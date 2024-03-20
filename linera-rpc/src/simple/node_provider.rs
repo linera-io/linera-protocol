@@ -5,7 +5,7 @@ use super::SimpleClient;
 
 use crate::{config::ValidatorPublicNetworkPreConfig, node_provider::NodeOptions};
 
-use linera_core::node::{NodeError, ValidatorNodeProvider};
+use linera_core::node::{LocalValidatorNodeProvider, NodeError};
 
 use std::str::FromStr as _;
 
@@ -19,7 +19,7 @@ impl SimpleNodeProvider {
     }
 }
 
-impl ValidatorNodeProvider for SimpleNodeProvider {
+impl LocalValidatorNodeProvider for SimpleNodeProvider {
     type Node = SimpleClient;
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {

@@ -83,6 +83,9 @@ tonic = { workspace = true, features = ["prost", "codegen", "transport"] }
 tonic = { workspace = true, features = ["codegen", "prost"] }
 tonic-web-wasm-client.workspace = true
 
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test.workspace = true
+
 [build-dependencies]
 cfg_aliases.workspace = true
 tonic-build = { workspace = true, features = ["prost"] }

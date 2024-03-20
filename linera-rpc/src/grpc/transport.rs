@@ -19,7 +19,7 @@ impl From<&'_ NodeOptions> for Options {
 }
 
 #[cfg(web)]
-pub mod transport {
+mod implementation {
     use super::Options;
 
     pub use tonic_web_wasm_client::{Client as Channel, Error};
@@ -31,7 +31,7 @@ pub mod transport {
 }
 
 #[cfg(not(web))]
-mod transport {
+mod implementation {
     use super::Options;
 
     pub use tonic::transport::{Channel, Error};
@@ -51,4 +51,4 @@ mod transport {
     }
 }
 
-pub use transport::*;
+pub use implementation::*;

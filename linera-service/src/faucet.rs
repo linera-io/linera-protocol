@@ -113,6 +113,7 @@ where
 impl<P, S, C> MutationRoot<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
+    <P as ValidatorNodeProvider>::Node: Sync,
     S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<P> + Send + 'static,
     ViewError: From<S::ContextError>,
@@ -126,6 +127,7 @@ where
 impl<P, S, C> MutationRoot<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
+    <P as ValidatorNodeProvider>::Node: Sync,
     S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<P> + Send + 'static,
     ViewError: From<S::ContextError>,

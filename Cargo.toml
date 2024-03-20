@@ -60,7 +60,6 @@ custom_debug_derive = "0.6.1"
 dashmap = "5.5.3"
 derive_more = "0.99.17"
 dirs = "5.0.1"
-ed25519 = "2.2"
 ed25519-dalek = { version = "2.1.1", features = ["batch", "serde"] }
 either = "1.10.0"
 frunk = "0.4.2"
@@ -127,6 +126,8 @@ tower-http = "0.5.2"
 tower = "0.4.13"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", default-features = false, features = ["env-filter"] }
+trait-variant = "0.1.1"
+wasm-bindgen-test = "0.3.42"
 wasm-encoder = "0.24.1"
 wasmer = { version = "=3.1.1", features = ["singlepass"] }
 wasmer-middlewares = "=3.1.1"
@@ -143,7 +144,6 @@ linera-chain = { version = "0.9.0", path = "./linera-chain" }
 linera-core = { version = "0.9.0", path = "./linera-core", default-features = false }
 linera-execution = { version = "0.9.0", path = "./linera-execution", default-features = false }
 linera-indexer = { path = "./linera-indexer/lib" }
-linera-indexer-example = { path = "./linera-indexer/example" }
 linera-indexer-graphql-client = { path = "./linera-indexer/graphql-client" }
 linera-indexer-plugins = { path = "./linera-indexer/plugins" }
 linera-rpc = { version = "0.9.0", path = "./linera-rpc" }

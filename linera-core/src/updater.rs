@@ -4,9 +4,9 @@
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
+    node::{CrossChainMessageDelivery, LocalValidatorNode, NodeError},
 };
-use futures::{future, StreamExt};
+use futures::{future, Future, StreamExt};
 use linera_base::{
     data_types::{BlockHeight, Round},
     identifiers::ChainId,
@@ -73,15 +73,16 @@ pub enum CommunicationError<E: fmt::Debug> {
 /// Tries to stop early when a quorum is reached. If `grace_period` is not zero, other validators
 /// are given this much additional time to contribute to the result, as a fraction of how long it
 /// took to reach the quorum.
-pub async fn communicate_with_quorum<'a, A, V, K, F, G>(
+pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
     validator_clients: &'a [(ValidatorName, A)],
     committee: &Committee,
     group_by: G,
     execute: F,
 ) -> Result<(K, Vec<V>), CommunicationError<NodeError>>
 where
-    A: ValidatorNode + Send + Sync + 'static + Clone,
-    F: Fn(ValidatorName, A) -> future::BoxFuture<'a, Result<V, NodeError>> + Clone,
+    A: LocalValidatorNode + Clone + 'static,
+    F: Clone + Fn(ValidatorName, A) -> R,
+    R: Future<Output = Result<V, NodeError>> + 'a,
     G: Fn(&V) -> K,
     K: Hash + PartialEq + Eq + Clone + 'static,
     V: 'static,
@@ -160,7 +161,7 @@ where
 
 impl<A, S> ValidatorUpdater<A, S>
 where
-    A: ValidatorNode + Clone + Send + Sync + 'static,
+    A: LocalValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {

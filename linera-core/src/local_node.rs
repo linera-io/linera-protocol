@@ -4,7 +4,7 @@
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    node::{NotificationStream, ValidatorNode},
+    node::{LocalValidatorNode, NotificationStream},
     notifier::Notifier,
     worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
 };
@@ -182,7 +182,7 @@ where
         certificates: Vec<Certificate>,
     ) -> Option<Box<ChainInfo>>
     where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
+        A: LocalValidatorNode + Clone + 'static,
     {
         let mut info = None;
         for certificate in certificates {
@@ -268,7 +268,7 @@ where
         target_next_block_height: BlockHeight,
     ) -> Result<Box<ChainInfo>, LocalNodeError>
     where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
+        A: LocalValidatorNode + Clone + 'static,
     {
         // Sequentially try each validator in random order.
         validators.shuffle(&mut rand::thread_rng());
@@ -306,7 +306,7 @@ where
         blob_locations: impl IntoIterator<Item = (BytecodeLocation, ChainId)>,
     ) -> Result<Vec<HashedValue>, LocalNodeError>
     where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
+        A: LocalValidatorNode + Clone + 'static,
     {
         let mut blobs = vec![];
         let mut tasks = vec![];
@@ -344,7 +344,7 @@ where
         location: BytecodeLocation,
     ) -> Result<Option<HashedValue>, LocalNodeError>
     where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
+        A: LocalValidatorNode + Clone + 'static,
     {
         match storage.read_value(location.certificate_hash).await {
             Ok(blob) => return Ok(Some(blob)),
@@ -387,7 +387,7 @@ where
         stop: BlockHeight,
     ) -> Result<(), LocalNodeError>
     where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
+        A: LocalValidatorNode + Clone + 'static,
     {
         let limit = u64::from(stop)
             .checked_sub(u64::from(start))
@@ -421,7 +421,7 @@ where
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, LocalNodeError>
     where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
+        A: LocalValidatorNode + Clone + 'static,
     {
         let futures = validators
             .into_iter()
@@ -446,7 +446,7 @@ where
         chain_id: ChainId,
     ) -> Result<(), LocalNodeError>
     where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
+        A: LocalValidatorNode + Clone + 'static,
     {
         let local_info = self.local_chain_info(chain_id).await?;
         let range = BlockHeightRange {
@@ -506,7 +506,7 @@ where
         location: BytecodeLocation,
     ) -> Option<HashedValue>
     where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
+        A: LocalValidatorNode + Clone + 'static,
     {
         // Sequentially try each validator in random order.
         validators.shuffle(&mut rand::thread_rng());
@@ -527,7 +527,7 @@ where
         location: BytecodeLocation,
     ) -> Option<HashedValue>
     where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
+        A: LocalValidatorNode + Clone + 'static,
     {
         let query = ChainInfoQuery::new(chain_id).with_blob(location.certificate_hash);
         if let Ok(response) = node.handle_chain_info_query(query).await {

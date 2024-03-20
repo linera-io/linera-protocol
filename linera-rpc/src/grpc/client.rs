@@ -5,19 +5,27 @@ use super::{
     api::{
         chain_info_result::Inner, validator_node_client::ValidatorNodeClient, SubscriptionRequest,
     },
-    transport, GrpcError, GrpcProtoConversionError, GRPC_MAX_MESSAGE_SIZE,
+    transport, GrpcError, GRPC_MAX_MESSAGE_SIZE,
 };
 use crate::{
-    config::ValidatorPublicNetworkConfig, mass_client, node_provider::NodeOptions,
-    HandleCertificateRequest, HandleLiteCertificateRequest, RpcMessage,
+    config::ValidatorPublicNetworkConfig, node_provider::NodeOptions, HandleCertificateRequest,
+    HandleLiteCertificateRequest,
 };
-use async_trait::async_trait;
 use futures::{future, stream, StreamExt};
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types;
 use linera_core::{
-    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
+    node::{CrossChainMessageDelivery, NodeError},
     worker::Notification,
+};
+
+#[cfg(web)]
+use linera_core::node::{LocalNotificationStream, LocalValidatorNode};
+#[cfg(not(web))]
+use {
+    super::GrpcProtoConversionError,
+    crate::{mass_client, RpcMessage},
+    linera_core::node::{NotificationStream, ValidatorNodeInner},
 };
 
 use linera_version::VersionInfo;
@@ -125,8 +133,12 @@ macro_rules! client_delegate {
     }};
 }
 
-#[async_trait]
-impl ValidatorNode for GrpcClient {
+// TODO(TODO): deduplicate this implementation
+
+#[cfg(web)]
+impl LocalValidatorNode for GrpcClient {
+    type NotificationStream = LocalNotificationStream;
+
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn handle_block_proposal(
         &mut self,
@@ -174,7 +186,10 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+    async fn subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Result<Self::NotificationStream, NodeError> {
         let notification_retry_delay = self.notification_retry_delay;
         let notification_retries = self.notification_retries;
         let mut retry_count = 0;
@@ -249,7 +264,137 @@ impl ValidatorNode for GrpcClient {
     }
 }
 
-#[async_trait]
+#[cfg(not(web))]
+impl ValidatorNodeInner for GrpcClient {
+    type NotificationStream = NotificationStream;
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn handle_block_proposal(
+        &mut self,
+        proposal: data_types::BlockProposal,
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        client_delegate!(self, handle_block_proposal, proposal)
+    }
+
+    #[instrument(target = "grpc_client", skip_all, fields(address = self.address))]
+    async fn handle_lite_certificate(
+        &mut self,
+        certificate: data_types::LiteCertificate<'_>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
+        let request = HandleLiteCertificateRequest {
+            certificate,
+            wait_for_outgoing_messages,
+        };
+        client_delegate!(self, handle_lite_certificate, request)
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn handle_certificate(
+        &mut self,
+        certificate: data_types::Certificate,
+        blobs: Vec<data_types::HashedValue>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
+        let request = HandleCertificateRequest {
+            certificate,
+            blobs,
+            wait_for_outgoing_messages,
+        };
+        client_delegate!(self, handle_certificate, request)
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn handle_chain_info_query(
+        &mut self,
+        query: linera_core::data_types::ChainInfoQuery,
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        client_delegate!(self, handle_chain_info_query, query)
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Result<Self::NotificationStream, NodeError> {
+        let notification_retry_delay = self.notification_retry_delay;
+        let notification_retries = self.notification_retries;
+        let mut retry_count = 0;
+        let subscription_request = SubscriptionRequest {
+            chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
+        };
+        let mut client = self.client.clone();
+
+        // Make the first connection attempt before returning from this method.
+        let mut stream = Some(
+            client
+                .subscribe(subscription_request.clone())
+                .await
+                .map_err(|status| NodeError::SubscriptionFailed {
+                    status: status.to_string(),
+                })?
+                .into_inner(),
+        );
+
+        // A stream of `Result<grpc::Notification, tonic::Status>` that keeps calling
+        // `client.subscribe(request)` endlessly and without delay.
+        let endlessly_retrying_notification_stream = stream::unfold((), move |()| {
+            let mut client = client.clone();
+            let subscription_request = subscription_request.clone();
+            let mut stream = stream.take();
+            async move {
+                let stream = if let Some(stream) = stream.take() {
+                    future::Either::Right(stream)
+                } else {
+                    match client.subscribe(subscription_request.clone()).await {
+                        Err(err) => future::Either::Left(stream::iter(iter::once(Err(err)))),
+                        Ok(response) => future::Either::Right(response.into_inner()),
+                    }
+                };
+                Some((stream, ()))
+            }
+        })
+        .flatten();
+
+        // The stream of `Notification`s that inserts increasing delays after retriable errors, and
+        // terminates after unexpected or fatal errors.
+        let notification_stream = endlessly_retrying_notification_stream
+            .map(|result| {
+                Notification::try_from(result?).map_err(|err| {
+                    let message = format!("Could not deserialize notification: {}", err);
+                    tonic::Status::new(Code::Internal, message)
+                })
+            })
+            .take_while(move |result| {
+                let Err(status) = result else {
+                    retry_count = 0;
+                    return future::Either::Left(future::ready(true));
+                };
+                if !Self::is_retryable(status) || retry_count >= notification_retries {
+                    return future::Either::Left(future::ready(false));
+                }
+                let delay = notification_retry_delay.saturating_mul(retry_count);
+                retry_count += 1;
+                future::Either::Right(async move {
+                    tokio::time::sleep(delay).await;
+                    true
+                })
+            })
+            .filter_map(|result| future::ready(result.ok()));
+
+        Ok(Box::pin(notification_stream))
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError> {
+        Ok(self.client.get_version_info(()).await?.into_inner().into())
+    }
+}
+
+#[cfg(not(web))]
+#[async_trait::async_trait]
 impl mass_client::MassClient for GrpcClient {
     #[tracing::instrument(skip_all, err)]
     async fn send(
