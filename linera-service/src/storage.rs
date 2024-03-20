@@ -299,6 +299,33 @@ impl StorageConfigNamespace {
             }
         }
     }
+
+    pub fn to_string(&self) -> String {
+        let namespace = &self.namespace;
+        match &self.storage_config {
+            StorageConfig::Service { endpoint } => {
+                format!("service:{}:{}", endpoint, namespace)
+            }
+            StorageConfig::Memory { } => {
+                format!("memory:{}", namespace)
+            }
+            #[cfg(feature = "rocksdb")]
+            StorageConfig::RocksDb { path } => {
+                format!("rocksdb:{}:{}", path.display(), namespace)
+            }
+            #[cfg(feature = "aws")]
+            StorageConfig::DynamoDb { use_localstack } => {
+                match use_localstack {
+                    true => format!("dynamodb:{}:localstack", namespace),
+                    false => format!("dynamodb:{}:env", namespace),
+                }
+            }
+            #[cfg(feature = "scylladb")]
+            StorageConfig::ScyllaDb { uri } => {
+                format!("scylladb:tcp:{}:{}", uri, namespace)
+            }
+        }
+    }
 }
 
 impl StoreConfig {
