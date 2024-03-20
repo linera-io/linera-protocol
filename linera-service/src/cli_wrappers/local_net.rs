@@ -6,6 +6,7 @@ use crate::{
     util::ChildExt,
 };
 use crate::storage::StorageConfig;
+use crate::storage::StorageConfigNamespace;
 use std::path::Path;
 use std::path::PathBuf;
 use anyhow::{anyhow, bail, ensure, Context, Result};
@@ -610,33 +611,10 @@ impl LocalNet {
             Database::RocksDb => (validator, shard),
             _ => (validator, 0),
         };
-        let storage = match self.database {
-            Database::Service => {
-                let StorageConfig::Service { endpoint } =
-                    &self.storage_config
-                else {
-                    unreachable!();
-                };
-                format!("service:{}:{}", endpoint, namespace)
-            }
-            #[cfg(feature = "rocksdb")]
-            Database::RocksDb => {
-                let StorageConfig::RocksDb { path } =
-                    &self.storage_config
-                else {
-                    unreachable!();
-                };
-                format!("rocksdb:{}:{}", path.display(), namespace)
-            }
-            #[cfg(feature = "aws")]
-            Database::DynamoDb => {
-                format!("dynamodb:{}:localstack", namespace)
-            }
-            #[cfg(feature = "scylladb")]
-            Database::ScyllaDb => {
-                format!("scylladb:{}", namespace)
-            }
-        };
+        let storage = StorageConfigNamespace {
+            storage_config: self.storage_config.clone(),
+            namespace,
+        }.to_string();
         if !self.set_init.contains(&key) {
             let max_try = 4;
             let mut i_try = 0;
