@@ -190,29 +190,27 @@ pub enum LocalServerConfig {
     },
 }
 
-impl LocalServerConfig {
-    #[cfg(any(test, feature = "test"))]
-    async fn make_testing_config(database: Database) -> Self {
-        match database {
-            Database::Service => {
-                let service_config = LOCAL_SERVER_SERVICE.get_config().await;
-                LocalServerConfig::Service { service_config }
-            }
-            #[cfg(feature = "rocksdb")]
-            Database::RocksDb => {
-                let rocks_db_config = LOCAL_SERVER_ROCKS_DB.get_config().await;
-                LocalServerConfig::RocksDb { rocks_db_config }
-            }
-            #[cfg(feature = "aws")]
-            Database::DynamoDb => {
-                let dynamo_db_config = create_dynamo_db_test_config().await;
-                LocalServerConfig::DynamoDb { dynamo_db_config }
-            }
-            #[cfg(feature = "scylladb")]
-            Database::ScyllaDb => {
-                let scylla_db_config = create_scylla_db_test_config().await;
-                LocalServerConfig::ScyllaDb { scylla_db_config }
-            }
+#[cfg(any(test, feature = "test"))]
+async fn make_testing_config(database: Database) -> LocalServerConfig {
+    match database {
+        Database::Service => {
+            let service_config = LOCAL_SERVER_SERVICE.get_config().await;
+            LocalServerConfig::Service { service_config }
+        }
+        #[cfg(feature = "rocksdb")]
+        Database::RocksDb => {
+            let rocks_db_config = LOCAL_SERVER_ROCKS_DB.get_config().await;
+            LocalServerConfig::RocksDb { rocks_db_config }
+        }
+        #[cfg(feature = "aws")]
+        Database::DynamoDb => {
+            let dynamo_db_config = create_dynamo_db_test_config().await;
+            LocalServerConfig::DynamoDb { dynamo_db_config }
+        }
+        #[cfg(feature = "scylladb")]
+        Database::ScyllaDb => {
+            let scylla_db_config = create_scylla_db_test_config().await;
+            LocalServerConfig::ScyllaDb { scylla_db_config }
         }
     }
 }
@@ -231,7 +229,7 @@ impl LocalServerConfigBuilder {
         match self {
             #[cfg(any(test, feature = "test"))]
             LocalServerConfigBuilder::TestConfig => {
-                LocalServerConfig::make_testing_config(database).await
+                make_testing_config(database).await
             },
             LocalServerConfigBuilder::ExistingConfig{ local_server_config } => {
                 local_server_config
