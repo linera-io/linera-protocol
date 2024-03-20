@@ -3,10 +3,10 @@
 
 use crate::{
     batch::Batch,
-    common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
+    common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update},
+    hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
-use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{borrow::Borrow, collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
@@ -32,23 +32,12 @@ static SET_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Histogram can be created")
 });
 
-/// Key tags to create the sub-keys of a SetView on top of the base key.
-#[repr(u8)]
-enum KeyTag {
-    /// Prefix for the indices of the `SetView`
-    Index = MIN_VIEW_TAG,
-    /// Prefix for the hash
-    Hash,
-}
-
 /// A view that supports inserting and removing values indexed by a key.
 #[derive(Debug)]
 pub struct ByteSetView<C> {
     context: C,
     delete_storage_first: bool,
     updates: BTreeMap<Vec<u8>, Update<()>>,
-    stored_hash: Option<HasherOutput>,
-    hash: Mutex<Option<HasherOutput>>,
 }
 
 #[async_trait]
@@ -62,59 +51,46 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key = context.base_tag(KeyTag::Hash as u8);
-        let hash = context.read_value(&key).await?;
         Ok(Self {
             context,
             delete_storage_first: false,
             updates: BTreeMap::new(),
-            stored_hash: hash,
-            hash: Mutex::new(hash),
         })
     }
 
     fn rollback(&mut self) {
         self.delete_storage_first = false;
         self.updates.clear();
-        *self.hash.get_mut() = self.stored_hash;
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let mut delete_view = false;
         if self.delete_storage_first {
+            delete_view = true;
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Update::Set(_) = update {
-                    let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
+                    let key = self.context.base_index(&index);
                     batch.put_key_value_bytes(key, Vec::new());
+                    delete_view = false;
                 }
             }
-            self.stored_hash = None;
         } else {
             for (index, update) in mem::take(&mut self.updates) {
-                let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
+                let key = self.context.base_index(&index);
                 match update {
                     Update::Removed => batch.delete_key(key),
                     Update::Set(_) => batch.put_key_value_bytes(key, Vec::new()),
                 }
             }
         }
-        let hash = *self.hash.get_mut();
-        if self.stored_hash != hash {
-            let key = self.context.base_tag(KeyTag::Hash as u8);
-            match hash {
-                None => batch.delete_key(key),
-                Some(hash) => batch.put_key_value(key, &hash)?,
-            }
-            self.stored_hash = hash;
-        }
         self.delete_storage_first = false;
-        Ok(())
+        Ok(delete_view)
     }
 
     fn clear(&mut self) {
         self.delete_storage_first = true;
         self.updates.clear();
-        *self.hash.get_mut() = None;
     }
 }
 
@@ -128,8 +104,6 @@ where
             context: self.context.clone(),
             delete_storage_first: self.delete_storage_first,
             updates: self.updates.clone(),
-            stored_hash: self.stored_hash,
-            hash: Mutex::new(*self.hash.get_mut()),
         })
     }
 }
@@ -151,7 +125,6 @@ where
     /// # })
     /// ```
     pub fn insert(&mut self, short_key: Vec<u8>) {
-        *self.hash.get_mut() = None;
         self.updates.insert(short_key, Update::Set(()));
     }
 
@@ -167,7 +140,6 @@ where
     /// # })
     /// ```
     pub fn remove(&mut self, short_key: Vec<u8>) {
-        *self.hash.get_mut() = None;
         if self.delete_storage_first {
             // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
             self.updates.remove(&short_key);
@@ -210,7 +182,7 @@ where
         if self.delete_storage_first {
             return Ok(false);
         }
-        let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
+        let key = self.context.base_index(short_key);
         Ok(self.context.contains_key(&key).await?)
     }
 }
@@ -269,7 +241,7 @@ where
         let mut updates = self.updates.iter();
         let mut update = updates.next();
         if !self.delete_storage_first {
-            let base = self.context.base_tag(KeyTag::Index as u8);
+            let base = self.context.base_key();
             for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
                 let index = index?;
                 loop {
@@ -335,8 +307,21 @@ where
         })
         .await
     }
+}
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+#[async_trait]
+impl<C> HashableView<C> for ByteSetView<C>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+{
+    type Hasher = sha3::Sha3_256;
+
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.hash().await
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
         let _hash_latency = SET_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
@@ -349,40 +334,6 @@ where
         .await?;
         hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
-    }
-}
-
-#[async_trait]
-impl<C> HashableView<C> for ByteSetView<C>
-where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-{
-    type Hasher = sha3::Sha3_256;
-
-    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let hash = *self.hash.get_mut();
-        match hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash().await?;
-                let hash = self.hash.get_mut();
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
-    }
-
-    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.lock().await;
-        match *hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash().await?;
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
     }
 }
 
@@ -416,7 +367,7 @@ where
         self.set.rollback()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         self.set.flush(batch)
     }
 
@@ -665,7 +616,7 @@ where
         self.set.rollback()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         self.set.flush(batch)
     }
 
@@ -888,3 +839,13 @@ where
         self.set.hash().await
     }
 }
+
+/// Type wrapping `ByteSetView` while memoizing the hash.
+pub type HashedByteSetView<C> = WrappedHashableContainerView<C, ByteSetView<C>, HasherOutput>;
+
+/// Type wrapping `SetView` while memoizing the hash.
+pub type HashedSetView<C, I> = WrappedHashableContainerView<C, SetView<C, I>, HasherOutput>;
+
+/// Type wrapping `CustomSetView` while memoizing the hash.
+pub type HashedCustomSetView<C, I> =
+    WrappedHashableContainerView<C, CustomSetView<C, I>, HasherOutput>;

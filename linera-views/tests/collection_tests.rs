@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    collection_view::CollectionView,
+    collection_view::HashedCollectionView,
     common::Context,
     memory::create_memory_context,
     register_view::RegisterView,
@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 
 #[derive(CryptoHashRootView)]
 struct StateView<C> {
-    pub v: CollectionView<C, u8, RegisterView<C, u32>>,
+    pub v: HashedCollectionView<C, u8, RegisterView<C, u32>>,
 }
 
 impl<C> StateView<C>

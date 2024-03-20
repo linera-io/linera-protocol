@@ -36,7 +36,8 @@ pub trait View<C>: Sized {
     /// program running. Crash-resistant storage implementations are expected to accumulate the desired
     /// changes in the `batch` variable first. If the view is dropped without calling `flush`, staged
     /// changes are simply lost.
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError>;
+    /// The returned boolean indicates whether the operation removes the view or not.
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError>;
 }
 
 /// Main error type for the crate.

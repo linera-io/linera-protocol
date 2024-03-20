@@ -3,10 +3,10 @@
 
 use crate::{
     batch::Batch,
-    common::{from_bytes_opt, Context, HasherOutput, MIN_VIEW_TAG},
+    common::{Context, HasherOutput, MIN_VIEW_TAG},
+    hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
-use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -43,8 +43,6 @@ enum KeyTag {
     Store = MIN_VIEW_TAG,
     /// Prefix for the indices of the log.
     Index,
-    /// Prefix for the hash.
-    Hash,
 }
 
 /// A view that supports a FIFO queue for values of type `T`.
@@ -55,8 +53,6 @@ pub struct QueueView<C, T> {
     front_delete_count: usize,
     delete_storage_first: bool,
     new_back_values: VecDeque<T>,
-    stored_hash: Option<HasherOutput>,
-    hash: Mutex<Option<HasherOutput>>,
 }
 
 #[async_trait]
@@ -71,20 +67,15 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key1 = context.base_tag(KeyTag::Store as u8);
-        let key2 = context.base_tag(KeyTag::Hash as u8);
-        let keys = vec![key1, key2];
-        let values_bytes = context.read_multi_values_bytes(keys).await?;
-        let stored_indices = from_bytes_opt(&values_bytes[0])?.unwrap_or_default();
-        let hash = from_bytes_opt(&values_bytes[1])?;
+        let key = context.base_tag(KeyTag::Store as u8);
+        let value = context.read_value(&key).await?;
+        let stored_indices = value.unwrap_or_default();
         Ok(Self {
             context,
             stored_indices,
             front_delete_count: 0,
             delete_storage_first: false,
             new_back_values: VecDeque::new(),
-            stored_hash: hash,
-            hash: Mutex::new(hash),
         })
     }
 
@@ -92,13 +83,13 @@ where
         self.delete_storage_first = false;
         self.front_delete_count = 0;
         self.new_back_values.clear();
-        *self.hash.get_mut() = self.stored_hash;
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let mut delete_view = false;
         if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key());
-            self.stored_hash = None;
+            delete_view = true;
         }
         if self.stored_count() == 0 {
             let key_prefix = self.context.base_tag(KeyTag::Index as u8);
@@ -113,6 +104,7 @@ where
             }
         }
         if !self.new_back_values.is_empty() {
+            delete_view = false;
             for value in &self.new_back_values {
                 let key = self
                     .context
@@ -127,23 +119,13 @@ where
             batch.put_key_value(key, &self.stored_indices)?;
         }
         self.front_delete_count = 0;
-        let hash = *self.hash.get_mut();
-        if self.stored_hash != hash {
-            let key = self.context.base_tag(KeyTag::Hash as u8);
-            match hash {
-                None => batch.delete_key(key),
-                Some(hash) => batch.put_key_value(key, &hash)?,
-            }
-            self.stored_hash = hash;
-        }
         self.delete_storage_first = false;
-        Ok(())
+        Ok(delete_view)
     }
 
     fn clear(&mut self) {
         self.delete_storage_first = true;
         self.new_back_values.clear();
-        *self.hash.get_mut() = None;
     }
 }
 
@@ -160,8 +142,6 @@ where
             front_delete_count: self.front_delete_count,
             delete_storage_first: self.delete_storage_first,
             new_back_values: self.new_back_values.clone(),
-            stored_hash: self.stored_hash,
-            hash: Mutex::new(*self.hash.get_mut()),
         })
     }
 }
@@ -245,7 +225,6 @@ where
     /// # })
     /// ```
     pub fn delete_front(&mut self) {
-        *self.hash.get_mut() = None;
         if self.stored_count() > 0 {
             self.front_delete_count += 1;
         } else {
@@ -267,7 +246,6 @@ where
     /// # })
     /// ```
     pub fn push_back(&mut self, value: T) {
-        *self.hash.get_mut() = None;
         self.new_back_values.push_back(value);
     }
 
@@ -405,16 +383,6 @@ where
         self.read_front(count).await
     }
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
-        #[cfg(with_metrics)]
-        let _hash_latency = QUEUE_VIEW_HASH_RUNTIME.measure_latency();
-        let count = self.count();
-        let elements = self.read_front(count).await?;
-        let mut hasher = sha3::Sha3_256::default();
-        hasher.update_with_bcs_bytes(&elements)?;
-        Ok(hasher.finalize())
-    }
-
     async fn load_all(&mut self) -> Result<(), ViewError> {
         if !self.delete_storage_first {
             let stored_remainder = self.stored_count();
@@ -450,7 +418,6 @@ where
     /// # })
     /// ```
     pub async fn iter_mut(&'a mut self) -> Result<IterMut<'a, T>, ViewError> {
-        *self.hash.get_mut() = None;
         self.load_all().await?;
         Ok(self.new_back_values.iter_mut())
     }
@@ -466,27 +433,19 @@ where
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let hash = *self.hash.get_mut();
-        match hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash().await?;
-                let hash = self.hash.get_mut();
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
+        self.hash().await
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.lock().await;
-        match *hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash().await?;
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
+        #[cfg(with_metrics)]
+        let _hash_latency = QUEUE_VIEW_HASH_RUNTIME.measure_latency();
+        let count = self.count();
+        let elements = self.read_front(count).await?;
+        let mut hasher = sha3::Sha3_256::default();
+        hasher.update_with_bcs_bytes(&elements)?;
+        Ok(hasher.finalize())
     }
 }
+
+/// Type wrapping `QueueView` while memoizing the hash.
+pub type HashedQueueView<C, T> = WrappedHashableContainerView<C, QueueView<C, T>, HasherOutput>;

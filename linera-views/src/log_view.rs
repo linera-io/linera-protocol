@@ -3,10 +3,10 @@
 
 use crate::{
     batch::Batch,
-    common::{from_bytes_opt, Context, HasherOutput, MIN_VIEW_TAG},
+    common::{Context, HasherOutput, MIN_VIEW_TAG},
+    hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
-use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -39,11 +39,9 @@ static LOG_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the storing of the variable stored_count.
-    Store = MIN_VIEW_TAG,
+    Count = MIN_VIEW_TAG,
     /// Prefix for the indices of the log.
     Index,
-    /// Prefix for the hash.
-    Hash,
 }
 
 /// A view that supports logging values of type `T`.
@@ -53,8 +51,6 @@ pub struct LogView<C, T> {
     delete_storage_first: bool,
     stored_count: usize,
     new_values: Vec<T>,
-    stored_hash: Option<HasherOutput>,
-    hash: Mutex<Option<HasherOutput>>,
 }
 
 #[async_trait]
@@ -69,35 +65,31 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key1 = context.base_tag(KeyTag::Store as u8);
-        let key2 = context.base_tag(KeyTag::Hash as u8);
-        let keys = vec![key1, key2];
-        let values_bytes = context.read_multi_values_bytes(keys).await?;
-        let stored_count = from_bytes_opt(&values_bytes[0])?.unwrap_or_default();
-        let hash = from_bytes_opt(&values_bytes[1])?;
+        let key = context.base_tag(KeyTag::Count as u8);
+        let value = context.read_value(&key).await?;
+        let stored_count = value.unwrap_or_default();
         Ok(Self {
             context,
             delete_storage_first: false,
             stored_count,
             new_values: Vec::new(),
-            stored_hash: hash,
-            hash: Mutex::new(hash),
         })
     }
 
     fn rollback(&mut self) {
         self.delete_storage_first = false;
         self.new_values.clear();
-        *self.hash.get_mut() = self.stored_hash;
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let mut delete_view = false;
         if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key());
             self.stored_count = 0;
-            self.stored_hash = None;
+            delete_view = true;
         }
         if !self.new_values.is_empty() {
+            delete_view = false;
             for value in &self.new_values {
                 let key = self
                     .context
@@ -105,27 +97,17 @@ where
                 batch.put_key_value(key, value)?;
                 self.stored_count += 1;
             }
-            let key = self.context.base_tag(KeyTag::Store as u8);
+            let key = self.context.base_tag(KeyTag::Count as u8);
             batch.put_key_value(key, &self.stored_count)?;
             self.new_values.clear();
         }
-        let hash = *self.hash.get_mut();
-        if self.stored_hash != hash {
-            let key = self.context.base_tag(KeyTag::Hash as u8);
-            match hash {
-                None => batch.delete_key(key),
-                Some(hash) => batch.put_key_value(key, &hash)?,
-            }
-            self.stored_hash = hash;
-        }
         self.delete_storage_first = false;
-        Ok(())
+        Ok(delete_view)
     }
 
     fn clear(&mut self) {
         self.delete_storage_first = true;
         self.new_values.clear();
-        *self.hash.get_mut() = None;
     }
 }
 
@@ -141,8 +123,6 @@ where
             delete_storage_first: self.delete_storage_first,
             stored_count: self.stored_count,
             new_values: self.new_values.clone(),
-            stored_hash: self.stored_hash,
-            hash: Mutex::new(*self.hash.get_mut()),
         })
     }
 }
@@ -164,7 +144,6 @@ where
     /// ```
     pub fn push(&mut self, value: T) {
         self.new_values.push(value);
-        *self.hash.get_mut() = None;
     }
 
     /// Reads the size of the log.
@@ -339,15 +318,6 @@ where
             )
         }
     }
-
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
-        #[cfg(with_metrics)]
-        let _hash_latency = LOG_VIEW_HASH_RUNTIME.measure_latency();
-        let elements = self.read(..).await?;
-        let mut hasher = sha3::Sha3_256::default();
-        hasher.update_with_bcs_bytes(&elements)?;
-        Ok(hasher.finalize())
-    }
 }
 
 #[async_trait]
@@ -360,27 +330,18 @@ where
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let hash = *self.hash.get_mut();
-        match hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash().await?;
-                let hash = self.hash.get_mut();
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
+        self.hash().await
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.lock().await;
-        match *hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash().await?;
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
+        #[cfg(with_metrics)]
+        let _hash_latency = LOG_VIEW_HASH_RUNTIME.measure_latency();
+        let elements = self.read(..).await?;
+        let mut hasher = sha3::Sha3_256::default();
+        hasher.update_with_bcs_bytes(&elements)?;
+        Ok(hasher.finalize())
     }
 }
+
+/// Type wrapping `LogView` while memoizing the hash.
+pub type HashedLogView<C, T> = WrappedHashableContainerView<C, LogView<C, T>, HasherOutput>;

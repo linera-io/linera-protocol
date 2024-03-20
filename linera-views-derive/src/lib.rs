@@ -112,10 +112,12 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut load_result_quotes = Vec::new();
     let mut rollback_quotes = Vec::new();
     let mut flush_quotes = Vec::new();
+    let mut test_flush_quotes = Vec::new();
     let mut clear_quotes = Vec::new();
     for (idx, e) in input.fields.into_iter().enumerate() {
         let name = e.clone().ident.unwrap();
         let fut = format_ident!("{}_fut", name.to_string());
+        let test_flush_ident = format_ident!("deleted{}", idx);
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
         let type_ident = get_type_field(e).expect("Failed to find the type");
         load_future_quotes.push(quote! {
@@ -131,7 +133,8 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         });
         name_quotes.push(quote! { #name });
         rollback_quotes.push(quote! { self.#name.rollback(); });
-        flush_quotes.push(quote! { self.#name.flush(batch)?; });
+        flush_quotes.push(quote! { let #test_flush_ident = self.#name.flush(batch)?; });
+        test_flush_quotes.push(quote! { #test_flush_ident });
         clear_quotes.push(quote! { self.#name.clear(); });
     }
     let first_name_quote = name_quotes
@@ -175,10 +178,10 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 #(#rollback_quotes)*
             }
 
-            fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<(), linera_views::views::ViewError> {
+            fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<bool, linera_views::views::ViewError> {
                 use linera_views::views::View;
                 #(#flush_quotes)*
-                Ok(())
+                Ok( #(#test_flush_quotes)&&* )
             }
 
             fn clear(&mut self) {

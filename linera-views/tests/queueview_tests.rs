@@ -3,7 +3,7 @@
 
 use linera_views::{
     memory::create_memory_context,
-    queue_view::QueueView,
+    queue_view::HashedQueueView,
     test_utils,
     views::{CryptoHashRootView, CryptoHashView, RootView, View},
 };
@@ -11,7 +11,7 @@ use rand::Rng as _;
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
-    pub queue: QueueView<C, u8>,
+    pub queue: HashedQueueView<C, u8>,
 }
 
 #[tokio::test]

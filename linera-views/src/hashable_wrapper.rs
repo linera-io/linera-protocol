@@ -8,13 +8,17 @@ use crate::{
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
+use futures::join;
 use serde::{de::DeserializeOwned, Serialize};
-use std::ops::{Deref, DerefMut};
+use std::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 /// A hash for ContainerView and storing of the hash for memoization purposes
 #[derive(Debug)]
 pub struct WrappedHashableContainerView<C, W, O> {
-    context: C,
+    _phantom: PhantomData<C>,
     stored_hash: Option<O>,
     hash: Mutex<Option<O>>,
     inner: W,
@@ -24,7 +28,7 @@ pub struct WrappedHashableContainerView<C, W, O> {
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the indices of the view.
-    Index = MIN_VIEW_TAG,
+    Inner = MIN_VIEW_TAG,
     /// Prefix for the hash.
     Hash,
 }
@@ -34,21 +38,25 @@ impl<C, W, O> View<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C>,
+    W: HashableView<C> + Send,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
     fn context(&self) -> &C {
-        &self.context
+        self.inner.context()
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key = context.base_tag(KeyTag::Hash as u8);
-        let hash = context.read_value(&key).await?;
-        let base_key = context.base_tag(KeyTag::Index as u8);
-        let inner = W::load(context.clone_with_base_key(base_key)).await?;
+        let hash_key = context.base_tag(KeyTag::Hash as u8);
+        let base_key = context.base_tag(KeyTag::Inner as u8);
+        let (hash, inner) = join!(
+            context.read_value(&hash_key),
+            W::load(context.clone_with_base_key(base_key))
+        );
+        let hash = hash?;
+        let inner = inner?;
         Ok(Self {
-            context,
+            _phantom: PhantomData,
             stored_hash: hash,
             hash: Mutex::new(hash),
             inner,
@@ -60,18 +68,26 @@ where
         *self.hash.get_mut() = self.stored_hash;
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        self.inner.flush(batch)?;
-        let hash = *self.hash.get_mut();
-        if self.stored_hash != hash {
-            let key = self.context.base_tag(KeyTag::Hash as u8);
-            match hash {
-                None => batch.delete_key(key),
-                Some(hash) => batch.put_key_value(key, &hash)?,
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let delete_view = self.inner.flush(batch)?;
+        if delete_view {
+            let mut key_prefix = self.inner.context().base_key();
+            key_prefix.pop();
+            batch.delete_key_prefix(key_prefix)
+        } else {
+            let hash = *self.hash.get_mut();
+            if self.stored_hash != hash {
+                let mut key = self.inner.context().base_key();
+                let tag = key.last_mut().unwrap();
+                *tag = KeyTag::Hash as u8;
+                match hash {
+                    None => batch.delete_key(key),
+                    Some(hash) => batch.put_key_value(key, &hash)?,
+                }
+                self.stored_hash = hash;
             }
-            self.stored_hash = hash;
         }
-        Ok(())
+        Ok(delete_view)
     }
 
     fn clear(&mut self) {
@@ -84,13 +100,13 @@ impl<C, W, O> ClonableView<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C> + ClonableView<C>,
+    W: HashableView<C> + ClonableView<C> + Send,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(WrappedHashableContainerView {
-            context: self.context.clone(),
+            _phantom: PhantomData,
             stored_hash: self.stored_hash,
             hash: Mutex::new(*self.hash.get_mut()),
             inner: self.inner.clone_unchecked()?,
