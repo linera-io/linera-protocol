@@ -25,14 +25,14 @@ use crate::metering::{
     MeteredStore, LRU_CACHING_METRICS, ROCKS_DB_METRICS, VALUE_SPLITTING_METRICS,
 };
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace},
     tempfile::TempDir,
 };
 
 /// The number of streams for the test
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
 
 // The maximum size of values in RocksDB is 3 GB
@@ -346,7 +346,7 @@ pub struct RocksDbStore {
 }
 
 /// Creates the common initialization for RocksDB
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub fn create_rocks_db_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
         max_concurrent_queries: None,
@@ -355,23 +355,30 @@ pub fn create_rocks_db_common_config() -> CommonStoreConfig {
     }
 }
 
-/// Returns the test config and a guard for the temporary directory
-#[cfg(any(test, feature = "test"))]
-pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
+/// Returns the test path for RocksDB without common config.
+#[cfg(with_testing)]
+pub fn create_rocks_db_test_path() -> (PathBuf, TempDir) {
     let dir = TempDir::new().unwrap();
     let path_buf = dir.path().to_path_buf();
+    (path_buf, dir)
+}
+
+/// Returns the test config and a guard for the temporary directory
+#[cfg(with_testing)]
+pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
+    let (path_buf, tmp_dir) = create_rocks_db_test_path();
     let common_config = create_rocks_db_common_config();
     let store_config = RocksDbStoreConfig {
         path_buf,
         common_config,
     };
-    (store_config, dir)
+    (store_config, tmp_dir)
 }
 
 /// Creates a RocksDB database client to be used for tests.
 /// The temporary directory has to be carried because if it goes
 /// out of scope then the RocksDB client can become unstable.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
     let (store_config, dir) = create_rocks_db_test_config().await;
     let namespace = generate_test_namespace();
@@ -500,8 +507,8 @@ pub enum RocksDbContextError {
     #[error("tokio join error: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),
 
-    /// RocksDb error.
-    #[error("RocksDb error: {0}")]
+    /// RocksDB error.
+    #[error("RocksDB error: {0}")]
     RocksDb(#[from] rocksdb::Error),
 
     /// The database contains a file which is not a directory

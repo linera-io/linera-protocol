@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_storage_service::{
-    child::{get_free_port, StorageServiceBuilder},
+    child::{get_free_port, StorageService},
     client::{create_service_test_store, service_config_from_endpoint, ServiceStoreClient},
 };
 use linera_views::test_utils::{
@@ -11,16 +11,16 @@ use linera_views::test_utils::{
 
 /// The endpoint used for the storage service tests.
 #[cfg(test)]
-fn get_storage_service_guard(endpoint: &str) -> StorageServiceBuilder {
+fn get_storage_service_guard(endpoint: &str) -> StorageService {
     let binary = env!("CARGO_BIN_EXE_storage_service_server").to_string();
-    StorageServiceBuilder::new(endpoint, binary)
+    StorageService::new(endpoint, binary)
 }
 
 #[tokio::test]
 async fn test_reads_service_store() {
     let endpoint = get_free_port().await.unwrap();
     for scenario in get_random_test_scenarios() {
-        let _guard = get_storage_service_guard(&endpoint).run_service().await;
+        let _guard = get_storage_service_guard(&endpoint).run().await;
         let key_value_store = create_service_test_store(&endpoint).await.unwrap();
         run_reads(key_value_store, scenario).await;
     }
@@ -29,7 +29,7 @@ async fn test_reads_service_store() {
 #[tokio::test]
 async fn test_service_store_writes_from_blank() {
     let endpoint = get_free_port().await.unwrap();
-    let _guard = get_storage_service_guard(&endpoint).run_service().await;
+    let _guard = get_storage_service_guard(&endpoint).run().await;
     let key_value_store = create_service_test_store(&endpoint).await.unwrap();
     run_writes_from_blank(&key_value_store).await;
 }
@@ -37,7 +37,7 @@ async fn test_service_store_writes_from_blank() {
 #[tokio::test]
 async fn test_service_store_writes_from_state() {
     let endpoint = get_free_port().await.unwrap();
-    let _guard = get_storage_service_guard(&endpoint).run_service().await;
+    let _guard = get_storage_service_guard(&endpoint).run().await;
     let key_value_store = create_service_test_store(&endpoint).await.unwrap();
     run_writes_from_state(&key_value_store).await;
 }
@@ -45,9 +45,7 @@ async fn test_service_store_writes_from_state() {
 #[tokio::test]
 async fn test_service_admin() {
     let endpoint = get_free_port().await.unwrap();
-    let _guard = get_storage_service_guard(&endpoint).run_service().await;
-    let config = service_config_from_endpoint(&endpoint)
-        .await
-        .expect("config");
+    let _guard = get_storage_service_guard(&endpoint).run().await;
+    let config = service_config_from_endpoint(&endpoint).expect("config");
     admin_test::<ServiceStoreClient>(&config).await;
 }

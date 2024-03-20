@@ -33,14 +33,14 @@ use linera_service::{
     chain_listener::ClientContext as _,
     cli_wrappers::{
         self,
-        local_net::{Database, LocalNetConfig},
+        local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain},
     faucet::FaucetService,
     node_service::NodeService,
     project::{self, Project},
-    storage::Runnable,
+    storage::{Runnable, StorageConfig},
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -53,6 +53,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use tempfile::tempdir;
 use tokio::{signal::unix, sync::mpsc};
 use tracing::{debug, info, warn};
 
@@ -1523,6 +1524,13 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                     #[cfg(not(feature = "kubernetes"))]
                     bail!("Cannot use the kubernetes flag with the kubernetes feature off")
                 } else {
+                    let tmp_dir = tempdir()?;
+                    let path = tmp_dir.path();
+                    let path_buf = path.to_path_buf();
+                    let storage_config = StorageConfig::RocksDb { path: path_buf };
+                    let storage_config_builder =
+                        StorageConfigBuilder::ExistingConfig { storage_config };
+                    let path_provider = PathProvider::new(path);
                     let config = LocalNetConfig {
                         network: Network::Grpc,
                         database: Database::RocksDb,
@@ -1533,6 +1541,8 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                         num_initial_validators: *validators,
                         num_shards: *shards,
                         policy: ResourceControlPolicy::default(),
+                        storage_config_builder,
+                        path_provider,
                     };
                     let (mut net, client1) = config.instantiate().await?;
                     let result = Ok(net_up(extra_wallets, &mut net, client1).await?);

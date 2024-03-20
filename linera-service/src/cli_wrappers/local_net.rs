@@ -3,6 +3,7 @@
 
 use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
+    storage::{StorageConfig, StorageConfigNamespace},
     util::ChildExt,
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
@@ -12,13 +13,10 @@ use linera_base::{
     data_types::Amount,
 };
 use linera_execution::ResourceControlPolicy;
-use linera_storage_service::{
-    child::{StorageServiceBuilder, StorageServiceGuard},
-    common::get_service_storage_binary,
-};
 use std::{
     collections::{BTreeMap, HashSet},
     env,
+    path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
@@ -29,8 +27,209 @@ use tonic_health::pb::{
 };
 use tracing::{info, warn};
 
-/// The endpoint used for all the tests
-const END_TO_END_STORAGE_SERVICE_ENDPOINT: &str = "127.0.0.1:8742";
+#[cfg(any(test, feature = "test"))]
+use {
+    async_lock::RwLock,
+    linera_base::sync::Lazy,
+    linera_storage_service::child::{get_free_port, StorageService, StorageServiceGuard},
+    linera_storage_service::common::get_service_storage_binary,
+    std::ops::Deref,
+};
+
+#[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
+use linera_views::rocks_db::create_rocks_db_test_path;
+
+#[cfg(all(feature = "scylladb", any(test, feature = "test")))]
+use linera_views::scylla_db::create_scylla_db_test_uri;
+
+#[cfg(any(test, feature = "test"))]
+trait LocalServerInternal: Sized {
+    type Config;
+
+    async fn new_test() -> Result<Self>;
+
+    fn get_config(&self) -> Self::Config;
+}
+
+#[cfg(any(test, feature = "test"))]
+struct LocalServerServiceInternal {
+    service_endpoint: String,
+    _service_guard: StorageServiceGuard,
+}
+
+#[cfg(any(test, feature = "test"))]
+impl LocalServerInternal for LocalServerServiceInternal {
+    type Config = String;
+
+    async fn new_test() -> Result<Self> {
+        let service_endpoint = get_free_port().await.unwrap();
+        let binary = get_service_storage_binary().await?.display().to_string();
+        let service = StorageService::new(&service_endpoint, binary);
+        let _service_guard = service.run().await?;
+        Ok(Self {
+            service_endpoint,
+            _service_guard,
+        })
+    }
+
+    fn get_config(&self) -> Self::Config {
+        self.service_endpoint.clone()
+    }
+}
+
+#[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
+struct LocalServerRocksDbInternal {
+    rocks_db_path: PathBuf,
+    _temp_dir: Option<TempDir>,
+}
+
+#[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
+impl LocalServerInternal for LocalServerRocksDbInternal {
+    type Config = PathBuf;
+
+    async fn new_test() -> Result<Self> {
+        let (rocks_db_path, temp_dir) = create_rocks_db_test_path();
+        let _temp_dir = Some(temp_dir);
+        Ok(Self {
+            rocks_db_path,
+            _temp_dir,
+        })
+    }
+
+    fn get_config(&self) -> Self::Config {
+        self.rocks_db_path.clone()
+    }
+}
+
+#[cfg(any(test, feature = "test"))]
+struct LocalServer<L> {
+    internal_server: RwLock<Option<L>>,
+}
+
+#[cfg(any(test, feature = "test"))]
+impl<L> Default for LocalServer<L>
+where
+    L: LocalServerInternal,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "test"))]
+impl<L> LocalServer<L>
+where
+    L: LocalServerInternal,
+{
+    pub fn new() -> Self {
+        Self {
+            internal_server: RwLock::new(None),
+        }
+    }
+
+    pub async fn get_config(&self) -> L::Config {
+        let mut server = self.internal_server.write().await;
+        if server.is_none() {
+            *server = Some(L::new_test().await.expect("local server"));
+        }
+        let Some(internal_server) = server.deref() else {
+            unreachable!();
+        };
+        internal_server.get_config()
+    }
+}
+
+// A static data to store the integration test server
+#[cfg(any(test, feature = "test"))]
+static LOCAL_SERVER_SERVICE: Lazy<LocalServer<LocalServerServiceInternal>> =
+    Lazy::new(LocalServer::new);
+
+#[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
+static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> =
+    Lazy::new(LocalServer::new);
+
+#[cfg(any(test, feature = "test"))]
+async fn make_testing_config(database: Database) -> StorageConfig {
+    match database {
+        Database::Service => {
+            let endpoint = LOCAL_SERVER_SERVICE.get_config().await;
+            StorageConfig::Service { endpoint }
+        }
+        Database::RocksDb => {
+            #[cfg(feature = "rocksdb")]
+            {
+                let path = LOCAL_SERVER_ROCKS_DB.get_config().await;
+                StorageConfig::RocksDb { path }
+            }
+            #[cfg(not(feature = "rocksdb"))]
+            panic!("Database::RocksDb is selected without the feature rocksdb");
+        }
+        Database::DynamoDb => {
+            #[cfg(feature = "aws")]
+            {
+                let use_localstack = true;
+                StorageConfig::DynamoDb { use_localstack }
+            }
+            #[cfg(not(feature = "aws"))]
+            panic!("Database::DynamoDb is selected without the feature aws");
+        }
+        Database::ScyllaDb => {
+            #[cfg(feature = "scylladb")]
+            {
+                let uri = create_scylla_db_test_uri();
+                StorageConfig::ScyllaDb { uri }
+            }
+            #[cfg(not(feature = "scylladb"))]
+            panic!("Database::ScyllaDb is selected without the feature sctlladb");
+        }
+    }
+}
+
+pub enum StorageConfigBuilder {
+    #[cfg(any(test, feature = "test"))]
+    TestConfig,
+    ExistingConfig {
+        storage_config: StorageConfig,
+    },
+}
+
+impl StorageConfigBuilder {
+    #[allow(unused_variables)]
+    pub async fn build(self, database: Database) -> StorageConfig {
+        match self {
+            #[cfg(any(test, feature = "test"))]
+            StorageConfigBuilder::TestConfig => make_testing_config(database).await,
+            StorageConfigBuilder::ExistingConfig { storage_config } => storage_config,
+        }
+    }
+}
+
+/// Path used for the run can come from a path whose lifetime is controlled
+/// by an external user or as a temporary directory
+#[derive(Clone)]
+pub enum PathProvider {
+    ExternalPath { path_buf: PathBuf },
+    TemporaryDirectory { tmp_dir: Arc<TempDir> },
+}
+
+impl PathProvider {
+    pub fn path(&self) -> &Path {
+        match self {
+            PathProvider::ExternalPath { path_buf } => path_buf.as_path(),
+            PathProvider::TemporaryDirectory { tmp_dir } => tmp_dir.path(),
+        }
+    }
+
+    pub fn create_temporary_directory() -> Result<Self> {
+        let tmp_dir = Arc::new(tempdir()?);
+        Ok(PathProvider::TemporaryDirectory { tmp_dir })
+    }
+
+    pub fn new(path: &Path) -> Self {
+        let path_buf = path.to_path_buf();
+        PathProvider::ExternalPath { path_buf }
+    }
+}
 
 /// The information needed to start a [`LocalNet`].
 pub struct LocalNetConfig {
@@ -43,6 +242,8 @@ pub struct LocalNetConfig {
     pub num_initial_validators: usize,
     pub num_shards: usize,
     pub policy: ResourceControlPolicy,
+    pub storage_config_builder: StorageConfigBuilder,
+    pub path_provider: PathProvider,
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -57,8 +258,8 @@ pub struct LocalNet {
     running_validators: BTreeMap<usize, Validator>,
     table_name: String,
     set_init: HashSet<(usize, usize)>,
-    tmp_dir: Arc<TempDir>,
-    _guard: Option<StorageServiceGuard>,
+    storage_config: StorageConfig,
+    path_provider: PathProvider,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -129,11 +330,11 @@ impl Validator {
 impl LocalNetConfig {
     pub fn new_test(database: Database, network: Network) -> Self {
         let num_shards = match database {
-            Database::Service => 4,
             Database::RocksDb => 1,
-            Database::DynamoDb => 4,
-            Database::ScyllaDb => 4,
+            _ => 4,
         };
+        let storage_config_builder = StorageConfigBuilder::TestConfig;
+        let path_provider = PathProvider::create_temporary_directory().unwrap();
         Self {
             database,
             network,
@@ -144,6 +345,8 @@ impl LocalNetConfig {
             table_name: linera_views::test_utils::generate_test_namespace(),
             num_initial_validators: 4,
             num_shards,
+            storage_config_builder,
+            path_provider,
         }
     }
 }
@@ -153,19 +356,11 @@ impl LineraNetConfig for LocalNetConfig {
     type Net = LocalNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
+        let server_config = self.storage_config_builder.build(self.database).await;
         ensure!(
             self.num_shards == 1 || self.database != Database::RocksDb,
             "Multiple shards not supported with RocksDB"
         );
-        let guard = match self.database {
-            Database::Service => {
-                let binary = get_service_storage_binary().await?.display().to_string();
-                let builder =
-                    StorageServiceBuilder::new(END_TO_END_STORAGE_SERVICE_ENDPOINT, binary);
-                Some(builder.run_service().await.expect("child"))
-            }
-            _ => None,
-        };
         let mut net = LocalNet::new(
             self.database,
             self.network,
@@ -173,7 +368,8 @@ impl LineraNetConfig for LocalNetConfig {
             self.table_name,
             self.num_initial_validators,
             self.num_shards,
-            guard,
+            server_config,
+            self.path_provider,
         )?;
         let client = net.make_client().await;
         ensure!(
@@ -209,7 +405,7 @@ impl LineraNet for LocalNet {
 
     async fn make_client(&mut self) -> ClientWrapper {
         let client = ClientWrapper::new(
-            self.tmp_dir.clone(),
+            self.path_provider.clone(),
             self.network,
             self.testing_prng_seed,
             self.next_client_id,
@@ -230,6 +426,7 @@ impl LineraNet for LocalNet {
 }
 
 impl LocalNet {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         database: Database,
         network: Network,
@@ -237,7 +434,8 @@ impl LocalNet {
         table_name: String,
         num_initial_validators: usize,
         num_shards: usize,
-        guard: Option<StorageServiceGuard>,
+        storage_config: StorageConfig,
+        path_provider: PathProvider,
     ) -> Result<Self> {
         Ok(Self {
             database,
@@ -250,15 +448,15 @@ impl LocalNet {
             running_validators: BTreeMap::new(),
             table_name,
             set_init: HashSet::new(),
-            tmp_dir: Arc::new(tempdir()?),
-            _guard: guard,
+            storage_config,
+            path_provider,
         })
     }
 
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
         let path = resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
-        command.current_dir(self.tmp_dir.path());
+        command.current_dir(self.path_provider.path());
         Ok(command)
     }
 
@@ -284,7 +482,10 @@ impl LocalNet {
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
         let n = server_number;
-        let path = self.tmp_dir.path().join(format!("validator_{n}.toml"));
+        let path = self
+            .path_provider
+            .path()
+            .join(format!("validator_{n}.toml"));
         let port = Self::proxy_port(n);
         let internal_port = Self::internal_port(n);
         let metrics_port = Self::proxy_metrics_port(n);
@@ -389,30 +590,20 @@ impl LocalNet {
     }
 
     async fn run_server(&mut self, validator: usize, shard: usize) -> Result<Child> {
-        let (storage, key) = match self.database {
-            Database::Service => (
-                format!(
-                    "service:http://{}:{}_server_{}_db",
-                    END_TO_END_STORAGE_SERVICE_ENDPOINT, self.table_name, validator
-                ),
-                (validator, 0),
-            ),
-            Database::RocksDb => (
-                format!("rocksdb:server_{}_{}.db", validator, shard),
-                (validator, shard),
-            ),
-            Database::DynamoDb => (
-                format!(
-                    "dynamodb:{}_server_{}.db:localstack",
-                    self.table_name, validator
-                ),
-                (validator, 0),
-            ),
-            Database::ScyllaDb => (
-                format!("scylladb:{}_server_{}_db", self.table_name, validator),
-                (validator, 0),
-            ),
+        let shard_str = match self.database {
+            Database::RocksDb => format!("_{}", shard),
+            _ => String::new(),
         };
+        let namespace = format!("{}_server_{}{}_db", self.table_name, validator, shard_str);
+        let key = match self.database {
+            Database::RocksDb => (validator, shard),
+            _ => (validator, 0),
+        };
+        let storage = StorageConfigNamespace {
+            storage_config: self.storage_config.clone(),
+            namespace,
+        }
+        .to_string();
         if !self.set_init.contains(&key) {
             let max_try = 4;
             let mut i_try = 0;

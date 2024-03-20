@@ -6,6 +6,7 @@ use crate::cli_wrappers::{
     helmfile::HelmFile,
     kind::KindCluster,
     kubectl::KubectlInstance,
+    local_net::PathProvider,
     util::get_github_root,
     ClientWrapper, LineraNet, LineraNetConfig, Network,
 };
@@ -247,8 +248,11 @@ impl LineraNet for LocalKubernetesNet {
     }
 
     async fn make_client(&mut self) -> ClientWrapper {
+        let path_provider = PathProvider::TemporaryDirectory {
+            tmp_dir: self.tmp_dir.clone(),
+        };
         let client = ClientWrapper::new(
-            self.tmp_dir.clone(),
+            path_provider,
             self.network,
             self.testing_prng_seed,
             self.next_client_id,

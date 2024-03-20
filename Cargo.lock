@@ -3385,6 +3385,7 @@ dependencies = [
  "assert_matches",
  "async-graphql",
  "async-graphql-axum",
+ "async-lock",
  "async-trait",
  "axum 0.7.4",
  "base64 0.22.0",

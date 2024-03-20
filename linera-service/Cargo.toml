@@ -35,6 +35,7 @@ anyhow.workspace = true
 assert_matches.workspace = true
 async-graphql.workspace = true
 async-graphql-axum.workspace = true
+async-lock.workspace = true
 async-trait.workspace = true
 axum = { workspace = true, features = ["ws"] }
 bcs.workspace = true

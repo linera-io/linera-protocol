@@ -9,12 +9,11 @@ use linera_indexer_graphql_client::{
     operations::{get_operation, GetOperation, OperationKey},
 };
 use linera_service::cli_wrappers::{
-    local_net::{Database, LocalNetConfig},
+    local_net::{Database, LocalNetConfig, PathProvider},
     LineraNet, LineraNetConfig, Network,
 };
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
-use std::{str::FromStr, sync::Arc, time::Duration};
-use tempfile::TempDir;
+use std::{str::FromStr, time::Duration};
 use test_case::test_case;
 use tokio::{
     process::{Child, Command},
@@ -31,14 +30,14 @@ fn reqwest_client() -> reqwest::Client {
         .unwrap()
 }
 
-async fn run_indexer(tmp_dir: &Arc<TempDir>) -> Child {
+async fn run_indexer(path_provider: &PathProvider) -> Child {
     let port = 8081;
     let path = resolve_binary("linera-indexer", "linera-indexer-example")
         .await
         .unwrap();
     let mut command = Command::new(path);
     command
-        .current_dir(tmp_dir.path())
+        .current_dir(path_provider.path())
         .kill_on_drop(true)
         .args(["run"]);
     let child = command.spawn().unwrap();
@@ -92,7 +91,7 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
 
     let (mut net, client) = config.instantiate().await.unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
-    let mut indexer = run_indexer(&client.tmp_dir).await;
+    let mut indexer = run_indexer(&client.path_provider).await;
 
     // check operations plugin
     let req_client = reqwest_client();
