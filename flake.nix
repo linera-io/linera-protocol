@@ -18,11 +18,8 @@
       let
         cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         nonRustDeps = with pkgs; [
+          # for building
           clang
-          jq
-          kubernetes-helm
-          kind
-          kubectl
           libclang.lib
           libiconv
           nodejs
@@ -30,6 +27,17 @@
           protobuf
           pkg-config
           rocksdb
+
+          # for testing
+          jq
+          kubernetes-helm
+          kind
+          kubectl
+
+          # for Wasm testing
+          chromium
+          chromedriver
+          wasm-pack
         ];
         rustBuildToolchain = (pkgs.rust-bin.fromRustupToolchainFile
           ./toolchains/build/rust-toolchain.toml);
