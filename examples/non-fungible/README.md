@@ -6,6 +6,8 @@ This example application implements non-fungible tokens (NFTs), showcasing the c
 
 Once this application's bytecode is published on a Linera chain, that application will contain the registry of the different NFTs.
 
+Some portions of this are very similar to the `fungible` README, and we'll refer to it throughout. Bash commands will always be included here for testing purposes.
+
 # How It Works
 
 Each chain maintains a subset of NFTs, represented as unique token identifiers. NFT ownership is tracked across one or multiple chains, allowing for rich, cross-chain interactions.
@@ -26,7 +28,14 @@ NFTs can be transferred to various destinations, including:
 
 ## Setting Up
 
-Most of this can be referred to the [fungible app README](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#setting-up), except for at the end when compiling and publishing the bytecode, what you'll need to do will be slightly different:
+Most of this can be referred to the [fungible app README](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#setting-up), except for at the end when compiling and publishing the bytecode, what you'll need to do will be slightly different.
+
+```bash
+export PATH="$PWD/target/debug:$PATH"
+source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
+
+linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37
+```
 
 Compile the `non-fungible` application WebAssembly binaries, and publish them as an application bytecode:
 
@@ -44,6 +53,15 @@ Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused it 
 Unlike fungible tokens, each NFT is unique and identified by a unique token ID. Also unlike fungible tokens, when creating the NFT application you don't need to specify an initial state or parameters. NFTs will be minted later.
 
 Refer to the [fungible app README](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#creating-a-token) to figure out how to list the chains created for the test in the default wallet, as well as defining some variables corresponding to these values.
+
+```bash
+linera wallet show
+
+CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65  # default chain for the wallet
+OWNER_1=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f  # owner of chain 1
+CHAIN_2=256e1dbc00482ddd619c293cc0df94d366afe7980022bb22d99e33036fd465dd  # another chain in the wallet
+OWNER_2=598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3  # owner of chain 2
+```
 
 To create the NFT application, run the command below:
 
@@ -72,55 +90,32 @@ linera service --port $PORT &
     mutation {
         mint(
             name: "nft1",
-            extraData: [1, 2, 3, 4]
+            payload: [1, 2, 3, 4]
         )
     }
 ```
 - To check that it's there, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
-        nfts {
-            entry(key: "WW4L3Puf+2J8bCqs5jGOB8vRA/TR7Veoqq/IVvq2eqY") {
-                value {
-                    tokenId,
-                    owner,
-                    metadata {
-                        name,
-                        minter,
-                        extraData
-                    }
-                }
-            }
+        nft(tokenId: "XZ2Vai9NN0jhmXuQx4OVkOZhsvGwMw38Jm5xPbqOS9U") {
+            tokenId,
+            owner,
+            name,
+            minter,
+            payload
         }
     }
 ```
 - To check that it's assigned to the owner, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query{
-        owners {
-            entry(key: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f") {
-                value
-            }
-        }
+        ownedNfts(owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f")
     }
 ```
 - To check everything that it's there, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query{
-        nfts {
-            entries {
-                key,
-                value {
-                    tokenId,
-                    owner,
-                    metadata {
-                        name,
-                        minter,
-                        extraData
-                    }
-                }
-            }
-        }
+        nfts
     }
 ```
 - To transfer the NFT to user `$OWNER_2`, still on chain `$CHAIN_1`, run the query:
@@ -128,7 +123,7 @@ linera service --port $PORT &
     mutation {
         transfer(
             sourceOwner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
-            tokenId: "WW4L3Puf+2J8bCqs5jGOB8vRA/TR7Veoqq/IVvq2eqY",
+            tokenId: "XZ2Vai9NN0jhmXuQx4OVkOZhsvGwMw38Jm5xPbqOS9U",
             targetAccount: {
                 chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
                 owner: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
@@ -147,6 +142,11 @@ npm install --no-save
 
 # Start the server but not open the web page right away.
 BROWSER=none npm start &
+```
+
+```bash
+echo "http://localhost:3000/$CHAIN_1?app=$APP_ID&owner=$OWNER_1&port=$PORT"
+echo "http://localhost:3000/$CHAIN_1?app=$APP_ID&owner=$OWNER_2&port=$PORT"
 ```
 
 For the final part, refer to [Fungible Token Example Application - Using web frontend](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#using-web-frontend).
