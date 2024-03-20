@@ -153,8 +153,13 @@ struct MutationRoot;
 
 #[Object]
 impl MutationRoot {
-    async fn mint(&self, name: String, payload: Vec<u8>) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Mint { name, payload }).unwrap()
+    async fn mint(&self, minter: AccountOwner, name: String, payload: Vec<u8>) -> Vec<u8> {
+        bcs::to_bytes(&Operation::Mint {
+            minter,
+            name,
+            payload,
+        })
+        .unwrap()
     }
 
     async fn transfer(
