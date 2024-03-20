@@ -8,7 +8,7 @@ mod wasm;
 use crate::{
     client::{
         client_test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder},
-        ChainClient, ChainClientError, ClientOutcome, MessageAction,
+        ArcChainClient, ChainClientError, ClientOutcome, MessageAction,
     },
     local_node::LocalNodeError,
     node::{
@@ -19,7 +19,7 @@ use crate::{
     worker::{Notification, Reason, WorkerError},
 };
 use assert_matches::assert_matches;
-use futures::{lock::Mutex, StreamExt};
+use futures::StreamExt;
 use linera_base::{
     crypto::*,
     data_types::*,
@@ -38,7 +38,7 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 use test_log::test;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -105,10 +105,10 @@ where
     let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
-    let sender = Arc::new(Mutex::new(sender));
+    let sender = ArcChainClient::new(sender);
     // Listen to the notifications on the sender chain.
     let mut notifications = sender.lock().await.subscribe().await?;
-    ChainClient::listen(sender.clone()).await?;
+    sender.listen().await?;
     {
         let mut sender = sender.lock().await;
         let certificate = sender
