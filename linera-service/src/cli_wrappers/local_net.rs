@@ -5,6 +5,7 @@ use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
     util::ChildExt,
 };
+use crate::storage::StorageConfig;
 use std::path::Path;
 use std::path::PathBuf;
 use anyhow::{anyhow, bail, ensure, Context, Result};
@@ -16,7 +17,6 @@ use linera_base::{
 use linera_execution::ResourceControlPolicy;
 use linera_storage_service::{
     child::StorageServiceGuard,
-    common::ServiceStoreConfig,
 };
 use std::{
     collections::{BTreeMap, HashSet},
@@ -39,29 +39,15 @@ use {
     tempfile::tempdir,
     linera_storage_service::child::{get_free_port, StorageService},
     linera_storage_service::{
-        client::service_config_from_endpoint,
         common::get_service_storage_binary,
     },
 };
 
 #[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
-use linera_views::rocks_db::create_rocks_db_test_config;
-
-#[cfg(all(feature = "aws", any(test, feature = "test")))]
-use linera_views::dynamo_db::create_dynamo_db_test_config;
+use linera_views::rocks_db::create_rocks_db_test_path;
 
 #[cfg(all(feature = "scylladb", any(test, feature = "test")))]
-use linera_views::scylla_db::create_scylla_db_test_config;
-
-#[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::RocksDbStoreConfig;
-
-#[cfg(feature = "aws")]
-use linera_views::dynamo_db::DynamoDbStoreConfig;
-
-#[cfg(feature = "scylladb")]
-use linera_views::scylla_db::ScyllaDbStoreConfig;
-
+use linera_views::scylla_db::create_scylla_db_test_uri;
 
 trait LocalServerInternal: Sized {
     type Config;
@@ -73,53 +59,52 @@ trait LocalServerInternal: Sized {
 }
 
 struct LocalServerServiceInternal {
-    service_config: ServiceStoreConfig,
+    service_endpoint: String,
     _service_guard: StorageServiceGuard,
 }
 
 impl LocalServerInternal for LocalServerServiceInternal {
-    type Config = ServiceStoreConfig;
+    type Config = String;
 
     #[cfg(any(test, feature = "test"))]
     async fn new_test() -> Result<Self> {
-        let endpoint = get_free_port().await.unwrap();
-        let service_config = service_config_from_endpoint(&endpoint)?;
+        let service_endpoint = get_free_port().await.unwrap();
         let binary = get_service_storage_binary().await?.display().to_string();
-        let service = StorageService::new(&endpoint, binary);
+        let service = StorageService::new(&service_endpoint, binary);
         let _service_guard = service.run().await?;
         Ok(Self {
-            service_config,
+            service_endpoint,
             _service_guard,
         })
     }
 
     fn get_config(&self) -> Self::Config {
-        self.service_config.clone()
+        self.service_endpoint.clone()
     }
 }
 
 #[cfg(feature = "rocksdb")]
 struct LocalServerRocksDbInternal {
-    rocks_db_config: RocksDbStoreConfig,
+    rocks_db_path: PathBuf,
     _temp_dir: Option<TempDir>,
 }
 
 #[cfg(feature = "rocksdb")]
 impl LocalServerInternal for LocalServerRocksDbInternal {
-    type Config = RocksDbStoreConfig;
+    type Config = PathBuf;
 
     #[cfg(any(test, feature = "test"))]
     async fn new_test() -> Result<Self> {
-        let (rocks_db_config, temp_dir) = create_rocks_db_test_config().await;
+        let (rocks_db_path, temp_dir) = create_rocks_db_test_path();
         let _temp_dir = Some(temp_dir);
         Ok(Self {
-            rocks_db_config,
+            rocks_db_path,
             _temp_dir,
         })
     }
 
     fn get_config(&self) -> Self::Config {
-        self.rocks_db_config.clone()
+        self.rocks_db_path.clone()
     }
 }
 
@@ -170,69 +155,49 @@ static LOCAL_SERVER_SERVICE: Lazy<LocalServer<LocalServerServiceInternal>> =
 static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> =
     Lazy::new(LocalServer::new);
 
-/// A server config to be used for the construction of the config.
-#[derive(Debug)]
-pub enum LocalServerConfig {
-    Service {
-        service_config: ServiceStoreConfig,
-    },
-    #[cfg(feature = "rocksdb")]
-    RocksDb {
-        rocks_db_config: RocksDbStoreConfig,
-    },
-    #[cfg(feature = "aws")]
-    DynamoDb {
-        dynamo_db_config: DynamoDbStoreConfig,
-    },
-    #[cfg(feature = "scylladb")]
-    ScyllaDb {
-        scylla_db_config: ScyllaDbStoreConfig,
-    },
-}
-
 #[cfg(any(test, feature = "test"))]
-async fn make_testing_config(database: Database) -> LocalServerConfig {
+async fn make_testing_config(database: Database) -> StorageConfig {
     match database {
         Database::Service => {
-            let service_config = LOCAL_SERVER_SERVICE.get_config().await;
-            LocalServerConfig::Service { service_config }
+            let endpoint = LOCAL_SERVER_SERVICE.get_config().await;
+            StorageConfig::Service { endpoint }
         }
         #[cfg(feature = "rocksdb")]
         Database::RocksDb => {
-            let rocks_db_config = LOCAL_SERVER_ROCKS_DB.get_config().await;
-            LocalServerConfig::RocksDb { rocks_db_config }
+            let path = LOCAL_SERVER_ROCKS_DB.get_config().await;
+            StorageConfig::RocksDb { path }
         }
         #[cfg(feature = "aws")]
         Database::DynamoDb => {
-            let dynamo_db_config = create_dynamo_db_test_config().await;
-            LocalServerConfig::DynamoDb { dynamo_db_config }
+            let use_localstack = true;
+            StorageConfig::DynamoDb { use_localstack }
         }
         #[cfg(feature = "scylladb")]
         Database::ScyllaDb => {
-            let scylla_db_config = create_scylla_db_test_config().await;
-            LocalServerConfig::ScyllaDb { scylla_db_config }
+            let uri = create_scylla_db_test_uri();
+            StorageConfig::ScyllaDb { uri }
         }
     }
 }
 
-pub enum LocalServerConfigBuilder {
+pub enum StorageConfigBuilder {
     #[cfg(any(test, feature = "test"))]
     TestConfig,
     ExistingConfig {
-        local_server_config: LocalServerConfig,
+        storage_config: StorageConfig,
     }
 }
 
-impl LocalServerConfigBuilder {
+impl StorageConfigBuilder {
     #[allow(unused_variables)]
-    pub async fn build(self, database: Database) -> LocalServerConfig {
+    pub async fn build(self, database: Database) -> StorageConfig {
         match self {
             #[cfg(any(test, feature = "test"))]
-            LocalServerConfigBuilder::TestConfig => {
+            StorageConfigBuilder::TestConfig => {
                 make_testing_config(database).await
             },
-            LocalServerConfigBuilder::ExistingConfig{ local_server_config } => {
-                local_server_config
+            StorageConfigBuilder::ExistingConfig{ storage_config } => {
+                storage_config
             }
         }
     }
@@ -285,7 +250,7 @@ pub struct LocalNetConfig {
     pub num_initial_validators: usize,
     pub num_shards: usize,
     pub policy: ResourceControlPolicy,
-    pub server_config_builder: LocalServerConfigBuilder,
+    pub storage_config_builder: StorageConfigBuilder,
     pub path_provider: PathProvider,
 }
 
@@ -301,7 +266,7 @@ pub struct LocalNet {
     running_validators: BTreeMap<usize, Validator>,
     table_name: String,
     set_init: HashSet<(usize, usize)>,
-    server_config: LocalServerConfig,
+    storage_config: StorageConfig,
     path_provider: PathProvider,
 }
 
@@ -380,7 +345,7 @@ impl LocalNetConfig {
             Database::RocksDb => 1,
             _ => 4,
         };
-        let server_config_builder = LocalServerConfigBuilder::TestConfig;
+        let storage_config_builder = StorageConfigBuilder::TestConfig;
         let path_provider = PathProvider::new_test().unwrap();
         Self {
             database,
@@ -392,7 +357,7 @@ impl LocalNetConfig {
             table_name: linera_views::test_utils::generate_test_namespace(),
             num_initial_validators: 4,
             num_shards,
-            server_config_builder,
+            storage_config_builder,
             path_provider,
         }
     }
@@ -403,7 +368,7 @@ impl LineraNetConfig for LocalNetConfig {
     type Net = LocalNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
-        let server_config = self.server_config_builder.build(self.database).await;
+        let server_config = self.storage_config_builder.build(self.database).await;
         #[cfg(feature = "rocksdb")]
         ensure!(
             self.num_shards == 1 || self.database != Database::RocksDb,
@@ -481,7 +446,7 @@ impl LocalNet {
         table_name: String,
         num_initial_validators: usize,
         num_shards: usize,
-        server_config: LocalServerConfig,
+        storage_config: StorageConfig,
         path_provider: PathProvider,
     ) -> Result<Self> {
         Ok(Self {
@@ -495,7 +460,7 @@ impl LocalNet {
             running_validators: BTreeMap::new(),
             table_name,
             set_init: HashSet::new(),
-            server_config,
+            storage_config,
             path_provider,
         })
     }
@@ -647,23 +612,21 @@ impl LocalNet {
         };
         let storage = match self.database {
             Database::Service => {
-                let LocalServerConfig::Service { service_config } =
-                    &self.server_config
+                let StorageConfig::Service { endpoint } =
+                    &self.storage_config
                 else {
                     unreachable!();
                 };
-                let endpoint = &service_config.endpoint;
                 format!("service:{}:{}", endpoint, namespace)
             }
             #[cfg(feature = "rocksdb")]
             Database::RocksDb => {
-                let LocalServerConfig::RocksDb { rocks_db_config } =
-                    &self.server_config
+                let StorageConfig::RocksDb { path } =
+                    &self.storage_config
                 else {
                     unreachable!();
                 };
-                let path_buf = rocks_db_config.path_buf.to_str().unwrap();
-                format!("rocksdb:{}:{}", path_buf, namespace)
+                format!("rocksdb:{}:{}", path.display(), namespace)
             }
             #[cfg(feature = "aws")]
             Database::DynamoDb => {

@@ -343,6 +343,7 @@ pub struct RocksDbStore {
 }
 
 /// Creates the common initialization for RocksDB
+#[cfg(any(test, feature = "test"))]
 pub fn create_rocks_db_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
         max_concurrent_queries: None,
@@ -351,16 +352,24 @@ pub fn create_rocks_db_common_config() -> CommonStoreConfig {
     }
 }
 
-/// Returns the test config and a guard for the temporary directory
-pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
+/// Returns the test path for RocksDb without common config.
+#[cfg(any(test, feature = "test"))]
+pub fn create_rocks_db_test_path() -> (PathBuf, TempDir) {
     let dir = TempDir::new().unwrap();
     let path_buf = dir.path().to_path_buf();
+    (path_buf, dir)
+}
+
+/// Returns the test config and a guard for the temporary directory
+#[cfg(any(test, feature = "test"))]
+pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
+    let (path_buf, tmp_dir) = create_rocks_db_test_path();
     let common_config = create_rocks_db_common_config();
     let store_config = RocksDbStoreConfig {
         path_buf,
         common_config,
     };
-    (store_config, dir)
+    (store_config, tmp_dir)
 }
 
 /// Creates a RocksDB database client to be used for tests.

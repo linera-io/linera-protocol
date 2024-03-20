@@ -30,21 +30,18 @@ use linera_execution::{
     system::{SystemChannel, UserData},
     Message, ResourceControlPolicy, SystemMessage,
 };
-use linera_views::rocks_db::RocksDbStoreConfig;
-use linera_views::common::CommonStoreConfig;
 use linera_service::{
     chain_listener::ClientContext as _,
     cli_wrappers::{
         self,
-        local_net::{Database, PathProvider, LocalNetConfig, LocalServerConfigBuilder},
-        local_net::{LocalServerConfig},
+        local_net::{Database, PathProvider, LocalNetConfig, StorageConfigBuilder},
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain},
     faucet::FaucetService,
     node_service::NodeService,
     project::{self, Project},
-    storage::Runnable,
+    storage::{StorageConfig, Runnable},
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -1514,11 +1511,9 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                     let tmp_dir = tempdir()?;
                     let path = tmp_dir.path();
                     let path_buf = path.to_path_buf();
-                    let common_config = CommonStoreConfig::default();
-                    let rocks_db_config = RocksDbStoreConfig { path_buf, common_config };
-                    let local_server_config = LocalServerConfig::RocksDb { rocks_db_config };
-                    let server_config_builder = LocalServerConfigBuilder::ExistingConfig { local_server_config };
-                    let path_provider = PathProvider::new(path);
+                    let storage_config = StorageConfig::RocksDb { path: path_buf };
+                    let storage_config_builder = StorageConfigBuilder::ExistingConfig { storage_config };
+                    let path_provider = PathProvider::new(&path);
                     let config = LocalNetConfig {
                         network: Network::Grpc,
                         database: Database::RocksDb,
@@ -1529,7 +1524,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                         num_initial_validators: *validators,
                         num_shards: *shards,
                         policy: ResourceControlPolicy::default(),
-                        server_config_builder,
+                        storage_config_builder,
                         path_provider,
                     };
                     let (mut net, client1) = config.instantiate().await?;
