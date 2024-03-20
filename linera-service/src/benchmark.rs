@@ -84,16 +84,14 @@ async fn benchmark_with_fungible(
     uniform: bool,
 ) -> Result<()> {
     info!("Creating the clients and initializing the wallets");
-    let tmp_dir = Arc::new(tempdir().context("cannot create temp dir")?);
-    let path_provider = PathProvider::TemporaryDirectory { tmp_dir };
+    let path_provider = PathProvider::new_test();
     let publisher = ClientWrapper::new(path_provider, Network::Grpc, None, num_wallets);
     publisher
         .wallet_init(&[], FaucetOption::NewChain(&faucet))
         .await?;
     let clients = (0..num_wallets)
         .map(|n| {
-            let tmp_dir = Arc::new(tempdir().context("cannot create temp dir")?);
-            let path_provider = PathProvider::TemporaryDirectory { tmp_dir };
+            let path_provider = PathProvider::new_test();
             Ok(ClientWrapper::new(path_provider, Network::Grpc, None, n))
         })
         .collect::<Result<Vec<_>, anyhow::Error>>()?;

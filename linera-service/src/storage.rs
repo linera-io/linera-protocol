@@ -46,7 +46,7 @@ pub enum StoreConfig {
     Service(ServiceStoreConfig, String),
     /// The memory key value store
     Memory(MemoryStoreConfig, String),
-    /// The RocksDb key value store
+    /// The RocksDB key value store
     #[cfg(feature = "rocksdb")]
     RocksDb(RocksDbStoreConfig, String),
     /// The DynamoDb key value store
@@ -67,8 +67,8 @@ pub enum StorageConfig {
         endpoint: String,
     },
     /// The memory description
-    Memory {},
-    /// The RocksDb description
+    Memory,
+    /// The RocksDB description
     #[cfg(feature = "rocksdb")]
     RocksDb {
         /// The path used
@@ -114,7 +114,7 @@ impl FromStr for StorageConfigNamespace {
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         if input == MEMORY {
             let namespace = DEFAULT_NAMESPACE.to_string();
-            let storage_config = StorageConfig::Memory {};
+            let storage_config = StorageConfig::Memory;
             return Ok(StorageConfigNamespace {
                 storage_config,
                 namespace,
@@ -122,7 +122,7 @@ impl FromStr for StorageConfigNamespace {
         }
         if let Some(s) = input.strip_prefix(MEMORY_EXT) {
             let namespace = s.to_string();
-            let storage_config = StorageConfig::Memory {};
+            let storage_config = StorageConfig::Memory;
             return Ok(StorageConfigNamespace {
                 storage_config,
                 namespace,
@@ -281,7 +281,7 @@ impl StorageConfigNamespace {
                 };
                 Ok(StoreConfig::Service(config, namespace))
             }
-            StorageConfig::Memory {} => {
+            StorageConfig::Memory => {
                 let config = MemoryStoreConfig { common_config };
                 Ok(StoreConfig::Memory(config, namespace))
             }
@@ -322,7 +322,7 @@ impl std::fmt::Display for StorageConfigNamespace {
             StorageConfig::Service { endpoint } => {
                 write!(f, "service:{}:{}", endpoint, namespace)
             }
-            StorageConfig::Memory {} => {
+            StorageConfig::Memory => {
                 write!(f, "memory:{}", namespace)
             }
             #[cfg(feature = "rocksdb")]
@@ -578,21 +578,21 @@ fn test_memory_storage_config_from_str() {
     assert_eq!(
         StorageConfigNamespace::from_str("memory:").unwrap(),
         StorageConfigNamespace {
-            storage_config: StorageConfig::Memory {},
+            storage_config: StorageConfig::Memory,
             namespace: "".into()
         }
     );
     assert_eq!(
         StorageConfigNamespace::from_str("memory").unwrap(),
         StorageConfigNamespace {
-            storage_config: StorageConfig::Memory {},
+            storage_config: StorageConfig::Memory,
             namespace: DEFAULT_NAMESPACE.into()
         }
     );
     assert_eq!(
         StorageConfigNamespace::from_str("memory:table_linera").unwrap(),
         StorageConfigNamespace {
-            storage_config: StorageConfig::Memory {},
+            storage_config: StorageConfig::Memory,
             namespace: DEFAULT_NAMESPACE.into()
         }
     );

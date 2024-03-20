@@ -767,7 +767,7 @@ pub fn create_scylla_db_common_config() -> CommonStoreConfig {
     }
 }
 
-/// Creates the uri used for the tests.
+/// Creates the URI used for the tests.
 #[cfg(any(test, feature = "test"))]
 pub fn create_scylla_db_test_uri() -> String {
     "localhost:9042".to_string()
