@@ -131,7 +131,7 @@ impl FromStr for StorageConfigNamespace {
         if let Some(s) = input.strip_prefix(STORAGE_SERVICE) {
             if s.is_empty() {
                 return Err(format_err!(
-                    "For Storage service, the formatting has to be service:endpoint:namespace"
+                    "For Storage service, the formatting has to be service:endpoint:namespace, example service:tcp:127.0.0.1:7878:table_do_my_test"
                 ));
             }
             let parts = s.split(':').collect::<Vec<_>>();
@@ -139,11 +139,12 @@ impl FromStr for StorageConfigNamespace {
                 return Err(format_err!("We should have one endpoint and one namespace"));
             }
             let protocol = parts[0];
-            let address = parts[1];
+            if protocol != "tcp" {
+                return Err(format_err!("Only allowed protocol is tcp"));
+            }
+            let endpoint = parts[1];
             let port = parts[2];
-            let mut endpoint = protocol.to_string();
-            endpoint.push(':');
-            endpoint.push_str(address);
+            let mut endpoint = endpoint.to_string();
             endpoint.push(':');
             endpoint.push_str(port);
             let endpoint = endpoint.to_string();
@@ -320,7 +321,7 @@ impl std::fmt::Display for StorageConfigNamespace {
         let namespace = &self.namespace;
         match &self.storage_config {
             StorageConfig::Service { endpoint } => {
-                write!(f, "service:{}:{}", endpoint, namespace)
+                write!(f, "service:tcp:{}:{}", endpoint, namespace)
             }
             StorageConfig::Memory => {
                 write!(f, "memory:{}", namespace)
@@ -601,16 +602,16 @@ fn test_memory_storage_config_from_str() {
 #[test]
 fn test_shared_store_config_from_str() {
     assert_eq!(
-        StorageConfigNamespace::from_str("service:http://127.0.0.1:8942:linera").unwrap(),
+        StorageConfigNamespace::from_str("service:tcp:127.0.0.1:8942:linera").unwrap(),
         StorageConfigNamespace {
             storage_config: StorageConfig::Service {
-                endpoint: "http://127.0.0.1:8942".to_string()
+                endpoint: "127.0.0.1:8942".to_string()
             },
             namespace: "linera".into()
         }
     );
-    assert!(StorageConfigNamespace::from_str("service:http://127.0.0.1:8942").is_err());
-    assert!(StorageConfigNamespace::from_str("service:http://127.0.0.1:linera").is_err());
+    assert!(StorageConfigNamespace::from_str("service:tcp:127.0.0.1:8942").is_err());
+    assert!(StorageConfigNamespace::from_str("service:tcp:127.0.0.1:linera").is_err());
 }
 
 #[cfg(feature = "rocksdb")]

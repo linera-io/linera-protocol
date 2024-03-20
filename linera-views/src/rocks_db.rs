@@ -7,7 +7,7 @@ use crate::{
         get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyValueStore,
         ReadableKeyValueStore, WritableKeyValueStore,
     },
-    lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
+    lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 use async_trait::async_trait;
@@ -27,12 +27,9 @@ use crate::metering::{
 
 #[cfg(with_testing)]
 use {
-    crate::{
-        lru_caching::TEST_CACHE_SIZE,
-        test_utils::generate_test_namespace,
-    },
+    crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace},
     tempfile::TempDir,
-}
+};
 
 /// The number of streams for the test
 #[cfg(with_testing)]

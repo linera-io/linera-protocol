@@ -241,7 +241,8 @@ impl AdminKeyValueStore for ServiceStoreClient {
     type Config = ServiceStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ServiceContextError> {
-        let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
+        let endpoint = format!("http://{}", config.endpoint);
+        let endpoint = Endpoint::from_shared(endpoint)?;
         let client = StoreProcessorClient::connect(endpoint).await?;
         let client = Arc::new(RwLock::new(client));
         let semaphore = config
@@ -261,7 +262,8 @@ impl AdminKeyValueStore for ServiceStoreClient {
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceContextError> {
         let query = RequestListAll {};
         let request = tonic::Request::new(query);
-        let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
+        let endpoint = format!("http://{}", config.endpoint);
+        let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
         let response = client.process_list_all(request).await?;
         let response = response.into_inner();
@@ -276,7 +278,8 @@ impl AdminKeyValueStore for ServiceStoreClient {
     async fn delete_all(config: &Self::Config) -> Result<(), ServiceContextError> {
         let query = RequestDeleteAll {};
         let request = tonic::Request::new(query);
-        let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
+        let endpoint = format!("http://{}", config.endpoint);
+        let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
         let _response = client.process_delete_all(request).await?;
         Ok(())
@@ -286,7 +289,8 @@ impl AdminKeyValueStore for ServiceStoreClient {
         let namespace = bcs::to_bytes(namespace)?;
         let query = RequestExistsNamespace { namespace };
         let request = tonic::Request::new(query);
-        let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
+        let endpoint = format!("http://{}", config.endpoint);
+        let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
         let response = client.process_exists_namespace(request).await?;
         let response = response.into_inner();
@@ -298,7 +302,8 @@ impl AdminKeyValueStore for ServiceStoreClient {
         let namespace = bcs::to_bytes(namespace)?;
         let query = RequestCreateNamespace { namespace };
         let request = tonic::Request::new(query);
-        let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
+        let endpoint = format!("http://{}", config.endpoint);
+        let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
         let _response = client.process_create_namespace(request).await?;
         Ok(())
@@ -308,7 +313,8 @@ impl AdminKeyValueStore for ServiceStoreClient {
         let namespace = bcs::to_bytes(namespace)?;
         let query = RequestDeleteNamespace { namespace };
         let request = tonic::Request::new(query);
-        let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
+        let endpoint = format!("http://{}", config.endpoint);
+        let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
         let _response = client.process_delete_namespace(request).await?;
         Ok(())
@@ -331,7 +337,7 @@ pub fn service_config_from_endpoint(
     endpoint: &str,
 ) -> Result<ServiceStoreConfig, ServiceContextError> {
     let common_config = create_service_store_common_config();
-    let endpoint = format!("http://{}", endpoint);
+    let endpoint = endpoint.to_string();
     Ok(ServiceStoreConfig {
         endpoint,
         common_config,

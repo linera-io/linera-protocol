@@ -17,8 +17,7 @@ use linera_service::cli_wrappers::{
 use port_selector::random_free_tcp_port;
 use rand::{Rng as _, SeedableRng};
 use serde_json::Value;
-use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
-use tempfile::tempdir;
+use std::{collections::BTreeMap, path::Path, time::Duration};
 use tokio::time::Instant;
 use tracing::info;
 
@@ -84,14 +83,14 @@ async fn benchmark_with_fungible(
     uniform: bool,
 ) -> Result<()> {
     info!("Creating the clients and initializing the wallets");
-    let path_provider = PathProvider::new_test();
+    let path_provider = PathProvider::new_test().unwrap();
     let publisher = ClientWrapper::new(path_provider, Network::Grpc, None, num_wallets);
     publisher
         .wallet_init(&[], FaucetOption::NewChain(&faucet))
         .await?;
     let clients = (0..num_wallets)
         .map(|n| {
-            let path_provider = PathProvider::new_test();
+            let path_provider = PathProvider::new_test().unwrap();
             Ok(ClientWrapper::new(path_provider, Network::Grpc, None, n))
         })
         .collect::<Result<Vec<_>, anyhow::Error>>()?;
