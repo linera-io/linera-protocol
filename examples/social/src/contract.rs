@@ -21,20 +21,33 @@ const POSTS_CHANNEL_NAME: &[u8] = b"posts";
 /// The number of recent posts sent in each cross-chain message.
 const RECENT_POSTS: usize = 10;
 
-linera_sdk::contract!(Social);
+pub struct SocialContract {
+    state: Social,
+    runtime: ContractRuntime,
+}
 
-impl WithContractAbi for Social {
+linera_sdk::contract!(SocialContract);
+
+impl WithContractAbi for SocialContract {
     type Abi = social::SocialAbi;
 }
 
 #[async_trait]
-impl Contract for Social {
+impl Contract for SocialContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type State = Social;
+
+    async fn new(state: Social, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+        Ok(SocialContract { state, runtime })
+    }
+
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
+    }
 
     async fn initialize(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _argument: (),
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
@@ -45,7 +58,6 @@ impl Contract for Social {
 
     async fn execute_operation(
         &mut self,
-        _runtime: &mut ContractRuntime,
         operation: Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         match operation {
@@ -61,11 +73,11 @@ impl Contract for Social {
 
     async fn execute_message(
         &mut self,
-        runtime: &mut ContractRuntime,
         message: Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         let mut outcome = ExecutionOutcome::default();
-        let message_id = runtime
+        let message_id = self
+            .runtime
             .message_id()
             .expect("Message ID has to be available when executing a message");
         match message {
@@ -86,24 +98,23 @@ impl Contract for Social {
 
     async fn handle_application_call(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _call: (),
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         Err(Error::ApplicationCallsNotSupported)
     }
 }
 
-impl Social {
+impl SocialContract {
     async fn execute_post_operation(
         &mut self,
         text: String,
     ) -> Result<ExecutionOutcome<Message>, Error> {
         let timestamp = system_api::current_system_time();
-        self.own_posts.push(OwnPost { timestamp, text });
-        let count = self.own_posts.count();
+        self.state.own_posts.push(OwnPost { timestamp, text });
+        let count = self.state.own_posts.count();
         let mut posts = vec![];
         for index in (0..count).rev().take(RECENT_POSTS) {
-            let maybe_post = self.own_posts.get(index).await?;
+            let maybe_post = self.state.own_posts.get(index).await?;
             let own_post = maybe_post
                 .expect("post with valid index missing; this is a bug in the social application!");
             posts.push(own_post);
@@ -125,7 +136,7 @@ impl Social {
                 author: message_id.chain_id,
                 index,
             };
-            self.received_posts.insert(&key, post.text)?;
+            self.state.received_posts.insert(&key, post.text)?;
         }
         Ok(())
     }

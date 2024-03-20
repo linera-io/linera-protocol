@@ -39,7 +39,7 @@ macro_rules! contract {
                     let argument = serde_json::from_slice(&argument)?;
 
                     application
-                        .initialize(&mut $crate::ContractRuntime::default(), argument)
+                        .initialize(argument)
                         .blocking_wait()
                         .map(|outcome| outcome.into_raw())
                 },
@@ -59,7 +59,7 @@ macro_rules! contract {
                         bcs::from_bytes(&operation)?;
 
                     application
-                        .execute_operation(&mut $crate::ContractRuntime::default(), operation)
+                        .execute_operation(operation)
                         .blocking_wait()
                         .map(|outcome| outcome.into_raw())
                 },
@@ -79,7 +79,7 @@ macro_rules! contract {
                         bcs::from_bytes(&message)?;
 
                     application
-                        .execute_message(&mut $crate::ContractRuntime::default(), message)
+                        .execute_message(message)
                         .blocking_wait()
                         .map(|outcome| outcome.into_raw())
                 },
@@ -99,7 +99,7 @@ macro_rules! contract {
                         bcs::from_bytes(&argument)?;
 
                     application
-                        .handle_application_call(&mut $crate::ContractRuntime::default(), argument)
+                        .handle_application_call(argument)
                         .blocking_wait()
                         .map(|outcome| outcome.into_raw())
                 },
@@ -114,7 +114,7 @@ macro_rules! contract {
                 unsafe { &mut APPLICATION },
                 move |application| {
                     application
-                        .finalize(&mut $crate::ContractRuntime::default())
+                        .finalize()
                         .blocking_wait()
                         .map(|outcome| outcome.into_raw())
                 },
@@ -147,12 +147,16 @@ where
 {
     ContractLogger::install();
 
-    let application =
-        application.get_or_insert_with(|| Application::Storage::load().blocking_wait());
+    let application = application.get_or_insert_with(|| {
+        let state = Application::Storage::load().blocking_wait();
+        Application::new(state, ContractRuntime::new())
+            .blocking_wait()
+            .expect("Failed to create application contract hnadler instance")
+    });
 
     let output = entrypoint(application).map_err(|error| error.to_string())?;
 
-    Application::Storage::store(application).blocking_wait();
+    Application::Storage::store(application.state_mut()).blocking_wait();
 
     Ok(output.into())
 }

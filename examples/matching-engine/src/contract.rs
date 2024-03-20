@@ -5,24 +5,28 @@
 
 mod state;
 use crate::state::{KeyBook, OrderEntry};
+use async_trait::async_trait;
+use fungible::{Account, FungibleTokenAbi};
+use linera_sdk::{
+    base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
+    contract::system_api,
+    ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
+    Resources, ViewStateStorage,
+};
 use matching_engine::{
     product_price_amount, ApplicationCall, Message, Operation, Order, OrderId, OrderNature, Price,
 };
 use state::{LevelView, MatchingEngine, MatchingEngineError};
 use std::cmp::min;
 
-use async_trait::async_trait;
-use fungible::{Account, FungibleTokenAbi};
-use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, ChainId, Owner, WithContractAbi},
-    contract::system_api,
-    ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
-    Resources, ViewStateStorage,
-};
+pub struct MatchingEngineContract {
+    state: MatchingEngine,
+    runtime: ContractRuntime,
+}
 
-linera_sdk::contract!(MatchingEngine);
+linera_sdk::contract!(MatchingEngineContract);
 
-impl WithContractAbi for MatchingEngine {
+impl WithContractAbi for MatchingEngineContract {
     type Abi = matching_engine::MatchingEngineAbi;
 }
 
@@ -47,13 +51,21 @@ pub struct Transfer {
 }
 
 #[async_trait]
-impl Contract for MatchingEngine {
+impl Contract for MatchingEngineContract {
     type Error = MatchingEngineError;
     type Storage = ViewStateStorage<Self>;
+    type State = MatchingEngine;
+
+    async fn new(state: MatchingEngine, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+        Ok(MatchingEngineContract { state, runtime })
+    }
+
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
+    }
 
     async fn initialize(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _argument: (),
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
@@ -68,23 +80,22 @@ impl Contract for MatchingEngine {
     /// locally. Otherwise, it gets transmitted as a message to the chain of the engine.
     async fn execute_operation(
         &mut self,
-        runtime: &mut ContractRuntime,
         operation: Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         let mut outcome = ExecutionOutcome::default();
         match operation {
             Operation::ExecuteOrder { order } => {
                 let owner = Self::get_owner(&order);
-                let chain_id = runtime.chain_id();
-                Self::check_account_authentication(None, runtime.authenticated_signer(), owner)?;
-                if chain_id == runtime.application_id().creation.chain_id {
+                let chain_id = self.runtime.chain_id();
+                self.check_account_authentication(owner)?;
+                if chain_id == self.runtime.application_id().creation.chain_id {
                     self.execute_order_local(order, chain_id).await?;
                 } else {
                     self.execute_order_remote(&mut outcome, order)?;
                 }
             }
             Operation::CloseChain => {
-                for order_id in self.orders.indices().await? {
+                for order_id in self.state.orders.indices().await? {
                     match self.modify_order(order_id, ModifyAmount::All).await {
                         Ok(transfer) => self.send_to(transfer)?,
                         // Orders with amount zero may have been cleared in an earlier iteration.
@@ -101,20 +112,20 @@ impl Contract for MatchingEngine {
     /// Execution of the order on the creation chain
     async fn execute_message(
         &mut self,
-        runtime: &mut ContractRuntime,
         message: Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         ensure!(
-            runtime.chain_id() == runtime.application_id().creation.chain_id,
+            self.runtime.chain_id() == self.runtime.application_id().creation.chain_id,
             Self::Error::MatchingEngineChainOnly
         );
         match message {
             Message::ExecuteOrder { order } => {
                 let owner = Self::get_owner(&order);
-                let message_id = runtime
+                let message_id = self
+                    .runtime
                     .message_id()
                     .expect("Incoming message ID has to be available when executing a message");
-                Self::check_account_authentication(None, runtime.authenticated_signer(), owner)?;
+                self.check_account_authentication(owner)?;
                 self.execute_order_local(order, message_id.chain_id).await?;
             }
         }
@@ -125,20 +136,15 @@ impl Contract for MatchingEngine {
     /// one or a remote one.
     async fn handle_application_call(
         &mut self,
-        runtime: &mut ContractRuntime,
         argument: ApplicationCall,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         let mut outcome = ApplicationCallOutcome::default();
         match argument {
             ApplicationCall::ExecuteOrder { order } => {
                 let owner = Self::get_owner(&order);
-                let chain_id = runtime.chain_id();
-                Self::check_account_authentication(
-                    runtime.authenticated_caller_id(),
-                    runtime.authenticated_signer(),
-                    owner,
-                )?;
-                if chain_id == runtime.application_id().creation.chain_id {
+                let chain_id = self.runtime.chain_id();
+                self.check_account_authentication(owner)?;
+                if chain_id == self.runtime.application_id().creation.chain_id {
                     self.execute_order_local(order, chain_id).await?;
                 } else {
                     self.execute_order_remote(&mut outcome.execution_outcome, order)?;
@@ -149,7 +155,7 @@ impl Contract for MatchingEngine {
     }
 }
 
-impl MatchingEngine {
+impl MatchingEngineContract {
     /// Get the owner from the order
     fn get_owner(order: &Order) -> AccountOwner {
         match order {
@@ -170,15 +176,25 @@ impl MatchingEngine {
 
     /// authenticate the originator of the message
     fn check_account_authentication(
-        authenticated_application_id: Option<ApplicationId>,
-        authenticated_signer: Option<Owner>,
+        &mut self,
         owner: AccountOwner,
     ) -> Result<(), MatchingEngineError> {
         match owner {
-            AccountOwner::User(address) if authenticated_signer == Some(address) => Ok(()),
-            AccountOwner::Application(id) if authenticated_application_id == Some(id) => Ok(()),
-            _ => Err(MatchingEngineError::IncorrectAuthentication),
+            AccountOwner::User(address) => {
+                ensure!(
+                    self.runtime.authenticated_signer() == Some(address),
+                    MatchingEngineError::IncorrectAuthentication
+                )
+            }
+            AccountOwner::Application(id) => {
+                ensure!(
+                    self.runtime.authenticated_caller_id() == Some(id),
+                    MatchingEngineError::IncorrectAuthentication
+                )
+            }
         }
+
+        Ok(())
     }
 
     /// The application engine is trading between two tokens. Those tokens are the parameters of the
@@ -331,7 +347,7 @@ impl MatchingEngine {
         order_id: &OrderId,
         owner: &AccountOwner,
     ) -> Result<(), MatchingEngineError> {
-        let value = self.orders.get(order_id).await?;
+        let value = self.state.orders.get(order_id).await?;
         match value {
             None => Err(MatchingEngineError::OrderNotPresent),
             Some(value) => {
@@ -412,11 +428,15 @@ impl MatchingEngine {
         order_id: OrderId,
         cancel_amount: ModifyAmount,
     ) -> Result<Transfer, MatchingEngineError> {
-        let key_book = self.orders.get(&order_id).await?;
+        let key_book = self.state.orders.get(&order_id).await?;
         let key_book = key_book.ok_or_else(|| MatchingEngineError::OrderNotPresent)?;
         match key_book.nature {
             OrderNature::Bid => {
-                let view = self.bids.load_entry_mut(&key_book.price.to_bid()).await?;
+                let view = self
+                    .state
+                    .bids
+                    .load_entry_mut(&key_book.price.to_bid())
+                    .await?;
                 let (cancel_amount, remove_order_id) =
                     Self::modify_order_level(view, order_id, cancel_amount).await?;
                 if remove_order_id {
@@ -432,7 +452,11 @@ impl MatchingEngine {
                 Ok(transfer)
             }
             OrderNature::Ask => {
-                let view = self.asks.load_entry_mut(&key_book.price.to_ask()).await?;
+                let view = self
+                    .state
+                    .asks
+                    .load_entry_mut(&key_book.price.to_ask())
+                    .await?;
                 let (cancel_count, remove_order_id) =
                     Self::modify_order_level(view, order_id, cancel_amount).await?;
                 if remove_order_id {
@@ -451,7 +475,7 @@ impl MatchingEngine {
 
     /// Gets the order_id that increases starting from 0.
     fn get_new_order_id(&mut self) -> Result<OrderId, MatchingEngineError> {
-        let value = self.next_order_number.get_mut();
+        let value = self.state.next_order_number.get_mut();
         let value_ret = *value;
         *value += 1;
         Ok(value_ret)
@@ -600,14 +624,18 @@ impl MatchingEngine {
         order_id: OrderId,
         price: Price,
     ) -> Result<(), MatchingEngineError> {
-        let account_info = self.account_info.get_mut_or_default(&account.owner).await?;
+        let account_info = self
+            .state
+            .account_info
+            .get_mut_or_default(&account.owner)
+            .await?;
         account_info.orders.insert(order_id);
         let key_book = KeyBook {
             price,
             nature,
             account,
         };
-        self.orders.insert(&order_id, key_book)?;
+        self.state.orders.insert(&order_id, key_book)?;
         Ok(())
     }
 
@@ -620,6 +648,7 @@ impl MatchingEngine {
     ) -> Result<(), MatchingEngineError> {
         let (owner, order_id) = entry;
         let account_info = self
+            .state
             .account_info
             .get_mut(&owner)
             .await
@@ -664,7 +693,8 @@ impl MatchingEngine {
         match nature {
             OrderNature::Bid => {
                 let mut matching_price_asks = Vec::new();
-                self.asks
+                self.state
+                    .asks
                     .for_each_index_while(|price_ask| {
                         let matches = price_ask.to_price() <= *price;
                         if matches {
@@ -674,7 +704,7 @@ impl MatchingEngine {
                     })
                     .await?;
                 for price_ask in matching_price_asks {
-                    let view = self.asks.load_entry_mut(&price_ask).await?;
+                    let view = self.state.asks.load_entry_mut(&price_ask).await?;
                     let remove_entry = Self::level_clearing(
                         view,
                         account,
@@ -686,7 +716,7 @@ impl MatchingEngine {
                     )
                     .await?;
                     if view.queue.count() == 0 {
-                        self.asks.remove_entry(&price_ask)?;
+                        self.state.asks.remove_entry(&price_ask)?;
                     }
                     self.remove_order_ids(remove_entry).await?;
                     if final_amount == Amount::ZERO {
@@ -694,7 +724,7 @@ impl MatchingEngine {
                     }
                 }
                 if final_amount != Amount::ZERO {
-                    let view = self.bids.load_entry_mut(&price.to_bid()).await?;
+                    let view = self.state.bids.load_entry_mut(&price.to_bid()).await?;
                     let order = OrderEntry {
                         amount: final_amount,
                         account: *account,
@@ -707,7 +737,8 @@ impl MatchingEngine {
             }
             OrderNature::Ask => {
                 let mut matching_price_bids = Vec::new();
-                self.bids
+                self.state
+                    .bids
                     .for_each_index_while(|price_bid| {
                         let matches = price_bid.to_price() >= *price;
                         if matches {
@@ -717,7 +748,7 @@ impl MatchingEngine {
                     })
                     .await?;
                 for price_bid in matching_price_bids {
-                    let view = self.bids.load_entry_mut(&price_bid).await?;
+                    let view = self.state.bids.load_entry_mut(&price_bid).await?;
                     let remove_entry = Self::level_clearing(
                         view,
                         account,
@@ -729,7 +760,7 @@ impl MatchingEngine {
                     )
                     .await?;
                     if view.queue.count() == 0 {
-                        self.bids.remove_entry(&price_bid)?;
+                        self.state.bids.remove_entry(&price_bid)?;
                     }
                     self.remove_order_ids(remove_entry).await?;
                     if final_amount == Amount::ZERO {
@@ -737,7 +768,7 @@ impl MatchingEngine {
                     }
                 }
                 if final_amount != Amount::ZERO {
-                    let view = self.asks.load_entry_mut(&price.to_ask()).await?;
+                    let view = self.state.asks.load_entry_mut(&price.to_ask()).await?;
                     let order = OrderEntry {
                         amount: final_amount,
                         account: *account,

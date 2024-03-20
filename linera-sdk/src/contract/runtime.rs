@@ -12,7 +12,7 @@ use linera_base::{
 /// The common runtime to interface with the host executing the contract.
 ///
 /// It automatically caches read-only values received from the host.
-#[derive(Clone, Debug, Default)]
+#[derive(Debug)]
 pub struct ContractRuntime {
     application_id: Option<ApplicationId>,
     chain_id: Option<ChainId>,
@@ -24,6 +24,19 @@ pub struct ContractRuntime {
 }
 
 impl ContractRuntime {
+    /// Creates a new [`ContractRuntime`] instance for a contract.
+    pub(crate) fn new() -> Self {
+        ContractRuntime {
+            application_id: None,
+            chain_id: None,
+            authenticated_signer: None,
+            block_height: None,
+            message_is_bouncing: None,
+            message_id: None,
+            authenticated_caller_id: None,
+        }
+    }
+
     /// Returns the ID of the current application.
     pub fn application_id(&mut self) -> ApplicationId {
         *self

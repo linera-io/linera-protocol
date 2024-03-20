@@ -11,25 +11,41 @@ use fungible::{ApplicationCall, FungibleResponse, Message, Operation};
 use linera_sdk::{
     base::{Account, AccountOwner, Amount, Owner, WithContractAbi},
     contract::system_api,
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
+    ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
 use native_fungible::TICKER_SYMBOL;
 use thiserror::Error;
 
-linera_sdk::contract!(NativeFungibleToken);
+pub struct NativeFungibleTokenContract {
+    state: NativeFungibleToken,
+    runtime: ContractRuntime,
+}
 
-impl WithContractAbi for NativeFungibleToken {
+linera_sdk::contract!(NativeFungibleTokenContract);
+
+impl WithContractAbi for NativeFungibleTokenContract {
     type Abi = fungible::FungibleTokenAbi;
 }
 
 #[async_trait]
-impl Contract for NativeFungibleToken {
+impl Contract for NativeFungibleTokenContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type State = NativeFungibleToken;
+
+    async fn new(
+        state: NativeFungibleToken,
+        runtime: ContractRuntime,
+    ) -> Result<Self, Self::Error> {
+        Ok(NativeFungibleTokenContract { state, runtime })
+    }
+
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
+    }
 
     async fn initialize(
         &mut self,
-        _runtime: &mut ContractRuntime,
         state: Self::InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
@@ -50,7 +66,6 @@ impl Contract for NativeFungibleToken {
 
     async fn execute_operation(
         &mut self,
-        runtime: &mut ContractRuntime,
         operation: Self::Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         match operation {
@@ -59,7 +74,7 @@ impl Contract for NativeFungibleToken {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(runtime.authenticated_signer(), owner)?;
+                self.check_account_authentication(owner)?;
                 let account_owner = owner;
                 let owner = self.normalize_owner(owner);
 
@@ -76,10 +91,7 @@ impl Contract for NativeFungibleToken {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(
-                    runtime.authenticated_signer(),
-                    source_account.owner,
-                )?;
+                self.check_account_authentication(source_account.owner)?;
 
                 let fungible_source_account = source_account;
                 let fungible_target_account = target_account;
@@ -103,7 +115,6 @@ impl Contract for NativeFungibleToken {
     // to be the only message used here, simple message (no authentication, not tracked)
     async fn execute_message(
         &mut self,
-        runtime: &mut ContractRuntime,
         message: Self::Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Messages for now don't do anything, just pass messages around
@@ -122,7 +133,7 @@ impl Contract for NativeFungibleToken {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(runtime.authenticated_signer(), owner)?;
+                self.check_account_authentication(owner)?;
                 Ok(self.get_transfer_outcome(owner, target_account, amount))
             }
         }
@@ -130,7 +141,6 @@ impl Contract for NativeFungibleToken {
 
     async fn handle_application_call(
         &mut self,
-        runtime: &mut ContractRuntime,
         call: ApplicationCall,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         match call {
@@ -148,7 +158,7 @@ impl Contract for NativeFungibleToken {
                 amount,
                 destination,
             } => {
-                Self::check_account_authentication(runtime.authenticated_signer(), owner)?;
+                self.check_account_authentication(owner)?;
                 let account_owner = owner;
                 let owner = self.normalize_owner(owner);
 
@@ -168,10 +178,7 @@ impl Contract for NativeFungibleToken {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(
-                    runtime.authenticated_signer(),
-                    source_account.owner,
-                )?;
+                self.check_account_authentication(source_account.owner)?;
 
                 let fungible_source_account = source_account;
                 let fungible_target_account = target_account;
@@ -202,7 +209,7 @@ impl Contract for NativeFungibleToken {
     }
 }
 
-impl NativeFungibleToken {
+impl NativeFungibleTokenContract {
     fn get_transfer_outcome(
         &self,
         source: AccountOwner,
@@ -257,14 +264,16 @@ impl NativeFungibleToken {
     }
 
     /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(
-        authenticated_signer: Option<Owner>,
-        owner: AccountOwner,
-    ) -> Result<(), Error> {
+    fn check_account_authentication(&mut self, owner: AccountOwner) -> Result<(), Error> {
         match owner {
-            AccountOwner::User(address) if authenticated_signer == Some(address) => Ok(()),
+            AccountOwner::User(address) => {
+                ensure!(
+                    self.runtime.authenticated_signer() == Some(address),
+                    Error::IncorrectAuthentication
+                );
+                Ok(())
+            }
             AccountOwner::Application(_) => Err(Error::ApplicationsNotSupported),
-            _ => Err(Error::IncorrectAuthentication),
         }
     }
 }

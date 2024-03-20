@@ -8,7 +8,6 @@
 //! contract type that implements [`Contract`].
 
 use crate::{
-    contract::system_api,
     views::{AppStateStore, ViewStorageContext},
     Contract, SimpleStateStorage, ViewStateStorage,
 };
@@ -16,26 +15,30 @@ use async_trait::async_trait;
 use linera_views::{
     batch::Batch,
     common::{ReadableKeyValueStore, WritableKeyValueStore},
-    views::RootView,
+    views::{RootView, View},
 };
 use serde::{de::DeserializeOwned, Serialize};
 
 /// The storage APIs used by a contract.
 #[async_trait]
-pub trait ContractStateStorage<Application> {
+pub trait ContractStateStorage<Application>
+where
+    Application: Contract,
+{
     /// Loads the `Application` state.
-    async fn load() -> Application;
+    async fn load() -> Application::State;
 
     /// Stores the `Application` state.
-    async fn store(state: &mut Application);
+    async fn store(state: &mut Application::State);
 }
 
 #[async_trait]
 impl<Application> ContractStateStorage<Application> for SimpleStateStorage<Application>
 where
-    Application: Contract + Default + DeserializeOwned + Serialize + Send + 'static,
+    Application: Contract,
+    Application::State: Default + DeserializeOwned + Serialize + Send + 'static,
 {
-    async fn load() -> Application {
+    async fn load() -> Application::State {
         let maybe_bytes = AppStateStore
             .read_value_bytes(&[])
             .await
@@ -44,11 +47,11 @@ where
         if let Some(bytes) = maybe_bytes {
             bcs::from_bytes(&bytes).expect("Failed to deserialize application state")
         } else {
-            Application::default()
+            Application::State::default()
         }
     }
 
-    async fn store(state: &mut Application) {
+    async fn store(state: &mut Application::State) {
         let mut batch = Batch::new();
 
         batch
@@ -65,13 +68,19 @@ where
 #[async_trait]
 impl<Application> ContractStateStorage<Application> for ViewStateStorage<Application>
 where
-    Application: Contract + RootView<ViewStorageContext> + Send + 'static,
+    Application: Contract,
+    Application::State: RootView<ViewStorageContext> + Send + 'static,
 {
-    async fn load() -> Application {
-        system_api::load_view().await
+    async fn load() -> Application::State {
+        Application::State::load(ViewStorageContext::default())
+            .await
+            .expect("Failed to load application state")
     }
 
-    async fn store(state: &mut Application) {
-        system_api::store_view(state).await;
+    async fn store(state: &mut Application::State) {
+        state
+            .save()
+            .await
+            .expect("Failed to store application state")
     }
 }

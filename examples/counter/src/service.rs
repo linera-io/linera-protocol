@@ -7,29 +7,33 @@ mod state;
 
 use self::state::Counter;
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use async_trait::async_trait;
 use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, SimpleStateStorage};
-use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(Counter);
+pub struct CounterService {
+    state: Counter,
+}
 
-impl WithServiceAbi for Counter {
+linera_sdk::service!(CounterService);
+
+impl WithServiceAbi for CounterService {
     type Abi = counter::CounterAbi;
 }
 
-#[async_trait]
-impl Service for Counter {
+impl Service for CounterService {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
+    type State = Counter;
 
-    async fn handle_query(
-        self: Arc<Self>,
-        _runtime: &ServiceRuntime,
-        request: Request,
-    ) -> Result<Response, Self::Error> {
+    async fn new(state: Self::State, _runtime: ServiceRuntime) -> Result<Self, Self::Error> {
+        Ok(CounterService { state })
+    }
+
+    async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
         let schema = Schema::build(
-            QueryRoot { value: self.value },
+            QueryRoot {
+                value: self.state.value,
+            },
             MutationRoot {},
             EmptySubscription,
         )
@@ -68,22 +72,22 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
-    use super::Counter;
+    use super::{Counter, CounterService};
     use async_graphql::{Request, Response, Value};
     use futures::FutureExt;
-    use linera_sdk::{Service, ServiceRuntime};
+    use linera_sdk::Service;
     use serde_json::json;
-    use std::sync::Arc;
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]
     fn query() {
         let value = 61_098_721_u64;
-        let counter = Arc::new(Counter { value });
+        let state = Counter { value };
+        let service = CounterService { state };
         let request = Request::new("{ value }");
 
-        let result = counter
-            .handle_query(&ServiceRuntime::default(), request)
+        let result = service
+            .handle_query(request)
             .now_or_never()
             .expect("Query should not await anything");
 

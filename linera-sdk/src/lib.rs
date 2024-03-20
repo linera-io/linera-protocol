@@ -58,7 +58,7 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{error::Error, fmt::Debug, sync::Arc};
+use std::{error::Error, fmt::Debug};
 
 pub use self::{
     contract::ContractRuntime,
@@ -92,6 +92,9 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// recoverable errors in the case of application calls, you may use the response types.
     type Error: Error + From<serde_json::Error> + From<bcs::Error> + 'static;
 
+    /// The type used to store the persisted application state.
+    type State: Sync;
+
     /// The desired storage backend used to store the application's state.
     ///
     /// Currently, the two supported backends are [`SimpleStateStorage`] or
@@ -103,6 +106,12 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// state if the [`ViewStateStorage`] is used.
     type Storage: ContractStateStorage<Self> + Send + 'static;
 
+    /// Creates a in-memory instance of the contract handler from the application's `state`.
+    async fn new(state: Self::State, runtime: ContractRuntime) -> Result<Self, Self::Error>;
+
+    /// Returns the current state of the application so that it can be persisted.
+    fn state_mut(&mut self) -> &mut Self::State;
+
     /// Initializes the application on the chain that created it.
     ///
     /// This is only called once when the application is created and only on the microchain that
@@ -112,7 +121,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// to channels and messages to be sent to this application on another chain.
     async fn initialize(
         &mut self,
-        runtime: &mut ContractRuntime,
         argument: Self::InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error>;
 
@@ -125,7 +133,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// to channels and messages to be sent to this application on another chain.
     async fn execute_operation(
         &mut self,
-        runtime: &mut ContractRuntime,
         operation: Self::Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error>;
 
@@ -145,7 +152,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// on another chain and subscription or unsubscription requests to channels.
     async fn execute_message(
         &mut self,
-        runtime: &mut ContractRuntime,
         message: Self::Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error>;
 
@@ -165,7 +171,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     ///   and channel subscription and unsubscription requests.
     async fn handle_application_call(
         &mut self,
-        runtime: &mut ContractRuntime,
         argument: Self::ApplicationCall,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error>;
 
@@ -177,11 +182,8 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     ///
     /// The default implementation persists the state, so if this method is overriden, care must be
     /// taken to persist the state manually.
-    async fn finalize(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        Self::Storage::store(self).await;
+    async fn finalize(&mut self) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+        Self::Storage::store(self.state_mut()).await;
         Ok(ExecutionOutcome::default())
     }
 
@@ -220,12 +222,15 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
 /// As opposed to the [`Contract`] interface of an application, service entry points
 /// are triggered by JSON queries (typically GraphQL). Their execution cannot modify
 /// storage and is not gas-metered.
-#[async_trait]
-pub trait Service: WithServiceAbi + ServiceAbi {
+#[allow(async_fn_in_trait)]
+pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     /// Type used to report errors to the execution environment.
     ///
     /// Errors are not recoverable and always interrupt the current query.
     type Error: Error + From<serde_json::Error>;
+
+    /// The type used to store the persisted application state.
+    type State;
 
     /// The desired storage backend used to store the application's state.
     ///
@@ -234,15 +239,14 @@ pub trait Service: WithServiceAbi + ServiceAbi {
     /// Storage = SimpleStateStorage<Self>` or `type Storage = ViewStateStorage<Self>`.
     type Storage: ServiceStateStorage;
 
+    /// Creates a in-memory instance of the service handler from the application's `state`.
+    async fn new(state: Self::State, runtime: ServiceRuntime) -> Result<Self, Self::Error>;
+
     /// Executes a read-only query on the state of this application.
-    async fn handle_query(
-        self: Arc<Self>,
-        runtime: &ServiceRuntime,
-        query: Self::Query,
-    ) -> Result<Self::QueryResponse, Self::Error>;
+    async fn handle_query(&self, query: Self::Query) -> Result<Self::QueryResponse, Self::Error>;
 
     /// Queries another application.
-    fn query_application<A: ServiceAbi + Send>(
+    fn query_application<A: ServiceAbi>(
         application: ApplicationId<A>,
         query: &A::Query,
     ) -> Result<A::QueryResponse, Self::Error>

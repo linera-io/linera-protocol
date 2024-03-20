@@ -8,26 +8,26 @@
 //! service type that implements [`linera-sdk::Service`].
 
 use crate::{
-    service::system_api,
     views::{AppStateStore, ViewStorageContext},
     Service, ServiceRuntime, SimpleStateStorage, ViewStateStorage,
 };
-use async_trait::async_trait;
-use linera_views::{common::ReadableKeyValueStore, views::RootView};
+use linera_views::{
+    common::ReadableKeyValueStore,
+    views::{RootView, View},
+};
 use serde::{de::DeserializeOwned, Serialize};
-use std::sync::Arc;
 
 /// The storage APIs used by a service.
-#[async_trait]
+#[allow(async_fn_in_trait)]
 pub trait ServiceStateStorage {
     /// Loads the application state and run the given query.
     async fn handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String>;
 }
 
-#[async_trait]
 impl<Application> ServiceStateStorage for SimpleStateStorage<Application>
 where
-    Application: Service + Default + DeserializeOwned + Serialize + Send + Sync,
+    Application: Service,
+    Application::State: Default + DeserializeOwned + Serialize,
 {
     async fn handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String> {
         let maybe_bytes = AppStateStore
@@ -38,33 +38,38 @@ where
         let state = if let Some(bytes) = maybe_bytes {
             bcs::from_bytes(&bytes).expect("Failed to deserialize application state")
         } else {
-            Application::default()
+            Application::State::default()
         };
 
-        let application: Arc<Application> = Arc::new(state);
+        let application = Application::new(state, ServiceRuntime::new())
+            .await
+            .map_err(|error| error.to_string())?;
         let argument: Application::Query =
             serde_json::from_slice(&argument).map_err(|e| e.to_string())?;
         let query_response = application
-            .handle_query(&ServiceRuntime::default(), argument)
+            .handle_query(argument)
             .await
             .map_err(|error| error.to_string())?;
         serde_json::to_vec(&query_response).map_err(|e| e.to_string())
     }
 }
 
-#[async_trait]
 impl<Application> ServiceStateStorage for ViewStateStorage<Application>
 where
-    Application: Service + RootView<ViewStorageContext> + Send + Sync,
-    Application::Error: Send,
+    Application: Service,
+    Application::State: RootView<ViewStorageContext>,
 {
     async fn handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String> {
-        let application: Arc<Application> = Arc::new(system_api::load_view().await);
+        let context = ViewStorageContext::default();
+        let state = Application::State::load(context)
+            .await
+            .expect("Failed to load application state");
+        let application = Application::new(state, ServiceRuntime::new())
+            .await
+            .map_err(|error| error.to_string())?;
         let argument: Application::Query =
             serde_json::from_slice(&argument).map_err(|e| e.to_string())?;
-        let result = application
-            .handle_query(&ServiceRuntime::default(), argument)
-            .await;
+        let result = application.handle_query(argument).await;
         let query_response = result.map_err(|error| error.to_string())?;
         serde_json::to_vec(&query_response).map_err(|e| e.to_string())
     }

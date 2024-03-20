@@ -10,20 +10,33 @@ use linera_sdk::{{
 }};
 use thiserror::Error;
 
-linera_sdk::contract!(Application);
+pub struct ApplicationContract {{
+    state: Application,
+    runtime: ContractRuntime,
+}}
 
-impl WithContractAbi for Application {{
+linera_sdk::contract!(ApplicationContract);
+
+impl WithContractAbi for ApplicationContract {{
     type Abi = {project_name}::ApplicationAbi;
 }}
 
 #[async_trait]
-impl Contract for Application {{
+impl Contract for ApplicationContract {{
     type Error = ContractError;
     type Storage = ViewStateStorage<Self>;
+    type State = Application;
+
+    async fn new(state: Self::State, runtime: ContractRuntime) -> Result<Self, Self::Error> {{
+        Ok(ApplicationContract {{ state, runtime }})
+    }}
+
+    fn state_mut(&mut self) -> &mut Self::State {{
+        &mut self.state
+    }}
 
     async fn initialize(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _argument: Self::InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {{
         Ok(ExecutionOutcome::default())
@@ -31,7 +44,6 @@ impl Contract for Application {{
 
     async fn execute_operation(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _operation: Self::Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {{
         Ok(ExecutionOutcome::default())
@@ -39,7 +51,6 @@ impl Contract for Application {{
 
     async fn execute_message(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _message: Self::Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {{
         Ok(ExecutionOutcome::default())
@@ -47,7 +58,6 @@ impl Contract for Application {{
 
     async fn handle_application_call(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _call: Self::ApplicationCall,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {{
         Ok(ApplicationCallOutcome::default())

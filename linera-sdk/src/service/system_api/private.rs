@@ -5,17 +5,7 @@
 //! that shouldn't be used by applications directly.
 
 use super::super::service_system_api as wit;
-use crate::views::ViewStorageContext;
 use linera_base::identifiers::ApplicationId;
-use linera_views::views::View;
-
-/// Helper function to load the service state or create a new one if it doesn't exist.
-pub async fn load_view<State: View<ViewStorageContext>>() -> State {
-    let context = ViewStorageContext::default();
-    State::load(context)
-        .await
-        .expect("Failed to load application state")
-}
 
 /// Retrieves the current application parameters.
 pub fn current_application_parameters() -> Vec<u8> {

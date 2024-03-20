@@ -3,27 +3,30 @@
 mod state;
 
 use self::state::Application;
-use async_trait::async_trait;
 use linera_sdk::{{base::WithServiceAbi, Service, ServiceRuntime, ViewStateStorage}};
-use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(Application);
+pub struct ApplicationService {{
+    state: Application,
+    runtime: ServiceRuntime,
+}}
 
-impl WithServiceAbi for Application {{
+linera_sdk::service!(ApplicationService);
+
+impl WithServiceAbi for ApplicationService {{
     type Abi = {project_name}::ApplicationAbi;
 }}
 
-#[async_trait]
-impl Service for Application {{
+impl Service for ApplicationService {{
     type Error = ServiceError;
     type Storage = ViewStateStorage<Self>;
+    type State = Application;
 
-    async fn handle_query(
-        self: Arc<Self>,
-        _runtime: &ServiceRuntime,
-        _query: Self::Query,
-    ) -> Result<(), Self::Error> {{
+    async fn new(state: Self::State, runtime: ServiceRuntime) -> Result<Self, Self::Error> {{
+        Ok(ApplicationService {{ state, runtime }})
+    }}
+
+    async fn handle_query(&self, _query: Self::Query) -> Result<(), Self::Error> {{
         Err(ServiceError::QueriesNotSupported)
     }}
 }}

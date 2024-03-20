@@ -9,7 +9,6 @@ use self::state::NativeFungibleToken;
 use async_graphql::{
     ComplexObject, EmptySubscription, Object, Request, Response, Schema, SimpleObject,
 };
-use async_trait::async_trait;
 use fungible::Operation;
 use linera_sdk::{
     base::{AccountOwner, Amount, WithServiceAbi},
@@ -21,24 +20,34 @@ use native_fungible::TICKER_SYMBOL;
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(NativeFungibleToken);
+pub struct NativeFungibleTokenService {
+    state: Arc<NativeFungibleToken>,
+}
 
-impl WithServiceAbi for NativeFungibleToken {
+linera_sdk::service!(NativeFungibleTokenService);
+
+impl WithServiceAbi for NativeFungibleTokenService {
     type Abi = fungible::FungibleTokenAbi;
 }
 
-#[async_trait]
-impl Service for NativeFungibleToken {
+impl Service for NativeFungibleTokenService {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type State = NativeFungibleToken;
 
-    async fn handle_query(
-        self: Arc<Self>,
-        _runtime: &ServiceRuntime,
-        request: Request,
-    ) -> Result<Response, Self::Error> {
-        let schema =
-            Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
+    async fn new(state: Self::State, _runtime: ServiceRuntime) -> Result<Self, Self::Error> {
+        Ok(NativeFungibleTokenService {
+            state: Arc::new(state),
+        })
+    }
+
+    async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
+        let schema = Schema::build(
+            self.state.clone(),
+            Operation::mutation_root(),
+            EmptySubscription,
+        )
+        .finish();
         let response = schema.execute(request).await;
         Ok(response)
     }

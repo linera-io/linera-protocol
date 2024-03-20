@@ -10,7 +10,7 @@ use amm::{AmmError, ApplicationCall, Message, Operation};
 use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, Owner, WithContractAbi},
+    base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
     Resources, ViewStateStorage,
@@ -18,20 +18,33 @@ use linera_sdk::{
 use num_bigint::BigUint;
 use num_traits::{cast::FromPrimitive, ToPrimitive};
 
-linera_sdk::contract!(Amm);
+pub struct AmmContract {
+    state: Amm,
+    runtime: ContractRuntime,
+}
 
-impl WithContractAbi for Amm {
+linera_sdk::contract!(AmmContract);
+
+impl WithContractAbi for AmmContract {
     type Abi = amm::AmmAbi;
 }
 
 #[async_trait]
-impl Contract for Amm {
+impl Contract for AmmContract {
     type Error = AmmError;
     type Storage = ViewStateStorage<Self>;
+    type State = Amm;
+
+    async fn new(state: Amm, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+        Ok(AmmContract { state, runtime })
+    }
+
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
+    }
 
     async fn initialize(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _argument: (),
     ) -> Result<ExecutionOutcome<Self::Message>, AmmError> {
         // Validate that the application parameters were configured correctly.
@@ -42,11 +55,10 @@ impl Contract for Amm {
 
     async fn execute_operation(
         &mut self,
-        runtime: &mut ContractRuntime,
         operation: Self::Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, AmmError> {
         let mut outcome = ExecutionOutcome::default();
-        if runtime.chain_id() == runtime.application_id().creation.chain_id {
+        if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
             self.execute_order_local(operation)?;
         } else {
             self.execute_order_remote(&mut outcome, operation)?;
@@ -57,11 +69,10 @@ impl Contract for Amm {
 
     async fn execute_message(
         &mut self,
-        runtime: &mut ContractRuntime,
         message: Self::Message,
     ) -> Result<ExecutionOutcome<Self::Message>, AmmError> {
         ensure!(
-            runtime.chain_id() == runtime.application_id().creation.chain_id,
+            self.runtime.chain_id() == self.runtime.application_id().creation.chain_id,
             AmmError::AmmChainOnly
         );
 
@@ -71,7 +82,7 @@ impl Contract for Amm {
                 input_token_idx,
                 input_amount,
             } => {
-                Self::check_account_authentication(None, runtime.authenticated_signer(), owner)?;
+                self.check_account_authentication(owner)?;
                 self.execute_swap(owner, input_token_idx, input_amount)?;
             }
         }
@@ -81,7 +92,6 @@ impl Contract for Amm {
 
     async fn handle_application_call(
         &mut self,
-        runtime: &mut ContractRuntime,
         application_call: ApplicationCall,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, AmmError> {
         let mut outcome = ApplicationCallOutcome::default();
@@ -91,12 +101,8 @@ impl Contract for Amm {
                 input_token_idx,
                 input_amount,
             } => {
-                Self::check_account_authentication(
-                    runtime.authenticated_caller_id(),
-                    runtime.authenticated_signer(),
-                    owner,
-                )?;
-                if runtime.chain_id() == runtime.application_id().creation.chain_id {
+                self.check_account_authentication(owner)?;
+                if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
                     self.execute_swap(owner, input_token_idx, input_amount)?;
                 } else {
                     self.execute_application_call_remote(
@@ -111,18 +117,25 @@ impl Contract for Amm {
     }
 }
 
-impl Amm {
+impl AmmContract {
     /// authenticate the originator of the message
-    fn check_account_authentication(
-        authenticated_application_id: Option<ApplicationId>,
-        authenticated_signer: Option<Owner>,
-        owner: AccountOwner,
-    ) -> Result<(), AmmError> {
+    fn check_account_authentication(&mut self, owner: AccountOwner) -> Result<(), AmmError> {
         match owner {
-            AccountOwner::User(address) if authenticated_signer == Some(address) => Ok(()),
-            AccountOwner::Application(id) if authenticated_application_id == Some(id) => Ok(()),
-            _ => Err(AmmError::IncorrectAuthentication),
+            AccountOwner::User(address) => {
+                ensure!(
+                    self.runtime.authenticated_signer() == Some(address),
+                    AmmError::IncorrectAuthentication
+                )
+            }
+            AccountOwner::Application(id) => {
+                ensure!(
+                    self.runtime.authenticated_caller_id() == Some(id),
+                    AmmError::IncorrectAuthentication
+                )
+            }
         }
+
+        Ok(())
     }
 
     fn execute_order_local(&mut self, operation: Operation) -> Result<(), AmmError> {

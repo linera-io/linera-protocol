@@ -15,26 +15,39 @@ use linera_sdk::{
 use meta_counter::{Message, Operation};
 use thiserror::Error;
 
-linera_sdk::contract!(MetaCounter);
+pub struct MetaCounterContract {
+    state: MetaCounter,
+    runtime: ContractRuntime,
+}
 
-impl MetaCounter {
+linera_sdk::contract!(MetaCounterContract);
+
+impl MetaCounterContract {
     fn counter_id() -> Result<ApplicationId<counter::CounterAbi>, Error> {
         Self::parameters()
     }
 }
 
-impl WithContractAbi for MetaCounter {
+impl WithContractAbi for MetaCounterContract {
     type Abi = meta_counter::MetaCounterAbi;
 }
 
 #[async_trait]
-impl Contract for MetaCounter {
+impl Contract for MetaCounterContract {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
+    type State = MetaCounter;
+
+    async fn new(state: MetaCounter, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+        Ok(MetaCounterContract { state, runtime })
+    }
+
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
+    }
 
     async fn initialize(
         &mut self,
-        runtime: &mut ContractRuntime,
         _argument: (),
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
@@ -43,12 +56,14 @@ impl Contract for MetaCounter {
         Self::counter_id()?;
         // Send a no-op message to ourselves. This is only for testing contracts that send messages
         // on initialization. Since the value is 0 it does not change the counter value.
-        Ok(ExecutionOutcome::default().with_message(runtime.chain_id(), Message::Increment(0)))
+        Ok(
+            ExecutionOutcome::default()
+                .with_message(self.runtime.chain_id(), Message::Increment(0)),
+        )
     }
 
     async fn execute_operation(
         &mut self,
-        _runtime: &mut ContractRuntime,
         operation: Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         log::trace!("operation: {:?}", operation);
@@ -76,10 +91,10 @@ impl Contract for MetaCounter {
 
     async fn execute_message(
         &mut self,
-        runtime: &mut ContractRuntime,
         message: Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        let is_bouncing = runtime
+        let is_bouncing = self
+            .runtime
             .message_is_bouncing()
             .expect("Message delivery status has to be available when executing a message");
         if is_bouncing {
@@ -101,7 +116,6 @@ impl Contract for MetaCounter {
 
     async fn handle_application_call(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _call: (),
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         Err(Error::CallsNotSupported)
