@@ -23,9 +23,14 @@ pub use self::mock_stubs::*;
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 pub use self::{block::BlockBuilder, chain::ActiveChain, validator::TestValidator};
 
-use crate::{Contract, ContractRuntime};
+use crate::{Contract, ContractRuntime, Service, ServiceRuntime};
 
 /// Creates a [`ContractRuntime`] to use in tests.
 pub fn test_contract_runtime<Application: Contract>() -> ContractRuntime<Application> {
     ContractRuntime::new()
+}
+
+/// Creates a [`ServiceRuntime`] to use in tests.
+pub fn test_service_runtime<Application: Service>() -> ServiceRuntime<Application> {
+    ServiceRuntime::new()
 }
