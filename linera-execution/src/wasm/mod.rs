@@ -233,7 +233,7 @@ pub enum WasmExecutionError {
 }
 
 /// This assumes that the current directory is one of the crates.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub mod test {
     #[cfg(with_fs)]
     use super::{WasmContractModule, WasmRuntime, WasmServiceModule};

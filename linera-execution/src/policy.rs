@@ -120,7 +120,7 @@ impl ResourceControlPolicy {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl ResourceControlPolicy {
     /// Creates a policy with no cost for anything except fuel.
     ///

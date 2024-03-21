@@ -27,7 +27,7 @@ use serde::de::DeserializeOwned;
 use std::{mem, sync::Arc};
 use tonic::transport::{Channel, Endpoint};
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use linera_views::test_utils::generate_test_namespace;
 
 // The maximum key size is set to 1M rather arbitrarily.
@@ -469,7 +469,7 @@ pub async fn storage_service_check_validity(endpoint: &str) -> Result<(), Servic
 }
 
 /// Creates a test store with an endpoint. The namespace is random.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub async fn create_service_test_store(
     endpoint: &str,
 ) -> Result<ServiceStoreClient, ServiceContextError> {

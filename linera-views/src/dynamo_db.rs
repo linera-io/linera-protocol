@@ -45,7 +45,7 @@ use crate::metering::{
     MeteredStore, DYNAMO_DB_METRICS, LRU_CACHING_METRICS, VALUE_SPLITTING_METRICS,
 };
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     crate::lru_caching::TEST_CACHE_SIZE,
     crate::test_utils::generate_test_namespace,
@@ -93,13 +93,13 @@ pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbContextE
 }
 
 /// A type to help tests that need a LocalStack instance.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub struct LocalStackTestContext {
     config: Config,
     _guard: MutexGuard<'static, ()>,
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl LocalStackTestContext {
     /// Creates an instance of [`LocalStackTestContext`], loading the necessary LocalStack
     /// configuration.
@@ -170,11 +170,11 @@ const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 4000000;
 /// The DynamoDb database is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of
 /// connections.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 const TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
 /// The number of entries in a stream of the tests can be controlled by this parameter for tests.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 100.
@@ -1188,11 +1188,11 @@ impl From<DynamoDbContextError> for crate::views::ViewError {
 
 /// A static lock to prevent multiple tests from using the same LocalStack instance at the same
 /// time.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 static LOCALSTACK_GUARD: Mutex<()> = Mutex::const_new(());
 
 /// Creates the common initialization for RocksDB
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
         max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
@@ -1202,7 +1202,7 @@ pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
 }
 
 /// Creates a configuration for tests
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub async fn create_dynamo_db_test_config() -> DynamoDbStoreConfig {
     let common_config = create_dynamo_db_common_config();
     let use_localstack = true;
@@ -1214,7 +1214,7 @@ pub async fn create_dynamo_db_test_config() -> DynamoDbStoreConfig {
 }
 
 /// Creates a basic client that can be used for tests.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
     let store_config = create_dynamo_db_test_config().await;
     let namespace = generate_test_namespace();

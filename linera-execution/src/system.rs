@@ -337,7 +337,7 @@ impl Recipient {
     }
 
     /// Returns the default recipient for the root chain with the given index.
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     pub fn root(index: u32) -> Recipient {
         Recipient::chain(ChainId::root(index))
     }

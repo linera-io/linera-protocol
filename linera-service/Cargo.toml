@@ -87,6 +87,9 @@ tower-http = { workspace = true, features = ["cors"] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
+[build-dependencies]
+cfg_aliases.workspace = true
+
 [dev-dependencies]
 amm.workspace = true
 base64.workspace = true

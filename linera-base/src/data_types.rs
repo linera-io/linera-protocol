@@ -330,7 +330,7 @@ impl TryFrom<BlockHeight> for usize {
     }
 }
 
-#[cfg(not(any(test, feature = "test")))]
+#[cfg(not(with_testing))]
 impl From<u64> for BlockHeight {
     fn from(value: u64) -> Self {
         Self(value)

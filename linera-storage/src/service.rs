@@ -4,7 +4,7 @@
 use crate::db_storage::DbStorage;
 use linera_storage_service::client::ServiceStoreClient;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     crate::db_storage::{DbStorageInner, TestClock},
     linera_execution::WasmRuntime,
@@ -17,7 +17,7 @@ use {
 
 pub type ServiceStorage<C> = DbStorage<ServiceStoreClient, C>;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl ServiceStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let endpoint = "127.0.0.1:8942";

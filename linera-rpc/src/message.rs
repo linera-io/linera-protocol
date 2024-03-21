@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::{HandleCertificateRequest, HandleLiteCertificateRequest};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub enum RpcMessage {
     // Inbound
     BlockProposal(Box<BlockProposal>),

@@ -22,7 +22,7 @@ use {
     prometheus::{register_int_counter_vec, IntCounterVec},
 };
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     crate::common::{AdminKeyValueStore, CommonStoreConfig, ContextFromStore},
     crate::memory::{MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
@@ -283,10 +283,10 @@ where
 }
 
 /// A context that stores all values in memory.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub type LruCachingMemoryContext<E> = ContextFromStore<E, LruCachingStore<MemoryStore>>;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl<E> LruCachingMemoryContext<E> {
     /// Creates a [`crate::key_value_store_view::KeyValueStoreMemoryContext`].
     pub async fn new(base_key: Vec<u8>, extra: E, n: usize) -> Result<Self, ViewError> {

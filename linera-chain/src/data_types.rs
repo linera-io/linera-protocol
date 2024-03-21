@@ -177,7 +177,7 @@ pub struct Target {
 
 /// A set of messages from a single block, for a single destination.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct MessageBundle {
     /// The block height.
     pub height: BlockHeight,
@@ -213,7 +213,7 @@ pub enum Medium {
 // TODO(#456): the signature of the block owner is currently lost but it would be useful
 // to have it for auditing purposes.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct BlockProposal {
     pub content: BlockAndRound,
     pub owner: Owner,
@@ -385,7 +385,7 @@ impl Vote {
 
 /// A vote on a statement from a validator, represented as a `LiteValue`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct LiteVote {
     pub value: LiteValue,
     pub round: Round,
@@ -410,7 +410,7 @@ impl LiteVote {
 
 /// A certified statement from the committee, without the value.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct LiteCertificate<'a> {
     /// Hash and chain ID of the certified value (used as key for storage).
     pub value: LiteValue,
@@ -491,7 +491,7 @@ impl<'a> LiteCertificate<'a> {
 
 /// A certified statement from the committee.
 #[derive(Clone, Debug, Serialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct Certificate {
     /// The certified value.
     pub value: HashedValue,
@@ -623,7 +623,7 @@ impl CertificateValue {
         matches!(self, CertificateValue::LeaderTimeout { .. })
     }
 
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     pub fn messages(&self) -> Option<&Vec<OutgoingMessage>> {
         Some(&self.executed_block()?.messages)
     }

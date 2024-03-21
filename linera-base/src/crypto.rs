@@ -429,7 +429,7 @@ impl CryptoHash {
     }
 
     /// Returns the hash of `TestString(s)`, for testing purposes.
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     pub fn test_hash(s: impl Into<String>) -> Self {
         CryptoHash::new(&TestString::new(s))
     }
@@ -538,11 +538,11 @@ doc_scalar!(PublicKey, "A signature public key");
 doc_scalar!(Signature, "A signature value");
 
 /// A BCS-signable struct for testing.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TestString(pub String);
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl TestString {
     /// Creates a new `TestString` with the given string.
     pub fn new(s: impl Into<String>) -> Self {
@@ -550,7 +550,7 @@ impl TestString {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl BcsSignable for TestString {}
 
 #[cfg(with_getrandom)]

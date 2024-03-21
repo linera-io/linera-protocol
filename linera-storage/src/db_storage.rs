@@ -145,7 +145,7 @@ where
         }
     }
 
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     pub async fn new_for_testing(
         store_config: Client::Config,
         namespace: &str,
@@ -209,18 +209,18 @@ impl Clock for WallClock {
 
 /// A clock implementation that uses a stored number of microseconds and that can be updated
 /// explicitly. All clones share the same time, and setting it in one clone updates all the others.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 #[derive(Clone, Default)]
 pub struct TestClock(Arc<std::sync::atomic::AtomicU64>);
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl Clock for TestClock {
     fn current_time(&self) -> Timestamp {
         Timestamp::from(self.0.load(std::sync::atomic::Ordering::SeqCst))
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl TestClock {
     /// Creates a new clock with its time set to 0, i.e. the Unix epoch.
     pub fn new() -> Self {

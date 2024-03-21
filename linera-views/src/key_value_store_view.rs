@@ -42,7 +42,7 @@ static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Histogram can be created")
 });
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     crate::common::{
         ContextFromStore, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
@@ -1009,13 +1009,13 @@ where
 }
 
 /// A virtual DB client using a `KeyValueStoreView` as a backend (testing only).
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 #[derive(Debug, Clone)]
 pub struct ViewContainer<C> {
     view: Arc<RwLock<KeyValueStoreView<C>>>,
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 #[async_trait]
 impl<C> ReadableKeyValueStore<ViewError> for ViewContainer<C>
 where
@@ -1061,7 +1061,7 @@ where
         view.find_key_values_by_prefix(key_prefix).await
     }
 }
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 #[async_trait]
 impl<C> WritableKeyValueStore<ViewError> for ViewContainer<C>
 where
@@ -1084,7 +1084,7 @@ where
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl<C> KeyValueStore for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
@@ -1093,7 +1093,7 @@ where
     type Error = ViewError;
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl<C> ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
@@ -1108,10 +1108,10 @@ where
 }
 
 /// A context that stores all values in memory.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub type KeyValueStoreMemoryContext<E> = ContextFromStore<E, ViewContainer<MemoryContext<()>>>;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl<E> KeyValueStoreMemoryContext<E> {
     /// Creates a [`KeyValueStoreMemoryContext`].
     pub async fn new(base_key: Vec<u8>, extra: E) -> Result<Self, ViewError> {

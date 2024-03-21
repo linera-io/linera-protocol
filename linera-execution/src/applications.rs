@@ -16,7 +16,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
     linera_views::views::View,
@@ -75,7 +75,7 @@ pub struct ApplicationRegistryView<C> {
     pub known_applications: HashedMapView<C, UserApplicationId, UserApplicationDescription>,
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 #[derive(Default, Eq, PartialEq, Debug, Clone)]
 pub struct ApplicationRegistry {
     pub published_bytecodes: BTreeMap<BytecodeId, BytecodeLocation>,
@@ -87,7 +87,7 @@ where
     C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
 {
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     pub fn import(&mut self, registry: ApplicationRegistry) -> Result<(), SystemExecutionError> {
         for (id, location) in registry.published_bytecodes {
             self.published_bytecodes.insert(&id, location)?;
@@ -255,7 +255,7 @@ where
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl ApplicationRegistryView<MemoryContext<()>>
 where
     MemoryContext<()>: Context + Clone + Send + Sync + 'static,

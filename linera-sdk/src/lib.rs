@@ -320,7 +320,7 @@ pub struct QueryContext {
 
 /// A message together with routing information.
 #[derive(Debug, Deserialize, Serialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct OutgoingMessage<Message> {
     /// The destination of the message.
     pub destination: Destination,
@@ -355,7 +355,7 @@ where
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
 #[derive(Debug, Deserialize, Serialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct ExecutionOutcome<Message> {
     /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer.
@@ -466,7 +466,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
 
 /// The result of calling into an application.
 #[derive(Debug, Deserialize, Serialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct ApplicationCallOutcome<Message, Value> {
     /// The return value, if any.
     pub value: Value,

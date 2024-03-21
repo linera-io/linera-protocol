@@ -27,7 +27,7 @@ use tonic_health::pb::{
 };
 use tracing::{info, warn};
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     async_lock::RwLock,
     linera_base::sync::Lazy,
@@ -36,13 +36,13 @@ use {
     std::ops::Deref,
 };
 
-#[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
+#[cfg(all(feature = "rocksdb", with_testing))]
 use linera_views::rocks_db::create_rocks_db_test_path;
 
-#[cfg(all(feature = "scylladb", any(test, feature = "test")))]
+#[cfg(all(feature = "scylladb", with_testing))]
 use linera_views::scylla_db::create_scylla_db_test_uri;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 trait LocalServerInternal: Sized {
     type Config;
 
@@ -51,13 +51,13 @@ trait LocalServerInternal: Sized {
     fn get_config(&self) -> Self::Config;
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 struct LocalServerServiceInternal {
     service_endpoint: String,
     _service_guard: StorageServiceGuard,
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl LocalServerInternal for LocalServerServiceInternal {
     type Config = String;
 
@@ -77,13 +77,13 @@ impl LocalServerInternal for LocalServerServiceInternal {
     }
 }
 
-#[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
+#[cfg(all(feature = "rocksdb", with_testing))]
 struct LocalServerRocksDbInternal {
     rocks_db_path: PathBuf,
     _temp_dir: Option<TempDir>,
 }
 
-#[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
+#[cfg(all(feature = "rocksdb", with_testing))]
 impl LocalServerInternal for LocalServerRocksDbInternal {
     type Config = PathBuf;
 
@@ -101,12 +101,12 @@ impl LocalServerInternal for LocalServerRocksDbInternal {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 struct LocalServer<L> {
     internal_server: RwLock<Option<L>>,
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl<L> Default for LocalServer<L>
 where
     L: LocalServerInternal,
@@ -116,7 +116,7 @@ where
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl<L> LocalServer<L>
 where
     L: LocalServerInternal,
@@ -140,15 +140,15 @@ where
 }
 
 // A static data to store the integration test server
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 static LOCAL_SERVER_SERVICE: Lazy<LocalServer<LocalServerServiceInternal>> =
     Lazy::new(LocalServer::new);
 
-#[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
+#[cfg(all(feature = "rocksdb", with_testing))]
 static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> =
     Lazy::new(LocalServer::new);
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 async fn make_testing_config(database: Database) -> StorageConfig {
     match database {
         Database::Service => {
@@ -186,7 +186,7 @@ async fn make_testing_config(database: Database) -> StorageConfig {
 }
 
 pub enum StorageConfigBuilder {
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     TestConfig,
     ExistingConfig {
         storage_config: StorageConfig,
@@ -197,7 +197,7 @@ impl StorageConfigBuilder {
     #[allow(unused_variables)]
     pub async fn build(self, database: Database) -> StorageConfig {
         match self {
-            #[cfg(any(test, feature = "test"))]
+            #[cfg(with_testing)]
             StorageConfigBuilder::TestConfig => make_testing_config(database).await,
             StorageConfigBuilder::ExistingConfig { storage_config } => storage_config,
         }
@@ -307,7 +307,7 @@ impl Validator {
         self.servers.push(server)
     }
 
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     async fn terminate_server(&mut self, index: usize) -> Result<()> {
         let mut server = self.servers.remove(index);
         server
@@ -326,7 +326,7 @@ impl Validator {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl LocalNetConfig {
     pub fn new_test(database: Database, network: Network) -> Self {
         let num_shards = match database {
@@ -680,7 +680,7 @@ impl LocalNet {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl LocalNet {
     pub fn validator_name(&self, validator: usize) -> Option<&String> {
         self.validator_names.get(&validator)

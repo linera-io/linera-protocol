@@ -787,7 +787,7 @@ pub enum FaucetOption<'a> {
     NewChain(&'a Faucet),
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl ClientWrapper {
     pub async fn build_example(&self, name: &str) -> Result<(PathBuf, PathBuf)> {
         self.build_application(Self::example_path(name)?.as_path(), name, true)
