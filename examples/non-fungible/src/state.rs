@@ -4,7 +4,7 @@
 use async_graphql::SimpleObject;
 use linera_sdk::{
     base::AccountOwner,
-    views::{linera_views, MapView, RootView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use non_fungible::{Nft, TokenId};
 use std::collections::BTreeSet;
@@ -17,4 +17,6 @@ pub struct NonFungibleToken {
     pub nfts: MapView<TokenId, Nft>,
     // Map from owners to the set of NFT token IDs they own
     pub owned_token_ids: MapView<AccountOwner, BTreeSet<TokenId>>,
+    // Counter of NFTs minted in this chain, used for hash uniqueness
+    pub num_minted_nfts: RegisterView<u64>,
 }

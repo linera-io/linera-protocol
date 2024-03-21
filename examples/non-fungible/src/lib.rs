@@ -100,7 +100,7 @@ linera service --port $PORT &
 - To check that it's there, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
-        nft(tokenId: "XZ2Vai9NN0jhmXuQx4OVkOZhsvGwMw38Jm5xPbqOS9U") {
+        nft(tokenId: "kSIB3o59Ut8wioJdISqZwWedPGUlHK2HapnkOLqLSRA") {
             tokenId,
             owner,
             name,
@@ -126,7 +126,7 @@ linera service --port $PORT &
     mutation {
         transfer(
             sourceOwner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
-            tokenId: "XZ2Vai9NN0jhmXuQx4OVkOZhsvGwMw38Jm5xPbqOS9U",
+            tokenId: "kSIB3o59Ut8wioJdISqZwWedPGUlHK2HapnkOLqLSRA",
             targetAccount: {
                 chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
                 owner: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
@@ -160,6 +160,7 @@ use fungible::Account;
 use linera_sdk::{
     base::{AccountOwner, ApplicationId, ChainId, ContractAbi, ServiceAbi},
     graphql::GraphQLMutationRoot,
+    ToBcsBytes,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
@@ -286,18 +287,21 @@ impl Nft {
         name: &String,
         minter: &AccountOwner,
         payload: &Vec<u8>,
-    ) -> TokenId {
+        num_minted_nfts: u64,
+    ) -> Result<TokenId, bcs::Error> {
         use sha3::Digest as _;
 
         let mut hasher = sha3::Sha3_256::new();
-        hasher.update(chain_id.to_string());
-        hasher.update(application_id.to_string());
+        hasher.update(chain_id.to_bcs_bytes()?);
+        hasher.update(application_id.to_bcs_bytes()?);
         hasher.update(name);
-        hasher.update(minter.to_string());
+        hasher.update(name.len().to_bcs_bytes()?);
+        hasher.update(minter.to_bcs_bytes()?);
         hasher.update(payload);
+        hasher.update(num_minted_nfts.to_bcs_bytes()?);
 
-        TokenId {
+        Ok(TokenId {
             id: hasher.finalize().to_vec(),
-        }
+        })
     }
 }

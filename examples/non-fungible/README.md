@@ -98,7 +98,7 @@ linera service --port $PORT &
 - To check that it's there, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
-        nft(tokenId: "XZ2Vai9NN0jhmXuQx4OVkOZhsvGwMw38Jm5xPbqOS9U") {
+        nft(tokenId: "kSIB3o59Ut8wioJdISqZwWedPGUlHK2HapnkOLqLSRA") {
             tokenId,
             owner,
             name,
@@ -124,7 +124,7 @@ linera service --port $PORT &
     mutation {
         transfer(
             sourceOwner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
-            tokenId: "XZ2Vai9NN0jhmXuQx4OVkOZhsvGwMw38Jm5xPbqOS9U",
+            tokenId: "kSIB3o59Ut8wioJdISqZwWedPGUlHK2HapnkOLqLSRA",
             targetAccount: {
                 chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
                 owner: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
