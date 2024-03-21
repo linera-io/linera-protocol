@@ -6,20 +6,20 @@
 mod state;
 
 use self::state::NativeFungibleToken;
-use async_graphql::{ComplexObject, EmptySubscription, Object, Request, Response, Schema};
+use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use fungible::Operation;
 use linera_sdk::{
     base::{AccountOwner, WithServiceAbi},
     graphql::GraphQLMutationRoot,
-    service::system_api,
     Service, ServiceRuntime, ViewStateStorage,
 };
 use native_fungible::{AccountEntry, TICKER_SYMBOL};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
+#[derive(Clone)]
 pub struct NativeFungibleTokenService {
-    state: Arc<NativeFungibleToken>,
+    runtime: Arc<Mutex<ServiceRuntime<Self>>>,
 }
 
 linera_sdk::service!(NativeFungibleTokenService);
@@ -33,26 +33,23 @@ impl Service for NativeFungibleTokenService {
     type Storage = ViewStateStorage<Self>;
     type State = NativeFungibleToken;
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
+    async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(NativeFungibleTokenService {
-            state: Arc::new(state),
+            runtime: Arc::new(Mutex::new(runtime)),
         })
     }
 
     async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
-        let schema = Schema::build(
-            self.state.clone(),
-            Operation::mutation_root(),
-            EmptySubscription,
-        )
-        .finish();
+        let schema =
+            Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
         let response = schema.execute(request).await;
         Ok(response)
     }
 }
 
-#[derive(Default)]
-struct Accounts;
+struct Accounts {
+    runtime: Arc<Mutex<ServiceRuntime<NativeFungibleTokenService>>>,
+}
 
 #[Object]
 impl Accounts {
@@ -62,15 +59,24 @@ impl Accounts {
             AccountOwner::User(owner) => owner,
             AccountOwner::Application(_) => return Err(Error::ApplicationsNotSupported),
         };
+        let runtime = self
+            .runtime
+            .try_lock()
+            .expect("Services only run in a single thread");
 
         Ok(AccountEntry {
             key,
-            value: system_api::current_owner_balance(owner),
+            value: runtime.owner_balance(owner),
         })
     }
 
     async fn entries(&self) -> Result<Vec<AccountEntry>, Error> {
-        Ok(system_api::current_owner_balances()
+        let runtime = self
+            .runtime
+            .try_lock()
+            .expect("Services only run in a single thread");
+        Ok(runtime
+            .owner_balances()
             .into_iter()
             .map(|(owner, amount)| AccountEntry {
                 key: AccountOwner::User(owner),
@@ -80,7 +86,12 @@ impl Accounts {
     }
 
     async fn keys(&self) -> Result<Vec<AccountOwner>, Error> {
-        Ok(system_api::current_balance_owners()
+        let runtime = self
+            .runtime
+            .try_lock()
+            .expect("Services only run in a single thread");
+        Ok(runtime
+            .balance_owners()
             .into_iter()
             .map(AccountOwner::User)
             .collect())
@@ -88,14 +99,16 @@ impl Accounts {
 }
 
 // Implements additional fields not derived from struct members of FungibleToken.
-#[ComplexObject]
-impl NativeFungibleToken {
+#[Object]
+impl NativeFungibleTokenService {
     async fn ticker_symbol(&self) -> Result<String, async_graphql::Error> {
         Ok(String::from(TICKER_SYMBOL))
     }
 
     async fn accounts(&self) -> Result<Accounts, async_graphql::Error> {
-        Ok(Accounts)
+        Ok(Accounts {
+            runtime: self.runtime.clone(),
+        })
     }
 }
 
