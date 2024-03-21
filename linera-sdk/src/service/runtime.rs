@@ -23,6 +23,7 @@ where
     next_block_height: Cell<Option<BlockHeight>>,
     timestamp: Cell<Option<Timestamp>>,
     chain_balance: Cell<Option<Amount>>,
+    owner_balances: Cell<Option<Vec<(Owner, Amount)>>>,
 }
 
 impl<Application> ServiceRuntime<Application>
@@ -38,6 +39,7 @@ where
             next_block_height: Cell::new(None),
             timestamp: Cell::new(None),
             chain_balance: Cell::new(None),
+            owner_balances: Cell::new(None),
         }
     }
 
@@ -79,6 +81,16 @@ where
     /// Returns the balance of one of the accounts on this chain.
     pub fn owner_balance(&self, owner: Owner) -> Amount {
         wit::read_owner_balance(owner.into()).into()
+    }
+
+    /// Returns the balances of all accounts on the chain.
+    pub fn owner_balances(&self) -> Vec<(Owner, Amount)> {
+        Self::fetch_value_through_cache(&self.owner_balances, || {
+            wit::read_owner_balances()
+                .into_iter()
+                .map(|(owner, amount)| (owner.into(), amount.into()))
+                .collect()
+        })
     }
 
     /// Loads a value from the `cell` cache or fetches it and stores it in the cache.
