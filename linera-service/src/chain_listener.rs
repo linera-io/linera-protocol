@@ -128,7 +128,7 @@ where
             entry.insert(client.clone());
             client
         };
-        client.listen().await?;
+        let _listen_handle = client.listen().await?;
         let mut local_stream = {
             let mut guard = client.lock().await;
             let stream = guard.subscribe().await?;
