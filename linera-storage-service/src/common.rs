@@ -13,11 +13,11 @@ use tonic::Status;
 /// The shared store is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of
 /// connections.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 const TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES: usize = 10;
 
 /// The number of entries in a stream of the tests can be controlled by this parameter for tests.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
 
 // The maximal block size on GRPC is 4M.
@@ -78,7 +78,7 @@ impl From<ServiceContextError> for linera_views::views::ViewError {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub fn create_shared_store_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
         max_concurrent_queries: Some(TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES),

@@ -7,7 +7,7 @@ use axum::response::{self, IntoResponse};
 use http::Uri;
 #[cfg(test)]
 use linera_base::command::parse_version_message;
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use std::path::{Path, PathBuf};
 use std::{num::ParseIntError, time::Duration};
 use tracing::debug;
@@ -31,19 +31,19 @@ impl ChildExt for tokio::process::Child {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     std::io::Write,
     tempfile::{tempdir, TempDir},
 };
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub struct QuotedBashAndGraphQlScript {
     tmp_dir: TempDir,
     path: PathBuf,
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl QuotedBashAndGraphQlScript {
     pub fn from_markdown<P: AsRef<Path>>(
         source_path: P,

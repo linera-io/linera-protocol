@@ -24,13 +24,13 @@ use std::sync::Arc;
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     crate::cli_wrappers::wallet::FaucetOption, linera_base::command::current_binary_parent,
     tokio::sync::OnceCell,
 };
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
     Arc<Mutex<LocalKubernetesNet>>,
     ClientWrapper,
@@ -50,7 +50,7 @@ pub struct LocalKubernetesNetConfig {
 
 /// A wrapper of [`LocalKubernetesNetConfig`] to create a shared local Kubernetes network
 /// or use an existing one.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub struct SharedLocalKubernetesNetTestingConfig(LocalKubernetesNetConfig);
 
 /// A set of Linera validators running locally as native processes.
@@ -67,7 +67,7 @@ pub struct LocalKubernetesNet {
     num_shards: usize,
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl SharedLocalKubernetesNetTestingConfig {
     // The second argument is sometimes used locally to use specific binaries for tests.
     pub fn new(network: Network, mut binaries: BuildArg) -> Self {
@@ -147,7 +147,7 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 #[async_trait]
 impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
     type Net = Arc<Mutex<LocalKubernetesNet>>;

@@ -9,7 +9,7 @@ use linera_views::{
     views::{View, ViewError},
 };
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES};
 
 #[cfg(test)]
@@ -73,7 +73,7 @@ where
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl OutboxStateView<MemoryContext<()>>
 where
     MemoryContext<()>: Context + Clone + Send + Sync + 'static,

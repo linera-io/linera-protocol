@@ -35,7 +35,7 @@ pub fn binary_parent(current_binary: &Path) -> Result<PathBuf> {
         .with_context(|| format!("Failed to canonicalize '{}'", current_binary.display()))?;
     current_binary_parent.pop();
 
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     // Test binaries are typically in target/debug/deps while crate binaries are in target/debug
     // (same thing for target/release).
     let current_binary_parent = if current_binary_parent.ends_with("target/debug/deps")

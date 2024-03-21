@@ -47,7 +47,7 @@ use {
     prometheus::{HistogramVec, IntCounterVec},
 };
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     linera_base::identifiers::{Destination, MessageId},
     linera_chain::data_types::ChannelFullName,
@@ -379,7 +379,7 @@ where
     ViewError: From<StorageClient::ContextError>,
 {
     // NOTE: This only works for non-sharded workers!
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     pub async fn fully_handle_certificate(
         &mut self,
         certificate: Certificate,
@@ -935,7 +935,7 @@ where
     }
 
     /// Returns a stored [`Certificate`] for a chain's block.
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     pub async fn read_certificate(
         &self,
         chain_id: ChainId,
@@ -956,7 +956,7 @@ where
     ///
     /// The returned [`ApplicationRegistryView`] holds a lock of the chain it belongs to. Incorrect
     /// usage of this method may cause deadlocks.
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     pub async fn load_application_registry(
         &self,
         chain_id: ChainId,
@@ -967,7 +967,7 @@ where
 
     /// Returns an [`IncomingMessage`] that's awaiting to be received by the chain specified by
     /// `chain_id`.
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     pub async fn find_incoming_message(
         &self,
         chain_id: ChainId,

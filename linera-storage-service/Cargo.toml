@@ -46,6 +46,7 @@ similar-asserts.workspace = true
 test-strategy.workspace = true
 
 [build-dependencies]
+cfg_aliases.workspace = true
 tonic-build = { workspace = true, features = ["prost", "transport"] }
 
 [package.metadata.cargo-machete]

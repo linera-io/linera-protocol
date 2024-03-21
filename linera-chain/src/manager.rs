@@ -482,7 +482,7 @@ impl ChainManager {
 
 /// Chain manager information that is included in `ChainInfo` sent to clients.
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct ChainManagerInfo {
     /// The configuration of the chain's owners.
     pub ownership: ChainOwnership,

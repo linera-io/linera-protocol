@@ -4,7 +4,7 @@
 use crate::db_storage::DbStorage;
 use linera_views::scylla_db::ScyllaDbStore;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     crate::db_storage::{DbStorageInner, TestClock},
     linera_execution::WasmRuntime,
@@ -20,7 +20,7 @@ mod tests;
 
 pub type ScyllaDbStorage<C> = DbStorage<ScyllaDbStore, C>;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl ScyllaDbStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let store_config = create_scylla_db_test_config().await;

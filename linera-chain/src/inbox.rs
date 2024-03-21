@@ -17,7 +17,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES};
 
 #[cfg(test)]
@@ -253,7 +253,7 @@ where
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl InboxStateView<MemoryContext<()>>
 where
     MemoryContext<()>: Context + Clone + Send + Sync + 'static,

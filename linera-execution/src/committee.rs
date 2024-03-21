@@ -308,7 +308,7 @@ impl Committee {
         }
     }
 
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     pub fn make_simple(keys: Vec<ValidatorName>) -> Self {
         let map = keys
             .into_iter()

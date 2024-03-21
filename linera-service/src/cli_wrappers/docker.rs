@@ -55,7 +55,7 @@ impl DockerImage {
             .args(["-f", "docker/Dockerfile"])
             .args(["--build-arg", &build_arg]);
 
-        #[cfg(not(any(test, feature = "test")))]
+        #[cfg(not(with_testing))]
         command
             .args([
                 "--build-arg",

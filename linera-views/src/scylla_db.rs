@@ -268,11 +268,11 @@ impl ScyllaDbClient {
 }
 
 /// We limit the number of connections that can be done for tests.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
 /// The number of connections in the stream is limited for tests.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// The maximal size of an operation on ScyllaDB seems to be 16M
@@ -758,7 +758,7 @@ impl ScyllaDbStore {
 }
 
 /// Creates the common initialization for RocksDB.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub fn create_scylla_db_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
         max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
@@ -768,13 +768,13 @@ pub fn create_scylla_db_common_config() -> CommonStoreConfig {
 }
 
 /// Creates the URI used for the tests.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub fn create_scylla_db_test_uri() -> String {
     "localhost:9042".to_string()
 }
 
 /// Creates a ScyllaDB test store config.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub async fn create_scylla_db_test_config() -> ScyllaDbStoreConfig {
     let uri = create_scylla_db_test_uri();
     let common_config = create_scylla_db_common_config();

@@ -8,7 +8,7 @@ pub mod data_types;
 mod inbox;
 mod manager;
 mod outbox;
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub mod test;
 
 pub use chain::ChainStateView;

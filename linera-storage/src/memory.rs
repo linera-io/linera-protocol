@@ -3,7 +3,7 @@
 
 use crate::db_storage::DbStorage;
 use linera_views::memory::MemoryStore;
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     crate::db_storage::DbStorageInner,
     linera_execution::WasmRuntime,
@@ -12,10 +12,10 @@ use {
 
 pub type MemoryStorage<C> = DbStorage<MemoryStore, C>;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use crate::db_storage::TestClock;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl MemoryStorage<crate::TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let clock = crate::TestClock::new();

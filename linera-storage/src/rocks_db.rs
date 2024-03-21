@@ -4,7 +4,7 @@
 use crate::db_storage::DbStorage;
 use linera_views::rocks_db::RocksDbStore;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     crate::db_storage::{DbStorageInner, TestClock},
     linera_execution::WasmRuntime,
@@ -21,7 +21,7 @@ mod tests;
 
 pub type RocksDbStorage<C> = DbStorage<RocksDbStore, C>;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl RocksDbStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> (Self, TempDir) {
         let (store_config, dir) = create_rocks_db_test_config().await;

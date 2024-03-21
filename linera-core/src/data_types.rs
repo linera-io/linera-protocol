@@ -25,10 +25,7 @@ use std::collections::BTreeMap;
 
 /// A range of block heights as used in ChainInfoQuery.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(
-    any(test, feature = "test"),
-    derive(test_strategy::Arbitrary, Eq, PartialEq)
-)]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Eq, PartialEq))]
 pub struct BlockHeightRange {
     /// Starting point
     pub start: BlockHeight,
@@ -46,10 +43,7 @@ impl BlockHeightRange {
 
 /// Request information about a chain.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(
-    any(test, feature = "test"),
-    derive(test_strategy::Arbitrary, Eq, PartialEq)
-)]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Eq, PartialEq))]
 pub struct ChainInfoQuery {
     /// The chain ID.
     pub chain_id: ChainId,
@@ -136,7 +130,7 @@ impl ChainInfoQuery {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct ChainInfo {
     /// The chain ID.
     pub chain_id: ChainId,
@@ -174,7 +168,7 @@ pub struct ChainInfo {
 
 /// The response to an `ChainInfoQuery`
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct ChainInfoResponse {
     pub info: Box<ChainInfo>,
     pub signature: Option<Signature>,
@@ -182,7 +176,7 @@ pub struct ChainInfoResponse {
 
 /// An internal request between chains within a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub enum CrossChainRequest {
     /// Communicate a number of confirmed blocks from the sender to the recipient.
     /// Blocks must be given by increasing heights.
@@ -291,7 +285,7 @@ pub struct RoundTimeout {
 }
 
 impl<T> ClientOutcome<T> {
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     pub fn unwrap(self) -> T {
         match self {
             ClientOutcome::Committed(t) => t,

@@ -544,7 +544,7 @@ pub enum Response {
 
 /// A message together with routing information.
 #[derive(Clone, Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct RawOutgoingMessage<Message, Grant = Resources> {
     /// The destination of the message.
     pub destination: Destination,
@@ -576,7 +576,7 @@ pub enum MessageKind {
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
 #[derive(Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct RawExecutionOutcome<Message, Grant = Resources> {
     /// The signer who created the messages.
     pub authenticated_signer: Option<Owner>,
@@ -604,7 +604,7 @@ pub struct ChannelSubscription {
 
 /// Externally visible results of an execution, tagged by their application.
 #[derive(Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 #[allow(clippy::large_enum_variant)]
 pub enum ExecutionOutcome {
     System(RawExecutionOutcome<SystemMessage, Amount>),
@@ -715,7 +715,7 @@ impl OperationContext {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 #[derive(Clone)]
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
@@ -724,7 +724,7 @@ pub struct TestExecutionRuntimeContext {
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl TestExecutionRuntimeContext {
     pub fn new(chain_id: ChainId, execution_runtime_config: ExecutionRuntimeConfig) -> Self {
         Self {
@@ -736,7 +736,7 @@ impl TestExecutionRuntimeContext {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 #[async_trait]
 impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId {

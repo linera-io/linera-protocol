@@ -15,7 +15,7 @@ mod scylla_db;
 #[cfg(not(target_arch = "wasm32"))]
 mod service;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
 #[cfg(with_dynamodb)]
 pub use crate::dynamo_db::DynamoDbStorage;

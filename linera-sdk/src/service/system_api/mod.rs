@@ -3,9 +3,9 @@
 
 //! Functions and types to interface with the system API available to application services.
 
-#[cfg(not(any(test, feature = "test")))]
+#[cfg(not(with_testing))]
 mod private;
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub mod private;
 
 pub(crate) use self::private::{current_application_parameters, query_application};

@@ -15,7 +15,7 @@ use linera_version::VersionInfo;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub enum RpcMessage {
     // Inbound
     BlockProposal(Box<BlockProposal>),
@@ -139,14 +139,14 @@ impl From<VersionInfo> for RpcMessage {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct HandleLiteCertificateRequest<'a> {
     pub certificate: LiteCertificate<'a>,
     pub wait_for_outgoing_messages: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct HandleCertificateRequest {
     pub certificate: Certificate,
     pub wait_for_outgoing_messages: bool,
