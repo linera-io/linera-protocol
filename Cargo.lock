@@ -4030,6 +4030,7 @@ dependencies = [
  "bcs",
  "fungible",
  "linera-sdk",
+ "serde",
  "serde_json",
  "thiserror",
 ]

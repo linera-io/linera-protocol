@@ -54,6 +54,38 @@ impl FungibleApp {
         }
     }
 
+    async fn entries(&self) -> Vec<native_fungible::AccountEntry> {
+        let query = "accounts { entries { key, value } }";
+        let response_body = self.0.query(&query).await.unwrap();
+        serde_json::from_value(response_body["accounts"]["entries"].clone()).unwrap_or_default()
+    }
+
+    async fn assert_entries(&self, accounts: impl IntoIterator<Item = (AccountOwner, Amount)>) {
+        let entries: BTreeMap<AccountOwner, Amount> = self
+            .entries()
+            .await
+            .into_iter()
+            .map(|entry| (entry.key, entry.value))
+            .collect();
+
+        for (account_owner, amount) in accounts {
+            assert_eq!(entries[&account_owner], amount);
+        }
+    }
+
+    async fn keys(&self) -> Vec<AccountOwner> {
+        let query = "accounts { keys }";
+        let response_body = self.0.query(&query).await.unwrap();
+        serde_json::from_value(response_body["accounts"]["keys"].clone()).unwrap_or_default()
+    }
+
+    async fn assert_keys(&self, accounts: impl IntoIterator<Item = AccountOwner>) {
+        let keys = self.keys().await;
+        for account_owner in accounts {
+            assert!(keys.contains(&account_owner));
+        }
+    }
+
     async fn transfer(
         &self,
         account_owner: &AccountOwner,
@@ -488,11 +520,13 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig, example_nam
             .await
             .unwrap(),
     );
-    app1.assert_balances([
+    let expected_balances = [
         (account_owner1, Amount::from_tokens(5)),
         (account_owner2, Amount::from_tokens(2)),
-    ])
-    .await;
+    ];
+    app1.assert_balances(expected_balances).await;
+    app1.assert_entries(expected_balances).await;
+    app1.assert_keys([account_owner1, account_owner2]).await;
 
     // Transferring
     app1.transfer(
@@ -506,11 +540,13 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig, example_nam
     .await;
 
     // Checking the final values on chain1 and chain2.
-    app1.assert_balances([
+    let expected_balances = [
         (account_owner1, Amount::from_tokens(4)),
         (account_owner2, Amount::from_tokens(2)),
-    ])
-    .await;
+    ];
+    app1.assert_balances(expected_balances).await;
+    app1.assert_entries(expected_balances).await;
+    app1.assert_keys([account_owner1, account_owner2]).await;
 
     // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
     let app2 = FungibleApp(
@@ -520,11 +556,14 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig, example_nam
             .unwrap(),
     );
 
-    app2.assert_balances(BTreeMap::from([
+    let expected_balances = [
         (account_owner1, Amount::ZERO),
         (account_owner2, Amount::ONE),
-    ]))
-    .await;
+    ];
+    let expected_entries = [(account_owner2, Amount::ONE)];
+    app2.assert_balances(expected_balances).await;
+    app2.assert_entries(expected_entries).await;
+    app2.assert_keys([account_owner2]).await;
 
     // Claiming more money from chain1 to chain2.
     app2.claim(
@@ -545,16 +584,23 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig, example_nam
     node_service2.process_inbox(&chain2).await.unwrap();
 
     // Checking the final value
-    app1.assert_balances([
+    let expected_balances = [
         (account_owner1, Amount::from_tokens(4)),
         (account_owner2, Amount::ZERO),
-    ])
-    .await;
-    app2.assert_balances([
+    ];
+    let expected_entries = [(account_owner1, Amount::from_tokens(4))];
+    app1.assert_balances(expected_balances).await;
+    app1.assert_entries(expected_entries).await;
+    app1.assert_keys([account_owner1]).await;
+
+    let expected_balances = [
         (account_owner1, Amount::ZERO),
         (account_owner2, Amount::from_tokens(3)),
-    ])
-    .await;
+    ];
+    let expected_entries = [(account_owner2, Amount::from_tokens(3))];
+    app2.assert_balances(expected_balances).await;
+    app2.assert_entries(expected_entries).await;
+    app2.assert_keys([account_owner2]).await;
 
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
@@ -628,11 +674,13 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
             .await
             .unwrap(),
     );
-    app1.assert_balances([
+    let expected_balances = [
         (account_owner1, Amount::from_tokens(5)),
         (account_owner2, Amount::from_tokens(2)),
-    ])
-    .await;
+    ];
+    app1.assert_balances(expected_balances).await;
+    app1.assert_entries(expected_balances).await;
+    app1.assert_keys([account_owner1, account_owner2]).await;
 
     // Transferring
     app1.transfer(
@@ -646,11 +694,13 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     .await;
 
     // Checking the final values on chain1 and chain2.
-    app1.assert_balances([
+    let expected_balances = [
         (account_owner1, Amount::from_tokens(4)),
         (account_owner2, Amount::from_tokens(2)),
-    ])
-    .await;
+    ];
+    app1.assert_balances(expected_balances).await;
+    app1.assert_entries(expected_balances).await;
+    app1.assert_keys([account_owner1, account_owner2]).await;
 
     let app2 = FungibleApp(
         node_service
@@ -658,7 +708,11 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
             .await
             .unwrap(),
     );
-    app2.assert_balances([(account_owner2, Amount::ONE)]).await;
+
+    let expected_balances = [(account_owner2, Amount::ONE)];
+    app2.assert_balances(expected_balances).await;
+    app2.assert_entries(expected_balances).await;
+    app2.assert_keys([account_owner2]).await;
 
     node_service.ensure_is_running().unwrap();
 

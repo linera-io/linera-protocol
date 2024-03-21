@@ -6,17 +6,15 @@
 mod state;
 
 use self::state::NativeFungibleToken;
-use async_graphql::{
-    ComplexObject, EmptySubscription, Object, Request, Response, Schema, SimpleObject,
-};
+use async_graphql::{ComplexObject, EmptySubscription, Object, Request, Response, Schema};
 use fungible::Operation;
 use linera_sdk::{
-    base::{AccountOwner, Amount, WithServiceAbi},
+    base::{AccountOwner, WithServiceAbi},
     graphql::GraphQLMutationRoot,
     service::system_api,
     Service, ServiceRuntime, ViewStateStorage,
 };
-use native_fungible::TICKER_SYMBOL;
+use native_fungible::{AccountEntry, TICKER_SYMBOL};
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -53,11 +51,6 @@ impl Service for NativeFungibleTokenService {
     }
 }
 
-#[derive(SimpleObject)]
-struct AccountEntry {
-    value: Amount,
-}
-
 #[derive(Default)]
 struct Accounts;
 
@@ -70,8 +63,27 @@ impl Accounts {
             AccountOwner::Application(_) => return Err(Error::ApplicationsNotSupported),
         };
 
-        let balance = system_api::current_owner_balance(owner);
-        Ok(AccountEntry { value: balance })
+        Ok(AccountEntry {
+            key,
+            value: system_api::current_owner_balance(owner),
+        })
+    }
+
+    async fn entries(&self) -> Result<Vec<AccountEntry>, Error> {
+        Ok(system_api::current_owner_balances()
+            .into_iter()
+            .map(|(owner, amount)| AccountEntry {
+                key: AccountOwner::User(owner),
+                value: amount,
+            })
+            .collect())
+    }
+
+    async fn keys(&self) -> Result<Vec<AccountOwner>, Error> {
+        Ok(system_api::current_balance_owners()
+            .into_iter()
+            .map(AccountOwner::User)
+            .collect())
     }
 }
 
