@@ -91,6 +91,7 @@ linera service --port $PORT &
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     mutation {
         mint(
+            minter: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
             name: "nft1",
             payload: [1, 2, 3, 4]
         )
@@ -192,7 +193,11 @@ impl ServiceAbi for NonFungibleTokenAbi {
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum Operation {
     /// Mints a token
-    Mint { name: String, payload: Vec<u8> },
+    Mint {
+        minter: AccountOwner,
+        name: String,
+        payload: Vec<u8>,
+    },
     /// Transfers a token from a (locally owned) account to a (possibly remote) account.
     Transfer {
         source_owner: AccountOwner,

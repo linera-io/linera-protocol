@@ -56,9 +56,13 @@ impl Contract for NonFungibleTokenContract {
         operation: Self::Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         match operation {
-            Operation::Mint { name, payload } => {
-                let signer = self.runtime.authenticated_signer().unwrap();
-                Ok(self.mint(AccountOwner::User(signer), name, payload).await)
+            Operation::Mint {
+                minter,
+                name,
+                payload,
+            } => {
+                self.check_account_authentication(minter)?;
+                Ok(self.mint(minter, name, payload).await)
             }
 
             Operation::Transfer {
@@ -134,12 +138,14 @@ impl Contract for NonFungibleTokenContract {
         call: Self::ApplicationCall,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         match call {
-            Self::ApplicationCall::Mint { name, payload } => {
-                let signer = self.runtime.authenticated_caller_id().unwrap();
-                let execution_outcome = self
-                    .mint(AccountOwner::Application(signer), name, payload)
-                    .await;
+            Self::ApplicationCall::Mint {
+                minter,
+                name,
+                payload,
+            } => {
+                self.check_account_authentication(minter)?;
 
+                let execution_outcome = self.mint(minter, name, payload).await;
                 Ok(ApplicationCallOutcome {
                     execution_outcome,
                     ..Default::default()

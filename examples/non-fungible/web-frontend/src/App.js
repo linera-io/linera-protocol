@@ -13,8 +13,8 @@ const GET_OWNED_NFTS = gql`
 `;
 
 const MINT_NFT = gql`
-  mutation Mint($name: String!, $payload: [Int!]!) {
-    mint(name: $name, payload: $payload)
+  mutation Mint($minter: AccountOwner!, $name: String!, $payload: [Int!]!) {
+    mint(minter: $minter, name: $name, payload: $payload)
   }
 `;
 
@@ -129,6 +129,7 @@ function App({ chainId, owner }) {
 
     mintNft({
       variables: {
+        minter: `User:${owner}`,
         name: name,
         payload: Array.from(byteArrayFile),
       },

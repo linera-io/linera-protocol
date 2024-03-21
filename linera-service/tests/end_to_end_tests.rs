@@ -115,9 +115,10 @@ impl NonFungibleApp {
         )?)
     }
 
-    async fn mint(&self, name: &String, payload: &Vec<u8>) -> Value {
+    async fn mint(&self, minter: &AccountOwner, name: &String, payload: &Vec<u8>) -> Value {
         let mutation = format!(
-            "mint(name: {}, payload: {})",
+            "mint(minter: {}, name: {}, payload: {})",
+            minter.to_value(),
             name.to_value(),
             payload.to_value(),
         );
@@ -712,7 +713,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) {
         &nft1_payload,
     );
 
-    app1.mint(&nft1_name, &nft1_payload).await;
+    app1.mint(&account_owner1, &nft1_name, &nft1_payload).await;
 
     let mut expected_nft1 = NftOutput {
         token_id: nft1_id.clone(),
@@ -841,7 +842,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) {
     );
 
     // Minting NFT from chain2
-    app2.mint(&nft2_name, &nft2_payload).await;
+    app2.mint(&account_owner2, &nft2_name, &nft2_payload).await;
 
     let expected_nft2 = NftOutput {
         token_id: nft2_id.clone(),
