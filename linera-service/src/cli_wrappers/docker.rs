@@ -69,7 +69,7 @@ impl DockerImage {
                 &format!(
                     "build_date={}",
                     // Same format as $(TZ=UTC date)
-                    chrono::Utc::now().format("%a %b %d %T UTC %Y").to_string()
+                    chrono::Utc::now().format("%a %b %d %T UTC %Y")
                 ),
             ]);
 
