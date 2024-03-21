@@ -17,7 +17,9 @@ use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
 #[cfg(with_testing)]
 use {
-    crate::cli_wrappers::wallet::FaucetOption, linera_base::command::current_binary_parent,
+    crate::cli_wrappers::wallet::FaucetOption,
+    futures::lock::OwnedMutexGuard,
+    linera_base::{command::current_binary_parent, sync::Lazy},
     tokio::sync::OnceCell,
 };
 
@@ -30,6 +32,9 @@ use crate::cli_wrappers::{
     util::get_github_root,
     ClientWrapper, LineraNet, LineraNetConfig, Network,
 };
+
+#[cfg(with_testing)]
+pub static KUBERNETES_TEST_GUARD: Lazy<Arc<Mutex<()>>> = Lazy::new(|| Arc::new(Mutex::new(())));
 
 #[cfg(with_testing)]
 static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
@@ -149,11 +154,18 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
 }
 
 #[cfg(with_testing)]
+pub struct LocalKubernetesTestNet {
+    net: Arc<Mutex<LocalKubernetesNet>>,
+    _guard: OwnedMutexGuard<()>,
+}
+
+#[cfg(with_testing)]
 #[async_trait]
 impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
-    type Net = Arc<Mutex<LocalKubernetesNet>>;
+    type Net = LocalKubernetesTestNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
+        let guard = KUBERNETES_TEST_GUARD.clone().lock_owned().await;
         let (net, initial_client) = SHARED_LOCAL_KUBERNETES_TESTING_NET
             .get_or_init(|| async {
                 let (net, initial_client) = self
@@ -165,7 +177,10 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
             })
             .await;
 
-        let mut net = net.clone();
+        let mut net = LocalKubernetesTestNet {
+            net: net.clone(),
+            _guard: guard,
+        };
         let client = net.make_client().await;
         // The tests assume we've created a genesis config with 10
         // chains with 10 tokens each.
@@ -186,16 +201,16 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
 }
 
 #[async_trait]
-impl LineraNet for Arc<Mutex<LocalKubernetesNet>> {
+impl LineraNet for LocalKubernetesTestNet {
     async fn ensure_is_running(&mut self) -> Result<()> {
-        let self_clone = self.clone();
+        let self_clone = self.net.clone();
         let mut self_lock = self_clone.lock().await;
 
         self_lock.ensure_is_running().await
     }
 
     async fn make_client(&mut self) -> ClientWrapper {
-        let self_clone = self.clone();
+        let self_clone = self.net.clone();
         let mut self_lock = self_clone.lock().await;
 
         self_lock.make_client().await
