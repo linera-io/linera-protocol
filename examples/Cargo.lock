@@ -2003,6 +2003,7 @@ dependencies = [
  "linera-views",
  "port-selector",
  "prost",
+ "serde",
  "thiserror",
  "tokio",
  "tonic",

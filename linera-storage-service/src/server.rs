@@ -4,22 +4,24 @@
 use crate::key_value_store::{
     statement::Operation,
     store_processor_server::{StoreProcessor, StoreProcessorServer},
-    KeyValue, OptValue, ReplyClearJournal, ReplyContainsKey, ReplyCreateNamespace, ReplyDeleteAll,
+    KeyValue, OptValue, ReplyContainsKey, ReplyCreateNamespace, ReplyDeleteAll,
     ReplyDeleteNamespace, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
-    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplyWriteBatch, RequestClearJournal,
-    RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
-    RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
-    RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
+    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk,
+    ReplyWriteBatchExtended, RequestContainsKey, RequestCreateNamespace, RequestDeleteAll,
+    RequestDeleteNamespace, RequestExistsNamespace, RequestFindKeyValuesByPrefix,
+    RequestFindKeysByPrefix, RequestListAll, RequestReadMultiValues, RequestReadValue,
+    RequestSpecificChunk, RequestWriteBatchExtended,
 };
+use async_lock::RwLock;
+use linera_storage_service::common::{KeyTag, MAX_PAYLOAD_SIZE};
 use linera_views::{
     batch::Batch,
-    common::{
-        AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore,
-        MIN_VIEW_TAG,
-    },
+    common::{AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
     memory::{create_memory_store_stream_queries, MemoryStore},
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
+use serde::Serialize;
+use std::{collections::BTreeMap, sync::Arc};
 use tonic::{transport::Server, Request, Response, Status};
 
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -28,31 +30,34 @@ pub mod key_value_store {
     tonic::include_proto!("key_value_store.v1");
 }
 
-/// Key tags to create the sub keys used for storing data on storage.
-#[repr(u8)]
-pub(crate) enum KeyTag {
-    /// Prefix for the storage of the keys of the map
-    Key = MIN_VIEW_TAG,
-    /// Prefix for the storage of existence or not of the namespaces.
-    Namespace,
-}
-
-pub enum ServiceStoreServer {
+enum ServiceStoreServerInternal {
     Memory(MemoryStore),
     /// The RocksDb key value store
     #[cfg(feature = "rocksdb")]
     RocksDb(RocksDbStore),
 }
 
+#[derive(Default)]
+struct PendingBigReads {
+    index: i64,
+    chunks_by_index: BTreeMap<i64, Vec<Vec<u8>>>,
+}
+
+struct ServiceStoreServer {
+    store: ServiceStoreServerInternal,
+    pending_big_puts: Arc<RwLock<BTreeMap<Vec<u8>, Vec<u8>>>>,
+    pending_big_reads: Arc<RwLock<PendingBigReads>>,
+}
+
 impl ServiceStoreServer {
     pub async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Status> {
-        match self {
-            ServiceStoreServer::Memory(store) => store
+        match &self.store {
+            ServiceStoreServerInternal::Memory(store) => store
                 .read_value_bytes(key)
                 .await
                 .map_err(|_e| Status::not_found("read_value_bytes")),
             #[cfg(feature = "rocksdb")]
-            ServiceStoreServer::RocksDb(store) => store
+            ServiceStoreServerInternal::RocksDb(store) => store
                 .read_value_bytes(key)
                 .await
                 .map_err(|_e| Status::not_found("read_value_bytes")),
@@ -60,13 +65,13 @@ impl ServiceStoreServer {
     }
 
     pub async fn contains_key(&self, key: &[u8]) -> Result<bool, Status> {
-        match self {
-            ServiceStoreServer::Memory(store) => store
+        match &self.store {
+            ServiceStoreServerInternal::Memory(store) => store
                 .contains_key(key)
                 .await
                 .map_err(|_e| Status::not_found("contains_key")),
             #[cfg(feature = "rocksdb")]
-            ServiceStoreServer::RocksDb(store) => store
+            ServiceStoreServerInternal::RocksDb(store) => store
                 .contains_key(key)
                 .await
                 .map_err(|_e| Status::not_found("contains_key")),
@@ -77,13 +82,13 @@ impl ServiceStoreServer {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Status> {
-        match self {
-            ServiceStoreServer::Memory(store) => store
+        match &self.store {
+            ServiceStoreServerInternal::Memory(store) => store
                 .read_multi_values_bytes(keys)
                 .await
                 .map_err(|_e| Status::not_found("read_multi_values_bytes")),
             #[cfg(feature = "rocksdb")]
-            ServiceStoreServer::RocksDb(store) => store
+            ServiceStoreServerInternal::RocksDb(store) => store
                 .read_multi_values_bytes(keys)
                 .await
                 .map_err(|_e| Status::not_found("read_multi_values_bytes")),
@@ -91,13 +96,13 @@ impl ServiceStoreServer {
     }
 
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Status> {
-        match self {
-            ServiceStoreServer::Memory(store) => store
+        match &self.store {
+            ServiceStoreServerInternal::Memory(store) => store
                 .find_keys_by_prefix(key_prefix)
                 .await
                 .map_err(|_e| Status::not_found("find_keys_by_prefix")),
             #[cfg(feature = "rocksdb")]
-            ServiceStoreServer::RocksDb(store) => store
+            ServiceStoreServerInternal::RocksDb(store) => store
                 .find_keys_by_prefix(key_prefix)
                 .await
                 .map_err(|_e| Status::not_found("find_keys_by_prefix")),
@@ -108,44 +113,30 @@ impl ServiceStoreServer {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Status> {
-        match self {
-            ServiceStoreServer::Memory(store) => store
+        match &self.store {
+            ServiceStoreServerInternal::Memory(store) => store
                 .find_key_values_by_prefix(key_prefix)
                 .await
                 .map_err(|_e| Status::not_found("find_key_values_by_prefix")),
             #[cfg(feature = "rocksdb")]
-            ServiceStoreServer::RocksDb(store) => store
+            ServiceStoreServerInternal::RocksDb(store) => store
                 .find_key_values_by_prefix(key_prefix)
                 .await
                 .map_err(|_e| Status::not_found("find_key_values_by_prefix")),
         }
     }
 
-    pub async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Status> {
-        match self {
-            ServiceStoreServer::Memory(store) => store
-                .write_batch(batch, base_key)
+    pub async fn write_batch(&self, batch: Batch) -> Result<(), Status> {
+        match &self.store {
+            ServiceStoreServerInternal::Memory(store) => store
+                .write_batch(batch, &[])
                 .await
                 .map_err(|_e| Status::not_found("write_batch")),
             #[cfg(feature = "rocksdb")]
-            ServiceStoreServer::RocksDb(store) => store
-                .write_batch(batch, base_key)
+            ServiceStoreServerInternal::RocksDb(store) => store
+                .write_batch(batch, &[])
                 .await
                 .map_err(|_e| Status::not_found("write_batch")),
-        }
-    }
-
-    pub async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Status> {
-        match self {
-            ServiceStoreServer::Memory(store) => store
-                .clear_journal(base_key)
-                .await
-                .map_err(|_e| Status::not_found("clear_journal")),
-            #[cfg(feature = "rocksdb")]
-            ServiceStoreServer::RocksDb(store) => store
-                .clear_journal(base_key)
-                .await
-                .map_err(|_e| Status::not_found("clear_journal")),
         }
     }
 
@@ -157,7 +148,7 @@ impl ServiceStoreServer {
         let mut batch = Batch::new();
         batch.delete_key_prefix(vec![KeyTag::Key as u8]);
         batch.delete_key_prefix(vec![KeyTag::Namespace as u8]);
-        self.write_batch(batch, &[]).await
+        self.write_batch(batch).await
     }
 
     pub async fn exists_namespace(&self, namespace: &[u8]) -> Result<bool, Status> {
@@ -171,7 +162,7 @@ impl ServiceStoreServer {
         full_key.extend(namespace);
         let mut batch = Batch::new();
         batch.put_key_value_bytes(full_key, vec![]);
-        self.write_batch(batch, &[]).await
+        self.write_batch(batch).await
     }
 
     pub async fn delete_namespace(&self, namespace: &[u8]) -> Result<(), Status> {
@@ -182,7 +173,23 @@ impl ServiceStoreServer {
         let mut key_prefix = vec![KeyTag::Key as u8];
         key_prefix.extend(namespace);
         batch.delete_key_prefix(key_prefix);
-        self.write_batch(batch, &[]).await
+        self.write_batch(batch).await
+    }
+
+    pub async fn insert_pending_read<S: Serialize>(&self, value: S) -> (i64, i32) {
+        let value = bcs::to_bytes(&value).unwrap();
+        let chunks = value
+            .chunks(MAX_PAYLOAD_SIZE)
+            .map(|x| x.to_vec())
+            .collect::<Vec<_>>();
+        let num_chunks = chunks.len() as i32;
+        let mut pending_big_reads = self.pending_big_reads.write().await;
+        let message_index = pending_big_reads.index;
+        pending_big_reads.index += 1;
+        pending_big_reads
+            .chunks_by_index
+            .insert(message_index, chunks);
+        (message_index, num_chunks)
     }
 }
 
@@ -217,7 +224,24 @@ impl StoreProcessor for ServiceStoreServer {
         let request = request.into_inner();
         let RequestReadValue { key } = request;
         let value = self.read_value_bytes(&key).await?;
-        let response = ReplyReadValue { value };
+        let size = match &value {
+            None => 0,
+            Some(value) => value.len(),
+        };
+        let response = if size < MAX_PAYLOAD_SIZE {
+            ReplyReadValue {
+                value,
+                message_index: 0,
+                num_chunks: 0,
+            }
+        } else {
+            let (message_index, num_chunks) = self.insert_pending_read(value).await;
+            ReplyReadValue {
+                value: None,
+                message_index,
+                num_chunks,
+            }
+        };
         Ok(Response::new(response))
     }
 
@@ -238,12 +262,32 @@ impl StoreProcessor for ServiceStoreServer {
     ) -> Result<Response<ReplyReadMultiValues>, Status> {
         let request = request.into_inner();
         let RequestReadMultiValues { keys } = request;
-        let values = self.read_multi_values_bytes(keys).await?;
-        let values = values
-            .into_iter()
-            .map(|value| OptValue { value })
-            .collect::<Vec<_>>();
-        let response = ReplyReadMultiValues { values };
+        let values = self.read_multi_values_bytes(keys.clone()).await?;
+        let size = values
+            .iter()
+            .map(|x| match x {
+                None => 0,
+                Some(entry) => entry.len(),
+            })
+            .sum::<usize>();
+        let response = if size < MAX_PAYLOAD_SIZE {
+            let values = values
+                .into_iter()
+                .map(|value| OptValue { value })
+                .collect::<Vec<_>>();
+            ReplyReadMultiValues {
+                values,
+                message_index: 0,
+                num_chunks: 0,
+            }
+        } else {
+            let (message_index, num_chunks) = self.insert_pending_read(values).await;
+            ReplyReadMultiValues {
+                values: Vec::default(),
+                message_index,
+                num_chunks,
+            }
+        };
         Ok(Response::new(response))
     }
 
@@ -254,7 +298,21 @@ impl StoreProcessor for ServiceStoreServer {
         let request = request.into_inner();
         let RequestFindKeysByPrefix { key_prefix } = request;
         let keys = self.find_keys_by_prefix(&key_prefix).await?;
-        let response = ReplyFindKeysByPrefix { keys };
+        let size = keys.iter().map(|x| x.len()).sum::<usize>();
+        let response = if size < MAX_PAYLOAD_SIZE {
+            ReplyFindKeysByPrefix {
+                keys,
+                message_index: 0,
+                num_chunks: 0,
+            }
+        } else {
+            let (message_index, num_chunks) = self.insert_pending_read(keys).await;
+            ReplyFindKeysByPrefix {
+                keys: Vec::default(),
+                message_index,
+                num_chunks,
+            }
+        };
         Ok(Response::new(response))
     }
 
@@ -265,26 +323,40 @@ impl StoreProcessor for ServiceStoreServer {
         let request = request.into_inner();
         let RequestFindKeyValuesByPrefix { key_prefix } = request;
         let key_values = self.find_key_values_by_prefix(&key_prefix).await?;
-        let key_values = key_values
-            .into_iter()
-            .map(|x| KeyValue {
-                key: x.0,
-                value: x.1,
-            })
-            .collect::<Vec<_>>();
-        let response = ReplyFindKeyValuesByPrefix { key_values };
+        let size = key_values
+            .iter()
+            .map(|x| x.0.len() + x.1.len())
+            .sum::<usize>();
+        let response = if size < MAX_PAYLOAD_SIZE {
+            let key_values = key_values
+                .into_iter()
+                .map(|x| KeyValue {
+                    key: x.0,
+                    value: x.1,
+                })
+                .collect::<Vec<_>>();
+            ReplyFindKeyValuesByPrefix {
+                key_values,
+                message_index: 0,
+                num_chunks: 0,
+            }
+        } else {
+            let (message_index, num_chunks) = self.insert_pending_read(key_values).await;
+            ReplyFindKeyValuesByPrefix {
+                key_values: Vec::default(),
+                message_index,
+                num_chunks,
+            }
+        };
         Ok(Response::new(response))
     }
 
-    async fn process_write_batch(
+    async fn process_write_batch_extended(
         &self,
-        request: Request<RequestWriteBatch>,
-    ) -> Result<Response<ReplyWriteBatch>, Status> {
+        request: Request<RequestWriteBatchExtended>,
+    ) -> Result<Response<ReplyWriteBatchExtended>, Status> {
         let request = request.into_inner();
-        let RequestWriteBatch {
-            statements,
-            base_key,
-        } = request;
+        let RequestWriteBatchExtended { statements } = request;
         let mut batch = Batch::default();
         for statement in statements {
             match statement.operation.unwrap() {
@@ -294,24 +366,53 @@ impl StoreProcessor for ServiceStoreServer {
                 Operation::Put(key_value) => {
                     batch.put_key_value_bytes(key_value.key, key_value.value);
                 }
+                Operation::Append(key_value_append) => {
+                    let mut pending_big_puts = self.pending_big_puts.write().await;
+                    match pending_big_puts.get_mut(&key_value_append.key) {
+                        None => {
+                            pending_big_puts
+                                .insert(key_value_append.key.clone(), key_value_append.value);
+                        }
+                        Some(value) => {
+                            value.extend(key_value_append.value);
+                        }
+                    }
+                    if key_value_append.last {
+                        let value = pending_big_puts.remove(&key_value_append.key).unwrap();
+                        batch.put_key_value_bytes(key_value_append.key, value);
+                    }
+                }
                 Operation::DeletePrefix(key_prefix) => {
                     batch.delete_key_prefix(key_prefix);
                 }
             }
         }
-        self.write_batch(batch, &base_key).await?;
-        let response = ReplyWriteBatch {};
+        if batch.size() > 0 {
+            self.write_batch(batch).await?;
+        }
+        let response = ReplyWriteBatchExtended {};
         Ok(Response::new(response))
     }
 
-    async fn process_clear_journal(
+    async fn process_specific_chunk(
         &self,
-        request: Request<RequestClearJournal>,
-    ) -> Result<Response<ReplyClearJournal>, Status> {
+        request: Request<RequestSpecificChunk>,
+    ) -> Result<Response<ReplySpecificChunk>, Status> {
         let request = request.into_inner();
-        let RequestClearJournal { base_key } = request;
-        self.clear_journal(&base_key).await?;
-        let response = ReplyClearJournal {};
+        let RequestSpecificChunk {
+            message_index,
+            index,
+        } = request;
+        let mut pending_big_reads = self.pending_big_reads.write().await;
+        let Some(entry) = pending_big_reads.chunks_by_index.get(&message_index) else {
+            return Err(Status::not_found("process_specific_chunk"));
+        };
+        let index = index as usize;
+        let chunk = entry[index].clone();
+        if entry.len() == index + 1 {
+            pending_big_reads.chunks_by_index.remove(&message_index);
+        }
+        let response = ReplySpecificChunk { chunk };
         Ok(Response::new(response))
     }
 
@@ -371,10 +472,11 @@ impl StoreProcessor for ServiceStoreServer {
 async fn main() {
     let options = <ServiceStoreServerOptions as clap::Parser>::parse();
     let common_config = CommonStoreConfig::default();
-    let (shared_store, endpoint) = match options {
+    let (store, endpoint) = match options {
         ServiceStoreServerOptions::Memory { endpoint } => {
             let store = create_memory_store_stream_queries(common_config.max_stream_queries);
-            (ServiceStoreServer::Memory(store), endpoint)
+            let store = ServiceStoreServerInternal::Memory(store);
+            (store, endpoint)
         }
         ServiceStoreServerOptions::RocksDb { path, endpoint } => {
             let path_buf = path.into();
@@ -386,12 +488,20 @@ async fn main() {
             let store = RocksDbStore::maybe_create_and_connect(&config, namespace)
                 .await
                 .expect("store");
-            (ServiceStoreServer::RocksDb(store), endpoint)
+            let store = ServiceStoreServerInternal::RocksDb(store);
+            (store, endpoint)
         }
+    };
+    let pending_big_puts = Arc::new(RwLock::new(BTreeMap::default()));
+    let pending_big_reads = Arc::new(RwLock::new(PendingBigReads::default()));
+    let store = ServiceStoreServer {
+        store,
+        pending_big_puts,
+        pending_big_reads,
     };
     let endpoint = endpoint.parse().unwrap();
     Server::builder()
-        .add_service(StoreProcessorServer::new(shared_store))
+        .add_service(StoreProcessorServer::new(store))
         .serve(endpoint)
         .await
         .expect("a successful running of the server");

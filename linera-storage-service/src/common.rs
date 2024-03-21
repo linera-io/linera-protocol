@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::command::resolve_binary;
-use linera_views::{common::CommonStoreConfig, value_splitting::DatabaseConsistencyError};
+use linera_views::{
+    common::{CommonStoreConfig, MIN_VIEW_TAG},
+    value_splitting::DatabaseConsistencyError,
+};
 use std::path::PathBuf;
 use thiserror::Error;
 use tonic::Status;
@@ -17,6 +20,24 @@ const TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES: usize = 10;
 #[cfg(any(test, feature = "test"))]
 const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
 
+// The maximal block size on GRPC is 4M.
+//
+// That size occurs in almost every use of GRPC and in particular the
+// `tonic` library. In particular for the `tonic` library, the limit is
+// both for incoming and outgoing messages.
+// We decrease the 4194304 to 4000000 to leave space for the rest of the message
+// (that includes length prefixes)
+pub const MAX_PAYLOAD_SIZE: usize = 4000000;
+
+/// Key tags to create the sub keys used for storing data on storage.
+#[repr(u8)]
+pub enum KeyTag {
+    /// Prefix for the storage of the keys of the map
+    Key = MIN_VIEW_TAG,
+    /// Prefix for the storage of existence or not of the namespaces.
+    Namespace,
+}
+
 #[derive(Debug, Error)]
 pub enum ServiceContextError {
     /// Not matching entry
@@ -30,6 +51,10 @@ pub enum ServiceContextError {
     /// gRPC error
     #[error(transparent)]
     GrpcError(#[from] Status),
+
+    /// The key size must be at most 1 MB
+    #[error("The key size must be at most 1 MB")]
+    KeyTooLong,
 
     /// Transport error
     #[error(transparent)]

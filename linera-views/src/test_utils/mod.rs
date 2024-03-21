@@ -442,7 +442,8 @@ async fn read_key_values_prefix<C: KeyValueStore + Sync>(
     key_values
 }
 
-async fn run_test_batch_from_blank<C: KeyValueStore + Sync>(
+/// Writes and then reads data under a prefix, and verifies the result.
+pub async fn run_test_batch_from_blank<C: KeyValueStore + Sync>(
     key_value_store: &C,
     key_prefix: Vec<u8>,
     batch: Batch,

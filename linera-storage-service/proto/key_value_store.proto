@@ -6,11 +6,18 @@ message KeyValue {
   bytes value = 2;
 }
 
+message KeyValueAppend {
+  bytes key = 1;
+  bytes value = 2;
+  bool last = 3;
+}
+
 message Statement {
   oneof Operation {
     bytes delete = 1;
     KeyValue put = 2;
-    bytes delete_prefix = 3;
+    KeyValueAppend append = 3;
+    bytes delete_prefix = 4;
   }
 }
 
@@ -25,6 +32,8 @@ message RequestReadValue {
 
 message ReplyReadValue {
   optional bytes value = 1;
+  int64 message_index = 2;
+  int32 num_chunks = 3;
 }
 
 
@@ -43,6 +52,8 @@ message RequestReadMultiValues {
 
 message ReplyReadMultiValues {
   repeated OptValue values = 1;
+  int64 message_index = 2;
+  int32 num_chunks = 3;
 }
 
 
@@ -52,6 +63,8 @@ message RequestFindKeysByPrefix {
 
 message ReplyFindKeysByPrefix {
   repeated bytes keys = 1;
+  int64 message_index = 2;
+  int32 num_chunks = 3;
 }
 
 
@@ -61,23 +74,26 @@ message RequestFindKeyValuesByPrefix {
 
 message ReplyFindKeyValuesByPrefix {
   repeated KeyValue key_values = 1;
+  int64 message_index = 2;
+  int32 num_chunks = 3;
 }
 
 
-message RequestWriteBatch {
+message RequestWriteBatchExtended {
   repeated Statement statements = 1;
-  bytes base_key = 2;
 }
 
-message ReplyWriteBatch {
+message ReplyWriteBatchExtended {
 }
 
 
-message RequestClearJournal {
-  bytes base_key = 1;
+message RequestSpecificChunk {
+  int64 message_index = 1;
+  int32 index = 2;
 }
 
-message ReplyClearJournal {
+message ReplySpecificChunk {
+  bytes chunk = 1;
 }
 
 
@@ -126,8 +142,8 @@ service StoreProcessor {
   rpc ProcessReadMultiValues (RequestReadMultiValues) returns (ReplyReadMultiValues) {}
   rpc ProcessFindKeysByPrefix (RequestFindKeysByPrefix) returns (ReplyFindKeysByPrefix) {}
   rpc ProcessFindKeyValuesByPrefix (RequestFindKeyValuesByPrefix) returns (ReplyFindKeyValuesByPrefix) {}
-  rpc ProcessWriteBatch (RequestWriteBatch) returns (ReplyWriteBatch) {}
-  rpc ProcessClearJournal (RequestClearJournal) returns (ReplyClearJournal) {}
+  rpc ProcessWriteBatchExtended (RequestWriteBatchExtended) returns (ReplyWriteBatchExtended) {}
+  rpc ProcessSpecificChunk (RequestSpecificChunk) returns (ReplySpecificChunk) {}
   rpc ProcessCreateNamespace (RequestCreateNamespace) returns (ReplyCreateNamespace) {}
   rpc ProcessExistsNamespace (RequestExistsNamespace) returns (ReplyExistsNamespace) {}
   rpc ProcessDeleteNamespace (RequestDeleteNamespace) returns (ReplyDeleteNamespace) {}
