@@ -6,16 +6,21 @@
 mod state;
 
 use self::state::FungibleToken;
-use async_graphql::{ComplexObject, EmptySubscription, Request, Response, Schema};
+use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use fungible::Operation;
 use linera_sdk::{
-    base::WithServiceAbi, graphql::GraphQLMutationRoot, Service, ServiceRuntime, ViewStateStorage,
+    base::{AccountOwner, Amount, WithServiceAbi},
+    graphql::GraphQLMutationRoot,
+    views::MapView,
+    Service, ServiceRuntime, ViewStateStorage,
 };
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
+#[derive(Clone)]
 pub struct FungibleTokenService {
     state: Arc<FungibleToken>,
+    runtime: Arc<Mutex<ServiceRuntime<Self>>>,
 }
 
 linera_sdk::service!(FungibleTokenService);
@@ -29,29 +34,33 @@ impl Service for FungibleTokenService {
     type Storage = ViewStateStorage<Self>;
     type State = FungibleToken;
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
+    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(FungibleTokenService {
             state: Arc::new(state),
+            runtime: Arc::new(Mutex::new(runtime)),
         })
     }
 
     async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
-        let schema = Schema::build(
-            self.state.clone(),
-            Operation::mutation_root(),
-            EmptySubscription,
-        )
-        .finish();
+        let schema =
+            Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
         let response = schema.execute(request).await;
         Ok(response)
     }
 }
 
-// Implements additional fields not derived from struct members of FungibleToken.
-#[ComplexObject]
-impl FungibleToken {
+#[Object]
+impl FungibleTokenService {
+    async fn accounts(&self) -> &MapView<AccountOwner, Amount> {
+        &self.state.accounts
+    }
+
     async fn ticker_symbol(&self) -> Result<String, async_graphql::Error> {
-        Ok(FungibleTokenService::parameters()?.ticker_symbol)
+        let runtime = self
+            .runtime
+            .try_lock()
+            .expect("Services only run in a single-thread");
+        Ok(runtime.application_parameters().ticker_symbol)
     }
 }
 

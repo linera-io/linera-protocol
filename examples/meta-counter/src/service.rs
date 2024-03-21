@@ -12,6 +12,7 @@ use thiserror::Error;
 
 pub struct MetaCounterService {
     _state: MetaCounter,
+    runtime: ServiceRuntime<Self>,
 }
 
 linera_sdk::service!(MetaCounterService);
@@ -25,12 +26,15 @@ impl Service for MetaCounterService {
     type Storage = SimpleStateStorage<Self>;
     type State = MetaCounter;
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(MetaCounterService { _state: state })
+    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
+        Ok(MetaCounterService {
+            _state: state,
+            runtime,
+        })
     }
 
     async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
-        let counter_id = Self::parameters()?;
+        let counter_id = self.runtime.application_parameters();
         Self::query_application(counter_id, &request)
     }
 }
@@ -40,9 +44,6 @@ impl Service for MetaCounterService {
 pub enum Error {
     #[error("Internal query failed: {0}")]
     InternalQuery(String),
-
-    #[error("Invalid application parameters")]
-    Parameters,
 
     /// Invalid query argument in meta-counter app: could not deserialize GraphQL request.
     #[error("Invalid query argument in meta-counter app: could not deserialize GraphQL request.")]

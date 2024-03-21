@@ -9,15 +9,10 @@ use linera_sdk::{
 use thiserror::Error;
 
 /// The application state.
-#[derive(RootView, async_graphql::SimpleObject)]
-// In the service we also want a tickerSymbol query, which is not derived from a struct member.
-// This attribute requires having a ComplexObject implementation that adds such fields.
-// The implementation with tickerSymbol is in service.rs. Since a ComplexObject impl is required,
-// there is also an empty one in contract.rs.
-#[graphql(complex)]
+#[derive(RootView)]
 #[view(context = "ViewStorageContext")]
 pub struct FungibleToken {
-    accounts: MapView<AccountOwner, Amount>,
+    pub accounts: MapView<AccountOwner, Amount>,
 }
 
 #[allow(dead_code)]
