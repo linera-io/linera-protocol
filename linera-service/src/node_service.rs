@@ -256,7 +256,7 @@ where
     {
         loop {
             let mut client = self.clients.try_client_lock(chain_id).await?;
-            let stream = client.subscribe().await?;
+            let mut stream = client.subscribe().await?;
             let (result, mut client) = f(client).await;
             self.context.lock().await.update_wallet(&mut *client).await;
             let timeout = match result? {
@@ -264,7 +264,7 @@ where
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             drop(client);
-            wait_for_next_round(stream, timeout).await;
+            wait_for_next_round(&mut stream, timeout).await;
         }
     }
 }
@@ -290,9 +290,9 @@ where
             match maybe_timeout {
                 None => return Ok(hashes),
                 Some(timestamp) => {
-                    let stream = client.subscribe().await?;
+                    let mut stream = client.subscribe().await?;
                     drop(client);
-                    wait_for_next_round(stream, timestamp).await;
+                    wait_for_next_round(&mut stream, timestamp).await;
                 }
             }
         }
@@ -656,9 +656,9 @@ where
                 ClientOutcome::Committed(certificate) => return Ok(certificate.hash()),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
-            let stream = client.subscribe().await?;
+            let mut stream = client.subscribe().await?;
             drop(client);
-            wait_for_next_round(stream, timeout).await;
+            wait_for_next_round(&mut stream, timeout).await;
         }
     }
 }
@@ -1025,11 +1025,11 @@ where
                 ClientOutcome::Committed(certificate) => break certificate.value.hash(),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
-            let stream = client.subscribe().await.map_err(|_| {
+            let mut stream = client.subscribe().await.map_err(|_| {
                 ChainClientError::InternalError("Could not subscribe to the local node.")
             })?;
             drop(client);
-            wait_for_next_round(stream, timeout).await;
+            wait_for_next_round(&mut stream, timeout).await;
         };
         Ok(async_graphql::Response::new(hash.to_value()))
     }
@@ -1081,7 +1081,7 @@ where
 }
 
 /// Returns after the specified time or if we receive a notification that a new round has started.
-pub async fn wait_for_next_round(stream: NotificationStream, timeout: RoundTimeout) {
+pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: RoundTimeout) {
     let mut stream = stream.filter(|notification| match &notification.reason {
         Reason::NewBlock { height, .. } => *height >= timeout.next_block_height,
         Reason::NewRound { round, .. } => *round > timeout.current_round,

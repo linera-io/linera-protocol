@@ -1965,6 +1965,11 @@ where
             .read_values_downward(from, limit)
             .await
     }
+
+    /// Wraps this chain client into an `Arc<Mutex<_>>`.
+    pub fn into_arc(self) -> ArcChainClient<P, S> {
+        ArcChainClient::new(self)
+    }
 }
 
 /// The outcome of trying to commit a list of incoming messages and operations to the chain.
