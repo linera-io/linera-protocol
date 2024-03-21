@@ -24,6 +24,7 @@ where
     timestamp: Cell<Option<Timestamp>>,
     chain_balance: Cell<Option<Amount>>,
     owner_balances: Cell<Option<Vec<(Owner, Amount)>>>,
+    balance_owners: Cell<Option<Vec<Owner>>>,
 }
 
 impl<Application> ServiceRuntime<Application>
@@ -40,6 +41,7 @@ where
             timestamp: Cell::new(None),
             chain_balance: Cell::new(None),
             owner_balances: Cell::new(None),
+            balance_owners: Cell::new(None),
         }
     }
 
@@ -89,6 +91,16 @@ where
             wit::read_owner_balances()
                 .into_iter()
                 .map(|(owner, amount)| (owner.into(), amount.into()))
+                .collect()
+        })
+    }
+
+    /// Returns the owners of accounts on this chain.
+    pub fn balance_owners(&self) -> Vec<Owner> {
+        Self::fetch_value_through_cache(&self.balance_owners, || {
+            wit::read_balance_owners()
+                .into_iter()
+                .map(Owner::from)
                 .collect()
         })
     }
