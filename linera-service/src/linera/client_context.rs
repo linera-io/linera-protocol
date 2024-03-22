@@ -775,10 +775,10 @@ impl ClientContext {
         responses
     }
 
-    fn make_validator_mass_clients(&self) -> Vec<Box<dyn MassClient>> {
+    fn make_validator_mass_clients(&self) -> Vec<Box<dyn MassClient + Send>> {
         let mut validator_clients = Vec::new();
         for config in &self.wallet_state.genesis_config().committee.validators {
-            let client: Box<dyn MassClient> = match config.network.protocol {
+            let client: Box<dyn MassClient + Send> = match config.network.protocol {
                 NetworkProtocol::Simple(protocol) => {
                     let network = config.network.clone_with_protocol(protocol);
                     Box::new(SimpleMassClient::new(

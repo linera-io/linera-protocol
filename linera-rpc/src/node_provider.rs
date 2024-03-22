@@ -5,7 +5,7 @@
 use crate::simple::SimpleNodeProvider;
 use crate::{client::Client, grpc::GrpcNodeProvider};
 
-use linera_core::node::{NodeError, ValidatorNodeProvider};
+use linera_core::node::{LocalValidatorNodeProvider, NodeError};
 
 use std::time::Duration;
 
@@ -28,7 +28,7 @@ impl NodeProvider {
     }
 }
 
-impl ValidatorNodeProvider for NodeProvider {
+impl LocalValidatorNodeProvider for NodeProvider {
     type Node = Client;
 
     fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {

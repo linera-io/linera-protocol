@@ -12,7 +12,7 @@ use linera_base::{
 use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
     client::{ArcChainClient, ChainClient},
-    node::ValidatorNodeProvider,
+    node::{ValidatorNode, ValidatorNodeProvider},
     worker::{Notification, Reason},
 };
 use linera_execution::{Message, SystemMessage};
@@ -61,6 +61,7 @@ pub struct ChainListener<P, S> {
 impl<P, S> ChainListener<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
+    <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {

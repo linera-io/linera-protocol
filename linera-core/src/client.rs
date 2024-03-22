@@ -8,8 +8,8 @@ use crate::{
     },
     local_node::{LocalNodeClient, LocalNodeError},
     node::{
-        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
-        ValidatorNodeProvider,
+        CrossChainMessageDelivery, LocalValidatorNode, LocalValidatorNodeProvider, NodeError,
+        NotificationStream, ValidatorNodeProvider,
     },
     notifier::Notifier,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
@@ -272,7 +272,7 @@ enum ReceiveCertificateMode {
 
 impl<P, S> ChainClient<P, S>
 where
-    P: ValidatorNodeProvider + Sync,
+    P: LocalValidatorNodeProvider + Sync,
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
@@ -722,7 +722,7 @@ where
         mut node_client: LocalNodeClient<S>,
     ) -> Result<(ValidatorName, u64, Vec<Certificate>), NodeError>
     where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
+        A: LocalValidatorNode + Clone + 'static,
     {
         // Retrieve newly received certificates from this validator.
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_nth(tracker);
@@ -2003,16 +2003,19 @@ impl<P, S> Clone for ArcChainClient<P, S> {
     }
 }
 
-impl<P, S> ArcChainClient<P, S>
-where
-    P: ValidatorNodeProvider + Sync,
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
-{
+impl<P, S> ArcChainClient<P, S> {
     pub fn new(client: ChainClient<P, S>) -> Self {
         Self(Arc::new(Mutex::new(client)))
     }
+}
 
+impl<P, S> ArcChainClient<P, S>
+where
+    P: ValidatorNodeProvider + Sync,
+    <<P as ValidatorNodeProvider>::Node as crate::node::ValidatorNode>::NotificationStream: Send,
+    S: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
     async fn local_chain_info(
         &self,
         chain_id: ChainId,
@@ -2040,7 +2043,7 @@ where
     async fn process_notification(
         &self,
         name: ValidatorName,
-        node: P::Node,
+        node: <P as ValidatorNodeProvider>::Node,
         mut local_node: LocalNodeClient<S>,
         notification: Notification,
     ) {
@@ -2198,7 +2201,7 @@ where
     pub async fn find_received_certificates_from_validator(
         &self,
         name: ValidatorName,
-        node: P::Node,
+        node: <P as ValidatorNodeProvider>::Node,
         node_client: LocalNodeClient<S>,
     ) -> Result<(), ChainClientError> {
         let ((committees, max_epoch), chain_id, current_tracker) = {

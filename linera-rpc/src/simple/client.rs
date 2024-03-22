@@ -3,23 +3,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{codec, transport::TransportProtocol};
+
 use crate::{
     config::ValidatorPublicNetworkPreConfig, mass_client, HandleCertificateRequest,
     HandleLiteCertificateRequest, RpcMessage,
 };
-use async_trait::async_trait;
-use futures::{sink::SinkExt, stream::StreamExt};
+
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
-
 use linera_version::VersionInfo;
 
-use std::time::Duration;
+use async_trait::async_trait;
+use futures::{sink::SinkExt, stream::StreamExt};
 use tokio::time;
+
+use std::{future::Future, time::Duration};
 
 #[derive(Clone)]
 pub struct SimpleClient {
@@ -68,8 +70,9 @@ impl SimpleClient {
     }
 }
 
-#[async_trait]
 impl ValidatorNode for SimpleClient {
+    type NotificationStream = NotificationStream;
+
     /// Initiates a new block.
     async fn handle_block_proposal(
         &mut self,
@@ -116,10 +119,12 @@ impl ValidatorNode for SimpleClient {
         self.query(query.into()).await
     }
 
-    async fn subscribe(&mut self, _chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
-        Err(NodeError::SubscriptionError {
-            transport: self.network.protocol.to_string(),
-        })
+    fn subscribe(
+        &mut self,
+        _chains: Vec<ChainId>,
+    ) -> impl Future<Output = Result<NotificationStream, NodeError>> + Send {
+        let transport = self.network.protocol.to_string();
+        async { Err(NodeError::SubscriptionError { transport }) }
     }
 
     async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError> {

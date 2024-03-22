@@ -5,19 +5,29 @@ use super::{
     api::{
         chain_info_result::Inner, validator_node_client::ValidatorNodeClient, SubscriptionRequest,
     },
-    GrpcError, GrpcProtoConversionError, GRPC_MAX_MESSAGE_SIZE,
+    transport, GrpcError, GRPC_MAX_MESSAGE_SIZE,
 };
 use crate::{
-    config::ValidatorPublicNetworkConfig, mass_client, node_provider::NodeOptions,
-    HandleCertificateRequest, HandleLiteCertificateRequest, RpcMessage,
+    config::ValidatorPublicNetworkConfig, node_provider::NodeOptions, HandleCertificateRequest,
+    HandleLiteCertificateRequest,
 };
-use async_trait::async_trait;
 use futures::{future, stream, StreamExt};
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types;
 use linera_core::{
-    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
+    node::{CrossChainMessageDelivery, NodeError},
     worker::Notification,
+};
+
+#[cfg(web)]
+use linera_core::node::{
+    LocalNotificationStream as NotificationStream, LocalValidatorNode as ValidatorNode,
+};
+#[cfg(not(web))]
+use {
+    super::GrpcProtoConversionError,
+    crate::{mass_client, RpcMessage},
+    linera_core::node::{NotificationStream, ValidatorNode},
 };
 
 use linera_version::VersionInfo;
@@ -31,7 +41,7 @@ use tracing::{debug, info, instrument, warn};
 #[derive(Clone)]
 pub struct GrpcClient {
     address: String,
-    client: ValidatorNodeClient<tonic::transport::Channel>,
+    client: ValidatorNodeClient<transport::Channel>,
     notification_retry_delay: Duration,
     notification_retries: u32,
 }
@@ -42,10 +52,9 @@ impl GrpcClient {
         options: NodeOptions,
     ) -> Result<Self, GrpcError> {
         let address = network.http_address();
-        let channel = tonic::transport::Channel::from_shared(address.clone())?
-            .connect_timeout(options.send_timeout)
-            .timeout(options.recv_timeout)
-            .connect_lazy();
+
+        let channel =
+            transport::create_channel(address.clone(), &transport::Options::from(&options))?;
         let client = ValidatorNodeClient::new(channel)
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
@@ -126,8 +135,9 @@ macro_rules! client_delegate {
     }};
 }
 
-#[async_trait]
 impl ValidatorNode for GrpcClient {
+    type NotificationStream = NotificationStream;
+
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn handle_block_proposal(
         &mut self,
@@ -175,7 +185,10 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+    async fn subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Result<Self::NotificationStream, NodeError> {
         let notification_retry_delay = self.notification_retry_delay;
         let notification_retries = self.notification_retries;
         let mut retry_count = 0;
@@ -250,7 +263,8 @@ impl ValidatorNode for GrpcClient {
     }
 }
 
-#[async_trait]
+#[cfg(not(web))]
+#[async_trait::async_trait]
 impl mass_client::MassClient for GrpcClient {
     #[tracing::instrument(skip_all, err)]
     async fn send(

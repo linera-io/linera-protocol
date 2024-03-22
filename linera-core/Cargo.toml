@@ -72,6 +72,7 @@ tokio.workspace = true
 tokio-stream.workspace = true
 tonic.workspace = true
 tracing.workspace = true
+trait-variant.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 linera-storage-service.workspace = true

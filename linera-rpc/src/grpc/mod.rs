@@ -5,9 +5,9 @@ mod client;
 mod conversions;
 mod node_provider;
 pub mod pool;
-
 #[cfg(with_server)]
 mod server;
+pub mod transport;
 
 pub use client::*;
 pub use conversions::*;
@@ -24,7 +24,7 @@ pub mod api {
 #[derive(thiserror::Error, Debug)]
 pub enum GrpcError {
     #[error("failed to connect to address: {0}")]
-    ConnectionFailed(#[from] tonic::transport::Error),
+    ConnectionFailed(#[from] transport::Error),
 
     #[error("failed to communicate cross-chain queries: {0}")]
     CrossChain(#[from] tonic::Status),

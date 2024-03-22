@@ -20,7 +20,7 @@ use linera_core::{
     client::ChainClientError,
     data_types::{ChainInfoQuery, ClientOutcome},
     local_node::LocalNodeClient,
-    node::ValidatorNodeProvider,
+    node::LocalValidatorNodeProvider,
     notifier::Notifier,
     worker::WorkerState,
 };

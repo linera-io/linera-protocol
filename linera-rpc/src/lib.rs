@@ -21,6 +21,7 @@ pub mod simple;
 pub mod grpc;
 
 pub use message::RpcMessage;
+pub use node_provider::NodeOptions;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]

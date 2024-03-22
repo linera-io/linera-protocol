@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    client::{ChainClient, ChainClientBuilder, ValidatorNodeProvider},
+    client::{ChainClient, ChainClientBuilder},
     data_types::*,
-    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
+    node::{
+        CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
+        ValidatorNode,
+    },
     notifier::Notifier,
     worker::{Notification, ValidatorWorker, WorkerState},
 };
@@ -90,12 +93,13 @@ pub struct LocalValidatorClient<S> {
     client: Arc<Mutex<LocalValidator<S>>>,
 }
 
-#[async_trait]
 impl<S> ValidatorNode for LocalValidatorClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    type NotificationStream = NotificationStream;
+
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
@@ -316,7 +320,7 @@ where
 #[derive(Clone)]
 pub struct NodeProvider<S>(BTreeMap<ValidatorName, Arc<Mutex<LocalValidator<S>>>>);
 
-impl<S> ValidatorNodeProvider for NodeProvider<S>
+impl<S> LocalValidatorNodeProvider for NodeProvider<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,

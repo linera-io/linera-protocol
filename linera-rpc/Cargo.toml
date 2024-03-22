@@ -45,6 +45,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 bincode.workspace = true
 bytes.workspace = true
+cfg-if.workspace = true
 clap.workspace = true
 dashmap.workspace = true
 ed25519-dalek.workspace = true
@@ -80,7 +81,11 @@ test-strategy.workspace = true
 tonic = { workspace = true, features = ["prost", "codegen", "transport"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tonic = { workspace = true, features = ["prost", "codegen"] }
+tonic = { workspace = true, features = ["codegen", "prost"] }
+tonic-web-wasm-client.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true

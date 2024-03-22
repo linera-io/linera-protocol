@@ -6,8 +6,7 @@ use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     worker::{Notification, WorkerError},
 };
-use async_trait::async_trait;
-use futures::Stream;
+use futures::stream::{BoxStream, LocalBoxStream, Stream};
 use linera_base::{
     crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight},
@@ -24,11 +23,12 @@ use linera_execution::{
 use linera_version::VersionInfo;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
-use std::pin::Pin;
 use thiserror::Error;
 
 /// A pinned [`Stream`] of Notifications.
-pub type NotificationStream = Pin<Box<dyn Stream<Item = Notification> + Send>>;
+pub type NotificationStream = BoxStream<'static, Notification>;
+/// A pinned [`Stream`] of Notifications, without the `Send` constraint.
+pub type LocalNotificationStream = LocalBoxStream<'static, Notification>;
 
 /// Whether to wait for the delivery of outgoing cross-chain messages.
 #[derive(Debug, Default, Clone, Copy)]
@@ -39,8 +39,10 @@ pub enum CrossChainMessageDelivery {
 }
 
 /// How to communicate with a validator node.
-#[async_trait]
-pub trait ValidatorNode {
+#[trait_variant::make(ValidatorNode: Send)]
+pub trait LocalValidatorNode {
+    type NotificationStream: Stream<Item = Notification> + Unpin;
+
     /// Proposes a new block.
     async fn handle_block_proposal(
         &mut self,
@@ -72,13 +74,16 @@ pub trait ValidatorNode {
     async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError>;
 
     /// Subscribes to receiving notifications for a collection of chains.
-    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError>;
+    async fn subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Result<Self::NotificationStream, NodeError>;
 }
 
 /// Turn an address into a validator node.
 #[allow(clippy::result_large_err)]
-pub trait ValidatorNodeProvider {
-    type Node: ValidatorNode + Clone + Send + Sync + 'static;
+pub trait LocalValidatorNodeProvider {
+    type Node: LocalValidatorNode + Clone + 'static;
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 
@@ -102,6 +107,19 @@ pub trait ValidatorNodeProvider {
             .map(|(name, address)| Ok((name, self.make_node(address.as_ref())?)))
             .collect()
     }
+}
+
+pub trait ValidatorNodeProvider:
+    LocalValidatorNodeProvider<Node = <Self as ValidatorNodeProvider>::Node>
+{
+    type Node: ValidatorNode + Send + Sync + Clone + 'static;
+}
+
+impl<T: LocalValidatorNodeProvider> ValidatorNodeProvider for T
+where
+    T::Node: ValidatorNode + Send + Sync + Clone + 'static,
+{
+    type Node = <T as LocalValidatorNodeProvider>::Node;
 }
 
 /// Error type for node queries.
