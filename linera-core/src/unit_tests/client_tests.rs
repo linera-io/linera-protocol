@@ -33,8 +33,8 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{Recipient, SystemOperation, UserData},
-    ExecutionError, Message, MessageKind, Operation, ResourceControlPolicy, SystemExecutionError,
-    SystemMessage, SystemQuery, SystemResponse,
+    ExecutionError, Message, Operation, RawMessageKind, ResourceControlPolicy,
+    SystemExecutionError, SystemMessage, SystemQuery, SystemResponse,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -1137,7 +1137,7 @@ where
             origin: Origin { sender, medium: Medium::Direct },
             action: MessageAction::Reject,
             event: Event {
-                kind: MessageKind::Tracked,
+                kind: RawMessageKind::Sending(MessageKind::Tracked),
                 message: Message::System(SystemMessage::Credit { .. }),
                 ..
             },
@@ -1149,7 +1149,7 @@ where
             origin: Origin { sender, medium: Medium::Direct },
             action: MessageAction::Reject,
             event: Event {
-                kind: MessageKind::Protected,
+                kind: RawMessageKind::Sending(MessageKind::Protected),
                 message: Message::System(SystemMessage::Subscribe { .. }),
                 ..
             },

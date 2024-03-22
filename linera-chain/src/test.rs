@@ -5,13 +5,13 @@
 
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{Amount, BlockHeight, Round, Timestamp},
+    data_types::{Amount, BlockHeight, MessageKind, Round, Timestamp},
     identifiers::{ChainId, Owner},
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorState},
     system::Recipient,
-    Message, MessageKind, Operation, ResourceControlPolicy, SystemOperation,
+    Message, Operation, ResourceControlPolicy, SystemOperation,
 };
 
 use crate::data_types::{
@@ -156,7 +156,7 @@ impl<T: Into<Message>> MessageTestExt for T {
                 authenticated_signer: None,
                 grant: Amount::ZERO,
                 refund_grant_to: None,
-                kind: MessageKind::Protected,
+                kind: MessageKind::Protected.into(),
                 timestamp: Timestamp::from(0),
                 message: self.into(),
             },

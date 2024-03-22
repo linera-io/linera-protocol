@@ -22,7 +22,7 @@ mod types {
     pub type ChannelFullName = Value;
     pub type Epoch = Value;
     pub type Event = Value;
-    pub type MessageKind = Value;
+    pub type RawMessageKind = Value;
     pub type Message = Value;
     pub type MessageAction = Value;
     pub type Operation = Value;
@@ -63,7 +63,7 @@ mod types {
     };
     pub use linera_core::worker::{Notification, Reason};
     pub use linera_execution::{
-        committee::Epoch, Message, MessageKind, Operation, UserApplicationDescription,
+        committee::Epoch, Message, Operation, RawMessageKind, UserApplicationDescription,
     };
 }
 

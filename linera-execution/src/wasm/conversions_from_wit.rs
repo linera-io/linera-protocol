@@ -12,12 +12,12 @@ use std::time::Duration;
 
 use super::{contract, contract_system_api, service_system_api};
 use crate::{
-    ApplicationCallOutcome, ChannelName, Destination, MessageKind, RawExecutionOutcome,
-    RawOutgoingMessage, UserApplicationId,
+    ApplicationCallOutcome, ChannelName, Destination, RawExecutionOutcome, RawOutgoingMessage,
+    UserApplicationId,
 };
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, Resources},
+    data_types::{Amount, BlockHeight, MessageKind, Resources},
     identifiers::{Account, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -53,9 +53,9 @@ impl From<contract::OutgoingMessage> for RawOutgoingMessage<Vec<u8>, Resources> 
             authenticated: message.authenticated,
             grant: message.resources.into(),
             kind: if message.is_tracked {
-                MessageKind::Tracked
+                MessageKind::Tracked.into()
             } else {
-                MessageKind::Simple
+                MessageKind::Simple.into()
             },
             message: message.message,
         }

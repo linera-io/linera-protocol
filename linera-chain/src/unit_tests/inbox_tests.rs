@@ -6,9 +6,9 @@ use super::*;
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, Timestamp},
+    data_types::{Amount, MessageKind, Timestamp},
 };
-use linera_execution::{Message, MessageKind, UserApplicationId};
+use linera_execution::{Message, UserApplicationId};
 
 fn make_event(
     certificate_hash: CryptoHash,
@@ -23,7 +23,7 @@ fn make_event(
         authenticated_signer: None,
         grant: Amount::ZERO,
         refund_grant_to: None,
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         timestamp: Timestamp::default(),
         message: Message::User {
             application_id: UserApplicationId::default(),
@@ -39,7 +39,7 @@ fn make_unskippable_event(
     message: impl Into<Vec<u8>>,
 ) -> Event {
     let mut event = make_event(certificate_hash, height, index, message);
-    event.kind = MessageKind::Protected;
+    event.kind = MessageKind::Protected.into();
     event
 }
 

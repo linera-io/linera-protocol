@@ -4,13 +4,13 @@
 use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
     ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
-    MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
+    MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
+    RawMessageKind, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
     UserApplicationDescription, UserApplicationId,
 };
 use futures::{stream::FuturesUnordered, StreamExt, TryStreamExt};
 use linera_base::{
-    data_types::{Amount, BlockHeight},
+    data_types::{Amount, BlockHeight, MessageKind},
     identifiers::{Account, ChainId, Destination, Owner},
 };
 use linera_views::{
@@ -249,7 +249,7 @@ where
                     destination: destination.clone(),
                     authenticated: false,
                     grant: Amount::ZERO,
-                    kind: MessageKind::Simple,
+                    kind: MessageKind::Simple.into(),
                     message: SystemMessage::RegisterApplications { applications },
                 })
             })
@@ -363,7 +363,7 @@ where
                     destination: Destination::Recipient(context.message_id.chain_id),
                     authenticated: true,
                     grant,
-                    kind: MessageKind::Bouncing,
+                    kind: RawMessageKind::Bouncing,
                     message,
                 });
                 Ok(vec![ExecutionOutcome::System(outcome)])
@@ -381,7 +381,7 @@ where
                     destination: Destination::Recipient(context.message_id.chain_id),
                     authenticated: true,
                     grant,
-                    kind: MessageKind::Bouncing,
+                    kind: RawMessageKind::Bouncing,
                     message: bytes,
                 });
                 Ok(vec![ExecutionOutcome::User(application_id, outcome)])
@@ -401,7 +401,7 @@ where
             destination: Destination::Recipient(account.chain_id),
             authenticated: false,
             grant: Amount::ZERO,
-            kind: MessageKind::Tracked,
+            kind: MessageKind::Tracked.into(),
             message: SystemMessage::Credit {
                 amount,
                 source: context.authenticated_signer,

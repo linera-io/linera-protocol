@@ -464,7 +464,7 @@ scalar MessageAction
 """
 The kind of outgoing message being sent
 """
-scalar MessageKind
+scalar RawMessageKind
 
 type MutationRoot {
 	"""
@@ -632,7 +632,7 @@ type OutgoingMessage {
 	"""
 	The kind of event being sent.
 	"""
-	kind: MessageKind!
+	kind: RawMessageKind!
 	"""
 	The message itself.
 	"""

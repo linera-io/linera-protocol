@@ -6,7 +6,7 @@ use crate::ChainError;
 use async_graphql::{Object, SimpleObject};
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
-    data_types::{Amount, BlockHeight, Round, Timestamp},
+    data_types::{Amount, BlockHeight, MessageKind, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{
         Account, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    BytecodeLocation, Message, MessageKind, Operation,
+    BytecodeLocation, Message, Operation, RawMessageKind,
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
 use std::{
@@ -150,7 +150,7 @@ pub struct Event {
     /// Where to send a refund for the unused part of the grant after execution, if any.
     pub refund_grant_to: Option<Account>,
     /// The kind of event being delivered.
-    pub kind: MessageKind,
+    pub kind: RawMessageKind,
     /// The timestamp of the block that caused the message.
     pub timestamp: Timestamp,
     /// The message of the event (i.e. the actual payload of a message).
@@ -234,7 +234,7 @@ pub struct OutgoingMessage {
     /// Where to send a refund for the unused part of the grant after execution, if any.
     pub refund_grant_to: Option<Account>,
     /// The kind of event being sent.
-    pub kind: MessageKind,
+    pub kind: RawMessageKind,
     /// The message itself.
     pub message: Message,
 }
@@ -652,23 +652,23 @@ impl CertificateValue {
 
 impl Event {
     pub fn is_skippable(&self) -> bool {
-        use MessageKind::*;
+        use self::{MessageKind::*, RawMessageKind::*};
         match self.kind {
-            Protected | Tracked => false,
-            Simple | Bouncing => self.grant == Amount::ZERO,
+            Sending(Protected | Tracked) => false,
+            Sending(Simple) | Bouncing => self.grant == Amount::ZERO,
         }
     }
 
     pub fn is_protected(&self) -> bool {
-        matches!(self.kind, MessageKind::Protected)
+        matches!(self.kind, RawMessageKind::Sending(MessageKind::Protected))
     }
 
     pub fn is_tracked(&self) -> bool {
-        matches!(self.kind, MessageKind::Tracked)
+        matches!(self.kind, RawMessageKind::Sending(MessageKind::Tracked))
     }
 
     pub fn is_bouncing(&self) -> bool {
-        matches!(self.kind, MessageKind::Bouncing)
+        matches!(self.kind, RawMessageKind::Bouncing)
     }
 }
 

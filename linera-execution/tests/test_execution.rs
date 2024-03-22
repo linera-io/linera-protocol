@@ -7,7 +7,7 @@ use assert_matches::assert_matches;
 use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::PublicKey,
-    data_types::{Amount, ApplicationPermissions, BlockHeight, Resources, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, MessageKind, Resources, Timestamp},
     identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, Owner},
     ownership::ChainOwnership,
 };
@@ -19,8 +19,8 @@ use linera_execution::{
         SystemExecutionState,
     },
     ApplicationCallOutcome, BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome,
-    MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, ResourceControlPolicy, ResourceController, Response, SystemOperation,
+    Operation, OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
+    ResourceControlPolicy, ResourceController, Response, SystemOperation,
 };
 use linera_views::batch::Batch;
 use std::{collections::BTreeMap, vec};
@@ -545,7 +545,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         destination: Destination::from(destination_chain),
         authenticated: false,
         grant: Resources::default(),
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: b"first".to_vec(),
     };
 
@@ -576,21 +576,21 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         destination: Destination::from(destination_chain),
         authenticated: false,
         grant: Resources::default(),
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: b"second".to_vec(),
     };
     let third_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
         grant: Resources::default(),
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: b"third".to_vec(),
     };
     let fourth_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
         grant: Resources::default(),
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: b"fourth".to_vec(),
     };
 
@@ -631,7 +631,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         destination: Destination::from(destination_chain),
         authenticated: false,
         grant: Amount::ZERO,
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: SystemMessage::RegisterApplications { applications },
     };
     let account = Account {
@@ -922,7 +922,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
         destination: Destination::from(destination_chain),
         authenticated: false,
         grant: Resources::default(),
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: b"msg".to_vec(),
     };
 
@@ -956,7 +956,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
         destination: Destination::from(destination_chain),
         authenticated: false,
         grant: Amount::ZERO,
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: SystemMessage::RegisterApplications {
             applications: vec![application_description],
         },
@@ -1017,7 +1017,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         destination: Destination::from(destination_chain),
         authenticated: false,
         grant: Resources::default(),
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: b"msg".to_vec(),
     };
 
@@ -1052,7 +1052,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         destination: Destination::from(destination_chain),
         authenticated: false,
         grant: Amount::ZERO,
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: SystemMessage::RegisterApplications {
             applications: vec![target_description],
         },
@@ -1130,7 +1130,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
         destination: Destination::from(destination_chain),
         authenticated: false,
         grant: Resources::default(),
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: b"msg".to_vec(),
     };
 
@@ -1163,7 +1163,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
         destination: Destination::from(destination_chain),
         authenticated: false,
         grant: Amount::ZERO,
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: SystemMessage::RegisterApplications {
             applications: vec![target_description],
         },
@@ -1246,7 +1246,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         destination: Destination::from(first_destination_chain),
         authenticated: false,
         grant: Resources::default(),
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: b"first".to_vec(),
     };
 
@@ -1279,7 +1279,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         destination: Destination::from(second_destination_chain),
         authenticated: false,
         grant: Resources::default(),
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: b"second".to_vec(),
     };
 
@@ -1329,7 +1329,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         destination: Destination::from(first_destination_chain),
         authenticated: false,
         grant: Amount::ZERO,
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: SystemMessage::RegisterApplications {
             applications: vec![sending_target_description.clone(), caller_description],
         },
@@ -1339,7 +1339,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         destination: Destination::from(second_destination_chain),
         authenticated: false,
         grant: Amount::ZERO,
-        kind: MessageKind::Simple,
+        kind: MessageKind::Simple.into(),
         message: SystemMessage::RegisterApplications {
             applications: vec![sending_target_description],
         },

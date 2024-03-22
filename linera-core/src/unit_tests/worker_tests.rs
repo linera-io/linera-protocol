@@ -38,7 +38,7 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
     test_utils::SystemExecutionState,
-    ChannelSubscription, ExecutionError, Message, MessageKind, Query, Response,
+    ChannelSubscription, ExecutionError, Message, Query, RawMessageKind, Response,
     SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, MemoryStorage, Storage, TestClock};
@@ -235,14 +235,17 @@ async fn make_transfer_certificate_for_epoch<S>(
     let mut messages = Vec::new();
     for incoming_message in &incoming_messages {
         if matches!(incoming_message.action, MessageAction::Reject)
-            && matches!(incoming_message.event.kind, MessageKind::Tracked)
+            && matches!(
+                incoming_message.event.kind,
+                RawMessageKind::Sending(MessageKind::Tracked)
+            )
         {
             messages.push(OutgoingMessage {
                 authenticated_signer: incoming_message.event.authenticated_signer,
                 destination: Destination::Recipient(incoming_message.origin.sender),
                 grant: Amount::ZERO,
                 refund_grant_to: None,
-                kind: MessageKind::Bouncing,
+                kind: RawMessageKind::Bouncing,
                 message: incoming_message.event.message.clone(),
             });
             message_count += 1;
@@ -261,7 +264,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         Recipient::Account(account) => {
             messages.push(direct_outgoing_message(
                 account.chain_id,
-                MessageKind::Tracked,
+                MessageKind::Tracked.into(),
                 SystemMessage::Credit {
                     source,
                     target: account.owner,
@@ -285,7 +288,7 @@ async fn make_transfer_certificate_for_epoch<S>(
 
 fn direct_outgoing_message(
     recipient: ChainId,
-    kind: MessageKind,
+    kind: RawMessageKind,
     message: SystemMessage,
 ) -> OutgoingMessage {
     OutgoingMessage {
@@ -300,7 +303,7 @@ fn direct_outgoing_message(
 
 fn channel_outgoing_message(
     name: ChannelName,
-    kind: MessageKind,
+    kind: RawMessageKind,
     message: SystemMessage,
 ) -> OutgoingMessage {
     OutgoingMessage {
@@ -314,7 +317,11 @@ fn channel_outgoing_message(
 }
 
 fn channel_admin_message(message: SystemMessage) -> OutgoingMessage {
-    channel_outgoing_message(SystemChannel::Admin.name(), MessageKind::Protected, message)
+    channel_outgoing_message(
+        SystemChannel::Admin.name(),
+        MessageKind::Protected.into(),
+        message,
+    )
 }
 
 fn system_credit_message(amount: Amount) -> Message {
@@ -331,7 +338,7 @@ fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage 
         target: None,
         amount,
     };
-    direct_outgoing_message(recipient, MessageKind::Tracked, message)
+    direct_outgoing_message(recipient, MessageKind::Tracked.into(), message)
 }
 
 /// Creates `count` key pairs and returns them, sorted by the `Owner` created from their public key.
@@ -971,7 +978,7 @@ where
                     authenticated_signer: None,
                     grant: Amount::ZERO,
                     refund_grant_to: None,
-                    kind: MessageKind::Tracked,
+                    kind: MessageKind::Tracked.into(),
                     timestamp: Timestamp::from(0),
                     message: system_credit_message(Amount::ONE),
                 },
@@ -986,7 +993,7 @@ where
                     authenticated_signer: None,
                     grant: Amount::ZERO,
                     refund_grant_to: None,
-                    kind: MessageKind::Tracked,
+                    kind: MessageKind::Tracked.into(),
                     timestamp: Timestamp::from(0),
                     message: system_credit_message(Amount::from_tokens(2)),
                 },
@@ -1001,7 +1008,7 @@ where
                     authenticated_signer: None,
                     grant: Amount::ZERO,
                     refund_grant_to: None,
-                    kind: MessageKind::Tracked,
+                    kind: MessageKind::Tracked.into(),
                     timestamp: Timestamp::from(0),
                     message: system_credit_message(Amount::from_tokens(2)), // wrong amount
                 },
@@ -1027,7 +1034,7 @@ where
                     authenticated_signer: None,
                     grant: Amount::ZERO,
                     refund_grant_to: None,
-                    kind: MessageKind::Tracked,
+                    kind: MessageKind::Tracked.into(),
                     timestamp: Timestamp::from(0),
                     message: system_credit_message(Amount::from_tokens(2)),
                 },
@@ -1053,7 +1060,7 @@ where
                     authenticated_signer: None,
                     grant: Amount::ZERO,
                     refund_grant_to: None,
-                    kind: MessageKind::Tracked,
+                    kind: MessageKind::Tracked.into(),
                     timestamp: Timestamp::from(0),
                     message: system_credit_message(Amount::from_tokens(3)),
                 },
@@ -1068,7 +1075,7 @@ where
                     authenticated_signer: None,
                     grant: Amount::ZERO,
                     refund_grant_to: None,
-                    kind: MessageKind::Tracked,
+                    kind: MessageKind::Tracked.into(),
                     timestamp: Timestamp::from(0),
                     message: system_credit_message(Amount::ONE),
                 },
@@ -1083,7 +1090,7 @@ where
                     authenticated_signer: None,
                     grant: Amount::ZERO,
                     refund_grant_to: None,
-                    kind: MessageKind::Tracked,
+                    kind: MessageKind::Tracked.into(),
                     timestamp: Timestamp::from(0),
                     message: system_credit_message(Amount::from_tokens(2)),
                 },
@@ -1109,7 +1116,7 @@ where
                     authenticated_signer: None,
                     grant: Amount::ZERO,
                     refund_grant_to: None,
-                    kind: MessageKind::Tracked,
+                    kind: MessageKind::Tracked.into(),
                     timestamp: Timestamp::from(0),
                     message: system_credit_message(Amount::ONE),
                 },
@@ -1154,7 +1161,7 @@ where
                     authenticated_signer: None,
                     grant: Amount::ZERO,
                     refund_grant_to: None,
-                    kind: MessageKind::Tracked,
+                    kind: MessageKind::Tracked.into(),
                     timestamp: Timestamp::from(0),
                     message: system_credit_message(Amount::from_tokens(2)),
                 },
@@ -1169,7 +1176,7 @@ where
                     authenticated_signer: None,
                     grant: Amount::ZERO,
                     refund_grant_to: None,
-                    kind: MessageKind::Tracked,
+                    kind: MessageKind::Tracked.into(),
                     timestamp: Timestamp::from(0),
                     message: system_credit_message(Amount::from_tokens(3)),
                 },
@@ -1534,7 +1541,7 @@ where
             authenticated_signer: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
-            kind: MessageKind::Protected,
+            kind: MessageKind::Protected.into(),
             timestamp: Timestamp::from(0),
             message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
                 ownership,
@@ -1763,7 +1770,7 @@ where
                 authenticated_signer: None,
                 grant: Amount::ZERO,
                 refund_grant_to: None,
-                kind: MessageKind::Tracked,
+                kind: MessageKind::Tracked.into(),
                 timestamp: Timestamp::from(0),
                 message: system_credit_message(Amount::from_tokens(995)),
             },
@@ -1813,7 +1820,7 @@ where
             authenticated_signer: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
-            kind: MessageKind::Tracked,
+            kind: RawMessageKind::Sending(MessageKind::Tracked),
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. }),
         } if certificate_hash == CryptoHash::test_hash("certificate")
@@ -2010,7 +2017,7 @@ where
             authenticated_signer: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
-            kind: MessageKind::Tracked,
+            kind: RawMessageKind::Sending(MessageKind::Tracked),
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. })
         } if certificate_hash == certificate.hash()
@@ -2116,7 +2123,7 @@ where
             authenticated_signer: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
-            kind: MessageKind::Tracked,
+            kind: RawMessageKind::Sending(MessageKind::Tracked),
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. })
         } if certificate_hash == certificate.hash()
@@ -2379,7 +2386,7 @@ where
                 authenticated_signer: None,
                 grant: Amount::ZERO,
                 refund_grant_to: None,
-                kind: MessageKind::Tracked,
+                kind: MessageKind::Tracked.into(),
                 timestamp: Timestamp::from(0),
                 message: system_credit_message(Amount::from_tokens(5)),
             },
@@ -2613,7 +2620,7 @@ where
                 authenticated_signer: None,
                 grant: Amount::ZERO,
                 refund_grant_to: None,
-                kind: MessageKind::Tracked,
+                kind: MessageKind::Tracked.into(),
                 timestamp: Timestamp::from(0),
                 message: Message::System(SystemMessage::Credit {
                     source: None,
@@ -2703,7 +2710,7 @@ where
                     authenticated_signer: None,
                     grant: Amount::ZERO,
                     refund_grant_to: None,
-                    kind: MessageKind::Tracked,
+                    kind: MessageKind::Tracked.into(),
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         source: Some(sender),
@@ -2722,7 +2729,7 @@ where
                     authenticated_signer: None,
                     grant: Amount::ZERO,
                     refund_grant_to: None,
-                    kind: MessageKind::Tracked,
+                    kind: MessageKind::Tracked.into(),
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         source: Some(sender),
@@ -2771,7 +2778,7 @@ where
                 authenticated_signer: None,
                 grant: Amount::ZERO,
                 refund_grant_to: None,
-                kind: MessageKind::Bouncing,
+                kind: RawMessageKind::Bouncing,
                 timestamp: Timestamp::from(0),
                 message: Message::System(SystemMessage::Credit {
                     source: Some(sender),
@@ -2887,7 +2894,7 @@ where
             messages: vec![
                 direct_outgoing_message(
                     user_id,
-                    MessageKind::Protected,
+                    MessageKind::Protected.into(),
                     SystemMessage::OpenChain(OpenChainConfig {
                         ownership: ChainOwnership::single(key_pair.public()),
                         epoch: Epoch::ZERO,
@@ -2899,7 +2906,7 @@ where
                 ),
                 direct_outgoing_message(
                     admin_id,
-                    MessageKind::Protected,
+                    MessageKind::Protected.into(),
                     SystemMessage::Subscribe {
                         id: user_id,
                         subscription: admin_channel_subscription.clone(),
@@ -2996,7 +3003,7 @@ where
                         authenticated_signer: None,
                         grant: Amount::ZERO,
                         refund_grant_to: None,
-                        kind: MessageKind::Protected,
+                        kind: MessageKind::Protected.into(),
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Subscribe {
                             id: user_id,
@@ -3007,7 +3014,7 @@ where
                 }),
             messages: vec![direct_outgoing_message(
                 user_id,
-                MessageKind::Protected,
+                MessageKind::Protected.into(),
                 SystemMessage::Notify { id: user_id },
             )],
             message_counts: vec![1],
@@ -3121,7 +3128,7 @@ where
                         authenticated_signer: None,
                         grant: Amount::ZERO,
                         refund_grant_to: None,
-                        kind: MessageKind::Protected,
+                        kind: MessageKind::Protected.into(),
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
                             ownership: ChainOwnership::single(key_pair.public()),
@@ -3143,7 +3150,7 @@ where
                         authenticated_signer: None,
                         grant: Amount::ZERO,
                         refund_grant_to: None,
-                        kind: MessageKind::Protected,
+                        kind: MessageKind::Protected.into(),
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::SetCommittees {
                             epoch: Epoch::from(1),
@@ -3161,7 +3168,7 @@ where
                         authenticated_signer: None,
                         grant: Amount::ZERO,
                         refund_grant_to: None,
-                        kind: MessageKind::Tracked,
+                        kind: MessageKind::Tracked.into(),
                         timestamp: Timestamp::from(0),
                         message: system_credit_message(Amount::from_tokens(2)),
                     },
@@ -3176,7 +3183,7 @@ where
                         authenticated_signer: None,
                         grant: Amount::ZERO,
                         refund_grant_to: None,
-                        kind: MessageKind::Protected,
+                        kind: MessageKind::Protected.into(),
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Notify { id: user_id }),
                     },
@@ -3558,7 +3565,7 @@ where
                         authenticated_signer: None,
                         grant: Amount::ZERO,
                         refund_grant_to: None,
-                        kind: MessageKind::Tracked,
+                        kind: MessageKind::Tracked.into(),
                         timestamp: Timestamp::from(0),
                         message: system_credit_message(Amount::ONE),
                     },

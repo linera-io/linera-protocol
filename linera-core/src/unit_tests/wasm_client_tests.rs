@@ -18,12 +18,12 @@ use crate::client::client_tests::{
 use assert_matches::assert_matches;
 use async_graphql::Request;
 use linera_base::{
-    data_types::Amount,
+    data_types::{Amount, MessageKind},
     identifiers::{AccountOwner, ChainDescription, ChainId, Destination, Owner},
 };
 use linera_chain::data_types::{CertificateValue, MessageAction, OutgoingMessage};
 use linera_execution::{
-    Bytecode, Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage,
+    Bytecode, Message, Operation, RawMessageKind, ResourceControlPolicy, SystemMessage,
     UserApplicationDescription, WasmRuntime,
 };
 use linera_storage::Storage;
@@ -351,7 +351,7 @@ where
     let incoming_messages = &cert.value().block().unwrap().incoming_messages;
     assert_eq!(incoming_messages.len(), 1);
     assert_eq!(incoming_messages[0].action, MessageAction::Reject);
-    assert_eq!(incoming_messages[0].event.kind, MessageKind::Simple);
+    assert_eq!(incoming_messages[0].event.kind, MessageKind::Simple.into());
     let messages = cert.value().messages().unwrap();
     assert_eq!(messages.len(), 0);
 
@@ -371,7 +371,7 @@ where
     let incoming_messages = &cert.value().block().unwrap().incoming_messages;
     assert_eq!(incoming_messages.len(), 1);
     assert_eq!(incoming_messages[0].action, MessageAction::Reject);
-    assert_eq!(incoming_messages[0].event.kind, MessageKind::Tracked);
+    assert_eq!(incoming_messages[0].event.kind, MessageKind::Tracked.into());
     let messages = cert.value().messages().unwrap();
     assert_eq!(messages.len(), 1);
 
@@ -384,14 +384,14 @@ where
     assert_eq!(incoming_messages.len(), 2);
     // First message is the grant refund for the successful message sent before.
     assert_eq!(incoming_messages[0].action, MessageAction::Accept);
-    assert_eq!(incoming_messages[0].event.kind, MessageKind::Tracked);
+    assert_eq!(incoming_messages[0].event.kind, MessageKind::Tracked.into());
     assert_matches!(
         incoming_messages[0].event.message,
         Message::System(SystemMessage::Credit { .. })
     );
     // Second message is the bounced message.
     assert_eq!(incoming_messages[1].action, MessageAction::Accept);
-    assert_eq!(incoming_messages[1].event.kind, MessageKind::Bouncing);
+    assert_eq!(incoming_messages[1].event.kind, RawMessageKind::Bouncing);
     assert_matches!(incoming_messages[1].event.message, Message::User { .. });
 
     Ok(())

@@ -5,14 +5,14 @@
 use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
-    Destination, MessageContext, MessageKind, OperationContext, QueryContext, RawExecutionOutcome,
+    Destination, MessageContext, OperationContext, QueryContext, RawExecutionOutcome,
     RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
 };
 use async_graphql::Enum;
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, ApplicationPermissions, ArithmeticError, Timestamp},
+    data_types::{Amount, ApplicationPermissions, ArithmeticError, MessageKind, Timestamp},
     ensure, hex_debug,
     identifiers::{Account, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -531,7 +531,7 @@ where
                             destination: Destination::Subscribers(SystemChannel::Admin.name()),
                             authenticated: false,
                             grant: Amount::ZERO,
-                            kind: MessageKind::Protected,
+                            kind: MessageKind::Protected.into(),
                             message: SystemMessage::SetCommittees {
                                 epoch,
                                 committees: self.committees.get().clone(),
@@ -548,7 +548,7 @@ where
                             destination: Destination::Subscribers(SystemChannel::Admin.name()),
                             authenticated: false,
                             grant: Amount::ZERO,
-                            kind: MessageKind::Protected,
+                            kind: MessageKind::Protected.into(),
                             message: SystemMessage::SetCommittees {
                                 epoch: self.epoch.get().expect("chain is active"),
                                 committees: self.committees.get().clone(),
@@ -582,7 +582,7 @@ where
                     destination: Destination::Recipient(chain_id),
                     authenticated: false,
                     grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
+                    kind: MessageKind::Protected.into(),
                     message: SystemMessage::Subscribe {
                         id: context.chain_id,
                         subscription,
@@ -604,7 +604,7 @@ where
                     destination: Destination::Recipient(chain_id),
                     authenticated: false,
                     grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
+                    kind: MessageKind::Protected.into(),
                     message: SystemMessage::Unsubscribe {
                         id: context.chain_id,
                         subscription,
@@ -619,7 +619,7 @@ where
                     destination: Destination::Recipient(context.chain_id),
                     authenticated: false,
                     grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
+                    kind: MessageKind::Protected.into(),
                     message: SystemMessage::BytecodePublished {
                         operation_index: context.index,
                     },
@@ -648,7 +648,7 @@ where
                     destination: Destination::Recipient(context.chain_id),
                     authenticated: false,
                     grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
+                    kind: MessageKind::Protected.into(),
                     message: SystemMessage::ApplicationCreated,
                 };
                 outcome.messages.push(message);
@@ -662,7 +662,7 @@ where
                     destination: Destination::Recipient(chain_id),
                     authenticated: false,
                     grant: Amount::ZERO,
-                    kind: MessageKind::Simple,
+                    kind: MessageKind::Simple.into(),
                     message: SystemMessage::RequestApplication(application_id),
                 };
                 outcome.messages.push(message);
@@ -702,7 +702,7 @@ where
                     destination: Destination::Recipient(account.chain_id),
                     authenticated: false,
                     grant: Amount::ZERO,
-                    kind: MessageKind::Tracked,
+                    kind: MessageKind::Tracked.into(),
                     message: SystemMessage::Credit {
                         amount,
                         source: owner,
@@ -738,7 +738,7 @@ where
             destination: Destination::Recipient(target_id),
             authenticated: true,
             grant: Amount::ZERO,
-            kind: MessageKind::Simple,
+            kind: MessageKind::Simple.into(),
             message: SystemMessage::Withdraw {
                 amount,
                 owner,
@@ -795,7 +795,7 @@ where
                             destination: Destination::Recipient(account.chain_id),
                             authenticated: false,
                             grant: Amount::ZERO,
-                            kind: MessageKind::Tracked,
+                            kind: MessageKind::Tracked.into(),
                             message: SystemMessage::Credit {
                                 amount,
                                 source: Some(owner),
@@ -826,7 +826,7 @@ where
                     destination: Destination::Recipient(id),
                     authenticated: false,
                     grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
+                    kind: MessageKind::Protected.into(),
                     message: SystemMessage::Notify { id },
                 };
                 outcome.messages.push(message);
@@ -841,7 +841,7 @@ where
                     destination: Destination::Recipient(id),
                     authenticated: false,
                     grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
+                    kind: MessageKind::Protected.into(),
                     message: SystemMessage::Notify { id },
                 };
                 outcome.messages.push(message);
@@ -860,7 +860,7 @@ where
                     destination: Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
                     authenticated: false,
                     grant: Amount::ZERO,
-                    kind: MessageKind::Simple,
+                    kind: MessageKind::Simple.into(),
                     message: SystemMessage::BytecodeLocations { locations },
                 };
                 outcome.messages.push(message);
@@ -889,7 +889,7 @@ where
                     destination: Destination::Recipient(context.message_id.chain_id),
                     authenticated: false,
                     grant: Amount::ZERO,
-                    kind: MessageKind::Simple,
+                    kind: MessageKind::Simple.into(),
                     message: SystemMessage::RegisterApplications { applications },
                 };
                 outcome.messages.push(message);
@@ -982,7 +982,7 @@ where
             destination: Destination::Recipient(child_id),
             authenticated: false,
             grant: Amount::ZERO,
-            kind: MessageKind::Protected,
+            kind: MessageKind::Protected.into(),
             message: SystemMessage::OpenChain(config),
         };
         let subscription = ChannelSubscription {
@@ -993,7 +993,7 @@ where
             destination: Destination::Recipient(admin_id),
             authenticated: false,
             grant: Amount::ZERO,
-            kind: MessageKind::Protected,
+            kind: MessageKind::Protected.into(),
             message: SystemMessage::Subscribe {
                 id: child_id,
                 subscription,
@@ -1014,7 +1014,7 @@ where
                     destination: Destination::Recipient(subscription.chain_id),
                     authenticated: false,
                     grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
+                    kind: MessageKind::Protected.into(),
                     message: SystemMessage::Unsubscribe { id, subscription },
                 };
                 messages.push(message);
