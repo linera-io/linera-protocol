@@ -101,7 +101,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
 }
 
 /// The runtime status of an application.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug)]
 struct ApplicationStatus {
     /// The caller application ID, if forwarded during the call.
     caller_id: Option<UserApplicationId>,
@@ -932,7 +932,7 @@ impl ContractSyncRuntime {
             &mut UserContractInstance,
         ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>,
     ) -> Result<(), ExecutionError> {
-        let (contract, status) = {
+        let contract = {
             let cloned_runtime = self.0.clone();
             let mut runtime = self.inner();
             let application = runtime.load_contract_instance(cloned_runtime, application_id)?;
@@ -940,24 +940,28 @@ impl ContractSyncRuntime {
             let status = ApplicationStatus {
                 caller_id: None,
                 id: application_id,
-                parameters: application.parameters,
+                parameters: application.parameters.clone(),
                 signer,
             };
 
-            runtime.push_application(status.clone());
+            runtime.push_application(status);
 
-            (application.instance, status)
+            application
         };
 
         let outcome = closure(
             &mut contract
+                .instance
                 .try_lock()
                 .expect("Application should not be already executing"),
         )?;
 
         let mut runtime = self.inner();
         let application_status = runtime.pop_application();
-        assert_eq!(application_status, status);
+        assert_eq!(application_status.caller_id, None);
+        assert_eq!(application_status.id, application_id);
+        assert_eq!(application_status.parameters, contract.parameters);
+        assert_eq!(application_status.signer, signer);
         assert!(runtime.call_stack.is_empty());
 
         runtime.handle_outcome(outcome, signer, application_id)?;
