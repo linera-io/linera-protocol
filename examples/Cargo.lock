@@ -1564,15 +1564,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fs-err"
-version = "2.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88a41f105fe1d5b6b34b2055e3dc59bb79b46b48b2040b9e6c7b4b5de097aa41"
-dependencies = [
- "autocfg",
-]
-
-[[package]]
 name = "fungible"
 version = "0.1.0"
 dependencies = [
@@ -2593,12 +2584,10 @@ dependencies = [
  "bcs",
  "candle-core",
  "candle-transformers",
- "fs-err",
  "getrandom",
  "linera-sdk",
  "log",
  "rand",
- "serde",
  "serde_json",
  "thiserror",
  "tokenizers",
