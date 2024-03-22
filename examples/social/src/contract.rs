@@ -79,10 +79,10 @@ impl Contract for SocialContract {
             .message_id()
             .expect("Message ID has to be available when executing a message");
         match message {
-            Message::Subscribe => outcome.subscribe.push((
-                ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
+            Message::Subscribe => self.runtime.subscribe(
                 message_id.chain_id,
-            )),
+                ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
+            ),
             Message::Unsubscribe => outcome.unsubscribe.push((
                 ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
                 message_id.chain_id,
