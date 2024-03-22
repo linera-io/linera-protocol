@@ -464,6 +464,9 @@ pub trait ContractRuntime: BaseRuntime {
     /// Schedules to subscribe to some `channel` on a `chain`.
     fn subscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
 
+    /// Schedules to unsubscribe to some `channel` on a `chain`.
+    fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
+
     /// Transfers amount from source to destination.
     fn transfer(
         &mut self,

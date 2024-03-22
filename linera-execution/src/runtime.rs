@@ -438,6 +438,10 @@ impl SyncRuntimeInternal<UserContractInstance> {
             .execution_outcome
             .subscribe
             .extend(outcome.subscribe);
+        raw_outcome
+            .execution_outcome
+            .unsubscribe
+            .extend(outcome.unsubscribe);
         self.handle_outcome(raw_outcome.execution_outcome, signer, callee_id)?;
 
         Ok(raw_outcome.value)
@@ -995,6 +999,9 @@ impl ContractSyncRuntime {
         outcome
             .subscribe
             .extend(application_status.outcome.subscribe);
+        outcome
+            .unsubscribe
+            .extend(application_status.outcome.unsubscribe);
         runtime.handle_outcome(outcome, signer, application_id)?;
 
         Ok(())
@@ -1048,6 +1055,15 @@ impl ContractRuntime for ContractSyncRuntime {
         let application = this.current_application_mut();
 
         application.outcome.subscribe.push((channel, chain));
+
+        Ok(())
+    }
+
+    fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError> {
+        let mut this = self.inner();
+        let application = this.current_application_mut();
+
+        application.outcome.unsubscribe.push((channel, chain));
 
         Ok(())
     }
