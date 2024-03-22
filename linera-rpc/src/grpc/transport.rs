@@ -18,37 +18,29 @@ impl From<&'_ NodeOptions> for Options {
     }
 }
 
-#[cfg(web)]
-mod implementation {
-    use super::Options;
+cfg_if::cfg_if! {
+    if #[cfg(web)] {
+        pub use tonic_web_wasm_client::{Client as Channel, Error};
 
-    pub use tonic_web_wasm_client::{Client as Channel, Error};
+        pub fn create_channel(address: String, _options: &Options) -> Result<Channel, Error> {
+            // TODO this should respect `options`
+            Ok(tonic_web_wasm_client::Client::new(address))
+        }
+    } else {
+        pub use tonic::transport::{Channel, Error};
 
-    pub fn create_channel(address: String, _options: &Options) -> Result<Channel, super::Error> {
-        // TODO this should respect `options`
-        Ok(tonic_web_wasm_client::Client::new(address))
+        pub fn create_channel(
+            address: String,
+            options: &Options,
+        ) -> Result<Channel, Error> {
+            let mut endpoint = tonic::transport::Endpoint::from_shared(address)?;
+            if let Some(timeout) = options.connect_timeout {
+                endpoint = endpoint.connect_timeout(timeout);
+            }
+            if let Some(timeout) = options.timeout {
+                endpoint = endpoint.timeout(timeout);
+            }
+            Ok(endpoint.connect_lazy())
+        }
     }
 }
-
-#[cfg(not(web))]
-mod implementation {
-    use super::Options;
-
-    pub use tonic::transport::{Channel, Error};
-
-    pub fn create_channel(
-        address: String,
-        options: &Options,
-    ) -> Result<Channel, super::super::GrpcError> {
-        let mut endpoint = tonic::transport::Endpoint::from_shared(address)?;
-        if let Some(timeout) = options.connect_timeout {
-            endpoint = endpoint.connect_timeout(timeout);
-        }
-        if let Some(timeout) = options.timeout {
-            endpoint = endpoint.timeout(timeout);
-        }
-        Ok(endpoint.connect_lazy())
-    }
-}
-
-pub use implementation::*;
