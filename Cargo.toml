@@ -71,6 +71,7 @@ getrandom = "0.2.12"
 hex = "0.4.3"
 http = "1.1.0"
 glob = "0.3.1"
+indexed_db_futures = "0.4.1"
 insta = "1.36.1"
 log = "0.4.21"
 lru = "0.12.3"
@@ -193,3 +194,6 @@ opt-level = 3
 
 [profile.dev.package.wasmtime]
 opt-level = 3
+
+[patch.crates-io]
+indexed_db_futures.path = "../../rust-indexed-db"
