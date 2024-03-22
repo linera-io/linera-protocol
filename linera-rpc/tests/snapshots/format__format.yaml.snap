@@ -370,7 +370,7 @@ Event:
         OPTION:
           TYPENAME: Account
     - kind:
-        TYPENAME: MessageKind
+        TYPENAME: RawMessageKind
     - timestamp:
         TYPENAME: Timestamp
     - message:
@@ -498,8 +498,6 @@ MessageKind:
       Protected: UNIT
     2:
       Tracked: UNIT
-    3:
-      Bouncing: UNIT
 NodeError:
   ENUM:
     0:
@@ -627,7 +625,7 @@ OutgoingMessage:
         OPTION:
           TYPENAME: Account
     - kind:
-        TYPENAME: MessageKind
+        TYPENAME: RawMessageKind
     - message:
         TYPENAME: Message
 Owner:
@@ -638,6 +636,14 @@ PublicKey:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+RawMessageKind:
+  ENUM:
+    0:
+      Sending:
+        NEWTYPE:
+          TYPENAME: MessageKind
+    1:
+      Bouncing: UNIT
 Recipient:
   ENUM:
     0:
