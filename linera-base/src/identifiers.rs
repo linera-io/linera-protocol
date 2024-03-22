@@ -193,6 +193,12 @@ impl From<ChainId> for Destination {
     }
 }
 
+impl From<ChannelName> for Destination {
+    fn from(channel_name: ChannelName) -> Self {
+        Destination::Subscribers(channel_name)
+    }
+}
+
 impl AsRef<[u8]> for ChannelName {
     fn as_ref(&self) -> &[u8] {
         &self.0
