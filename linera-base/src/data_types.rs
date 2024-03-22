@@ -14,7 +14,7 @@ use thiserror::Error;
 
 use crate::{
     doc_scalar,
-    identifiers::{ApplicationId, GenericApplicationId},
+    identifiers::{ApplicationId, Destination, GenericApplicationId},
 };
 
 /// A non-negative amount of tokens.
@@ -170,6 +170,40 @@ pub struct Resources {
     pub storage_size_delta: u32,
     // TODO(#1532): Account for the system calls that we plan on calling.
     // TODO(#1533): Allow declaring calls to other applications instead of having to count them here.
+}
+
+/// A message that is scheduled to be sent.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct OutgoingMessage<Message> {
+    /// The destination of the message.
+    pub destination: Destination,
+    /// Whether the message is authenticated.
+    pub authenticated: bool,
+    /// Whether the message is tracked.
+    pub is_tracked: bool,
+    /// The grant resources forwarded with the message.
+    pub grant: Resources,
+    /// The message itself.
+    pub message: Message,
+}
+
+impl<Message> OutgoingMessage<Message>
+where
+    Message: Serialize,
+{
+    /// Serializes the internal `Message` type into raw bytes.
+    pub fn into_raw(self) -> OutgoingMessage<Vec<u8>> {
+        let message = bcs::to_bytes(&self.message).expect("Failed to serialize message");
+
+        OutgoingMessage {
+            destination: self.destination,
+            authenticated: self.authenticated,
+            is_tracked: self.is_tracked,
+            grant: self.grant,
+            message,
+        }
+    }
 }
 
 /// An error type for arithmetic errors.

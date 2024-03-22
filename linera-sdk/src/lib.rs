@@ -53,7 +53,11 @@ pub mod views;
 use std::{error::Error, fmt::Debug};
 
 use async_trait::async_trait;
-pub use linera_base::{abi, data_types::Resources, ensure};
+pub use linera_base::{
+    abi,
+    data_types::{OutgoingMessage, Resources},
+    ensure,
+};
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     data_types::BlockHeight,
@@ -266,40 +270,6 @@ pub struct QueryContext {
     pub chain_id: ChainId,
     /// The height of the next block on this chain.
     pub next_block_height: BlockHeight,
-}
-
-/// A message together with routing information.
-#[derive(Debug, Deserialize, Serialize)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct OutgoingMessage<Message> {
-    /// The destination of the message.
-    pub destination: Destination,
-    /// Whether the message is authenticated.
-    pub authenticated: bool,
-    /// Whether the message is tracked.
-    pub is_tracked: bool,
-    /// Resources to be forwarded with the message.
-    pub grant: Resources,
-    /// The message itself.
-    pub message: Message,
-}
-
-impl<Message> OutgoingMessage<Message>
-where
-    Message: Serialize,
-{
-    /// Serializes the internal `Message` type into raw bytes.
-    pub fn into_raw(self) -> OutgoingMessage<Vec<u8>> {
-        let message = bcs::to_bytes(&self.message).expect("Failed to serialize message");
-
-        OutgoingMessage {
-            destination: self.destination,
-            authenticated: self.authenticated,
-            is_tracked: self.is_tracked,
-            grant: self.grant,
-            message,
-        }
-    }
 }
 
 /// Externally visible results of an execution. These results are meant in the context of

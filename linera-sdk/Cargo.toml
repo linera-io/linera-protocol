@@ -24,7 +24,7 @@ wasmtime = [
     "linera-execution/wasmtime",
     "linera-storage/wasmtime",
 ]
-test = []
+test = ["linera-base/test"]
 
 [dependencies]
 async-graphql.workspace = true
