@@ -77,7 +77,7 @@ impl Contract for MetaCounterContract {
             destination: recipient_id.into(),
             authenticated,
             is_tracked,
-            resources: Resources {
+            grant: Resources {
                 fuel: fuel_grant,
                 ..Default::default()
             },

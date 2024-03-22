@@ -279,7 +279,7 @@ pub struct OutgoingMessage<Message> {
     /// Whether the message is tracked.
     pub is_tracked: bool,
     /// Resources to be forwarded with the message.
-    pub resources: Resources,
+    pub grant: Resources,
     /// The message itself.
     pub message: Message,
 }
@@ -296,7 +296,7 @@ where
             destination: self.destination,
             authenticated: self.authenticated,
             is_tracked: self.is_tracked,
-            resources: self.resources,
+            grant: self.grant,
             message,
         }
     }
@@ -334,7 +334,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
             destination,
             authenticated: false,
             is_tracked: false,
-            resources: Resources::default(),
+            grant: Resources::default(),
             message,
         });
         self
@@ -352,7 +352,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
             destination,
             authenticated: true,
             is_tracked: false,
-            resources: Resources::default(),
+            grant: Resources::default(),
             message,
         });
         self
@@ -371,7 +371,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
             destination,
             authenticated: false,
             is_tracked: true,
-            resources: Resources::default(),
+            grant: Resources::default(),
             message,
         });
         self
@@ -391,7 +391,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
             destination,
             authenticated: true,
             is_tracked: true,
-            resources: Resources::default(),
+            grant: Resources::default(),
             message,
         });
         self

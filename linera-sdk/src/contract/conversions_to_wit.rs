@@ -109,7 +109,7 @@ impl From<OutgoingMessage<Vec<u8>>> for wit_types::OutgoingMessage {
             destination: message.destination.into(),
             authenticated: message.authenticated,
             is_tracked: message.is_tracked,
-            resources: message.resources.into(),
+            resources: message.grant.into(),
             message: message.message,
         }
     }

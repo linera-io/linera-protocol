@@ -321,7 +321,7 @@ impl AmmContract {
                     destination: chain_id.into(),
                     authenticated: true,
                     is_tracked: false,
-                    resources: Resources::default(),
+                    grant: Resources::default(),
                     message,
                 });
             }
@@ -365,7 +365,7 @@ impl AmmContract {
                     destination: chain_id.into(),
                     authenticated: true,
                     is_tracked: false,
-                    resources: Resources::default(),
+                    grant: Resources::default(),
                     message,
                 });
             }
