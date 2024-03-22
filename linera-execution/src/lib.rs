@@ -138,21 +138,21 @@ pub trait UserContract {
         &mut self,
         context: OperationContext,
         argument: Vec<u8>,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>;
+    ) -> Result<(), ExecutionError>;
 
     /// Applies an operation from the current block.
     fn execute_operation(
         &mut self,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>;
+    ) -> Result<(), ExecutionError>;
 
     /// Applies a message originating from a cross-chain message.
     fn execute_message(
         &mut self,
         context: MessageContext,
         message: Vec<u8>,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>;
+    ) -> Result<(), ExecutionError>;
 
     /// Executes a call from another application.
     ///
@@ -162,13 +162,10 @@ pub trait UserContract {
         &mut self,
         context: CalleeContext,
         argument: Vec<u8>,
-    ) -> Result<ApplicationCallOutcome, ExecutionError>;
+    ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Finishes execution of the current transaction.
-    fn finalize(
-        &mut self,
-        context: FinalizeContext,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>;
+    fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError>;
 }
 
 /// The public entry points provided by the service part of an application.

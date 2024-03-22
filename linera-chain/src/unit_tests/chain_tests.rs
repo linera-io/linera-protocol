@@ -14,8 +14,8 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::OpenChainConfig,
     test_utils::{ExpectedCall, MockApplication},
-    BytecodeLocation, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation,
-    RawExecutionOutcome, SystemMessage, TestExecutionRuntimeContext, UserApplicationDescription,
+    BytecodeLocation, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, SystemMessage,
+    TestExecutionRuntimeContext, UserApplicationDescription,
 };
 use linera_views::{
     memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
@@ -127,9 +127,7 @@ async fn test_application_permissions() {
     );
 
     // After registering, an app operation can already be used in the first block.
-    application.expect_call(ExpectedCall::execute_operation(|_, _, _| {
-        Ok(RawExecutionOutcome::default())
-    }));
+    application.expect_call(ExpectedCall::execute_operation(|_, _, _| Ok(())));
     application.expect_call(ExpectedCall::default_finalize());
     let app_operation = Operation::User {
         application_id,
@@ -150,9 +148,7 @@ async fn test_application_permissions() {
     );
 
     // But app operations continue to work.
-    application.expect_call(ExpectedCall::execute_operation(|_, _, _| {
-        Ok(RawExecutionOutcome::default())
-    }));
+    application.expect_call(ExpectedCall::execute_operation(|_, _, _| Ok(())));
     application.expect_call(ExpectedCall::default_finalize());
     let valid_block = make_child_block(&value).with_operation(app_operation);
     chain.execute_block(&valid_block, time).await.unwrap();

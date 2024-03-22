@@ -25,9 +25,9 @@ use crate::{
     execution_state_actor::{ExecutionStateSender, Request},
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
-    ApplicationCallOutcome, BaseRuntime, CalleeContext, ContractRuntime, ExecutionError,
-    ExecutionOutcome, FinalizeContext, MessageContext, RawExecutionOutcome, ServiceRuntime,
-    UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
+    BaseRuntime, CalleeContext, ContractRuntime, ExecutionError, ExecutionOutcome, FinalizeContext,
+    MessageContext, RawExecutionOutcome, ServiceRuntime, UserApplicationDescription,
+    UserApplicationId, UserContractInstance, UserServiceInstance,
 };
 
 #[cfg(test)]
@@ -419,10 +419,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
     }
 
     /// Cleans up the runtime after the execution of a call to a different contract.
-    fn finish_call(
-        &mut self,
-        mut raw_outcome: ApplicationCallOutcome,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    fn finish_call(&mut self) -> Result<(), ExecutionError> {
         let ApplicationStatus {
             id: callee_id,
             signer,
@@ -430,21 +427,9 @@ impl SyncRuntimeInternal<UserContractInstance> {
             ..
         } = self.pop_application();
 
-        raw_outcome
-            .execution_outcome
-            .messages
-            .extend(outcome.messages);
-        raw_outcome
-            .execution_outcome
-            .subscribe
-            .extend(outcome.subscribe);
-        raw_outcome
-            .execution_outcome
-            .unsubscribe
-            .extend(outcome.unsubscribe);
-        self.handle_outcome(raw_outcome.execution_outcome, signer, callee_id)?;
+        self.handle_outcome(outcome, signer, callee_id)?;
 
-        Ok(raw_outcome.value)
+        Ok(())
     }
 
     /// Handles a newly produced [`RawExecutionOutcome`], conditioning and adding it to the stack
@@ -935,9 +920,7 @@ impl ContractSyncRuntime {
         &mut self,
         application_id: UserApplicationId,
         signer: Option<Owner>,
-        closure: impl FnOnce(
-            &mut UserContractInstance,
-        ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>,
+        closure: impl FnOnce(&mut UserContractInstance) -> Result<(), ExecutionError>,
     ) -> Result<(), ExecutionError> {
         match self.try_execute(application_id, signer, closure) {
             Ok(()) => Ok(()),
@@ -958,9 +941,7 @@ impl ContractSyncRuntime {
         &mut self,
         application_id: UserApplicationId,
         signer: Option<Owner>,
-        closure: impl FnOnce(
-            &mut UserContractInstance,
-        ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>,
+        closure: impl FnOnce(&mut UserContractInstance) -> Result<(), ExecutionError>,
     ) -> Result<(), ExecutionError> {
         let contract = {
             let cloned_runtime = self.0.clone();
@@ -980,7 +961,7 @@ impl ContractSyncRuntime {
             application
         };
 
-        let mut outcome = closure(
+        closure(
             &mut contract
                 .instance
                 .try_lock()
@@ -995,14 +976,7 @@ impl ContractSyncRuntime {
         assert_eq!(application_status.signer, signer);
         assert!(runtime.call_stack.is_empty());
 
-        outcome.messages.extend(application_status.outcome.messages);
-        outcome
-            .subscribe
-            .extend(application_status.outcome.subscribe);
-        outcome
-            .unsubscribe
-            .extend(application_status.outcome.unsubscribe);
-        runtime.handle_outcome(outcome, signer, application_id)?;
+        runtime.handle_outcome(application_status.outcome, signer, application_id)?;
 
         Ok(())
     }
@@ -1128,12 +1102,14 @@ impl ContractRuntime for ContractSyncRuntime {
             self.inner()
                 .prepare_for_call(cloned_self, authenticated, callee_id)?;
 
-        let raw_outcome = contract
+        let value = contract
             .try_lock()
             .expect("Applications should not have reentrant calls")
             .handle_application_call(callee_context, argument)?;
 
-        self.inner().finish_call(raw_outcome)
+        self.inner().finish_call()?;
+
+        Ok(value)
     }
 
     fn open_chain(
