@@ -43,17 +43,18 @@ use bytes::Bytes;
 use linera_base::{identifiers::SessionId, sync::Lazy};
 use std::{marker::Unpin, sync::Arc};
 use tokio::sync::Mutex;
-use wasmer::{
-    imports, wasmparser::Operator, CompilerConfig, Engine, EngineBuilder, Instance, Module,
-    Singlepass, Store,
-};
+use wasmer::{imports, wasmparser::Operator, CompilerConfig, Engine, EngineBuilder, Instance, Module, Store, Features, Cranelift, Singlepass};
 use wasmer_middlewares::metering::{self, Metering, MeteringPoints};
 use wit_bindgen_host_wasmer_rust::Le;
 
 /// An [`Engine`] instance configured to run application services.
 static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(|| {
-    let compiler_config = Singlepass::default();
-    EngineBuilder::new(compiler_config).into()
+    let compiler_config = Cranelift::new();
+    let builder = EngineBuilder::new(compiler_config);
+    let mut features = Features::new();
+    features.simd = true;
+    let builder = builder.set_features(Some(features));
+    builder.into()
 });
 
 /// A cache of compiled contract modules, with their respective [`Engine`] instances.

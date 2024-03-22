@@ -463,7 +463,7 @@ pub trait ServiceRuntime: BaseRuntime {
 
     /// Queries another application.
     fn get_blob_from_url(
-        &mut self,
+        &self,
         url: &str,
     ) -> Result<Vec<u8>, ExecutionError>;
 }

@@ -1271,7 +1271,7 @@ impl ServiceRuntime for ServiceSyncRuntime {
         Ok(response)
     }
 
-    fn get_blob_from_url(&mut self, url: &str) -> Result<Vec<u8>, ExecutionError> {
+    fn get_blob_from_url(&self, url: &str) -> Result<Vec<u8>, ExecutionError> {
         let response = reqwest::blocking::get(url)?;
         Ok(response.bytes()?.to_vec())
     }
