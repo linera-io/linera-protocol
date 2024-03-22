@@ -1,6 +1,26 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    ffi::OsString,
+    ops::{Bound, Bound::Excluded},
+    path::PathBuf,
+    sync::Arc,
+};
+
+use async_trait::async_trait;
+use linera_base::ensure;
+use thiserror::Error;
+#[cfg(with_testing)]
+use {
+    crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace},
+    tempfile::TempDir,
+};
+
+#[cfg(with_metrics)]
+use crate::metering::{
+    MeteredStore, LRU_CACHING_METRICS, ROCKS_DB_METRICS, VALUE_SPLITTING_METRICS,
+};
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
@@ -9,26 +29,6 @@ use crate::{
     },
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
-};
-use async_trait::async_trait;
-use linera_base::ensure;
-use std::{
-    ffi::OsString,
-    ops::{Bound, Bound::Excluded},
-    path::PathBuf,
-    sync::Arc,
-};
-use thiserror::Error;
-
-#[cfg(with_metrics)]
-use crate::metering::{
-    MeteredStore, LRU_CACHING_METRICS, ROCKS_DB_METRICS, VALUE_SPLITTING_METRICS,
-};
-
-#[cfg(with_testing)]
-use {
-    crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace},
-    tempfile::TempDir,
 };
 
 /// The number of streams for the test

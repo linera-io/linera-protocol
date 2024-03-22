@@ -1,9 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::process;
+
 use linera_service::storage::StorageConfigNamespace;
 use linera_views::common::CommonStoreConfig;
-use std::process;
 
 #[derive(clap::Parser)]
 #[command(

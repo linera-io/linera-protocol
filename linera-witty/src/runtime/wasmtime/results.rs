@@ -3,9 +3,10 @@
 
 //! Representation of Wasmtime function result types.
 
-use crate::{memory_layout::FlatLayout, primitive_types::FlatType};
 use frunk::{hlist, hlist_pat, HList};
 use wasmtime::{WasmResults, WasmTy};
+
+use crate::{memory_layout::FlatLayout, primitive_types::FlatType};
 
 /// Conversions between flat layouts and Wasmtime function result types.
 pub trait WasmtimeResults: FlatLayout {

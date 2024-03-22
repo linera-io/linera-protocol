@@ -10,9 +10,10 @@
 //!
 //! [flattening]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md#flattening
 
+use either::Either;
+
 use super::FlatType;
 use crate::util::ZeroExtend;
-use either::Either;
 
 /// Trait that allows joining one of two possible flat type values into a common flat type.
 pub trait JoinFlatTypes {

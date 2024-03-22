@@ -1,9 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{DynamoDbStorage, Storage};
-use linera_base::identifiers::ChainId;
 use std::mem;
+
+use linera_base::identifiers::ChainId;
+
+use crate::{DynamoDbStorage, Storage};
 
 /// Tests if released guards don't use memory.
 #[tokio::test]

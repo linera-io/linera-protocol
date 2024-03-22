@@ -19,27 +19,26 @@ mod wasmer;
 #[cfg(with_wasmtime)]
 mod wasmtime;
 
-use self::sanitizer::sanitize;
-use crate::{
-    Bytecode, ContractSyncRuntime, ExecutionError, ServiceSyncRuntime, UserContractInstance,
-    UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
-};
+use std::sync::Arc;
 
 #[cfg(with_metrics)]
 use linera_base::{
     prometheus_util::{self, MeasureLatency},
     sync::Lazy,
 };
-
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
-use std::sync::Arc;
 use thiserror::Error;
-
 #[cfg(with_wasmer)]
 use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 #[cfg(with_wasmtime)]
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
+
+use self::sanitizer::sanitize;
+use crate::{
+    Bytecode, ContractSyncRuntime, ExecutionError, ServiceSyncRuntime, UserContractInstance,
+    UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
+};
 
 #[cfg(with_metrics)]
 static CONTRACT_INSTANTIATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
@@ -235,9 +234,10 @@ pub enum WasmExecutionError {
 /// This assumes that the current directory is one of the crates.
 #[cfg(with_testing)]
 pub mod test {
+    use once_cell::sync::OnceCell;
+
     #[cfg(with_fs)]
     use super::{WasmContractModule, WasmRuntime, WasmServiceModule};
-    use once_cell::sync::OnceCell;
 
     fn build_applications() -> Result<(), std::io::Error> {
         tracing::info!("Building example applications with cargo");

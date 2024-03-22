@@ -2,21 +2,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    data_types::{
-        BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout,
-    },
-    local_node::{LocalNodeClient, LocalNodeError},
-    node::{
-        CrossChainMessageDelivery, LocalValidatorNode, LocalValidatorNodeProvider, NodeError,
-        NotificationStream, ValidatorNodeProvider,
-    },
-    notifier::Notifier,
-    updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
-    worker::{
-        DeliveryNotifiers, Notification, Reason, WorkerError, WorkerState, DEFAULT_VALUE_CACHE_SIZE,
-    },
+use std::{
+    collections::{hash_map, BTreeMap, HashMap},
+    convert::Infallible,
+    iter,
+    num::NonZeroUsize,
+    ops::Deref,
+    sync::Arc,
 };
+
 use futures::{
     future,
     lock::Mutex,
@@ -49,16 +43,24 @@ use linera_execution::{
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;
-use std::{
-    collections::{hash_map, BTreeMap, HashMap},
-    convert::Infallible,
-    iter,
-    num::NonZeroUsize,
-    ops::Deref,
-    sync::Arc,
-};
 use thiserror::Error;
 use tracing::{debug, error, info};
+
+use crate::{
+    data_types::{
+        BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout,
+    },
+    local_node::{LocalNodeClient, LocalNodeError},
+    node::{
+        CrossChainMessageDelivery, LocalValidatorNode, LocalValidatorNodeProvider, NodeError,
+        NotificationStream, ValidatorNodeProvider,
+    },
+    notifier::Notifier,
+    updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
+    worker::{
+        DeliveryNotifiers, Notification, Reason, WorkerError, WorkerState, DEFAULT_VALUE_CACHE_SIZE,
+    },
+};
 
 #[cfg(with_testing)]
 #[path = "unit_tests/client_test_utils.rs"]

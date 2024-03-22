@@ -6,8 +6,9 @@
 //! This is analogous to what [`MaybeFlatType`] is to [`crate::primitive_types::FlatType`]. Empty
 //! slots (represented by the `()` unit type) make it easier to generate code for zero sized types.
 
-use crate::primitive_types::{JoinFlatTypes, MaybeFlatType, SimpleType};
 use either::Either;
+
+use crate::primitive_types::{JoinFlatTypes, MaybeFlatType, SimpleType};
 
 /// Marker trait to prevent [`LayoutElement`] to be implemented for other types.
 pub trait Sealed {}

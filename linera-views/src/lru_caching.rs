@@ -4,29 +4,29 @@
 /// The standard cache size used for tests.
 pub const TEST_CACHE_SIZE: usize = 1000;
 
-use crate::{
-    batch::{Batch, WriteOperation},
-    common::{get_interval, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
-};
-use async_lock::Mutex;
-use async_trait::async_trait;
-use linked_hash_map::LinkedHashMap;
 use std::{
     collections::{btree_map, hash_map::RandomState, BTreeMap},
     sync::Arc,
 };
 
+use async_lock::Mutex;
+use async_trait::async_trait;
+use linked_hash_map::LinkedHashMap;
+#[cfg(with_testing)]
+use {
+    crate::common::{AdminKeyValueStore, CommonStoreConfig, ContextFromStore},
+    crate::memory::{MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
+    crate::views::ViewError,
+};
 #[cfg(with_metrics)]
 use {
     linera_base::sync::Lazy,
     prometheus::{register_int_counter_vec, IntCounterVec},
 };
 
-#[cfg(with_testing)]
-use {
-    crate::common::{AdminKeyValueStore, CommonStoreConfig, ContextFromStore},
-    crate::memory::{MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
-    crate::views::ViewError,
+use crate::{
+    batch::{Batch, WriteOperation},
+    common::{get_interval, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
 };
 
 #[cfg(with_metrics)]

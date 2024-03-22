@@ -2,15 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::data_types::{ArithmeticError, BlockHeight};
+#[cfg(with_testing)]
+use linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES};
 use linera_views::{
     common::Context,
     queue_view::QueueView,
     register_view::RegisterView,
     views::{View, ViewError},
 };
-
-#[cfg(with_testing)]
-use linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES};
 
 #[cfg(test)]
 #[path = "unit_tests/outbox_tests.rs"]

@@ -1,12 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use bytes::{Buf, BufMut, BytesMut};
 use std::{io, mem, ops::DerefMut};
+
+use bytes::{Buf, BufMut, BytesMut};
+use linera_core::node::NodeError;
 use thiserror::Error;
 use tokio_util::codec::{Decoder, Encoder};
-
-use linera_core::node::NodeError;
 
 use crate::RpcMessage;
 
@@ -117,11 +117,12 @@ impl From<Error> for NodeError {
 
 #[cfg(test)]
 mod tests {
-    use super::{Codec, RpcMessage, PREFIX_SIZE};
     use bytes::{BufMut, BytesMut};
     use linera_core::data_types::ChainInfoQuery;
     use test_strategy::proptest;
     use tokio_util::codec::{Decoder, Encoder};
+
+    use super::{Codec, RpcMessage, PREFIX_SIZE};
 
     /// Test decoding of a frame from a buffer.
     ///

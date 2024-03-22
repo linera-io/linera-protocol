@@ -1,13 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
-    ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
-    MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
-    UserApplicationDescription, UserApplicationId,
-};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+
 use futures::{stream::FuturesUnordered, StreamExt, TryStreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight},
@@ -20,8 +15,6 @@ use linera_views::{
     views::{View, ViewError},
 };
 use linera_views_derive::CryptoHashView;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-
 #[cfg(with_testing)]
 use {
     crate::{
@@ -29,6 +22,14 @@ use {
     },
     linera_views::memory::MemoryContext,
     std::sync::Arc,
+};
+
+use crate::{
+    resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
+    ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
+    MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
+    UserApplicationDescription, UserApplicationId,
 };
 
 /// A view accessing the execution state of a chain.

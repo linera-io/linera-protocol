@@ -7,10 +7,6 @@
 //! Wasm module's respective endpoint. This module contains the code to forward the call to the
 //! contract type that implements [`Contract`].
 
-use crate::{
-    views::{AppStateStore, ViewStorageContext},
-    Contract, SimpleStateStorage, ViewStateStorage,
-};
 use async_trait::async_trait;
 use linera_views::{
     batch::Batch,
@@ -18,6 +14,11 @@ use linera_views::{
     views::{RootView, View},
 };
 use serde::{de::DeserializeOwned, Serialize};
+
+use crate::{
+    views::{AppStateStore, ViewStorageContext},
+    Contract, SimpleStateStorage, ViewStateStorage,
+};
 
 /// The storage APIs used by a contract.
 #[async_trait]

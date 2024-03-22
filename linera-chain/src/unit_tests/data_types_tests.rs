@@ -2,9 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_base::data_types::Amount;
+
 use super::*;
 use crate::test::{make_first_block, BlockTestExt};
-use linera_base::data_types::Amount;
 
 #[test]
 fn test_signed_values() {

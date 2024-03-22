@@ -3,9 +3,10 @@
 
 //! Representation of the memory layout of complex types as a sequence of fundamental WIT types.
 
+use frunk::{hlist::HList, HCons, HNil};
+
 use super::{element::LayoutElement, FlatLayout};
 use crate::primitive_types::MaybeFlatType;
-use frunk::{hlist::HList, HCons, HNil};
 
 /// Marker trait to prevent [`LayoutElement`] to be implemented for other types.
 pub trait Sealed {}

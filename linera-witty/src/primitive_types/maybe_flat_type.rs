@@ -3,9 +3,10 @@
 
 //! A representation of either a [`FlatType`] or nothing, represented by the unit (`()`) type.
 
+use frunk::HCons;
+
 use super::flat_type::FlatType;
 use crate::{memory_layout::FlatLayout, Layout};
-use frunk::HCons;
 
 /// A marker trait for [`FlatType`]s and the unit type, which uses no storage space.
 pub trait MaybeFlatType: Default + Sized {

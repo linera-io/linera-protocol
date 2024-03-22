@@ -3,7 +3,8 @@
 
 //! This module defines the service client for the indexer.
 
-use crate::{common::IndexerError, indexer::Indexer};
+use std::time::Duration;
+
 use async_tungstenite::{
     tokio::connect_async,
     tungstenite::{client::IntoClientRequest, http::HeaderValue},
@@ -21,9 +22,10 @@ use linera_service_graphql_client::{block, chains, notifications, Block, Chains,
 use linera_views::{
     common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
-use std::time::Duration;
 use tokio::runtime::Handle;
 use tracing::error;
+
+use crate::{common::IndexerError, indexer::Indexer};
 
 struct TokioSpawner(Handle);
 

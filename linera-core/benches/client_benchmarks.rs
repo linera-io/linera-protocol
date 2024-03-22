@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use criterion::{criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion};
 use linera_base::{
     data_types::Amount,
@@ -18,7 +20,6 @@ use linera_storage::{
 use linera_views::{views::ViewError, LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
 use prometheus::core::Collector;
 use recorder::BenchRecorderMeasurement;
-use std::time::Duration;
 use tokio::runtime;
 
 type ChainClient<B> = client::ChainClient<

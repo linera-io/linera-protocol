@@ -1,12 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client::{storage_service_check_absence, storage_service_check_validity};
+use std::time::Duration;
+
 use anyhow::{bail, Result};
 use linera_base::command::CommandExt;
 use port_selector::random_free_tcp_port;
-use std::time::Duration;
 use tokio::process::{Child, Command};
+
+use crate::client::{storage_service_check_absence, storage_service_check_validity};
 
 pub async fn get_free_port() -> Result<String> {
     for i in 1..10 {

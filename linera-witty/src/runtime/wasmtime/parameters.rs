@@ -3,9 +3,10 @@
 
 //! Representation of Wasmtime function parameter types.
 
-use crate::{primitive_types::FlatType, Layout};
 use frunk::{hlist, hlist_pat, HCons, HList};
 use wasmtime::{WasmParams, WasmTy};
+
+use crate::{primitive_types::FlatType, Layout};
 
 /// Conversions between flat layouts and Wasmtime parameter types.
 pub trait WasmtimeParameters {

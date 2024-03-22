@@ -6,19 +6,21 @@
 mod fields;
 mod specialization;
 
-#[cfg(with_wit_export)]
-pub use self::specialization::Specialization;
-pub use self::{fields::FieldsInformation, specialization::Specializations};
+use std::hash::{Hash, Hasher};
+
 use heck::ToKebabCase;
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
 use quote::ToTokens;
-use std::hash::{Hash, Hasher};
 use syn::{
     parse::{self, Parse, ParseStream},
     punctuated::Punctuated,
     DeriveInput, Ident, Lit, LitStr, MetaNameValue, Token,
 };
+
+#[cfg(with_wit_export)]
+pub use self::specialization::Specialization;
+pub use self::{fields::FieldsInformation, specialization::Specializations};
 
 /// Changes the [`DeriveInput`] by replacing some generic type parameters with specialized types.
 pub fn apply_specialization_attribute(input: &mut DeriveInput) -> Specializations {

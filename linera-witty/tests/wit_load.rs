@@ -6,13 +6,15 @@
 #[path = "common/types.rs"]
 mod types;
 
+use std::fmt::Debug;
+
+use assert_matches::assert_matches;
+use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, RuntimeError, WitLoad};
+
 use self::types::{
     Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
     SpecializedGenericStruct, TupleWithPadding, TupleWithoutPadding,
 };
-use assert_matches::assert_matches;
-use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, RuntimeError, WitLoad};
-use std::fmt::Debug;
 
 /// Check that a wrapper type is properly loaded from memory and lifted from its flat layout.
 #[test]

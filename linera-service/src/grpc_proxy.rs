@@ -5,7 +5,14 @@
 #![allow(unknown_lints)]
 #![allow(clippy::blocks_in_conditions)]
 
-use crate::prometheus_server;
+use std::{
+    fmt::Debug,
+    net::SocketAddr,
+    sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
+};
+
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt};
@@ -29,13 +36,6 @@ use linera_rpc::{
 };
 use prometheus::{HistogramVec, IntCounterVec};
 use rcgen::generate_simple_self_signed;
-use std::{
-    fmt::Debug,
-    net::SocketAddr,
-    sync::Arc,
-    task::{Context, Poll},
-    time::Duration,
-};
 use tokio::select;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
@@ -44,6 +44,8 @@ use tonic::{
 };
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument};
+
+use crate::prometheus_server;
 
 static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(

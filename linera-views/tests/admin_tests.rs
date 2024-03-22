@@ -3,16 +3,13 @@
 
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
-use linera_views::test_utils::admin_test;
-
-#[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStore};
-
 #[cfg(feature = "aws")]
 use linera_views::dynamo_db::{create_dynamo_db_test_config, DynamoDbStore};
-
+#[cfg(feature = "rocksdb")]
+use linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStore};
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::{create_scylla_db_test_config, ScyllaDbStore};
+use linera_views::test_utils::admin_test;
 
 #[cfg(feature = "rocksdb")]
 #[tokio::test]

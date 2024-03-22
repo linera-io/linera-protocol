@@ -5,9 +5,10 @@
 
 #![cfg(test)]
 
-use super::{derive_for_enum, derive_for_struct};
 use quote::quote;
 use syn::{parse_quote, Fields, ItemEnum, ItemStruct};
+
+use super::{derive_for_enum, derive_for_struct};
 
 /// Check the generated code for the body of the implementation of `WitStore` for a unit struct.
 #[test]

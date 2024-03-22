@@ -8,9 +8,10 @@
 //! represent the flat type of any of the variants. See [`crate::primitive_types::JoinFlatTypes`]
 //! for more information on how flat types are joined.
 
-use crate::primitive_types::{FlatType, JoinFlatTypes};
 use either::Either;
 use frunk::{HCons, HNil};
+
+use crate::primitive_types::{FlatType, JoinFlatTypes};
 
 /// Allows converting between the current flat layout and the joined `Target` flat layout, which
 /// may be longer or have some elements wider than the current elements.

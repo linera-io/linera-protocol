@@ -1,6 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    cmp::{Ordering, PartialOrd},
+    sync::Arc,
+};
+
 use async_graphql::{Object, OneofObject, SimpleObject};
 use axum::Router;
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, doc_scalar, identifiers::ChainId};
@@ -16,10 +21,6 @@ use linera_views::{
     views::{RootView, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    cmp::{Ordering, PartialOrd},
-    sync::Arc,
-};
 use tokio::sync::Mutex;
 use tracing::info;
 

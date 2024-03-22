@@ -6,11 +6,12 @@
 #[path = "unit_tests/wit_load.rs"]
 mod tests;
 
-use crate::util::FieldsInformation;
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::quote;
 use syn::{Ident, LitInt, Variant};
+
+use crate::util::FieldsInformation;
 
 /// Returns the body of the `WitLoad` implementation for the Rust `struct` with the specified
 /// `fields`.

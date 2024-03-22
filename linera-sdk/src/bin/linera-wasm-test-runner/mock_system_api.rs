@@ -1,9 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::any::Any;
+
 use anyhow::Result;
 use linera_views::batch::WriteOperation;
-use std::any::Any;
 use wasmtime::{Caller, Extern, Func, Linker};
 use wit_bindgen_host_wasmtime_rust::{
     rt::{get_memory, RawMem},

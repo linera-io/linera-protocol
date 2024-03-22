@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{Context, Result};
-use tokio::process::{Child, Command};
-
 use linera_base::command::CommandExt;
+use tokio::process::{Child, Command};
 
 pub struct KubectlInstance {
     pub port_forward_children: Vec<Child>,

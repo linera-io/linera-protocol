@@ -3,12 +3,14 @@
 
 //! Implementations of the custom traits for the [`Option`] type.
 
+use std::borrow::Cow;
+
+use frunk::{hlist, hlist_pat, HCons, HList, HNil};
+
 use crate::{
     GuestPointer, InstanceWithMemory, JoinFlatLayouts, Layout, Memory, Merge, Runtime,
     RuntimeError, RuntimeMemory, WitLoad, WitStore, WitType,
 };
-use frunk::{hlist, hlist_pat, HCons, HList, HNil};
-use std::borrow::Cow;
 
 impl<T> WitType for Option<T>
 where

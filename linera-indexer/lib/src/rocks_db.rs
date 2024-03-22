@@ -1,16 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    common::IndexerError,
-    runner::{IndexerConfig, Runner},
-};
+use std::path::PathBuf;
+
 use clap::Parser as _;
 use linera_views::{
     common::{AdminKeyValueStore, CommonStoreConfig},
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
-use std::path::PathBuf;
+
+use crate::{
+    common::IndexerError,
+    runner::{IndexerConfig, Runner},
+};
 
 #[derive(clap::Parser, Clone, Debug)]
 #[command(version = linera_version::VersionInfo::default_clap_str())]

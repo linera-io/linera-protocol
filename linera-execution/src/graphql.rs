@@ -1,12 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    committee::{Committee, Epoch, ValidatorName, ValidatorState},
-    system::{Recipient, UserData},
-    Bytecode, ChannelSubscription, ExecutionStateView, SystemExecutionStateView,
-    UserApplicationDescription,
-};
+use std::collections::BTreeMap;
+
 use async_graphql::{Error, Object};
 use linera_base::{
     data_types::{Amount, Timestamp},
@@ -15,7 +11,13 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_views::{common::Context, map_view::MapView, views::ViewError};
-use std::collections::BTreeMap;
+
+use crate::{
+    committee::{Committee, Epoch, ValidatorName, ValidatorState},
+    system::{Recipient, UserData},
+    Bytecode, ChannelSubscription, ExecutionStateView, SystemExecutionStateView,
+    UserApplicationDescription,
+};
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(

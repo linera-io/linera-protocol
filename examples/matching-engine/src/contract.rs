@@ -4,7 +4,8 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 mod state;
-use crate::state::{KeyBook, OrderEntry};
+use std::cmp::min;
+
 use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
@@ -17,7 +18,8 @@ use matching_engine::{
     OrderNature, Price,
 };
 use state::{LevelView, MatchingEngine, MatchingEngineError};
-use std::cmp::min;
+
+use crate::state::{KeyBook, OrderEntry};
 
 pub struct MatchingEngineContract {
     state: MatchingEngine,

@@ -3,12 +3,13 @@
 
 //! Command functionality used for spanning child processes.
 
-use anyhow::{bail, ensure, Context, Result};
-use async_trait::async_trait;
 use std::{
     path::{Path, PathBuf},
     process::Stdio,
 };
+
+use anyhow::{bail, ensure, Context, Result};
+use async_trait::async_trait;
 use tokio::process::Command;
 use tracing::{debug, error};
 

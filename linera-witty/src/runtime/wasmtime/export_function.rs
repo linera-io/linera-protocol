@@ -5,8 +5,9 @@
 
 #![allow(clippy::let_unit_value)]
 
-use crate::{primitive_types::MaybeFlatType, ExportFunction, RuntimeError};
 use wasmtime::{Caller, Linker, Trap, WasmRet, WasmTy};
+
+use crate::{primitive_types::MaybeFlatType, ExportFunction, RuntimeError};
 
 /// Implements [`ExportFunction`] for Wasmtime's [`Linker`] using the supported function
 /// signatures.

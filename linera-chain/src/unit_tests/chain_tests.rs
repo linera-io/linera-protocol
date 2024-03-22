@@ -1,11 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    data_types::HashedValue,
-    test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
-    ChainError, ChainStateView,
-};
+use std::{iter, sync::Arc};
+
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
@@ -24,7 +21,12 @@ use linera_views::{
     memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
     views::{View, ViewError},
 };
-use std::{iter, sync::Arc};
+
+use crate::{
+    data_types::HashedValue,
+    test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
+    ChainError, ChainStateView,
+};
 
 impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>>
 where

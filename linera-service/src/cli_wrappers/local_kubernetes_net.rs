@@ -1,15 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cli_wrappers::{
-    docker::{BuildArg, DockerImage},
-    helmfile::HelmFile,
-    kind::KindCluster,
-    kubectl::KubectlInstance,
-    local_net::PathProvider,
-    util::get_github_root,
-    ClientWrapper, LineraNet, LineraNetConfig, Network,
-};
+use std::sync::Arc;
+
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{future, lock::Mutex};
@@ -20,14 +13,22 @@ use linera_base::{
     data_types::Amount,
 };
 use linera_execution::ResourceControlPolicy;
-use std::sync::Arc;
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
-
 #[cfg(with_testing)]
 use {
     crate::cli_wrappers::wallet::FaucetOption, linera_base::command::current_binary_parent,
     tokio::sync::OnceCell,
+};
+
+use crate::cli_wrappers::{
+    docker::{BuildArg, DockerImage},
+    helmfile::HelmFile,
+    kind::KindCluster,
+    kubectl::KubectlInstance,
+    local_net::PathProvider,
+    util::get_github_root,
+    ClientWrapper, LineraNet, LineraNetConfig, Network,
 };
 
 #[cfg(with_testing)]

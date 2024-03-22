@@ -3,16 +3,18 @@
 
 //! Representation of a shared generic type parameter for the caller.
 
-use crate::util::{Specialization, Specializations};
+use std::collections::HashMap;
+
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::ToTokens;
-use std::collections::HashMap;
 use syn::{
     punctuated::Punctuated, AngleBracketedGenericArguments, AssocType, GenericArgument, Generics,
     Ident, PathArguments, PathSegment, PredicateType, Token, TraitBound, TraitBoundModifier, Type,
     TypeParam, TypeParamBound, TypePath, WhereClause, WherePredicate,
 };
+
+use crate::util::{Specialization, Specializations};
 
 /// Information on the  generic type parameter to use for the caller parameter, if present.
 #[derive(Clone, Copy, Debug)]

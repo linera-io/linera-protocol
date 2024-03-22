@@ -1,13 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{data_types::Event, ChainError, Origin};
 use async_graphql::SimpleObject;
 use linera_base::{
     data_types::{ArithmeticError, BlockHeight},
     ensure,
     identifiers::ChainId,
 };
+#[cfg(with_testing)]
+use linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES};
 use linera_views::{
     common::Context,
     queue_view::QueueView,
@@ -17,8 +18,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[cfg(with_testing)]
-use linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES};
+use crate::{data_types::Event, ChainError, Origin};
 
 #[cfg(test)]
 #[path = "unit_tests/inbox_tests.rs"]

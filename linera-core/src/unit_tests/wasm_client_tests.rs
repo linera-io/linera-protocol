@@ -12,9 +12,8 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use crate::client::client_tests::{
-    get_free_port, MemoryStorageBuilder, ServiceStorageBuilder, StorageBuilder, TestBuilder,
-};
+use std::collections::BTreeMap;
+
 use assert_matches::assert_matches;
 use async_graphql::Request;
 use linera_base::{
@@ -29,17 +28,17 @@ use linera_execution::{
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde_json::json;
-use std::collections::BTreeMap;
 use test_case::test_case;
-
-#[cfg(feature = "rocksdb")]
-use crate::client::client_tests::{RocksDbStorageBuilder, ROCKS_DB_SEMAPHORE};
 
 #[cfg(feature = "aws")]
 use crate::client::client_tests::DynamoDbStorageBuilder;
-
 #[cfg(feature = "scylladb")]
 use crate::client::client_tests::ScyllaDbStorageBuilder;
+use crate::client::client_tests::{
+    get_free_port, MemoryStorageBuilder, ServiceStorageBuilder, StorageBuilder, TestBuilder,
+};
+#[cfg(feature = "rocksdb")]
+use crate::client::client_tests::{RocksDbStorageBuilder, ROCKS_DB_SEMAPHORE};
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]

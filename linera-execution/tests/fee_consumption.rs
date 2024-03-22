@@ -5,6 +5,8 @@
 
 #![allow(clippy::items_after_test_module)]
 
+use std::{sync::Arc, vec};
+
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight},
@@ -15,7 +17,6 @@ use linera_execution::{
     ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
     RawExecutionOutcome, ResourceControlPolicy, ResourceController,
 };
-use std::{sync::Arc, vec};
 use test_case::test_case;
 
 /// Tests if the chain balance is updated based on the fees spent for consuming resources.

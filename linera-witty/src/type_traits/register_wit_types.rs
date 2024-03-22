@@ -3,9 +3,11 @@
 
 //! Trait and helper types allow registering a compile-time list of [`WitType`]s.
 
-use super::WitType;
-use frunk::{HCons, HNil};
 use std::collections::HashMap;
+
+use frunk::{HCons, HNil};
+
+use super::WitType;
 
 /// Marker trait to prevent [`RegisterWitTypes`] to be implemented for other types.
 pub trait Sealed {}

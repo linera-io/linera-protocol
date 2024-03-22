@@ -3,7 +3,8 @@
 
 //! This module defines the trait for indexer plugins.
 
-use crate::common::IndexerError;
+use std::sync::Arc;
+
 use async_graphql::{EmptyMutation, EmptySubscription, ObjectType, Schema};
 use axum::Router;
 use linera_chain::data_types::HashedValue;
@@ -11,8 +12,9 @@ use linera_views::{
     common::{ContextFromStore, KeyValueStore},
     views::{View, ViewError},
 };
-use std::sync::Arc;
 use tokio::sync::Mutex;
+
+use crate::common::IndexerError;
 
 #[async_trait::async_trait]
 pub trait Plugin<S>: Send + Sync

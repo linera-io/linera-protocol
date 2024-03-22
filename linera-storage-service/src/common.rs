@@ -1,12 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+
 use linera_base::command::resolve_binary;
 use linera_views::{
     common::{CommonStoreConfig, MIN_VIEW_TAG},
     value_splitting::DatabaseConsistencyError,
 };
-use std::path::PathBuf;
 use thiserror::Error;
 use tonic::Status;
 

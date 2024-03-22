@@ -15,16 +15,21 @@
 //! is public because some other libraries require it. But the users using views should
 //! not have to deal with batches.
 
-use crate::{common::get_uleb128_size, views::ViewError};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    fmt::Debug,
+    iter::Peekable,
+    ops::Bound,
+    vec::IntoIter,
+};
+
 use async_trait::async_trait;
 use bcs::serialized_size;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, iter::Peekable, vec::IntoIter};
 
-use crate::common::get_interval;
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    ops::Bound,
+use crate::{
+    common::{get_interval, get_uleb128_size},
+    views::ViewError,
 };
 
 /// A write operation as requested by a view when it needs to persist staged changes.

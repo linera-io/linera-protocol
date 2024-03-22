@@ -1,8 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::MutationRoot;
-use crate::{chain_listener, config::WalletState};
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
@@ -18,7 +18,9 @@ use linera_core::client::{
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{memory::MemoryStore, views::ViewError};
-use std::sync::Arc;
+
+use super::MutationRoot;
+use crate::{chain_listener, config::WalletState};
 
 #[derive(Default)]
 struct ClientContext {

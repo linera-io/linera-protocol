@@ -1,6 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    path::PathBuf,
+    time::{Duration, Instant},
+};
+
 use anyhow::Context;
 use async_trait::async_trait;
 use colored::Colorize;
@@ -27,14 +32,7 @@ use linera_service::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use std::{
-    path::PathBuf,
-    time::{Duration, Instant},
-};
 use tracing::{debug, info};
-
-use crate::{client_options::ChainOwnershipConfig, ClientOptions};
-
 #[cfg(feature = "benchmark")]
 use {
     futures::{stream, StreamExt as _},
@@ -64,6 +62,8 @@ use {
     },
     tracing::{error, trace},
 };
+
+use crate::{client_options::ChainOwnershipConfig, ClientOptions};
 
 pub struct ClientContext {
     wallet_state: WalletState,

@@ -10,12 +10,13 @@
 //! for a given chain, and new instances for the same chain can only be created when the previous
 //! instance is dropped.
 
-use dashmap::DashMap;
-use linera_base::identifiers::ChainId;
 use std::{
     fmt::{self, Debug, Formatter},
     sync::{Arc, Weak},
 };
+
+use dashmap::DashMap;
+use linera_base::identifiers::ChainId;
 use tokio::sync::{Mutex, OwnedMutexGuard};
 #[cfg(with_metrics)]
 use {

@@ -5,15 +5,17 @@
 
 mod state;
 
-use self::state::FungibleToken;
+use std::str::FromStr;
+
 use async_trait::async_trait;
 use fungible::{Account, ApplicationCall, FungibleResponse, FungibleTokenAbi, Message, Operation};
 use linera_sdk::{
     base::{AccountOwner, Amount, WithContractAbi},
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
-use std::str::FromStr;
 use thiserror::Error;
+
+use self::state::FungibleToken;
 
 pub struct FungibleTokenContract {
     state: FungibleToken,

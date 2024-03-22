@@ -2,10 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    simple::{codec, codec::Codec},
-    RpcMessage,
-};
+use std::{collections::HashMap, io, net::ToSocketAddrs, sync::Arc};
+
 use async_trait::async_trait;
 use futures::{
     future,
@@ -13,13 +11,17 @@ use futures::{
     Sink, SinkExt, Stream, StreamExt, TryStreamExt,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io, net::ToSocketAddrs, sync::Arc};
 use tokio::{
     net::{TcpListener, TcpStream, UdpSocket},
     sync::Mutex,
 };
 use tokio_util::{codec::Framed, udp::UdpFramed};
 use tracing::{error, warn};
+
+use crate::{
+    simple::{codec, codec::Codec},
+    RpcMessage,
+};
 
 /// Suggested buffer size
 pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";

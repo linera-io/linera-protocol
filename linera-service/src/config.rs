@@ -2,6 +2,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    collections::{BTreeMap, HashMap},
+    io::{BufRead, BufReader, BufWriter, Write},
+    path::{Path, PathBuf},
+};
+
 use anyhow::{bail, Context as _};
 use comfy_table::{
     modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
@@ -25,11 +31,6 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::Rng as _;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, HashMap},
-    io::{BufRead, BufReader, BufWriter, Write},
-    path::{Path, PathBuf},
-};
 
 pub trait Import: DeserializeOwned {
     fn read(path: &Path) -> Result<Self, std::io::Error> {

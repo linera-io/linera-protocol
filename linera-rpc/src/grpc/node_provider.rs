@@ -1,12 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::GrpcClient;
-
-use crate::{config::ValidatorPublicNetworkConfig, node_provider::NodeOptions};
+use std::str::FromStr as _;
 
 use linera_core::node::{LocalValidatorNodeProvider, NodeError};
-use std::str::FromStr as _;
+
+use super::GrpcClient;
+use crate::{config::ValidatorPublicNetworkConfig, node_provider::NodeOptions};
 
 #[derive(Copy, Clone)]
 pub struct GrpcNodeProvider(NodeOptions);

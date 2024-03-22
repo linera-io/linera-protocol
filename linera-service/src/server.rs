@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{net::SocketAddr, path::PathBuf, time::Duration};
+
 use anyhow::bail;
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -28,7 +30,6 @@ use linera_service::{
 use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde::Deserialize;
-use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use tracing::{error, info};
 
 struct ServerContext {
@@ -519,8 +520,9 @@ async fn run(options: ServerOptions) {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use linera_rpc::simple::TransportProtocol;
+
+    use super::*;
 
     #[test]
     fn test_validator_options() {

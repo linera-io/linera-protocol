@@ -1,13 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    common::IndexerError,
-    runner::{IndexerConfig, Runner},
-};
 use linera_views::{
     common::{AdminKeyValueStore, CommonStoreConfig},
     scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
+};
+
+use crate::{
+    common::IndexerError,
+    runner::{IndexerConfig, Runner},
 };
 
 #[derive(clap::Parser, Clone, Debug)]

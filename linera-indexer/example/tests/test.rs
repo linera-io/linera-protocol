@@ -3,6 +3,8 @@
 
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
+use std::{str::FromStr, time::Duration};
+
 use linera_base::{command::resolve_binary, data_types::Amount, identifiers::ChainId, sync::Lazy};
 use linera_indexer_graphql_client::{
     indexer::{plugins, state, Plugins, State},
@@ -13,7 +15,6 @@ use linera_service::cli_wrappers::{
     LineraNet, LineraNetConfig, Network,
 };
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
-use std::{str::FromStr, time::Duration};
 use test_case::test_case;
 use tokio::{
     process::{Child, Command},

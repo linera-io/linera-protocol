@@ -5,6 +5,8 @@
 
 mod state;
 
+use std::sync::Arc;
+
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use linera_sdk::{
     base::WithServiceAbi, graphql::GraphQLMutationRoot, views::ViewError, Service, ServiceRuntime,
@@ -12,7 +14,6 @@ use linera_sdk::{
 };
 use social::Operation;
 use state::Social;
-use std::sync::Arc;
 use thiserror::Error;
 
 pub struct SocialService {

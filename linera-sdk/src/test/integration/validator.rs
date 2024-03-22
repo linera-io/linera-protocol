@@ -6,8 +6,11 @@
 //! The [`TestValidator`] is a minimal validator with a single shard. Micro-chains can be added to
 //! it, and blocks can be added to each microchain individually.
 
-use super::ActiveChain;
-use crate::ContractAbi;
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Arc,
+};
+
 use dashmap::DashMap;
 use futures::FutureExt;
 use linera_base::{
@@ -22,11 +25,10 @@ use linera_execution::{
 };
 use linera_storage::{MemoryStorage, Storage, WallClock};
 use linera_views::memory::{MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES};
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Arc,
-};
 use tokio::sync::{Mutex, MutexGuard};
+
+use super::ActiveChain;
+use crate::ContractAbi;
 
 /// A minimal validator implementation suited for tests.
 ///

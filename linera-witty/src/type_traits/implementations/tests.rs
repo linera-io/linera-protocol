@@ -3,9 +3,11 @@
 
 //! Unit tests for implementations of the custom traits for existing types.
 
-use crate::{InstanceWithMemory, Layout, MockInstance, WitLoad, WitStore};
-use frunk::hlist;
 use std::fmt::Debug;
+
+use frunk::hlist;
+
+use crate::{InstanceWithMemory, Layout, MockInstance, WitLoad, WitStore};
 
 /// Test roundtrip of a heterogeneous list that doesn't need any internal padding.
 #[test]

@@ -3,6 +3,8 @@
 
 #![cfg(with_wasm_runtime)]
 
+use std::sync::Arc;
+
 use counter::CounterAbi;
 use linera_base::{
     data_types::{Amount, BlockHeight},
@@ -16,7 +18,6 @@ use linera_execution::{
 };
 use linera_views::views::View;
 use serde_json::json;
-use std::sync::Arc;
 use test_case::test_case;
 
 /// Test if the "counter" example application in `linera-sdk` compiled to a Wasm module can be

@@ -64,13 +64,6 @@
 //! round. Then they download the highest `ValidatedBlock` certificate known to any honest validator
 //! and include that in their block proposal, just like in the cooperative case.
 
-use crate::{
-    data_types::{
-        BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
-        HashedValue, LiteVote, Vote,
-    },
-    ChainError,
-};
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
@@ -83,6 +76,14 @@ use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use rand_distr::{Distribution, WeightedAliasIndex};
 use serde::{Deserialize, Serialize};
 use tracing::error;
+
+use crate::{
+    data_types::{
+        BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
+        HashedValue, LiteVote, Vote,
+    },
+    ChainError,
+};
 
 /// The result of verifying a (valid) query.
 #[derive(Eq, PartialEq)]

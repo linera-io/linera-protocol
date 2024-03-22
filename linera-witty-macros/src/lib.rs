@@ -14,7 +14,6 @@ mod wit_load;
 mod wit_store;
 mod wit_type;
 
-use self::util::{apply_specialization_attribute, AttributeParameters, Specializations};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use proc_macro_error::{abort, proc_macro_error};
@@ -22,6 +21,8 @@ use quote::{quote, ToTokens};
 #[cfg(with_wit_export)]
 use syn::ItemImpl;
 use syn::{parse_macro_input, Data, DeriveInput, Ident, ItemTrait};
+
+use self::util::{apply_specialization_attribute, AttributeParameters, Specializations};
 
 /// Derives `WitType` for a Rust type.
 ///

@@ -5,7 +5,6 @@
 
 mod state;
 
-use self::state::MetaCounter;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{ApplicationId, WithContractAbi},
@@ -14,6 +13,8 @@ use linera_sdk::{
 };
 use meta_counter::{Message, MetaCounterAbi, Operation};
 use thiserror::Error;
+
+use self::state::MetaCounter;
 
 pub struct MetaCounterContract {
     state: MetaCounter,

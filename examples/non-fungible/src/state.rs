@@ -1,13 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use async_graphql::SimpleObject;
 use linera_sdk::{
     base::AccountOwner,
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use non_fungible::{Nft, TokenId};
-use std::collections::BTreeSet;
 
 /// The application state.
 #[derive(RootView, SimpleObject)]

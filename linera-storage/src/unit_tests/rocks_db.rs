@@ -1,10 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::mem;
+
+use linera_base::identifiers::ChainId;
+
 use super::RocksDbStorage;
 use crate::Storage;
-use linera_base::identifiers::ChainId;
-use std::mem;
 
 /// Tests if released guards don't use memory.
 #[tokio::test]

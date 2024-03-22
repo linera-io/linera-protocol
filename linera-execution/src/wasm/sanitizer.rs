@@ -8,10 +8,12 @@
 //! function finishes without such an instruction in Wasmer no fuel is consumed, while in Wasmtime,
 //! one unit of fuel is consumed.
 
-use crate::Bytecode;
 use std::{borrow::Cow, mem, ops::Range};
+
 use wasm_encoder::{Encode, Function};
 use wasmparser::{BinaryReaderError, FunctionBody, Parser, Payload};
+
+use crate::Bytecode;
 
 /// Sanitizes the input `bytecode`, ensuring that all functions end with a `return` instruction.
 ///

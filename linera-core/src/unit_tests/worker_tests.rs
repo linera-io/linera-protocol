@@ -5,14 +5,12 @@
 #[path = "./wasm_worker_tests.rs"]
 mod wasm;
 
-use crate::{
-    data_types::*,
-    worker::{
-        CrossChainUpdateHelper, Notification, Reason,
-        Reason::{NewBlock, NewIncomingMessage},
-        ValidatorWorker, WorkerError, WorkerState,
-    },
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    iter,
+    time::Duration,
 };
+
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, *},
@@ -41,26 +39,27 @@ use linera_execution::{
     ChannelSubscription, ExecutionError, Message, MessageKind, Query, Response,
     SystemExecutionError, SystemQuery, SystemResponse,
 };
+#[cfg(feature = "aws")]
+use linera_storage::DynamoDbStorage;
+#[cfg(feature = "scylladb")]
+use linera_storage::ScyllaDbStorage;
 use linera_storage::{DbStorage, MemoryStorage, Storage, TestClock};
 use linera_views::{
     common::KeyValueStore, memory::TEST_MEMORY_MAX_STREAM_QUERIES,
     value_splitting::DatabaseConsistencyError, views::ViewError,
 };
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    iter,
-    time::Duration,
-};
 use test_log::test;
-
 #[cfg(feature = "rocksdb")]
 use {linera_core::client::client_test_utils::ROCKS_DB_SEMAPHORE, linera_storage::RocksDbStorage};
 
-#[cfg(feature = "aws")]
-use linera_storage::DynamoDbStorage;
-
-#[cfg(feature = "scylladb")]
-use linera_storage::ScyllaDbStorage;
+use crate::{
+    data_types::*,
+    worker::{
+        CrossChainUpdateHelper, Notification, Reason,
+        Reason::{NewBlock, NewIncomingMessage},
+        ValidatorWorker, WorkerError, WorkerState,
+    },
+};
 
 /// The test worker accepts blocks with a timestamp this far in the future.
 const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;

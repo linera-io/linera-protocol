@@ -3,12 +3,14 @@
 
 //! Implementations of the custom traits for types from the standard library.
 
+use std::{borrow::Cow, ops::Add};
+
+use frunk::{HCons, HList, HNil};
+
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory, Split,
     WitLoad, WitStore, WitType,
 };
-use frunk::{HCons, HList, HNil};
-use std::{borrow::Cow, ops::Add};
 
 impl WitType for HNil {
     const SIZE: u32 = 0;

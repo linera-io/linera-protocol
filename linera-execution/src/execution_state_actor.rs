@@ -3,26 +3,19 @@
 
 //! Handle requests from the synchronous execution thread of user applications.
 
-use crate::{
-    system::{OpenChainConfig, Recipient, UserData},
-    util::RespondExt,
-    ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
-    RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserServiceCode,
-};
+use std::fmt::{self, Debug, Formatter};
+
 use futures::channel::mpsc;
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{Account, MessageId, Owner},
     ownership::ChainOwnership,
 };
-
 #[cfg(with_metrics)]
 use linera_base::{
     prometheus_util::{self, MeasureLatency as _},
     sync::Lazy,
 };
-
 use linera_views::{
     batch::Batch,
     common::Context,
@@ -31,7 +24,14 @@ use linera_views::{
 use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
-use std::fmt::{self, Debug, Formatter};
+
+use crate::{
+    system::{OpenChainConfig, Recipient, UserData},
+    util::RespondExt,
+    ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
+    RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
+    UserApplicationId, UserContractCode, UserServiceCode,
+};
 
 #[cfg(with_metrics)]
 /// Histogram of the latency to load a contract bytecode.

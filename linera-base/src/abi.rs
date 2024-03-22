@@ -4,8 +4,9 @@
 //! This module defines the notion of Application Binary Interface (ABI) for Linera
 //! applications across Wasm and native architectures.
 
-use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
+
+use serde::{de::DeserializeOwned, Serialize};
 
 // ANCHOR: abi
 /// A trait that includes all the types exported by a Linera application (both contract

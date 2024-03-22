@@ -223,13 +223,14 @@ transfer tokens from OWNER_1 to OWNER_2 at CHAIN_2 will instantly update the UI 
 second page.
 */
 
+use std::collections::BTreeMap;
+
 use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
     base::{AccountOwner, Amount, ChainId, ContractAbi, ServiceAbi},
     graphql::GraphQLMutationRoot,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 use {
     async_graphql::InputType,

@@ -1,7 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, ChainRuntimeContext, Storage};
+use std::{fmt::Debug, sync::Arc};
+
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{crypto::CryptoHash, data_types::Timestamp, identifiers::ChainId};
@@ -19,7 +20,6 @@ use linera_views::{
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, sync::Arc};
 #[cfg(with_metrics)]
 use {
     linera_base::{
@@ -28,6 +28,8 @@ use {
     },
     prometheus::{HistogramVec, IntCounterVec},
 };
+
+use crate::{chain_guards::ChainGuards, ChainRuntimeContext, Storage};
 
 /// The metric counting how often a value is read from storage.
 #[cfg(with_metrics)]

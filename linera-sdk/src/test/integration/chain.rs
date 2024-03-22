@@ -5,8 +5,12 @@
 //!
 //! This allows manipulating a test microchain.
 
-use super::{BlockBuilder, TestValidator};
-use crate::{ContractAbi, ServiceAbi};
+use std::{
+    io,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+
 use cargo_toml::Manifest;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
@@ -19,12 +23,10 @@ use linera_execution::{
     system::{SystemChannel, SystemExecutionError, SystemMessage, SystemOperation},
     Bytecode, Message, Query, Response,
 };
-use std::{
-    io,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
 use tokio::{fs, sync::Mutex};
+
+use super::{BlockBuilder, TestValidator};
+use crate::{ContractAbi, ServiceAbi};
 
 /// A reference to a single microchain inside a [`TestValidator`].
 pub struct ActiveChain {

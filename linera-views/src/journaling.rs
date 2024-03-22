@@ -17,6 +17,13 @@
 //! time the data in a block are written, the journal header is updated in the same
 //! transaction to mark the block as processed.
 
+use std::fmt::Debug;
+
+use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use static_assertions as sa;
+use thiserror::Error;
+
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     common::{
@@ -24,11 +31,6 @@ use crate::{
         WritableKeyValueStore, MIN_VIEW_TAG,
     },
 };
-use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use static_assertions as sa;
-use std::fmt::Debug;
-use thiserror::Error;
 
 /// The tag used for the journal stuff.
 const JOURNAL_TAG: u8 = 0;

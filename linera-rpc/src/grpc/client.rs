@@ -1,6 +1,29 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{iter, time::Duration};
+
+use futures::{future, stream, StreamExt};
+use linera_base::identifiers::ChainId;
+use linera_chain::data_types;
+#[cfg(web)]
+use linera_core::node::{
+    LocalNotificationStream as NotificationStream, LocalValidatorNode as ValidatorNode,
+};
+use linera_core::{
+    node::{CrossChainMessageDelivery, NodeError},
+    worker::Notification,
+};
+use linera_version::VersionInfo;
+use tonic::{Code, Request, Status};
+use tracing::{debug, info, instrument, warn};
+#[cfg(not(web))]
+use {
+    super::GrpcProtoConversionError,
+    crate::{mass_client, RpcMessage},
+    linera_core::node::{NotificationStream, ValidatorNode},
+};
+
 use super::{
     api::{
         chain_info_result::Inner, validator_node_client::ValidatorNodeClient, SubscriptionRequest,
@@ -11,32 +34,6 @@ use crate::{
     config::ValidatorPublicNetworkConfig, node_provider::NodeOptions, HandleCertificateRequest,
     HandleLiteCertificateRequest,
 };
-use futures::{future, stream, StreamExt};
-use linera_base::identifiers::ChainId;
-use linera_chain::data_types;
-use linera_core::{
-    node::{CrossChainMessageDelivery, NodeError},
-    worker::Notification,
-};
-
-#[cfg(web)]
-use linera_core::node::{
-    LocalNotificationStream as NotificationStream, LocalValidatorNode as ValidatorNode,
-};
-#[cfg(not(web))]
-use {
-    super::GrpcProtoConversionError,
-    crate::{mass_client, RpcMessage},
-    linera_core::node::{NotificationStream, ValidatorNode},
-};
-
-use linera_version::VersionInfo;
-
-use std::{iter, time::Duration};
-
-use tonic::{Code, Request, Status};
-
-use tracing::{debug, info, instrument, warn};
 
 #[derive(Clone)]
 pub struct GrpcClient {

@@ -1,9 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::db_storage::DbStorage;
 use linera_views::scylla_db::ScyllaDbStore;
-
 #[cfg(with_testing)]
 use {
     crate::db_storage::{DbStorageInner, TestClock},
@@ -13,6 +11,8 @@ use {
     },
     linera_views::test_utils::generate_test_namespace,
 };
+
+use crate::db_storage::DbStorage;
 
 #[cfg(test)]
 #[path = "unit_tests/scylla_db.rs"]

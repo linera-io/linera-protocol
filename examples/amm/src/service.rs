@@ -5,11 +5,13 @@
 
 mod state;
 
-use self::state::Amm;
+use std::sync::Arc;
+
 use amm::{AmmError, Operation};
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, ViewStateStorage};
-use std::sync::Arc;
+
+use self::state::Amm;
 
 pub struct AmmService {
     state: Arc<Amm>,

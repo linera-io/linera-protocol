@@ -5,7 +5,6 @@
 
 mod state;
 
-use self::state::Amm;
 use amm::{AmmAbi, AmmError, ApplicationCall, Message, Operation};
 use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
@@ -16,6 +15,8 @@ use linera_sdk::{
 };
 use num_bigint::BigUint;
 use num_traits::{cast::FromPrimitive, ToPrimitive};
+
+use self::state::Amm;
 
 pub struct AmmContract {
     state: Amm,

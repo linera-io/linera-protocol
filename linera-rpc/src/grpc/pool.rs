@@ -1,10 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{transport, GrpcError};
+use std::time::Duration;
 
 use dashmap::DashMap;
-use std::time::Duration;
+
+use super::{transport, GrpcError};
 
 /// A pool of transport channels to be used by gRPC.
 #[derive(Clone, Default)]

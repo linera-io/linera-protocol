@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use linera_views::{
     map_view::HashedByteMapView,
     memory::create_memory_context,
@@ -8,7 +10,6 @@ use linera_views::{
     views::{CryptoHashRootView, CryptoHashView, RootView, View},
 };
 use rand::{distributions::Uniform, Rng, RngCore};
-use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {

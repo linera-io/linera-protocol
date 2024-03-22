@@ -1,19 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    batch::{Batch, SimpleUnorderedBatch},
-    common::{
-        AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
-        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
-    },
-    journaling::{
-        DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
-        JournalingKeyValueStore,
-    },
-    lru_caching::LruCachingStore,
-    value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
-};
+use std::{collections::HashMap, env, sync::Arc};
+
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -37,20 +26,31 @@ use aws_sdk_dynamodb::{
 use aws_smithy_types::error::operation::BuildError;
 use futures::future::join_all;
 use linera_base::ensure;
-use std::{collections::HashMap, env, sync::Arc};
 use thiserror::Error;
-
-#[cfg(with_metrics)]
-use crate::metering::{
-    MeteredStore, DYNAMO_DB_METRICS, LRU_CACHING_METRICS, VALUE_SPLITTING_METRICS,
-};
-
 #[cfg(with_testing)]
 use {
     crate::lru_caching::TEST_CACHE_SIZE,
     crate::test_utils::generate_test_namespace,
     anyhow::Error,
     tokio::sync::{Mutex, MutexGuard},
+};
+
+#[cfg(with_metrics)]
+use crate::metering::{
+    MeteredStore, DYNAMO_DB_METRICS, LRU_CACHING_METRICS, VALUE_SPLITTING_METRICS,
+};
+use crate::{
+    batch::{Batch, SimpleUnorderedBatch},
+    common::{
+        AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
+        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
+    },
+    journaling::{
+        DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
+        JournalingKeyValueStore,
+    },
+    lru_caching::LruCachingStore,
+    value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 
 /// Name of the environment variable with the address to a LocalStack instance.
@@ -1225,12 +1225,13 @@ pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
 
 #[cfg(test)]
 mod tests {
+    use bcs::serialized_size;
+
     use crate::{
         batch::SimpleUnorderedBatch,
         common::get_uleb128_size,
         dynamo_db::{MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
     };
-    use bcs::serialized_size;
 
     #[test]
     fn test_serialization_len() {

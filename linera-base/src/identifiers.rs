@@ -3,18 +3,20 @@
 
 //! Core identifiers used by the Linera protocol.
 
+use std::{
+    fmt::{Debug, Display},
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
+
+use anyhow::{anyhow, Context};
+use serde::{Deserialize, Serialize};
+
 use crate::{
     bcs_scalar,
     crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
     data_types::BlockHeight,
     doc_scalar,
-};
-use anyhow::{anyhow, Context};
-use serde::{Deserialize, Serialize};
-use std::{
-    fmt::{Debug, Display},
-    hash::{Hash, Hasher},
-    str::FromStr,
 };
 
 /// The owner of a chain. This is currently the hash of the owner's public key used to

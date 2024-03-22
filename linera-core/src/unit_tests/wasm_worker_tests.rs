@@ -9,7 +9,8 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use super::{init_worker_with_chains, make_certificate};
+use std::sync::Arc;
+
 use linera_base::{
     crypto::KeyPair,
     data_types::{Amount, BlockHeight, Timestamp},
@@ -33,19 +34,17 @@ use linera_execution::{
     OperationContext, ResourceController, UserApplicationDescription, UserApplicationId,
     WasmContractModule, WasmRuntime,
 };
-use linera_storage::{MemoryStorage, Storage};
-use linera_views::views::{CryptoHashView, ViewError};
-use std::sync::Arc;
-use test_case::test_case;
-
-#[cfg(feature = "rocksdb")]
-use linera_storage::RocksDbStorage;
-
 #[cfg(feature = "aws")]
 use linera_storage::DynamoDbStorage;
-
+#[cfg(feature = "rocksdb")]
+use linera_storage::RocksDbStorage;
 #[cfg(feature = "scylladb")]
 use linera_storage::ScyllaDbStorage;
+use linera_storage::{MemoryStorage, Storage};
+use linera_views::views::{CryptoHashView, ViewError};
+use test_case::test_case;
+
+use super::{init_worker_with_chains, make_certificate};
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]

@@ -5,10 +5,12 @@
 
 #![allow(clippy::let_unit_value)]
 
+use std::error::Error;
+
+use wasmer::{FromToNativeWasmType, Function, FunctionEnvMut, WasmTypeList};
+
 use super::{InstanceBuilder, InstanceSlot};
 use crate::{primitive_types::MaybeFlatType, ExportFunction, RuntimeError};
-use std::error::Error;
-use wasmer::{FromToNativeWasmType, Function, FunctionEnvMut, WasmTypeList};
 
 /// Implements [`ExportFunction`] for [`InstanceBuilder`] using the supported function signatures.
 macro_rules! export_function {

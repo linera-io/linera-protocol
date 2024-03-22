@@ -8,14 +8,8 @@
 mod mock_application;
 mod system_execution_state;
 
-pub use self::{
-    mock_application::{ExpectedCall, MockApplication, MockApplicationInstance},
-    system_execution_state::SystemExecutionState,
-};
-use crate::{
-    ApplicationRegistryView, BytecodeLocation, ExecutionRuntimeContext, ExecutionStateView,
-    TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
-};
+use std::{sync::Arc, vec};
+
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::BlockHeight,
@@ -26,7 +20,15 @@ use linera_views::{
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::{sync::Arc, vec};
+
+pub use self::{
+    mock_application::{ExpectedCall, MockApplication, MockApplicationInstance},
+    system_execution_state::SystemExecutionState,
+};
+use crate::{
+    ApplicationRegistryView, BytecodeLocation, ExecutionRuntimeContext, ExecutionStateView,
+    TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
+};
 
 pub fn create_dummy_user_application_description(index: u64) -> UserApplicationDescription {
     let chain_id = ChainId::root(1);

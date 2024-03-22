@@ -2,14 +2,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::policy::ResourceControlPolicy;
+use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
+
 use async_graphql::InputObject;
 use linera_base::{
     crypto::{CryptoError, PublicKey},
     data_types::ArithmeticError,
 };
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
+
+use crate::policy::ResourceControlPolicy;
 
 /// A number identifying the configuration of the chain (aka the committee).
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]

@@ -1,10 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
-    util,
+use std::{
+    collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc, time::Duration,
 };
+
 use async_graphql::{
     futures_util::Stream,
     parser::types::{DocumentOperations, ExecutableDocument, OperationType},
@@ -42,13 +42,15 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{
-    collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc, time::Duration,
-};
 use thiserror::Error as ThisError;
 use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
+
+use crate::{
+    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
+    util,
+};
 
 #[derive(SimpleObject, Serialize, Deserialize, Clone)]
 pub struct Chains {

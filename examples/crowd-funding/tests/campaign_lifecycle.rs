@@ -5,13 +5,14 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+use std::iter;
+
 use crowd_funding::{CrowdFundingAbi, InitializationArgument, Operation};
 use fungible::FungibleTokenAbi;
 use linera_sdk::{
     base::{AccountOwner, Amount, Timestamp},
     test::TestValidator,
 };
-use std::iter;
 
 /// Test creating a campaign and collecting pledges.
 ///

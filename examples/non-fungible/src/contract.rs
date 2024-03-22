@@ -5,7 +5,8 @@
 
 mod state;
 
-use self::state::NonFungibleToken;
+use std::collections::BTreeSet;
+
 use async_trait::async_trait;
 use fungible::Account;
 use linera_sdk::{
@@ -13,8 +14,9 @@ use linera_sdk::{
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
 use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
-use std::collections::BTreeSet;
 use thiserror::Error;
+
+use self::state::NonFungibleToken;
 
 pub struct NonFungibleTokenContract {
     state: NonFungibleToken,

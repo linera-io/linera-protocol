@@ -1,15 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    execution::UserAction,
-    execution_state_actor::{ExecutionStateSender, Request},
-    resources::ResourceController,
-    util::{ReceiverExt, UnboundedSenderExt},
-    ApplicationCallOutcome, BaseRuntime, CalleeContext, ContractRuntime, ExecutionError,
-    ExecutionOutcome, FinalizeContext, MessageContext, RawExecutionOutcome, ServiceRuntime,
-    UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
+use std::{
+    collections::{hash_map, BTreeMap, HashMap, HashSet},
+    mem,
+    sync::{Arc, Mutex},
 };
+
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{
@@ -21,10 +18,15 @@ use linera_base::{
 };
 use linera_views::batch::Batch;
 use oneshot::Receiver;
-use std::{
-    collections::{hash_map, BTreeMap, HashMap, HashSet},
-    mem,
-    sync::{Arc, Mutex},
+
+use crate::{
+    execution::UserAction,
+    execution_state_actor::{ExecutionStateSender, Request},
+    resources::ResourceController,
+    util::{ReceiverExt, UnboundedSenderExt},
+    ApplicationCallOutcome, BaseRuntime, CalleeContext, ContractRuntime, ExecutionError,
+    ExecutionOutcome, FinalizeContext, MessageContext, RawExecutionOutcome, ServiceRuntime,
+    UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
 };
 
 #[cfg(test)]

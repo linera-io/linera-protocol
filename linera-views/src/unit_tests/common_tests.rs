@@ -1,8 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::get_upper_bound;
 use std::ops::Bound::{Excluded, Unbounded};
+
+use super::get_upper_bound;
 
 #[test]
 fn test_upper_bound() {

@@ -3,13 +3,14 @@
 
 //! This module defines the trait for indexer runners.
 
-use crate::{common::IndexerError, indexer::Indexer, plugin::Plugin, service::Listener};
 use linera_base::identifiers::ChainId;
 use linera_views::{
     common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
 use tokio::select;
 use tracing::{info, warn};
+
+use crate::{common::IndexerError, indexer::Indexer, plugin::Plugin, service::Listener};
 
 #[derive(clap::Parser, Debug, Clone)]
 #[command(version = linera_version::VersionInfo::default_clap_str())]

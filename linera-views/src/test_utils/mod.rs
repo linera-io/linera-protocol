@@ -2,6 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod test_views;
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    fmt::Debug,
+};
+
+use rand::{Rng, SeedableRng};
+use tracing::warn;
+
 use crate::{
     batch::{
         Batch, WriteOperation,
@@ -9,12 +17,6 @@ use crate::{
     },
     common::{AdminKeyValueStore, KeyIterable, KeyValueIterable, KeyValueStore},
 };
-use rand::{Rng, SeedableRng};
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    fmt::Debug,
-};
-use tracing::warn;
 
 // The following seed is chosen to have equal numbers of 1s and 0s, as advised by
 // https://docs.rs/rand/latest/rand/rngs/struct.SmallRng.html
@@ -53,8 +55,9 @@ pub fn make_deterministic_rng() -> DeterministicRng {
 pub fn make_nondeterministic_rng() -> NonDeterministicRng {
     #[cfg(target_arch = "wasm32")]
     {
-        use rand::rngs::SmallRng;
         use std::sync::{Mutex, OnceLock};
+
+        use rand::rngs::SmallRng;
 
         static RNG: OnceLock<Mutex<SmallRng>> = OnceLock::new();
         NonDeterministicRng(

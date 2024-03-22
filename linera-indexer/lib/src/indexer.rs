@@ -3,11 +3,8 @@
 
 //! This module defines the base component of linera-indexer.
 
-use crate::{
-    common::{graphiql, IndexerError},
-    plugin::Plugin,
-    service::Listener,
-};
+use std::{collections::BTreeMap, sync::Arc};
+
 use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{extract::Extension, routing::get, Router};
@@ -21,10 +18,15 @@ use linera_views::{
     value_splitting::DatabaseConsistencyError,
     views::{RootView, View, ViewError},
 };
-use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 use tracing::info;
+
+use crate::{
+    common::{graphiql, IndexerError},
+    plugin::Plugin,
+    service::Listener,
+};
 
 #[derive(RootView)]
 pub struct StateView<C> {

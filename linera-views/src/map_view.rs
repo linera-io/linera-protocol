@@ -37,6 +37,17 @@ static MAP_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Histogram can be created")
 });
 
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+    marker::PhantomData,
+    mem,
+};
+
+use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Serialize};
+
 use crate::{
     batch::Batch,
     common::{
@@ -45,15 +56,6 @@ use crate::{
     },
     hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
-};
-use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
-use std::{
-    borrow::Borrow,
-    collections::{BTreeMap, BTreeSet},
-    fmt::Debug,
-    marker::PhantomData,
-    mem,
 };
 
 /// A view that supports inserting and removing values indexed by `Vec<u8>`.

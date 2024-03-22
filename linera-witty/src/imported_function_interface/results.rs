@@ -17,11 +17,12 @@
 //! [`FlatHostResults`] implementations automatically handle flat layouts with more or less
 //! elements than the limit.
 
+use frunk::HList;
+
 use crate::{
     memory_layout::FlatLayout, primitive_types::FlatType, GuestPointer, InstanceWithMemory, Layout,
     Memory, Runtime, RuntimeError, RuntimeMemory, WitLoad, WitType,
 };
-use frunk::HList;
 
 /// Helper trait for converting from the guest results to the host results.
 ///

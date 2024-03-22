@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{net::SocketAddr, path::PathBuf, time::Duration};
+
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
@@ -17,7 +19,6 @@ use linera_service::{
     grpc_proxy::GrpcProxy,
     prometheus_server, util,
 };
-use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use tracing::{error, info, instrument};
 
 /// Options for running the proxy.

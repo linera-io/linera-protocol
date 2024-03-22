@@ -29,13 +29,14 @@ compile_error!("The test runner is meant to be compiled for the host target");
 
 mod mock_system_api;
 
-use anyhow::Result;
-use clap::Parser as _;
-use mock_system_api::Resources;
 use std::{
     path::{Path, PathBuf},
     process::ExitCode,
 };
+
+use anyhow::Result;
+use clap::Parser as _;
+use mock_system_api::Resources;
 use wasmtime::*;
 
 #[derive(clap::Parser)]

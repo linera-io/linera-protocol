@@ -3,10 +3,11 @@
 
 //! Unit tests for the `witty_specialize_with` attribute.
 
-use super::{super::apply_specialization_attribute, Specialization, Specializations};
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use syn::{parse_quote, DeriveInput, Ident};
+
+use super::{super::apply_specialization_attribute, Specialization, Specializations};
 
 /// Check that the [`DeriveInput`] of a `struct` is changed.
 #[test]

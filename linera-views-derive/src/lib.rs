@@ -416,9 +416,10 @@ pub fn derive_clonable_view(input: TokenStream) -> TokenStream {
 #[cfg(test)]
 pub mod tests {
 
-    use crate::*;
     use quote::quote;
     use syn::{parse_quote, AngleBracketedGenericArguments};
+
+    use crate::*;
 
     fn pretty(tokens: TokenStream2) -> String {
         prettyplease::unparse(

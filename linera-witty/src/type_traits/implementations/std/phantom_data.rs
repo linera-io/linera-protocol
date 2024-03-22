@@ -3,12 +3,14 @@
 
 //! Implementations of the custom traits for the [`PhantomData`] type.
 
+use std::{borrow::Cow, marker::PhantomData};
+
+use frunk::{hlist, HList};
+
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
     WitLoad, WitStore, WitType,
 };
-use frunk::{hlist, HList};
-use std::{borrow::Cow, marker::PhantomData};
 
 impl<T> WitType for PhantomData<T> {
     const SIZE: u32 = 0;

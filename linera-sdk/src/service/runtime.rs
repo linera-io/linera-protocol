@@ -3,14 +3,16 @@
 
 //! Runtime types to interface with the host executing the service.
 
-use super::wit_system_api as wit;
-use crate::Service;
+use std::cell::Cell;
+
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{ApplicationId, ChainId, Owner},
 };
-use std::cell::Cell;
+
+use super::wit_system_api as wit;
+use crate::Service;
 
 /// The runtime available during execution of a query.
 pub struct ServiceRuntime<Application>

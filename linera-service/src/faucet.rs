@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
+
 use async_graphql::{EmptySubscription, Error, Object, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{http::StatusCode, response, response::IntoResponse, Extension, Router};
@@ -21,7 +23,6 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::Deserialize;
 use serde_json::json;
-use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info};

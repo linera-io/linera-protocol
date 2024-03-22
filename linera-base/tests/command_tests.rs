@@ -4,8 +4,9 @@
 
 #![cfg(feature = "rocksdb")]
 
-use linera_base::util;
 use std::path::Path;
+
+use linera_base::util;
 
 #[test_log::test(tokio::test)]
 async fn test_resolve_binary_with_test_default() {

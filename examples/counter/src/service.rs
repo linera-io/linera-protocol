@@ -5,10 +5,11 @@
 
 mod state;
 
-use self::state::Counter;
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, SimpleStateStorage};
 use thiserror::Error;
+
+use self::state::Counter;
 
 pub struct CounterService {
     state: Counter,
@@ -72,12 +73,13 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{Counter, CounterService};
     use async_graphql::{Request, Response, Value};
     use futures::FutureExt;
     use linera_sdk::Service;
     use serde_json::json;
     use webassembly_test::webassembly_test;
+
+    use super::{Counter, CounterService};
 
     #[webassembly_test]
     fn query() {

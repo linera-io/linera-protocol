@@ -1,6 +1,23 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{mem, sync::Arc};
+
+use async_lock::{RwLock, RwLockWriteGuard, Semaphore, SemaphoreGuard};
+use async_trait::async_trait;
+use linera_base::ensure;
+#[cfg(with_testing)]
+use linera_views::test_utils::generate_test_namespace;
+use linera_views::{
+    batch::{Batch, WriteOperation},
+    common::{
+        AdminKeyValueStore, CommonStoreConfig, KeyValueStore, ReadableKeyValueStore,
+        WritableKeyValueStore,
+    },
+};
+use serde::de::DeserializeOwned;
+use tonic::transport::{Channel, Endpoint};
+
 use crate::{
     common::{KeyTag, ServiceContextError, ServiceStoreConfig, MAX_PAYLOAD_SIZE},
     key_value_store::{
@@ -13,22 +30,6 @@ use crate::{
         RequestSpecificChunk, RequestWriteBatchExtended, Statement,
     },
 };
-use async_lock::{RwLock, RwLockWriteGuard, Semaphore, SemaphoreGuard};
-use async_trait::async_trait;
-use linera_base::ensure;
-use linera_views::{
-    batch::{Batch, WriteOperation},
-    common::{
-        AdminKeyValueStore, CommonStoreConfig, KeyValueStore, ReadableKeyValueStore,
-        WritableKeyValueStore,
-    },
-};
-use serde::de::DeserializeOwned;
-use std::{mem, sync::Arc};
-use tonic::transport::{Channel, Endpoint};
-
-#[cfg(with_testing)]
-use linera_views::test_utils::generate_test_namespace;
 
 // The maximum key size is set to 1M rather arbitrarily.
 const MAX_KEY_SIZE: usize = 1000000;
@@ -203,8 +204,9 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ServiceContextError> {
-        use crate::client::Operation;
         use linera_views::batch::WriteOperation;
+
+        use crate::client::Operation;
         let mut statements = Vec::new();
         let mut chunk_size = 0;
         for operation in batch.operations {

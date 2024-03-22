@@ -3,7 +3,6 @@
 
 mod r#type;
 pub use r#type::*;
-
 use serde::{de::Deserialize, ser::Serialize};
 
 impl<T, Repr> From<T> for Pretty<T, Repr> {

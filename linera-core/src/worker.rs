@@ -2,7 +2,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest};
+use std::{
+    borrow::Cow,
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    num::NonZeroUsize,
+    sync::Arc,
+    time::Duration,
+};
+
 use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
@@ -30,29 +37,22 @@ use linera_views::{
 };
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
-use std::{
-    borrow::Cow,
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
-    num::NonZeroUsize,
-    sync::Arc,
-    time::Duration,
-};
 use thiserror::Error;
 use tokio::sync::{oneshot, Mutex};
 use tracing::{debug, error, instrument, trace, warn};
-
-#[cfg(with_metrics)]
-use {
-    linera_base::{prometheus_util, sync::Lazy},
-    prometheus::{HistogramVec, IntCounterVec},
-};
-
 #[cfg(with_testing)]
 use {
     linera_base::identifiers::{Destination, MessageId},
     linera_chain::data_types::ChannelFullName,
     linera_execution::ApplicationRegistryView,
 };
+#[cfg(with_metrics)]
+use {
+    linera_base::{prometheus_util, sync::Lazy},
+    prometheus::{HistogramVec, IntCounterVec},
+};
+
+use crate::data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest};
 
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]

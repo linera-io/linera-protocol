@@ -1,15 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    data_types::{
-        Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, IncomingMessage,
-        MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
-    },
-    inbox::{InboxError, InboxStateView},
-    outbox::OutboxStateView,
-    ChainError, ChainExecutionContext, ChainManager,
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::Arc,
 };
+
 use async_graphql::SimpleObject;
 use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
@@ -32,9 +28,15 @@ use linera_views::{
     views::{CryptoHashView, RootView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, HashSet},
-    sync::Arc,
+
+use crate::{
+    data_types::{
+        Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, IncomingMessage,
+        MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
+    },
+    inbox::{InboxError, InboxStateView},
+    outbox::OutboxStateView,
+    ChainError, ChainExecutionContext, ChainManager,
 };
 
 #[cfg(test)]

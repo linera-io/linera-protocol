@@ -5,8 +5,8 @@
 //!
 //! Helps with the construction of blocks, adding operations and
 
-use super::TestValidator;
-use crate::ToBcsBytes;
+use std::mem;
+
 use linera_base::{
     data_types::{ApplicationPermissions, Round, Timestamp},
     identifiers::{ApplicationId, ChainId, MessageId, Owner},
@@ -15,7 +15,9 @@ use linera_chain::data_types::{
     Block, Certificate, HashedValue, IncomingMessage, LiteVote, SignatureAggregator,
 };
 use linera_execution::{system::SystemOperation, Operation};
-use std::mem;
+
+use super::TestValidator;
+use crate::ToBcsBytes;
 
 /// A helper type to build [`Block`]s using the builder pattern, and then signing them into
 /// [`Certificate`]s using a [`TestValidator`].

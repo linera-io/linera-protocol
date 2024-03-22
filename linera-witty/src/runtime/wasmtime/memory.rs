@@ -3,10 +3,12 @@
 
 //! How to access the memory of a Wasmtime guest instance.
 
+use std::borrow::Cow;
+
+use wasmtime::{Extern, Memory};
+
 use super::{super::traits::InstanceWithMemory, EntrypointInstance, ReentrantInstance};
 use crate::{GuestPointer, RuntimeError, RuntimeMemory};
-use std::borrow::Cow;
-use wasmtime::{Extern, Memory};
 
 macro_rules! impl_memory_traits {
     ($instance:ty) => {

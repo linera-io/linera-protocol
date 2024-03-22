@@ -1,25 +1,25 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::transport::{MessageHandler, ServerHandle, TransportProtocol};
-use crate::{
-    config::{CrossChainConfig, ShardId, ValidatorInternalNetworkPreConfig},
-    RpcMessage,
-};
+use std::{io, time::Duration};
+
 use async_trait::async_trait;
 use futures::{channel::mpsc, stream::StreamExt};
-
 use linera_core::{
     node::NodeError,
     worker::{NetworkActions, ValidatorWorker, WorkerError, WorkerState},
 };
 use linera_storage::Storage;
-
 use linera_views::views::ViewError;
 use rand::Rng;
-use std::{io, time::Duration};
 use tokio::sync::oneshot;
 use tracing::{debug, error, info, instrument, warn};
+
+use super::transport::{MessageHandler, ServerHandle, TransportProtocol};
+use crate::{
+    config::{CrossChainConfig, ShardId, ValidatorInternalNetworkPreConfig},
+    RpcMessage,
+};
 
 #[derive(Clone)]
 pub struct Server<S> {

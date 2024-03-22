@@ -1,12 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{contract, service};
-use log::{LevelFilter, Log, Metadata, Record};
 use std::{
     panic::{self, PanicInfo},
     sync::Once,
 };
+
+use log::{LevelFilter, Log, Metadata, Record};
+
+use crate::{contract, service};
 
 static CONTRACT_LOGGER: ContractLogger = ContractLogger;
 static SERVICE_LOGGER: ServiceLogger = ServiceLogger;

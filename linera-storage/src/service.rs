@@ -1,9 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::db_storage::DbStorage;
 use linera_storage_service::client::ServiceStoreClient;
-
 #[cfg(with_testing)]
 use {
     crate::db_storage::{DbStorageInner, TestClock},
@@ -14,6 +12,8 @@ use {
     },
     linera_views::test_utils::generate_test_namespace,
 };
+
+use crate::db_storage::DbStorage;
 
 pub type ServiceStorage<C> = DbStorage<ServiceStoreClient, C>;
 

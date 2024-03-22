@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::db_storage::DbStorage;
 use linera_views::memory::MemoryStore;
 #[cfg(with_testing)]
 use {
@@ -9,6 +8,8 @@ use {
     linera_execution::WasmRuntime,
     linera_views::memory::{MemoryContextError, MemoryStoreConfig},
 };
+
+use crate::db_storage::DbStorage;
 
 pub type MemoryStorage<C> = DbStorage<MemoryStore, C>;
 

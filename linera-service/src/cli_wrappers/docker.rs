@@ -1,12 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Result};
-use pathdiff::diff_paths;
 use std::path::PathBuf;
-use tokio::process::Command;
 
+use anyhow::{Context, Result};
 use linera_base::command::{current_binary_parent, CommandExt};
+use pathdiff::diff_paths;
+use tokio::process::Command;
 
 pub struct DockerImage {
     name: String,

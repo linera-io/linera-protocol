@@ -1,13 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_simple_network)]
-use crate::simple::SimpleNodeProvider;
-use crate::{client::Client, grpc::GrpcNodeProvider};
+use std::time::Duration;
 
 use linera_core::node::{LocalValidatorNodeProvider, NodeError};
 
-use std::time::Duration;
+#[cfg(with_simple_network)]
+use crate::simple::SimpleNodeProvider;
+use crate::{client::Client, grpc::GrpcNodeProvider};
 
 /// A general node provider which delegates node provision to the underlying
 /// node provider according to the `ValidatorPublicNetworkConfig`.
