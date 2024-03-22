@@ -7,7 +7,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Resources},
-    identifiers::{Account, ApplicationId, ChannelName, Destination, MessageId, Owner},
+    identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 
 use super::{wit_system_api, wit_types};
@@ -23,6 +23,12 @@ impl From<CryptoHash> for wit_system_api::CryptoHash {
             part3: parts[2],
             part4: parts[3],
         }
+    }
+}
+
+impl From<ChainId> for wit_system_api::CryptoHash {
+    fn from(chain_id: ChainId) -> Self {
+        chain_id.0.into()
     }
 }
 

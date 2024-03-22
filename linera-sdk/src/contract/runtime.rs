@@ -6,7 +6,7 @@
 use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, BlockHeight, OutgoingMessage, Resources, Timestamp},
-    identifiers::{Account, ApplicationId, ChainId, Destination, MessageId, Owner},
+    identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use serde::Serialize;
@@ -137,6 +137,11 @@ where
         message: Application::Message,
     ) -> MessageSender<Application::Message> {
         MessageSender::new(destination.into(), message)
+    }
+
+    /// Subscribes to a message channel from another chain.
+    pub fn subscribe(&mut self, chain: ChainId, channel: ChannelName) {
+        wit::subscribe(chain.into(), (&channel).into());
     }
 
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
