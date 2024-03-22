@@ -3,13 +3,15 @@
 
 //! Generation of code to import functions from a Wasm guest module.
 
-use crate::util::{AttributeParameters, TokensSetItem};
+use std::collections::HashSet;
+
 use heck::ToKebabCase;
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
-use std::collections::HashSet;
 use syn::{spanned::Spanned, FnArg, Ident, ItemTrait, LitStr, ReturnType, TraitItem, TraitItemFn};
+
+use crate::util::{AttributeParameters, TokensSetItem};
 
 /// Returns the code generated for calling imported Wasm functions.
 ///

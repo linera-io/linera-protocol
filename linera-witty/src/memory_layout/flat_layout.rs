@@ -3,9 +3,10 @@
 
 //! Representation of the layout of complex types as a sequence of native WebAssembly types.
 
+use frunk::{HCons, HNil};
+
 use super::Layout;
 use crate::primitive_types::FlatType;
-use frunk::{HCons, HNil};
 
 /// Representation of the layout of complex types as a sequence of native WebAssembly types.
 ///

@@ -3,13 +3,15 @@
 
 //! Abstraction over how different runtimes manipulate the guest WebAssembly module's memory.
 
+use std::borrow::Cow;
+
+use frunk::{hlist, hlist_pat, HList};
+
 use super::{
     traits::{CabiFreeAlias, CabiReallocAlias},
     InstanceWithFunction, Runtime, RuntimeError,
 };
 use crate::{Layout, WitType};
-use frunk::{hlist, hlist_pat, HList};
-use std::borrow::Cow;
 
 #[cfg(test)]
 #[path = "unit_tests/memory.rs"]

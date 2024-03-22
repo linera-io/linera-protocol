@@ -22,7 +22,6 @@ mod validator;
 pub use self::mock_stubs::*;
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 pub use self::{block::BlockBuilder, chain::ActiveChain, validator::TestValidator};
-
 use crate::{Contract, ContractRuntime, Service, ServiceRuntime};
 
 /// Creates a [`ContractRuntime`] to use in tests.

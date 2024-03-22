@@ -5,7 +5,8 @@
 
 mod state;
 
-use self::state::FungibleToken;
+use std::sync::{Arc, Mutex};
+
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use fungible::Operation;
 use linera_sdk::{
@@ -14,8 +15,9 @@ use linera_sdk::{
     views::MapView,
     Service, ServiceRuntime, ViewStateStorage,
 };
-use std::sync::{Arc, Mutex};
 use thiserror::Error;
+
+use self::state::FungibleToken;
 
 #[derive(Clone)]
 pub struct FungibleTokenService {

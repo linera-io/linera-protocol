@@ -12,10 +12,11 @@ pub type JSONObject = serde_json::Value;
 
 #[cfg(target_arch = "wasm32")]
 mod types {
-    use super::{BlockHeight, ChainId, CryptoHash};
     use linera_base::data_types::Round;
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
+
+    use super::{BlockHeight, ChainId, CryptoHash};
 
     pub type ChainManager = Value;
     pub type ChainOwnership = Value;
@@ -128,8 +129,9 @@ pub struct Transfer;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
-    use super::*;
     use linera_chain::data_types::{ExecutedBlock, HashedValue, IncomingMessage, OutgoingMessage};
+
+    use super::*;
 
     impl From<block::BlockBlockValueExecutedBlockBlockIncomingMessages> for IncomingMessage {
         fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingMessages) -> Self {

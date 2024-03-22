@@ -16,8 +16,6 @@ wit_bindgen_guest_rust::export!("mock_system_api.wit");
 mod conversions_from_wit;
 mod conversions_to_wit;
 
-use self::mock_system_api as wit;
-use crate::{Contract, ContractRuntime, Service, ServiceRuntime};
 use futures::FutureExt;
 use linera_base::{
     data_types::{Amount, Timestamp},
@@ -29,6 +27,9 @@ use linera_views::{
     memory::MemoryContext,
 };
 use serde::Serialize;
+
+use self::mock_system_api as wit;
+use crate::{Contract, ContractRuntime, Service, ServiceRuntime};
 
 static mut MOCK_CHAIN_ID: Option<ChainId> = None;
 static mut MOCK_APPLICATION_ID: Option<ApplicationId> = None;

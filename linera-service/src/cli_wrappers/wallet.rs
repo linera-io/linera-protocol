@@ -1,12 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    cli_wrappers::{local_net::PathProvider, Network},
-    config::{GenesisConfig, WalletState},
-    faucet::ClaimOutcome,
-    util::ChildExt,
+use std::{
+    collections::HashMap,
+    env,
+    marker::PhantomData,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::Duration,
 };
+
 use anyhow::{bail, Context, Result};
 use async_graphql::InputType;
 use linera_base::{
@@ -22,17 +25,16 @@ use linera_execution::{
 use linera_version::VersionInfo;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_json::{json, Value};
-use std::{
-    collections::HashMap,
-    env,
-    marker::PhantomData,
-    path::{Path, PathBuf},
-    str::FromStr,
-    time::Duration,
-};
 use tempfile::TempDir;
 use tokio::process::{Child, Command};
 use tracing::{info, warn};
+
+use crate::{
+    cli_wrappers::{local_net::PathProvider, Network},
+    config::{GenesisConfig, WalletState},
+    faucet::ClaimOutcome,
+    util::ChildExt,
+};
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
 /// to the node-service command of the client.

@@ -469,9 +469,10 @@ pub enum ApplicationCall {
 
 #[cfg(test)]
 mod tests {
-    use super::{PriceAsk, PriceBid};
     use linera_sdk::views::CustomSerialize;
     use webassembly_test::webassembly_test;
+
+    use super::{PriceAsk, PriceBid};
 
     #[webassembly_test]
     fn test_ordering_serialization() {

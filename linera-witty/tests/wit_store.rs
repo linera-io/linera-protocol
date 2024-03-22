@@ -6,12 +6,14 @@
 #[path = "common/types.rs"]
 mod types;
 
+use std::fmt::Debug;
+
+use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitStore};
+
 use self::types::{
     Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
     SpecializedGenericStruct, TupleWithPadding, TupleWithoutPadding,
 };
-use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitStore};
-use std::fmt::Debug;
 
 /// Check that a wrapper type is properly stored in memory and lowered into its flat layout.
 #[test]

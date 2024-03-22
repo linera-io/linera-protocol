@@ -3,9 +3,10 @@
 
 //! Representation of Wasmer function result types.
 
-use crate::{memory_layout::FlatLayout, primitive_types::FlatType};
 use frunk::{hlist, hlist_pat, HList};
 use wasmer::{FromToNativeWasmType, WasmTypeList};
+
+use crate::{memory_layout::FlatLayout, primitive_types::FlatType};
 
 /// Conversions between flat layouts and Wasmer function result types.
 pub trait WasmerResults: FlatLayout {

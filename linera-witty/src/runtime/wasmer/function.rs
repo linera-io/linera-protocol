@@ -3,6 +3,9 @@
 
 //! Implementations of [`InstanceWithFunction`] for Wasmer instances.
 
+use frunk::{hlist_pat, HList};
+use wasmer::{AsStoreRef, Extern, FromToNativeWasmType, TypedFunction};
+
 use super::{
     parameters::WasmerParameters, results::WasmerResults, EntrypointInstance, ReentrantInstance,
 };
@@ -10,8 +13,6 @@ use crate::{
     memory_layout::FlatLayout, primitive_types::FlatType, InstanceWithFunction, Runtime,
     RuntimeError,
 };
-use frunk::{hlist_pat, HList};
-use wasmer::{AsStoreRef, Extern, FromToNativeWasmType, TypedFunction};
 
 /// Implements [`InstanceWithFunction`] for functions with the provided amount of parameters for
 /// the [`EntrypointInstance`] and [`ReentrantInstance`] types.

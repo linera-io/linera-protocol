@@ -5,7 +5,11 @@
 
 mod state;
 
-use self::state::NonFungibleToken;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
+
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use fungible::Account;
@@ -14,11 +18,9 @@ use linera_sdk::{
     Service, ServiceRuntime, ViewStateStorage,
 };
 use non_fungible::{NftOutput, Operation, TokenId};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
 use thiserror::Error;
+
+use self::state::NonFungibleToken;
 
 pub struct NonFungibleTokenService {
     state: Arc<NonFungibleToken>,

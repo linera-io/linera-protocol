@@ -5,13 +5,14 @@
 
 mod utils;
 
-use crate::utils::{concat, snakify};
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use syn::{
     parse_macro_input, Fields, ItemEnum,
     __private::{quote::quote, TokenStream2},
 };
+
+use crate::utils::{concat, snakify};
 
 #[proc_macro_derive(GraphQLMutationRoot)]
 pub fn derive_mutation_root(input: TokenStream) -> TokenStream {
@@ -92,8 +93,9 @@ fn generate_mutation_root_code(input: ItemEnum) -> TokenStream2 {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::generate_mutation_root_code;
     use syn::{parse_quote, ItemEnum, __private::quote::quote};
+
+    use crate::generate_mutation_root_code;
 
     fn assert_eq_no_whitespace(mut actual: String, mut expected: String) {
         // Intentionally left here for debugging purposes

@@ -1,6 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{env, sync::Arc};
+
+use anyhow::Result;
+use async_trait::async_trait;
+use linera_base::data_types::Amount;
+use linera_execution::ResourceControlPolicy;
+use tempfile::{tempdir, TempDir};
+
 use crate::{
     cli_wrappers::{
         local_net::PathProvider, ClientWrapper, Faucet, FaucetOption, LineraNet, LineraNetConfig,
@@ -8,12 +16,6 @@ use crate::{
     },
     config::Export,
 };
-use anyhow::Result;
-use async_trait::async_trait;
-use linera_base::data_types::Amount;
-use linera_execution::ResourceControlPolicy;
-use std::{env, sync::Arc};
-use tempfile::{tempdir, TempDir};
 
 #[cfg(with_testing)]
 pub struct RemoteNetTestingConfig {

@@ -3,10 +3,11 @@
 
 //! Helper types to process [`Fields`] from `struct`s and `enum` variants.
 
+use std::{borrow::Cow, ops::Deref};
+
 use heck::ToKebabCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use std::{borrow::Cow, ops::Deref};
 use syn::{spanned::Spanned, Field, Fields, Ident, LitStr, Meta, MetaList, Type};
 
 /// A helper type with information about a list of [`Fields`].

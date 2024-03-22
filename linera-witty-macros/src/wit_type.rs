@@ -3,12 +3,13 @@
 
 //! Derivation of the `WitType` trait.
 
-use crate::util::FieldsInformation;
 use heck::ToKebabCase;
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::quote;
 use syn::{Ident, LitStr, Variant};
+
+use crate::util::FieldsInformation;
 
 #[path = "unit_tests/wit_type.rs"]
 mod tests;

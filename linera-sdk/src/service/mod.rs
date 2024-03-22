@@ -10,9 +10,10 @@ mod storage;
 pub(crate) mod wit_system_api;
 pub mod wit_types;
 
+use std::future::Future;
+
 pub use self::{runtime::ServiceRuntime, storage::ServiceStateStorage};
 use crate::{util::BlockingWait, ServiceLogger};
-use std::future::Future;
 
 /// Declares an implementation of the [`Service`][`crate::Service`] trait, exporting it from the
 /// Wasm module.

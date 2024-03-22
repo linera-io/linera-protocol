@@ -1,13 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::js_utils::{getf, js_to_json, setf, SER};
-
-use crate::reqwest_client;
 use serde::Serialize;
 use serde_json::Value;
 use serde_wasm_bindgen::from_value;
 use wasm_bindgen::prelude::*;
+
+use super::js_utils::{getf, js_to_json, setf, SER};
+use crate::reqwest_client;
 
 /// Auxiliary recursive function for forge_arg.
 fn forge_arg_type(arg: &Value, non_null: bool) -> Option<String> {

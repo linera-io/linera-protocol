@@ -1,16 +1,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{ensure, Context, Result};
-use cargo_toml::Manifest;
-use current_platform::CURRENT_PLATFORM;
-use fs_err::File;
-use linera_base::command::resolve_binary;
 use std::{
     io::Write,
     path::{Path, PathBuf},
     process::Command,
 };
+
+use anyhow::{ensure, Context, Result};
+use cargo_toml::Manifest;
+use current_platform::CURRENT_PLATFORM;
+use fs_err::File;
+use linera_base::command::resolve_binary;
 use tracing::debug;
 
 pub struct Project {

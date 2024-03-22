@@ -3,6 +3,8 @@
 
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
+use std::{collections::BTreeMap, io::Read, str::FromStr, time::Duration};
+
 use fungible::{FungibleTokenAbi, InitialState};
 use linera_base::{command::resolve_binary, data_types::Amount, identifiers::ChainId, sync::Lazy};
 use linera_service::cli_wrappers::{
@@ -13,7 +15,6 @@ use linera_service_graphql_client::{
     applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
     Transfer,
 };
-use std::{collections::BTreeMap, io::Read, str::FromStr, time::Duration};
 use tempfile::tempdir;
 use test_case::test_case;
 use tokio::{process::Command, sync::Mutex};

@@ -5,19 +5,8 @@
 #[path = "./wasm_client_tests.rs"]
 mod wasm;
 
-use crate::{
-    client::{
-        client_test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder},
-        ArcChainClient, ChainClientError, ClientOutcome, MessageAction,
-    },
-    local_node::LocalNodeError,
-    node::{
-        CrossChainMessageDelivery,
-        NodeError::{self, ClientIoError},
-    },
-    updater::CommunicationError,
-    worker::{Notification, Reason, WorkerError},
-};
+use std::time::Duration;
+
 use assert_matches::assert_matches;
 use futures::StreamExt;
 use linera_base::{
@@ -38,23 +27,32 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use std::time::Duration;
 use test_log::test;
-
 #[cfg(not(target_arch = "wasm32"))]
 use {
     crate::client::client_test_utils::ServiceStorageBuilder,
     linera_storage_service::child::get_free_port,
 };
 
-#[cfg(feature = "rocksdb")]
-use crate::client::client_test_utils::{RocksDbStorageBuilder, ROCKS_DB_SEMAPHORE};
-
 #[cfg(feature = "aws")]
 use crate::client::client_test_utils::DynamoDbStorageBuilder;
-
 #[cfg(feature = "scylladb")]
 use crate::client::client_test_utils::ScyllaDbStorageBuilder;
+#[cfg(feature = "rocksdb")]
+use crate::client::client_test_utils::{RocksDbStorageBuilder, ROCKS_DB_SEMAPHORE};
+use crate::{
+    client::{
+        client_test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder},
+        ArcChainClient, ChainClientError, ClientOutcome, MessageAction,
+    },
+    local_node::LocalNodeError,
+    node::{
+        CrossChainMessageDelivery,
+        NodeError::{self, ClientIoError},
+    },
+    updater::CommunicationError,
+    worker::{Notification, Reason, WorkerError},
+};
 
 #[test(tokio::test)]
 pub async fn test_memory_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>

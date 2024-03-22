@@ -4,6 +4,7 @@
 //! Common error type for usage of different Wasm runtimes.
 
 use std::{num::TryFromIntError, string::FromUtf8Error};
+
 use thiserror::Error;
 
 /// Errors that can occur when using a Wasm runtime.

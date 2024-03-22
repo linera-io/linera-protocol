@@ -1,13 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::SimpleClient;
-
-use crate::{config::ValidatorPublicNetworkPreConfig, node_provider::NodeOptions};
+use std::str::FromStr as _;
 
 use linera_core::node::{LocalValidatorNodeProvider, NodeError};
 
-use std::str::FromStr as _;
+use super::SimpleClient;
+use crate::{config::ValidatorPublicNetworkPreConfig, node_provider::NodeOptions};
 
 /// A client without an address - serves as a client factory.
 #[derive(Copy, Clone)]

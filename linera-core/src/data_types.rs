@@ -2,7 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client::ChainClientError;
+use std::collections::BTreeMap;
+
 use linera_base::{
     crypto::{BcsSignable, CryptoError, CryptoHash, KeyPair, Signature},
     data_types::{Amount, BlockHeight, Round, Timestamp},
@@ -21,7 +22,8 @@ use linera_execution::{
 use linera_storage::ChainRuntimeContext;
 use linera_views::{common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+
+use crate::client::ChainClientError;
 
 /// A range of block heights as used in ChainInfoQuery.
 #[derive(Clone, Debug, Serialize, Deserialize)]

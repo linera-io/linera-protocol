@@ -2,13 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{codec, transport::TransportProtocol};
+use std::{future::Future, time::Duration};
 
-use crate::{
-    config::ValidatorPublicNetworkPreConfig, mass_client, HandleCertificateRequest,
-    HandleLiteCertificateRequest, RpcMessage,
-};
-
+use async_trait::async_trait;
+use futures::{sink::SinkExt, stream::StreamExt};
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
@@ -16,12 +13,13 @@ use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
 use linera_version::VersionInfo;
-
-use async_trait::async_trait;
-use futures::{sink::SinkExt, stream::StreamExt};
 use tokio::time;
 
-use std::{future::Future, time::Duration};
+use super::{codec, transport::TransportProtocol};
+use crate::{
+    config::ValidatorPublicNetworkPreConfig, mass_client, HandleCertificateRequest,
+    HandleLiteCertificateRequest, RpcMessage,
+};
 
 #[derive(Clone)]
 pub struct SimpleClient {

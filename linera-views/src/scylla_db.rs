@@ -15,12 +15,22 @@
 //! [trait1]: common::KeyValueStore
 //! [trait2]: common::Context
 
+use std::{ops::Deref, sync::Arc};
+
+use async_lock::{Semaphore, SemaphoreGuard};
+use async_trait::async_trait;
+use futures::{future::join_all, StreamExt};
+use linera_base::ensure;
+use scylla::{
+    frame::request::batch::BatchType,
+    query::Query,
+    transport::errors::{DbError, QueryError},
+    IntoTypedRows, Session, SessionBuilder,
+};
+use thiserror::Error;
+
 #[cfg(with_metrics)]
 use crate::metering::{MeteredStore, LRU_CACHING_METRICS, SCYLLA_DB_METRICS};
-
-#[cfg(with_testing)]
-use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace};
-
 use crate::{
     batch::{Batch, DeletePrefixExpander, UnorderedBatch},
     common::{
@@ -34,18 +44,8 @@ use crate::{
     lru_caching::LruCachingStore,
     value_splitting::DatabaseConsistencyError,
 };
-use async_lock::{Semaphore, SemaphoreGuard};
-use async_trait::async_trait;
-use futures::{future::join_all, StreamExt};
-use linera_base::ensure;
-use scylla::{
-    frame::request::batch::BatchType,
-    query::Query,
-    transport::errors::{DbError, QueryError},
-    IntoTypedRows, Session, SessionBuilder,
-};
-use std::{ops::Deref, sync::Arc};
-use thiserror::Error;
+#[cfg(with_testing)]
+use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace};
 
 /// The client for ScyllaDb.
 /// * The session allows to pass queries

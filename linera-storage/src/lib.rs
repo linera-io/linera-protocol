@@ -15,25 +15,7 @@ mod scylla_db;
 #[cfg(not(target_arch = "wasm32"))]
 mod service;
 
-#[cfg(with_testing)]
-pub use crate::db_storage::TestClock;
-#[cfg(with_dynamodb)]
-pub use crate::dynamo_db::DynamoDbStorage;
-#[cfg(with_rocksdb)]
-pub use crate::rocks_db::RocksDbStorage;
-#[cfg(with_scylladb)]
-pub use crate::scylla_db::ScyllaDbStorage;
-#[cfg(not(target_arch = "wasm32"))]
-pub use crate::service::ServiceStorage;
-pub use crate::{
-    db_storage::{Clock, DbStorage, WallClock},
-    memory::MemoryStorage,
-};
-
-#[cfg(with_metrics)]
-pub use crate::db_storage::{
-    READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
-};
+use std::{fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use chain_guards::ChainGuard;
@@ -59,12 +41,29 @@ use linera_views::{
     common::Context,
     views::{CryptoHashView, RootView, ViewError},
 };
-use std::{fmt::Debug, sync::Arc};
-
 #[cfg(with_wasm_runtime)]
 use {
     linera_chain::data_types::CertificateValue,
     linera_execution::{Operation, SystemOperation, WasmContractModule, WasmServiceModule},
+};
+
+#[cfg(with_testing)]
+pub use crate::db_storage::TestClock;
+#[cfg(with_metrics)]
+pub use crate::db_storage::{
+    READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
+};
+#[cfg(with_dynamodb)]
+pub use crate::dynamo_db::DynamoDbStorage;
+#[cfg(with_rocksdb)]
+pub use crate::rocks_db::RocksDbStorage;
+#[cfg(with_scylladb)]
+pub use crate::scylla_db::ScyllaDbStorage;
+#[cfg(not(target_arch = "wasm32"))]
+pub use crate::service::ServiceStorage;
+pub use crate::{
+    db_storage::{Clock, DbStorage, WallClock},
+    memory::MemoryStorage,
 };
 
 /// Communicate with a persistent storage using the "views" abstraction.

@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::api;
-use crate::{HandleCertificateRequest, HandleLiteCertificateRequest};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
     data_types::BlockHeight,
@@ -20,6 +18,9 @@ use linera_core::{
 use linera_execution::committee::ValidatorName;
 use thiserror::Error;
 use tonic::{Code, Status};
+
+use super::api;
+use crate::{HandleCertificateRequest, HandleLiteCertificateRequest};
 
 #[derive(Error, Debug)]
 pub enum GrpcProtoConversionError {
@@ -510,7 +511,8 @@ impl TryFrom<api::Owner> for Owner {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
+    use std::{borrow::Cow, fmt::Debug};
+
     use linera_base::{
         crypto::{BcsSignable, CryptoHash, KeyPair},
         data_types::{Amount, Round, Timestamp},
@@ -521,7 +523,8 @@ pub mod tests {
     };
     use linera_core::data_types::ChainInfo;
     use serde::{Deserialize, Serialize};
-    use std::{borrow::Cow, fmt::Debug};
+
+    use super::*;
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Foo(String);

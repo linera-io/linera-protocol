@@ -2,7 +2,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ChainError;
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+};
+
 use async_graphql::{Object, SimpleObject};
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
@@ -17,10 +21,8 @@ use linera_execution::{
     BytecodeLocation, Message, MessageKind, Operation,
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
-};
+
+use crate::ChainError;
 
 #[cfg(test)]
 #[path = "unit_tests/data_types_tests.rs"]

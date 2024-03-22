@@ -1,15 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    applications::ApplicationRegistry,
-    committee::{Committee, Epoch},
-    execution::UserAction,
-    system::SystemChannel,
-    ChannelSubscription, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    ExecutionStateView, OperationContext, ResourceControlPolicy, ResourceController,
-    ResourceTracker, TestExecutionRuntimeContext, UserApplicationDescription, UserContractCode,
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
 };
+
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, Timestamp},
@@ -21,9 +17,15 @@ use linera_views::{
     memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
     views::{CryptoHashView, View, ViewError},
 };
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
+
+use crate::{
+    applications::ApplicationRegistry,
+    committee::{Committee, Epoch},
+    execution::UserAction,
+    system::SystemChannel,
+    ChannelSubscription, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
+    ExecutionStateView, OperationContext, ResourceControlPolicy, ResourceController,
+    ResourceTracker, TestExecutionRuntimeContext, UserApplicationDescription, UserContractCode,
 };
 
 /// A system execution state, not represented as a view but as a simple struct.

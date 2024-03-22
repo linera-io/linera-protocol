@@ -7,14 +7,15 @@
 #[path = "../unit_tests/specialization.rs"]
 mod tests;
 
-use proc_macro2::{Span, TokenStream};
-use proc_macro_error::abort;
-use quote::ToTokens;
 use std::{
     collections::HashSet,
     fmt::{self, Debug, Formatter},
     mem,
 };
+
+use proc_macro2::{Span, TokenStream};
+use proc_macro_error::abort;
+use quote::ToTokens;
 use syn::{
     parse::{self, Parse, ParseStream, Parser},
     punctuated::Punctuated,

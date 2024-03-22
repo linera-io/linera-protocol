@@ -1,14 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
-    ApplicationRegistry, ApplicationRegistryView, BytecodeLocation, UserApplicationDescription,
-    UserApplicationId,
-};
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
     identifiers::{BytecodeId, ChainId, MessageId},
+};
+
+use super::{
+    ApplicationRegistry, ApplicationRegistryView, BytecodeLocation, UserApplicationDescription,
+    UserApplicationId,
 };
 
 fn message_id(index: u32) -> MessageId {

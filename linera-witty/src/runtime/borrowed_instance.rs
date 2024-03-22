@@ -6,12 +6,13 @@
 //! This allows using the same traits without having to move the type implementation around, for
 //! example as parameters in reentrant functions.
 
+use std::borrow::Cow;
+
 use super::{
     traits::{CabiFreeAlias, CabiReallocAlias},
     Instance, InstanceWithFunction, InstanceWithMemory, Runtime, RuntimeError, RuntimeMemory,
 };
 use crate::{memory_layout::FlatLayout, GuestPointer};
-use std::borrow::Cow;
 
 impl<I> Instance for &mut I
 where

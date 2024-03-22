@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{collections::BTreeMap, path::Path, time::Duration};
+
 use anyhow::{bail, Context as _, Result};
 use clap::Parser as _;
 use fungible::{self, FungibleTokenAbi, InitialState, Parameters};
@@ -17,7 +19,6 @@ use linera_service::cli_wrappers::{
 use port_selector::random_free_tcp_port;
 use rand::{Rng as _, SeedableRng};
 use serde_json::Value;
-use std::{collections::BTreeMap, path::Path, time::Duration};
 use tokio::time::Instant;
 use tracing::info;
 

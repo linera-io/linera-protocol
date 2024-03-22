@@ -1,8 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use std::net::SocketAddr;
+
+use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use tracing::info;
 
 pub fn start_metrics(address: SocketAddr) {

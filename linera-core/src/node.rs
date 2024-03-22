@@ -2,10 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    data_types::{ChainInfoQuery, ChainInfoResponse},
-    worker::{Notification, WorkerError},
-};
 use futures::stream::{BoxStream, LocalBoxStream, Stream};
 use linera_base::{
     crypto::CryptoError,
@@ -24,6 +20,11 @@ use linera_version::VersionInfo;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::{
+    data_types::{ChainInfoQuery, ChainInfoResponse},
+    worker::{Notification, WorkerError},
+};
 
 /// A pinned [`Stream`] of Notifications.
 pub type NotificationStream = BoxStream<'static, Notification>;

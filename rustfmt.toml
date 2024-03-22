@@ -1,3 +1,4 @@
 unstable_features = true
 imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
 edition = "2021"

@@ -3,12 +3,14 @@
 
 //! Implementations of the custom traits for the [`Result`] type.
 
+use std::borrow::Cow;
+
+use frunk::{hlist, hlist_pat, HCons, HList};
+
 use crate::{
     GuestPointer, InstanceWithMemory, JoinFlatLayouts, Layout, Memory, Merge, Runtime,
     RuntimeError, RuntimeMemory, WitLoad, WitStore, WitType,
 };
-use frunk::{hlist, hlist_pat, HCons, HList};
-use std::borrow::Cow;
 
 impl<T, E> WitType for Result<T, E>
 where

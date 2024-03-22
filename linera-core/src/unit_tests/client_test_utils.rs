@@ -1,16 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    client::{ChainClient, ChainClientBuilder},
-    data_types::*,
-    node::{
-        CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
-        ValidatorNode,
-    },
-    notifier::Notifier,
-    worker::{Notification, ValidatorWorker, WorkerState},
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    slice::SliceIndex,
+    str::FromStr,
+    sync::Arc,
 };
+
 use async_trait::async_trait;
 use futures::{lock::Mutex, Future};
 use linera_base::{
@@ -26,16 +23,24 @@ use linera_execution::{
 use linera_storage::{MemoryStorage, Storage, TestClock};
 use linera_version::VersionInfo;
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
-
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    slice::SliceIndex,
-    str::FromStr,
-    sync::Arc,
-};
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
-
+#[cfg(feature = "aws")]
+use {
+    linera_storage::DynamoDbStorage,
+    linera_views::dynamo_db::DynamoDbStoreConfig,
+    linera_views::dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
+};
+#[cfg(feature = "rocksdb")]
+use {
+    linera_storage::RocksDbStorage, linera_views::rocks_db::create_rocks_db_common_config,
+    linera_views::rocks_db::RocksDbStoreConfig, tokio::sync::Semaphore,
+};
+#[cfg(feature = "scylladb")]
+use {
+    linera_storage::ScyllaDbStorage, linera_views::scylla_db::create_scylla_db_common_config,
+    linera_views::scylla_db::ScyllaDbStoreConfig,
+};
 #[cfg(not(target_arch = "wasm32"))]
 use {
     linera_storage::ServiceStorage,
@@ -47,23 +52,15 @@ use {
     linera_views::test_utils::generate_test_namespace,
 };
 
-#[cfg(feature = "rocksdb")]
-use {
-    linera_storage::RocksDbStorage, linera_views::rocks_db::create_rocks_db_common_config,
-    linera_views::rocks_db::RocksDbStoreConfig, tokio::sync::Semaphore,
-};
-
-#[cfg(feature = "aws")]
-use {
-    linera_storage::DynamoDbStorage,
-    linera_views::dynamo_db::DynamoDbStoreConfig,
-    linera_views::dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
-};
-
-#[cfg(feature = "scylladb")]
-use {
-    linera_storage::ScyllaDbStorage, linera_views::scylla_db::create_scylla_db_common_config,
-    linera_views::scylla_db::ScyllaDbStoreConfig,
+use crate::{
+    client::{ChainClient, ChainClientBuilder},
+    data_types::*,
+    node::{
+        CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
+        ValidatorNode,
+    },
+    notifier::Notifier,
+    worker::{Notification, ValidatorWorker, WorkerState},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]

@@ -1,6 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Debug;
+
+use async_trait::async_trait;
+use futures::FutureExt;
+use linera_base::ensure;
+use thiserror::Error;
+
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
@@ -9,11 +16,6 @@ use crate::{
     },
     memory::{MemoryContextError, MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
 };
-use async_trait::async_trait;
-use futures::FutureExt;
-use linera_base::ensure;
-use std::fmt::Debug;
-use thiserror::Error;
 
 /// Data type indicating that the database is not consistent
 #[derive(Error, Debug)]

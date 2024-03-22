@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use linera_base::command::CommandExt;
 use rand::Rng;
 use tokio::process::Command;
-
-use linera_base::command::CommandExt;
 
 #[derive(Clone)]
 pub struct KindCluster {

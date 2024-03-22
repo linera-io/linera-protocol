@@ -1,6 +1,24 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+    mem,
+    ops::Bound::Included,
+};
+
+use async_lock::Mutex;
+use async_trait::async_trait;
+use linera_base::{data_types::ArithmeticError, ensure};
+use serde::{Deserialize, Serialize};
+#[cfg(with_metrics)]
+use {
+    linera_base::prometheus_util::{self, MeasureLatency},
+    linera_base::sync::Lazy,
+    prometheus::HistogramVec,
+};
+
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
@@ -9,23 +27,6 @@ use crate::{
     },
     map_view::ByteMapView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
-};
-use async_lock::Mutex;
-use async_trait::async_trait;
-use linera_base::{data_types::ArithmeticError, ensure};
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt::Debug,
-    mem,
-    ops::Bound::Included,
-};
-
-#[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{self, MeasureLatency},
-    linera_base::sync::Lazy,
-    prometheus::HistogramVec,
 };
 
 #[cfg(with_metrics)]

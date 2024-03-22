@@ -21,13 +21,15 @@
 //!
 //! [flattening]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md#flattening
 
+use std::ops::Add;
+
+use frunk::HList;
+
 use super::result_storage::ResultStorage;
 use crate::{
     memory_layout::FlatLayout, primitive_types::FlatType, util::Split, GuestPointer,
     InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory, WitLoad,
 };
-use frunk::HList;
-use std::ops::Add;
 
 /// Representation of the interface a guest Wasm instance uses for a host function.
 ///

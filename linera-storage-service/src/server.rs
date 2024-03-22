@@ -1,6 +1,19 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{collections::BTreeMap, sync::Arc};
+
+use async_lock::RwLock;
+use linera_storage_service::common::{KeyTag, MAX_PAYLOAD_SIZE};
+use linera_views::{
+    batch::Batch,
+    common::{AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
+    memory::{create_memory_store_stream_queries, MemoryStore},
+    rocks_db::{RocksDbStore, RocksDbStoreConfig},
+};
+use serde::Serialize;
+use tonic::{transport::Server, Request, Response, Status};
+
 use crate::key_value_store::{
     statement::Operation,
     store_processor_server::{StoreProcessor, StoreProcessorServer},
@@ -12,17 +25,6 @@ use crate::key_value_store::{
     RequestFindKeysByPrefix, RequestListAll, RequestReadMultiValues, RequestReadValue,
     RequestSpecificChunk, RequestWriteBatchExtended,
 };
-use async_lock::RwLock;
-use linera_storage_service::common::{KeyTag, MAX_PAYLOAD_SIZE};
-use linera_views::{
-    batch::Batch,
-    common::{AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
-    memory::{create_memory_store_stream_queries, MemoryStore},
-    rocks_db::{RocksDbStore, RocksDbStoreConfig},
-};
-use serde::Serialize;
-use std::{collections::BTreeMap, sync::Arc};
-use tonic::{transport::Server, Request, Response, Status};
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 // https://github.com/hyperium/tonic/issues/1056

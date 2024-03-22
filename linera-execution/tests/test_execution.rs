@@ -3,6 +3,8 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
+use std::{collections::BTreeMap, vec};
+
 use assert_matches::assert_matches;
 use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
@@ -23,7 +25,6 @@ use linera_execution::{
     RawOutgoingMessage, ResourceControlPolicy, ResourceController, Response, SystemOperation,
 };
 use linera_views::batch::Batch;
-use std::{collections::BTreeMap, vec};
 
 fn make_operation_context() -> OperationContext {
     OperationContext {

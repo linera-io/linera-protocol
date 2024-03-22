@@ -10,9 +10,6 @@
 //! [trait1]: common::KeyValueStore
 //! [trait2]: common::Context
 
-use crate::{batch::Batch, views::ViewError};
-use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::BTreeSet,
     fmt::{Debug, Display},
@@ -23,6 +20,11 @@ use std::{
     },
     time::{Duration, Instant},
 };
+
+use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Serialize};
+
+use crate::{batch::Batch, views::ViewError};
 
 #[cfg(test)]
 #[path = "unit_tests/common_tests.rs"]
@@ -822,9 +824,10 @@ pub fn get_uleb128_size(len: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use linera_views::common::CustomSerialize;
     use rand::Rng;
-    use std::collections::BTreeSet;
 
     #[test]
     fn test_ordering_serialization() {

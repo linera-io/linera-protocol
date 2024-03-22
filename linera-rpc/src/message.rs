@@ -9,7 +9,6 @@ use linera_core::{
     node::NodeError,
 };
 use linera_version::VersionInfo;
-
 use serde::{Deserialize, Serialize};
 
 use crate::{HandleCertificateRequest, HandleLiteCertificateRequest};

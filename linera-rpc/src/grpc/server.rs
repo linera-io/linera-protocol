@@ -1,11 +1,34 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::pool::GrpcConnectionPool;
+use std::{
+    net::SocketAddr,
+    str::FromStr,
+    task::{Context, Poll},
+    time::{Duration, Instant},
+};
 
-use crate::{
-    config::{CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig},
-    HandleCertificateRequest, HandleLiteCertificateRequest,
+use futures::{
+    channel::{mpsc, mpsc::Receiver, oneshot::Sender},
+    future::BoxFuture,
+    FutureExt, StreamExt,
+};
+use linera_base::identifiers::ChainId;
+use linera_core::{
+    node::NodeError,
+    worker::{NetworkActions, Notification, ValidatorWorker, WorkerError, WorkerState},
+};
+use linera_storage::Storage;
+use linera_views::views::ViewError;
+use rand::Rng;
+use tokio::{sync::oneshot, task::JoinHandle};
+use tonic::{Request, Response, Status};
+use tower::{builder::ServiceBuilder, Layer, Service};
+use tracing::{debug, error, info, instrument, warn};
+#[cfg(with_metrics)]
+use {
+    linera_base::{prometheus_util, sync::Lazy},
+    prometheus::{HistogramVec, IntCounterVec},
 };
 
 use super::{
@@ -17,39 +40,12 @@ use super::{
         BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
         LiteCertificate,
     },
+    pool::GrpcConnectionPool,
     GrpcError, GRPC_MAX_MESSAGE_SIZE,
 };
-use futures::{
-    channel::{mpsc, mpsc::Receiver, oneshot::Sender},
-    future::BoxFuture,
-    FutureExt, StreamExt,
-};
-use linera_base::identifiers::ChainId;
-
-use linera_core::{
-    node::NodeError,
-    worker::{NetworkActions, Notification, ValidatorWorker, WorkerError, WorkerState},
-};
-use linera_storage::Storage;
-
-use linera_views::views::ViewError;
-use rand::Rng;
-use std::{
-    net::SocketAddr,
-    str::FromStr,
-    task::{Context, Poll},
-    time::{Duration, Instant},
-};
-
-use tokio::{sync::oneshot, task::JoinHandle};
-use tonic::{Request, Response, Status};
-use tower::{builder::ServiceBuilder, Layer, Service};
-use tracing::{debug, error, info, instrument, warn};
-
-#[cfg(with_metrics)]
-use {
-    linera_base::{prometheus_util, sync::Lazy},
-    prometheus::{HistogramVec, IntCounterVec},
+use crate::{
+    config::{CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig},
+    HandleCertificateRequest, HandleLiteCertificateRequest,
 };
 
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;

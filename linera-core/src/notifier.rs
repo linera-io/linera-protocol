@@ -79,11 +79,12 @@ impl Notifier<crate::worker::Notification> {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
     use std::{
         sync::{atomic::Ordering, Arc},
         time::Duration,
     };
+
+    use super::*;
 
     #[test]
     fn test_concurrent() {

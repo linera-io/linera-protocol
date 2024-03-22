@@ -6,12 +6,12 @@
 mod implementations;
 mod register_wit_types;
 
-pub use self::register_wit_types::RegisterWitTypes;
+use std::borrow::Cow;
 
+pub use self::register_wit_types::RegisterWitTypes;
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
 };
-use std::borrow::Cow;
 
 /// A type that is representable by fundamental WIT types.
 pub trait WitType: Sized {

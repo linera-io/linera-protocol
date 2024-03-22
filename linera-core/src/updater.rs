@@ -2,10 +2,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    node::{CrossChainMessageDelivery, LocalValidatorNode, NodeError},
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    fmt,
+    hash::Hash,
+    ops::Range,
+    time::{Duration, Instant},
 };
+
 use futures::{future, Future, StreamExt};
 use linera_base::{
     data_types::{BlockHeight, Round},
@@ -15,15 +19,13 @@ use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, Lit
 use linera_execution::committee::{Committee, ValidatorName};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    fmt,
-    hash::Hash,
-    ops::Range,
-    time::{Duration, Instant},
-};
 use thiserror::Error;
 use tracing::{error, warn};
+
+use crate::{
+    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
+    node::{CrossChainMessageDelivery, LocalValidatorNode, NodeError},
+};
 
 /// The amount of time we wait for additional validators to contribute to the result, as a fraction
 /// of how long it took to reach a quorum.

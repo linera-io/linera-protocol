@@ -3,14 +3,15 @@
 
 //! Runtime types to interface with the host executing the contract.
 
-use super::{wit_system_api as wit, CloseChainError};
-use crate::Contract;
 use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
+
+use super::{wit_system_api as wit, CloseChainError};
+use crate::Contract;
 
 /// The common runtime to interface with the host executing the contract.
 ///

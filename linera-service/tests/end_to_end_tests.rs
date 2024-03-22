@@ -4,6 +4,8 @@
 
 mod common;
 
+use std::{collections::BTreeMap, env, path::PathBuf, time::Duration};
+
 use assert_matches::assert_matches;
 use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
@@ -13,21 +15,19 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, Owner},
 };
-use linera_service::cli_wrappers::{
-    local_net::{Database, LocalNet, LocalNetConfig, PathProvider},
-    ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
-};
-use serde_json::{json, Value};
-use std::{collections::BTreeMap, env, path::PathBuf, time::Duration};
-use test_case::test_case;
-use tracing::{info, warn};
-
 #[cfg(feature = "remote_net")]
 use linera_service::cli_wrappers::remote_net::RemoteNetTestingConfig;
 #[cfg(feature = "kubernetes")]
 use linera_service::cli_wrappers::{
     docker::BuildArg, local_kubernetes_net::SharedLocalKubernetesNetTestingConfig,
 };
+use linera_service::cli_wrappers::{
+    local_net::{Database, LocalNet, LocalNetConfig, PathProvider},
+    ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+};
+use serde_json::{json, Value};
+use test_case::test_case;
+use tracing::{info, warn};
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     let owner = client.get_owner().unwrap();

@@ -10,16 +10,17 @@
 
 use std::time::Duration;
 
-use super::{contract, contract_system_api, service_system_api};
-use crate::{
-    ApplicationCallOutcome, ChannelName, Destination, MessageKind, RawExecutionOutcome,
-    RawOutgoingMessage, UserApplicationId,
-};
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight, Resources},
     identifiers::{Account, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
+};
+
+use super::{contract, contract_system_api, service_system_api};
+use crate::{
+    ApplicationCallOutcome, ChannelName, Destination, MessageKind, RawExecutionOutcome,
+    RawOutgoingMessage, UserApplicationId,
 };
 
 impl From<contract::ApplicationCallOutcome> for ApplicationCallOutcome {

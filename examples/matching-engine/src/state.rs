@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use async_graphql::SimpleObject;
 use fungible::Account;
 use linera_sdk::{
@@ -12,7 +14,6 @@ use linera_sdk::{
 };
 use matching_engine::{OrderId, OrderNature, Price, PriceAsk, PriceBid};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
 use thiserror::Error;
 
 /// An error that can occur during the contract execution.

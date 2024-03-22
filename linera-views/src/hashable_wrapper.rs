@@ -1,18 +1,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    batch::Batch,
-    common::{Context, MIN_VIEW_TAG},
-    views::{ClonableView, HashableView, Hasher, View, ViewError},
+use std::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
 };
+
 use async_lock::Mutex;
 use async_trait::async_trait;
 use futures::join;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
+
+use crate::{
+    batch::Batch,
+    common::{Context, MIN_VIEW_TAG},
+    views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
 /// A hash for ContainerView and storing of the hash for memoization purposes

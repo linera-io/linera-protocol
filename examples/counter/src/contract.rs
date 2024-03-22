@@ -5,7 +5,6 @@
 
 mod state;
 
-use self::state::Counter;
 use async_trait::async_trait;
 use counter::CounterAbi;
 use linera_sdk::{
@@ -13,6 +12,8 @@ use linera_sdk::{
     SimpleStateStorage,
 };
 use thiserror::Error;
+
+use self::state::Counter;
 
 pub struct CounterContract {
     state: Counter,
@@ -96,7 +97,6 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{Counter, CounterContract, Error};
     use assert_matches::assert_matches;
     use futures::FutureExt;
     use linera_sdk::{
@@ -104,6 +104,8 @@ mod tests {
         ApplicationCallOutcome, Contract, ExecutionOutcome,
     };
     use webassembly_test::webassembly_test;
+
+    use super::{Counter, CounterContract, Error};
 
     #[webassembly_test]
     fn operation() {

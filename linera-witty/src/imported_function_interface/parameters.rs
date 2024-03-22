@@ -15,11 +15,12 @@
 //!
 //! [flattening]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md#flattening
 
+use frunk::HList;
+
 use crate::{
     memory_layout::FlatLayout, primitive_types::FlatType, InstanceWithMemory, Layout, Memory,
     Runtime, RuntimeError, RuntimeMemory, WitStore, WitType,
 };
-use frunk::HList;
 
 /// Helper trait for converting from the host parameters to the guest parameters.
 ///

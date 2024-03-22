@@ -3,12 +3,13 @@
 
 //! Conversions from WIT types to the original types.
 
-use super::wit;
 use linera_base::{
     crypto::CryptoHash,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
 };
 use linera_views::batch::WriteOperation;
+
+use super::wit;
 
 impl From<wit::WriteOperation> for WriteOperation {
     fn from(operation: wit::WriteOperation) -> Self {

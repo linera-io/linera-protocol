@@ -3,12 +3,14 @@
 
 //! Implementations of the custom traits for integer primitives.
 
+use std::borrow::Cow;
+
+use frunk::{hlist, hlist_pat, HList};
+
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
     WitLoad, WitStore, WitType,
 };
-use frunk::{hlist, hlist_pat, HList};
-use std::borrow::Cow;
 
 macro_rules! impl_wit_traits {
     ($integer:ty, $wit_name:literal, 1) => {

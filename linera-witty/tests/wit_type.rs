@@ -6,12 +6,14 @@
 #[path = "common/types.rs"]
 mod types;
 
+use std::collections::{BTreeMap, HashMap};
+
+use linera_witty::{HList, Layout, RegisterWitTypes, WitType};
+
 use self::types::{
     Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
     SpecializedGenericStruct, TupleWithPadding, TupleWithoutPadding,
 };
-use linera_witty::{HList, Layout, RegisterWitTypes, WitType};
-use std::collections::{BTreeMap, HashMap};
 
 /// Check the memory size, layout and WIT type declaration derived for a wrapper type.
 #[test]

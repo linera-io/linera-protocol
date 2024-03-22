@@ -3,12 +3,13 @@
 
 //! Module with helper types and functions used by the SDK.
 
-use futures::task;
 use std::{
     future::Future,
     pin::{pin, Pin},
     task::{Context, Poll},
 };
+
+use futures::task;
 
 /// Yields the current asynchronous task so that other tasks may progress if possible.
 ///
@@ -74,9 +75,11 @@ where
 /// Unit tests for the helpers defined in the `util` module.
 #[cfg(test)]
 mod tests {
-    use super::{yield_once, BlockingWait};
-    use futures::{future::poll_fn, task::noop_waker, FutureExt};
     use std::task::{Context, Poll};
+
+    use futures::{future::poll_fn, task::noop_waker, FutureExt};
+
+    use super::{yield_once, BlockingWait};
 
     /// Tests the behavior of the [`YieldOnce`] future.
     ///

@@ -2,12 +2,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    committee::{Committee, Epoch},
-    ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
-    Destination, MessageContext, MessageKind, OperationContext, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
+use std::{
+    collections::BTreeMap,
+    fmt::{self, Display, Formatter},
+    iter,
 };
+
 use async_graphql::Enum;
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -17,9 +17,6 @@ use linera_base::{
     identifiers::{Account, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
-
-#[cfg(test)]
-use crate::test_utils::SystemExecutionState;
 use linera_views::{
     common::Context,
     map_view::HashedMapView,
@@ -28,16 +25,20 @@ use linera_views::{
     views::{HashableView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Display, Formatter},
-    iter,
-};
 use thiserror::Error;
 #[cfg(with_metrics)]
 use {
     linera_base::{prometheus_util, sync::Lazy},
     prometheus::IntCounterVec,
+};
+
+#[cfg(test)]
+use crate::test_utils::SystemExecutionState;
+use crate::{
+    committee::{Committee, Epoch},
+    ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
+    Destination, MessageContext, MessageKind, OperationContext, QueryContext, RawExecutionOutcome,
+    RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -1029,10 +1030,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{ExecutionStateView, TestExecutionRuntimeContext};
     use linera_base::{data_types::BlockHeight, identifiers::ApplicationId};
     use linera_views::memory::MemoryContext;
+
+    use super::*;
+    use crate::{ExecutionStateView, TestExecutionRuntimeContext};
 
     /// Returns an execution state view and a matching operation context, for epoch 1, with root
     /// chain 0 as the admin ID and one empty committee.

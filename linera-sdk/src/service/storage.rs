@@ -7,15 +7,16 @@
 //! Wasm module's respective endpoint. This module contains the code to forward the call to the
 //! service type that implements [`linera-sdk::Service`].
 
-use crate::{
-    views::{AppStateStore, ViewStorageContext},
-    Service, ServiceRuntime, SimpleStateStorage, ViewStateStorage,
-};
 use linera_views::{
     common::ReadableKeyValueStore,
     views::{RootView, View},
 };
 use serde::{de::DeserializeOwned, Serialize};
+
+use crate::{
+    views::{AppStateStore, ViewStorageContext},
+    Service, ServiceRuntime, SimpleStateStorage, ViewStateStorage,
+};
 
 /// The storage APIs used by a service.
 #[allow(async_fn_in_trait)]

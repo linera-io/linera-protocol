@@ -5,10 +5,11 @@
 
 mod state;
 
-use self::state::MetaCounter;
 use async_graphql::{Request, Response};
 use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, SimpleStateStorage};
 use thiserror::Error;
+
+use self::state::MetaCounter;
 
 pub struct MetaCounterService {
     runtime: ServiceRuntime<Self>,

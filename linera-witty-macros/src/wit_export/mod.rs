@@ -9,8 +9,6 @@
 mod caller_type_parameter;
 mod function_information;
 
-use self::{caller_type_parameter::CallerTypeParameter, function_information::FunctionInformation};
-use crate::util::AttributeParameters;
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::{quote, ToTokens};
@@ -18,6 +16,9 @@ use syn::{
     parse_quote, punctuated::Punctuated, token::Paren, Generics, Ident, ItemImpl, LitStr, Type,
     TypePath, TypeTuple,
 };
+
+use self::{caller_type_parameter::CallerTypeParameter, function_information::FunctionInformation};
+use crate::util::AttributeParameters;
 
 /// Returns the code generated for exporting host functions to guest Wasm instances.
 ///

@@ -6,12 +6,6 @@
 //! No WebAssembly bytecode can be executed, but it allows calling the canonical ABI functions
 //! related to memory allocation.
 
-use super::{
-    GuestPointer, Instance, InstanceWithFunction, InstanceWithMemory, Runtime, RuntimeError,
-    RuntimeMemory,
-};
-use crate::{memory_layout::FlatLayout, ExportFunction, WitLoad, WitStore};
-use frunk::{hlist, hlist_pat, HList};
 use std::{
     any::Any,
     borrow::Cow,
@@ -21,6 +15,14 @@ use std::{
         Arc, Mutex, MutexGuard,
     },
 };
+
+use frunk::{hlist, hlist_pat, HList};
+
+use super::{
+    GuestPointer, Instance, InstanceWithFunction, InstanceWithMemory, Runtime, RuntimeError,
+    RuntimeMemory,
+};
+use crate::{memory_layout::FlatLayout, ExportFunction, WitLoad, WitStore};
 
 /// A fake Wasm runtime.
 pub struct MockRuntime;

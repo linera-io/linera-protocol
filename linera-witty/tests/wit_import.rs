@@ -8,13 +8,14 @@
 #[path = "common/test_instance.rs"]
 mod test_instance;
 
+use linera_witty::{wit_import, Instance, Runtime, RuntimeMemory};
+use test_case::test_case;
+
 #[cfg(with_wasmer)]
 use self::test_instance::WasmerInstanceFactory;
 #[cfg(with_wasmtime)]
 use self::test_instance::WasmtimeInstanceFactory;
 use self::test_instance::{MockInstanceFactory, TestInstanceFactory, WithoutExports};
-use linera_witty::{wit_import, Instance, Runtime, RuntimeMemory};
-use test_case::test_case;
 
 /// An interface to import a single function without parameters or return values.
 #[wit_import(package = "witty-macros:test-modules")]

@@ -5,13 +5,14 @@
 
 mod system_api;
 
-pub(crate) use self::system_api::AppStateStore;
-pub use self::system_api::ViewStorageContext;
 pub use linera_views::{
     self,
     common::CustomSerialize,
     views::{RootView, View, ViewError},
 };
+
+pub(crate) use self::system_api::AppStateStore;
+pub use self::system_api::ViewStorageContext;
 
 // Import the views system interface.
 wit_bindgen_guest_rust::import!("view_system_api.wit");

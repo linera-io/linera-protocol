@@ -1,9 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::ChainGuards;
-use futures::FutureExt;
-use linera_base::identifiers::ChainId;
 use std::{
     mem,
     sync::{
@@ -12,7 +9,12 @@ use std::{
     },
     time::Duration,
 };
+
+use futures::FutureExt;
+use linera_base::identifiers::ChainId;
 use tokio::{sync::Barrier, time::sleep};
+
+use super::ChainGuards;
 
 /// Tests if a released chain guard does not stay in memory.
 #[tokio::test]

@@ -4,14 +4,12 @@
 
 //! Define the cryptographic primitives used by the Linera protocol.
 
+use std::{num::ParseIntError, str::FromStr};
+
 use ed25519_dalek::{self as dalek, Signer, Verifier};
 use generic_array::typenum::Unsigned;
 use serde::{Deserialize, Serialize};
-use std::{num::ParseIntError, str::FromStr};
 use thiserror::Error;
-
-use crate::doc_scalar;
-
 #[cfg(with_testing)]
 use {
     proptest::{
@@ -21,6 +19,8 @@ use {
     },
     std::ops::RangeInclusive,
 };
+
+use crate::doc_scalar;
 
 /// A signature key-pair.
 pub struct KeyPair(dalek::SigningKey);

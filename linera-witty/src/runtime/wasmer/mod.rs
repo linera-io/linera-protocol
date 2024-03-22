@@ -9,15 +9,17 @@ mod memory;
 mod parameters;
 mod results;
 
-pub use self::{parameters::WasmerParameters, results::WasmerResults};
-use super::traits::{Instance, Runtime};
 use std::sync::{Arc, Mutex, MutexGuard};
+
 pub use wasmer::FunctionEnvMut;
 use wasmer::{
     AsStoreMut, AsStoreRef, Engine, Extern, FunctionEnv, Imports, InstantiationError, Memory,
     Module, Store, StoreMut, StoreRef,
 };
 use wasmer_vm::StoreObjects;
+
+pub use self::{parameters::WasmerParameters, results::WasmerResults};
+use super::traits::{Instance, Runtime};
 
 /// Representation of the [Wasmer](https://wasmer.io) runtime.
 pub struct Wasmer;

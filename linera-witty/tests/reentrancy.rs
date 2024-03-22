@@ -6,14 +6,6 @@
 #[path = "common/test_instance.rs"]
 mod test_instance;
 
-#[cfg(with_wasmer)]
-use self::test_instance::WasmerInstanceFactory;
-#[cfg(with_wasmtime)]
-use self::test_instance::WasmtimeInstanceFactory;
-use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
-use linera_witty::{
-    wit_export, wit_import, ExportTo, Instance, Runtime, RuntimeError, RuntimeMemory,
-};
 use std::{
     marker::PhantomData,
     sync::{
@@ -21,7 +13,17 @@ use std::{
         Arc,
     },
 };
+
+use linera_witty::{
+    wit_export, wit_import, ExportTo, Instance, Runtime, RuntimeError, RuntimeMemory,
+};
 use test_case::test_case;
+
+#[cfg(with_wasmer)]
+use self::test_instance::WasmerInstanceFactory;
+#[cfg(with_wasmtime)]
+use self::test_instance::WasmtimeInstanceFactory;
+use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
 
 /// An interface to call into the test modules.
 #[wit_import(package = "witty-macros:test-modules")]

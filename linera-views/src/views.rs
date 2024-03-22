@@ -1,15 +1,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{batch::Batch, common::HasherOutput};
+use std::{fmt::Debug, io::Write};
+
 use async_trait::async_trait;
 use linera_base::{crypto::CryptoHash, data_types::ArithmeticError};
 pub use linera_views_derive::{
     ClonableView, CryptoHashRootView, CryptoHashView, HashableView, RootView, View,
 };
 use serde::Serialize;
-use std::{fmt::Debug, io::Write};
 use thiserror::Error;
+
+use crate::{batch::Batch, common::HasherOutput};
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]

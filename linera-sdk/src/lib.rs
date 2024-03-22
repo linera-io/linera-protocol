@@ -50,25 +50,26 @@ pub mod test;
 pub mod util;
 pub mod views;
 
-use self::contract::ContractStateStorage;
+use std::{error::Error, fmt::Debug};
+
 use async_trait::async_trait;
+pub use linera_base::{abi, data_types::Resources, ensure};
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     data_types::BlockHeight,
     identifiers::{ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{error::Error, fmt::Debug};
+#[doc(hidden)]
+pub use wit_bindgen_guest_rust;
 
+use self::contract::ContractStateStorage;
 pub use self::{
     contract::ContractRuntime,
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
     service::{ServiceRuntime, ServiceStateStorage},
 };
-pub use linera_base::{abi, data_types::Resources, ensure};
-#[doc(hidden)]
-pub use wit_bindgen_guest_rust;
 
 /// A simple state management runtime based on a single byte array.
 pub struct SimpleStateStorage<A>(std::marker::PhantomData<A>);

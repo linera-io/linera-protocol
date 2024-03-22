@@ -32,6 +32,12 @@ mod conversions_from_wit;
 #[path = "conversions_to_wit.rs"]
 mod conversions_to_wit;
 
+use std::error::Error;
+
+use once_cell::sync::Lazy;
+use tokio::sync::Mutex;
+use wasmtime::{Config, Engine, Linker, Module, Store};
+
 use self::{contract::ContractData, service::ServiceData, view_system_api::ViewSystemApiTables};
 use super::{module_cache::ModuleCache, WasmExecutionError};
 use crate::{
@@ -40,10 +46,6 @@ use crate::{
     FinalizeContext, MessageContext, OperationContext, QueryContext, RawExecutionOutcome,
     ServiceRuntime,
 };
-use once_cell::sync::Lazy;
-use std::error::Error;
-use tokio::sync::Mutex;
-use wasmtime::{Config, Engine, Linker, Module, Store};
 
 /// An [`Engine`] instance configured to run application contracts.
 static CONTRACT_ENGINE: Lazy<Engine> = Lazy::new(|| {

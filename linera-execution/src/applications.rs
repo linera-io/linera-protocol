@@ -1,7 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::SystemExecutionError;
+use std::collections::{HashMap, HashSet};
+
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
@@ -14,14 +15,14 @@ use linera_views::{
     views::{HashableView, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-
 #[cfg(with_testing)]
 use {
     linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
     linera_views::views::View,
     std::collections::BTreeMap,
 };
+
+use crate::SystemExecutionError;
 
 #[cfg(test)]
 #[path = "unit_tests/applications_tests.rs"]

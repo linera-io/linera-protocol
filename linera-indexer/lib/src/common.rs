@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::net::AddrParseError;
+
 use async_graphql::http::GraphiQLSource;
 use axum::{
     http::Uri,
@@ -8,7 +10,6 @@ use axum::{
 };
 use linera_base::crypto::CryptoHash;
 use reqwest::header::InvalidHeaderValue;
-use std::net::AddrParseError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

@@ -1,21 +1,22 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    batch::Batch,
-    common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update},
-    hashable_wrapper::WrappedHashableContainerView,
-    views::{ClonableView, HashableView, Hasher, View, ViewError},
-};
-use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
 use std::{borrow::Borrow, collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
 
+use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{self, MeasureLatency},
     linera_base::sync::Lazy,
     prometheus::HistogramVec,
+};
+
+use crate::{
+    batch::Batch,
+    common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update},
+    hashable_wrapper::WrappedHashableContainerView,
+    views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
 #[cfg(with_metrics)]

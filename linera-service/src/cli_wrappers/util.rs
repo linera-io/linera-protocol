@@ -1,9 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use linera_base::command::CommandExt;
-use std::path::PathBuf;
 use tokio::process::Command;
 
 pub async fn get_github_root() -> Result<PathBuf> {

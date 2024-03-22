@@ -1,18 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
-    storage::{StorageConfig, StorageConfigNamespace},
-    util::ChildExt,
-};
-use anyhow::{anyhow, bail, ensure, Context, Result};
-use async_trait::async_trait;
-use linera_base::{
-    command::{resolve_binary, CommandExt},
-    data_types::Amount,
-};
-use linera_execution::ResourceControlPolicy;
 use std::{
     collections::{BTreeMap, HashSet},
     env,
@@ -20,13 +8,24 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+
+use anyhow::{anyhow, bail, ensure, Context, Result};
+use async_trait::async_trait;
+use linera_base::{
+    command::{resolve_binary, CommandExt},
+    data_types::Amount,
+};
+use linera_execution::ResourceControlPolicy;
+#[cfg(all(feature = "rocksdb", with_testing))]
+use linera_views::rocks_db::create_rocks_db_test_path;
+#[cfg(all(feature = "scylladb", with_testing))]
+use linera_views::scylla_db::create_scylla_db_test_uri;
 use tempfile::{tempdir, TempDir};
 use tokio::process::{Child, Command};
 use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
 use tracing::{info, warn};
-
 #[cfg(with_testing)]
 use {
     async_lock::RwLock,
@@ -36,11 +35,11 @@ use {
     std::ops::Deref,
 };
 
-#[cfg(all(feature = "rocksdb", with_testing))]
-use linera_views::rocks_db::create_rocks_db_test_path;
-
-#[cfg(all(feature = "scylladb", with_testing))]
-use linera_views::scylla_db::create_scylla_db_test_uri;
+use crate::{
+    cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
+    storage::{StorageConfig, StorageConfigNamespace},
+    util::ChildExt,
+};
 
 #[cfg(with_testing)]
 trait LocalServerInternal: Sized {

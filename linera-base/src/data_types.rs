@@ -4,11 +4,12 @@
 
 //! Core data-types used in the Linera protocol.
 
-use serde::{Deserialize, Serialize};
 use std::{
     fmt,
     time::{Duration, SystemTime},
 };
+
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -575,8 +576,9 @@ doc_scalar!(
 
 #[cfg(test)]
 mod tests {
-    use super::Amount;
     use std::str::FromStr;
+
+    use super::Amount;
 
     #[test]
     fn display_amount() {

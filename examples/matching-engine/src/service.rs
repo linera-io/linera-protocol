@@ -5,13 +5,15 @@
 
 mod state;
 
-use crate::state::{MatchingEngine, MatchingEngineError};
+use std::sync::Arc;
+
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use linera_sdk::{
     base::WithServiceAbi, graphql::GraphQLMutationRoot, Service, ServiceRuntime, ViewStateStorage,
 };
 use matching_engine::Operation;
-use std::sync::Arc;
+
+use crate::state::{MatchingEngine, MatchingEngineError};
 
 pub struct MatchingEngineService {
     state: Arc<MatchingEngine>,

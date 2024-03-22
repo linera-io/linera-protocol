@@ -7,9 +7,11 @@
 //! estimate the total memory usage by the cache, since it's currently not possible to determine
 //! the size of a generic `Module`.
 
-use crate::Bytecode;
-use lru::LruCache;
 use std::sync::Arc;
+
+use lru::LruCache;
+
+use crate::Bytecode;
 
 /// The default maximum size of the bytecodes stored in cache.
 const DEFAULT_MAX_CACHE_SIZE: u64 = 512 /* MiB */ * 1024 /* KiB */ * 1024 /* bytes */;

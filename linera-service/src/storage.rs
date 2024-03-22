@@ -1,7 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::GenesisConfig;
+use std::str::FromStr;
+
 use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
@@ -12,22 +13,7 @@ use linera_views::{
     memory::MemoryStoreConfig,
     views::ViewError,
 };
-use std::str::FromStr;
 use tracing::error;
-
-#[cfg(feature = "rocksdb")]
-use {
-    linera_storage::RocksDbStorage,
-    linera_views::rocks_db::{RocksDbStore, RocksDbStoreConfig},
-    std::path::PathBuf,
-};
-
-#[cfg(feature = "aws")]
-use {
-    linera_storage::DynamoDbStorage,
-    linera_views::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig},
-};
-
 #[cfg(feature = "scylladb")]
 use {
     anyhow::Context,
@@ -36,6 +22,19 @@ use {
     std::num::NonZeroU16,
     tracing::debug,
 };
+#[cfg(feature = "aws")]
+use {
+    linera_storage::DynamoDbStorage,
+    linera_views::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig},
+};
+#[cfg(feature = "rocksdb")]
+use {
+    linera_storage::RocksDbStorage,
+    linera_views::rocks_db::{RocksDbStore, RocksDbStoreConfig},
+    std::path::PathBuf,
+};
+
+use crate::config::GenesisConfig;
 
 const DEFAULT_NAMESPACE: &str = "table_linera";
 

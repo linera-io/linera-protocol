@@ -10,6 +10,8 @@ mod graphql;
 mod input_type;
 mod js_utils;
 
+use std::str::FromStr;
+
 use anyhow::{anyhow, Context as _, Result};
 use futures::prelude::*;
 use gql_service::{
@@ -42,7 +44,6 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_wasm_bindgen::from_value;
-use std::str::FromStr;
 use url::Url;
 use uuid::Uuid;
 use wasm_bindgen::prelude::*;

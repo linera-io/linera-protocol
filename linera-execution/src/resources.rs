@@ -3,17 +3,19 @@
 
 //! This module tracks the resources used during the execution of a transaction.
 
-use crate::{
-    system::SystemExecutionError, ExecutionError, ExecutionStateView, Message, Operation,
-    ResourceControlPolicy,
-};
+use std::sync::Arc;
+
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Amount, ArithmeticError},
     identifiers::Owner,
 };
 use linera_views::{common::Context, views::ViewError};
-use std::sync::Arc;
+
+use crate::{
+    system::SystemExecutionError, ExecutionError, ExecutionStateView, Message, Operation,
+    ResourceControlPolicy,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {

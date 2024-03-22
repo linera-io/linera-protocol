@@ -3,11 +3,12 @@
 
 //! Derivation of the `WitStore` trait.
 
-use crate::util::FieldsInformation;
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::quote;
 use syn::{Ident, LitInt, Variant};
+
+use crate::util::FieldsInformation;
 
 #[path = "unit_tests/wit_store.rs"]
 mod tests;

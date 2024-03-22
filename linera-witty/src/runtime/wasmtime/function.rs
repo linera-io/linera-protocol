@@ -3,11 +3,12 @@
 
 //! Implementations of [`InstanceWithFunction`] for Wasmtime instances.
 
+use wasmtime::{AsContext, AsContextMut, Extern, TypedFunc};
+
 use super::{
     parameters::WasmtimeParameters, results::WasmtimeResults, EntrypointInstance, ReentrantInstance,
 };
 use crate::{memory_layout::FlatLayout, InstanceWithFunction, Runtime, RuntimeError};
-use wasmtime::{AsContext, AsContextMut, Extern, TypedFunc};
 
 /// Implements [`InstanceWithFunction`] for the Wasmtime [`Instance`] implementations.
 macro_rules! impl_instance_with_function {

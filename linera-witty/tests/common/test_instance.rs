@@ -3,15 +3,6 @@
 
 //! Helper code for testing using different runtimes.
 
-use frunk::{hlist, hlist_pat, HList};
-#[cfg(with_wasmer)]
-use linera_witty::wasmer;
-#[cfg(with_wasmtime)]
-use linera_witty::wasmtime;
-use linera_witty::{
-    ExportTo, InstanceWithMemory, Layout, MockExportedFunction, MockInstance, RuntimeError,
-    WitLoad, WitStore,
-};
 use std::{
     any::Any,
     fmt::Debug,
@@ -21,6 +12,16 @@ use std::{
         atomic::{AtomicU32, Ordering},
         Arc,
     },
+};
+
+use frunk::{hlist, hlist_pat, HList};
+#[cfg(with_wasmer)]
+use linera_witty::wasmer;
+#[cfg(with_wasmtime)]
+use linera_witty::wasmtime;
+use linera_witty::{
+    ExportTo, InstanceWithMemory, Layout, MockExportedFunction, MockInstance, RuntimeError,
+    WitLoad, WitStore,
 };
 
 /// Trait representing a type that can create instances for tests.

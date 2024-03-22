@@ -1,8 +1,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(any(with_dynamodb, with_rocksdb, with_scylladb))]
+use std::collections::BTreeSet;
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
+
 use async_lock::{Mutex, RwLock};
 use async_trait::async_trait;
+#[cfg(with_scylladb)]
+use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
 use linera_views::{
     batch::{
         Batch, WriteOperation,
@@ -28,18 +37,6 @@ use linera_views::{
     },
     views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
 };
-use rand::{Rng, RngCore};
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
-
-#[cfg(with_rocksdb)]
-use {
-    linera_views::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDbStore},
-    tempfile::TempDir,
-};
-
 #[cfg(with_dynamodb)]
 use linera_views::{
     common::{AdminKeyValueStore, CommonStoreConfig},
@@ -49,12 +46,12 @@ use linera_views::{
     },
     test_utils::generate_test_namespace,
 };
-
-#[cfg(with_scylladb)]
-use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
-
-#[cfg(any(with_dynamodb, with_rocksdb, with_scylladb))]
-use std::collections::BTreeSet;
+use rand::{Rng, RngCore};
+#[cfg(with_rocksdb)]
+use {
+    linera_views::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDbStore},
+    tempfile::TempDir,
+};
 
 #[allow(clippy::type_complexity)]
 #[derive(CryptoHashRootView)]

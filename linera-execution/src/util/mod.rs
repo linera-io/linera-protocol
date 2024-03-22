@@ -5,9 +5,10 @@
 
 mod sync_response;
 
+use futures::channel::mpsc;
+
 pub use self::sync_response::SyncSender;
 use crate::ExecutionError;
-use futures::channel::mpsc;
 
 /// Extension trait to help with sending requests to an actor.
 ///

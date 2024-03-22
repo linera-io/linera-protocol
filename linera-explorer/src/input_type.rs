@@ -1,8 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::js_utils::{getf, unproxy};
 use wasm_bindgen::prelude::*;
+
+use super::js_utils::{getf, unproxy};
 
 /// Adds an input line for lists.
 #[wasm_bindgen]

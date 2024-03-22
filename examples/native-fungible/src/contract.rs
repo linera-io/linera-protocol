@@ -5,7 +5,6 @@
 
 mod state;
 
-use self::state::NativeFungibleToken;
 use async_trait::async_trait;
 use fungible::{ApplicationCall, FungibleResponse, FungibleTokenAbi, Message, Operation};
 use linera_sdk::{
@@ -14,6 +13,8 @@ use linera_sdk::{
 };
 use native_fungible::TICKER_SYMBOL;
 use thiserror::Error;
+
+use self::state::NativeFungibleToken;
 
 pub struct NativeFungibleTokenContract {
     state: NativeFungibleToken,

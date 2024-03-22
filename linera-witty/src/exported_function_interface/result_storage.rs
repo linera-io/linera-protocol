@@ -15,11 +15,12 @@
 //!
 //! [flattening]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md#flattening
 
+use frunk::HNil;
+
 use crate::{
     memory_layout::FlatLayout, GuestPointer, InstanceWithMemory, Layout, Memory, Runtime,
     RuntimeError, RuntimeMemory, WitStore,
 };
-use frunk::HNil;
 
 /// Representation of where a function's results should be stored.
 ///

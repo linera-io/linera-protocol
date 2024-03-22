@@ -1,9 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashSet;
+
 use criterion::measurement::{Measurement, ValueFormatter};
 use prometheus::proto::MetricType;
-use std::collections::HashSet;
 
 /// A `BenchRecorder` together with a set of counter names. This can be used in benachmarks that
 /// measure the sum of the selected counters instead of wall clock time.

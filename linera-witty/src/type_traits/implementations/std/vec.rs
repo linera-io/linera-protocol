@@ -3,12 +3,14 @@
 
 //! Implementations of the custom traits for the [`Vec`] type.
 
+use std::borrow::Cow;
+
+use frunk::{hlist, hlist_pat, HList};
+
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
     WitLoad, WitStore, WitType,
 };
-use frunk::{hlist, hlist_pat, HList};
-use std::borrow::Cow;
 
 impl<T> WitType for Vec<T>
 where

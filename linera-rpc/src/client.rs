@@ -1,22 +1,22 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::grpc::GrpcClient;
-#[cfg(with_simple_network)]
-use crate::simple::SimpleClient;
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
-use linera_core::{
-    data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{CrossChainMessageDelivery, NodeError},
-};
-
 #[cfg(web)]
 use linera_core::node::{
     LocalNotificationStream as NotificationStream, LocalValidatorNode as ValidatorNode,
 };
 #[cfg(not(web))]
 use linera_core::node::{NotificationStream, ValidatorNode};
+use linera_core::{
+    data_types::{ChainInfoQuery, ChainInfoResponse},
+    node::{CrossChainMessageDelivery, NodeError},
+};
+
+use crate::grpc::GrpcClient;
+#[cfg(with_simple_network)]
+use crate::simple::SimpleClient;
 
 #[derive(Clone)]
 pub enum Client {

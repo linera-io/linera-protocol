@@ -3,12 +3,13 @@
 
 //! Conversions to WIT types from the original types.
 
-use super::wit;
 use linera_base::{
     crypto::CryptoHash,
     data_types::Amount,
     identifiers::{ApplicationId, ChainId, MessageId},
 };
+
+use super::wit;
 
 impl From<ChainId> for wit::CryptoHash {
     fn from(chain_id: ChainId) -> Self {

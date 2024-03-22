@@ -4,9 +4,11 @@
 //! Structures defining the set of owners and super owners, as well as the consensus
 //! round types and timeouts for chains.
 
-use crate::{crypto::PublicKey, data_types::Round, doc_scalar, identifiers::Owner};
-use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, iter, time::Duration};
+
+use serde::{Deserialize, Serialize};
+
+use crate::{crypto::PublicKey, data_types::Round, doc_scalar, identifiers::Owner};
 
 /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
 #[derive(PartialEq, Eq, Clone, Hash, Debug, Serialize, Deserialize)]

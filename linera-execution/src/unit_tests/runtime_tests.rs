@@ -5,16 +5,17 @@
 
 #![cfg(with_tokio_multi_thread)]
 
-use super::{ApplicationStatus, SyncRuntimeInternal};
-use crate::{
-    execution_state_actor::Request, runtime::ResourceController, BaseRuntime, UserContractInstance,
-};
 use futures::{channel::mpsc, StreamExt};
 use linera_base::{
     data_types::BlockHeight,
     identifiers::{ApplicationId, BytecodeId, ChainDescription, MessageId},
 };
 use linera_views::batch::Batch;
+
+use super::{ApplicationStatus, SyncRuntimeInternal};
+use crate::{
+    execution_state_actor::Request, runtime::ResourceController, BaseRuntime, UserContractInstance,
+};
 
 /// Test writing a batch of changes.
 ///

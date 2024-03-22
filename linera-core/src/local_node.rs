@@ -2,12 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    node::{LocalValidatorNode, NotificationStream},
-    notifier::Notifier,
-    worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
-};
+use std::{borrow::Cow, sync::Arc};
+
 use futures::{future, lock::Mutex};
 use linera_base::{
     data_types::{ArithmeticError, BlockHeight},
@@ -23,9 +19,15 @@ use linera_execution::{
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;
-use std::{borrow::Cow, sync::Arc};
 use thiserror::Error;
 use tokio_stream::wrappers::UnboundedReceiverStream;
+
+use crate::{
+    data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
+    node::{LocalValidatorNode, NotificationStream},
+    notifier::Notifier,
+    worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
+};
 
 /// A local node with a single worker, typically used by clients.
 pub struct LocalNode<S> {

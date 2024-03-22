@@ -1,7 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{config::WalletState, node_service::ChainClients};
+use std::{collections::btree_map, sync::Arc, time::Duration};
+
 use async_trait::async_trait;
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
@@ -18,8 +19,9 @@ use linera_core::{
 use linera_execution::{Message, SystemMessage};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use std::{collections::btree_map, sync::Arc, time::Duration};
 use tracing::{error, info, warn};
+
+use crate::{config::WalletState, node_service::ChainClients};
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct ChainListenerConfig {

@@ -32,6 +32,17 @@ mod conversions_from_wit;
 #[path = "conversions_to_wit.rs"]
 mod conversions_to_wit;
 
+use std::{marker::Unpin, sync::Arc};
+
+use bytes::Bytes;
+use linera_base::sync::Lazy;
+use tokio::sync::Mutex;
+use wasmer::{
+    imports, wasmparser::Operator, CompilerConfig, Engine, EngineBuilder, Instance, Module,
+    Singlepass, Store,
+};
+use wasmer_middlewares::metering::{self, Metering, MeteringPoints};
+
 use super::{module_cache::ModuleCache, WasmExecutionError};
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
@@ -39,15 +50,6 @@ use crate::{
     FinalizeContext, MessageContext, OperationContext, QueryContext, RawExecutionOutcome,
     ServiceRuntime,
 };
-use bytes::Bytes;
-use linera_base::sync::Lazy;
-use std::{marker::Unpin, sync::Arc};
-use tokio::sync::Mutex;
-use wasmer::{
-    imports, wasmparser::Operator, CompilerConfig, Engine, EngineBuilder, Instance, Module,
-    Singlepass, Store,
-};
-use wasmer_middlewares::metering::{self, Metering, MeteringPoints};
 
 /// An [`Engine`] instance configured to run application services.
 static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(|| {

@@ -3,10 +3,12 @@
 
 //! Abstractions over different Wasm runtime implementations.
 
+use std::ops::{Deref, DerefMut};
+
+use frunk::HList;
+
 use super::{memory::Memory, RuntimeError};
 use crate::memory_layout::FlatLayout;
-use frunk::HList;
-use std::ops::{Deref, DerefMut};
 
 /// A Wasm runtime.
 ///

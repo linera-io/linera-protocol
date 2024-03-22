@@ -5,16 +5,17 @@
 
 #![allow(dead_code)]
 
-use crate::{
-    ApplicationCallOutcome, CalleeContext, ContractSyncRuntime, ExecutionError, FinalizeContext,
-    MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceSyncRuntime,
-    UserContract, UserContractModule, UserService, UserServiceModule,
-};
 use std::{
     collections::VecDeque,
     fmt::{self, Display, Formatter},
     mem,
     sync::{Arc, Mutex},
+};
+
+use crate::{
+    ApplicationCallOutcome, CalleeContext, ContractSyncRuntime, ExecutionError, FinalizeContext,
+    MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceSyncRuntime,
+    UserContract, UserContractModule, UserService, UserServiceModule,
 };
 
 /// A mocked implementation of a user application.

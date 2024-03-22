@@ -1,12 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::borrow::Cow;
+
 use crate::{
     common::Context,
     views::{View, ViewError},
 };
-
-use std::borrow::Cow;
 
 // TODO(#1326): fix the proliferation of constraints from this module
 

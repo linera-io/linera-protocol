@@ -2,6 +2,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    collections::HashMap,
+    env,
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
 use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
 use chrono::Utc;
@@ -46,21 +54,12 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::Rng as _;
 use serde_json::Value;
-use std::{
-    collections::HashMap,
-    env,
-    path::PathBuf,
-    sync::Arc,
-    time::{Duration, Instant},
-};
 use tempfile::tempdir;
 use tokio::{signal::unix, sync::mpsc};
 use tracing::{debug, info, warn};
 
 mod client_context;
 mod client_options;
-
-use crate::client_options::{ClientCommand, NetCommand, ProjectCommand, WalletCommand};
 
 #[cfg(feature = "benchmark")]
 use {
@@ -70,6 +69,8 @@ use {
     std::collections::HashSet,
     tracing::error,
 };
+
+use crate::client_options::{ClientCommand, NetCommand, ProjectCommand, WalletCommand};
 
 #[cfg(feature = "benchmark")]
 fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {

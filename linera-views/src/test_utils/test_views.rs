@@ -3,6 +3,10 @@
 
 //! Some [`View`][`crate::views::View`]s that are easy to use with test cases.
 
+use std::{collections::HashMap, fmt::Debug};
+
+use async_trait::async_trait;
+
 use crate::{
     self as linera_views,
     collection_view::CollectionView,
@@ -12,8 +16,6 @@ use crate::{
     register_view::RegisterView,
     views::{ClonableView, RootView, ViewError},
 };
-use async_trait::async_trait;
-use std::{collections::HashMap, fmt::Debug};
 
 /// A [`View`][`crate::views::View`] to be used in test cases.
 #[async_trait]

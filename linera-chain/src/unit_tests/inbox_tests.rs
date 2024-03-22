@@ -2,13 +2,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::*;
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Timestamp},
 };
 use linera_execution::{Message, MessageKind, UserApplicationId};
+
+use super::*;
 
 fn make_event(
     certificate_hash: CryptoHash,
