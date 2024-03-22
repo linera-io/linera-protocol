@@ -238,7 +238,10 @@ impl NonFungibleTokenContract {
                 target_account,
             };
 
-            ExecutionOutcome::default().with_tracked_message(target_account.chain_id, message)
+            self.runtime
+                .send_message(target_account.chain_id, message)
+                .with_tracking();
+            ExecutionOutcome::default()
         }
     }
 
@@ -293,7 +296,10 @@ impl NonFungibleTokenContract {
             token_id,
             target_account,
         };
-        ExecutionOutcome::default().with_authenticated_message(source_account.chain_id, message)
+        self.runtime
+            .send_message(source_account.chain_id, message)
+            .with_authentication();
+        ExecutionOutcome::default()
     }
 
     async fn add_nft(&mut self, nft: Nft) {

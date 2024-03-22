@@ -10,8 +10,7 @@ use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
-    ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
-    Resources, ViewStateStorage,
+    ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
 use num_bigint::BigUint;
 use num_traits::{cast::FromPrimitive, ToPrimitive};
@@ -57,14 +56,13 @@ impl Contract for AmmContract {
         &mut self,
         operation: Self::Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, AmmError> {
-        let mut outcome = ExecutionOutcome::default();
         if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
             self.execute_order_local(operation)?;
         } else {
-            self.execute_order_remote(&mut outcome, operation)?;
+            self.execute_order_remote(operation)?;
         }
 
-        Ok(outcome)
+        Ok(ExecutionOutcome::default())
     }
 
     async fn execute_message(
@@ -94,7 +92,6 @@ impl Contract for AmmContract {
         &mut self,
         application_call: ApplicationCall,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, AmmError> {
-        let mut outcome = ApplicationCallOutcome::default();
         match application_call {
             ApplicationCall::Swap {
                 owner,
@@ -105,15 +102,12 @@ impl Contract for AmmContract {
                 if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
                     self.execute_swap(owner, input_token_idx, input_amount)?;
                 } else {
-                    self.execute_application_call_remote(
-                        &mut outcome.execution_outcome,
-                        application_call,
-                    )?;
+                    self.execute_application_call_remote(application_call)?;
                 }
             }
         }
 
-        Ok(outcome)
+        Ok(ApplicationCallOutcome::default())
     }
 }
 
@@ -300,11 +294,7 @@ impl AmmContract {
         Ok(())
     }
 
-    fn execute_order_remote(
-        &mut self,
-        outcome: &mut ExecutionOutcome<Message>,
-        operation: Operation,
-    ) -> Result<(), AmmError> {
+    fn execute_order_remote(&mut self, operation: Operation) -> Result<(), AmmError> {
         match operation {
             Operation::Swap {
                 owner,
@@ -317,13 +307,9 @@ impl AmmContract {
                     input_token_idx,
                     input_amount,
                 };
-                outcome.messages.push(OutgoingMessage {
-                    destination: chain_id.into(),
-                    authenticated: true,
-                    is_tracked: false,
-                    grant: Resources::default(),
-                    message,
-                });
+                self.runtime
+                    .send_message(chain_id, message)
+                    .with_authentication();
             }
             Operation::AddLiquidity {
                 owner: _,
@@ -346,7 +332,6 @@ impl AmmContract {
 
     fn execute_application_call_remote(
         &mut self,
-        outcome: &mut ExecutionOutcome<Message>,
         application_call: ApplicationCall,
     ) -> Result<(), AmmError> {
         match application_call {
@@ -361,13 +346,9 @@ impl AmmContract {
                     input_token_idx,
                     input_amount,
                 };
-                outcome.messages.push(OutgoingMessage {
-                    destination: chain_id.into(),
-                    authenticated: true,
-                    is_tracked: false,
-                    grant: Resources::default(),
-                    message,
-                });
+                self.runtime
+                    .send_message(chain_id, message)
+                    .with_authentication();
             }
         }
 

@@ -224,8 +224,11 @@ impl NativeFungibleTokenContract {
                 amount,
                 source,
             };
+            self.runtime
+                .send_message(target.chain_id, message)
+                .with_authentication();
 
-            ExecutionOutcome::default().with_message(target.chain_id, message)
+            ExecutionOutcome::default()
         }
     }
 
@@ -244,7 +247,10 @@ impl NativeFungibleTokenContract {
                 amount,
                 target_account: target,
             };
-            ExecutionOutcome::default().with_message(source.chain_id, message)
+            self.runtime
+                .send_message(source.chain_id, message)
+                .with_authentication();
+            ExecutionOutcome::default()
         }
     }
 

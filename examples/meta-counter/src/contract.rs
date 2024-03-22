@@ -8,8 +8,8 @@ mod state;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{ApplicationId, WithContractAbi},
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
-    Resources, SimpleStateStorage,
+    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, Resources,
+    SimpleStateStorage,
 };
 use meta_counter::{Message, MetaCounterAbi, Operation};
 use thiserror::Error;
@@ -55,10 +55,9 @@ impl Contract for MetaCounterContract {
         self.counter_id();
         // Send a no-op message to ourselves. This is only for testing contracts that send messages
         // on initialization. Since the value is 0 it does not change the counter value.
-        Ok(
-            ExecutionOutcome::default()
-                .with_message(self.runtime.chain_id(), Message::Increment(0)),
-        )
+        let this_chain = self.runtime.chain_id();
+        self.runtime.send_message(this_chain, Message::Increment(0));
+        Ok(ExecutionOutcome::default())
     }
 
     async fn execute_operation(
@@ -73,19 +72,22 @@ impl Contract for MetaCounterContract {
             fuel_grant,
             message,
         } = operation;
-        let message = OutgoingMessage {
-            destination: recipient_id.into(),
-            authenticated,
-            is_tracked,
-            grant: Resources {
-                fuel: fuel_grant,
-                ..Default::default()
-            },
-            message,
-        };
-        let mut outcome = ExecutionOutcome::default();
-        outcome.messages.push(message);
-        Ok(outcome)
+
+        let mut send_message =
+            self.runtime
+                .send_message(recipient_id, message)
+                .with_grant(Resources {
+                    fuel: fuel_grant,
+                    ..Resources::default()
+                });
+        if authenticated {
+            send_message = send_message.with_authentication();
+        }
+        if is_tracked {
+            send_message.with_tracking();
+        }
+
+        Ok(ExecutionOutcome::default())
     }
 
     async fn execute_message(

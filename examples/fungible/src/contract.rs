@@ -215,8 +215,10 @@ impl FungibleTokenContract {
                 amount,
                 target_account,
             };
-            Ok(ExecutionOutcome::default()
-                .with_authenticated_message(source_account.chain_id, message))
+            self.runtime
+                .send_message(source_account.chain_id, message)
+                .with_authentication();
+            Ok(ExecutionOutcome::default())
         }
     }
 
@@ -236,7 +238,10 @@ impl FungibleTokenContract {
                 amount,
                 source,
             };
-            ExecutionOutcome::default().with_tracked_message(target_account.chain_id, message)
+            self.runtime
+                .send_message(target_account.chain_id, message)
+                .with_authentication();
+            ExecutionOutcome::default()
         }
     }
 }

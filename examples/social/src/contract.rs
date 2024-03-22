@@ -59,15 +59,14 @@ impl Contract for SocialContract {
         &mut self,
         operation: Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        match operation {
-            Operation::Subscribe { chain_id } => {
-                Ok(ExecutionOutcome::default().with_message(chain_id, Message::Subscribe))
-            }
-            Operation::Unsubscribe { chain_id } => {
-                Ok(ExecutionOutcome::default().with_message(chain_id, Message::Unsubscribe))
-            }
-            Operation::Post { text } => self.execute_post_operation(text).await,
-        }
+        let (destination, message) = match operation {
+            Operation::Subscribe { chain_id } => (chain_id.into(), Message::Subscribe),
+            Operation::Unsubscribe { chain_id } => (chain_id.into(), Message::Unsubscribe),
+            Operation::Post { text } => self.execute_post_operation(text).await?,
+        };
+
+        self.runtime.send_message(destination, message);
+        Ok(ExecutionOutcome::default())
     }
 
     async fn execute_message(
@@ -107,7 +106,7 @@ impl SocialContract {
     async fn execute_post_operation(
         &mut self,
         text: String,
-    ) -> Result<ExecutionOutcome<Message>, Error> {
+    ) -> Result<(Destination, Message), Error> {
         let timestamp = self.runtime.system_time();
         self.state.own_posts.push(OwnPost { timestamp, text });
         let count = self.state.own_posts.count();
@@ -119,8 +118,10 @@ impl SocialContract {
             posts.push(own_post);
         }
         let count = count as u64;
-        let dest = Destination::Subscribers(ChannelName::from(POSTS_CHANNEL_NAME.to_vec()));
-        Ok(ExecutionOutcome::default().with_message(dest, Message::Posts { count, posts }))
+        Ok((
+            ChannelName::from(POSTS_CHANNEL_NAME.to_vec()).into(),
+            Message::Posts { count, posts },
+        ))
     }
 
     fn execute_posts_message(
