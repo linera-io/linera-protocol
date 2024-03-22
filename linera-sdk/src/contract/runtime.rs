@@ -3,30 +3,42 @@
 
 //! Runtime types to interface with the host executing the contract.
 
-use super::wit_system_api as wit;
+use super::{wit_system_api as wit, CloseChainError};
+use crate::Contract;
 use linera_base::{
-    data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainId, MessageId, Owner},
+    abi::ContractAbi,
+    data_types::{Amount, BlockHeight, Timestamp},
+    identifiers::{Account, ApplicationId, ChainId, MessageId, Owner},
+    ownership::ChainOwnership,
 };
 
 /// The common runtime to interface with the host executing the contract.
 ///
 /// It automatically caches read-only values received from the host.
 #[derive(Debug)]
-pub struct ContractRuntime {
-    application_id: Option<ApplicationId>,
+pub struct ContractRuntime<Application>
+where
+    Application: Contract,
+{
+    application_parameters: Option<<Application::Abi as ContractAbi>::Parameters>,
+    application_id: Option<ApplicationId<Application::Abi>>,
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
     block_height: Option<BlockHeight>,
     message_is_bouncing: Option<Option<bool>>,
     message_id: Option<Option<MessageId>>,
     authenticated_caller_id: Option<Option<ApplicationId>>,
+    timestamp: Option<Timestamp>,
 }
 
-impl ContractRuntime {
+impl<Application> ContractRuntime<Application>
+where
+    Application: Contract,
+{
     /// Creates a new [`ContractRuntime`] instance for a contract.
     pub(crate) fn new() -> Self {
         ContractRuntime {
+            application_parameters: None,
             application_id: None,
             chain_id: None,
             authenticated_signer: None,
@@ -34,14 +46,26 @@ impl ContractRuntime {
             message_is_bouncing: None,
             message_id: None,
             authenticated_caller_id: None,
+            timestamp: None,
         }
     }
 
+    /// Returns the application parameters provided when the application was created.
+    pub fn application_parameters(&mut self) -> <Application::Abi as ContractAbi>::Parameters {
+        self.application_parameters
+            .get_or_insert_with(|| {
+                let bytes = wit::application_parameters();
+                serde_json::from_slice(&bytes)
+                    .expect("Application parameters must be deserializable")
+            })
+            .clone()
+    }
+
     /// Returns the ID of the current application.
-    pub fn application_id(&mut self) -> ApplicationId {
+    pub fn application_id(&mut self) -> ApplicationId<Application::Abi> {
         *self
             .application_id
-            .get_or_insert_with(|| wit::application_id().into())
+            .get_or_insert_with(|| ApplicationId::from(wit::application_id()).with_abi())
     }
 
     /// Returns the ID of the current chain.
@@ -85,5 +109,65 @@ impl ContractRuntime {
         *self
             .authenticated_caller_id
             .get_or_insert_with(|| wit::authenticated_caller_id().map(ApplicationId::from))
+    }
+
+    /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.
+    pub fn system_time(&mut self) -> Timestamp {
+        *self
+            .timestamp
+            .get_or_insert_with(|| wit::read_system_timestamp().into())
+    }
+
+    /// Returns the current chain balance.
+    pub fn chain_balance(&mut self) -> Amount {
+        wit::read_chain_balance().into()
+    }
+
+    /// Returns the balance of one of the accounts on this chain.
+    pub fn owner_balance(&mut self, owner: Owner) -> Amount {
+        wit::read_owner_balance(owner.into()).into()
+    }
+
+    /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
+    /// balance) to `destination`.
+    pub fn transfer(&mut self, source: Option<Owner>, destination: Account, amount: Amount) {
+        wit::transfer(
+            source.map(|source| source.into()),
+            destination.into(),
+            amount.into(),
+        )
+    }
+
+    /// Claims an `amount` of native tokens from a `source` account to a `destination` account.
+    pub fn claim(&mut self, source: Account, destination: Account, amount: Amount) {
+        wit::claim(source.into(), destination.into(), amount.into())
+    }
+
+    /// Retrieves the owner configuration for the current chain.
+    pub fn chain_ownership(&mut self) -> ChainOwnership {
+        wit::chain_ownership().into()
+    }
+
+    /// Closes the current chain. Returns an error if the application doesn't have
+    /// permission to do so.
+    pub fn close_chain(&mut self) -> Result<(), CloseChainError> {
+        wit::close_chain()
+    }
+
+    /// Calls another application.
+    pub fn call_application<A: ContractAbi + Send>(
+        &mut self,
+        authenticated: bool,
+        application: ApplicationId<A>,
+        call: &A::ApplicationCall,
+    ) -> A::Response {
+        let call_bytes = bcs::to_bytes(call)
+            .expect("Failed to serialize `ApplicationCall` type for a cross-application call");
+
+        let response_bytes =
+            wit::try_call_application(authenticated, application.forget_abi().into(), &call_bytes);
+
+        bcs::from_bytes(&response_bytes)
+            .expect("Failed to deserialize `Response` type from cross-application call")
     }
 }

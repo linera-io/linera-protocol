@@ -6,12 +6,11 @@
 mod state;
 
 use self::state::Amm;
-use amm::{AmmError, ApplicationCall, Message, Operation};
+use amm::{AmmAbi, AmmError, ApplicationCall, Message, Operation};
 use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
-    contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
     Resources, ViewStateStorage,
 };
@@ -20,13 +19,13 @@ use num_traits::{cast::FromPrimitive, ToPrimitive};
 
 pub struct AmmContract {
     state: Amm,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(AmmContract);
 
 impl WithContractAbi for AmmContract {
-    type Abi = amm::AmmAbi;
+    type Abi = AmmAbi;
 }
 
 #[async_trait]
@@ -35,7 +34,7 @@ impl Contract for AmmContract {
     type Storage = ViewStateStorage<Self>;
     type State = Amm;
 
-    async fn new(state: Amm, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+    async fn new(state: Amm, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(AmmContract { state, runtime })
     }
 
@@ -48,7 +47,7 @@ impl Contract for AmmContract {
         _argument: (),
     ) -> Result<ExecutionOutcome<Self::Message>, AmmError> {
         // Validate that the application parameters were configured correctly.
-        assert!(Self::parameters().is_ok());
+        let _ = self.runtime.application_parameters();
 
         Ok(ExecutionOutcome::default())
     }
@@ -216,8 +215,8 @@ impl AmmContract {
                     token1_amount = max_token1_amount;
                 }
 
-                self.receive_from_account(&owner, 0, token0_amount)?;
-                self.receive_from_account(&owner, 1, token1_amount)?;
+                self.receive_from_account(&owner, 0, token0_amount);
+                self.receive_from_account(&owner, 1, token1_amount);
 
                 Ok(())
             }
@@ -266,8 +265,8 @@ impl AmmContract {
                     )
                 };
 
-                self.send_to(&owner, token_to_remove_idx, token_to_remove_amount)?;
-                self.send_to(&owner, other_token_to_remove_idx, other_amount)?;
+                self.send_to(&owner, token_to_remove_idx, token_to_remove_amount);
+                self.send_to(&owner, other_token_to_remove_idx, other_amount);
                 Ok(())
             }
         }
@@ -294,8 +293,8 @@ impl AmmContract {
         let output_amount =
             self.calculate_output_amount(input_amount, input_pool_balance, output_pool_balance)?;
 
-        self.receive_from_account(&owner, input_token_idx, input_amount)?;
-        self.send_to(&owner, output_token_idx, output_amount)?;
+        self.receive_from_account(&owner, input_token_idx, input_amount);
+        self.send_to(&owner, output_token_idx, output_amount);
 
         Ok(())
     }
@@ -311,7 +310,7 @@ impl AmmContract {
                 input_token_idx,
                 input_amount,
             } => {
-                let chain_id = system_api::current_application_id().creation.chain_id;
+                let chain_id = self.runtime.application_id().creation.chain_id;
                 let message = Message::Swap {
                     owner,
                     input_token_idx,
@@ -355,7 +354,7 @@ impl AmmContract {
                 input_token_idx,
                 input_amount,
             } => {
-                let chain_id = system_api::current_application_id().creation.chain_id;
+                let chain_id = self.runtime.application_id().creation.chain_id;
                 let message = Message::Swap {
                     owner,
                     input_token_idx,
@@ -418,13 +417,12 @@ impl AmmContract {
     }
 
     fn get_pool_balance(&mut self, token_idx: u32) -> Result<Amount, AmmError> {
-        let pool_owner = AccountOwner::Application(system_api::current_application_id());
+        let pool_owner = AccountOwner::Application(self.runtime.application_id().forget_abi());
         self.balance(&pool_owner, token_idx)
     }
 
-    fn fungible_id(token_idx: u32) -> Result<ApplicationId<FungibleTokenAbi>, AmmError> {
-        let parameter = Self::parameters()?;
-        Ok(parameter.tokens[token_idx as usize])
+    fn fungible_id(&mut self, token_idx: u32) -> ApplicationId<FungibleTokenAbi> {
+        self.runtime.application_parameters().tokens[token_idx as usize]
     }
 
     fn transfer(
@@ -433,50 +431,39 @@ impl AmmContract {
         amount: Amount,
         destination: Account,
         token_idx: u32,
-    ) -> Result<(), AmmError> {
+    ) {
         let transfer = fungible::ApplicationCall::Transfer {
             owner: *owner,
             amount,
             destination,
         };
-        let token = Self::fungible_id(token_idx).expect("failed to get the token");
-        self.call_application(true, token, &transfer)?;
-        Ok(())
+        let token = self.fungible_id(token_idx);
+        self.runtime.call_application(true, token, &transfer);
     }
 
     fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Result<Amount, AmmError> {
         let balance = fungible::ApplicationCall::Balance { owner: *owner };
-        let token = Self::fungible_id(token_idx).expect("failed to get the token");
-        match self.call_application(true, token, &balance)? {
+        let token = self.fungible_id(token_idx);
+        match self.runtime.call_application(true, token, &balance) {
             fungible::FungibleResponse::Balance(balance) => Ok(balance),
             response => Err(AmmError::UnexpectedFungibleResponse(response)),
         }
     }
 
-    fn receive_from_account(
-        &mut self,
-        owner: &AccountOwner,
-        token_idx: u32,
-        amount: Amount,
-    ) -> Result<(), AmmError> {
+    fn receive_from_account(&mut self, owner: &AccountOwner, token_idx: u32, amount: Amount) {
         let destination = Account {
-            chain_id: system_api::current_chain_id(),
-            owner: AccountOwner::Application(system_api::current_application_id()),
+            chain_id: self.runtime.chain_id(),
+            owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
         };
-        self.transfer(owner, amount, destination, token_idx)
+        self.transfer(owner, amount, destination, token_idx);
     }
 
-    fn send_to(
-        &mut self,
-        owner: &AccountOwner,
-        token_idx: u32,
-        amount: Amount,
-    ) -> Result<(), AmmError> {
+    fn send_to(&mut self, owner: &AccountOwner, token_idx: u32, amount: Amount) {
         let destination = Account {
-            chain_id: system_api::current_chain_id(),
+            chain_id: self.runtime.chain_id(),
             owner: *owner,
         };
-        let owner_app = AccountOwner::Application(system_api::current_application_id());
-        self.transfer(&owner_app, amount, destination, token_idx)
+        let owner_app = AccountOwner::Application(self.runtime.application_id().forget_abi());
+        self.transfer(&owner_app, amount, destination, token_idx);
     }
 }

@@ -7,7 +7,6 @@ mod state;
 
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use crowd_funding::Operation;
-
 use linera_sdk::{
     base::WithServiceAbi, graphql::GraphQLMutationRoot, Service, ServiceRuntime, ViewStateStorage,
 };
@@ -30,7 +29,7 @@ impl Service for CrowdFundingService {
     type Storage = ViewStateStorage<Self>;
     type State = CrowdFunding;
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime) -> Result<Self, Self::Error> {
+    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(CrowdFundingService {
             state: Arc::new(state),
         })

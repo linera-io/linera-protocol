@@ -7,10 +7,9 @@ mod state;
 
 use self::state::FungibleToken;
 use async_trait::async_trait;
-use fungible::{Account, ApplicationCall, FungibleResponse, Message, Operation};
+use fungible::{Account, ApplicationCall, FungibleResponse, FungibleTokenAbi, Message, Operation};
 use linera_sdk::{
     base::{AccountOwner, Amount, WithContractAbi},
-    contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
 use std::str::FromStr;
@@ -18,13 +17,13 @@ use thiserror::Error;
 
 pub struct FungibleTokenContract {
     state: FungibleToken,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(FungibleTokenContract);
 
 impl WithContractAbi for FungibleTokenContract {
-    type Abi = fungible::FungibleTokenAbi;
+    type Abi = FungibleTokenAbi;
 }
 
 #[async_trait]
@@ -33,7 +32,10 @@ impl Contract for FungibleTokenContract {
     type Storage = ViewStateStorage<Self>;
     type State = FungibleToken;
 
-    async fn new(state: FungibleToken, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+    async fn new(
+        state: FungibleToken,
+        runtime: ContractRuntime<Self>,
+    ) -> Result<Self, Self::Error> {
         Ok(FungibleTokenContract { state, runtime })
     }
 
@@ -46,7 +48,7 @@ impl Contract for FungibleTokenContract {
         mut state: Self::InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
-        assert!(Self::parameters().is_ok());
+        let _ = self.runtime.application_parameters();
 
         // If initial accounts are empty, creator gets 1M tokens to act like a faucet.
         if state.accounts.is_empty() {
@@ -165,7 +167,7 @@ impl Contract for FungibleTokenContract {
 
             ApplicationCall::TickerSymbol => {
                 let mut outcome = ApplicationCallOutcome::default();
-                let params = Self::parameters()?;
+                let params = self.runtime.application_parameters();
                 outcome.value = FungibleResponse::TickerSymbol(params.ticker_symbol);
                 Ok(outcome)
             }
@@ -200,7 +202,7 @@ impl FungibleTokenContract {
         amount: Amount,
         target_account: Account,
     ) -> Result<ExecutionOutcome<Message>, Error> {
-        if source_account.chain_id == system_api::current_chain_id() {
+        if source_account.chain_id == self.runtime.chain_id() {
             self.state.debit(source_account.owner, amount).await?;
             Ok(self
                 .finish_transfer_to_account(amount, target_account, source_account.owner)
@@ -223,7 +225,7 @@ impl FungibleTokenContract {
         target_account: Account,
         source: AccountOwner,
     ) -> ExecutionOutcome<Message> {
-        if target_account.chain_id == system_api::current_chain_id() {
+        if target_account.chain_id == self.runtime.chain_id() {
             self.state.credit(target_account.owner, amount).await;
             ExecutionOutcome::default()
         } else {

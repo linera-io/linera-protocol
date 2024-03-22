@@ -7,11 +7,13 @@ mod conversions_from_wit;
 mod conversions_to_wit;
 mod runtime;
 mod storage;
-pub mod system_api;
-mod wit_system_api;
+pub(crate) mod wit_system_api;
 pub mod wit_types;
 
-pub use self::{runtime::ContractRuntime, storage::ContractStateStorage};
+pub use self::{
+    runtime::ContractRuntime, storage::ContractStateStorage,
+    wit_system_api::Closechainerror as CloseChainError,
+};
 use crate::{
     log::ContractLogger, util::BlockingWait, ApplicationCallOutcome, Contract, ExecutionOutcome,
 };

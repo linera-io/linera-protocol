@@ -34,7 +34,7 @@ impl Log for ContractLogger {
     }
 
     fn log(&self, record: &Record) {
-        contract::system_api::log(record.args(), record.level());
+        contract::wit_system_api::log(&record.args().to_string(), record.level().into());
     }
 
     fn flush(&self) {}
@@ -61,7 +61,7 @@ impl Log for ServiceLogger {
     }
 
     fn log(&self, record: &Record) {
-        service::system_api::log(record.args(), record.level());
+        service::wit_system_api::log(&record.args().to_string(), record.level().into());
     }
 
     fn flush(&self) {}

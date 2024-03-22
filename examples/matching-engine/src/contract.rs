@@ -9,25 +9,25 @@ use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
-    contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
     Resources, ViewStateStorage,
 };
 use matching_engine::{
-    product_price_amount, ApplicationCall, Message, Operation, Order, OrderId, OrderNature, Price,
+    product_price_amount, ApplicationCall, MatchingEngineAbi, Message, Operation, Order, OrderId,
+    OrderNature, Price,
 };
 use state::{LevelView, MatchingEngine, MatchingEngineError};
 use std::cmp::min;
 
 pub struct MatchingEngineContract {
     state: MatchingEngine,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(MatchingEngineContract);
 
 impl WithContractAbi for MatchingEngineContract {
-    type Abi = matching_engine::MatchingEngineAbi;
+    type Abi = MatchingEngineAbi;
 }
 
 /// An order can be cancelled which removes it totally or
@@ -56,7 +56,10 @@ impl Contract for MatchingEngineContract {
     type Storage = ViewStateStorage<Self>;
     type State = MatchingEngine;
 
-    async fn new(state: MatchingEngine, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+    async fn new(
+        state: MatchingEngine,
+        runtime: ContractRuntime<Self>,
+    ) -> Result<Self, Self::Error> {
         Ok(MatchingEngineContract { state, runtime })
     }
 
@@ -69,7 +72,7 @@ impl Contract for MatchingEngineContract {
         _argument: (),
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
-        assert!(Self::parameters().is_ok());
+        let _ = self.runtime.application_parameters();
 
         Ok(ExecutionOutcome::default())
     }
@@ -97,13 +100,15 @@ impl Contract for MatchingEngineContract {
             Operation::CloseChain => {
                 for order_id in self.state.orders.indices().await? {
                     match self.modify_order(order_id, ModifyAmount::All).await {
-                        Ok(transfer) => self.send_to(transfer)?,
+                        Ok(transfer) => self.send_to(transfer),
                         // Orders with amount zero may have been cleared in an earlier iteration.
                         Err(MatchingEngineError::OrderNotPresent) => continue,
                         Err(error) => return Err(error),
                     }
                 }
-                system_api::close_chain().map_err(|_| MatchingEngineError::CloseChainError)?;
+                self.runtime
+                    .close_chain()
+                    .map_err(|_| MatchingEngineError::CloseChainError)?;
             }
         }
         Ok(outcome)
@@ -199,9 +204,8 @@ impl MatchingEngineContract {
 
     /// The application engine is trading between two tokens. Those tokens are the parameters of the
     /// construction of the exchange and are accessed by index in the system.
-    fn fungible_id(token_idx: u32) -> Result<ApplicationId<FungibleTokenAbi>, MatchingEngineError> {
-        let parameter = Self::parameters()?;
-        Ok(parameter.tokens[token_idx as usize])
+    fn fungible_id(&mut self, token_idx: u32) -> ApplicationId<FungibleTokenAbi> {
+        self.runtime.application_parameters().tokens[token_idx as usize]
     }
 
     /// Calls into the Fungible Token application to receive tokens from the given account.
@@ -211,20 +215,20 @@ impl MatchingEngineContract {
         amount: &Amount,
         nature: &OrderNature,
         price: &Price,
-    ) -> Result<(), MatchingEngineError> {
+    ) {
         let destination = Account {
-            chain_id: system_api::current_chain_id(),
-            owner: AccountOwner::Application(system_api::current_application_id()),
+            chain_id: self.runtime.chain_id(),
+            owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
         };
         let (amount, token_idx) = Self::get_amount_idx(nature, price, amount);
         self.transfer(*owner, amount, destination, token_idx)
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
-    fn send_to(&mut self, transfer: Transfer) -> Result<(), MatchingEngineError> {
+    fn send_to(&mut self, transfer: Transfer) {
         let destination = transfer.account;
-        let owner_app = AccountOwner::Application(system_api::current_application_id());
-        self.transfer(owner_app, transfer.amount, destination, transfer.token_idx)
+        let owner_app = AccountOwner::Application(self.runtime.application_id().forget_abi());
+        self.transfer(owner_app, transfer.amount, destination, transfer.token_idx);
     }
 
     /// Transfers tokens from the owner to the destination
@@ -234,15 +238,14 @@ impl MatchingEngineContract {
         amount: Amount,
         destination: Account,
         token_idx: u32,
-    ) -> Result<(), MatchingEngineError> {
+    ) {
         let transfer = fungible::ApplicationCall::Transfer {
             owner,
             amount,
             destination,
         };
-        let token = Self::fungible_id(token_idx).expect("failed to get the token");
-        self.call_application(true, token, &transfer)?;
-        Ok(())
+        let token = self.fungible_id(token_idx);
+        self.runtime.call_application(true, token, &transfer);
     }
 
     /// Execution of orders. There are three kinds:
@@ -266,13 +269,13 @@ impl MatchingEngineContract {
                 nature,
                 price,
             } => {
-                self.receive_from_account(&owner, &amount, &nature, &price)?;
+                self.receive_from_account(&owner, &amount, &nature, &price);
                 let account = Account { chain_id, owner };
                 let transfers = self
                     .insert_and_uncross_market(&account, amount, nature, &price)
                     .await?;
                 for transfer in transfers {
-                    self.send_to(transfer)?;
+                    self.send_to(transfer);
                 }
             }
             Order::Cancel { owner, order_id } => {
@@ -315,7 +318,7 @@ impl MatchingEngineContract {
         outcome: &mut ExecutionOutcome<Message>,
         order: Order,
     ) -> Result<(), MatchingEngineError> {
-        let chain_id = system_api::current_application_id().creation.chain_id;
+        let chain_id = self.runtime.application_id().creation.chain_id;
         let message = Message::ExecuteOrder {
             order: order.clone(),
         };
@@ -329,7 +332,7 @@ impl MatchingEngineContract {
             // First, move the funds to the matching engine chain (under the same owner).
             let destination = Account { chain_id, owner };
             let (amount, token_idx) = Self::get_amount_idx(&nature, &price, &amount);
-            self.transfer(owner, amount, destination, token_idx)?;
+            self.transfer(owner, amount, destination, token_idx);
         }
         outcome.messages.push(OutgoingMessage {
             destination: chain_id.into(),
@@ -371,7 +374,8 @@ impl MatchingEngineContract {
     ) -> Result<(), MatchingEngineError> {
         self.check_order_id(&order_id, owner).await?;
         let transfer = self.modify_order(order_id, cancel_amount).await?;
-        self.send_to(transfer)
+        self.send_to(transfer);
+        Ok(())
     }
 
     /// Orders which have length 0 should be removed from the system.

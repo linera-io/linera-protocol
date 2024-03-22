@@ -6,11 +6,10 @@
 mod state;
 
 use async_trait::async_trait;
-use crowd_funding::{ApplicationCall, InitializationArgument, Message, Operation};
+use crowd_funding::{ApplicationCall, CrowdFundingAbi, InitializationArgument, Message, Operation};
 use fungible::{Account, FungibleResponse, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
-    contract::system_api,
     ensure,
     views::View,
     ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
@@ -21,13 +20,13 @@ use thiserror::Error;
 
 pub struct CrowdFundingContract {
     state: CrowdFunding,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(CrowdFundingContract);
 
 impl WithContractAbi for CrowdFundingContract {
-    type Abi = crowd_funding::CrowdFundingAbi;
+    type Abi = CrowdFundingAbi;
 }
 
 #[async_trait]
@@ -36,7 +35,7 @@ impl Contract for CrowdFundingContract {
     type Storage = ViewStateStorage<Self>;
     type State = CrowdFunding;
 
-    async fn new(state: CrowdFunding, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+    async fn new(state: CrowdFunding, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(CrowdFundingContract { state, runtime })
     }
 
@@ -49,12 +48,13 @@ impl Contract for CrowdFundingContract {
         argument: InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
-        assert!(Self::parameters().is_ok());
+        let _ = self.runtime.application_parameters();
 
         self.state.initialization_argument.set(Some(argument));
 
+        let deadline = self.initialization_argument().deadline;
         ensure!(
-            self.initialization_argument().deadline > system_api::current_system_time(),
+            deadline > self.runtime.system_time(),
             Error::DeadlineInThePast
         );
 
@@ -69,8 +69,7 @@ impl Contract for CrowdFundingContract {
 
         match operation {
             Operation::Pledge { owner, amount } => {
-                if self.runtime.chain_id() == system_api::current_application_id().creation.chain_id
-                {
+                if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
                     self.execute_pledge_with_account(owner, amount).await?;
                 } else {
                     self.execute_pledge_with_transfer(&mut outcome, owner, amount)?;
@@ -90,8 +89,7 @@ impl Contract for CrowdFundingContract {
         match message {
             Message::PledgeWithAccount { owner, amount } => {
                 ensure!(
-                    self.runtime.chain_id()
-                        == system_api::current_application_id().creation.chain_id,
+                    self.runtime.chain_id() == self.runtime.application_id().creation.chain_id,
                     Error::CampaignChainOnly
                 );
                 self.execute_pledge_with_account(owner, amount).await?;
@@ -118,10 +116,10 @@ impl Contract for CrowdFundingContract {
 }
 
 impl CrowdFundingContract {
-    fn fungible_id() -> Result<ApplicationId<FungibleTokenAbi>, Error> {
+    fn fungible_id(&mut self) -> ApplicationId<FungibleTokenAbi> {
         // TODO(#723): We should be able to pull the fungible ID from the
         // `required_application_ids` of the application description.
-        Self::parameters()
+        self.runtime.application_parameters()
     }
 
     /// Adds a pledge from a local account to the remote campaign chain.
@@ -133,7 +131,7 @@ impl CrowdFundingContract {
     ) -> Result<(), Error> {
         ensure!(amount > Amount::ZERO, Error::EmptyPledge);
         // The campaign chain.
-        let chain_id = system_api::current_application_id().creation.chain_id;
+        let chain_id = self.runtime.application_id().creation.chain_id;
         // First, move the funds to the campaign chain (under the same owner).
         // TODO(#589): Simplify this when the messaging system guarantees atomic delivery
         // of all messages created in the same operation/message.
@@ -143,11 +141,9 @@ impl CrowdFundingContract {
             amount,
             destination,
         };
-        self.call_application(
-            /* authenticated by owner */ true,
-            Self::fungible_id()?,
-            &call,
-        )?;
+        let fungible_id = self.fungible_id();
+        self.runtime
+            .call_application(/* authenticated by owner */ true, fungible_id, &call);
         // Second, schedule the attribution of the funds to the (remote) campaign.
         let message = Message::PledgeWithAccount { owner, amount };
         outcome.messages.push(OutgoingMessage {
@@ -167,7 +163,7 @@ impl CrowdFundingContract {
         amount: Amount,
     ) -> Result<(), Error> {
         ensure!(amount > Amount::ZERO, Error::EmptyPledge);
-        self.receive_from_account(owner, amount)?;
+        self.receive_from_account(owner, amount);
         self.finish_pledge(owner, amount).await
     }
 
@@ -184,7 +180,10 @@ impl CrowdFundingContract {
                     .saturating_add_assign(amount);
                 Ok(())
             }
-            Status::Complete => self.send_to(amount, self.initialization_argument().owner),
+            Status::Complete => {
+                self.send_to(amount, self.initialization_argument().owner);
+                Ok(())
+            }
             Status::Cancelled => Err(Error::Cancelled),
         }
     }
@@ -204,7 +203,7 @@ impl CrowdFundingContract {
             Status::Cancelled => return Err(Error::Cancelled),
         }
 
-        self.send_to(total, self.initialization_argument().owner)?;
+        self.send_to(total, self.initialization_argument().owner);
         self.state.pledges.clear();
         self.state.status.set(Status::Complete);
 
@@ -218,7 +217,7 @@ impl CrowdFundingContract {
         // TODO(#728): Remove this.
         #[cfg(not(any(test, feature = "test")))]
         ensure!(
-            system_api::current_system_time() >= self.initialization_argument().deadline,
+            self.runtime.system_time() >= self.initialization_argument().deadline,
             Error::DeadlineNotReached
         );
 
@@ -232,11 +231,11 @@ impl CrowdFundingContract {
             .await
             .expect("view iteration should not fail");
         for (pledger, amount) in pledges {
-            self.send_to(amount, pledger)?;
+            self.send_to(amount, pledger);
         }
 
         let balance = self.balance()?;
-        self.send_to(balance, self.initialization_argument().owner)?;
+        self.send_to(balance, self.initialization_argument().owner);
         self.state.status.set(Status::Cancelled);
 
         Ok(())
@@ -244,12 +243,13 @@ impl CrowdFundingContract {
 
     /// Queries the token application to determine the total amount of tokens in custody.
     fn balance(&mut self) -> Result<Amount, Error> {
-        let owner = AccountOwner::Application(system_api::current_application_id());
-        let response = self.call_application(
+        let owner = AccountOwner::Application(self.runtime.application_id().forget_abi());
+        let fungible_id = self.fungible_id();
+        let response = self.runtime.call_application(
             true,
-            Self::fungible_id()?,
+            fungible_id,
             &fungible::ApplicationCall::Balance { owner },
-        )?;
+        );
         match response {
             fungible::FungibleResponse::Balance(balance) => Ok(balance),
             response => Err(Error::UnexpectedFungibleResponse(response)),
@@ -257,33 +257,33 @@ impl CrowdFundingContract {
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
-    fn send_to(&mut self, amount: Amount, owner: AccountOwner) -> Result<(), Error> {
+    fn send_to(&mut self, amount: Amount, owner: AccountOwner) {
         let destination = Account {
-            chain_id: system_api::current_chain_id(),
+            chain_id: self.runtime.chain_id(),
             owner,
         };
         let transfer = fungible::ApplicationCall::Transfer {
-            owner: AccountOwner::Application(system_api::current_application_id()),
+            owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
             amount,
             destination,
         };
-        self.call_application(true, Self::fungible_id()?, &transfer)?;
-        Ok(())
+        let fungible_id = self.fungible_id();
+        self.runtime.call_application(true, fungible_id, &transfer);
     }
 
     /// Calls into the Fungible Token application to receive tokens from the given account.
-    fn receive_from_account(&mut self, owner: AccountOwner, amount: Amount) -> Result<(), Error> {
+    fn receive_from_account(&mut self, owner: AccountOwner, amount: Amount) {
         let destination = Account {
-            chain_id: system_api::current_chain_id(),
-            owner: AccountOwner::Application(system_api::current_application_id()),
+            chain_id: self.runtime.chain_id(),
+            owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
         };
         let transfer = fungible::ApplicationCall::Transfer {
             owner,
             amount,
             destination,
         };
-        self.call_application(true, Self::fungible_id()?, &transfer)?;
-        Ok(())
+        let fungible_id = self.fungible_id();
+        self.runtime.call_application(true, fungible_id, &transfer);
     }
 
     pub fn initialization_argument(&self) -> &InitializationArgument {

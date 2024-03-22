@@ -17,6 +17,7 @@ mod conversions_from_wit;
 mod conversions_to_wit;
 
 use self::mock_system_api as wit;
+use crate::{Contract, ContractRuntime, Service, ServiceRuntime};
 use futures::FutureExt;
 use linera_base::{
     data_types::{Amount, Timestamp},
@@ -39,6 +40,16 @@ static mut MOCK_LOG_COLLECTOR: Vec<(log::Level, String)> = Vec::new();
 static mut MOCK_KEY_VALUE_STORE: Option<MemoryContext<()>> = None;
 static mut MOCK_TRY_QUERY_APPLICATION: Option<Box<dyn FnMut(ApplicationId, Vec<u8>) -> Vec<u8>>> =
     None;
+
+/// Creates a [`ContractRuntime`] to use in tests.
+pub fn test_contract_runtime<Application: Contract>() -> ContractRuntime<Application> {
+    ContractRuntime::new()
+}
+
+/// Creates a [`ServiceRuntime`] to use in tests.
+pub fn test_service_runtime<Application: Service>() -> ServiceRuntime<Application> {
+    ServiceRuntime::new()
+}
 
 /// Sets the mocked chain ID.
 pub fn mock_chain_id(chain_id: impl Into<Option<ChainId>>) {

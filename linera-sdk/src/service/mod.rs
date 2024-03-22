@@ -7,15 +7,12 @@ mod conversions_from_wit;
 mod conversions_to_wit;
 mod runtime;
 mod storage;
-pub mod system_api;
+pub(crate) mod wit_system_api;
 pub mod wit_types;
 
 pub use self::{runtime::ServiceRuntime, storage::ServiceStateStorage};
 use crate::{util::BlockingWait, ServiceLogger};
 use std::future::Future;
-
-// Import the system interface.
-wit_bindgen_guest_rust::import!("service_system_api.wit");
 
 /// Declares an implementation of the [`Service`][`crate::Service`] trait, exporting it from the
 /// Wasm module.

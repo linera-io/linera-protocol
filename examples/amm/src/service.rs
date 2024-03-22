@@ -26,7 +26,7 @@ impl Service for AmmService {
     type Storage = ViewStateStorage<Self>;
     type State = Amm;
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime) -> Result<Self, Self::Error> {
+    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(AmmService {
             state: Arc::new(state),
         })

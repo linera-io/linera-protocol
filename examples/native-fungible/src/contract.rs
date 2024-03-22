@@ -7,10 +7,9 @@ mod state;
 
 use self::state::NativeFungibleToken;
 use async_trait::async_trait;
-use fungible::{ApplicationCall, FungibleResponse, Message, Operation};
+use fungible::{ApplicationCall, FungibleResponse, FungibleTokenAbi, Message, Operation};
 use linera_sdk::{
     base::{Account, AccountOwner, Amount, Owner, WithContractAbi},
-    contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
 use native_fungible::TICKER_SYMBOL;
@@ -18,13 +17,13 @@ use thiserror::Error;
 
 pub struct NativeFungibleTokenContract {
     state: NativeFungibleToken,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(NativeFungibleTokenContract);
 
 impl WithContractAbi for NativeFungibleTokenContract {
-    type Abi = fungible::FungibleTokenAbi;
+    type Abi = FungibleTokenAbi;
 }
 
 #[async_trait]
@@ -35,7 +34,7 @@ impl Contract for NativeFungibleTokenContract {
 
     async fn new(
         state: NativeFungibleToken,
-        runtime: ContractRuntime,
+        runtime: ContractRuntime<Self>,
     ) -> Result<Self, Self::Error> {
         Ok(NativeFungibleTokenContract { state, runtime })
     }
@@ -50,16 +49,16 @@ impl Contract for NativeFungibleTokenContract {
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
         assert!(
-            Self::parameters().is_ok_and(|param| param.ticker_symbol == "NAT"),
+            self.runtime.application_parameters().ticker_symbol == "NAT",
             "Only NAT is accepted as ticker symbol"
         );
         for (owner, amount) in state.accounts {
             let owner = self.normalize_owner(owner);
             let account = Account {
-                chain_id: system_api::current_chain_id(),
+                chain_id: self.runtime.chain_id(),
                 owner: Some(owner),
             };
-            system_api::transfer(None, account, amount);
+            self.runtime.transfer(None, account, amount);
         }
         Ok(ExecutionOutcome::default())
     }
@@ -81,7 +80,7 @@ impl Contract for NativeFungibleTokenContract {
                 let fungible_target_account = target_account;
                 let target_account = self.normalize_account(target_account);
 
-                system_api::transfer(Some(owner), target_account, amount);
+                self.runtime.transfer(Some(owner), target_account, amount);
 
                 Ok(self.get_transfer_outcome(account_owner, fungible_target_account, amount))
             }
@@ -99,7 +98,7 @@ impl Contract for NativeFungibleTokenContract {
                 let source_account = self.normalize_account(source_account);
                 let target_account = self.normalize_account(target_account);
 
-                system_api::claim(source_account, target_account, amount);
+                self.runtime.claim(source_account, target_account, amount);
                 Ok(
                     self.get_claim_outcome(
                         fungible_source_account,
@@ -148,7 +147,7 @@ impl Contract for NativeFungibleTokenContract {
                 let owner = self.normalize_owner(owner);
 
                 let mut outcome = ApplicationCallOutcome::default();
-                let balance = system_api::current_owner_balance(owner);
+                let balance = self.runtime.owner_balance(owner);
                 outcome.value = FungibleResponse::Balance(balance);
                 Ok(outcome)
             }
@@ -164,7 +163,7 @@ impl Contract for NativeFungibleTokenContract {
 
                 let target_account = self.normalize_account(destination);
 
-                system_api::transfer(Some(owner), target_account, amount);
+                self.runtime.transfer(Some(owner), target_account, amount);
                 let execution_outcome =
                     self.get_transfer_outcome(account_owner, destination, amount);
                 Ok(ApplicationCallOutcome {
@@ -186,7 +185,7 @@ impl Contract for NativeFungibleTokenContract {
                 let source_account = self.normalize_account(source_account);
                 let target_account = self.normalize_account(target_account);
 
-                system_api::claim(source_account, target_account, amount);
+                self.runtime.claim(source_account, target_account, amount);
                 let execution_outcome = self.get_claim_outcome(
                     fungible_source_account,
                     fungible_target_account,
@@ -211,12 +210,12 @@ impl Contract for NativeFungibleTokenContract {
 
 impl NativeFungibleTokenContract {
     fn get_transfer_outcome(
-        &self,
+        &mut self,
         source: AccountOwner,
         target: fungible::Account,
         amount: Amount,
     ) -> ExecutionOutcome<Message> {
-        if target.chain_id == system_api::current_chain_id() {
+        if target.chain_id == self.runtime.chain_id() {
             ExecutionOutcome::default()
         } else {
             let message = Message::Credit {
@@ -230,12 +229,12 @@ impl NativeFungibleTokenContract {
     }
 
     fn get_claim_outcome(
-        &self,
+        &mut self,
         source: fungible::Account,
         target: fungible::Account,
         amount: Amount,
     ) -> ExecutionOutcome<Message> {
-        if source.chain_id == system_api::current_chain_id() {
+        if source.chain_id == self.runtime.chain_id() {
             self.get_transfer_outcome(source.owner, target, amount)
         } else {
             // If different chain, send message that will be ignored so the app gets auto-deployed

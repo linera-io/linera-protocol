@@ -10,22 +10,21 @@ use async_trait::async_trait;
 use fungible::Account;
 use linera_sdk::{
     base::{AccountOwner, WithContractAbi},
-    contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
-use non_fungible::{Message, Nft, Operation, TokenId};
+use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
 use std::collections::BTreeSet;
 use thiserror::Error;
 
 pub struct NonFungibleTokenContract {
     state: NonFungibleToken,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(NonFungibleTokenContract);
 
 impl WithContractAbi for NonFungibleTokenContract {
-    type Abi = non_fungible::NonFungibleTokenAbi;
+    type Abi = NonFungibleTokenAbi;
 }
 
 #[async_trait]
@@ -34,7 +33,10 @@ impl Contract for NonFungibleTokenContract {
     type Storage = ViewStateStorage<Self>;
     type State = NonFungibleToken;
 
-    async fn new(state: NonFungibleToken, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+    async fn new(
+        state: NonFungibleToken,
+        runtime: ContractRuntime<Self>,
+    ) -> Result<Self, Self::Error> {
         Ok(NonFungibleTokenContract { state, runtime })
     }
 
@@ -47,7 +49,7 @@ impl Contract for NonFungibleTokenContract {
         _state: Self::InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
-        assert!(Self::parameters().is_ok());
+        self.runtime.application_parameters();
         self.state.num_minted_nfts.set(0);
         Ok(ExecutionOutcome::default())
     }
@@ -86,7 +88,7 @@ impl Contract for NonFungibleTokenContract {
             } => {
                 self.check_account_authentication(source_account.owner)?;
 
-                if source_account.chain_id == system_api::current_chain_id() {
+                if source_account.chain_id == self.runtime.chain_id() {
                     let nft = self.get_nft(&token_id).await?;
                     self.check_account_authentication(nft.owner)?;
 
@@ -177,8 +179,7 @@ impl Contract for NonFungibleTokenContract {
             } => {
                 self.check_account_authentication(source_account.owner)?;
 
-                let execution_outcome = if source_account.chain_id == system_api::current_chain_id()
-                {
+                let execution_outcome = if source_account.chain_id == self.runtime.chain_id() {
                     let nft = self.get_nft(&token_id).await?;
                     self.check_account_authentication(nft.owner)?;
 
@@ -225,7 +226,7 @@ impl NonFungibleTokenContract {
         target_account: Account,
     ) -> ExecutionOutcome<Message> {
         self.remove_nft(&nft).await;
-        if target_account.chain_id == system_api::current_chain_id() {
+        if target_account.chain_id == self.runtime.chain_id() {
             nft.owner = target_account.owner;
             self.add_nft(nft).await;
             ExecutionOutcome::default()
@@ -257,8 +258,8 @@ impl NonFungibleTokenContract {
         payload: Vec<u8>,
     ) -> Result<ExecutionOutcome<Message>, Error> {
         let token_id = Nft::create_token_id(
-            &system_api::current_chain_id(),
-            &system_api::current_application_id(),
+            &self.runtime.chain_id(),
+            &self.runtime.application_id().forget_abi(),
             &name,
             &owner,
             &payload,

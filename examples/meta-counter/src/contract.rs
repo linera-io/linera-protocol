@@ -12,24 +12,24 @@ use linera_sdk::{
     ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
     Resources, SimpleStateStorage,
 };
-use meta_counter::{Message, Operation};
+use meta_counter::{Message, MetaCounterAbi, Operation};
 use thiserror::Error;
 
 pub struct MetaCounterContract {
     state: MetaCounter,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(MetaCounterContract);
 
 impl MetaCounterContract {
-    fn counter_id() -> Result<ApplicationId<counter::CounterAbi>, Error> {
-        Self::parameters()
+    fn counter_id(&mut self) -> ApplicationId<counter::CounterAbi> {
+        self.runtime.application_parameters()
     }
 }
 
 impl WithContractAbi for MetaCounterContract {
-    type Abi = meta_counter::MetaCounterAbi;
+    type Abi = MetaCounterAbi;
 }
 
 #[async_trait]
@@ -38,7 +38,7 @@ impl Contract for MetaCounterContract {
     type Storage = SimpleStateStorage<Self>;
     type State = MetaCounter;
 
-    async fn new(state: MetaCounter, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+    async fn new(state: MetaCounter, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(MetaCounterContract { state, runtime })
     }
 
@@ -51,9 +51,7 @@ impl Contract for MetaCounterContract {
         _argument: (),
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
-        assert!(Self::parameters().is_ok());
-
-        Self::counter_id()?;
+        self.counter_id();
         // Send a no-op message to ourselves. This is only for testing contracts that send messages
         // on initialization. Since the value is 0 it does not change the counter value.
         Ok(
@@ -107,8 +105,9 @@ impl Contract for MetaCounterContract {
                 Err(Error::MessageFailed)
             }
             Message::Increment(value) => {
-                log::trace!("executing {} via {:?}", value, Self::counter_id()?);
-                self.call_application(true, Self::counter_id()?, &value)?;
+                let counter_id = self.counter_id();
+                log::trace!("executing {} via {:?}", value, counter_id);
+                self.runtime.call_application(true, counter_id, &value);
                 Ok(ExecutionOutcome::default())
             }
         }

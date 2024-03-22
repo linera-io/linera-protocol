@@ -107,7 +107,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     type Storage: ContractStateStorage<Self> + Send + 'static;
 
     /// Creates a in-memory instance of the contract handler from the application's `state`.
-    async fn new(state: Self::State, runtime: ContractRuntime) -> Result<Self, Self::Error>;
+    async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error>;
 
     /// Returns the current state of the application so that it can be persisted.
     fn state_mut(&mut self) -> &mut Self::State;
@@ -186,35 +186,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
         Self::Storage::store(self.state_mut()).await;
         Ok(ExecutionOutcome::default())
     }
-
-    /// Calls another application.
-    fn call_application<A: ContractAbi + Send>(
-        &mut self,
-        authenticated: bool,
-        application: ApplicationId<A>,
-        call: &A::ApplicationCall,
-    ) -> Result<A::Response, Self::Error> {
-        let call_bytes = bcs::to_bytes(call)?;
-        let response_bytes = crate::contract::system_api::call_application(
-            authenticated,
-            application.forget_abi(),
-            &call_bytes,
-        );
-        let response = bcs::from_bytes(&response_bytes)?;
-        Ok(response)
-    }
-
-    /// Retrieves the parameters of the application.
-    fn parameters() -> Result<Self::Parameters, Self::Error> {
-        let bytes = crate::contract::system_api::current_application_parameters();
-        let parameters = serde_json::from_slice(&bytes)?;
-        Ok(parameters)
-    }
-
-    /// Retrieves the current application ID.
-    fn current_application_id() -> ApplicationId<Self::Abi> {
-        crate::contract::system_api::current_application_id().with_abi()
-    }
 }
 
 /// The service interface of a Linera application.
@@ -240,32 +211,10 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     type Storage: ServiceStateStorage;
 
     /// Creates a in-memory instance of the service handler from the application's `state`.
-    async fn new(state: Self::State, runtime: ServiceRuntime) -> Result<Self, Self::Error>;
+    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error>;
 
     /// Executes a read-only query on the state of this application.
     async fn handle_query(&self, query: Self::Query) -> Result<Self::QueryResponse, Self::Error>;
-
-    /// Queries another application.
-    fn query_application<A: ServiceAbi>(
-        application: ApplicationId<A>,
-        query: &A::Query,
-    ) -> Result<A::QueryResponse, Self::Error>
-    where
-        Self::Error: From<String>,
-    {
-        let query_bytes = serde_json::to_vec(&query)?;
-        let response_bytes =
-            crate::service::system_api::query_application(application.forget_abi(), &query_bytes);
-        let response = serde_json::from_slice(&response_bytes)?;
-        Ok(response)
-    }
-
-    /// Retrieves the parameters of the application.
-    fn parameters() -> Result<Self::Parameters, Self::Error> {
-        let bytes = crate::service::system_api::current_application_parameters();
-        let parameters = serde_json::from_slice(&bytes)?;
-        Ok(parameters)
-    }
 }
 
 /// The context of the execution of an application's operation.

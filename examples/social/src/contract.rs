@@ -8,11 +8,10 @@ mod state;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{ChannelName, Destination, MessageId, WithContractAbi},
-    contract::system_api,
     views::ViewError,
     ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
-use social::{Key, Message, Operation, OwnPost};
+use social::{Key, Message, Operation, OwnPost, SocialAbi};
 use state::Social;
 use thiserror::Error;
 
@@ -23,13 +22,13 @@ const RECENT_POSTS: usize = 10;
 
 pub struct SocialContract {
     state: Social,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(SocialContract);
 
 impl WithContractAbi for SocialContract {
-    type Abi = social::SocialAbi;
+    type Abi = SocialAbi;
 }
 
 #[async_trait]
@@ -38,7 +37,7 @@ impl Contract for SocialContract {
     type Storage = ViewStateStorage<Self>;
     type State = Social;
 
-    async fn new(state: Social, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+    async fn new(state: Social, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(SocialContract { state, runtime })
     }
 
@@ -51,7 +50,7 @@ impl Contract for SocialContract {
         _argument: (),
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
-        assert!(Self::parameters().is_ok());
+        let _ = self.runtime.application_parameters();
 
         Ok(ExecutionOutcome::default())
     }
@@ -109,7 +108,7 @@ impl SocialContract {
         &mut self,
         text: String,
     ) -> Result<ExecutionOutcome<Message>, Error> {
-        let timestamp = system_api::current_system_time();
+        let timestamp = self.runtime.system_time();
         self.state.own_posts.push(OwnPost { timestamp, text });
         let count = self.state.own_posts.count();
         let mut posts = vec![];

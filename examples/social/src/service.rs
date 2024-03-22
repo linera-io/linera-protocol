@@ -30,7 +30,7 @@ impl Service for SocialService {
     type Storage = ViewStateStorage<Self>;
     type State = Social;
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime) -> Result<Self, Self::Error> {
+    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(SocialService {
             state: Arc::new(state),
         })
