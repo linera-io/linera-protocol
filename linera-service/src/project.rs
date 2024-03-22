@@ -266,6 +266,7 @@ impl Project {
         let contract_name = format!("{}_contract", name);
         let service_name = format!("{}_service", name);
         let cargo_build = Command::new("cargo")
+            // .env("RUSTFLAGS", "-Ctarget-feature=+simd128")
             .arg("build")
             .arg("--release")
             .args(["--target", "wasm32-unknown-unknown"])
