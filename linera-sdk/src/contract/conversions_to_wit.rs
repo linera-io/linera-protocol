@@ -82,6 +82,54 @@ impl From<MessageId> for wit_system_api::MessageId {
     }
 }
 
+impl<'a> From<&'a OutgoingMessage<Vec<u8>>> for wit_system_api::OutgoingMessage<'a> {
+    fn from(message: &'a OutgoingMessage<Vec<u8>>) -> Self {
+        Self {
+            destination: (&message.destination).into(),
+            authenticated: message.authenticated,
+            is_tracked: message.is_tracked,
+            resources: message.grant.into(),
+            message: &message.message,
+        }
+    }
+}
+
+impl<'a> From<&'a Destination> for wit_system_api::Destination<'a> {
+    fn from(destination: &'a Destination) -> Self {
+        match destination {
+            Destination::Recipient(chain_id) => {
+                wit_system_api::Destination::Recipient(chain_id.0.into())
+            }
+            Destination::Subscribers(subscription) => {
+                wit_system_api::Destination::Subscribers(subscription.into())
+            }
+        }
+    }
+}
+
+impl<'a> From<&'a ChannelName> for wit_system_api::ChannelName<'a> {
+    fn from(name: &'a ChannelName) -> Self {
+        wit_system_api::ChannelName {
+            name: name.as_ref(),
+        }
+    }
+}
+
+impl From<Resources> for wit_system_api::Resources {
+    fn from(resources: Resources) -> Self {
+        wit_system_api::Resources {
+            fuel: resources.fuel,
+            read_operations: resources.read_operations,
+            write_operations: resources.write_operations,
+            bytes_to_read: resources.bytes_to_read,
+            bytes_to_write: resources.bytes_to_write,
+            messages: resources.messages,
+            message_size: resources.message_size,
+            storage_size_delta: resources.storage_size_delta,
+        }
+    }
+}
+
 impl From<log::Level> for wit_system_api::LogLevel {
     fn from(level: log::Level) -> Self {
         match level {
