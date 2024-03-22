@@ -23,7 +23,7 @@ cfg_if::cfg_if! {
         pub use tonic_web_wasm_client::{Client as Channel, Error};
 
         pub fn create_channel(address: String, _options: &Options) -> Result<Channel, Error> {
-            // TODO this should respect `options`
+            // TODO(#1817): this should respect `options`
             Ok(tonic_web_wasm_client::Client::new(address))
         }
     } else {
