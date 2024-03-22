@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::RpcMessage;
+
+use async_trait::async_trait;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -16,7 +18,7 @@ pub enum MassClientError {
     Rpc(#[from] tonic::Status),
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 pub trait MassClient {
     async fn send(
         &mut self,

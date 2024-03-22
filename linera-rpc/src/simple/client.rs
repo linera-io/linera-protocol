@@ -3,22 +3,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{codec, transport::TransportProtocol};
+
 use crate::{
     config::ValidatorPublicNetworkPreConfig, mass_client, HandleCertificateRequest,
     HandleLiteCertificateRequest, RpcMessage,
 };
-use futures::{sink::SinkExt, stream::StreamExt};
+
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNodeInner},
 };
-
 use linera_version::VersionInfo;
 
-use std::{future::Future, time::Duration};
+use async_trait::async_trait;
+use futures::{sink::SinkExt, stream::StreamExt};
 use tokio::time;
+
+use std::{future::Future, time::Duration};
 
 #[derive(Clone)]
 pub struct SimpleClient {
@@ -150,7 +153,7 @@ impl SimpleMassClient {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl mass_client::MassClient for SimpleMassClient {
     async fn send(
         &mut self,
