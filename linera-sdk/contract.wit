@@ -1,53 +1,5 @@
-initialize: func(argument: list<u8>) -> result<execution-outcome, string>
-execute-operation: func(operation: list<u8>) -> result<execution-outcome, string>
-execute-message: func(message: list<u8>) -> result<execution-outcome, string>
-handle-application-call: func(argument: list<u8>) -> result<application-call-outcome, string>
-finalize: func() -> result<execution-outcome, string>
-
-type chain-id = crypto-hash
-
-record application-call-outcome {
-    value: list<u8>,
-    execution-outcome: execution-outcome,
-}
-
-record outgoing-message {
-    destination: destination,
-    authenticated: bool,
-    is-tracked: bool,
-    resources: resources,
-    message: list<u8>,
-}
-
-record resources {
-    fuel: u64,
-    read-operations: u32,
-    write-operations: u32,
-    bytes-to-read: u32,
-    bytes-to-write: u32,
-    messages: u32,
-    message-size: u32,
-    storage-size-delta: u32,
-}
-
-record execution-outcome {
-    messages: list<outgoing-message>,
-    subscribe: list<tuple<channel-name, chain-id>>,
-    unsubscribe: list<tuple<channel-name, chain-id>>,
-}
-
-variant destination {
-    recipient(chain-id),
-    subscribers(channel-name),
-}
-
-record channel-name {
-    name: list<u8>,
-}
-
-record crypto-hash {
-    part1: u64,
-    part2: u64,
-    part3: u64,
-    part4: u64,
-}
+initialize: func(argument: list<u8>) -> result<tuple<>, string>
+execute-operation: func(operation: list<u8>) -> result<tuple<>, string>
+execute-message: func(message: list<u8>) -> result<tuple<>, string>
+handle-application-call: func(argument: list<u8>) -> result<list<u8>, string>
+finalize: func() -> result<tuple<>, string>

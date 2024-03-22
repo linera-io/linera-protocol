@@ -8,10 +8,6 @@
 // Export the contract interface.
 wit_bindgen_guest_rust::export!("contract.wit");
 
-pub use self::contract::{
-    ApplicationCallOutcome, ChainId, ChannelName, CryptoHash, Destination, ExecutionOutcome,
-    OutgoingMessage, Resources,
-};
 use super::{
     __contract_execute_message, __contract_execute_operation, __contract_finalize,
     __contract_handle_application_call, __contract_initialize,
@@ -21,32 +17,23 @@ use super::{
 pub struct Contract;
 
 impl contract::Contract for Contract {
-    fn initialize(argument: Vec<u8>) -> Result<ExecutionOutcome, String> {
+    fn initialize(argument: Vec<u8>) -> Result<(), String> {
         unsafe { __contract_initialize(argument) }
-            .map(|()| crate::ExecutionOutcome::default().into())
     }
 
-    fn execute_operation(operation: Vec<u8>) -> Result<ExecutionOutcome, String> {
+    fn execute_operation(operation: Vec<u8>) -> Result<(), String> {
         unsafe { __contract_execute_operation(operation) }
-            .map(|()| crate::ExecutionOutcome::default().into())
     }
 
-    fn execute_message(message: Vec<u8>) -> Result<ExecutionOutcome, String> {
+    fn execute_message(message: Vec<u8>) -> Result<(), String> {
         unsafe { __contract_execute_message(message) }
-            .map(|()| crate::ExecutionOutcome::default().into())
     }
 
-    fn handle_application_call(argument: Vec<u8>) -> Result<ApplicationCallOutcome, String> {
-        unsafe { __contract_handle_application_call(argument) }.map(|value| {
-            crate::ApplicationCallOutcome {
-                value,
-                execution_outcome: crate::ExecutionOutcome::<Vec<u8>>::default(),
-            }
-            .into()
-        })
+    fn handle_application_call(argument: Vec<u8>) -> Result<Vec<u8>, String> {
+        unsafe { __contract_handle_application_call(argument) }
     }
 
-    fn finalize() -> Result<ExecutionOutcome, String> {
-        unsafe { __contract_finalize() }.map(|()| crate::ExecutionOutcome::default().into())
+    fn finalize() -> Result<(), String> {
+        unsafe { __contract_finalize() }
     }
 }

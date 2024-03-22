@@ -320,7 +320,7 @@ where
     ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         self.configure_initial_fuel()?;
         let result = contract::Contract::initialize(&self.application, &mut self.store, &argument)
-            .map(|inner| inner.map(RawExecutionOutcome::from));
+            .map(|inner| inner.map(|()| RawExecutionOutcome::default()));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
@@ -333,7 +333,7 @@ where
         self.configure_initial_fuel()?;
         let result =
             contract::Contract::execute_operation(&self.application, &mut self.store, &operation)
-                .map(|inner| inner.map(RawExecutionOutcome::from));
+                .map(|inner| inner.map(|()| RawExecutionOutcome::default()));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
@@ -346,7 +346,7 @@ where
         self.configure_initial_fuel()?;
         let result =
             contract::Contract::execute_message(&self.application, &mut self.store, &message)
-                .map(|inner| inner.map(RawExecutionOutcome::from));
+                .map(|inner| inner.map(|()| RawExecutionOutcome::default()));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
@@ -362,7 +362,12 @@ where
             &mut self.store,
             &argument,
         )
-        .map(|inner| inner.map(ApplicationCallOutcome::from));
+        .map(|inner| {
+            inner.map(|value| ApplicationCallOutcome {
+                value,
+                execution_outcome: RawExecutionOutcome::default(),
+            })
+        });
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
@@ -373,7 +378,7 @@ where
     ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         self.configure_initial_fuel()?;
         let result = contract::Contract::finalize(&self.application, &mut self.store)
-            .map(|inner| inner.map(RawExecutionOutcome::from));
+            .map(|inner| inner.map(|()| RawExecutionOutcome::default()));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }

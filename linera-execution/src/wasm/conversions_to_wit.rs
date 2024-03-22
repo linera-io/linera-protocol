@@ -15,7 +15,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 
-use super::{contract, contract_system_api, service_system_api};
+use super::{contract_system_api, service_system_api};
 use crate::{MessageId, UserApplicationId};
 
 impl From<MessageId> for service_system_api::MessageId {
@@ -65,24 +65,6 @@ impl From<ChainId> for service_system_api::ChainId {
 impl From<ChainId> for contract_system_api::ChainId {
     fn from(chain_id: ChainId) -> Self {
         chain_id.0.into()
-    }
-}
-
-impl From<ChainId> for contract::ChainId {
-    fn from(chain_id: ChainId) -> Self {
-        chain_id.0.into()
-    }
-}
-
-impl From<CryptoHash> for contract::CryptoHash {
-    fn from(crypto_hash: CryptoHash) -> Self {
-        let [part1, part2, part3, part4]: [u64; 4] = crypto_hash.into();
-        contract::CryptoHash {
-            part1,
-            part2,
-            part3,
-            part4,
-        }
     }
 }
 
