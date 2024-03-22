@@ -73,7 +73,6 @@ impl Contract for SocialContract {
         &mut self,
         message: Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        let mut outcome = ExecutionOutcome::default();
         let message_id = self
             .runtime
             .message_id()
@@ -83,15 +82,15 @@ impl Contract for SocialContract {
                 message_id.chain_id,
                 ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
             ),
-            Message::Unsubscribe => outcome.unsubscribe.push((
-                ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
+            Message::Unsubscribe => self.runtime.unsubscribe(
                 message_id.chain_id,
-            )),
+                ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
+            ),
             Message::Posts { count, posts } => {
                 self.execute_posts_message(message_id, count, posts)?
             }
         }
-        Ok(outcome)
+        Ok(ExecutionOutcome::default())
     }
 
     async fn handle_application_call(
