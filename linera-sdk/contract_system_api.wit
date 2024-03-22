@@ -24,6 +24,8 @@ enum log-level {
     error,
 }
 
+send-message: func(message: outgoing-message)
+
 try-call-application: func(
     authenticated: bool,
     application: application-id,
@@ -50,6 +52,34 @@ record application-id {
 
 type owner = crypto-hash
 type bytecode-id = message-id
+
+record outgoing-message {
+    destination: destination,
+    authenticated: bool,
+    is-tracked: bool,
+    resources: resources,
+    message: list<u8>,
+}
+
+record resources {
+    fuel: u64,
+    read-operations: u32,
+    write-operations: u32,
+    bytes-to-read: u32,
+    bytes-to-write: u32,
+    messages: u32,
+    message-size: u32,
+    storage-size-delta: u32,
+}
+
+variant destination {
+    recipient(chain-id),
+    subscribers(channel-name),
+}
+
+record channel-name {
+    name: list<u8>,
+}
 
 record message-id {
     chain-id: chain-id,

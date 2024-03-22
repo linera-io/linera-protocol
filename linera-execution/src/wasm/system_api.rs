@@ -75,6 +75,13 @@ macro_rules! impl_contract_system_api {
                 BaseRuntime::read_owner_balance(self, owner.into()).map(|balance| balance.into())
             }
 
+            fn send_message(
+                &mut self,
+                message: contract_system_api::OutgoingMessage,
+            ) -> Result<(), Self::Error> {
+                ContractRuntime::send_message(self, message.into())
+            }
+
             fn transfer(
                 &mut self,
                 source: Option<contract_system_api::Owner>,
