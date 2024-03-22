@@ -26,6 +26,7 @@ enum log-level {
 
 send-message: func(message: outgoing-message)
 subscribe: func(chain: chain-id, channel: channel-name)
+unsubscribe: func(chain: chain-id, channel: channel-name)
 
 try-call-application: func(
     authenticated: bool,

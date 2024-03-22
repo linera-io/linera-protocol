@@ -90,6 +90,14 @@ macro_rules! impl_contract_system_api {
                 ContractRuntime::subscribe(self, chain.into(), channel.into())
             }
 
+            fn unsubscribe(
+                &mut self,
+                chain: contract_system_api::ChainId,
+                channel: contract_system_api::ChannelName,
+            ) -> Result<(), Self::Error> {
+                ContractRuntime::unsubscribe(self, chain.into(), channel.into())
+            }
+
             fn transfer(
                 &mut self,
                 source: Option<contract_system_api::Owner>,
