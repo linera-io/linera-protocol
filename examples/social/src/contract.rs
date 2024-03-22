@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use linera_sdk::{
     base::{ChannelName, Destination, MessageId, WithContractAbi},
     views::ViewError,
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
+    Contract, ContractRuntime, ViewStateStorage,
 };
 use social::{Key, Message, Operation, OwnPost, SocialAbi};
 use state::Social;
@@ -45,20 +45,14 @@ impl Contract for SocialContract {
         &mut self.state
     }
 
-    async fn initialize(
-        &mut self,
-        _argument: (),
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn initialize(&mut self, _argument: ()) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
 
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
-    async fn execute_operation(
-        &mut self,
-        operation: Operation,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn execute_operation(&mut self, operation: Operation) -> Result<(), Self::Error> {
         let (destination, message) = match operation {
             Operation::Subscribe { chain_id } => (chain_id.into(), Message::Subscribe),
             Operation::Unsubscribe { chain_id } => (chain_id.into(), Message::Unsubscribe),
@@ -66,13 +60,10 @@ impl Contract for SocialContract {
         };
 
         self.runtime.send_message(destination, message);
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
-    async fn execute_message(
-        &mut self,
-        message: Message,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn execute_message(&mut self, message: Message) -> Result<(), Self::Error> {
         let message_id = self
             .runtime
             .message_id()
@@ -90,13 +81,10 @@ impl Contract for SocialContract {
                 self.execute_posts_message(message_id, count, posts)?
             }
         }
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
-    async fn handle_application_call(
-        &mut self,
-        _call: (),
-    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
+    async fn handle_application_call(&mut self, _call: ()) -> Result<Self::Response, Self::Error> {
         Err(Error::ApplicationCallsNotSupported)
     }
 }

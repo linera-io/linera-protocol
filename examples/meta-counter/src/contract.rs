@@ -8,8 +8,7 @@ mod state;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{ApplicationId, WithContractAbi},
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, Resources,
-    SimpleStateStorage,
+    Contract, ContractRuntime, Resources, SimpleStateStorage,
 };
 use meta_counter::{Message, MetaCounterAbi, Operation};
 use thiserror::Error;
@@ -47,23 +46,17 @@ impl Contract for MetaCounterContract {
         &mut self.state
     }
 
-    async fn initialize(
-        &mut self,
-        _argument: (),
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn initialize(&mut self, _argument: ()) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         self.counter_id();
         // Send a no-op message to ourselves. This is only for testing contracts that send messages
         // on initialization. Since the value is 0 it does not change the counter value.
         let this_chain = self.runtime.chain_id();
         self.runtime.send_message(this_chain, Message::Increment(0));
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
-    async fn execute_operation(
-        &mut self,
-        operation: Operation,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn execute_operation(&mut self, operation: Operation) -> Result<(), Self::Error> {
         log::trace!("operation: {:?}", operation);
         let Operation {
             recipient_id,
@@ -87,20 +80,17 @@ impl Contract for MetaCounterContract {
             send_message.with_tracking();
         }
 
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
-    async fn execute_message(
-        &mut self,
-        message: Message,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn execute_message(&mut self, message: Message) -> Result<(), Self::Error> {
         let is_bouncing = self
             .runtime
             .message_is_bouncing()
             .expect("Message delivery status has to be available when executing a message");
         if is_bouncing {
             log::trace!("receiving a bouncing message {message:?}");
-            return Ok(ExecutionOutcome::default());
+            return Ok(());
         }
         match message {
             Message::Fail => {
@@ -111,15 +101,12 @@ impl Contract for MetaCounterContract {
                 let counter_id = self.counter_id();
                 log::trace!("executing {} via {:?}", value, counter_id);
                 self.runtime.call_application(true, counter_id, &value);
-                Ok(ExecutionOutcome::default())
+                Ok(())
             }
         }
     }
 
-    async fn handle_application_call(
-        &mut self,
-        _call: (),
-    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
+    async fn handle_application_call(&mut self, _call: ()) -> Result<Self::Response, Self::Error> {
         Err(Error::CallsNotSupported)
     }
 }

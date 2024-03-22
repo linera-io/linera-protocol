@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
-    ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
+    ensure, Contract, ContractRuntime, ViewStateStorage,
 };
 use num_bigint::BigUint;
 use num_traits::{cast::FromPrimitive, ToPrimitive};
@@ -42,33 +42,24 @@ impl Contract for AmmContract {
         &mut self.state
     }
 
-    async fn initialize(
-        &mut self,
-        _argument: (),
-    ) -> Result<ExecutionOutcome<Self::Message>, AmmError> {
+    async fn initialize(&mut self, _argument: ()) -> Result<(), AmmError> {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
 
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
-    async fn execute_operation(
-        &mut self,
-        operation: Self::Operation,
-    ) -> Result<ExecutionOutcome<Self::Message>, AmmError> {
+    async fn execute_operation(&mut self, operation: Self::Operation) -> Result<(), AmmError> {
         if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
             self.execute_order_local(operation)?;
         } else {
             self.execute_order_remote(operation)?;
         }
 
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
-    async fn execute_message(
-        &mut self,
-        message: Self::Message,
-    ) -> Result<ExecutionOutcome<Self::Message>, AmmError> {
+    async fn execute_message(&mut self, message: Self::Message) -> Result<(), AmmError> {
         ensure!(
             self.runtime.chain_id() == self.runtime.application_id().creation.chain_id,
             AmmError::AmmChainOnly
@@ -85,13 +76,13 @@ impl Contract for AmmContract {
             }
         }
 
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
     async fn handle_application_call(
         &mut self,
         application_call: ApplicationCall,
-    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, AmmError> {
+    ) -> Result<Self::Response, AmmError> {
         match application_call {
             ApplicationCall::Swap {
                 owner,
@@ -107,7 +98,7 @@ impl Contract for AmmContract {
             }
         }
 
-        Ok(ApplicationCallOutcome::default())
+        Ok(())
     }
 }
 
