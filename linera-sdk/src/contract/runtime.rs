@@ -144,6 +144,11 @@ where
         wit::subscribe(chain.into(), (&channel).into());
     }
 
+    /// Unsubscribes to a message channel from another chain.
+    pub fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) {
+        wit::unsubscribe(chain.into(), (&channel).into());
+    }
+
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
     /// balance) to `destination`.
     pub fn transfer(&mut self, source: Option<Owner>, destination: Account, amount: Amount) {
