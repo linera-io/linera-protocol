@@ -21,6 +21,7 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 metrics = ["dep:hex", "linera-base/metrics", "linera-views-derive/metrics"]
 test = ["tokio/macros", "rand"]
 web = ["linera-base/web"]
+indexeddb = ["indexed_db_futures", "wasm-bindgen"]
 
 dynamodb = ["aws-config", "aws-sdk-dynamodb", "aws-smithy-types"]
 scylladb = ["scylla"]
@@ -53,6 +54,14 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "sync"] }
 tracing.workspace = true
 trait-variant.workspace = true
+
+[target.wasm32-unknown-unknown.dependencies]
+indexed_db_futures = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+web-sys = { workspace = true, features = ["console"] }
+
+[target.wasm32-unknown-unknown.dev-dependencies]
+wasm-bindgen-test.workspace = true
 
 [dev-dependencies]
 linera-views = { path = ".", features = ["test"] }

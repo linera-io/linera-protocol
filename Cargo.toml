@@ -71,6 +71,7 @@ getrandom = "0.2.12"
 hex = "0.4.3"
 http = "1.1.0"
 glob = "0.3.1"
+indexed_db_futures = "0.4.1"
 insta = "1.36.1"
 log = "0.4.21"
 lru = "0.12.3"
@@ -127,6 +128,7 @@ tower = "0.4.13"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", default-features = false, features = ["env-filter"] }
 trait-variant = "0.1.1"
+wasm-bindgen = "0.2.92"
 wasm-bindgen-test = "0.3.42"
 wasm-encoder = "0.24.1"
 wasmer = { version = "=3.1.1", features = ["singlepass"] }
@@ -135,6 +137,7 @@ wasmer-vm = { version = "=3.1.1" }
 wasmparser = "0.101.1"
 wasmtime = "1.0"
 webassembly-test = "0.1.0"
+web-sys = "0.3.69"
 wit-bindgen-guest-rust = { version = "0.2.0", package = "linera-wit-bindgen-guest-rust" }
 wit-bindgen-host-wasmer-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmer-rust" }
 wit-bindgen-host-wasmtime-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmtime-rust" }
@@ -193,3 +196,8 @@ opt-level = 3
 
 [profile.dev.package.wasmtime]
 opt-level = 3
+
+[patch.crates-io.indexed_db_futures]
+version = "0.4.1"
+git = "https://github.com/Twey/rust-indexed-db"
+branch = "no-uuid-wasm-bindgen"
