@@ -4,7 +4,7 @@
 use anyhow::Context;
 use async_trait::async_trait;
 use colored::Colorize;
-use futures::Future;
+use futures::{lock::OwnedMutexGuard, Future};
 use linera_base::{
     crypto::{CryptoRng, KeyPair},
     data_types::{BlockHeight, Timestamp},
@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
-    client::{ChainClient, ChainClientBuilder},
+    client::{ArcChainClient, ChainClient, ChainClientBuilder},
     data_types::ClientOutcome,
     node::{CrossChainMessageDelivery, ValidatorNodeProvider},
 };
@@ -325,24 +325,24 @@ impl ClientContext {
         let mut certificates = Vec::new();
         loop {
             chain_client.synchronize_from_validators().await?;
-            let stream = chain_client.subscribe().await?;
+            let mut stream = chain_client.subscribe().await?;
             let result = chain_client.process_inbox().await;
             self.update_wallet_from_client(chain_client).await;
             let (new_certificates, maybe_timeout) = result.unwrap();
             certificates.extend(new_certificates);
             match maybe_timeout {
                 None => return Ok(certificates),
-                Some(timestamp) => wait_for_next_round(stream, timestamp).await,
+                Some(timestamp) => wait_for_next_round(&mut stream, timestamp).await,
             }
         }
     }
 
     pub async fn publish_bytecode<S>(
         &mut self,
-        chain_client: ChainClient<NodeProvider, S>,
+        chain_client: &ArcChainClient<NodeProvider, S>,
         contract: PathBuf,
         service: PathBuf,
-    ) -> anyhow::Result<(BytecodeId, ChainClient<NodeProvider, S>)>
+    ) -> anyhow::Result<BytecodeId>
     where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
@@ -358,21 +358,29 @@ impl ClientContext {
         ))?;
 
         info!("Publishing bytecode");
-        let ((bytecode_id, _), mut chain_client) = self
-            .apply_client_command(chain_client, |mut chain_client| async {
-                let result = chain_client
-                    .publish_bytecode(contract_bytecode.clone(), service_bytecode.clone())
-                    .await;
-                (result.context("Failed to publish bytecode"), chain_client)
+        let (bytecode_id, _) = self
+            .apply_client_command(chain_client, |mut chain_client| {
+                let contract_bytecode = contract_bytecode.clone();
+                let service_bytecode = service_bytecode.clone();
+                async move {
+                    chain_client
+                        .publish_bytecode(contract_bytecode, service_bytecode)
+                        .await
+                        .context("Failed to publish bytecode")
+                }
             })
             .await?;
 
         info!("{}", "Bytecode published successfully!".green().bold());
 
         info!("Synchronizing client and processing inbox");
-        chain_client.synchronize_from_validators().await?;
-        self.process_inbox(&mut chain_client).await?;
-        Ok((bytecode_id, chain_client))
+        chain_client
+            .lock()
+            .await
+            .synchronize_from_validators()
+            .await?;
+        self.process_inbox(&mut *chain_client.lock().await).await?;
+        Ok(bytecode_id)
     }
 
     pub fn generate_key_pair(&mut self) -> KeyPair {
@@ -380,34 +388,33 @@ impl ClientContext {
     }
 
     /// Applies the given function to the chain client.
+    ///
     /// Updates the wallet regardless of the outcome. As long as the function returns a round
     /// timeout, it will wait and retry.
-    pub async fn apply_client_command<S, F, Fut, T>(
+    pub async fn apply_client_command<S, E, F, Fut, T>(
         &mut self,
-        mut client: ChainClient<NodeProvider, S>,
+        client: &ArcChainClient<NodeProvider, S>,
         mut f: F,
-    ) -> anyhow::Result<(T, ChainClient<NodeProvider, S>)>
+    ) -> anyhow::Result<T>
     where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
-        F: FnMut(ChainClient<NodeProvider, S>) -> Fut,
-        Fut: Future<
-            Output = (
-                anyhow::Result<ClientOutcome<T>>,
-                ChainClient<NodeProvider, S>,
-            ),
-        >,
+        F: FnMut(OwnedMutexGuard<ChainClient<NodeProvider, S>>) -> Fut,
+        Fut: Future<Output = Result<ClientOutcome<T>, E>>,
+        anyhow::Error: From<E>,
     {
         loop {
-            let stream = client.subscribe().await?;
-            let (result, moved_client) = f(client).await;
-            client = moved_client;
-            self.update_and_save_wallet(&mut client).await;
+            // Subscribe to the local node, so we learn about new rounds.
+            let mut notification_stream = client.lock().await.subscribe().await?;
+            // Try applying f. Return if committed.
+            let result = f(client.0.clone().lock_owned().await).await;
+            self.update_and_save_wallet(&mut *client.lock().await).await;
             let timeout = match result? {
-                ClientOutcome::Committed(t) => return Ok((t, client)),
+                ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
-            linera_service::node_service::wait_for_next_round(stream, timeout).await;
+            // Otherwise wait and try again in the next round.
+            wait_for_next_round(&mut notification_stream, timeout).await;
         }
     }
 
@@ -422,18 +429,20 @@ impl ClientContext {
         ViewError: From<S::ContextError>,
     {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let chain_client = self.make_chain_client(storage, chain_id);
+        let chain_client = self.make_chain_client(storage, chain_id).into_arc();
         info!("Changing ownership for chain {}", chain_id);
         let time_start = Instant::now();
         let ownership = ChainOwnership::try_from(ownership_config)?;
 
-        let (certificate, _) = self
-            .apply_client_command(chain_client, |mut chain_client| async {
-                let result = chain_client
-                    .change_ownership(ownership.clone())
-                    .await
-                    .context("failed to change ownership");
-                (result, chain_client)
+        let certificate = self
+            .apply_client_command(&chain_client, |mut chain_client| {
+                let ownership = ownership.clone();
+                async move {
+                    chain_client
+                        .change_ownership(ownership)
+                        .await
+                        .context("Failed to change ownership")
+                }
             })
             .await?;
         let time_total = time_start.elapsed();
