@@ -6,7 +6,7 @@ mod token;
 
 use self::state::Llm;
 use crate::token::TokenOutputStream;
-use async_graphql::{EmptySubscription, Object, Schema};
+use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Schema};
 use async_trait::async_trait;
 use candle_core::{quantized::ggml_file, Device, Tensor};
 use candle_transformers::{
@@ -28,24 +28,22 @@ impl WithServiceAbi for Llm {
     type Abi = llm::LlmAbi;
 }
 
-struct MutationRoot;
-
-#[Object]
-impl MutationRoot {
-    async fn hello(&self) -> &str {
-        "world!"
-    }
-}
-
-struct QueryRoot {
-    response: String,
-}
+struct QueryRoot {}
 
 #[Object]
 impl QueryRoot {
-    async fn response(&self) -> &str {
-        &self.response
+    async fn prompt(&self,  ctx: &Context<'_>, prompt: String) -> &str {
+        let model_context = ctx.data::<ModelContext>().unwrap();
+        let response = model_context.run_model(&prompt).unwrap();
+        "world"
     }
+}
+
+struct ModelContext {
+    model: Vec<u8>,
+    tokenizer: Vec<u8>,
+    /// Group query attention
+    gqa: usize
 }
 
 #[async_trait]
@@ -55,28 +53,32 @@ impl Service for Llm {
 
     async fn handle_query(
         self: Arc<Self>,
-        _runtime: &ServiceRuntime,
+        runtime: &ServiceRuntime,
         request: Self::Query,
     ) -> Result<Self::QueryResponse, Self::Error> {
         let prompt_string = &request.query; // TODO is this correct?
-        let raw_weights = self.model_weights.get().clone();
-        let tokenizer_bytes = self.tokenizer.get();
-        let gqa = 1; // group query attention, is 1 for llama.
-        self.run_model(prompt_string, raw_weights, tokenizer_bytes, gqa)?;
-
-        let schema = Schema::build(
-            QueryRoot {
-                response: "TODO".to_string(),
-            },
-            MutationRoot,
-            EmptySubscription,
-        )
-        .finish();
-        Ok(schema.execute(request).await)
+        let raw_weights = runtime.get_blob_from_url(
+            "http://localhost:10001/model.bin",
+        );
+        eprintln!("got weights: {}B", raw_weights.len());
+        let tokenizer_bytes = runtime.get_blob_from_url(
+            "http://localhost:10001/tokenizer.json",
+        );
+        let model_context = ModelContext {
+            model: raw_weights,
+            tokenizer: tokenizer_bytes,
+            gqa: 1
+        };
+        let schema = Schema::build(QueryRoot {}, EmptyMutation, EmptySubscription)
+            .data(model_context)
+            .finish();
+        error!("prompt: {}", prompt_string);
+        let response = schema.execute(request).await;
+        return Ok(response);
     }
 }
 
-impl Llm {
+impl ModelContext {
     fn load_model(&self, model_weights: Vec<u8>, gqa: usize) -> Result<ModelWeights, ServiceError> {
         let model_contents =
             ggml_file::Content::read(&mut Cursor::new(model_weights), &Device::Cpu).unwrap();
@@ -102,12 +104,13 @@ impl Llm {
     fn run_model(
         &self,
         prompt_string: &str,
-        raw_weights: Vec<u8>,
-        tokenizer_bytes: &Vec<u8>,
-        gqa: usize,
     ) -> Result<String, ServiceError> {
+        let raw_weights = &self.model;
+        let tokenizer_bytes = &self.tokenizer;
+        let gqa = self.gqa;
+
         let mut output = String::new();
-        let mut model = self.load_model(raw_weights, gqa)?;
+        let mut model = self.load_model(raw_weights.clone(), gqa)?;
         let mut pre_prompt_tokens = vec![];
 
         let tokenizer = Tokenizer::from_bytes(tokenizer_bytes)
