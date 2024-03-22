@@ -4,17 +4,16 @@
 
 //! Core data-types used in the Linera protocol.
 
+use crate::{
+    doc_scalar,
+    identifiers::{ApplicationId, GenericApplicationId},
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
     time::{Duration, SystemTime},
 };
 use thiserror::Error;
-
-use crate::{
-    doc_scalar,
-    identifiers::{ApplicationId, GenericApplicationId},
-};
 
 /// A non-negative amount of tokens.
 ///
