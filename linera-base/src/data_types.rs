@@ -170,6 +170,19 @@ pub struct Resources {
     // TODO(#1533): Allow declaring calls to other applications instead of having to count them here.
 }
 
+/// The kind of outgoing message being sent.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub enum MessageKind {
+    /// The message can be skipped or rejected. No receipt is requested.
+    Simple,
+    /// The message cannot be skipped nor rejected. No receipt is requested.
+    /// This only concerns certain system messages that cannot fail.
+    Protected,
+    /// The message cannot be skipped but can be rejected. A receipt must be sent
+    /// when the message is rejected in a block of the receiver.
+    Tracked,
+}
+
 /// An error type for arithmetic errors.
 #[derive(Debug, Error)]
 #[allow(missing_docs)]
@@ -571,6 +584,7 @@ doc_scalar!(
     Round,
     "A number to identify successive attempts to decide a value in a consensus protocol."
 );
+doc_scalar!(MessageKind, "The kind of outgoing message being sent");
 
 #[cfg(test)]
 mod tests {
