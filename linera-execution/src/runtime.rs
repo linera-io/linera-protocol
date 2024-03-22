@@ -14,7 +14,7 @@ use linera_base::{
         Timestamp,
     },
     ensure,
-    identifiers::{Account, ChainId, MessageId, Owner},
+    identifiers::{Account, ChainId, ChannelName, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::batch::Batch;
@@ -434,6 +434,10 @@ impl SyncRuntimeInternal<UserContractInstance> {
             .execution_outcome
             .messages
             .extend(outcome.messages);
+        raw_outcome
+            .execution_outcome
+            .subscribe
+            .extend(outcome.subscribe);
         self.handle_outcome(raw_outcome.execution_outcome, signer, callee_id)?;
 
         Ok(raw_outcome.value)
@@ -988,6 +992,9 @@ impl ContractSyncRuntime {
         assert!(runtime.call_stack.is_empty());
 
         outcome.messages.extend(application_status.outcome.messages);
+        outcome
+            .subscribe
+            .extend(application_status.outcome.subscribe);
         runtime.handle_outcome(outcome, signer, application_id)?;
 
         Ok(())
@@ -1032,6 +1039,15 @@ impl ContractRuntime for ContractSyncRuntime {
         let application = this.current_application_mut();
 
         application.outcome.messages.push(message.into());
+
+        Ok(())
+    }
+
+    fn subscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError> {
+        let mut this = self.inner();
+        let application = this.current_application_mut();
+
+        application.outcome.subscribe.push((channel, chain));
 
         Ok(())
     }

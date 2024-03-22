@@ -461,6 +461,9 @@ pub trait ContractRuntime: BaseRuntime {
     /// Schedules a message to be sent.
     fn send_message(&mut self, message: OutgoingMessage<Vec<u8>>) -> Result<(), ExecutionError>;
 
+    /// Schedules to subscribe to some `channel` on a `chain`.
+    fn subscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
+
     /// Transfers amount from source to destination.
     fn transfer(
         &mut self,
