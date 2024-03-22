@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, path::PathBuf, time::Duration};
+use std::{path::PathBuf, time::Duration};
 
 use anyhow::bail;
 use async_trait::async_trait;
@@ -21,7 +21,6 @@ use linera_service::{
     config::{
         CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
     },
-    prometheus_server,
     storage::{
         full_initialize_storage, run_with_storage, Runnable, StorageConfig, StorageConfigNamespace,
     },
@@ -31,6 +30,8 @@ use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde::Deserialize;
 use tracing::{error, info};
+#[cfg(with_metrics)]
+use {linera_service::prometheus_server, std::net::SocketAddr};
 
 struct ServerContext {
     server_config: ValidatorServerConfig,
@@ -83,6 +84,7 @@ impl ServerContext {
             let internal_network = internal_network.clone();
             let cross_chain_config = self.cross_chain_config.clone();
             handles.push(async move {
+                #[cfg(with_metrics)]
                 if let Some(port) = shard.metrics_port {
                     Self::start_metrics(listen_address, &port);
                 }
@@ -126,6 +128,7 @@ impl ServerContext {
             let cross_chain_config = self.cross_chain_config.clone();
             let notification_config = self.notification_config.clone();
             handles.push(async move {
+                #[cfg(with_metrics)]
                 if let Some(port) = shard.metrics_port {
                     Self::start_metrics(listen_address, &port);
                 }
@@ -157,6 +160,7 @@ impl ServerContext {
         Ok(())
     }
 
+    #[cfg(with_metrics)]
     fn start_metrics(host: &str, port: &u16) {
         match format!("{}:{}", host, port).parse::<SocketAddr>() {
             Err(err) => panic!("Invalid metrics address for {host}:{port}: {err}"),
