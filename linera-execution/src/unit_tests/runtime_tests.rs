@@ -14,7 +14,8 @@ use linera_views::batch::Batch;
 
 use super::{ApplicationStatus, SyncRuntimeInternal};
 use crate::{
-    execution_state_actor::Request, runtime::ResourceController, BaseRuntime, UserContractInstance,
+    execution_state_actor::Request, runtime::ResourceController, BaseRuntime, RawExecutionOutcome,
+    UserContractInstance,
 };
 
 /// Test writing a batch of changes.
@@ -125,5 +126,6 @@ fn create_dummy_application() -> ApplicationStatus {
         id,
         parameters: vec![],
         signer: None,
+        outcome: RawExecutionOutcome::default(),
     }
 }

@@ -458,6 +458,9 @@ pub trait ContractRuntime: BaseRuntime {
     /// Consumes some of the execution fuel.
     fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError>;
 
+    /// Schedules a message to be sent.
+    fn send_message(&mut self, message: OutgoingMessage<Vec<u8>>) -> Result<(), ExecutionError>;
+
     /// Transfers amount from source to destination.
     fn transfer(
         &mut self,

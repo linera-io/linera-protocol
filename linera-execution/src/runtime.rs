@@ -10,7 +10,8 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Resources, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OutgoingMessage, Resources,
+        Timestamp,
     },
     ensure,
     identifiers::{Account, ChainId, MessageId, Owner},
@@ -111,6 +112,8 @@ struct ApplicationStatus {
     parameters: Vec<u8>,
     /// The authenticated signer for the execution thread, if any.
     signer: Option<Owner>,
+    /// The current execution outcome of the application.
+    outcome: RawExecutionOutcome<Vec<u8>>,
 }
 
 /// A loaded application instance.
@@ -293,6 +296,19 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             .expect("Call stack is unexpectedly empty")
     }
 
+    /// Returns a mutable refernce to the [`ApplicationStatus`] of the current application.
+    ///
+    /// The current application is the last to be pushed to the `call_stack`.
+    ///
+    /// # Panics
+    ///
+    /// If the call stack is empty.
+    fn current_application_mut(&mut self) -> &mut ApplicationStatus {
+        self.call_stack
+            .last_mut()
+            .expect("Call stack is unexpectedly empty")
+    }
+
     /// Inserts a new [`ApplicationStatus`] to the end of the `call_stack`.
     ///
     /// Ensures the application's ID is also tracked in the `active_applications` set.
@@ -397,6 +413,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
             parameters: application.parameters,
             // Allow further nested calls to be authenticated if this one is.
             signer: authenticated_signer,
+            outcome: RawExecutionOutcome::default(),
         });
         Ok((application.instance, callee_context))
     }
@@ -404,14 +421,19 @@ impl SyncRuntimeInternal<UserContractInstance> {
     /// Cleans up the runtime after the execution of a call to a different contract.
     fn finish_call(
         &mut self,
-        raw_outcome: ApplicationCallOutcome,
+        mut raw_outcome: ApplicationCallOutcome,
     ) -> Result<Vec<u8>, ExecutionError> {
         let ApplicationStatus {
             id: callee_id,
             signer,
+            outcome,
             ..
         } = self.pop_application();
 
+        raw_outcome
+            .execution_outcome
+            .messages
+            .extend(outcome.messages);
         self.handle_outcome(raw_outcome.execution_outcome, signer, callee_id)?;
 
         Ok(raw_outcome.value)
@@ -942,6 +964,7 @@ impl ContractSyncRuntime {
                 id: application_id,
                 parameters: application.parameters.clone(),
                 signer,
+                outcome: RawExecutionOutcome::default(),
             };
 
             runtime.push_application(status);
@@ -949,7 +972,7 @@ impl ContractSyncRuntime {
             application
         };
 
-        let outcome = closure(
+        let mut outcome = closure(
             &mut contract
                 .instance
                 .try_lock()
@@ -964,6 +987,7 @@ impl ContractSyncRuntime {
         assert_eq!(application_status.signer, signer);
         assert!(runtime.call_stack.is_empty());
 
+        outcome.messages.extend(application_status.outcome.messages);
         runtime.handle_outcome(outcome, signer, application_id)?;
 
         Ok(())
@@ -1001,6 +1025,15 @@ impl ContractRuntime for ContractSyncRuntime {
     fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError> {
         let mut this = self.inner();
         this.resource_controller.track_fuel(fuel)
+    }
+
+    fn send_message(&mut self, message: OutgoingMessage<Vec<u8>>) -> Result<(), ExecutionError> {
+        let mut this = self.inner();
+        let application = this.current_application_mut();
+
+        application.outcome.messages.push(message.into());
+
+        Ok(())
     }
 
     fn transfer(
@@ -1166,6 +1199,7 @@ impl ServiceRuntime for ServiceSyncRuntime {
                 id: queried_id,
                 parameters: application.parameters,
                 signer: None,
+                outcome: RawExecutionOutcome::default(),
             });
             (query_context, application.instance)
         };
