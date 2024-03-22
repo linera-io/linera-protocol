@@ -33,7 +33,7 @@ pub use execution::ExecutionStateView;
 use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
-    data_types::{Amount, ArithmeticError, BlockHeight, Resources, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, OutgoingMessage, Resources, Timestamp},
     doc_scalar, hex_debug,
     identifiers::{
         Account, BytecodeId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId,
@@ -563,6 +563,32 @@ pub struct RawOutgoingMessage<Message, Grant = Resources> {
     pub kind: MessageKind,
     /// The message itself.
     pub message: Message,
+}
+
+impl<Message> From<OutgoingMessage<Message>> for RawOutgoingMessage<Message, Resources> {
+    fn from(outgoing_message: OutgoingMessage<Message>) -> Self {
+        let OutgoingMessage {
+            destination,
+            authenticated,
+            grant,
+            is_tracked,
+            message,
+        } = outgoing_message;
+
+        let kind = if is_tracked {
+            MessageKind::Tracked
+        } else {
+            MessageKind::Simple
+        };
+
+        RawOutgoingMessage {
+            destination,
+            authenticated,
+            grant,
+            kind,
+            message,
+        }
+    }
 }
 
 /// The kind of outgoing message being sent.
