@@ -50,20 +50,15 @@ pub mod test;
 pub mod util;
 pub mod views;
 
-use std::{error::Error, fmt::Debug};
+use std::error::Error;
 
 use async_trait::async_trait;
+use linera_base::abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi};
 pub use linera_base::{
     abi,
     data_types::{OutgoingMessage, Resources},
     ensure,
 };
-use linera_base::{
-    abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
-    data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainId, MessageId, Owner},
-};
-use serde::{Deserialize, Serialize};
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 
@@ -201,54 +196,4 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
 
     /// Executes a read-only query on the state of this application.
     async fn handle_query(&self, query: Self::Query) -> Result<Self::QueryResponse, Self::Error>;
-}
-
-/// The context of the execution of an application's operation.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct OperationContext {
-    /// The current chain ID.
-    pub chain_id: ChainId,
-    /// The authenticated signer of the operation, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// The current block height.
-    pub height: BlockHeight,
-    /// The current index of the operation.
-    pub index: u32,
-}
-
-/// The context of the execution of an application's message.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct MessageContext {
-    /// The current chain ID.
-    pub chain_id: ChainId,
-    /// Whether the message was rejected by the original receiver and is now bouncing back.
-    pub is_bouncing: bool,
-    /// The authenticated signer of the operation, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// The current block height.
-    pub height: BlockHeight,
-    /// The ID of the message (based on the operation height and index in the remote
-    /// chain that created the message).
-    pub message_id: MessageId,
-}
-
-/// The context of the execution of an application's cross-application call handler.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CalleeContext {
-    /// The current chain ID.
-    pub chain_id: ChainId,
-    /// The authenticated signer of the operation, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// `None` if the caller doesn't want this particular call to be authenticated (e.g.
-    /// for safety reasons).
-    pub authenticated_caller_id: Option<ApplicationId>,
-}
-
-/// The context of the execution of an application's query.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct QueryContext {
-    /// The current chain ID.
-    pub chain_id: ChainId,
-    /// The height of the next block on this chain.
-    pub next_block_height: BlockHeight,
 }
