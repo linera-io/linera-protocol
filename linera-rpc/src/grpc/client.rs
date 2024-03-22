@@ -27,7 +27,7 @@ use linera_core::node::{
 use {
     super::GrpcProtoConversionError,
     crate::{mass_client, RpcMessage},
-    linera_core::node::{NotificationStream, ValidatorNodeInner as ValidatorNode},
+    linera_core::node::{NotificationStream, ValidatorNode},
 };
 
 use linera_version::VersionInfo;

@@ -13,7 +13,7 @@ use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNodeInner},
+    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
 use linera_version::VersionInfo;
 
@@ -70,7 +70,7 @@ impl SimpleClient {
     }
 }
 
-impl ValidatorNodeInner for SimpleClient {
+impl ValidatorNode for SimpleClient {
     type NotificationStream = NotificationStream;
 
     /// Initiates a new block.

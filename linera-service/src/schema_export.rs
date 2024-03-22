@@ -9,7 +9,7 @@ use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{
         CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
-        ValidatorNodeInner,
+        ValidatorNode,
     },
 };
 use linera_execution::committee::Committee;
@@ -28,7 +28,7 @@ use linera_views::{
 #[derive(Clone)]
 struct DummyValidatorNode;
 
-impl ValidatorNodeInner for DummyValidatorNode {
+impl ValidatorNode for DummyValidatorNode {
     type NotificationStream = NotificationStream;
 
     async fn handle_block_proposal(

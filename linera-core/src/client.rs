@@ -2012,7 +2012,7 @@ impl<P, S> ArcChainClient<P, S> {
 impl<P, S> ArcChainClient<P, S>
 where
     P: ValidatorNodeProvider + Sync,
-    <P as ValidatorNodeProvider>::Node: Clone + 'static,
+    <<P as ValidatorNodeProvider>::Node as crate::node::ValidatorNode>::NotificationStream: Send,
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {

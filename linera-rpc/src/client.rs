@@ -16,7 +16,7 @@ use linera_core::node::{
     LocalNotificationStream as NotificationStream, LocalValidatorNode as ValidatorNode,
 };
 #[cfg(not(web))]
-use linera_core::node::{NotificationStream, ValidatorNodeInner as ValidatorNode};
+use linera_core::node::{NotificationStream, ValidatorNode};
 
 #[derive(Clone)]
 pub enum Client {

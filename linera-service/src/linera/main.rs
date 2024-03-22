@@ -430,7 +430,7 @@ impl Runnable for Job {
             }
 
             QueryValidators { chain_id } => {
-                use linera_core::node::ValidatorNodeInner as _;
+                use linera_core::node::ValidatorNode as _;
 
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let mut chain_client = context.make_chain_client(storage, chain_id);

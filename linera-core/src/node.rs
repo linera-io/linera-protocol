@@ -39,7 +39,7 @@ pub enum CrossChainMessageDelivery {
 }
 
 /// How to communicate with a validator node.
-#[trait_variant::make(ValidatorNodeInner: Send)]
+#[trait_variant::make(ValidatorNode: Send)]
 pub trait LocalValidatorNode {
     type NotificationStream: Stream<Item = Notification> + Unpin;
 
@@ -78,20 +78,6 @@ pub trait LocalValidatorNode {
         &mut self,
         chains: Vec<ChainId>,
     ) -> Result<Self::NotificationStream, NodeError>;
-}
-
-/// How to communicate with a validator node.
-pub trait ValidatorNode:
-    ValidatorNodeInner<NotificationStream = <Self as ValidatorNode>::NotificationStream>
-{
-    type NotificationStream: Stream<Item = Notification> + Unpin + Send;
-}
-
-impl<T: ValidatorNodeInner> ValidatorNode for T
-where
-    T::NotificationStream: Send,
-{
-    type NotificationStream = <T as ValidatorNodeInner>::NotificationStream;
 }
 
 /// Turn an address into a validator node.

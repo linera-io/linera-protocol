@@ -6,7 +6,7 @@ use crate::{
     data_types::*,
     node::{
         CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
-        ValidatorNodeInner,
+        ValidatorNode,
     },
     notifier::Notifier,
     worker::{Notification, ValidatorWorker, WorkerState},
@@ -93,7 +93,7 @@ pub struct LocalValidatorClient<S> {
     client: Arc<Mutex<LocalValidator<S>>>,
 }
 
-impl<S> ValidatorNodeInner for LocalValidatorClient<S>
+impl<S> ValidatorNode for LocalValidatorClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,

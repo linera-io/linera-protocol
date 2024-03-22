@@ -29,7 +29,7 @@ use linera_chain::{data_types::HashedValue, ChainStateView};
 use linera_core::{
     client::{ArcChainClient, ChainClient, ChainClientError},
     data_types::{ClientOutcome, RoundTimeout},
-    node::{NotificationStream, ValidatorNodeProvider},
+    node::{NotificationStream, ValidatorNode, ValidatorNodeProvider},
     worker::{Notification, Reason},
 };
 use linera_execution::{
@@ -884,6 +884,7 @@ impl<P, S: Clone, C> Clone for NodeService<P, S, C> {
 impl<P, S, C> NodeService<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
+    <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<P> + Send + 'static,
     ViewError: From<S::ContextError>,
