@@ -11,7 +11,7 @@ use linera_base::{
 };
 
 use super::wit_system_api;
-use crate::OutgoingMessage;
+use crate::SendMessageRequest;
 
 impl From<CryptoHash> for wit_system_api::CryptoHash {
     fn from(hash_value: CryptoHash) -> Self {
@@ -75,8 +75,8 @@ impl From<MessageId> for wit_system_api::MessageId {
     }
 }
 
-impl<'a> From<&'a OutgoingMessage<Vec<u8>>> for wit_system_api::OutgoingMessage<'a> {
-    fn from(message: &'a OutgoingMessage<Vec<u8>>) -> Self {
+impl<'a> From<&'a SendMessageRequest<Vec<u8>>> for wit_system_api::SendMessageRequest<'a> {
+    fn from(message: &'a SendMessageRequest<Vec<u8>>) -> Self {
         Self {
             destination: (&message.destination).into(),
             authenticated: message.authenticated,

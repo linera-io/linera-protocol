@@ -5,7 +5,7 @@
 
 use linera_base::{
     abi::ContractAbi,
-    data_types::{Amount, BlockHeight, OutgoingMessage, Resources, Timestamp},
+    data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
     ownership::ChainOwnership,
 };
@@ -199,7 +199,7 @@ pub struct MessageSender<Message>
 where
     Message: Serialize,
 {
-    message: OutgoingMessage<Message>,
+    message: SendMessageRequest<Message>,
 }
 
 impl<Message> MessageSender<Message>
@@ -209,7 +209,7 @@ where
     /// Creates a new [`MessageSender`] instance to send the `message` to the `destination`.
     pub(crate) fn new(destination: Destination, message: Message) -> Self {
         MessageSender {
-            message: OutgoingMessage {
+            message: SendMessageRequest {
                 destination,
                 authenticated: false,
                 is_tracked: false,
@@ -247,7 +247,7 @@ where
         let serialized_message =
             bcs::to_bytes(&self.message.message).expect("Failed to serialize message to be sent");
 
-        let raw_message = OutgoingMessage {
+        let raw_message = SendMessageRequest {
             destination: self.message.destination.clone(),
             authenticated: self.message.authenticated,
             is_tracked: self.message.is_tracked,

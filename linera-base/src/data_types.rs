@@ -172,10 +172,10 @@ pub struct Resources {
     // TODO(#1533): Allow declaring calls to other applications instead of having to count them here.
 }
 
-/// A message that is scheduled to be sent.
+/// A request to send a message.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct OutgoingMessage<Message> {
+pub struct SendMessageRequest<Message> {
     /// The destination of the message.
     pub destination: Destination,
     /// Whether the message is authenticated.
@@ -188,15 +188,15 @@ pub struct OutgoingMessage<Message> {
     pub message: Message,
 }
 
-impl<Message> OutgoingMessage<Message>
+impl<Message> SendMessageRequest<Message>
 where
     Message: Serialize,
 {
     /// Serializes the internal `Message` type into raw bytes.
-    pub fn into_raw(self) -> OutgoingMessage<Vec<u8>> {
+    pub fn into_raw(self) -> SendMessageRequest<Vec<u8>> {
         let message = bcs::to_bytes(&self.message).expect("Failed to serialize message");
 
-        OutgoingMessage {
+        SendMessageRequest {
             destination: self.destination,
             authenticated: self.authenticated,
             is_tracked: self.is_tracked,

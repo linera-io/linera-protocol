@@ -10,7 +10,7 @@ use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::PublicKey,
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, OutgoingMessage, Resources, Timestamp,
+        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, Owner},
     ownership::ChainOwnership,
@@ -538,7 +538,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         .expect("Fourth mock application should be registered");
 
     let destination_chain = ChainId::from(ChainDescription::Root(1));
-    let first_message = OutgoingMessage {
+    let first_message = SendMessageRequest {
         destination: Destination::from(destination_chain),
         authenticated: false,
         is_tracked: false,
@@ -573,21 +573,21 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         |_runtime, _context, _argument| Ok(vec![]),
     ));
 
-    let second_message = OutgoingMessage {
+    let second_message = SendMessageRequest {
         destination: Destination::from(destination_chain),
         authenticated: false,
         is_tracked: false,
         grant: Resources::default(),
         message: b"second".to_vec(),
     };
-    let third_message = OutgoingMessage {
+    let third_message = SendMessageRequest {
         destination: Destination::from(destination_chain),
         authenticated: false,
         is_tracked: false,
         grant: Resources::default(),
         message: b"third".to_vec(),
     };
-    let fourth_message = OutgoingMessage {
+    let fourth_message = SendMessageRequest {
         destination: Destination::from(destination_chain),
         authenticated: false,
         is_tracked: false,
@@ -921,7 +921,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
         .expect("Caller mock application should be registered");
 
     let destination_chain = ChainId::from(ChainDescription::Root(1));
-    let dummy_message = OutgoingMessage {
+    let dummy_message = SendMessageRequest {
         destination: Destination::from(destination_chain),
         authenticated: false,
         is_tracked: false,
@@ -1019,7 +1019,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     ));
 
     let destination_chain = ChainId::from(ChainDescription::Root(1));
-    let dummy_message = OutgoingMessage {
+    let dummy_message = SendMessageRequest {
         destination: Destination::from(destination_chain),
         authenticated: false,
         is_tracked: false,
@@ -1132,7 +1132,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     ));
 
     let destination_chain = ChainId::from(ChainDescription::Root(1));
-    let dummy_message = OutgoingMessage {
+    let dummy_message = SendMessageRequest {
         destination: Destination::from(destination_chain),
         authenticated: false,
         is_tracked: false,
@@ -1251,7 +1251,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let second_destination_chain = ChainId::from(ChainDescription::Root(2));
 
     // The message sent to the first destination chain by the caller and the sending applications
-    let first_message = OutgoingMessage {
+    let first_message = SendMessageRequest {
         destination: Destination::from(first_destination_chain),
         authenticated: false,
         is_tracked: false,
@@ -1289,7 +1289,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     ));
 
     // The message sent to the second destination chain by the sending application
-    let second_message = OutgoingMessage {
+    let second_message = SendMessageRequest {
         destination: Destination::from(second_destination_chain),
         authenticated: false,
         is_tracked: false,

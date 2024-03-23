@@ -33,7 +33,7 @@ pub use execution::ExecutionStateView;
 use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
-    data_types::{Amount, ArithmeticError, BlockHeight, OutgoingMessage, Resources, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, Resources, SendMessageRequest, Timestamp},
     doc_scalar, hex_debug,
     identifiers::{
         Account, BytecodeId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId,
@@ -456,7 +456,7 @@ pub trait ContractRuntime: BaseRuntime {
     fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError>;
 
     /// Schedules a message to be sent.
-    fn send_message(&mut self, message: OutgoingMessage<Vec<u8>>) -> Result<(), ExecutionError>;
+    fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError>;
 
     /// Schedules to subscribe to some `channel` on a `chain`.
     fn subscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
@@ -571,15 +571,15 @@ pub struct RawOutgoingMessage<Message, Grant = Resources> {
     pub message: Message,
 }
 
-impl<Message> From<OutgoingMessage<Message>> for RawOutgoingMessage<Message, Resources> {
-    fn from(outgoing_message: OutgoingMessage<Message>) -> Self {
-        let OutgoingMessage {
+impl<Message> From<SendMessageRequest<Message>> for RawOutgoingMessage<Message, Resources> {
+    fn from(request: SendMessageRequest<Message>) -> Self {
+        let SendMessageRequest {
             destination,
             authenticated,
             grant,
             is_tracked,
             message,
-        } = outgoing_message;
+        } = request;
 
         let kind = if is_tracked {
             MessageKind::Tracked

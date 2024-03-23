@@ -10,8 +10,8 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OutgoingMessage, Resources,
-        Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Resources,
+        SendMessageRequest, Timestamp,
     },
     ensure,
     identifiers::{Account, ChainId, ChannelName, MessageId, Owner},
@@ -1015,7 +1015,7 @@ impl ContractRuntime for ContractSyncRuntime {
         this.resource_controller.track_fuel(fuel)
     }
 
-    fn send_message(&mut self, message: OutgoingMessage<Vec<u8>>) -> Result<(), ExecutionError> {
+    fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError> {
         let mut this = self.inner();
         let application = this.current_application_mut();
 

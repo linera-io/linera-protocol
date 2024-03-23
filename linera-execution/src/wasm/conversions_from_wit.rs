@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, OutgoingMessage, Resources},
+    data_types::{Amount, BlockHeight, Resources, SendMessageRequest},
     identifiers::{Account, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -134,8 +134,8 @@ impl From<contract_system_api::Amount> for Amount {
     }
 }
 
-impl<'a> From<contract_system_api::OutgoingMessage<'a>> for OutgoingMessage<Vec<u8>> {
-    fn from(message: contract_system_api::OutgoingMessage<'a>) -> Self {
+impl<'a> From<contract_system_api::SendMessageRequest<'a>> for SendMessageRequest<Vec<u8>> {
+    fn from(message: contract_system_api::SendMessageRequest<'a>) -> Self {
         Self {
             destination: message.destination.into(),
             authenticated: message.authenticated,

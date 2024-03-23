@@ -24,7 +24,7 @@ enum log-level {
     error,
 }
 
-send-message: func(message: outgoing-message)
+send-message: func(message: send-message-request)
 subscribe: func(chain: chain-id, channel: channel-name)
 unsubscribe: func(chain: chain-id, channel: channel-name)
 
@@ -55,7 +55,7 @@ record application-id {
 type owner = crypto-hash
 type bytecode-id = message-id
 
-record outgoing-message {
+record send-message-request {
     destination: destination,
     authenticated: bool,
     is-tracked: bool,

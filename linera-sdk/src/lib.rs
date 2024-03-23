@@ -56,7 +56,7 @@ use async_trait::async_trait;
 use linera_base::abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi};
 pub use linera_base::{
     abi,
-    data_types::{OutgoingMessage, Resources},
+    data_types::{Resources, SendMessageRequest},
     ensure,
 };
 #[doc(hidden)]

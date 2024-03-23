@@ -77,7 +77,7 @@ macro_rules! impl_contract_system_api {
 
             fn send_message(
                 &mut self,
-                message: contract_system_api::OutgoingMessage,
+                message: contract_system_api::SendMessageRequest,
             ) -> Result<(), Self::Error> {
                 ContractRuntime::send_message(self, message.into())
             }
