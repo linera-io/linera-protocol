@@ -13,9 +13,9 @@ use std::{
 };
 
 use crate::{
-    ApplicationCallOutcome, CalleeContext, ContractSyncRuntime, ExecutionError, FinalizeContext,
-    MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceSyncRuntime,
-    UserContract, UserContractModule, UserService, UserServiceModule,
+    CalleeContext, ContractSyncRuntime, ExecutionError, FinalizeContext, MessageContext,
+    OperationContext, QueryContext, ServiceSyncRuntime, UserContract, UserContractModule,
+    UserService, UserServiceModule,
 };
 
 /// A mocked implementation of a user application.
@@ -57,46 +57,27 @@ impl MockApplication {
 }
 
 type InitializeHandler = Box<
-    dyn FnOnce(
-            &mut ContractSyncRuntime,
-            OperationContext,
-            Vec<u8>,
-        ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>
+    dyn FnOnce(&mut ContractSyncRuntime, OperationContext, Vec<u8>) -> Result<(), ExecutionError>
         + Send
         + Sync,
 >;
 type ExecuteOperationHandler = Box<
-    dyn FnOnce(
-            &mut ContractSyncRuntime,
-            OperationContext,
-            Vec<u8>,
-        ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>
+    dyn FnOnce(&mut ContractSyncRuntime, OperationContext, Vec<u8>) -> Result<(), ExecutionError>
         + Send
         + Sync,
 >;
 type ExecuteMessageHandler = Box<
-    dyn FnOnce(
-            &mut ContractSyncRuntime,
-            MessageContext,
-            Vec<u8>,
-        ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>
+    dyn FnOnce(&mut ContractSyncRuntime, MessageContext, Vec<u8>) -> Result<(), ExecutionError>
         + Send
         + Sync,
 >;
 type HandleApplicationCallHandler = Box<
-    dyn FnOnce(
-            &mut ContractSyncRuntime,
-            CalleeContext,
-            Vec<u8>,
-        ) -> Result<ApplicationCallOutcome, ExecutionError>
+    dyn FnOnce(&mut ContractSyncRuntime, CalleeContext, Vec<u8>) -> Result<Vec<u8>, ExecutionError>
         + Send
         + Sync,
 >;
 type FinalizeHandler = Box<
-    dyn FnOnce(
-            &mut ContractSyncRuntime,
-            FinalizeContext,
-        ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>
+    dyn FnOnce(&mut ContractSyncRuntime, FinalizeContext) -> Result<(), ExecutionError>
         + Send
         + Sync,
 >;
@@ -145,7 +126,7 @@ impl ExpectedCall {
                 &mut ContractSyncRuntime,
                 OperationContext,
                 Vec<u8>,
-            ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>
+            ) -> Result<(), ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -161,7 +142,7 @@ impl ExpectedCall {
                 &mut ContractSyncRuntime,
                 OperationContext,
                 Vec<u8>,
-            ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>
+            ) -> Result<(), ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -173,11 +154,7 @@ impl ExpectedCall {
     /// [`UserContract::execute_message`] implementation, which is handled by the provided
     /// `handler`.
     pub fn execute_message(
-        handler: impl FnOnce(
-                &mut ContractSyncRuntime,
-                MessageContext,
-                Vec<u8>,
-            ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>
+        handler: impl FnOnce(&mut ContractSyncRuntime, MessageContext, Vec<u8>) -> Result<(), ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -193,7 +170,7 @@ impl ExpectedCall {
                 &mut ContractSyncRuntime,
                 CalleeContext,
                 Vec<u8>,
-            ) -> Result<ApplicationCallOutcome, ExecutionError>
+            ) -> Result<Vec<u8>, ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -204,10 +181,7 @@ impl ExpectedCall {
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::finalize`]
     /// implementation, which is handled by the provided `handler`.
     pub fn finalize(
-        handler: impl FnOnce(
-                &mut ContractSyncRuntime,
-                FinalizeContext,
-            ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>
+        handler: impl FnOnce(&mut ContractSyncRuntime, FinalizeContext) -> Result<(), ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -218,7 +192,7 @@ impl ExpectedCall {
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::finalize`]
     /// implementation, which is handled by the default implementation which does nothing.
     pub fn default_finalize() -> Self {
-        Self::finalize(|_, _| Ok(RawExecutionOutcome::default()))
+        Self::finalize(|_, _| Ok(()))
     }
 
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
@@ -267,7 +241,7 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
         &mut self,
         context: OperationContext,
         argument: Vec<u8>,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
             Some(ExpectedCall::Initialize(handler)) => {
                 handler(&mut self.runtime, context, argument)
@@ -283,7 +257,7 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
         &mut self,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
             Some(ExpectedCall::ExecuteOperation(handler)) => {
                 handler(&mut self.runtime, context, operation)
@@ -299,7 +273,7 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
         &mut self,
         context: MessageContext,
         message: Vec<u8>,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
             Some(ExpectedCall::ExecuteMessage(handler)) => {
                 handler(&mut self.runtime, context, message)
@@ -315,7 +289,7 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
         &mut self,
         context: CalleeContext,
         argument: Vec<u8>,
-    ) -> Result<ApplicationCallOutcome, ExecutionError> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         match self.next_expected_call() {
             Some(ExpectedCall::HandleApplicationCall(handler)) => {
                 handler(&mut self.runtime, context, argument)
@@ -327,10 +301,7 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
         }
     }
 
-    fn finalize(
-        &mut self,
-        context: FinalizeContext,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
+    fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
             Some(ExpectedCall::Finalize(handler)) => handler(&mut self.runtime, context),
             Some(unexpected_call) => {

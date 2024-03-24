@@ -12,30 +12,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 
-use super::{wit_system_api, wit_types};
-
-impl From<wit_types::CryptoHash> for Owner {
-    fn from(crypto_hash: wit_types::CryptoHash) -> Self {
-        Owner(crypto_hash.into())
-    }
-}
-
-impl From<wit_types::CryptoHash> for ChainId {
-    fn from(hash_value: wit_types::CryptoHash) -> Self {
-        ChainId(hash_value.into())
-    }
-}
-
-impl From<wit_types::CryptoHash> for CryptoHash {
-    fn from(crypto_hash: wit_types::CryptoHash) -> Self {
-        CryptoHash::from([
-            crypto_hash.part1,
-            crypto_hash.part2,
-            crypto_hash.part3,
-            crypto_hash.part4,
-        ])
-    }
-}
+use super::wit_system_api;
 
 impl From<wit_system_api::MessageId> for MessageId {
     fn from(message_id: wit_system_api::MessageId) -> Self {

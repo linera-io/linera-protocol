@@ -46,9 +46,8 @@ use wasmer_middlewares::metering::{self, Metering, MeteringPoints};
 use super::{module_cache::ModuleCache, WasmExecutionError};
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
-    ApplicationCallOutcome, BaseRuntime, Bytecode, CalleeContext, ContractRuntime, ExecutionError,
-    FinalizeContext, MessageContext, OperationContext, QueryContext, RawExecutionOutcome,
-    ServiceRuntime,
+    BaseRuntime, Bytecode, CalleeContext, ContractRuntime, ExecutionError, FinalizeContext,
+    MessageContext, OperationContext, QueryContext, ServiceRuntime,
 };
 
 /// An [`Engine`] instance configured to run application services.
@@ -227,10 +226,9 @@ where
         &mut self,
         _context: OperationContext,
         argument: Vec<u8>,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         self.configure_initial_fuel()?;
-        let result = contract::Contract::initialize(&self.application, &mut self.store, &argument)
-            .map(|inner| inner.map(RawExecutionOutcome::from));
+        let result = contract::Contract::initialize(&self.application, &mut self.store, &argument);
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
@@ -239,11 +237,10 @@ where
         &mut self,
         _context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         self.configure_initial_fuel()?;
         let result =
-            contract::Contract::execute_operation(&self.application, &mut self.store, &operation)
-                .map(|inner| inner.map(RawExecutionOutcome::from));
+            contract::Contract::execute_operation(&self.application, &mut self.store, &operation);
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
@@ -252,11 +249,10 @@ where
         &mut self,
         _context: MessageContext,
         message: Vec<u8>,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         self.configure_initial_fuel()?;
         let result =
-            contract::Contract::execute_message(&self.application, &mut self.store, &message)
-                .map(|inner| inner.map(RawExecutionOutcome::from));
+            contract::Contract::execute_message(&self.application, &mut self.store, &message);
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
@@ -265,25 +261,20 @@ where
         &mut self,
         _context: CalleeContext,
         argument: Vec<u8>,
-    ) -> Result<ApplicationCallOutcome, ExecutionError> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         self.configure_initial_fuel()?;
         let result = contract::Contract::handle_application_call(
             &self.application,
             &mut self.store,
             &argument,
-        )
-        .map(|inner| inner.map(ApplicationCallOutcome::from));
+        );
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
 
-    fn finalize(
-        &mut self,
-        _context: FinalizeContext,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
+    fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {
         self.configure_initial_fuel()?;
-        let result = contract::Contract::finalize(&self.application, &mut self.store)
-            .map(|inner| inner.map(RawExecutionOutcome::from));
+        let result = contract::Contract::finalize(&self.application, &mut self.store);
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }

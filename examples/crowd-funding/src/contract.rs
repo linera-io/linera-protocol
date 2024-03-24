@@ -12,8 +12,7 @@ use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
     ensure,
     views::View,
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
-    Resources, ViewStateStorage,
+    Contract, ContractRuntime, ViewStateStorage,
 };
 use state::{CrowdFunding, Status};
 use thiserror::Error;
@@ -43,10 +42,7 @@ impl Contract for CrowdFundingContract {
         &mut self.state
     }
 
-    async fn initialize(
-        &mut self,
-        argument: InitializationArgument,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn initialize(&mut self, argument: InitializationArgument) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
 
@@ -58,34 +54,26 @@ impl Contract for CrowdFundingContract {
             Error::DeadlineInThePast
         );
 
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
-    async fn execute_operation(
-        &mut self,
-        operation: Operation,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        let mut outcome = ExecutionOutcome::default();
-
+    async fn execute_operation(&mut self, operation: Operation) -> Result<(), Self::Error> {
         match operation {
             Operation::Pledge { owner, amount } => {
                 if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
                     self.execute_pledge_with_account(owner, amount).await?;
                 } else {
-                    self.execute_pledge_with_transfer(&mut outcome, owner, amount)?;
+                    self.execute_pledge_with_transfer(owner, amount)?;
                 }
             }
             Operation::Collect => self.collect_pledges()?,
             Operation::Cancel => self.cancel_campaign().await?,
         }
 
-        Ok(outcome)
+        Ok(())
     }
 
-    async fn execute_message(
-        &mut self,
-        message: Message,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn execute_message(&mut self, message: Message) -> Result<(), Self::Error> {
         match message {
             Message::PledgeWithAccount { owner, amount } => {
                 ensure!(
@@ -95,23 +83,22 @@ impl Contract for CrowdFundingContract {
                 self.execute_pledge_with_account(owner, amount).await?;
             }
         }
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
     async fn handle_application_call(
         &mut self,
         call: ApplicationCall,
-    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
-        let mut outcome = ApplicationCallOutcome::default();
+    ) -> Result<Self::Response, Self::Error> {
         match call {
             ApplicationCall::Pledge { owner, amount } => {
-                self.execute_pledge_with_transfer(&mut outcome.execution_outcome, owner, amount)?;
+                self.execute_pledge_with_transfer(owner, amount)?
             }
             ApplicationCall::Collect => self.collect_pledges()?,
             ApplicationCall::Cancel => self.cancel_campaign().await?,
         }
 
-        Ok(outcome)
+        Ok(())
     }
 }
 
@@ -125,7 +112,6 @@ impl CrowdFundingContract {
     /// Adds a pledge from a local account to the remote campaign chain.
     fn execute_pledge_with_transfer(
         &mut self,
-        outcome: &mut ExecutionOutcome<Message>,
         owner: AccountOwner,
         amount: Amount,
     ) -> Result<(), Error> {
@@ -145,14 +131,9 @@ impl CrowdFundingContract {
         self.runtime
             .call_application(/* authenticated by owner */ true, fungible_id, &call);
         // Second, schedule the attribution of the funds to the (remote) campaign.
-        let message = Message::PledgeWithAccount { owner, amount };
-        outcome.messages.push(OutgoingMessage {
-            destination: chain_id.into(),
-            authenticated: true,
-            is_tracked: false,
-            resources: Resources::default(),
-            message,
-        });
+        self.runtime
+            .send_message(chain_id, Message::PledgeWithAccount { owner, amount })
+            .with_authentication();
         Ok(())
     }
 

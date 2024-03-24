@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use fungible::Account;
 use linera_sdk::{
     base::{AccountOwner, WithContractAbi},
-    ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
+    ensure, Contract, ContractRuntime, ViewStateStorage,
 };
 use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
 use thiserror::Error;
@@ -49,17 +49,14 @@ impl Contract for NonFungibleTokenContract {
     async fn initialize(
         &mut self,
         _state: Self::InitializationArgument,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    ) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
         self.state.num_minted_nfts.set(0);
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
-    async fn execute_operation(
-        &mut self,
-        operation: Self::Operation,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn execute_operation(&mut self, operation: Self::Operation) -> Result<(), Self::Error> {
         match operation {
             Operation::Mint {
                 minter,
@@ -67,7 +64,7 @@ impl Contract for NonFungibleTokenContract {
                 payload,
             } => {
                 self.check_account_authentication(minter)?;
-                self.mint(minter, name, payload).await
+                self.mint(minter, name, payload).await?;
             }
 
             Operation::Transfer {
@@ -80,7 +77,7 @@ impl Contract for NonFungibleTokenContract {
                 let nft = self.get_nft(&token_id).await?;
                 self.check_account_authentication(nft.owner)?;
 
-                Ok(self.transfer(nft, target_account).await)
+                self.transfer(nft, target_account).await;
             }
 
             Operation::Claim {
@@ -94,18 +91,17 @@ impl Contract for NonFungibleTokenContract {
                     let nft = self.get_nft(&token_id).await?;
                     self.check_account_authentication(nft.owner)?;
 
-                    Ok(self.transfer(nft, target_account).await)
+                    self.transfer(nft, target_account).await;
                 } else {
-                    Ok(self.remote_claim(source_account, token_id, target_account))
+                    self.remote_claim(source_account, token_id, target_account)
                 }
             }
         }
+
+        Ok(())
     }
 
-    async fn execute_message(
-        &mut self,
-        message: Message,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn execute_message(&mut self, message: Message) -> Result<(), Self::Error> {
         match message {
             Message::Transfer {
                 mut nft,
@@ -120,7 +116,6 @@ impl Contract for NonFungibleTokenContract {
                 }
 
                 self.add_nft(nft).await;
-                Ok(ExecutionOutcome::default())
             }
 
             Message::Claim {
@@ -133,15 +128,17 @@ impl Contract for NonFungibleTokenContract {
                 let nft = self.get_nft(&token_id).await?;
                 self.check_account_authentication(nft.owner)?;
 
-                Ok(self.transfer(nft, target_account).await)
+                self.transfer(nft, target_account).await;
             }
         }
+
+        Ok(())
     }
 
     async fn handle_application_call(
         &mut self,
         call: Self::ApplicationCall,
-    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
+    ) -> Result<Self::Response, Self::Error> {
         match call {
             Self::ApplicationCall::Mint {
                 minter,
@@ -150,11 +147,7 @@ impl Contract for NonFungibleTokenContract {
             } => {
                 self.check_account_authentication(minter)?;
 
-                let execution_outcome = self.mint(minter, name, payload).await?;
-                Ok(ApplicationCallOutcome {
-                    execution_outcome,
-                    ..Default::default()
-                })
+                self.mint(minter, name, payload).await?;
             }
 
             Self::ApplicationCall::Transfer {
@@ -167,11 +160,7 @@ impl Contract for NonFungibleTokenContract {
                 let nft = self.get_nft(&token_id).await?;
                 self.check_account_authentication(nft.owner)?;
 
-                let execution_outcome = self.transfer(nft, target_account).await;
-                Ok(ApplicationCallOutcome {
-                    execution_outcome,
-                    ..Default::default()
-                })
+                self.transfer(nft, target_account).await;
             }
 
             Self::ApplicationCall::Claim {
@@ -181,21 +170,18 @@ impl Contract for NonFungibleTokenContract {
             } => {
                 self.check_account_authentication(source_account.owner)?;
 
-                let execution_outcome = if source_account.chain_id == self.runtime.chain_id() {
+                if source_account.chain_id == self.runtime.chain_id() {
                     let nft = self.get_nft(&token_id).await?;
                     self.check_account_authentication(nft.owner)?;
 
-                    self.transfer(nft, target_account).await
+                    self.transfer(nft, target_account).await;
                 } else {
-                    self.remote_claim(source_account, token_id, target_account)
-                };
-
-                Ok(ApplicationCallOutcome {
-                    execution_outcome,
-                    ..Default::default()
-                })
+                    self.remote_claim(source_account, token_id, target_account);
+                }
             }
         }
+
+        Ok(())
     }
 }
 
@@ -222,23 +208,20 @@ impl NonFungibleTokenContract {
 
     /// Transfers the specified NFT to another account.
     /// Authentication needs to have happened already.
-    async fn transfer(
-        &mut self,
-        mut nft: Nft,
-        target_account: Account,
-    ) -> ExecutionOutcome<Message> {
+    async fn transfer(&mut self, mut nft: Nft, target_account: Account) {
         self.remove_nft(&nft).await;
         if target_account.chain_id == self.runtime.chain_id() {
             nft.owner = target_account.owner;
             self.add_nft(nft).await;
-            ExecutionOutcome::default()
         } else {
             let message = Message::Transfer {
                 nft,
                 target_account,
             };
 
-            ExecutionOutcome::default().with_tracked_message(target_account.chain_id, message)
+            self.runtime
+                .send_message(target_account.chain_id, message)
+                .with_tracking();
         }
     }
 
@@ -258,7 +241,7 @@ impl NonFungibleTokenContract {
         owner: AccountOwner,
         name: String,
         payload: Vec<u8>,
-    ) -> Result<ExecutionOutcome<Message>, Error> {
+    ) -> Result<(), Error> {
         let token_id = Nft::create_token_id(
             &self.runtime.chain_id(),
             &self.runtime.application_id().forget_abi(),
@@ -279,7 +262,8 @@ impl NonFungibleTokenContract {
 
         let num_minted_nfts = self.state.num_minted_nfts.get_mut();
         *num_minted_nfts += 1;
-        Ok(ExecutionOutcome::default())
+
+        Ok(())
     }
 
     fn remote_claim(
@@ -287,13 +271,15 @@ impl NonFungibleTokenContract {
         source_account: Account,
         token_id: TokenId,
         target_account: Account,
-    ) -> ExecutionOutcome<Message> {
+    ) {
         let message = Message::Claim {
             source_account,
             token_id,
             target_account,
         };
-        ExecutionOutcome::default().with_authenticated_message(source_account.chain_id, message)
+        self.runtime
+            .send_message(source_account.chain_id, message)
+            .with_authentication();
     }
 
     async fn add_nft(&mut self, nft: Nft) {

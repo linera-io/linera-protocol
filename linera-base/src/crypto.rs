@@ -94,7 +94,7 @@ impl From<Option<u64>> for Box<dyn CryptoRng> {
 }
 
 impl KeyPair {
-    #[cfg(with_testing)]
+    #[cfg(all(with_getrandom, with_testing))]
     /// Generates a new key-pair.
     pub fn generate() -> Self {
         let mut rng = rand::rngs::OsRng;

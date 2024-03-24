@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use fungible::{ApplicationCall, FungibleResponse, FungibleTokenAbi, Message, Operation};
 use linera_sdk::{
     base::{Account, AccountOwner, Amount, Owner, WithContractAbi},
-    ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
+    ensure, Contract, ContractRuntime, ViewStateStorage,
 };
 use native_fungible::TICKER_SYMBOL;
 use thiserror::Error;
@@ -44,10 +44,7 @@ impl Contract for NativeFungibleTokenContract {
         &mut self.state
     }
 
-    async fn initialize(
-        &mut self,
-        state: Self::InitializationArgument,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn initialize(&mut self, state: Self::InitializationArgument) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         assert!(
             self.runtime.application_parameters().ticker_symbol == "NAT",
@@ -61,13 +58,10 @@ impl Contract for NativeFungibleTokenContract {
             };
             self.runtime.transfer(None, account, amount);
         }
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
-    async fn execute_operation(
-        &mut self,
-        operation: Self::Operation,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn execute_operation(&mut self, operation: Self::Operation) -> Result<(), Self::Error> {
         match operation {
             Operation::Transfer {
                 owner,
@@ -83,7 +77,8 @@ impl Contract for NativeFungibleTokenContract {
 
                 self.runtime.transfer(Some(owner), target_account, amount);
 
-                Ok(self.get_transfer_outcome(account_owner, fungible_target_account, amount))
+                self.transfer(account_owner, fungible_target_account, amount);
+                Ok(())
             }
 
             Operation::Claim {
@@ -100,23 +95,15 @@ impl Contract for NativeFungibleTokenContract {
                 let target_account = self.normalize_account(target_account);
 
                 self.runtime.claim(source_account, target_account, amount);
-                Ok(
-                    self.get_claim_outcome(
-                        fungible_source_account,
-                        fungible_target_account,
-                        amount,
-                    ),
-                )
+                self.claim(fungible_source_account, fungible_target_account, amount);
+                Ok(())
             }
         }
     }
 
     // TODO(#1721): After message is separated from the Abi, create an empty Notify message
     // to be the only message used here, simple message (no authentication, not tracked)
-    async fn execute_message(
-        &mut self,
-        message: Self::Message,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn execute_message(&mut self, message: Self::Message) -> Result<(), Self::Error> {
         // Messages for now don't do anything, just pass messages around
         match message {
             Message::Credit {
@@ -126,7 +113,7 @@ impl Contract for NativeFungibleTokenContract {
             } => {
                 // If we ever actually implement this, we need to remember
                 // to check if it's a bouncing message like in the fungible app
-                Ok(ExecutionOutcome::default())
+                Ok(())
             }
             Message::Withdraw {
                 owner,
@@ -134,7 +121,8 @@ impl Contract for NativeFungibleTokenContract {
                 target_account,
             } => {
                 self.check_account_authentication(owner)?;
-                Ok(self.get_transfer_outcome(owner, target_account, amount))
+                self.transfer(owner, target_account, amount);
+                Ok(())
             }
         }
     }
@@ -142,15 +130,13 @@ impl Contract for NativeFungibleTokenContract {
     async fn handle_application_call(
         &mut self,
         call: ApplicationCall,
-    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
+    ) -> Result<Self::Response, Self::Error> {
         match call {
             ApplicationCall::Balance { owner } => {
                 let owner = self.normalize_owner(owner);
 
-                let mut outcome = ApplicationCallOutcome::default();
                 let balance = self.runtime.owner_balance(owner);
-                outcome.value = FungibleResponse::Balance(balance);
-                Ok(outcome)
+                Ok(FungibleResponse::Balance(balance))
             }
 
             ApplicationCall::Transfer {
@@ -165,12 +151,8 @@ impl Contract for NativeFungibleTokenContract {
                 let target_account = self.normalize_account(destination);
 
                 self.runtime.transfer(Some(owner), target_account, amount);
-                let execution_outcome =
-                    self.get_transfer_outcome(account_owner, destination, amount);
-                Ok(ApplicationCallOutcome {
-                    execution_outcome,
-                    ..Default::default()
-                })
+                self.transfer(account_owner, destination, amount);
+                Ok(FungibleResponse::Ok)
             }
 
             ApplicationCall::Claim {
@@ -187,56 +169,34 @@ impl Contract for NativeFungibleTokenContract {
                 let target_account = self.normalize_account(target_account);
 
                 self.runtime.claim(source_account, target_account, amount);
-                let execution_outcome = self.get_claim_outcome(
-                    fungible_source_account,
-                    fungible_target_account,
-                    amount,
-                );
-                Ok(ApplicationCallOutcome {
-                    execution_outcome,
-                    ..Default::default()
-                })
+                self.claim(fungible_source_account, fungible_target_account, amount);
+                Ok(FungibleResponse::Ok)
             }
 
             ApplicationCall::TickerSymbol => {
-                let outcome = ApplicationCallOutcome {
-                    value: FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL)),
-                    ..Default::default()
-                };
-                Ok(outcome)
+                Ok(FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL)))
             }
         }
     }
 }
 
 impl NativeFungibleTokenContract {
-    fn get_transfer_outcome(
-        &mut self,
-        source: AccountOwner,
-        target: fungible::Account,
-        amount: Amount,
-    ) -> ExecutionOutcome<Message> {
-        if target.chain_id == self.runtime.chain_id() {
-            ExecutionOutcome::default()
-        } else {
+    fn transfer(&mut self, source: AccountOwner, target: fungible::Account, amount: Amount) {
+        if target.chain_id != self.runtime.chain_id() {
             let message = Message::Credit {
                 target: target.owner,
                 amount,
                 source,
             };
-
-            ExecutionOutcome::default().with_message(target.chain_id, message)
+            self.runtime
+                .send_message(target.chain_id, message)
+                .with_authentication();
         }
     }
 
-    fn get_claim_outcome(
-        &mut self,
-        source: fungible::Account,
-        target: fungible::Account,
-        amount: Amount,
-    ) -> ExecutionOutcome<Message> {
+    fn claim(&mut self, source: fungible::Account, target: fungible::Account, amount: Amount) {
         if source.chain_id == self.runtime.chain_id() {
-            self.get_transfer_outcome(source.owner, target, amount)
+            self.transfer(source.owner, target, amount);
         } else {
             // If different chain, send message that will be ignored so the app gets auto-deployed
             let message = Message::Withdraw {
@@ -244,7 +204,9 @@ impl NativeFungibleTokenContract {
                 amount,
                 target_account: target,
             };
-            ExecutionOutcome::default().with_message(source.chain_id, message)
+            self.runtime
+                .send_message(source.chain_id, message)
+                .with_authentication();
         }
     }
 

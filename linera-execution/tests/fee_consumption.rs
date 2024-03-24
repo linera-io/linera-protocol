@@ -173,7 +173,7 @@ async fn test_fee_consumption(
             for spend in spends {
                 spend.execute(runtime).unwrap();
             }
-            Ok(RawExecutionOutcome::default())
+            Ok(())
         },
     ));
     application.expect_call(ExpectedCall::default_finalize());

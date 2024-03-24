@@ -33,7 +33,7 @@ pub use execution::ExecutionStateView;
 use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
-    data_types::{Amount, ArithmeticError, BlockHeight, Resources, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, Resources, SendMessageRequest, Timestamp},
     doc_scalar, hex_debug,
     identifiers::{
         Account, BytecodeId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId,
@@ -138,21 +138,21 @@ pub trait UserContract {
         &mut self,
         context: OperationContext,
         argument: Vec<u8>,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>;
+    ) -> Result<(), ExecutionError>;
 
     /// Applies an operation from the current block.
     fn execute_operation(
         &mut self,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>;
+    ) -> Result<(), ExecutionError>;
 
     /// Applies a message originating from a cross-chain message.
     fn execute_message(
         &mut self,
         context: MessageContext,
         message: Vec<u8>,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>;
+    ) -> Result<(), ExecutionError>;
 
     /// Executes a call from another application.
     ///
@@ -162,13 +162,10 @@ pub trait UserContract {
         &mut self,
         context: CalleeContext,
         argument: Vec<u8>,
-    ) -> Result<ApplicationCallOutcome, ExecutionError>;
+    ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Finishes execution of the current transaction.
-    fn finalize(
-        &mut self,
-        context: FinalizeContext,
-    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>;
+    fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError>;
 }
 
 /// The public entry points provided by the service part of an application.
@@ -458,6 +455,15 @@ pub trait ContractRuntime: BaseRuntime {
     /// Consumes some of the execution fuel.
     fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError>;
 
+    /// Schedules a message to be sent.
+    fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError>;
+
+    /// Schedules to subscribe to some `channel` on a `chain`.
+    fn subscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
+
+    /// Schedules to unsubscribe to some `channel` on a `chain`.
+    fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
+
     /// Transfers amount from source to destination.
     fn transfer(
         &mut self,
@@ -563,6 +569,32 @@ pub struct RawOutgoingMessage<Message, Grant = Resources> {
     pub kind: MessageKind,
     /// The message itself.
     pub message: Message,
+}
+
+impl<Message> From<SendMessageRequest<Message>> for RawOutgoingMessage<Message, Resources> {
+    fn from(request: SendMessageRequest<Message>) -> Self {
+        let SendMessageRequest {
+            destination,
+            authenticated,
+            grant,
+            is_tracked,
+            message,
+        } = request;
+
+        let kind = if is_tracked {
+            MessageKind::Tracked
+        } else {
+            MessageKind::Simple
+        };
+
+        RawOutgoingMessage {
+            destination,
+            authenticated,
+            grant,
+            kind,
+            message,
+        }
+    }
 }
 
 /// The kind of outgoing message being sent.

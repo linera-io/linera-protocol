@@ -10,8 +10,7 @@ use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
-    ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
-    Resources, ViewStateStorage,
+    ensure, Contract, ContractRuntime, ViewStateStorage,
 };
 use matching_engine::{
     product_price_amount, ApplicationCall, MatchingEngineAbi, Message, Operation, Order, OrderId,
@@ -69,25 +68,18 @@ impl Contract for MatchingEngineContract {
         &mut self.state
     }
 
-    async fn initialize(
-        &mut self,
-        _argument: (),
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn initialize(&mut self, _argument: ()) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
 
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
     /// Executes an order operation, or closes the chain.
     ///
     /// If the chain is the one of the matching engine then the order is processed
     /// locally. Otherwise, it gets transmitted as a message to the chain of the engine.
-    async fn execute_operation(
-        &mut self,
-        operation: Operation,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        let mut outcome = ExecutionOutcome::default();
+    async fn execute_operation(&mut self, operation: Operation) -> Result<(), Self::Error> {
         match operation {
             Operation::ExecuteOrder { order } => {
                 let owner = Self::get_owner(&order);
@@ -96,7 +88,7 @@ impl Contract for MatchingEngineContract {
                 if chain_id == self.runtime.application_id().creation.chain_id {
                     self.execute_order_local(order, chain_id).await?;
                 } else {
-                    self.execute_order_remote(&mut outcome, order)?;
+                    self.execute_order_remote(order)?;
                 }
             }
             Operation::CloseChain => {
@@ -113,14 +105,11 @@ impl Contract for MatchingEngineContract {
                     .map_err(|_| MatchingEngineError::CloseChainError)?;
             }
         }
-        Ok(outcome)
+        Ok(())
     }
 
     /// Execution of the order on the creation chain
-    async fn execute_message(
-        &mut self,
-        message: Message,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn execute_message(&mut self, message: Message) -> Result<(), Self::Error> {
         ensure!(
             self.runtime.chain_id() == self.runtime.application_id().creation.chain_id,
             Self::Error::MatchingEngineChainOnly
@@ -136,7 +125,7 @@ impl Contract for MatchingEngineContract {
                 self.execute_order_local(order, message_id.chain_id).await?;
             }
         }
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
     /// Execution of the message from the application. The application call can be a local
@@ -144,8 +133,7 @@ impl Contract for MatchingEngineContract {
     async fn handle_application_call(
         &mut self,
         argument: ApplicationCall,
-    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
-        let mut outcome = ApplicationCallOutcome::default();
+    ) -> Result<Self::Response, Self::Error> {
         match argument {
             ApplicationCall::ExecuteOrder { order } => {
                 let owner = Self::get_owner(&order);
@@ -154,11 +142,11 @@ impl Contract for MatchingEngineContract {
                 if chain_id == self.runtime.application_id().creation.chain_id {
                     self.execute_order_local(order, chain_id).await?;
                 } else {
-                    self.execute_order_remote(&mut outcome.execution_outcome, order)?;
+                    self.execute_order_remote(order)?;
                 }
             }
         }
-        Ok(outcome)
+        Ok(())
     }
 }
 
@@ -315,11 +303,7 @@ impl MatchingEngineContract {
     ///   This is similar to the code for the crowd-funding.
     /// * Creation of the message that will represent the order on the chain of the matching
     ///   engine
-    fn execute_order_remote(
-        &mut self,
-        outcome: &mut ExecutionOutcome<Message>,
-        order: Order,
-    ) -> Result<(), MatchingEngineError> {
+    fn execute_order_remote(&mut self, order: Order) -> Result<(), MatchingEngineError> {
         let chain_id = self.runtime.application_id().creation.chain_id;
         let message = Message::ExecuteOrder {
             order: order.clone(),
@@ -336,13 +320,9 @@ impl MatchingEngineContract {
             let (amount, token_idx) = Self::get_amount_idx(&nature, &price, &amount);
             self.transfer(owner, amount, destination, token_idx);
         }
-        outcome.messages.push(OutgoingMessage {
-            destination: chain_id.into(),
-            authenticated: true,
-            is_tracked: false,
-            resources: Resources::default(),
-            message,
-        });
+        self.runtime
+            .send_message(chain_id, message)
+            .with_authentication();
         Ok(())
     }
 

@@ -7,10 +7,7 @@ mod state;
 
 use async_trait::async_trait;
 use counter::CounterAbi;
-use linera_sdk::{
-    base::WithContractAbi, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome,
-    SimpleStateStorage,
-};
+use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, SimpleStateStorage};
 use thiserror::Error;
 
 use self::state::Counter;
@@ -40,42 +37,30 @@ impl Contract for CounterContract {
         &mut self.state
     }
 
-    async fn initialize(
-        &mut self,
-        value: u64,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn initialize(&mut self, value: u64) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
 
         self.state.value = value;
 
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
-    async fn execute_operation(
-        &mut self,
-        operation: u64,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn execute_operation(&mut self, operation: u64) -> Result<(), Self::Error> {
         self.state.value += operation;
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
-    async fn execute_message(
-        &mut self,
-        _message: (),
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn execute_message(&mut self, _message: ()) -> Result<(), Self::Error> {
         Err(Error::MessagesNotSupported)
     }
 
     async fn handle_application_call(
         &mut self,
         increment: u64,
-    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
+    ) -> Result<Self::Response, Self::Error> {
         self.state.value += increment;
-        Ok(ApplicationCallOutcome {
-            value: self.state.value,
-            ..ApplicationCallOutcome::default()
-        })
+        Ok(self.state.value)
     }
 }
 
@@ -101,7 +86,7 @@ mod tests {
     use futures::FutureExt;
     use linera_sdk::{
         test::{mock_application_parameters, test_contract_runtime},
-        ApplicationCallOutcome, Contract, ExecutionOutcome,
+        Contract,
     };
     use webassembly_test::webassembly_test;
 
@@ -120,7 +105,6 @@ mod tests {
             .expect("Execution of counter operation should not await anything");
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), ExecutionOutcome::default());
         assert_eq!(counter.state.value, initial_value + increment);
     }
 
@@ -151,13 +135,9 @@ mod tests {
             .expect("Execution of counter operation should not await anything");
 
         let expected_value = initial_value + increment;
-        let expected_outcome = ApplicationCallOutcome {
-            value: expected_value,
-            execution_outcome: ExecutionOutcome::default(),
-        };
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), expected_outcome);
+        assert_eq!(result.unwrap(), expected_value);
         assert_eq!(counter.state.value, expected_value);
     }
 
@@ -176,7 +156,6 @@ mod tests {
             .expect("Initialization of counter state should not await anything");
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), ExecutionOutcome::default());
         assert_eq!(contract.state.value, initial_value);
 
         contract

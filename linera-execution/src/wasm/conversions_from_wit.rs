@@ -12,116 +12,13 @@ use std::time::Duration;
 
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, Resources},
+    data_types::{Amount, BlockHeight, Resources, SendMessageRequest},
     identifiers::{Account, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 
-use super::{contract, contract_system_api, service_system_api};
-use crate::{
-    ApplicationCallOutcome, ChannelName, Destination, MessageKind, RawExecutionOutcome,
-    RawOutgoingMessage, UserApplicationId,
-};
-
-impl From<contract::ApplicationCallOutcome> for ApplicationCallOutcome {
-    fn from(outcome: contract::ApplicationCallOutcome) -> Self {
-        ApplicationCallOutcome {
-            execution_outcome: outcome.execution_outcome.into(),
-            value: outcome.value,
-        }
-    }
-}
-
-impl From<contract::Resources> for Resources {
-    fn from(value: contract::Resources) -> Self {
-        Self {
-            fuel: value.fuel,
-            read_operations: value.read_operations,
-            write_operations: value.write_operations,
-            bytes_to_read: value.bytes_to_read,
-            bytes_to_write: value.bytes_to_write,
-            messages: value.messages,
-            message_size: value.message_size,
-            storage_size_delta: value.storage_size_delta,
-        }
-    }
-}
-
-impl From<contract::OutgoingMessage> for RawOutgoingMessage<Vec<u8>, Resources> {
-    fn from(message: contract::OutgoingMessage) -> Self {
-        Self {
-            destination: message.destination.into(),
-            authenticated: message.authenticated,
-            grant: message.resources.into(),
-            kind: if message.is_tracked {
-                MessageKind::Tracked
-            } else {
-                MessageKind::Simple
-            },
-            message: message.message,
-        }
-    }
-}
-
-impl From<contract::ExecutionOutcome> for RawExecutionOutcome<Vec<u8>, Resources> {
-    fn from(outcome: contract::ExecutionOutcome) -> Self {
-        let messages = outcome
-            .messages
-            .into_iter()
-            .map(RawOutgoingMessage::from)
-            .collect();
-
-        let subscribe = outcome
-            .subscribe
-            .into_iter()
-            .map(|(subscription, chain_id)| (subscription.into(), chain_id.into()))
-            .collect();
-
-        let unsubscribe = outcome
-            .unsubscribe
-            .into_iter()
-            .map(|(subscription, chain_id)| (subscription.into(), chain_id.into()))
-            .collect();
-
-        RawExecutionOutcome {
-            authenticated_signer: None,
-            refund_grant_to: None,
-            messages,
-            subscribe,
-            unsubscribe,
-        }
-    }
-}
-
-impl From<contract::Destination> for Destination {
-    fn from(guest: contract::Destination) -> Self {
-        match guest {
-            contract::Destination::Recipient(chain_id) => Destination::Recipient(chain_id.into()),
-            contract::Destination::Subscribers(subscription) => {
-                Destination::Subscribers(subscription.into())
-            }
-        }
-    }
-}
-
-impl From<contract::ChannelName> for ChannelName {
-    fn from(guest: contract::ChannelName) -> Self {
-        guest.name.into()
-    }
-}
-
-impl From<contract::CryptoHash> for CryptoHash {
-    fn from(guest: contract::CryptoHash) -> Self {
-        let integers = [guest.part1, guest.part2, guest.part3, guest.part4];
-        CryptoHash::from(integers)
-    }
-}
-
-impl From<contract::ChainId> for ChainId {
-    fn from(guest: contract::ChainId) -> Self {
-        ChainId(guest.into())
-    }
-}
+use super::{contract_system_api, service_system_api};
+use crate::{ChannelName, Destination, UserApplicationId};
 
 impl From<contract_system_api::ApplicationId> for UserApplicationId {
     fn from(guest: contract_system_api::ApplicationId) -> Self {
@@ -234,6 +131,52 @@ impl From<contract_system_api::Amount> for Amount {
     fn from(amount: contract_system_api::Amount) -> Self {
         let value = ((amount.upper_half as u128) << 64) | (amount.lower_half as u128);
         Amount::from_attos(value)
+    }
+}
+
+impl<'a> From<contract_system_api::SendMessageRequest<'a>> for SendMessageRequest<Vec<u8>> {
+    fn from(message: contract_system_api::SendMessageRequest<'a>) -> Self {
+        Self {
+            destination: message.destination.into(),
+            authenticated: message.authenticated,
+            is_tracked: message.is_tracked,
+            grant: message.resources.into(),
+            message: message.message.to_vec(),
+        }
+    }
+}
+
+impl From<contract_system_api::Resources> for Resources {
+    fn from(value: contract_system_api::Resources) -> Self {
+        Self {
+            fuel: value.fuel,
+            read_operations: value.read_operations,
+            write_operations: value.write_operations,
+            bytes_to_read: value.bytes_to_read,
+            bytes_to_write: value.bytes_to_write,
+            messages: value.messages,
+            message_size: value.message_size,
+            storage_size_delta: value.storage_size_delta,
+        }
+    }
+}
+
+impl<'a> From<contract_system_api::Destination<'a>> for Destination {
+    fn from(guest: contract_system_api::Destination<'a>) -> Self {
+        match guest {
+            contract_system_api::Destination::Recipient(chain_id) => {
+                Destination::Recipient(chain_id.into())
+            }
+            contract_system_api::Destination::Subscribers(subscription) => {
+                Destination::Subscribers(subscription.into())
+            }
+        }
+    }
+}
+
+impl<'a> From<contract_system_api::ChannelName<'a>> for ChannelName {
+    fn from(guest: contract_system_api::ChannelName<'a>) -> Self {
+        guest.name.to_vec().into()
     }
 }
 

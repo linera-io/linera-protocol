@@ -14,9 +14,7 @@ pub use self::{
     runtime::ContractRuntime, storage::ContractStateStorage,
     wit_system_api::Closechainerror as CloseChainError,
 };
-use crate::{
-    log::ContractLogger, util::BlockingWait, ApplicationCallOutcome, Contract, ExecutionOutcome,
-};
+use crate::{log::ContractLogger, util::BlockingWait, Contract};
 
 /// Declares an implementation of the [`Contract`][`crate::Contract`] trait, exporting it from the
 /// Wasm module.
@@ -31,28 +29,21 @@ macro_rules! contract {
 
         #[doc(hidden)]
         #[no_mangle]
-        fn __contract_initialize(
-            argument: Vec<u8>,
-        ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+        fn __contract_initialize(argument: Vec<u8>) -> Result<(), String> {
             use $crate::util::BlockingWait;
             $crate::contract::run_async_entrypoint::<$application, _, _, _>(
                 unsafe { &mut APPLICATION },
                 move |application| {
                     let argument = serde_json::from_slice(&argument)?;
 
-                    application
-                        .initialize(argument)
-                        .blocking_wait()
-                        .map(|outcome| outcome.into_raw())
+                    application.initialize(argument).blocking_wait()
                 },
             )
         }
 
         #[doc(hidden)]
         #[no_mangle]
-        fn __contract_execute_operation(
-            operation: Vec<u8>,
-        ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+        fn __contract_execute_operation(operation: Vec<u8>) -> Result<(), String> {
             use $crate::util::BlockingWait;
             $crate::contract::run_async_entrypoint::<$application, _, _, _>(
                 unsafe { &mut APPLICATION },
@@ -60,19 +51,14 @@ macro_rules! contract {
                     let operation: <$application as $crate::abi::ContractAbi>::Operation =
                         bcs::from_bytes(&operation)?;
 
-                    application
-                        .execute_operation(operation)
-                        .blocking_wait()
-                        .map(|outcome| outcome.into_raw())
+                    application.execute_operation(operation).blocking_wait()
                 },
             )
         }
 
         #[doc(hidden)]
         #[no_mangle]
-        fn __contract_execute_message(
-            message: Vec<u8>,
-        ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+        fn __contract_execute_message(message: Vec<u8>) -> Result<(), String> {
             use $crate::util::BlockingWait;
             $crate::contract::run_async_entrypoint::<$application, _, _, _>(
                 unsafe { &mut APPLICATION },
@@ -80,19 +66,14 @@ macro_rules! contract {
                     let message: <$application as $crate::abi::ContractAbi>::Message =
                         bcs::from_bytes(&message)?;
 
-                    application
-                        .execute_message(message)
-                        .blocking_wait()
-                        .map(|outcome| outcome.into_raw())
+                    application.execute_message(message).blocking_wait()
                 },
             )
         }
 
         #[doc(hidden)]
         #[no_mangle]
-        fn __contract_handle_application_call(
-            argument: Vec<u8>,
-        ) -> Result<$crate::ApplicationCallOutcome<Vec<u8>, Vec<u8>>, String> {
+        fn __contract_handle_application_call(argument: Vec<u8>) -> Result<Vec<u8>, String> {
             use $crate::util::BlockingWait;
             $crate::contract::run_async_entrypoint::<$application, _, _, _>(
                 unsafe { &mut APPLICATION },
@@ -103,23 +84,21 @@ macro_rules! contract {
                     application
                         .handle_application_call(argument)
                         .blocking_wait()
-                        .map(|outcome| outcome.into_raw())
+                        .map(|response| {
+                            bcs::to_bytes(&response)
+                                .expect("Failed to serialize `ApplicationCallOutcome`'s `Response`")
+                        })
                 },
             )
         }
 
         #[doc(hidden)]
         #[no_mangle]
-        fn __contract_finalize() -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+        fn __contract_finalize() -> Result<(), String> {
             use $crate::util::BlockingWait;
             $crate::contract::run_async_entrypoint::<$application, _, _, _>(
                 unsafe { &mut APPLICATION },
-                move |application| {
-                    application
-                        .finalize()
-                        .blocking_wait()
-                        .map(|outcome| outcome.into_raw())
-                },
+                move |application| application.finalize().blocking_wait(),
             )
         }
 
@@ -165,16 +144,9 @@ where
 
 // Import entrypoint proxy functions that applications implement with the `contract!` macro.
 extern "Rust" {
-    fn __contract_initialize(argument: Vec<u8>) -> Result<ExecutionOutcome<Vec<u8>>, String>;
-
-    fn __contract_execute_operation(argument: Vec<u8>)
-        -> Result<ExecutionOutcome<Vec<u8>>, String>;
-
-    fn __contract_execute_message(message: Vec<u8>) -> Result<ExecutionOutcome<Vec<u8>>, String>;
-
-    fn __contract_handle_application_call(
-        argument: Vec<u8>,
-    ) -> Result<ApplicationCallOutcome<Vec<u8>, Vec<u8>>, String>;
-
-    fn __contract_finalize() -> Result<ExecutionOutcome<Vec<u8>>, String>;
+    fn __contract_initialize(argument: Vec<u8>) -> Result<(), String>;
+    fn __contract_execute_operation(argument: Vec<u8>) -> Result<(), String>;
+    fn __contract_execute_message(message: Vec<u8>) -> Result<(), String>;
+    fn __contract_handle_application_call(argument: Vec<u8>) -> Result<Vec<u8>, String>;
+    fn __contract_finalize() -> Result<(), String>;
 }

@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use linera_sdk::{
     base::{ChannelName, Destination, MessageId, WithContractAbi},
     views::ViewError,
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
+    Contract, ContractRuntime, ViewStateStorage,
 };
 use social::{Key, Message, Operation, OwnPost, SocialAbi};
 use state::Social;
@@ -45,60 +45,46 @@ impl Contract for SocialContract {
         &mut self.state
     }
 
-    async fn initialize(
-        &mut self,
-        _argument: (),
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn initialize(&mut self, _argument: ()) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
 
-        Ok(ExecutionOutcome::default())
+        Ok(())
     }
 
-    async fn execute_operation(
-        &mut self,
-        operation: Operation,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        match operation {
-            Operation::Subscribe { chain_id } => {
-                Ok(ExecutionOutcome::default().with_message(chain_id, Message::Subscribe))
-            }
-            Operation::Unsubscribe { chain_id } => {
-                Ok(ExecutionOutcome::default().with_message(chain_id, Message::Unsubscribe))
-            }
-            Operation::Post { text } => self.execute_post_operation(text).await,
-        }
+    async fn execute_operation(&mut self, operation: Operation) -> Result<(), Self::Error> {
+        let (destination, message) = match operation {
+            Operation::Subscribe { chain_id } => (chain_id.into(), Message::Subscribe),
+            Operation::Unsubscribe { chain_id } => (chain_id.into(), Message::Unsubscribe),
+            Operation::Post { text } => self.execute_post_operation(text).await?,
+        };
+
+        self.runtime.send_message(destination, message);
+        Ok(())
     }
 
-    async fn execute_message(
-        &mut self,
-        message: Message,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        let mut outcome = ExecutionOutcome::default();
+    async fn execute_message(&mut self, message: Message) -> Result<(), Self::Error> {
         let message_id = self
             .runtime
             .message_id()
             .expect("Message ID has to be available when executing a message");
         match message {
-            Message::Subscribe => outcome.subscribe.push((
-                ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
+            Message::Subscribe => self.runtime.subscribe(
                 message_id.chain_id,
-            )),
-            Message::Unsubscribe => outcome.unsubscribe.push((
                 ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
+            ),
+            Message::Unsubscribe => self.runtime.unsubscribe(
                 message_id.chain_id,
-            )),
+                ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
+            ),
             Message::Posts { count, posts } => {
                 self.execute_posts_message(message_id, count, posts)?
             }
         }
-        Ok(outcome)
+        Ok(())
     }
 
-    async fn handle_application_call(
-        &mut self,
-        _call: (),
-    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
+    async fn handle_application_call(&mut self, _call: ()) -> Result<Self::Response, Self::Error> {
         Err(Error::ApplicationCallsNotSupported)
     }
 }
@@ -107,7 +93,7 @@ impl SocialContract {
     async fn execute_post_operation(
         &mut self,
         text: String,
-    ) -> Result<ExecutionOutcome<Message>, Error> {
+    ) -> Result<(Destination, Message), Error> {
         let timestamp = self.runtime.system_time();
         self.state.own_posts.push(OwnPost { timestamp, text });
         let count = self.state.own_posts.count();
@@ -119,8 +105,10 @@ impl SocialContract {
             posts.push(own_post);
         }
         let count = count as u64;
-        let dest = Destination::Subscribers(ChannelName::from(POSTS_CHANNEL_NAME.to_vec()));
-        Ok(ExecutionOutcome::default().with_message(dest, Message::Posts { count, posts }))
+        Ok((
+            ChannelName::from(POSTS_CHANNEL_NAME.to_vec()).into(),
+            Message::Posts { count, posts },
+        ))
     }
 
     fn execute_posts_message(

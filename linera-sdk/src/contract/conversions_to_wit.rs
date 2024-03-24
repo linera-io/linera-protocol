@@ -7,11 +7,11 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Resources},
-    identifiers::{Account, ApplicationId, ChannelName, Destination, MessageId, Owner},
+    identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 
-use super::{wit_system_api, wit_types};
-use crate::{ApplicationCallOutcome, ExecutionOutcome, OutgoingMessage};
+use super::wit_system_api;
+use crate::SendMessageRequest;
 
 impl From<CryptoHash> for wit_system_api::CryptoHash {
     fn from(hash_value: CryptoHash) -> Self {
@@ -26,6 +26,12 @@ impl From<CryptoHash> for wit_system_api::CryptoHash {
     }
 }
 
+impl From<ChainId> for wit_system_api::CryptoHash {
+    fn from(chain_id: ChainId) -> Self {
+        chain_id.0.into()
+    }
+}
+
 impl From<Owner> for wit_system_api::CryptoHash {
     fn from(owner: Owner) -> Self {
         wit_system_api::CryptoHash::from(owner.0)
@@ -37,19 +43,6 @@ impl From<Amount> for wit_system_api::Amount {
         wit_system_api::Amount {
             lower_half: host.lower_half(),
             upper_half: host.upper_half(),
-        }
-    }
-}
-
-impl From<CryptoHash> for wit_types::CryptoHash {
-    fn from(crypto_hash: CryptoHash) -> Self {
-        let parts = <[u64; 4]>::from(crypto_hash);
-
-        wit_types::CryptoHash {
-            part1: parts[0],
-            part2: parts[1],
-            part3: parts[2],
-            part4: parts[3],
         }
     }
 }
@@ -82,42 +75,42 @@ impl From<MessageId> for wit_system_api::MessageId {
     }
 }
 
-impl From<log::Level> for wit_system_api::LogLevel {
-    fn from(level: log::Level) -> Self {
-        match level {
-            log::Level::Trace => wit_system_api::LogLevel::Trace,
-            log::Level::Debug => wit_system_api::LogLevel::Debug,
-            log::Level::Info => wit_system_api::LogLevel::Info,
-            log::Level::Warn => wit_system_api::LogLevel::Warn,
-            log::Level::Error => wit_system_api::LogLevel::Error,
-        }
-    }
-}
-
-impl From<ApplicationCallOutcome<Vec<u8>, Vec<u8>>> for wit_types::ApplicationCallOutcome {
-    fn from(outcome: ApplicationCallOutcome<Vec<u8>, Vec<u8>>) -> Self {
-        wit_types::ApplicationCallOutcome {
-            value: outcome.value,
-            execution_outcome: outcome.execution_outcome.into(),
-        }
-    }
-}
-
-impl From<OutgoingMessage<Vec<u8>>> for wit_types::OutgoingMessage {
-    fn from(message: OutgoingMessage<Vec<u8>>) -> Self {
+impl<'a> From<&'a SendMessageRequest<Vec<u8>>> for wit_system_api::SendMessageRequest<'a> {
+    fn from(message: &'a SendMessageRequest<Vec<u8>>) -> Self {
         Self {
-            destination: message.destination.into(),
+            destination: (&message.destination).into(),
             authenticated: message.authenticated,
             is_tracked: message.is_tracked,
-            resources: message.resources.into(),
-            message: message.message,
+            resources: message.grant.into(),
+            message: &message.message,
         }
     }
 }
 
-impl From<Resources> for wit_types::Resources {
+impl<'a> From<&'a Destination> for wit_system_api::Destination<'a> {
+    fn from(destination: &'a Destination) -> Self {
+        match destination {
+            Destination::Recipient(chain_id) => {
+                wit_system_api::Destination::Recipient(chain_id.0.into())
+            }
+            Destination::Subscribers(subscription) => {
+                wit_system_api::Destination::Subscribers(subscription.into())
+            }
+        }
+    }
+}
+
+impl<'a> From<&'a ChannelName> for wit_system_api::ChannelName<'a> {
+    fn from(name: &'a ChannelName) -> Self {
+        wit_system_api::ChannelName {
+            name: name.as_ref(),
+        }
+    }
+}
+
+impl From<Resources> for wit_system_api::Resources {
     fn from(resources: Resources) -> Self {
-        wit_types::Resources {
+        wit_system_api::Resources {
             fuel: resources.fuel,
             read_operations: resources.read_operations,
             write_operations: resources.write_operations,
@@ -130,51 +123,14 @@ impl From<Resources> for wit_types::Resources {
     }
 }
 
-impl From<ExecutionOutcome<Vec<u8>>> for wit_types::ExecutionOutcome {
-    fn from(outcome: ExecutionOutcome<Vec<u8>>) -> Self {
-        let messages = outcome
-            .messages
-            .into_iter()
-            .map(wit_types::OutgoingMessage::from)
-            .collect();
-
-        let subscribe = outcome
-            .subscribe
-            .into_iter()
-            .map(|(subscription, chain_id)| (subscription.into(), chain_id.0.into()))
-            .collect();
-
-        let unsubscribe = outcome
-            .unsubscribe
-            .into_iter()
-            .map(|(subscription, chain_id)| (subscription.into(), chain_id.0.into()))
-            .collect();
-
-        wit_types::ExecutionOutcome {
-            messages,
-            subscribe,
-            unsubscribe,
-        }
-    }
-}
-
-impl From<Destination> for wit_types::Destination {
-    fn from(destination: Destination) -> Self {
-        match destination {
-            Destination::Recipient(chain_id) => {
-                wit_types::Destination::Recipient(chain_id.0.into())
-            }
-            Destination::Subscribers(subscription) => {
-                wit_types::Destination::Subscribers(subscription.into())
-            }
-        }
-    }
-}
-
-impl From<ChannelName> for wit_types::ChannelName {
-    fn from(name: ChannelName) -> Self {
-        wit_types::ChannelName {
-            name: name.into_bytes(),
+impl From<log::Level> for wit_system_api::LogLevel {
+    fn from(level: log::Level) -> Self {
+        match level {
+            log::Level::Trace => wit_system_api::LogLevel::Trace,
+            log::Level::Debug => wit_system_api::LogLevel::Debug,
+            log::Level::Info => wit_system_api::LogLevel::Info,
+            log::Level::Warn => wit_system_api::LogLevel::Warn,
+            log::Level::Error => wit_system_api::LogLevel::Error,
         }
     }
 }

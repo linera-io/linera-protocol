@@ -15,8 +15,8 @@ use linera_sdk::{
     test::{self, test_contract_runtime, test_service_runtime},
     util::BlockingWait,
     views::ViewStorageContext,
-    ApplicationCallOutcome, Contract, ContractLogger, ContractRuntime, ExecutionOutcome, Service,
-    ServiceLogger, ServiceRuntime, SimpleStateStorage,
+    Contract, ContractLogger, ContractRuntime, Service, ServiceLogger, ServiceRuntime,
+    SimpleStateStorage,
 };
 use linera_views::{
     map_view::MapView,
@@ -428,29 +428,23 @@ impl Contract for TestApp {
     async fn initialize(
         &mut self,
         _argument: Self::InitializationArgument,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        Ok(ExecutionOutcome::default())
+    ) -> Result<(), Self::Error> {
+        Ok(())
     }
 
-    async fn execute_operation(
-        &mut self,
-        _operation: Self::Operation,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        Ok(ExecutionOutcome::default())
+    async fn execute_operation(&mut self, _operation: Self::Operation) -> Result<(), Self::Error> {
+        Ok(())
     }
 
-    async fn execute_message(
-        &mut self,
-        _message: Self::Message,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        Ok(ExecutionOutcome::default())
+    async fn execute_message(&mut self, _message: Self::Message) -> Result<(), Self::Error> {
+        Ok(())
     }
 
     async fn handle_application_call(
         &mut self,
         _argument: Self::ApplicationCall,
-    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
-        Ok(ApplicationCallOutcome::default())
+    ) -> Result<Self::Response, Self::Error> {
+        Ok(vec![])
     }
 }
 
