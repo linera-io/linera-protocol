@@ -6,7 +6,7 @@
 mod state;
 
 use async_trait::async_trait;
-use crowd_funding::{ApplicationCall, CrowdFundingAbi, InitializationArgument, Message, Operation};
+use crowd_funding::{CrowdFundingAbi, InitializationArgument, Message, Operation};
 use fungible::{Account, FungibleResponse, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
@@ -89,14 +89,14 @@ impl Contract for CrowdFundingContract {
 
     async fn handle_application_call(
         &mut self,
-        call: ApplicationCall,
+        call: Self::ApplicationCall,
     ) -> Result<Self::Response, Self::Error> {
         match call {
-            ApplicationCall::Pledge { owner, amount } => {
+            Operation::Pledge { owner, amount } => {
                 self.execute_pledge_with_transfer(owner, amount)?
             }
-            ApplicationCall::Collect => self.collect_pledges()?,
-            ApplicationCall::Cancel => self.cancel_campaign().await?,
+            Operation::Collect => self.collect_pledges()?,
+            Operation::Cancel => self.cancel_campaign().await?,
         }
 
         Ok(())
