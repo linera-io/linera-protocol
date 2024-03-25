@@ -299,7 +299,7 @@ impl AmmContract {
                     input_amount,
                 };
                 self.runtime
-                    .send_message(chain_id, message)
+                    .prepare_message(chain_id, message)
                     .with_authentication();
             }
             Operation::AddLiquidity {
@@ -338,7 +338,7 @@ impl AmmContract {
                     input_amount,
                 };
                 self.runtime
-                    .send_message(chain_id, message)
+                    .prepare_message(chain_id, message)
                     .with_authentication();
             }
         }

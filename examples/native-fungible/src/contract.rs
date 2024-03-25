@@ -189,7 +189,7 @@ impl NativeFungibleTokenContract {
                 source,
             };
             self.runtime
-                .send_message(target.chain_id, message)
+                .prepare_message(target.chain_id, message)
                 .with_authentication();
         }
     }
@@ -205,7 +205,7 @@ impl NativeFungibleTokenContract {
                 target_account: target,
             };
             self.runtime
-                .send_message(source.chain_id, message)
+                .prepare_message(source.chain_id, message)
                 .with_authentication();
         }
     }

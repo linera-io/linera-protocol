@@ -135,6 +135,15 @@ where
         &mut self,
         destination: impl Into<Destination>,
         message: Application::Message,
+    ) {
+        MessageBuilder::new(destination.into(), message);
+    }
+
+    /// Returns a `MessageBuilder` to prepare a message to be sent.
+    pub fn prepare_message(
+        &mut self,
+        destination: impl Into<Destination>,
+        message: Application::Message,
     ) -> MessageBuilder<Application::Message> {
         MessageBuilder::new(destination.into(), message)
     }

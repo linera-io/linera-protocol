@@ -220,7 +220,7 @@ impl NonFungibleTokenContract {
             };
 
             self.runtime
-                .send_message(target_account.chain_id, message)
+                .prepare_message(target_account.chain_id, message)
                 .with_tracking();
         }
     }
@@ -278,7 +278,7 @@ impl NonFungibleTokenContract {
             target_account,
         };
         self.runtime
-            .send_message(source_account.chain_id, message)
+            .prepare_message(source_account.chain_id, message)
             .with_authentication();
     }
 
