@@ -55,6 +55,7 @@ use {
         config::NetworkProtocol, grpc::GrpcClient, mass_client::MassClient,
         simple::SimpleMassClient, RpcMessage,
     },
+    linera_sdk::abis::fungible,
     std::{
         collections::{HashMap, HashSet},
         iter,

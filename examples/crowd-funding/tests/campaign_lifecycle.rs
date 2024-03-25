@@ -8,7 +8,6 @@
 use std::iter;
 
 use crowd_funding::{CrowdFundingAbi, InitializationArgument, Operation};
-use fungible::FungibleTokenAbi;
 use linera_sdk::{
     base::{AccountOwner, Amount, Timestamp},
     test::TestValidator,
@@ -35,7 +34,7 @@ async fn collect_pledges() {
         .publish_bytecodes_in("../fungible")
         .await;
 
-    let (token_id, backers) = FungibleTokenAbi::create_with_accounts(
+    let (token_id, backers) = fungible::create_with_accounts(
         &validator,
         fungible_bytecode_id,
         iter::repeat(initial_amount).take(3),
@@ -84,7 +83,7 @@ async fn collect_pledges() {
         .await;
 
     assert_eq!(
-        FungibleTokenAbi::query_account(token_id, &campaign_chain, campaign_account).await,
+        fungible::query_account(token_id, &campaign_chain, campaign_account).await,
         None
     );
 
@@ -95,17 +94,17 @@ async fn collect_pledges() {
         .await;
 
     assert_eq!(
-        FungibleTokenAbi::query_account(token_id, &campaign_chain, campaign_account).await,
+        fungible::query_account(token_id, &campaign_chain, campaign_account).await,
         Some(pledge_amount.saturating_mul(backers.len() as u128)),
     );
 
     for (backer_chain, backer_account, initial_amount) in backers {
         assert_eq!(
-            FungibleTokenAbi::query_account(token_id, &backer_chain, backer_account).await,
+            fungible::query_account(token_id, &backer_chain, backer_account).await,
             Some(initial_amount.saturating_sub(pledge_amount)),
         );
         assert_eq!(
-            FungibleTokenAbi::query_account(token_id, &campaign_chain, backer_account).await,
+            fungible::query_account(token_id, &campaign_chain, backer_account).await,
             None,
         );
     }
@@ -132,7 +131,7 @@ async fn cancel_successful_campaign() {
         .publish_bytecodes_in("../fungible")
         .await;
 
-    let (token_id, backers) = FungibleTokenAbi::create_with_accounts(
+    let (token_id, backers) = fungible::create_with_accounts(
         &validator,
         fungible_bytecode_id,
         iter::repeat(initial_amount).take(3),
@@ -181,7 +180,7 @@ async fn cancel_successful_campaign() {
         .await;
 
     assert_eq!(
-        FungibleTokenAbi::query_account(token_id, &campaign_chain, campaign_account).await,
+        fungible::query_account(token_id, &campaign_chain, campaign_account).await,
         None
     );
 
@@ -194,17 +193,17 @@ async fn cancel_successful_campaign() {
         .await;
 
     assert_eq!(
-        FungibleTokenAbi::query_account(token_id, &campaign_chain, campaign_account).await,
+        fungible::query_account(token_id, &campaign_chain, campaign_account).await,
         None,
     );
 
     for (backer_chain, backer_account, initial_amount) in backers {
         assert_eq!(
-            FungibleTokenAbi::query_account(token_id, &backer_chain, backer_account).await,
+            fungible::query_account(token_id, &backer_chain, backer_account).await,
             Some(initial_amount.saturating_sub(pledge_amount)),
         );
         assert_eq!(
-            FungibleTokenAbi::query_account(token_id, &campaign_chain, backer_account).await,
+            fungible::query_account(token_id, &campaign_chain, backer_account).await,
             Some(pledge_amount),
         );
     }

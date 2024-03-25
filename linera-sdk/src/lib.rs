@@ -37,6 +37,7 @@
 
 #![deny(missing_docs)]
 
+pub mod abis;
 pub mod base;
 pub mod contract;
 mod extensions;
