@@ -33,6 +33,7 @@ impl Contract for AmmContract {
     type Error = AmmError;
     type Storage = ViewStateStorage<Self>;
     type State = Amm;
+    type Message = Message;
 
     async fn new(state: Amm, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(AmmContract { state, runtime })

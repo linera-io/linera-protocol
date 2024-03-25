@@ -37,12 +37,6 @@ pub trait ContractAbi {
     /// application on their own chain.
     type Operation: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
-    /// The type of message executed by the application.
-    ///
-    /// Messages are executed when a message created by the same application is received
-    /// from another chain and accepted in a block.
-    type Message: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
-
     /// The argument type when this application is called from another application on the same chain.
     type ApplicationCall: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
@@ -80,7 +74,6 @@ where
     type Parameters = <<A as WithContractAbi>::Abi as ContractAbi>::Parameters;
     type Operation = <<A as WithContractAbi>::Abi as ContractAbi>::Operation;
     type ApplicationCall = <<A as WithContractAbi>::Abi as ContractAbi>::ApplicationCall;
-    type Message = <<A as WithContractAbi>::Abi as ContractAbi>::Message;
     type Response = <<A as WithContractAbi>::Abi as ContractAbi>::Response;
 }
 

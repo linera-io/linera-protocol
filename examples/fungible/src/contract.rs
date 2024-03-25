@@ -33,6 +33,7 @@ impl Contract for FungibleTokenContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type State = FungibleToken;
+    type Message = Message;
 
     async fn new(
         state: FungibleToken,

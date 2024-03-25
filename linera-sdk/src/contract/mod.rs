@@ -63,7 +63,7 @@ macro_rules! contract {
             $crate::contract::run_async_entrypoint::<$application, _, _, _>(
                 unsafe { &mut APPLICATION },
                 move |application| {
-                    let message: <$application as $crate::abi::ContractAbi>::Message =
+                    let message: <$application as $crate::Contract>::Message =
                         bcs::from_bytes(&message)?;
 
                     application.execute_message(message).blocking_wait()

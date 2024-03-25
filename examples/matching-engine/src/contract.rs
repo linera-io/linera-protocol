@@ -56,6 +56,7 @@ impl Contract for MatchingEngineContract {
     type Error = MatchingEngineError;
     type Storage = ViewStateStorage<Self>;
     type State = MatchingEngine;
+    type Message = Message;
 
     async fn new(
         state: MatchingEngine,

@@ -34,6 +34,7 @@ impl Contract for NonFungibleTokenContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type State = NonFungibleToken;
+    type Message = Message;
 
     async fn new(
         state: NonFungibleToken,

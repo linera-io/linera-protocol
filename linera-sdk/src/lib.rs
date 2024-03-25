@@ -50,7 +50,7 @@ pub mod test;
 pub mod util;
 pub mod views;
 
-use std::error::Error;
+use std::{error::Error, fmt::Debug};
 
 use async_trait::async_trait;
 use linera_base::abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi};
@@ -59,6 +59,7 @@ pub use linera_base::{
     data_types::{Resources, SendMessageRequest},
     ensure,
 };
+use serde::{de::DeserializeOwned, Serialize};
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 
@@ -105,6 +106,12 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// state if [`SimpleStateStorage`] is used, or the [`Default`] value of all sub-views in the
     /// state if the [`ViewStateStorage`] is used.
     type Storage: ContractStateStorage<Self> + Send + 'static;
+
+    /// The type of message executed by the application.
+    ///
+    /// Messages are executed when a message created by the same application is received
+    /// from another chain and accepted in a block.
+    type Message: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
     /// Creates a in-memory instance of the contract handler from the application's `state`.
     async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error>;

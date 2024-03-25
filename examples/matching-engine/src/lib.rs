@@ -284,7 +284,6 @@ impl ContractAbi for MatchingEngineAbi {
     type Parameters = Parameters;
     type Operation = Operation;
     type ApplicationCall = ApplicationCall;
-    type Message = Message;
     type Response = ();
 }
 

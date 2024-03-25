@@ -248,7 +248,6 @@ impl ContractAbi for FungibleTokenAbi {
     type Parameters = Parameters;
     type ApplicationCall = ApplicationCall;
     type Operation = Operation;
-    type Message = Message;
     type Response = FungibleResponse;
 }
 

@@ -33,6 +33,7 @@ impl Contract for CrowdFundingContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type State = CrowdFunding;
+    type Message = Message;
 
     async fn new(state: CrowdFunding, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(CrowdFundingContract { state, runtime })
