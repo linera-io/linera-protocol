@@ -6,7 +6,7 @@
 mod state;
 
 use async_trait::async_trait;
-use fungible::{ApplicationCall, FungibleResponse, FungibleTokenAbi, Message, Operation};
+use fungible::{FungibleResponse, FungibleTokenAbi, Message, Operation};
 use linera_sdk::{
     base::{Account, AccountOwner, Amount, Owner, WithContractAbi},
     ensure, Contract, ContractRuntime, ViewStateStorage,
@@ -67,6 +67,17 @@ impl Contract for NativeFungibleTokenContract {
         operation: Self::Operation,
     ) -> Result<Self::Response, Self::Error> {
         match operation {
+            Operation::Balance { owner } => {
+                let owner = self.normalize_owner(owner);
+
+                let balance = self.runtime.owner_balance(owner);
+                Ok(FungibleResponse::Balance(balance))
+            }
+
+            Operation::TickerSymbol => {
+                Ok(FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL)))
+            }
+
             Operation::Transfer {
                 owner,
                 amount,
@@ -133,54 +144,9 @@ impl Contract for NativeFungibleTokenContract {
 
     async fn handle_application_call(
         &mut self,
-        call: ApplicationCall,
+        call: Operation,
     ) -> Result<Self::Response, Self::Error> {
-        match call {
-            ApplicationCall::Balance { owner } => {
-                let owner = self.normalize_owner(owner);
-
-                let balance = self.runtime.owner_balance(owner);
-                Ok(FungibleResponse::Balance(balance))
-            }
-
-            ApplicationCall::Transfer {
-                owner,
-                amount,
-                destination,
-            } => {
-                self.check_account_authentication(owner)?;
-                let account_owner = owner;
-                let owner = self.normalize_owner(owner);
-
-                let target_account = self.normalize_account(destination);
-
-                self.runtime.transfer(Some(owner), target_account, amount);
-                self.transfer(account_owner, destination, amount);
-                Ok(FungibleResponse::Ok)
-            }
-
-            ApplicationCall::Claim {
-                source_account,
-                amount,
-                target_account,
-            } => {
-                self.check_account_authentication(source_account.owner)?;
-
-                let fungible_source_account = source_account;
-                let fungible_target_account = target_account;
-
-                let source_account = self.normalize_account(source_account);
-                let target_account = self.normalize_account(target_account);
-
-                self.runtime.claim(source_account, target_account, amount);
-                self.claim(fungible_source_account, fungible_target_account, amount);
-                Ok(FungibleResponse::Ok)
-            }
-
-            ApplicationCall::TickerSymbol => {
-                Ok(FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL)))
-            }
-        }
+        self.execute_operation(call).await
     }
 }
 

@@ -8,7 +8,7 @@ mod state;
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use fungible::{Account, ApplicationCall, FungibleResponse, FungibleTokenAbi, Message, Operation};
+use fungible::{Account, FungibleResponse, FungibleTokenAbi, Message, Operation};
 use linera_sdk::{
     base::{AccountOwner, Amount, WithContractAbi},
     ensure, Contract, ContractRuntime, ViewStateStorage,
@@ -72,6 +72,16 @@ impl Contract for FungibleTokenContract {
         operation: Self::Operation,
     ) -> Result<Self::Response, Self::Error> {
         match operation {
+            Operation::Balance { owner } => {
+                let balance = self.state.balance_or_default(&owner).await;
+                Ok(FungibleResponse::Balance(balance))
+            }
+
+            Operation::TickerSymbol => {
+                let params = self.runtime.application_parameters();
+                Ok(FungibleResponse::TickerSymbol(params.ticker_symbol))
+            }
+
             Operation::Transfer {
                 owner,
                 amount,
@@ -81,6 +91,7 @@ impl Contract for FungibleTokenContract {
                 self.state.debit(owner, amount).await?;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
+                Ok(FungibleResponse::Ok)
             }
 
             Operation::Claim {
@@ -90,10 +101,9 @@ impl Contract for FungibleTokenContract {
             } => {
                 self.check_account_authentication(source_account.owner)?;
                 self.claim(source_account, amount, target_account).await?;
+                Ok(FungibleResponse::Ok)
             }
         }
-
-        Ok(FungibleResponse::Ok)
     }
 
     async fn execute_message(&mut self, message: Message) -> Result<(), Self::Error> {
@@ -127,41 +137,9 @@ impl Contract for FungibleTokenContract {
 
     async fn handle_application_call(
         &mut self,
-        call: ApplicationCall,
+        call: Operation,
     ) -> Result<Self::Response, Self::Error> {
-        match call {
-            ApplicationCall::Balance { owner } => {
-                let balance = self.state.balance_or_default(&owner).await;
-                Ok(FungibleResponse::Balance(balance))
-            }
-
-            ApplicationCall::Transfer {
-                owner,
-                amount,
-                destination,
-            } => {
-                self.check_account_authentication(owner)?;
-                self.state.debit(owner, amount).await?;
-                self.finish_transfer_to_account(amount, destination, owner)
-                    .await;
-                Ok(FungibleResponse::Ok)
-            }
-
-            ApplicationCall::Claim {
-                source_account,
-                amount,
-                target_account,
-            } => {
-                self.check_account_authentication(source_account.owner)?;
-                self.claim(source_account, amount, target_account).await?;
-                Ok(FungibleResponse::Ok)
-            }
-
-            ApplicationCall::TickerSymbol => {
-                let params = self.runtime.application_parameters();
-                Ok(FungibleResponse::TickerSymbol(params.ticker_symbol))
-            }
-        }
+        self.execute_operation(call).await
     }
 }
 

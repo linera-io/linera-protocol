@@ -227,13 +227,13 @@ impl MatchingEngineContract {
         &mut self,
         owner: AccountOwner,
         amount: Amount,
-        destination: Account,
+        target_account: Account,
         token_idx: u32,
     ) {
-        let transfer = fungible::ApplicationCall::Transfer {
+        let transfer = fungible::Operation::Transfer {
             owner,
             amount,
-            destination,
+            target_account,
         };
         let token = self.fungible_id(token_idx);
         self.runtime.call_application(true, token, &transfer);

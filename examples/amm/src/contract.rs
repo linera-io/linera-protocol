@@ -405,20 +405,20 @@ impl AmmContract {
         &mut self,
         owner: &AccountOwner,
         amount: Amount,
-        destination: Account,
+        target_account: Account,
         token_idx: u32,
     ) {
-        let transfer = fungible::ApplicationCall::Transfer {
+        let transfer = fungible::Operation::Transfer {
             owner: *owner,
             amount,
-            destination,
+            target_account,
         };
         let token = self.fungible_id(token_idx);
         self.runtime.call_application(true, token, &transfer);
     }
 
     fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Result<Amount, AmmError> {
-        let balance = fungible::ApplicationCall::Balance { owner: *owner };
+        let balance = fungible::Operation::Balance { owner: *owner };
         let token = self.fungible_id(token_idx);
         match self.runtime.call_application(true, token, &balance) {
             fungible::FungibleResponse::Balance(balance) => Ok(balance),
