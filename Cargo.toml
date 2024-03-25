@@ -128,6 +128,7 @@ tower = "0.4.13"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", default-features = false, features = ["env-filter"] }
 trait-variant = "0.1.1"
+wasm-bindgen = "0.2.92"
 wasm-bindgen-test = "0.3.42"
 wasm-encoder = "0.24.1"
 wasmer = { version = "=3.1.1", features = ["singlepass"] }

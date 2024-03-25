@@ -4,17 +4,16 @@
 use crate::{
     batch::{Batch, DeletePrefixExpander, WriteOperation},
     common::{
-        get_interval, AdminKeyValueStore, CommonStoreConfig, Context, ContextFromStore,
+        AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
         KeyIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
 };
-use async_lock::{Mutex, MutexGuardArc, RwLock};
 use async_trait::async_trait;
-use futures::FutureExt;
-use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
+use std::{collections::BTreeMap, fmt::Debug};
 use thiserror::Error;
+use indexed_db_futures::{prelude::*, js_sys, web_sys};
 
 /// The initial configuration of the system
 #[derive(Debug)]
@@ -36,19 +35,61 @@ impl IndexedDbStoreConfig {
 }
 
 /// The number of streams for the test
-pub const TEST_MEMORY_MAX_STREAM_QUERIES: usize = 10;
+pub const TEST_INDEX_DB_MAX_STREAM_QUERIES: usize = 10;
+
+pub const DATABASE_NAME: &str = "linera-views";
 
 /// The data is serialized in memory just like for RocksDB / DynamoDB
 /// The analog of the database is the BTreeMap
 pub type IndexedDbStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
 /// A virtual DB client where data are persisted in memory.
-#[derive(Clone)]
 pub struct IndexedDbStore {
-    /// The map used for storing the data.
-    pub map: Arc<RwLock<MutexGuardArc<IndexedDbStoreMap>>>,
+    /// The database used for storing the data.
+    pub database: IdbDatabase,
+    /// The object store name used for storing the data.
+    pub object_store_name: String,
     /// The maximum number of queries used for the stream.
     pub max_stream_queries: usize,
+}
+
+impl IndexedDbStore {
+    fn with_object_store<R>(&self, f: impl FnOnce(IdbObjectStore) -> R) -> Result<R, IndexedDbContextError> {
+        let object_store = self.database
+            .transaction_on_one(&self.object_store_name)?
+            .object_store(&self.object_store_name)?;
+        Ok(f(object_store))
+    }
+}
+
+// base-256 increment
+fn increment(key: &[u8]) -> Option<Vec<u8>> {
+    if key.is_empty() {
+        None
+    } else {
+        let mut successor = Vec::with_capacity(key.len() + 1);
+
+        if let Some(i) = key.iter().rposition(|&x| x != u8::MAX) {
+            successor.extend_from_slice(&key[..=i]);
+            successor.resize(key.len(), 0);
+            successor[i] += 1;
+        } else {
+            successor.resize(key.len() + 1, 0);
+            successor[0] = 1;
+        }
+
+        Some(successor)
+     }
+ }
+
+fn prefix_to_range(prefix: &[u8]) -> Result<web_sys::IdbKeyRange, wasm_bindgen::JsValue> {
+    let lower = js_sys::Uint8Array::from(prefix);
+    if let Some(upper) = increment(prefix) {
+        let upper = js_sys::Uint8Array::from(&upper[..]);
+        web_sys::IdbKeyRange::bound_with_lower_open_and_upper_open(&lower.into(), &upper.into(), false, true)
+    } else {
+        web_sys::IdbKeyRange::lower_bound(&lower.into())
+    }
 }
 
 #[async_trait]
@@ -62,52 +103,47 @@ impl ReadableKeyValueStore<IndexedDbContextError> for IndexedDbStore {
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, IndexedDbContextError> {
-        let map = self.map.read().await;
-        Ok(map.get(key).cloned())
+        let key = js_sys::Uint8Array::from(key);
+        let value = self.with_object_store(|o| o.get(&key))??.await?;
+        Ok(value.map(|v| js_sys::Uint8Array::new(&v).to_vec()))
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, IndexedDbContextError> {
-        let map = self.map.read().await;
-        Ok(map.contains_key(key))
+        let key = js_sys::Uint8Array::from(key);
+        let count = self.with_object_store(|o| o.count_with_key(&key))??.await?;
+        assert!(count < 2);
+        Ok(count == 1)
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, IndexedDbContextError> {
-        let map = self.map.read().await;
-        let mut result = Vec::new();
+        let mut values = Vec::with_capacity(keys.len());
         for key in keys {
-            result.push(map.get(&key).cloned());
+            values.push(self.read_value_bytes(&key).await?);
         }
-        Ok(result)
+        Ok(values)
     }
 
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, IndexedDbContextError> {
-        let map = self.map.read().await;
-        let mut values = Vec::new();
-        let len = key_prefix.len();
-        for (key, _value) in map.range(get_interval(key_prefix.to_vec())) {
-            values.push(key[len..].to_vec())
-        }
-        Ok(values)
+        let range = prefix_to_range(key_prefix)?;
+        Ok(self.with_object_store(|o| o.get_all_keys_with_key(&range))??.await?
+            .into_iter()
+            .map(|key| js_sys::Uint8Array::new(&key).to_vec()).collect())
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, IndexedDbContextError> {
-        let map = self.map.read().await;
-        let mut key_values = Vec::new();
-        let len = key_prefix.len();
-        for (key, value) in map.range(get_interval(key_prefix.to_vec())) {
-            let key_value = (key[len..].to_vec(), value.to_vec());
-            key_values.push(key_value);
-        }
-        Ok(key_values)
+        let range = prefix_to_range(key_prefix)?;
+        Ok(self.with_object_store(|o| o.get_all_with_key(&range))??.await?
+            .into_iter()
+            .map(|key| js_sys::Uint8Array::new(&key).to_vec()).collect())
     }
 }
 
@@ -116,26 +152,26 @@ impl WritableKeyValueStore<IndexedDbContextError> for IndexedDbStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), IndexedDbContextError> {
-        let mut map = self.map.write().await;
-        for ent in batch.operations {
-            match ent {
-                WriteOperation::Put { key, value } => {
-                    map.insert(key, value);
-                }
-                WriteOperation::Delete { key } => {
-                    map.remove(&key);
-                }
-                WriteOperation::DeletePrefix { key_prefix } => {
-                    let key_list = map
-                        .range(get_interval(key_prefix))
-                        .map(|x| x.0.to_vec())
-                        .collect::<Vec<_>>();
-                    for key in key_list {
-                        map.remove(&key);
+        self.with_object_store(|object_store| async {
+            for ent in batch.operations {
+                match ent {
+                    WriteOperation::Put { key, value } => {
+                        object_store.add_key_val_owned(
+                            js_sys::Uint8Array::from(&key[..]),
+                            &js_sys::Uint8Array::from(&value[..]),
+                        )?.await?;
+                    }
+                    WriteOperation::Delete { key } => {
+                        object_store.delete_owned(js_sys::Uint8Array::from(&key[..]))?.await?;
+                    }
+                    WriteOperation::DeletePrefix { key_prefix } => {
+                        object_store.delete_owned(prefix_to_range(&key_prefix[..])?)?.await?;
                     }
                 }
             }
-        }
+
+            Ok(())
+        })?.await?;
         Ok(())
     }
 
@@ -149,33 +185,32 @@ impl AdminKeyValueStore for IndexedDbStore {
     type Error = IndexedDbContextError;
     type Config = IndexedDbStoreConfig;
 
-    async fn connect(config: &Self::Config, _namespace: &str) -> Result<Self, IndexedDbContextError> {
-        let state = Arc::new(Mutex::new(BTreeMap::new()));
-        let guard = state
-            .try_lock_arc()
-            .expect("We should acquire the lock just after creating the object");
-        let max_stream_queries = config.common_config.max_stream_queries;
-        let map = Arc::new(RwLock::new(guard));
+    // TODO figure out whether `namespace` should be a database or object store name
+    // assuming object store for now because database is more work (the `databases`
+    // function currently isn't supported by `indexed_db_futures`)
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, IndexedDbContextError> {
         Ok(IndexedDbStore {
-            map,
-            max_stream_queries,
+            database: IdbDatabase::open_u32(DATABASE_NAME, 1)?.await?,
+            object_store_name: namespace.to_string(),
+            max_stream_queries: config.common_config.max_stream_queries,
         })
     }
 
-    async fn list_all(_config: &Self::Config) -> Result<Vec<String>, IndexedDbContextError> {
-        Ok(Vec::new())
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, IndexedDbContextError> {
+        Ok(Self::connect(config, "").await?.database.object_store_names().collect())
     }
 
-    async fn exists(_config: &Self::Config, _namespace: &str) -> Result<bool, IndexedDbContextError> {
-        Ok(false)
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, IndexedDbContextError> {
+        Ok(Self::connect(config, "").await?.database.object_store_names().any(|x| x == namespace))
     }
 
-    async fn create(_config: &Self::Config, _namespace: &str) -> Result<(), IndexedDbContextError> {
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), IndexedDbContextError> {
+        Self::connect(config, "").await?.database.create_object_store(namespace)?;
         Ok(())
     }
 
-    async fn delete(_config: &Self::Config, _namespace: &str) -> Result<(), IndexedDbContextError> {
-        Ok(())
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), IndexedDbContextError> {
+        Ok(Self::connect(config, "").await?.database.delete_object_store(namespace)?)
     }
 }
 
@@ -188,36 +223,25 @@ pub type IndexedDbContext<E> = ContextFromStore<E, IndexedDbStore>;
 
 impl<E> IndexedDbContext<E> {
     /// Creates a [`IndexedDbContext`].
-    pub fn new(max_stream_queries: usize, extra: E) -> Self {
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries: None,
-            max_stream_queries,
-            cache_size: 1000,
-        };
-        let config = IndexedDbStoreConfig { common_config };
-        let namespace = "linera";
-        let store = IndexedDbStore::connect(&config, namespace)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
-        let base_key = Vec::new();
+    pub fn new(store: IndexedDbStore, extra: E) -> Self {
         Self {
             store,
-            base_key,
+            base_key: vec![],
             extra,
         }
     }
 }
 
 /// Provides a `IndexedDbContext<()>` that can be used for tests.
-/// It is not named create_memory_test_context because it is massively
-/// used and so we want to have a short name.
-pub fn create_memory_context() -> IndexedDbContext<()> {
-    IndexedDbContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, ())
+pub async fn create_indexed_db_test_context() -> IndexedDbContext<()> {
+    IndexedDbContext::new(
+        create_indexed_db_store_stream_queries(TEST_INDEX_DB_MAX_STREAM_QUERIES).await,
+        (),
+    )
 }
 
 /// Creates a test memory client for working.
-pub fn create_indexed_db_store_stream_queries(max_stream_queries: usize) -> IndexedDbStore {
+pub async fn create_indexed_db_store_stream_queries(max_stream_queries: usize) -> IndexedDbStore {
     let common_config = CommonStoreConfig {
         max_concurrent_queries: None,
         max_stream_queries,
@@ -226,15 +250,14 @@ pub fn create_indexed_db_store_stream_queries(max_stream_queries: usize) -> Inde
     let config = IndexedDbStoreConfig { common_config };
     let namespace = "linera";
     IndexedDbStore::connect(&config, namespace)
-        .now_or_never()
-        .unwrap()
+        .await
         .unwrap()
 }
 
 /// Creates a test memory store for working.
 #[cfg(with_testing)]
 pub async fn create_indexed_db_test_store() -> IndexedDbStore {
-    create_indexed_db_store_stream_queries(TEST_MEMORY_MAX_STREAM_QUERIES)
+    create_indexed_db_store_stream_queries(context, TEST_INDEX_DB_MAX_STREAM_QUERIES)
 }
 
 /// The error type for [`IndexedDbContext`].
@@ -251,6 +274,13 @@ pub enum IndexedDbContextError {
     /// The database is not consistent
     #[error(transparent)]
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
+
+    /// A DOM exception occurred in the IndexedDB operations
+    #[error(transparent)]
+    Dom(#[from] web_sys::DomException),
+
+    #[error(transparent)]
+    Js(#[from] wasm_bindgen::JsValue),
 }
 
 impl From<IndexedDbContextError> for ViewError {
