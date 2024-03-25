@@ -135,8 +135,8 @@ where
         &mut self,
         destination: impl Into<Destination>,
         message: Application::Message,
-    ) -> MessageSender<Application::Message> {
-        MessageSender::new(destination.into(), message)
+    ) -> MessageBuilder<Application::Message> {
+        MessageBuilder::new(destination.into(), message)
     }
 
     /// Subscribes to a message channel from another chain.
@@ -195,20 +195,20 @@ where
 
 /// A helper type that uses the builder pattern to configure how a message is sent, and then
 /// sends the message once it is dropped.
-pub struct MessageSender<Message>
+pub struct MessageBuilder<Message>
 where
     Message: Serialize,
 {
     message: SendMessageRequest<Message>,
 }
 
-impl<Message> MessageSender<Message>
+impl<Message> MessageBuilder<Message>
 where
     Message: Serialize,
 {
-    /// Creates a new [`MessageSender`] instance to send the `message` to the `destination`.
+    /// Creates a new [`MessageBuilder`] instance to send the `message` to the `destination`.
     pub(crate) fn new(destination: Destination, message: Message) -> Self {
-        MessageSender {
+        MessageBuilder {
             message: SendMessageRequest {
                 destination,
                 authenticated: false,
@@ -239,7 +239,7 @@ where
     }
 }
 
-impl<Message> Drop for MessageSender<Message>
+impl<Message> Drop for MessageBuilder<Message>
 where
     Message: Serialize,
 {
