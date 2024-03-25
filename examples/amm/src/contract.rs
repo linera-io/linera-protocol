@@ -299,8 +299,9 @@ impl AmmContract {
                     input_amount,
                 };
                 self.runtime
-                    .prepare_message(chain_id, message)
-                    .with_authentication();
+                    .prepare_message(message)
+                    .with_authentication()
+                    .send_to(chain_id);
             }
             Operation::AddLiquidity {
                 owner: _,
@@ -338,8 +339,9 @@ impl AmmContract {
                     input_amount,
                 };
                 self.runtime
-                    .prepare_message(chain_id, message)
-                    .with_authentication();
+                    .prepare_message(message)
+                    .with_authentication()
+                    .send_to(chain_id);
             }
         }
 

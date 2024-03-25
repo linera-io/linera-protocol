@@ -136,16 +136,15 @@ where
         destination: impl Into<Destination>,
         message: Application::Message,
     ) {
-        MessageBuilder::new(destination.into(), message);
+        self.prepare_message(message).send_to(destination)
     }
 
     /// Returns a `MessageBuilder` to prepare a message to be sent.
     pub fn prepare_message(
         &mut self,
-        destination: impl Into<Destination>,
         message: Application::Message,
     ) -> MessageBuilder<Application::Message> {
-        MessageBuilder::new(destination.into(), message)
+        MessageBuilder::new(message)
     }
 
     /// Subscribes to a message channel from another chain.
@@ -208,7 +207,10 @@ pub struct MessageBuilder<Message>
 where
     Message: Serialize,
 {
-    message: SendMessageRequest<Message>,
+    authenticated: bool,
+    is_tracked: bool,
+    grant: Resources,
+    message: Message,
 }
 
 impl<Message> MessageBuilder<Message>
@@ -216,51 +218,44 @@ where
     Message: Serialize,
 {
     /// Creates a new [`MessageBuilder`] instance to send the `message` to the `destination`.
-    pub(crate) fn new(destination: Destination, message: Message) -> Self {
+    pub(crate) fn new(message: Message) -> Self {
         MessageBuilder {
-            message: SendMessageRequest {
-                destination,
-                authenticated: false,
-                is_tracked: false,
-                grant: Resources::default(),
-                message,
-            },
+            authenticated: false,
+            is_tracked: false,
+            grant: Resources::default(),
+            message,
         }
     }
 
     /// Marks the message to be tracked, so that the sender receives the message back if it is
     /// rejected by the receiver.
     pub fn with_tracking(mut self) -> Self {
-        self.message.is_tracked = true;
+        self.is_tracked = true;
         self
     }
 
     /// Forwards the authenticated signer with the message.
     pub fn with_authentication(mut self) -> Self {
-        self.message.authenticated = true;
+        self.authenticated = true;
         self
     }
 
     /// Forwards a grant of resources so the receiver can use it to pay for receiving the message.
     pub fn with_grant(mut self, grant: Resources) -> Self {
-        self.message.grant = grant;
+        self.grant = grant;
         self
     }
-}
 
-impl<Message> Drop for MessageBuilder<Message>
-where
-    Message: Serialize,
-{
-    fn drop(&mut self) {
+    /// Schedules this `Message` to be sent to the `destination`.
+    pub fn send_to(self, destination: impl Into<Destination>) {
         let serialized_message =
-            bcs::to_bytes(&self.message.message).expect("Failed to serialize message to be sent");
+            bcs::to_bytes(&self.message).expect("Failed to serialize message to be sent");
 
         let raw_message = SendMessageRequest {
-            destination: self.message.destination.clone(),
-            authenticated: self.message.authenticated,
-            is_tracked: self.message.is_tracked,
-            grant: self.message.grant,
+            destination: destination.into(),
+            authenticated: self.authenticated,
+            is_tracked: self.is_tracked,
+            grant: self.grant,
             message: serialized_message,
         };
 

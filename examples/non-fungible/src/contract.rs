@@ -220,8 +220,9 @@ impl NonFungibleTokenContract {
             };
 
             self.runtime
-                .prepare_message(target_account.chain_id, message)
-                .with_tracking();
+                .prepare_message(message)
+                .with_tracking()
+                .send_to(target_account.chain_id);
         }
     }
 
@@ -278,8 +279,9 @@ impl NonFungibleTokenContract {
             target_account,
         };
         self.runtime
-            .prepare_message(source_account.chain_id, message)
-            .with_authentication();
+            .prepare_message(message)
+            .with_authentication()
+            .send_to(source_account.chain_id);
     }
 
     async fn add_nft(&mut self, nft: Nft) {

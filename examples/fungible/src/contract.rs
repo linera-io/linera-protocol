@@ -199,8 +199,9 @@ impl FungibleTokenContract {
                 target_account,
             };
             self.runtime
-                .prepare_message(source_account.chain_id, message)
-                .with_authentication();
+                .prepare_message(message)
+                .with_authentication()
+                .send_to(source_account.chain_id);
         }
 
         Ok(())
@@ -222,8 +223,9 @@ impl FungibleTokenContract {
                 source,
             };
             self.runtime
-                .prepare_message(target_account.chain_id, message)
-                .with_authentication();
+                .prepare_message(message)
+                .with_authentication()
+                .send_to(target_account.chain_id);
         }
     }
 }

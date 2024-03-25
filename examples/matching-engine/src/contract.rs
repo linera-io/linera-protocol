@@ -321,8 +321,9 @@ impl MatchingEngineContract {
             self.transfer(owner, amount, destination, token_idx);
         }
         self.runtime
-            .prepare_message(chain_id, message)
-            .with_authentication();
+            .prepare_message(message)
+            .with_authentication()
+            .send_to(chain_id);
         Ok(())
     }
 

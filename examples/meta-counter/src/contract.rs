@@ -66,19 +66,17 @@ impl Contract for MetaCounterContract {
             message,
         } = operation;
 
-        let mut message = self
-            .runtime
-            .prepare_message(recipient_id, message)
-            .with_grant(Resources {
-                fuel: fuel_grant,
-                ..Resources::default()
-            });
+        let mut message = self.runtime.prepare_message(message).with_grant(Resources {
+            fuel: fuel_grant,
+            ..Resources::default()
+        });
         if authenticated {
             message = message.with_authentication();
         }
         if is_tracked {
-            message.with_tracking();
+            message = message.with_tracking();
         }
+        message.send_to(recipient_id);
 
         Ok(())
     }

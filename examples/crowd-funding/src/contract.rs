@@ -132,8 +132,9 @@ impl CrowdFundingContract {
             .call_application(/* authenticated by owner */ true, fungible_id, &call);
         // Second, schedule the attribution of the funds to the (remote) campaign.
         self.runtime
-            .prepare_message(chain_id, Message::PledgeWithAccount { owner, amount })
-            .with_authentication();
+            .prepare_message(Message::PledgeWithAccount { owner, amount })
+            .with_authentication()
+            .send_to(chain_id);
         Ok(())
     }
 
