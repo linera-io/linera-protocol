@@ -203,6 +203,7 @@ where
 
 /// A helper type that uses the builder pattern to configure how a message is sent, and then
 /// sends the message once it is dropped.
+#[must_use]
 pub struct MessageBuilder<Message>
 where
     Message: Serialize,
