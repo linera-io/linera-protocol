@@ -24,6 +24,7 @@ impl Contract for ApplicationContract {{
     type Error = ContractError;
     type Storage = ViewStateStorage<Self>;
     type State = Application;
+    type Message = ();
 
     async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {{
         Ok(ApplicationContract {{ state, runtime }})

@@ -37,6 +37,7 @@ impl Contract for MetaCounterContract {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
     type State = MetaCounter;
+    type Message = Message;
 
     async fn new(state: MetaCounter, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(MetaCounterContract { state, runtime })

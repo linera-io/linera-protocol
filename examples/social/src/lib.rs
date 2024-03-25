@@ -186,7 +186,6 @@ impl ContractAbi for SocialAbi {
     type Parameters = ();
     type Operation = Operation;
     type ApplicationCall = ();
-    type Message = Message;
     type Response = ();
 }
 

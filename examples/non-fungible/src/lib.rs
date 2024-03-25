@@ -181,7 +181,6 @@ impl ContractAbi for NonFungibleTokenAbi {
     type Parameters = ();
     type ApplicationCall = Operation;
     type Operation = Operation;
-    type Message = Message;
     type Response = ();
 }
 

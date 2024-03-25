@@ -36,6 +36,7 @@ impl Contract for SocialContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type State = Social;
+    type Message = Message;
 
     async fn new(state: Social, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(SocialContract { state, runtime })

@@ -32,6 +32,7 @@ impl Contract for NativeFungibleTokenContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type State = NativeFungibleToken;
+    type Message = Message;
 
     async fn new(
         state: NativeFungibleToken,

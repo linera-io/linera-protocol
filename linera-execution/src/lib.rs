@@ -865,18 +865,6 @@ impl Message {
         Message::System(message)
     }
 
-    pub fn user<A: Abi>(
-        application_id: UserApplicationId<A>,
-        message: &A::Message,
-    ) -> Result<Self, bcs::Error> {
-        let application_id = application_id.forget_abi();
-        let bytes = bcs::to_bytes(&message)?;
-        Ok(Message::User {
-            application_id,
-            bytes,
-        })
-    }
-
     pub fn application_id(&self) -> GenericApplicationId {
         match self {
             Self::System(_) => GenericApplicationId::System,

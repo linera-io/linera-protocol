@@ -188,7 +188,6 @@ impl ContractAbi for AmmAbi {
     type Parameters = Parameters;
     type Operation = Operation;
     type ApplicationCall = ApplicationCall;
-    type Message = Message;
     type Response = ();
 }
 
