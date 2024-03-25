@@ -67,7 +67,10 @@ impl Contract for FungibleTokenContract {
         Ok(())
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Result<(), Self::Error> {
+    async fn execute_operation(
+        &mut self,
+        operation: Self::Operation,
+    ) -> Result<Self::Response, Self::Error> {
         match operation {
             Operation::Transfer {
                 owner,
@@ -90,7 +93,7 @@ impl Contract for FungibleTokenContract {
             }
         }
 
-        Ok(())
+        Ok(FungibleResponse::Ok)
     }
 
     async fn execute_message(&mut self, message: Message) -> Result<(), Self::Error> {

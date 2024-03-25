@@ -432,8 +432,11 @@ impl Contract for TestApp {
         Ok(())
     }
 
-    async fn execute_operation(&mut self, _operation: Self::Operation) -> Result<(), Self::Error> {
-        Ok(())
+    async fn execute_operation(
+        &mut self,
+        _operation: Self::Operation,
+    ) -> Result<Self::Response, Self::Error> {
+        Ok(vec![])
     }
 
     async fn execute_message(&mut self, _message: Self::Message) -> Result<(), Self::Error> {

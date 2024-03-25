@@ -41,7 +41,10 @@ impl Contract for ApplicationContract {{
         Ok(())
     }}
 
-    async fn execute_operation(&mut self, _operation: Self::Operation) -> Result<(), Self::Error> {{
+    async fn execute_operation(
+        &mut self,
+        _operation: Self::Operation,
+    ) -> Result<Self::Response, Self::Error> {{
         Ok(())
     }}
 

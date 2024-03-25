@@ -132,7 +132,10 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     ///
     /// Operations are created by users and added to blocks, serving as the starting point for an
     /// application's execution.
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Result<(), Self::Error>;
+    async fn execute_operation(
+        &mut self,
+        operation: Self::Operation,
+    ) -> Result<Self::Response, Self::Error>;
 
     /// Applies a message originating from a cross-chain message.
     ///

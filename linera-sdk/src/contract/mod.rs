@@ -51,7 +51,10 @@ macro_rules! contract {
                     let operation: <$application as $crate::abi::ContractAbi>::Operation =
                         bcs::from_bytes(&operation)?;
 
-                    application.execute_operation(operation).blocking_wait()
+                    application
+                        .execute_operation(operation)
+                        .blocking_wait()
+                        .map(|_| ())
                 },
             )
         }

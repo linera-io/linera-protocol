@@ -62,7 +62,10 @@ impl Contract for NativeFungibleTokenContract {
         Ok(())
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Result<(), Self::Error> {
+    async fn execute_operation(
+        &mut self,
+        operation: Self::Operation,
+    ) -> Result<Self::Response, Self::Error> {
         match operation {
             Operation::Transfer {
                 owner,
@@ -79,7 +82,7 @@ impl Contract for NativeFungibleTokenContract {
                 self.runtime.transfer(Some(owner), target_account, amount);
 
                 self.transfer(account_owner, fungible_target_account, amount);
-                Ok(())
+                Ok(FungibleResponse::Ok)
             }
 
             Operation::Claim {
@@ -97,7 +100,7 @@ impl Contract for NativeFungibleTokenContract {
 
                 self.runtime.claim(source_account, target_account, amount);
                 self.claim(fungible_source_account, fungible_target_account, amount);
-                Ok(())
+                Ok(FungibleResponse::Ok)
             }
         }
     }

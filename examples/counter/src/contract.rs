@@ -47,9 +47,9 @@ impl Contract for CounterContract {
         Ok(())
     }
 
-    async fn execute_operation(&mut self, operation: u64) -> Result<(), Self::Error> {
+    async fn execute_operation(&mut self, operation: u64) -> Result<u64, Self::Error> {
         self.state.value += operation;
-        Ok(())
+        Ok(self.state.value)
     }
 
     async fn execute_message(&mut self, _message: ()) -> Result<(), Self::Error> {
