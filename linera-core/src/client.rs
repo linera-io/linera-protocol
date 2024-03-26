@@ -527,11 +527,15 @@ where
         committee: &Committee,
         certificate: Certificate,
     ) -> Result<Certificate, ChainClientError> {
-        let value = certificate.value.clone().into_confirmed().ok_or_else(|| {
-            ChainClientError::InternalError(
-                "Certificate for finalization must be a validated block",
-            )
-        })?;
+        let value = certificate
+            .value
+            .clone()
+            .validated_into_confirmed()
+            .ok_or_else(|| {
+                ChainClientError::InternalError(
+                    "Certificate for finalization must be a validated block",
+                )
+            })?;
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate,
             delivery: self.cross_chain_message_delivery,

@@ -4309,6 +4309,9 @@ where
         Some(Box::new(certificate3))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
-    assert_eq!(vote.value, value2.into_confirmed().unwrap().lite());
+    assert_eq!(
+        vote.value,
+        value2.validated_into_confirmed().unwrap().lite()
+    );
     assert_eq!(vote.round, Round::MultiLeader(2));
 }
