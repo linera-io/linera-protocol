@@ -141,13 +141,6 @@ impl Contract for NativeFungibleTokenContract {
             }
         }
     }
-
-    async fn handle_application_call(
-        &mut self,
-        call: Operation,
-    ) -> Result<Self::Response, Self::Error> {
-        self.execute_operation(call).await
-    }
 }
 
 impl NativeFungibleTokenContract {

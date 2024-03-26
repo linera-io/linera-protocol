@@ -84,10 +84,6 @@ impl Contract for SocialContract {
         }
         Ok(())
     }
-
-    async fn handle_application_call(&mut self, _call: ()) -> Result<Self::Response, Self::Error> {
-        Err(Error::ApplicationCallsNotSupported)
-    }
 }
 
 impl SocialContract {
@@ -133,10 +129,6 @@ impl SocialContract {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Social application doesn't support any cross-application calls.
-    #[error("Social application doesn't support any application calls")]
-    ApplicationCallsNotSupported,
-
     /// View error.
     #[error(transparent)]
     View(#[from] ViewError),

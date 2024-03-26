@@ -86,21 +86,6 @@ impl Contract for CrowdFundingContract {
         }
         Ok(())
     }
-
-    async fn handle_application_call(
-        &mut self,
-        call: Self::ApplicationCall,
-    ) -> Result<Self::Response, Self::Error> {
-        match call {
-            Operation::Pledge { owner, amount } => {
-                self.execute_pledge_with_transfer(owner, amount)?
-            }
-            Operation::Collect => self.collect_pledges()?,
-            Operation::Cancel => self.cancel_campaign().await?,
-        }
-
-        Ok(())
-    }
 }
 
 impl CrowdFundingContract {

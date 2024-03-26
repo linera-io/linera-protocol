@@ -135,55 +135,6 @@ impl Contract for NonFungibleTokenContract {
 
         Ok(())
     }
-
-    async fn handle_application_call(
-        &mut self,
-        call: Self::ApplicationCall,
-    ) -> Result<Self::Response, Self::Error> {
-        match call {
-            Self::ApplicationCall::Mint {
-                minter,
-                name,
-                payload,
-            } => {
-                self.check_account_authentication(minter)?;
-
-                self.mint(minter, name, payload).await?;
-            }
-
-            Self::ApplicationCall::Transfer {
-                source_owner,
-                token_id,
-                target_account,
-            } => {
-                self.check_account_authentication(source_owner)?;
-
-                let nft = self.get_nft(&token_id).await?;
-                self.check_account_authentication(nft.owner)?;
-
-                self.transfer(nft, target_account).await;
-            }
-
-            Self::ApplicationCall::Claim {
-                source_account,
-                token_id,
-                target_account,
-            } => {
-                self.check_account_authentication(source_account.owner)?;
-
-                if source_account.chain_id == self.runtime.chain_id() {
-                    let nft = self.get_nft(&token_id).await?;
-                    self.check_account_authentication(nft.owner)?;
-
-                    self.transfer(nft, target_account).await;
-                } else {
-                    self.remote_claim(source_account, token_id, target_account);
-                }
-            }
-        }
-
-        Ok(())
-    }
 }
 
 impl NonFungibleTokenContract {

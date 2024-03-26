@@ -13,8 +13,7 @@ use linera_sdk::{
     ensure, Contract, ContractRuntime, ViewStateStorage,
 };
 use matching_engine::{
-    product_price_amount, ApplicationCall, MatchingEngineAbi, Message, Operation, Order, OrderId,
-    OrderNature, Price,
+    product_price_amount, MatchingEngineAbi, Message, Operation, Order, OrderId, OrderNature, Price,
 };
 use state::{LevelView, MatchingEngine, MatchingEngineError};
 
@@ -124,27 +123,6 @@ impl Contract for MatchingEngineContract {
                     .expect("Incoming message ID has to be available when executing a message");
                 self.check_account_authentication(owner)?;
                 self.execute_order_local(order, message_id.chain_id).await?;
-            }
-        }
-        Ok(())
-    }
-
-    /// Execution of the message from the application. The application call can be a local
-    /// one or a remote one.
-    async fn handle_application_call(
-        &mut self,
-        argument: ApplicationCall,
-    ) -> Result<Self::Response, Self::Error> {
-        match argument {
-            ApplicationCall::ExecuteOrder { order } => {
-                let owner = Self::get_owner(&order);
-                let chain_id = self.runtime.chain_id();
-                self.check_account_authentication(owner)?;
-                if chain_id == self.runtime.application_id().creation.chain_id {
-                    self.execute_order_local(order, chain_id).await?;
-                } else {
-                    self.execute_order_remote(order)?;
-                }
             }
         }
         Ok(())

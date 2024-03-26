@@ -442,13 +442,6 @@ impl Contract for TestApp {
     async fn execute_message(&mut self, _message: Self::Message) -> Result<(), Self::Error> {
         Ok(())
     }
-
-    async fn handle_application_call(
-        &mut self,
-        _argument: Self::ApplicationCall,
-    ) -> Result<Self::Response, Self::Error> {
-        Ok(vec![])
-    }
 }
 
 impl Service for TestApp {
