@@ -235,7 +235,7 @@ impl AmmApp {
             max_token1_amount,
         };
 
-        let mutation = format!("operation(operation: {})", operation.to_value(),);
+        let mutation = format!("operation(operation: {})", operation.to_value());
         self.0.mutate(mutation).await.unwrap();
     }
 
@@ -251,7 +251,7 @@ impl AmmApp {
             token_to_remove_amount,
         };
 
-        let mutation = format!("operation(operation: {})", operation.to_value(),);
+        let mutation = format!("operation(operation: {})", operation.to_value());
         self.0.mutate(mutation).await.unwrap();
     }
 
@@ -262,7 +262,7 @@ impl AmmApp {
             input_amount,
         };
 
-        let mutation = format!("operation(operation: {})", operation.to_value(),);
+        let mutation = format!("operation(operation: {})", operation.to_value());
         self.0.mutate(mutation).await.unwrap();
     }
 }
@@ -2281,7 +2281,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     let client1_key = client1.keygen().await.unwrap();
     let client2_key = client2.keygen().await.unwrap();
 
-    // Open chain on behalf of Client 2.
+    // Open a chain owned by both clients.
     let (message_id, chain2) = client1
         .open_multi_owner_chain(
             chain1,
@@ -2326,8 +2326,8 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     client1.sync(chain1).await.unwrap();
     client2.sync(chain2).await.unwrap();
 
-    assert!(client1.query_balance(account2).await.unwrap() <= Amount::from_tokens(3),);
-    assert!(client2.query_balance(account2).await.unwrap() <= Amount::from_tokens(3),);
+    assert!(client1.query_balance(account2).await.unwrap() <= Amount::from_tokens(3));
+    assert!(client2.query_balance(account2).await.unwrap() <= Amount::from_tokens(3));
 
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
@@ -2342,7 +2342,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
 async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    // Create runner and two clients.
+    // Create runner and client.
     let (mut net, client) = config.instantiate().await.unwrap();
 
     let chain = client.get_wallet().unwrap().default_chain().unwrap();
@@ -2567,7 +2567,7 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) {
         .await;
     assert!(result.is_err());
     // The transfer didn't get confirmed.
-    assert_eq!(client.local_balance(account).await.unwrap(), balance,);
+    assert_eq!(client.local_balance(account).await.unwrap(), balance);
     // Restart validators.
     for i in 0..4 {
         net.start_validator(i).await.unwrap();
