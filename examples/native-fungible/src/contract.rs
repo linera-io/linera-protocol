@@ -6,12 +6,12 @@
 mod state;
 
 use async_trait::async_trait;
-use fungible::{FungibleResponse, FungibleTokenAbi, Message, Operation};
+use fungible::{FungibleResponse, FungibleTokenAbi, Operation};
 use linera_sdk::{
-    base::{Account, AccountOwner, Amount, Owner, WithContractAbi},
+    base::{Account, AccountOwner, ChainId, Owner, WithContractAbi},
     ensure, Contract, ContractRuntime, ViewStateStorage,
 };
-use native_fungible::TICKER_SYMBOL;
+use native_fungible::{Message, TICKER_SYMBOL};
 use thiserror::Error;
 
 use self::state::NativeFungibleToken;
@@ -84,7 +84,6 @@ impl Contract for NativeFungibleTokenContract {
                 target_account,
             } => {
                 self.check_account_authentication(owner)?;
-                let account_owner = owner;
                 let owner = self.normalize_owner(owner);
 
                 let fungible_target_account = target_account;
@@ -92,7 +91,7 @@ impl Contract for NativeFungibleTokenContract {
 
                 self.runtime.transfer(Some(owner), target_account, amount);
 
-                self.transfer(account_owner, fungible_target_account, amount);
+                self.transfer(fungible_target_account.chain_id);
                 Ok(FungibleResponse::Ok)
             }
 
@@ -110,68 +109,44 @@ impl Contract for NativeFungibleTokenContract {
                 let target_account = self.normalize_account(target_account);
 
                 self.runtime.claim(source_account, target_account, amount);
-                self.claim(fungible_source_account, fungible_target_account, amount);
+                self.claim(
+                    fungible_source_account.chain_id,
+                    fungible_target_account.chain_id,
+                );
                 Ok(FungibleResponse::Ok)
             }
         }
     }
 
-    // TODO(#1721): After message is separated from the Abi, create an empty Notify message
-    // to be the only message used here, simple message (no authentication, not tracked)
     async fn execute_message(&mut self, message: Self::Message) -> Result<(), Self::Error> {
         // Messages for now don't do anything, just pass messages around
         match message {
-            Message::Credit {
-                amount: _,
-                target: _,
-                source: _,
-            } => {
-                // If we ever actually implement this, we need to remember
-                // to check if it's a bouncing message like in the fungible app
-                Ok(())
-            }
-            Message::Withdraw {
-                owner,
-                amount,
-                target_account,
-            } => {
-                self.check_account_authentication(owner)?;
-                self.transfer(owner, target_account, amount);
-                Ok(())
-            }
+            Message::Notify => Ok(()),
         }
     }
 }
 
 impl NativeFungibleTokenContract {
-    fn transfer(&mut self, source: AccountOwner, target: fungible::Account, amount: Amount) {
-        if target.chain_id != self.runtime.chain_id() {
-            let message = Message::Credit {
-                target: target.owner,
-                amount,
-                source,
-            };
+    fn transfer(&mut self, chain_id: ChainId) {
+        if chain_id != self.runtime.chain_id() {
+            let message = Message::Notify;
             self.runtime
                 .prepare_message(message)
                 .with_authentication()
-                .send_to(target.chain_id);
+                .send_to(chain_id);
         }
     }
 
-    fn claim(&mut self, source: fungible::Account, target: fungible::Account, amount: Amount) {
-        if source.chain_id == self.runtime.chain_id() {
-            self.transfer(source.owner, target, amount);
+    fn claim(&mut self, source_chain_id: ChainId, target_chain_id: ChainId) {
+        if source_chain_id == self.runtime.chain_id() {
+            self.transfer(target_chain_id);
         } else {
-            // If different chain, send message that will be ignored so the app gets auto-deployed
-            let message = Message::Withdraw {
-                owner: source.owner,
-                amount,
-                target_account: target,
-            };
+            // If different chain, send notify message so the app gets auto-deployed
+            let message = Message::Notify;
             self.runtime
                 .prepare_message(message)
                 .with_authentication()
-                .send_to(source.chain_id);
+                .send_to(source_chain_id);
         }
     }
 
