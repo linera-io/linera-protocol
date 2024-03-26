@@ -1,6 +1,6 @@
 [package]
 name = "linera-indexer-example"
-version = "0.10.0"
+version = "0.11.0"
 description = "Indexer example."
 authors = ["Linera <contact@linera.io>"]
 readme = "README.md"

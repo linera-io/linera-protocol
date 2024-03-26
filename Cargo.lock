@@ -3036,7 +3036,7 @@ dependencies = [
 
 [[package]]
 name = "linera-base"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -3065,7 +3065,7 @@ dependencies = [
 
 [[package]]
 name = "linera-chain"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "assert_matches",
  "async-graphql",
@@ -3087,7 +3087,7 @@ dependencies = [
 
 [[package]]
 name = "linera-core"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3131,7 +3131,7 @@ dependencies = [
 
 [[package]]
 name = "linera-execution"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3175,7 +3175,7 @@ dependencies = [
 
 [[package]]
 name = "linera-explorer"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -3201,7 +3201,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-graphql",
  "async-graphql-axum",
@@ -3229,7 +3229,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer-example"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -3252,7 +3252,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer-graphql-client"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "graphql_client",
  "linera-base",
@@ -3269,7 +3269,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer-plugins"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -3287,7 +3287,7 @@ dependencies = [
 
 [[package]]
 name = "linera-rpc"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3331,7 +3331,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -3362,7 +3362,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk-derive"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2",
@@ -3371,7 +3371,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk-wasm-tests"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -3386,7 +3386,7 @@ dependencies = [
 
 [[package]]
 name = "linera-service"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "amm",
  "anyhow",
@@ -3461,7 +3461,7 @@ dependencies = [
 
 [[package]]
 name = "linera-service-graphql-client"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "fungible",
  "graphql_client",
@@ -3484,7 +3484,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3507,7 +3507,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage-service"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -3535,7 +3535,7 @@ dependencies = [
 
 [[package]]
 name = "linera-version"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-graphql",
  "base64 0.22.0",
@@ -3552,7 +3552,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -3588,7 +3588,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views-derive"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "cfg_aliases",
  "insta",
@@ -3739,7 +3739,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3758,7 +3758,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty-macros"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "cfg_aliases",
  "heck 0.4.1",
@@ -3770,7 +3770,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty-test-modules"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "wit-bindgen",
 ]
