@@ -764,9 +764,11 @@ where
             } => block,
             _ => panic!("Expecting a validation certificate"),
         };
+        let chain_id = block.chain_id;
+        let height = block.height;
         // Check that the chain is active and ready for this confirmation.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        let mut chain = self.storage.load_active_chain(block.chain_id).await?;
+        let mut chain = self.storage.load_active_chain(chain_id).await?;
         let (epoch, committee) = chain
             .execution_state
             .system
@@ -775,10 +777,7 @@ where
         Self::check_block_epoch(epoch, block)?;
         certificate.check(committee)?;
         let mut actions = NetworkActions::default();
-        if chain
-            .tip_state
-            .get()
-            .already_validated_block(block.height)?
+        if chain.tip_state.get().already_validated_block(height)?
             || chain.manager.get().check_validated_block(&certificate)? == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info unchanged.
@@ -789,24 +788,21 @@ where
             ));
         }
         self.cache_validated(&certificate.value).await;
-        let current_round = chain.manager.get().current_round();
+        let old_round = chain.manager.get().current_round();
         chain.manager.get_mut().create_final_vote(
-            certificate.clone(),
+            certificate,
             self.key_pair(),
             self.storage.current_time(),
         );
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
-        if chain.manager.get().current_round() > current_round {
+        let round = chain.manager.get().current_round();
+        if round > old_round {
             actions.notifications.push(Notification {
-                chain_id: block.chain_id,
-                reason: Reason::NewRound {
-                    height: block.height,
-                    round: chain.manager.get().current_round(),
-                },
+                chain_id,
+                reason: Reason::NewRound { height, round },
             })
         }
-        self.cache_validated(&certificate.value).await;
         Ok((info, actions, false))
     }
 
@@ -1125,7 +1121,7 @@ where
         manager.create_vote(proposal, outcome, self.key_pair(), local_time);
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
-            self.cache_recent_value(Cow::Borrowed(&vote.value)).await;
+            self.cache_validated(&vote.value).await;
         }
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
