@@ -403,11 +403,10 @@ impl Runnable for Job {
 
             ProcessInbox { chain_id } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let mut chain_client = context.make_chain_client(storage, chain_id);
+                let chain_client = context.make_chain_client(storage, chain_id).into_arc();
                 info!("Processing the inbox of chain {}", chain_id);
                 let time_start = Instant::now();
-                let certificates = context.process_inbox(&mut chain_client).await?;
-                context.update_and_save_wallet(&mut chain_client).await;
+                let certificates = context.process_inbox(&chain_client).await?;
                 let time_total = time_start.elapsed();
                 info!(
                     "Processed incoming messages with {} blocks in {} ms",
@@ -461,18 +460,19 @@ impl Runnable for Job {
                 // Make sure genesis chains are subscribed to the admin chain.
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
-                let mut chain_client = context.make_chain_client(
-                    storage.clone(),
-                    context.wallet_state().genesis_admin_chain(),
-                );
+                let chain_client = context
+                    .make_chain_client(
+                        storage.clone(),
+                        context.wallet_state().genesis_admin_chain(),
+                    )
+                    .into_arc();
                 let n = context
-                    .process_inbox(&mut chain_client)
+                    .process_inbox(&chain_client)
                     .await
                     .unwrap()
                     .into_iter()
                     .filter_map(|c| c.value().executed_block().map(|e| e.messages.len()))
                     .sum::<usize>();
-                let chain_client = chain_client.into_arc();
                 info!("Subscribed {} chains to new committees", n);
                 let maybe_certificate = context
                     .apply_client_command(&chain_client, |mut chain_client| {
@@ -830,8 +830,8 @@ impl Runnable for Job {
 
                 info!("Synchronizing");
                 chain_client.synchronize_from_validators().await?;
-                context.process_inbox(&mut chain_client).await?;
                 let chain_client = chain_client.into_arc();
+                context.process_inbox(&chain_client).await?;
 
                 let (application_id, _) = context
                     .apply_client_command(&chain_client, move |mut chain_client| {
