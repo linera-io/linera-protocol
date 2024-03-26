@@ -62,7 +62,11 @@ type InitializeHandler = Box<
         + Sync,
 >;
 type ExecuteOperationHandler = Box<
-    dyn FnOnce(&mut ContractSyncRuntime, OperationContext, Vec<u8>) -> Result<(), ExecutionError>
+    dyn FnOnce(
+            &mut ContractSyncRuntime,
+            OperationContext,
+            Vec<u8>,
+        ) -> Result<Vec<u8>, ExecutionError>
         + Send
         + Sync,
 >;
@@ -142,7 +146,7 @@ impl ExpectedCall {
                 &mut ContractSyncRuntime,
                 OperationContext,
                 Vec<u8>,
-            ) -> Result<(), ExecutionError>
+            ) -> Result<Vec<u8>, ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -257,7 +261,7 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
         &mut self,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         match self.next_expected_call() {
             Some(ExpectedCall::ExecuteOperation(handler)) => {
                 handler(&mut self.runtime, context, operation)

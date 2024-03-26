@@ -116,7 +116,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
             )?;
             assert!(response.is_empty());
 
-            Ok(())
+            Ok(vec![])
         })
     });
 
@@ -249,7 +249,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
                 vec![SessionCall::StartSession as u8],
             )?;
             runtime.try_call_application(false, target_id, vec![SessionCall::EndSession as u8])?;
-            Ok(())
+            Ok(vec![])
         },
     ));
 
@@ -358,7 +358,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
                 target_id,
                 vec![SessionCall::StartSession as u8],
             )?;
-            Ok(())
+            Ok(vec![])
         },
     ));
 
@@ -421,7 +421,7 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
         .expect("Mock application should be registered");
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |_runtime, _context, _operation| Ok(()),
+        move |_runtime, _context, _operation| Ok(vec![]),
     ));
 
     let error_message = "Finalize aborted execution";
@@ -471,7 +471,7 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
     first_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             runtime.try_call_application(false, second_id, vec![])?;
-            Ok(())
+            Ok(vec![])
         },
     ));
     second_application.expect_call(ExpectedCall::handle_application_call(
@@ -553,7 +553,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     first_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             runtime.try_call_application(false, second_id, vec![])?;
-            Ok(())
+            Ok(vec![])
         },
     ));
     second_application.expect_call(ExpectedCall::handle_application_call(
@@ -709,7 +709,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
         .expect("Target mock application should be registered");
 
     caller_application.expect_call(ExpectedCall::execute_operation(
-        move |_runtime, _context, _operation| Ok(()),
+        move |_runtime, _context, _operation| Ok(vec![]),
     ));
 
     caller_application.expect_call(ExpectedCall::finalize({
@@ -762,7 +762,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             runtime.try_call_application(false, target_id, vec![])?;
-            Ok(())
+            Ok(vec![])
         },
     ));
     target_application.expect_call(ExpectedCall::handle_application_call(
@@ -819,7 +819,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             runtime.try_call_application(false, target_id, vec![])?;
-            Ok(())
+            Ok(vec![])
         },
     ));
     target_application.expect_call(ExpectedCall::handle_application_call(
@@ -879,7 +879,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             runtime.try_call_application(/* authenticated */ false, target_id, vec![])?;
-            Ok(())
+            Ok(vec![])
         },
     ));
 
@@ -936,7 +936,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             runtime.send_message(dummy_message)?;
-            Ok(())
+            Ok(vec![])
         },
     ));
     application.expect_call(ExpectedCall::default_finalize());
@@ -1014,7 +1014,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             runtime.try_call_application(/* authenticated */ false, target_id, vec![])?;
-            Ok(())
+            Ok(vec![])
         },
     ));
 
@@ -1120,7 +1120,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             runtime.try_call_application(/* authenticated */ false, middle_id, vec![])?;
-            Ok(())
+            Ok(vec![])
         },
     ));
 
@@ -1279,7 +1279,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
                 sending_target_id,
                 vec![],
             )?;
-            Ok(())
+            Ok(vec![])
         }
     }));
 
@@ -1444,7 +1444,7 @@ async fn test_open_chain() {
             runtime.transfer(None, destination, Amount::ONE).unwrap();
             let chain_id = runtime.open_chain(child_ownership, Amount::ONE).unwrap();
             assert_eq!(chain_id, ChainId::child(message_id));
-            Ok(())
+            Ok(vec![])
         }
     }));
     application.expect_call(ExpectedCall::default_finalize());
@@ -1521,7 +1521,7 @@ async fn test_close_chain() {
                 runtime.close_chain(),
                 Err(ExecutionError::UnauthorizedApplication(_))
             );
-            Ok(())
+            Ok(vec![])
         },
     ));
     application.expect_call(ExpectedCall::default_finalize());
@@ -1546,7 +1546,7 @@ async fn test_close_chain() {
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             runtime.close_chain().unwrap();
-            Ok(())
+            Ok(vec![])
         },
     ));
     application.expect_call(ExpectedCall::default_finalize());

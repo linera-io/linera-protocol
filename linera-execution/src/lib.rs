@@ -145,7 +145,7 @@ pub trait UserContract {
         &mut self,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<(), ExecutionError>;
+    ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Applies a message originating from a cross-chain message.
     fn execute_message(

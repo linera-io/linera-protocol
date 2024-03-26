@@ -883,7 +883,9 @@ impl ContractSyncRuntime {
         };
         runtime.execute(application_id, signer, move |code| match action {
             UserAction::Initialize(context, argument) => code.initialize(context, argument),
-            UserAction::Operation(context, operation) => code.execute_operation(context, operation),
+            UserAction::Operation(context, operation) => {
+                code.execute_operation(context, operation).map(|_| ())
+            }
             UserAction::Message(context, message) => code.execute_message(context, message),
         })?;
         runtime.finalize(finalize_context)?;
