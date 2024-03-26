@@ -1,6 +1,6 @@
 [package]
 name = "linera-witty-macros"
-version = "0.9.0"
+version = "0.10.0"
 description = "Procedural macros for generation of WIT compatible host code from Rust code"
 authors = ["Linera <contact@linera.io>"]
 readme = "README.md"
