@@ -403,9 +403,9 @@ impl ClientContext {
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         anyhow::Error: From<E>,
     {
+        // Start listening for notifications, so we learn about new rounds and blocks.
+        let (_listen_handle, mut notification_stream) = client.listen().await?;
         loop {
-            // Subscribe to the local node, so we learn about new rounds.
-            let mut notification_stream = client.lock().await.subscribe().await?;
             // Try applying f. Return if committed.
             let result = f(client.0.clone().lock_owned().await).await;
             self.update_and_save_wallet(&mut *client.lock().await).await;

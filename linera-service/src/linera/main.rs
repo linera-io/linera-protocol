@@ -748,11 +748,10 @@ impl Runnable for Job {
 
             Watch { chain_id, raw } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let mut chain_client = context.make_chain_client(storage, chain_id);
+                let chain_client = context.make_chain_client(storage, chain_id).into_arc();
                 info!("Watching for notifications for chain {:?}", chain_id);
-                let mut notification_stream = chain_client.subscribe().await?;
-                let _listen_handle = chain_client.into_arc().listen().await?;
-                while let Some(notification) = notification_stream.next().await {
+                let (_listen_handle, mut notifications) = chain_client.listen().await?;
+                while let Some(notification) = notifications.next().await {
                     if raw {
                         println!("{}", serde_json::to_string(&notification)?);
                     }

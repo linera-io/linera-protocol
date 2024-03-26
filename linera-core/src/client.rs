@@ -2145,22 +2145,25 @@ where
 
     /// Spawns a task that listens to notifications about the current chain from all validators,
     /// and synchronizes the local state accordingly.
-    pub async fn listen(&self) -> Result<AbortOnDrop, ChainClientError>
+    pub async fn listen(&self) -> Result<(AbortOnDrop, NotificationStream), ChainClientError>
     where
         P: Send + 'static,
     {
         let mut senders = HashMap::new(); // Senders to cancel notification streams.
-        let notifications = self.lock().await.subscribe().await?;
+        let mut guard = self.lock().await;
+        let notifications = guard.subscribe().await?;
+        let notifications2 = guard.subscribe().await?;
+        drop(guard);
         let (mut notifications, abort) = stream::abortable(notifications);
-        if let Err(err) = self.update_streams(&mut senders).await {
-            error!("Failed to update committee: {}", err);
+        if let Err(error) = self.update_streams(&mut senders).await {
+            error!("Failed to update committee: {}", error);
         }
         let this = self.clone();
         tokio::spawn(async move {
             while let Some(notification) = notifications.next().await {
                 if matches!(notification.reason, Reason::NewBlock { .. }) {
-                    if let Err(err) = this.update_streams(&mut senders).await {
-                        error!("Failed to update committee: {}", err);
+                    if let Err(error) = this.update_streams(&mut senders).await {
+                        error!("Failed to update committee: {}", error);
                     }
                 }
             }
@@ -2168,7 +2171,7 @@ where
                 abort.abort();
             }
         });
-        Ok(AbortOnDrop(abort))
+        Ok((AbortOnDrop(abort), notifications2))
     }
 
     async fn update_streams(
