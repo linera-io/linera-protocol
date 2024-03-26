@@ -1046,6 +1046,7 @@ mod tests {
         let context = OperationContext {
             chain_id: ChainId::from(description),
             authenticated_signer: None,
+            authenticated_caller_id: None,
             height: BlockHeight::from(7),
             index: 2,
             next_message_index: 3,

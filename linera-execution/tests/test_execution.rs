@@ -34,6 +34,7 @@ fn make_operation_context() -> OperationContext {
         height: BlockHeight(0),
         index: 0,
         authenticated_signer: None,
+        authenticated_caller_id: None,
         next_message_index: 0,
     }
 }

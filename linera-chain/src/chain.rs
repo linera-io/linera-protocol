@@ -811,6 +811,7 @@ where
                 height: block.height,
                 index,
                 authenticated_signer: block.authenticated_signer,
+                authenticated_caller_id: None,
                 next_message_index,
             };
             let outcomes = self

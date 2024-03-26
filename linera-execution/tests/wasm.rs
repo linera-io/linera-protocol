@@ -69,6 +69,7 @@ async fn test_fuel_for_counter_wasm_application(
         height: BlockHeight(0),
         index: 0,
         authenticated_signer: None,
+        authenticated_caller_id: None,
         next_message_index: 0,
     };
     let increments = [2_u64, 9, 7, 1000];

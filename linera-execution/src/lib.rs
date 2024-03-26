@@ -231,6 +231,9 @@ pub struct OperationContext {
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
     pub authenticated_signer: Option<Owner>,
+    /// `None` if this is the transaction entrypoint or the caller doesn't want this particular
+    /// call to be authenticated (e.g. for safety reasons).
+    pub authenticated_caller_id: Option<UserApplicationId>,
     /// The current block height.
     pub height: BlockHeight,
     /// The current index of the operation.

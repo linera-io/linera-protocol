@@ -33,6 +33,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         height: BlockHeight(0),
         index: 0,
         authenticated_signer: None,
+        authenticated_caller_id: None,
         next_message_index: 0,
     };
     let mut controller = ResourceController::default();
