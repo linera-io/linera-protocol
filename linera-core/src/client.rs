@@ -2153,6 +2153,9 @@ where
         let mut guard = self.lock().await;
         let notifications = guard.subscribe().await?;
         let notifications2 = guard.subscribe().await?;
+        if let Err(error) = guard.synchronize_from_validators().await {
+            error!("Failed to synchronize from validators: {}", error);
+        }
         drop(guard);
         let (mut notifications, abort) = stream::abortable(notifications);
         if let Err(error) = self.update_streams(&mut senders).await {
