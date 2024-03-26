@@ -188,10 +188,10 @@ where
         &mut self,
         authenticated: bool,
         application: ApplicationId<A>,
-        call: &A::ApplicationCall,
+        call: &A::Operation,
     ) -> A::Response {
         let call_bytes = bcs::to_bytes(call)
-            .expect("Failed to serialize `ApplicationCall` type for a cross-application call");
+            .expect("Failed to serialize `Operation` type for a cross-application call");
 
         let response_bytes =
             wit::try_call_application(authenticated, application.forget_abi().into(), &call_bytes);
