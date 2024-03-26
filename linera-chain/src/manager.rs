@@ -388,7 +388,7 @@ impl ChainManager {
         if key_pair.is_some() && round < self.current_round() {
             return;
         }
-        let Some(value) = certificate.value.clone().validated_into_confirmed() else {
+        let Some(value) = certificate.value.validated_to_confirmed() else {
             // Unreachable: This is only called with validated blocks.
             error!("Unexpected certificate; expected ValidatedBlock");
             return;

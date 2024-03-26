@@ -924,7 +924,7 @@ where
     /// Caches the validated block and the corresponding confirmed block.
     async fn cache_validated(&mut self, value: &HashedValue) {
         if self.cache_recent_value(Cow::Borrowed(value)).await {
-            if let Some(value) = value.clone().validated_into_confirmed() {
+            if let Some(value) = value.validated_to_confirmed() {
                 self.cache_recent_value(Cow::Owned(value)).await;
             }
         }
