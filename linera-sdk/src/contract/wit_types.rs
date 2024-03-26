@@ -21,7 +21,7 @@ impl contract::Contract for Contract {
         unsafe { __contract_initialize(argument) }
     }
 
-    fn execute_operation(operation: Vec<u8>) -> Result<(), String> {
+    fn execute_operation(operation: Vec<u8>) -> Result<Vec<u8>, String> {
         unsafe { __contract_execute_operation(operation) }
     }
 

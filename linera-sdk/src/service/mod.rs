@@ -48,7 +48,7 @@ macro_rules! service {
 
         #[doc(hidden)]
         #[no_mangle]
-        fn __contract_execute_operation(_: Vec<u8>) -> Result<(), String> {
+        fn __contract_execute_operation(_: Vec<u8>) -> Result<Vec<u8>, String> {
             unreachable!("Contract entrypoint should not be called in service");
         }
 

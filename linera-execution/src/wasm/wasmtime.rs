@@ -332,7 +332,7 @@ where
         let result =
             contract::Contract::execute_operation(&self.application, &mut self.store, &operation);
         self.persist_remaining_fuel()?;
-        result?.map_err(ExecutionError::UserError)
+        result?.map(|_| ()).map_err(ExecutionError::UserError)
     }
 
     fn execute_message(
