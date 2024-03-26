@@ -131,7 +131,6 @@ pub mod dynamo_db;
 #[cfg(with_indexeddb)]
 pub mod indexed_db;
 
-
 /// Helper types for tests.
 #[cfg(with_testing)]
 pub mod test_utils;

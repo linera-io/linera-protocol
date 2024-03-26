@@ -4,7 +4,6 @@
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use async_lock::{Mutex, MutexGuardArc, RwLock};
-use async_trait::async_trait;
 use futures::FutureExt;
 use thiserror::Error;
 
@@ -53,7 +52,6 @@ pub struct MemoryStore {
     pub max_stream_queries: usize,
 }
 
-#[async_trait]
 impl ReadableKeyValueStore<MemoryContextError> for MemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
@@ -113,7 +111,6 @@ impl ReadableKeyValueStore<MemoryContextError> for MemoryStore {
     }
 }
 
-#[async_trait]
 impl WritableKeyValueStore<MemoryContextError> for MemoryStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
@@ -146,7 +143,6 @@ impl WritableKeyValueStore<MemoryContextError> for MemoryStore {
     }
 }
 
-#[async_trait]
 impl AdminKeyValueStore for MemoryStore {
     type Error = MemoryContextError;
     type Config = MemoryStoreConfig;
@@ -263,7 +259,6 @@ impl From<MemoryContextError> for ViewError {
     }
 }
 
-#[async_trait]
 impl DeletePrefixExpander for MemoryContext<()> {
     type Error = MemoryContextError;
 

@@ -12,7 +12,6 @@ use linera_views::{
     },
     value_splitting::create_test_memory_store,
 };
-
 #[cfg(web)]
 use wasm_bindgen_test::wasm_bindgen_test;
 

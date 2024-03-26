@@ -3637,6 +3637,7 @@ dependencies = [
  "tokio",
  "tokio-test",
  "tracing",
+ "trait-variant",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]

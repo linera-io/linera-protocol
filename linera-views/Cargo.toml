@@ -53,6 +53,7 @@ tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "sync"] }
 tracing.workspace = true
+trait-variant.workspace = true
 
 [target.wasm32-unknown-unknown.dependencies]
 indexed_db_futures = { workspace = true, optional = true }

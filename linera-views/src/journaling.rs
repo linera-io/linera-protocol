@@ -102,7 +102,6 @@ pub struct JournalingKeyValueStore<K> {
     pub store: K,
 }
 
-#[async_trait]
 impl<K> DeletePrefixExpander for &JournalingKeyValueStore<K>
 where
     K: DirectKeyValueStore + Send + Sync,
@@ -117,7 +116,6 @@ where
     }
 }
 
-#[async_trait]
 impl<K> ReadableKeyValueStore<K::Error> for JournalingKeyValueStore<K>
 where
     K: DirectKeyValueStore + Send + Sync,
@@ -161,7 +159,6 @@ where
     }
 }
 
-#[async_trait]
 impl<K> AdminKeyValueStore for JournalingKeyValueStore<K>
 where
     K: AdminKeyValueStore + Send + Sync,
@@ -195,7 +192,6 @@ where
     }
 }
 
-#[async_trait]
 impl<K> WritableKeyValueStore<K::Error> for JournalingKeyValueStore<K>
 where
     K: DirectKeyValueStore + Send + Sync,
