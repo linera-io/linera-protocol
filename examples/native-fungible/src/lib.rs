@@ -153,7 +153,7 @@ echo "http://localhost:3000/$CHAIN_1?app=$APP_ID&owner=$OWNER_2&port=$PORT"
 
 use async_graphql::SimpleObject;
 use linera_sdk::base::{AccountOwner, Amount};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub const TICKER_SYMBOL: &str = "NAT";
 
@@ -161,4 +161,9 @@ pub const TICKER_SYMBOL: &str = "NAT";
 pub struct AccountEntry {
     pub key: AccountOwner,
     pub value: Amount,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub enum Message {
+    Notify,
 }
