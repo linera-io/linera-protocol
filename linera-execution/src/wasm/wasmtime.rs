@@ -42,8 +42,8 @@ use self::{contract::ContractData, service::ServiceData, view_system_api::ViewSy
 use super::{module_cache::ModuleCache, WasmExecutionError};
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
-    BaseRuntime, Bytecode, CalleeContext, ContractRuntime, ExecutionError, FinalizeContext,
-    MessageContext, OperationContext, QueryContext, ServiceRuntime,
+    BaseRuntime, Bytecode, ContractRuntime, ExecutionError, FinalizeContext, MessageContext,
+    OperationContext, QueryContext, ServiceRuntime,
 };
 
 /// An [`Engine`] instance configured to run application contracts.
@@ -343,21 +343,6 @@ where
         self.configure_initial_fuel()?;
         let result =
             contract::Contract::execute_message(&self.application, &mut self.store, &message);
-        self.persist_remaining_fuel()?;
-        result?.map_err(ExecutionError::UserError)
-    }
-
-    fn handle_application_call(
-        &mut self,
-        _context: CalleeContext,
-        argument: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        self.configure_initial_fuel()?;
-        let result = contract::Contract::handle_application_call(
-            &self.application,
-            &mut self.store,
-            &argument,
-        );
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
