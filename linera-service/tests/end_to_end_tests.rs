@@ -9,6 +9,7 @@ use std::{collections::BTreeMap, env, path::PathBuf, time::Duration};
 use assert_matches::assert_matches;
 use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
+use futures::{channel::mpsc, SinkExt, StreamExt};
 use linera_base::{
     command::resolve_binary,
     crypto::{KeyPair, PublicKey},
@@ -27,6 +28,7 @@ use linera_service::cli_wrappers::{
 };
 use serde_json::{json, Value};
 use test_case::test_case;
+use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
@@ -235,7 +237,7 @@ impl AmmApp {
             max_token1_amount,
         };
 
-        let mutation = format!("operation(operation: {})", operation.to_value(),);
+        let mutation = format!("operation(operation: {})", operation.to_value());
         self.0.mutate(mutation).await.unwrap();
     }
 
@@ -251,7 +253,7 @@ impl AmmApp {
             token_to_remove_amount,
         };
 
-        let mutation = format!("operation(operation: {})", operation.to_value(),);
+        let mutation = format!("operation(operation: {})", operation.to_value());
         self.0.mutate(mutation).await.unwrap();
     }
 
@@ -262,7 +264,7 @@ impl AmmApp {
             input_amount,
         };
 
-        let mutation = format!("operation(operation: {})", operation.to_value(),);
+        let mutation = format!("operation(operation: {})", operation.to_value());
         self.0.mutate(mutation).await.unwrap();
     }
 }
@@ -2281,7 +2283,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     let client1_key = client1.keygen().await.unwrap();
     let client2_key = client2.keygen().await.unwrap();
 
-    // Open chain on behalf of Client 2.
+    // Open a chain owned by both clients.
     let (message_id, chain2) = client1
         .open_multi_owner_chain(
             chain1,
@@ -2289,6 +2291,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
             vec![100, 100],
             u32::MAX,
             Amount::from_tokens(6),
+            Duration::from_secs(10),
         )
         .await
         .unwrap();
@@ -2326,8 +2329,8 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     client1.sync(chain1).await.unwrap();
     client2.sync(chain2).await.unwrap();
 
-    assert!(client1.query_balance(account2).await.unwrap() <= Amount::from_tokens(3),);
-    assert!(client2.query_balance(account2).await.unwrap() <= Amount::from_tokens(3),);
+    assert!(client1.query_balance(account2).await.unwrap() <= Amount::from_tokens(3));
+    assert!(client2.query_balance(account2).await.unwrap() <= Amount::from_tokens(3));
 
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
@@ -2342,7 +2345,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
 async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    // Create runner and two clients.
+    // Create runner and client.
     let (mut net, client) = config.instantiate().await.unwrap();
 
     let chain = client.get_wallet().unwrap().default_chain().unwrap();
@@ -2567,7 +2570,7 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) {
         .await;
     assert!(result.is_err());
     // The transfer didn't get confirmed.
-    assert_eq!(client.local_balance(account).await.unwrap(), balance,);
+    assert_eq!(client.local_balance(account).await.unwrap(), balance);
     // Restart validators.
     for i in 0..4 {
         net.start_validator(i).await.unwrap();
@@ -2645,4 +2648,65 @@ impl Drop for RestoreVarOnDrop {
     fn drop(&mut self) {
         env::set_var("RUSTFLAGS", "-D warnings");
     }
+}
+
+#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    // Create runner and two clients.
+    let (mut net, client1) = config.instantiate().await.unwrap();
+    let client2 = net.make_client().await;
+    client2.wallet_init(&[], FaucetOption::None).await.unwrap();
+    let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
+
+    // Open a chain owned by both clients, with only single-leader rounds.
+    let client1_key = client1.keygen().await.unwrap();
+    let client2_key = client2.keygen().await.unwrap();
+    let (message_id, chain2) = client1
+        .open_multi_owner_chain(
+            chain1,
+            vec![client1_key, client2_key],
+            vec![100, 100],
+            0,
+            Amount::from_tokens(9),
+            Duration::from_secs(60 * 60 * 24),
+        )
+        .await
+        .unwrap();
+    client1.assign(client1_key, message_id).await.unwrap();
+    client2.assign(client2_key, message_id).await.unwrap();
+    client2.sync(chain2).await.unwrap();
+
+    let (mut tx1, mut rx) = mpsc::channel(8);
+    let mut tx2 = tx1.clone();
+    let handle1: JoinHandle<Result<(), anyhow::Error>> = tokio::spawn(async move {
+        loop {
+            client1.transfer(Amount::ONE, chain2, chain1).await?;
+            tx1.send(()).await.unwrap();
+        }
+    });
+    let handle2: JoinHandle<Result<(), anyhow::Error>> = tokio::spawn(async move {
+        loop {
+            client2.transfer(Amount::ONE, chain2, chain1).await?;
+            tx2.send(()).await.unwrap();
+        }
+    });
+
+    for _ in 0..8 {
+        let () = rx.next().await.unwrap();
+    }
+    drop(rx);
+
+    let (result1, result2) = futures::join!(handle1, handle2);
+    assert!(result1.unwrap().is_err());
+    assert!(result2.unwrap().is_err());
+
+    net.ensure_is_running().await.unwrap();
+    net.terminate().await.unwrap();
 }

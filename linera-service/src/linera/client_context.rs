@@ -308,31 +308,57 @@ impl ClientContext {
                 .receive_certificate(certificate.clone())
                 .await
                 .unwrap();
-            self.process_inbox(&mut chain_client).await.unwrap();
-            let epochs = chain_client.epochs().await.unwrap();
+            let chain_client = chain_client.into_arc();
+            self.process_inbox(&chain_client).await.unwrap();
+            let epochs = chain_client.lock().await.epochs().await.unwrap();
             debug!("{:?} accepts epochs {:?}", chain_id, epochs);
         }
     }
 
     pub async fn process_inbox<S>(
         &mut self,
-        chain_client: &mut ChainClient<impl ValidatorNodeProvider + Sync + 'static, S>,
+        chain_client: &ArcChainClient<NodeProvider, S>,
     ) -> anyhow::Result<Vec<Certificate>>
     where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         let mut certificates = Vec::new();
+        // Try processing the inbox optimistically without waiting for validator notifications.
+        let (new_certificates, maybe_timeout) = {
+            let mut guard = chain_client.0.lock().await;
+            guard.synchronize_from_validators().await?;
+            let result = guard.process_inbox().await;
+            self.update_wallet_from_client(&mut *guard).await;
+            if result.is_err() {
+                self.save_wallet();
+            }
+            result?
+        };
+        certificates.extend(new_certificates);
+        if maybe_timeout.is_none() {
+            self.save_wallet();
+            return Ok(certificates);
+        }
+        // Start listening for notifications, so we learn about new rounds and blocks.
+        let (_listen_handle, mut notification_stream) = chain_client.listen().await?;
         loop {
-            chain_client.synchronize_from_validators().await?;
-            let mut stream = chain_client.subscribe().await?;
-            let result = chain_client.process_inbox().await;
-            self.update_wallet_from_client(chain_client).await;
-            let (new_certificates, maybe_timeout) = result.unwrap();
+            let (new_certificates, maybe_timeout) = {
+                let mut guard = chain_client.0.lock().await;
+                let result = guard.process_inbox().await;
+                self.update_wallet_from_client(&mut *guard).await;
+                if result.is_err() {
+                    self.save_wallet();
+                }
+                result?
+            };
             certificates.extend(new_certificates);
             match maybe_timeout {
-                None => return Ok(certificates),
-                Some(timestamp) => wait_for_next_round(&mut stream, timestamp).await,
+                None => {
+                    self.save_wallet();
+                    return Ok(certificates);
+                }
+                Some(timestamp) => wait_for_next_round(&mut notification_stream, timestamp).await,
             }
         }
     }
@@ -379,7 +405,7 @@ impl ClientContext {
             .await
             .synchronize_from_validators()
             .await?;
-        self.process_inbox(&mut *chain_client.lock().await).await?;
+        self.process_inbox(chain_client).await?;
         Ok(bytecode_id)
     }
 
@@ -403,9 +429,15 @@ impl ClientContext {
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         anyhow::Error: From<E>,
     {
+        // Try applying f optimistically without validator notifications. Return if committed.
+        let result = f(client.0.clone().lock_owned().await).await;
+        self.update_and_save_wallet(&mut *client.lock().await).await;
+        if let ClientOutcome::Committed(t) = result? {
+            return Ok(t);
+        }
+        // Start listening for notifications, so we learn about new rounds and blocks.
+        let (_listen_handle, mut notification_stream) = client.listen().await?;
         loop {
-            // Subscribe to the local node, so we learn about new rounds.
-            let mut notification_stream = client.lock().await.subscribe().await?;
             // Try applying f. Return if committed.
             let result = f(client.0.clone().lock_owned().await).await;
             self.update_and_save_wallet(&mut *client.lock().await).await;
@@ -460,9 +492,9 @@ impl ClientContext {
         ViewError: From<S::ContextError>,
     {
         for chain_id in self.wallet_state.own_chain_ids() {
-            let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
-            self.process_inbox(&mut chain_client).await.unwrap();
-            chain_client.update_validators().await.unwrap();
+            let chain_client = self.make_chain_client(storage.clone(), chain_id).into_arc();
+            self.process_inbox(&chain_client).await.unwrap();
+            chain_client.lock().await.update_validators().await.unwrap();
         }
     }
 
