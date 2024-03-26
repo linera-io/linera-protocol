@@ -324,6 +324,22 @@ impl ClientContext {
         ViewError: From<S::ContextError>,
     {
         let mut certificates = Vec::new();
+        // Try processing the inbox optimistically without waiting for validator notifications.
+        let (new_certificates, maybe_timeout) = {
+            let mut guard = chain_client.0.lock().await;
+            guard.synchronize_from_validators().await?;
+            let result = guard.process_inbox().await;
+            self.update_wallet_from_client(&mut *guard).await;
+            if result.is_err() {
+                self.save_wallet();
+            }
+            result?
+        };
+        certificates.extend(new_certificates);
+        if maybe_timeout.is_none() {
+            self.save_wallet();
+            return Ok(certificates);
+        }
         // Start listening for notifications, so we learn about new rounds and blocks.
         let (_listen_handle, mut notification_stream) = chain_client.listen().await?;
         loop {
@@ -413,6 +429,12 @@ impl ClientContext {
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         anyhow::Error: From<E>,
     {
+        // Try applying f optimistically without validator notifications. Return if committed.
+        let result = f(client.0.clone().lock_owned().await).await;
+        self.update_and_save_wallet(&mut *client.lock().await).await;
+        if let ClientOutcome::Committed(t) = result? {
+            return Ok(t);
+        }
         // Start listening for notifications, so we learn about new rounds and blocks.
         let (_listen_handle, mut notification_stream) = client.listen().await?;
         loop {
