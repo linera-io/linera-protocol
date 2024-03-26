@@ -47,21 +47,13 @@ impl Contract for CounterContract {
         Ok(())
     }
 
-    async fn execute_operation(&mut self, operation: u64) -> Result<(), Self::Error> {
+    async fn execute_operation(&mut self, operation: u64) -> Result<u64, Self::Error> {
         self.state.value += operation;
-        Ok(())
+        Ok(self.state.value)
     }
 
     async fn execute_message(&mut self, _message: ()) -> Result<(), Self::Error> {
         Err(Error::MessagesNotSupported)
-    }
-
-    async fn handle_application_call(
-        &mut self,
-        increment: u64,
-    ) -> Result<Self::Response, Self::Error> {
-        self.state.value += increment;
-        Ok(self.state.value)
     }
 }
 
@@ -131,7 +123,7 @@ mod tests {
         let increment = 8_u64;
 
         let result = counter
-            .handle_application_call(increment)
+            .execute_operation(increment)
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 

@@ -13,9 +13,9 @@ use std::{
 };
 
 use crate::{
-    CalleeContext, ContractSyncRuntime, ExecutionError, FinalizeContext, MessageContext,
-    OperationContext, QueryContext, ServiceSyncRuntime, UserContract, UserContractModule,
-    UserService, UserServiceModule,
+    ContractSyncRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
+    QueryContext, ServiceSyncRuntime, UserContract, UserContractModule, UserService,
+    UserServiceModule,
 };
 
 /// A mocked implementation of a user application.
@@ -62,17 +62,16 @@ type InitializeHandler = Box<
         + Sync,
 >;
 type ExecuteOperationHandler = Box<
-    dyn FnOnce(&mut ContractSyncRuntime, OperationContext, Vec<u8>) -> Result<(), ExecutionError>
+    dyn FnOnce(
+            &mut ContractSyncRuntime,
+            OperationContext,
+            Vec<u8>,
+        ) -> Result<Vec<u8>, ExecutionError>
         + Send
         + Sync,
 >;
 type ExecuteMessageHandler = Box<
     dyn FnOnce(&mut ContractSyncRuntime, MessageContext, Vec<u8>) -> Result<(), ExecutionError>
-        + Send
-        + Sync,
->;
-type HandleApplicationCallHandler = Box<
-    dyn FnOnce(&mut ContractSyncRuntime, CalleeContext, Vec<u8>) -> Result<Vec<u8>, ExecutionError>
         + Send
         + Sync,
 >;
@@ -95,8 +94,6 @@ pub enum ExpectedCall {
     ExecuteOperation(ExecuteOperationHandler),
     /// An expected call to [`UserContract::execute_message`].
     ExecuteMessage(ExecuteMessageHandler),
-    /// An expected call to [`UserContract::handle_application_call`].
-    HandleApplicationCall(HandleApplicationCallHandler),
     /// An expected call to [`UserContract::finalize`].
     Finalize(FinalizeHandler),
     /// An expected call to [`UserService::handle_query`].
@@ -109,7 +106,6 @@ impl Display for ExpectedCall {
             ExpectedCall::Initialize(_) => "initialize",
             ExpectedCall::ExecuteOperation(_) => "execute_operation",
             ExpectedCall::ExecuteMessage(_) => "execute_message",
-            ExpectedCall::HandleApplicationCall(_) => "handle_application_call",
             ExpectedCall::Finalize(_) => "finalize",
             ExpectedCall::HandleQuery(_) => "handle_query",
         };
@@ -142,7 +138,7 @@ impl ExpectedCall {
                 &mut ContractSyncRuntime,
                 OperationContext,
                 Vec<u8>,
-            ) -> Result<(), ExecutionError>
+            ) -> Result<Vec<u8>, ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -160,22 +156,6 @@ impl ExpectedCall {
             + 'static,
     ) -> Self {
         ExpectedCall::ExecuteMessage(Box::new(handler))
-    }
-
-    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
-    /// [`UserContract::handle_application_call`] implementation, which is handled by the provided
-    /// `handler`.
-    pub fn handle_application_call(
-        handler: impl FnOnce(
-                &mut ContractSyncRuntime,
-                CalleeContext,
-                Vec<u8>,
-            ) -> Result<Vec<u8>, ExecutionError>
-            + Send
-            + Sync
-            + 'static,
-    ) -> Self {
-        ExpectedCall::HandleApplicationCall(Box::new(handler))
     }
 
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::finalize`]
@@ -257,7 +237,7 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
         &mut self,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         match self.next_expected_call() {
             Some(ExpectedCall::ExecuteOperation(handler)) => {
                 handler(&mut self.runtime, context, operation)
@@ -282,22 +262,6 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
                 "Expected a call to `execute_message`, got a call to `{unexpected_call}` instead."
             ),
             None => panic!("Unexpected call to `execute_message`"),
-        }
-    }
-
-    fn handle_application_call(
-        &mut self,
-        context: CalleeContext,
-        argument: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        match self.next_expected_call() {
-            Some(ExpectedCall::HandleApplicationCall(handler)) => {
-                handler(&mut self.runtime, context, argument)
-            }
-            Some(unexpected_call) => panic!(
-                "Expected a call to `handle_application_call`, got a call to `{unexpected_call}` instead."
-            ),
-            None => panic!("Unexpected call to `handle_application_call`"),
         }
     }
 

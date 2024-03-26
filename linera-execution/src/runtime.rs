@@ -25,9 +25,9 @@ use crate::{
     execution_state_actor::{ExecutionStateSender, Request},
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
-    BaseRuntime, CalleeContext, ContractRuntime, ExecutionError, ExecutionOutcome, FinalizeContext,
-    MessageContext, RawExecutionOutcome, ServiceRuntime, UserApplicationDescription,
-    UserApplicationId, UserContractInstance, UserServiceInstance,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, FinalizeContext,
+    MessageContext, OperationContext, RawExecutionOutcome, ServiceRuntime,
+    UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
 };
 
 #[cfg(test)]
@@ -379,7 +379,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
         this: Arc<Mutex<Self>>,
         authenticated: bool,
         callee_id: UserApplicationId,
-    ) -> Result<(Arc<Mutex<UserContractInstance>>, CalleeContext), ExecutionError> {
+    ) -> Result<(Arc<Mutex<UserContractInstance>>, OperationContext), ExecutionError> {
         self.check_for_reentrancy(callee_id)?;
 
         ensure!(
@@ -402,10 +402,13 @@ impl SyncRuntimeInternal<UserContractInstance> {
             _ => None,
         };
         let authenticated_caller_id = authenticated.then_some(caller_id);
-        let callee_context = CalleeContext {
+        let callee_context = OperationContext {
             chain_id: self.chain_id,
             authenticated_signer,
             authenticated_caller_id,
+            height: self.height,
+            index: None,
+            next_message_index: self.next_message_index,
         };
         self.push_application(ApplicationStatus {
             caller_id: authenticated_caller_id,
@@ -883,7 +886,9 @@ impl ContractSyncRuntime {
         };
         runtime.execute(application_id, signer, move |code| match action {
             UserAction::Initialize(context, argument) => code.initialize(context, argument),
-            UserAction::Operation(context, operation) => code.execute_operation(context, operation),
+            UserAction::Operation(context, operation) => {
+                code.execute_operation(context, operation).map(|_| ())
+            }
             UserAction::Message(context, message) => code.execute_message(context, message),
         })?;
         runtime.finalize(finalize_context)?;
@@ -1098,14 +1103,14 @@ impl ContractRuntime for ContractSyncRuntime {
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let cloned_self = self.clone().0;
-        let (contract, callee_context) =
+        let (contract, context) =
             self.inner()
                 .prepare_for_call(cloned_self, authenticated, callee_id)?;
 
         let value = contract
             .try_lock()
             .expect("Applications should not have reentrant calls")
-            .handle_application_call(callee_context, argument)?;
+            .execute_operation(context, argument)?;
 
         self.inner().finish_call()?;
 

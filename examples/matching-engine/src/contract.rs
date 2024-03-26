@@ -13,8 +13,7 @@ use linera_sdk::{
     ensure, Contract, ContractRuntime, ViewStateStorage,
 };
 use matching_engine::{
-    product_price_amount, ApplicationCall, MatchingEngineAbi, Message, Operation, Order, OrderId,
-    OrderNature, Price,
+    product_price_amount, MatchingEngineAbi, Message, Operation, Order, OrderId, OrderNature, Price,
 };
 use state::{LevelView, MatchingEngine, MatchingEngineError};
 
@@ -128,27 +127,6 @@ impl Contract for MatchingEngineContract {
         }
         Ok(())
     }
-
-    /// Execution of the message from the application. The application call can be a local
-    /// one or a remote one.
-    async fn handle_application_call(
-        &mut self,
-        argument: ApplicationCall,
-    ) -> Result<Self::Response, Self::Error> {
-        match argument {
-            ApplicationCall::ExecuteOrder { order } => {
-                let owner = Self::get_owner(&order);
-                let chain_id = self.runtime.chain_id();
-                self.check_account_authentication(owner)?;
-                if chain_id == self.runtime.application_id().creation.chain_id {
-                    self.execute_order_local(order, chain_id).await?;
-                } else {
-                    self.execute_order_remote(order)?;
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 impl MatchingEngineContract {
@@ -227,13 +205,13 @@ impl MatchingEngineContract {
         &mut self,
         owner: AccountOwner,
         amount: Amount,
-        destination: Account,
+        target_account: Account,
         token_idx: u32,
     ) {
-        let transfer = fungible::ApplicationCall::Transfer {
+        let transfer = fungible::Operation::Transfer {
             owner,
             amount,
-            destination,
+            target_account,
         };
         let token = self.fungible_id(token_idx);
         self.runtime.call_application(true, token, &transfer);

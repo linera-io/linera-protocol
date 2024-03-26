@@ -5,7 +5,7 @@
 
 mod state;
 
-use amm::{AmmAbi, AmmError, ApplicationCall, Message, Operation};
+use amm::{AmmAbi, AmmError, Message, Operation};
 use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
@@ -74,28 +74,6 @@ impl Contract for AmmContract {
             } => {
                 self.check_account_authentication(owner)?;
                 self.execute_swap(owner, input_token_idx, input_amount)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn handle_application_call(
-        &mut self,
-        application_call: ApplicationCall,
-    ) -> Result<Self::Response, AmmError> {
-        match application_call {
-            ApplicationCall::Swap {
-                owner,
-                input_token_idx,
-                input_amount,
-            } => {
-                self.check_account_authentication(owner)?;
-                if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
-                    self.execute_swap(owner, input_token_idx, input_amount)?;
-                } else {
-                    self.execute_application_call_remote(application_call)?;
-                }
             }
         }
 
@@ -323,32 +301,6 @@ impl AmmContract {
         Ok(())
     }
 
-    fn execute_application_call_remote(
-        &mut self,
-        application_call: ApplicationCall,
-    ) -> Result<(), AmmError> {
-        match application_call {
-            ApplicationCall::Swap {
-                owner,
-                input_token_idx,
-                input_amount,
-            } => {
-                let chain_id = self.runtime.application_id().creation.chain_id;
-                let message = Message::Swap {
-                    owner,
-                    input_token_idx,
-                    input_amount,
-                };
-                self.runtime
-                    .prepare_message(message)
-                    .with_authentication()
-                    .send_to(chain_id);
-            }
-        }
-
-        Ok(())
-    }
-
     fn calculate_output_amount(
         &mut self,
         input_amount: Amount,
@@ -405,20 +357,20 @@ impl AmmContract {
         &mut self,
         owner: &AccountOwner,
         amount: Amount,
-        destination: Account,
+        target_account: Account,
         token_idx: u32,
     ) {
-        let transfer = fungible::ApplicationCall::Transfer {
+        let transfer = fungible::Operation::Transfer {
             owner: *owner,
             amount,
-            destination,
+            target_account,
         };
         let token = self.fungible_id(token_idx);
         self.runtime.call_application(true, token, &transfer);
     }
 
     fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Result<Amount, AmmError> {
-        let balance = fungible::ApplicationCall::Balance { owner: *owner };
+        let balance = fungible::Operation::Balance { owner: *owner };
         let token = self.fungible_id(token_idx);
         match self.runtime.call_application(true, token, &balance) {
             fungible::FungibleResponse::Balance(balance) => Ok(balance),

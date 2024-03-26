@@ -187,7 +187,6 @@ impl ContractAbi for AmmAbi {
     type InitializationArgument = ();
     type Parameters = Parameters;
     type Operation = Operation;
-    type ApplicationCall = ApplicationCall;
     type Response = ();
 }
 
@@ -249,15 +248,6 @@ pub enum Message {
     },
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub enum ApplicationCall {
-    Swap {
-        owner: AccountOwner,
-        input_token_idx: u32,
-        input_amount: Amount,
-    },
-}
-
 #[derive(Debug, Error)]
 #[allow(dead_code)]
 pub enum AmmError {
@@ -273,9 +263,6 @@ pub enum AmmError {
 
     #[error("AMM application doesn't support any cross-chain messages")]
     MessagesNotSupported,
-
-    #[error("AMM application doesn't support any application calls")]
-    ApplicationCallsNotSupported,
 
     #[error("Action can only be executed on the chain that created the AMM")]
     AmmChainOnly,

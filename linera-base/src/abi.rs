@@ -37,9 +37,6 @@ pub trait ContractAbi {
     /// application on their own chain.
     type Operation: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
-    /// The argument type when this application is called from another application on the same chain.
-    type ApplicationCall: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
-
     /// The response type of an application call.
     type Response: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 }
@@ -73,7 +70,6 @@ where
         <<A as WithContractAbi>::Abi as ContractAbi>::InitializationArgument;
     type Parameters = <<A as WithContractAbi>::Abi as ContractAbi>::Parameters;
     type Operation = <<A as WithContractAbi>::Abi as ContractAbi>::Operation;
-    type ApplicationCall = <<A as WithContractAbi>::Abi as ContractAbi>::ApplicationCall;
     type Response = <<A as WithContractAbi>::Abi as ContractAbi>::Response;
 }
 

@@ -104,10 +104,6 @@ impl Contract for MetaCounterContract {
             }
         }
     }
-
-    async fn handle_application_call(&mut self, _call: ()) -> Result<Self::Response, Self::Error> {
-        Err(Error::CallsNotSupported)
-    }
 }
 
 /// An error that can occur during the contract execution.
@@ -115,9 +111,6 @@ impl Contract for MetaCounterContract {
 pub enum Error {
     #[error("MetaCounter application doesn't support any cross-chain messages")]
     MessagesNotSupported,
-
-    #[error("MetaCounter application doesn't support any cross-application calls")]
-    CallsNotSupported,
 
     #[error("Message failed intentionally")]
     MessageFailed,

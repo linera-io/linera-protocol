@@ -246,7 +246,6 @@ pub struct FungibleTokenAbi;
 impl ContractAbi for FungibleTokenAbi {
     type InitializationArgument = InitialState;
     type Parameters = Parameters;
-    type ApplicationCall = ApplicationCall;
     type Operation = Operation;
     type Response = FungibleResponse;
 }
@@ -260,6 +259,10 @@ impl ServiceAbi for FungibleTokenAbi {
 /// An operation.
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum Operation {
+    /// Requests an account balance.
+    Balance { owner: AccountOwner },
+    /// Requests this fungible token's ticker symbol.
+    TickerSymbol,
     /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
     Transfer {
         owner: AccountOwner,
@@ -293,27 +296,6 @@ pub enum Message {
         amount: Amount,
         target_account: Account,
     },
-}
-
-/// A cross-application call.
-#[derive(Debug, Deserialize, Serialize)]
-pub enum ApplicationCall {
-    /// Requests an account balance.
-    Balance { owner: AccountOwner },
-    /// Transfers tokens from an account.
-    Transfer {
-        owner: AccountOwner,
-        amount: Amount,
-        destination: Account,
-    },
-    /// Same as transfer but the source account may be remote.
-    Claim {
-        source_account: Account,
-        amount: Amount,
-        target_account: Account,
-    },
-    /// Requests this fungible token's ticker symbol.
-    TickerSymbol,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]

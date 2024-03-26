@@ -6,7 +6,6 @@ impl ContractAbi for ApplicationAbi {
     type Parameters = ();
     type InitializationArgument = ();
     type Operation = ();
-    type ApplicationCall = ();
     type Response = ();
 }
 

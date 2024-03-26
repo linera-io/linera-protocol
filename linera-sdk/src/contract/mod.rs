@@ -43,7 +43,7 @@ macro_rules! contract {
 
         #[doc(hidden)]
         #[no_mangle]
-        fn __contract_execute_operation(operation: Vec<u8>) -> Result<(), String> {
+        fn __contract_execute_operation(operation: Vec<u8>) -> Result<Vec<u8>, String> {
             use $crate::util::BlockingWait;
             $crate::contract::run_async_entrypoint::<$application, _, _, _>(
                 unsafe { &mut APPLICATION },
@@ -51,7 +51,13 @@ macro_rules! contract {
                     let operation: <$application as $crate::abi::ContractAbi>::Operation =
                         bcs::from_bytes(&operation)?;
 
-                    application.execute_operation(operation).blocking_wait()
+                    application
+                        .execute_operation(operation)
+                        .blocking_wait()
+                        .map(|response| {
+                            bcs::to_bytes(&response)
+                                .expect("Failed to serialize contract's `Response`")
+                        })
                 },
             )
         }
@@ -67,27 +73,6 @@ macro_rules! contract {
                         bcs::from_bytes(&message)?;
 
                     application.execute_message(message).blocking_wait()
-                },
-            )
-        }
-
-        #[doc(hidden)]
-        #[no_mangle]
-        fn __contract_handle_application_call(argument: Vec<u8>) -> Result<Vec<u8>, String> {
-            use $crate::util::BlockingWait;
-            $crate::contract::run_async_entrypoint::<$application, _, _, _>(
-                unsafe { &mut APPLICATION },
-                move |application| {
-                    let argument: <$application as $crate::abi::ContractAbi>::ApplicationCall =
-                        bcs::from_bytes(&argument)?;
-
-                    application
-                        .handle_application_call(argument)
-                        .blocking_wait()
-                        .map(|response| {
-                            bcs::to_bytes(&response)
-                                .expect("Failed to serialize `ApplicationCallOutcome`'s `Response`")
-                        })
                 },
             )
         }
@@ -145,8 +130,7 @@ where
 // Import entrypoint proxy functions that applications implement with the `contract!` macro.
 extern "Rust" {
     fn __contract_initialize(argument: Vec<u8>) -> Result<(), String>;
-    fn __contract_execute_operation(argument: Vec<u8>) -> Result<(), String>;
+    fn __contract_execute_operation(argument: Vec<u8>) -> Result<Vec<u8>, String>;
     fn __contract_execute_message(message: Vec<u8>) -> Result<(), String>;
-    fn __contract_handle_application_call(argument: Vec<u8>) -> Result<Vec<u8>, String>;
     fn __contract_finalize() -> Result<(), String>;
 }

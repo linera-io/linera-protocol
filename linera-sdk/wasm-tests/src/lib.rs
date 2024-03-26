@@ -388,7 +388,6 @@ impl ContractAbi for Abi {
     type Parameters = Vec<u8>;
     type InitializationArgument = Vec<u8>;
     type Operation = Vec<u8>;
-    type ApplicationCall = Vec<u8>;
     type Response = Vec<u8>;
 }
 
@@ -432,19 +431,15 @@ impl Contract for TestApp {
         Ok(())
     }
 
-    async fn execute_operation(&mut self, _operation: Self::Operation) -> Result<(), Self::Error> {
-        Ok(())
+    async fn execute_operation(
+        &mut self,
+        _operation: Self::Operation,
+    ) -> Result<Self::Response, Self::Error> {
+        Ok(vec![])
     }
 
     async fn execute_message(&mut self, _message: Self::Message) -> Result<(), Self::Error> {
         Ok(())
-    }
-
-    async fn handle_application_call(
-        &mut self,
-        _argument: Self::ApplicationCall,
-    ) -> Result<Self::Response, Self::Error> {
-        Ok(vec![])
     }
 }
 

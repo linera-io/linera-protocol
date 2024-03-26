@@ -6,7 +6,7 @@
 mod state;
 
 use async_trait::async_trait;
-use crowd_funding::{ApplicationCall, CrowdFundingAbi, InitializationArgument, Message, Operation};
+use crowd_funding::{CrowdFundingAbi, InitializationArgument, Message, Operation};
 use fungible::{Account, FungibleResponse, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
@@ -86,21 +86,6 @@ impl Contract for CrowdFundingContract {
         }
         Ok(())
     }
-
-    async fn handle_application_call(
-        &mut self,
-        call: ApplicationCall,
-    ) -> Result<Self::Response, Self::Error> {
-        match call {
-            ApplicationCall::Pledge { owner, amount } => {
-                self.execute_pledge_with_transfer(owner, amount)?
-            }
-            ApplicationCall::Collect => self.collect_pledges()?,
-            ApplicationCall::Cancel => self.cancel_campaign().await?,
-        }
-
-        Ok(())
-    }
 }
 
 impl CrowdFundingContract {
@@ -122,11 +107,11 @@ impl CrowdFundingContract {
         // First, move the funds to the campaign chain (under the same owner).
         // TODO(#589): Simplify this when the messaging system guarantees atomic delivery
         // of all messages created in the same operation/message.
-        let destination = Account { chain_id, owner };
-        let call = fungible::ApplicationCall::Transfer {
+        let target_account = Account { chain_id, owner };
+        let call = fungible::Operation::Transfer {
             owner,
             amount,
-            destination,
+            target_account,
         };
         let fungible_id = self.fungible_id();
         self.runtime
@@ -231,7 +216,7 @@ impl CrowdFundingContract {
         let response = self.runtime.call_application(
             true,
             fungible_id,
-            &fungible::ApplicationCall::Balance { owner },
+            &fungible::Operation::Balance { owner },
         );
         match response {
             fungible::FungibleResponse::Balance(balance) => Ok(balance),
@@ -239,16 +224,16 @@ impl CrowdFundingContract {
         }
     }
 
-    /// Transfers `amount` tokens from the funds in custody to the `destination`.
+    /// Transfers `amount` tokens from the funds in custody to the `owner`'s account.
     fn send_to(&mut self, amount: Amount, owner: AccountOwner) {
-        let destination = Account {
+        let target_account = Account {
             chain_id: self.runtime.chain_id(),
             owner,
         };
-        let transfer = fungible::ApplicationCall::Transfer {
+        let transfer = fungible::Operation::Transfer {
             owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
             amount,
-            destination,
+            target_account,
         };
         let fungible_id = self.fungible_id();
         self.runtime.call_application(true, fungible_id, &transfer);
@@ -256,14 +241,14 @@ impl CrowdFundingContract {
 
     /// Calls into the Fungible Token application to receive tokens from the given account.
     fn receive_from_account(&mut self, owner: AccountOwner, amount: Amount) {
-        let destination = Account {
+        let target_account = Account {
             chain_id: self.runtime.chain_id(),
             owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
         };
-        let transfer = fungible::ApplicationCall::Transfer {
+        let transfer = fungible::Operation::Transfer {
             owner,
             amount,
-            destination,
+            target_account,
         };
         let fungible_id = self.fungible_id();
         self.runtime.call_application(true, fungible_id, &transfer);
@@ -296,10 +281,6 @@ pub enum Error {
     /// Pledge used a token that's not the same as the one in the campaign's [`InitializationArgument`].
     #[error("Pledge uses the incorrect token")]
     IncorrectToken,
-
-    /// Pledge used a destination that's not the same as this campaign's [`ApplicationId`].
-    #[error("Pledge uses the incorrect destination account")]
-    IncorrectDestination,
 
     /// Cross-application call without a source application ID.
     #[error("Applications must identify themselves to perform transfers")]

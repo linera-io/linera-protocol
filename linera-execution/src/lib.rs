@@ -145,7 +145,7 @@ pub trait UserContract {
         &mut self,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<(), ExecutionError>;
+    ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Applies a message originating from a cross-chain message.
     fn execute_message(
@@ -153,16 +153,6 @@ pub trait UserContract {
         context: MessageContext,
         message: Vec<u8>,
     ) -> Result<(), ExecutionError>;
-
-    /// Executes a call from another application.
-    ///
-    /// When an application is executing an operation or a message it may call other applications,
-    /// which can in turn call other applications.
-    fn handle_application_call(
-        &mut self,
-        context: CalleeContext,
-        argument: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Finishes execution of the current transaction.
     fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError>;
@@ -231,10 +221,13 @@ pub struct OperationContext {
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
     pub authenticated_signer: Option<Owner>,
+    /// `None` if this is the transaction entrypoint or the caller doesn't want this particular
+    /// call to be authenticated (e.g. for safety reasons).
+    pub authenticated_caller_id: Option<UserApplicationId>,
     /// The current block height.
     pub height: BlockHeight,
     /// The current index of the operation.
-    pub index: u32,
+    pub index: Option<u32>,
     /// The index of the next message to be created.
     pub next_message_index: u32,
 }
@@ -258,17 +251,6 @@ pub struct MessageContext {
     pub message_id: MessageId,
     /// The index of the next message to be created.
     pub next_message_index: u32,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct CalleeContext {
-    /// The current chain ID.
-    pub chain_id: ChainId,
-    /// The authenticated signer for the execution thread, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// `None` if the caller doesn't want this particular call to be authenticated (e.g.
-    /// for safety reasons).
-    pub authenticated_caller_id: Option<UserApplicationId>,
 }
 
 #[derive(Clone, Copy, Debug)]

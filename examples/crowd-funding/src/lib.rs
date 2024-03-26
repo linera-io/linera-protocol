@@ -292,7 +292,6 @@ impl ContractAbi for CrowdFundingAbi {
     type InitializationArgument = InitializationArgument;
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
     type Operation = Operation;
-    type ApplicationCall = ApplicationCall;
     type Response = ();
 }
 
@@ -341,16 +340,4 @@ pub enum Operation {
 pub enum Message {
     /// Pledge some tokens to the campaign (from an account on the receiver chain).
     PledgeWithAccount { owner: AccountOwner, amount: Amount },
-}
-
-/// A cross-application call. This is meant to mimic operations, except triggered by another contract.
-#[derive(Debug, Deserialize, Serialize)]
-#[allow(clippy::large_enum_variant)]
-pub enum ApplicationCall {
-    /// Pledge some tokens to the campaign (from an account on the current chain).
-    Pledge { owner: AccountOwner, amount: Amount },
-    /// Collect the pledges after the campaign has reached its target (campaign chain only).
-    Collect,
-    /// Cancel the campaign and refund all pledges after the campaign has reached its deadline (campaign chain only).
-    Cancel,
 }
