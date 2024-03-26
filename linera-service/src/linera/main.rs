@@ -30,7 +30,7 @@ use linera_core::{
     local_node::LocalNodeClient,
     node::LocalValidatorNodeProvider,
     notifier::Notifier,
-    worker::WorkerState,
+    worker::{Reason, WorkerState},
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
@@ -752,12 +752,15 @@ impl Runnable for Job {
                 info!("Watching for notifications for chain {:?}", chain_id);
                 let (_listen_handle, mut notifications) = chain_client.listen().await?;
                 while let Some(notification) = notifications.next().await {
+                    if let Reason::NewBlock { .. } = notification.reason {
+                        let mut guard = chain_client.lock().await;
+                        context.update_and_save_wallet(&mut *guard).await;
+                    }
                     if raw {
                         println!("{}", serde_json::to_string(&notification)?);
                     }
                 }
                 info!("Notification stream ended.");
-                // Not saving the wallet because `listen()` does not create blocks.
             }
 
             Service { config, port } => {
