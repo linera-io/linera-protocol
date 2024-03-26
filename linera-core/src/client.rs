@@ -1543,18 +1543,24 @@ where
             .map_or(false, |proposal| {
                 proposal.content.round == manager.current_round && proposal.content.block != *block
             });
-        let round = if conflicting_proposal {
-            manager
-                .ownership
-                .next_round(manager.current_round)
-                .filter(|_| manager.current_round.is_multi_leader())
-                .ok_or_else(|| {
-                    ChainClientError::BlockProposalError(
-                        "Conflicting proposal in the current round",
-                    )
-                })?
-        } else {
+        let round = if !conflicting_proposal {
             manager.current_round
+        } else if let Some(round) = manager
+            .ownership
+            .next_round(manager.current_round)
+            .filter(|_| manager.current_round.is_multi_leader())
+        {
+            round
+        } else if let Some(timestamp) = manager.round_timeout {
+            return Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
+                timestamp,
+                current_round: manager.current_round,
+                next_block_height: info.next_block_height,
+            }));
+        } else {
+            return Err(ChainClientError::BlockProposalError(
+                "Conflicting proposal in the current round.",
+            ));
         };
         let can_propose = match round {
             Round::Fast => manager.ownership.super_owners.contains_key(&identity),
