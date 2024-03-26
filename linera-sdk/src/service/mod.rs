@@ -60,12 +60,6 @@ macro_rules! service {
 
         #[doc(hidden)]
         #[no_mangle]
-        fn __contract_handle_application_call(_: Vec<u8>) -> Result<Vec<u8>, String> {
-            unreachable!("Contract entrypoint should not be called in service");
-        }
-
-        #[doc(hidden)]
-        #[no_mangle]
         fn __contract_finalize() -> Result<(), String> {
             unreachable!("Contract entrypoint should not be called in service");
         }

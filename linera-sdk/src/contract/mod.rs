@@ -79,27 +79,6 @@ macro_rules! contract {
 
         #[doc(hidden)]
         #[no_mangle]
-        fn __contract_handle_application_call(argument: Vec<u8>) -> Result<Vec<u8>, String> {
-            use $crate::util::BlockingWait;
-            $crate::contract::run_async_entrypoint::<$application, _, _, _>(
-                unsafe { &mut APPLICATION },
-                move |application| {
-                    let argument: <$application as $crate::abi::ContractAbi>::ApplicationCall =
-                        bcs::from_bytes(&argument)?;
-
-                    application
-                        .handle_application_call(argument)
-                        .blocking_wait()
-                        .map(|response| {
-                            bcs::to_bytes(&response)
-                                .expect("Failed to serialize `ApplicationCallOutcome`'s `Response`")
-                        })
-                },
-            )
-        }
-
-        #[doc(hidden)]
-        #[no_mangle]
         fn __contract_finalize() -> Result<(), String> {
             use $crate::util::BlockingWait;
             $crate::contract::run_async_entrypoint::<$application, _, _, _>(
@@ -153,6 +132,5 @@ extern "Rust" {
     fn __contract_initialize(argument: Vec<u8>) -> Result<(), String>;
     fn __contract_execute_operation(argument: Vec<u8>) -> Result<Vec<u8>, String>;
     fn __contract_execute_message(message: Vec<u8>) -> Result<(), String>;
-    fn __contract_handle_application_call(argument: Vec<u8>) -> Result<Vec<u8>, String>;
     fn __contract_finalize() -> Result<(), String>;
 }
