@@ -1,6 +1,6 @@
 [package]
 name = "linera-sdk-wasm-tests"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
