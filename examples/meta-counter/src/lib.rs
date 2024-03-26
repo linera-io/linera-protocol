@@ -17,7 +17,6 @@ impl ContractAbi for MetaCounterAbi {
     type InitializationArgument = ();
     type Parameters = ApplicationId<counter::CounterAbi>;
     type Operation = Operation;
-    type ApplicationCall = ();
     type Response = ();
 }
 

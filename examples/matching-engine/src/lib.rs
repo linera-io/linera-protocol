@@ -283,7 +283,6 @@ impl ContractAbi for MatchingEngineAbi {
     type InitializationArgument = ();
     type Parameters = Parameters;
     type Operation = Operation;
-    type ApplicationCall = ApplicationCall;
     type Response = ();
 }
 
@@ -456,13 +455,6 @@ pub enum Operation {
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Message {
     /// The order being transmitted from the chain and received by the chain of the order book.
-    ExecuteOrder { order: Order },
-}
-
-/// Arguments for an application call to the matching engine by another application.
-#[derive(Debug, Deserialize, Serialize)]
-pub enum ApplicationCall {
-    /// The order from the application
     ExecuteOrder { order: Order },
 }
 

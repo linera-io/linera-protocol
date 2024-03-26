@@ -179,7 +179,6 @@ pub struct NonFungibleTokenAbi;
 impl ContractAbi for NonFungibleTokenAbi {
     type InitializationArgument = ();
     type Parameters = ();
-    type ApplicationCall = Operation;
     type Operation = Operation;
     type Response = ();
 }

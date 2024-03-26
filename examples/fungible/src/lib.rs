@@ -246,7 +246,6 @@ pub struct FungibleTokenAbi;
 impl ContractAbi for FungibleTokenAbi {
     type InitializationArgument = InitialState;
     type Parameters = Parameters;
-    type ApplicationCall = Operation;
     type Operation = Operation;
     type Response = FungibleResponse;
 }

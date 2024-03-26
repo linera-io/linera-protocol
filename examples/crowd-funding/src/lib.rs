@@ -292,7 +292,6 @@ impl ContractAbi for CrowdFundingAbi {
     type InitializationArgument = InitializationArgument;
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
     type Operation = Operation;
-    type ApplicationCall = Operation;
     type Response = ();
 }
 

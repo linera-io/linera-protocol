@@ -388,7 +388,6 @@ impl ContractAbi for Abi {
     type Parameters = Vec<u8>;
     type InitializationArgument = Vec<u8>;
     type Operation = Vec<u8>;
-    type ApplicationCall = Vec<u8>;
     type Response = Vec<u8>;
 }
 
