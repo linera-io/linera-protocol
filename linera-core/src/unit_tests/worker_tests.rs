@@ -1783,7 +1783,7 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap();
-    assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get(),);
+    assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get());
     assert_eq!(
         BlockHeight::from(1),
         chain.tip_state.get().next_block_height

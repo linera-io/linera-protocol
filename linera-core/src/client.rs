@@ -749,7 +749,7 @@ where
                 }
             }
             // The certificate is not as expected. Give up.
-            tracing::warn!("Failed to process network blob",);
+            tracing::warn!("Failed to process network blob");
             return Err(err.into());
         }
         // Make sure a quorum of validators (according to our new local committee) are up-to-date

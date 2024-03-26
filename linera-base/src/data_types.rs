@@ -622,7 +622,7 @@ mod tests {
             Amount(10_000_000_000_000_000_000),
             Amount::from_str("10").unwrap()
         );
-        assert_eq!("10.", Amount(10_000_000_000_000_000_000).to_string(),);
+        assert_eq!("10.", Amount(10_000_000_000_000_000_000).to_string());
         assert_eq!(
             "1001.3",
             (Amount::from_str("1.1")

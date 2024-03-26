@@ -451,7 +451,7 @@ pub mod tests {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
             insta::assert_snapshot!(
-                format!("test_generate_hash_view_code_{}", context.name,),
+                format!("test_generate_hash_view_code_{}", context.name),
                 pretty(generate_hash_view_code(input))
             );
         }
