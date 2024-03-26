@@ -131,18 +131,10 @@ where
             entry.insert(client.clone());
             client
         };
-        let _listen_handle = client.listen().await?;
-        let mut local_stream = {
-            let mut guard = client.lock().await;
-            let stream = guard.subscribe().await?;
-            // Process the inbox: For messages that are already there we won't receive a
-            // notification.
-            guard.synchronize_from_validators().await?;
-            if let Err(error) = guard.process_inbox_if_owned().await {
-                warn!(%error, "Failed to process inbox after starting stream.");
-            }
-            stream
-        };
+        let (_listen_handle, mut local_stream) = client.listen().await?;
+        if let Err(error) = client.lock().await.process_inbox_if_owned().await {
+            warn!(%error, "Failed to process inbox after starting stream.");
+        }
         while let Some(notification) = local_stream.next().await {
             info!("Received new notification: {:?}", notification);
             if config.delay_before_ms > 0 {

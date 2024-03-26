@@ -1502,10 +1502,24 @@ where
         if let Some(certificate) = &manager.requested_locked {
             if certificate.round == manager.current_round {
                 let committee = self.local_committee().await?;
-                let certificate = self
-                    .finalize_block(&committee, *certificate.clone())
-                    .await?;
-                return Ok(ClientOutcome::Committed(Some(certificate)));
+                match self.finalize_block(&committee, *certificate.clone()).await {
+                    Ok(certificate) => return Ok(ClientOutcome::Committed(Some(certificate))),
+                    Err(ChainClientError::CommunicationError(_)) => {
+                        // Communication errors in this case often mean that someone else already
+                        // finalized the block.
+                        let timestamp = manager.round_timeout.ok_or_else(|| {
+                            ChainClientError::BlockProposalError(
+                                "Cannot propose in the current round.",
+                            )
+                        })?;
+                        return Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
+                            timestamp,
+                            current_round: manager.current_round,
+                            next_block_height: info.next_block_height,
+                        }));
+                    }
+                    Err(error) => return Err(error),
+                }
             }
         }
         // The block we want to propose is either the highest validated, or our pending one.
@@ -1529,18 +1543,24 @@ where
             .map_or(false, |proposal| {
                 proposal.content.round == manager.current_round && proposal.content.block != *block
             });
-        let round = if conflicting_proposal {
-            manager
-                .ownership
-                .next_round(manager.current_round)
-                .filter(|_| manager.current_round.is_multi_leader())
-                .ok_or_else(|| {
-                    ChainClientError::BlockProposalError(
-                        "Conflicting proposal in the current round",
-                    )
-                })?
-        } else {
+        let round = if !conflicting_proposal {
             manager.current_round
+        } else if let Some(round) = manager
+            .ownership
+            .next_round(manager.current_round)
+            .filter(|_| manager.current_round.is_multi_leader())
+        {
+            round
+        } else if let Some(timestamp) = manager.round_timeout {
+            return Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
+                timestamp,
+                current_round: manager.current_round,
+                next_block_height: info.next_block_height,
+            }));
+        } else {
+            return Err(ChainClientError::BlockProposalError(
+                "Conflicting proposal in the current round.",
+            ));
         };
         let can_propose = match round {
             Round::Fast => manager.ownership.super_owners.contains_key(&identity),
@@ -2125,22 +2145,28 @@ where
 
     /// Spawns a task that listens to notifications about the current chain from all validators,
     /// and synchronizes the local state accordingly.
-    pub async fn listen(&self) -> Result<AbortOnDrop, ChainClientError>
+    pub async fn listen(&self) -> Result<(AbortOnDrop, NotificationStream), ChainClientError>
     where
         P: Send + 'static,
     {
         let mut senders = HashMap::new(); // Senders to cancel notification streams.
-        let notifications = self.lock().await.subscribe().await?;
+        let mut guard = self.lock().await;
+        let notifications = guard.subscribe().await?;
+        let notifications2 = guard.subscribe().await?;
+        if let Err(error) = guard.synchronize_from_validators().await {
+            error!("Failed to synchronize from validators: {}", error);
+        }
+        drop(guard);
         let (mut notifications, abort) = stream::abortable(notifications);
-        if let Err(err) = self.update_streams(&mut senders).await {
-            error!("Failed to update committee: {}", err);
+        if let Err(error) = self.update_streams(&mut senders).await {
+            error!("Failed to update committee: {}", error);
         }
         let this = self.clone();
         tokio::spawn(async move {
             while let Some(notification) = notifications.next().await {
                 if matches!(notification.reason, Reason::NewBlock { .. }) {
-                    if let Err(err) = this.update_streams(&mut senders).await {
-                        error!("Failed to update committee: {}", err);
+                    if let Err(error) = this.update_streams(&mut senders).await {
+                        error!("Failed to update committee: {}", error);
                     }
                 }
             }
@@ -2148,7 +2174,7 @@ where
                 abort.abort();
             }
         });
-        Ok(AbortOnDrop(abort))
+        Ok((AbortOnDrop(abort), notifications2))
     }
 
     async fn update_streams(
