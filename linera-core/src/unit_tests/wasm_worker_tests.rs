@@ -435,7 +435,7 @@ where
         authenticated_signer: None,
         authenticated_caller_id: None,
         height: run_block.height,
-        index: 0,
+        index: Some(0),
         next_message_index: 0,
     };
     let mut controller = ResourceController::default();

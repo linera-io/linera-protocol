@@ -237,7 +237,7 @@ pub struct OperationContext {
     /// The current block height.
     pub height: BlockHeight,
     /// The current index of the operation.
-    pub index: u32,
+    pub index: Option<u32>,
     /// The index of the next message to be created.
     pub next_message_index: u32,
 }

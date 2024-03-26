@@ -32,7 +32,7 @@ fn make_operation_context() -> OperationContext {
     OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
-        index: 0,
+        index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
         next_message_index: 0,

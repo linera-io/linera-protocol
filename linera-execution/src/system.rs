@@ -622,7 +622,9 @@ where
                     grant: Amount::ZERO,
                     kind: MessageKind::Protected,
                     message: SystemMessage::BytecodePublished {
-                        operation_index: context.index,
+                        operation_index: context
+                            .index
+                            .expect("System application can not be called by other applications"),
                     },
                 };
                 outcome.messages.push(message);
@@ -1048,7 +1050,7 @@ mod tests {
             authenticated_signer: None,
             authenticated_caller_id: None,
             height: BlockHeight::from(7),
-            index: 2,
+            index: Some(2),
             next_message_index: 3,
         };
         let state = SystemExecutionState {
@@ -1075,7 +1077,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(new_application, None);
-        let operation_index = context.index;
+        let operation_index = context
+            .index
+            .expect("Missing operation index in dummy context");
         assert_eq!(
             result.messages[PUBLISH_BYTECODE_MESSAGE_INDEX as usize].message,
             SystemMessage::BytecodePublished { operation_index }

@@ -809,7 +809,7 @@ where
             let context = OperationContext {
                 chain_id,
                 height: block.height,
-                index,
+                index: Some(index),
                 authenticated_signer: block.authenticated_signer,
                 authenticated_caller_id: None,
                 next_message_index,

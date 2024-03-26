@@ -61,7 +61,7 @@ where
             authenticated_signer: None,
             authenticated_caller_id: None,
             height: application_description.creation.height,
-            index: application_description.creation.index,
+            index: Some(application_description.creation.index),
             next_message_index: 0,
         };
 
