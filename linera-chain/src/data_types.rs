@@ -767,16 +767,18 @@ impl HashedValue {
         }
     }
 
-    pub fn into_confirmed(self) -> Option<HashedValue> {
-        match self.value {
-            value @ CertificateValue::ConfirmedBlock { .. } => Some(HashedValue {
-                hash: self.hash,
-                value,
-            }),
-            CertificateValue::ValidatedBlock { executed_block } => {
-                Some(CertificateValue::ConfirmedBlock { executed_block }.into())
+    /// Returns the corresponding `ConfirmedBlock`, if this is a `ValidatedBlock`.
+    pub fn validated_to_confirmed(&self) -> Option<HashedValue> {
+        match &self.value {
+            CertificateValue::ValidatedBlock { executed_block } => Some(
+                CertificateValue::ConfirmedBlock {
+                    executed_block: executed_block.clone(),
+                }
+                .into(),
+            ),
+            CertificateValue::ConfirmedBlock { .. } | CertificateValue::LeaderTimeout { .. } => {
+                None
             }
-            CertificateValue::LeaderTimeout { .. } => None,
         }
     }
 
