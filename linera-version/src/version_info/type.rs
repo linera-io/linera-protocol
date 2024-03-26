@@ -158,12 +158,12 @@ fn get_package_root<'r>(
 
 impl VersionInfo {
     pub fn get() -> Result<Self, Error> {
-        Self::trace_get(&mut vec![])
+        Self::trace_get(&std::env::current_dir()?, &mut vec![])
     }
 
-    fn trace_get(paths: &mut Vec<PathBuf>) -> Result<Self, Error> {
+    fn trace_get(crate_dir: &std::path::Path, paths: &mut Vec<PathBuf>) -> Result<Self, Error> {
         let metadata = cargo_metadata::MetadataCommand::new()
-            .current_dir(env!("PWD"))
+            .current_dir(crate_dir)
             .exec()?;
 
         let crate_version = Pretty::new(
