@@ -64,6 +64,7 @@ async fn test_reads_scylla_db() {
 #[cfg(with_indexeddb)]
 #[wasm_bindgen_test]
 async fn test_reads_indexed_db() {
+    console_error_panic_hook::set_once();
     for scenario in get_random_test_scenarios() {
         let key_value_store = linera_views::indexed_db::create_indexed_db_test_store().await;
         run_reads(key_value_store, scenario).await;
@@ -134,6 +135,7 @@ async fn test_scylla_db_writes_from_blank() {
 #[cfg(with_indexeddb)]
 #[wasm_bindgen_test]
 async fn test_indexed_db_writes_from_blank() {
+    console_error_panic_hook::set_once();
     let key_value_store = linera_views::indexed_db::create_indexed_db_test_store().await;
     run_writes_from_blank(&key_value_store).await;
 }
@@ -199,6 +201,7 @@ async fn test_rocks_db_big_write_read() {
 #[cfg(with_indexeddb)]
 #[wasm_bindgen_test]
 async fn test_indexed_db_big_write_read() {
+    console_error_panic_hook::set_once();
     let key_value_store = linera_views::indexed_db::create_indexed_db_test_store().await;
     let value_sizes = vec![100, 1000, 200000, 5000000];
     let target_size = 20000000;
@@ -230,6 +233,7 @@ async fn test_rocks_db_writes_from_state() {
 #[cfg(with_indexeddb)]
 #[wasm_bindgen_test]
 async fn test_indexed_db_writes_from_state() {
+    console_error_panic_hook::set_once();
     let key_value_store = linera_views::indexed_db::create_indexed_db_test_store().await;
     run_writes_from_state(&key_value_store).await;
 }

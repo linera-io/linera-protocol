@@ -3615,6 +3615,7 @@ dependencies = [
  "aws-smithy-types",
  "bcs",
  "cfg_aliases",
+ "console_error_panic_hook",
  "convert_case 0.6.0",
  "futures",
  "generic-array",
@@ -3640,6 +3641,7 @@ dependencies = [
  "trait-variant",
  "wasm-bindgen",
  "wasm-bindgen-test",
+ "web-sys",
 ]
 
 [[package]]

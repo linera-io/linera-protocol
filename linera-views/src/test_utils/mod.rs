@@ -452,7 +452,7 @@ pub async fn run_test_batch_from_blank<C: LocalKeyValueStore>(
     batch: Batch,
 ) {
     let kv_state = realize_batch(&batch);
-    key_value_store.write_batch(batch, &[]).await.unwrap();
+    key_value_store.write_batch(batch.clone(), &[]).await.unwrap();
     // Checking the consistency
     let key_values = read_key_values_prefix(key_value_store, &key_prefix).await;
     assert_eq!(key_values, kv_state);

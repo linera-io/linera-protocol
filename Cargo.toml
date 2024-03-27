@@ -137,6 +137,7 @@ wasmer-vm = { version = "=3.1.1" }
 wasmparser = "0.101.1"
 wasmtime = "1.0"
 webassembly-test = "0.1.0"
+web-sys = "0.3.69"
 wit-bindgen-guest-rust = { version = "0.2.0", package = "linera-wit-bindgen-guest-rust" }
 wit-bindgen-host-wasmer-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmer-rust" }
 wit-bindgen-host-wasmtime-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmtime-rust" }

@@ -3,15 +3,17 @@
 
 use std::{collections::BTreeMap, fmt::Debug};
 
-use indexed_db_futures::{js_sys, prelude::*, web_sys};
+use indexed_db_futures::{js_sys, web_sys, prelude::*};
 use thiserror::Error;
 
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
+        get_upper_bound_option,
         CommonStoreConfig, ContextFromStore, LocalAdminKeyValueStore, LocalKeyValueStore,
         LocalReadableKeyValueStore, LocalWritableKeyValueStore,
     },
+    test_utils::generate_test_namespace,
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
 };
@@ -65,29 +67,9 @@ impl IndexedDbStore {
     }
 }
 
-// base-256 increment
-fn increment(key: &[u8]) -> Option<Vec<u8>> {
-    if key.is_empty() {
-        None
-    } else {
-        let mut successor = Vec::with_capacity(key.len() + 1);
-
-        if let Some(i) = key.iter().rposition(|&x| x != u8::MAX) {
-            successor.extend_from_slice(&key[..=i]);
-            successor.resize(key.len(), 0);
-            successor[i] += 1;
-        } else {
-            successor.resize(key.len() + 1, 0);
-            successor[0] = 1;
-        }
-
-        Some(successor)
-    }
-}
-
 fn prefix_to_range(prefix: &[u8]) -> Result<web_sys::IdbKeyRange, wasm_bindgen::JsValue> {
     let lower = js_sys::Uint8Array::from(prefix);
-    if let Some(upper) = increment(prefix) {
+    if let Some(upper) = get_upper_bound_option(prefix) {
         let upper = js_sys::Uint8Array::from(&upper[..]);
         web_sys::IdbKeyRange::bound_with_lower_open_and_upper_open(
             &lower.into(),
@@ -142,7 +124,10 @@ impl LocalReadableKeyValueStore<IndexedDbContextError> for IndexedDbStore {
             .with_object_store(|o| o.get_all_keys_with_key(&range))??
             .await?
             .into_iter()
-            .map(|key| js_sys::Uint8Array::new(&key).to_vec())
+            .map(|key| {
+                let key = js_sys::Uint8Array::new(&key);
+                key.subarray(key_prefix.len() as u32, key.length()).to_vec()
+            })
             .collect())
     }
 
@@ -158,12 +143,17 @@ impl LocalReadableKeyValueStore<IndexedDbContextError> for IndexedDbStore {
             return Ok(key_values);
         };
 
-        while let Some(key) = cursor.primary_key() {
+        loop {
+            let Some(key) = cursor.primary_key()
+                else { break; };
+            let key = js_sys::Uint8Array::new(&key);
             key_values.push((
-                js_sys::Uint8Array::new(&key).to_vec(),
+                key.subarray(key_prefix.len() as u32, key.length()).to_vec(),
                 js_sys::Uint8Array::new(&cursor.value()).to_vec(),
             ));
-            cursor.continue_cursor()?.await?;
+            if !cursor.continue_cursor()?.await? {
+                break;
+            }
         }
 
         Ok(key_values)
@@ -178,14 +168,14 @@ impl LocalWritableKeyValueStore<IndexedDbContextError> for IndexedDbStore {
         batch: Batch,
         _base_key: &[u8],
     ) -> Result<(), IndexedDbContextError> {
-        let transaction = self.database.transaction_on_one(&self.object_store_name)?;
+        let transaction = self.database.transaction_on_one_with_mode(&self.object_store_name, IdbTransactionMode::Readwrite)?;
         let object_store = transaction.object_store(&self.object_store_name)?;
 
         for ent in batch.operations {
             match ent {
                 WriteOperation::Put { key, value } => {
                     object_store
-                        .add_key_val_owned(
+                        .put_key_val_owned(
                             js_sys::Uint8Array::from(&key[..]),
                             &js_sys::Uint8Array::from(&value[..]),
                         )?
@@ -223,9 +213,24 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Self, IndexedDbContextError> {
+        let namespace = namespace.to_string();
+        let object_store_name = namespace.clone();
+        let mut database = IdbDatabase::open(DATABASE_NAME)?.await?;
+
+        if !database.object_store_names().any(|n| n == namespace) {
+            let version = database.version();
+            database.close();
+            let mut db_req = IdbDatabase::open_f64(DATABASE_NAME, version + 1.0)?;
+            db_req.set_on_upgrade_needed(Some(move |event: &IdbVersionChangeEvent| {
+                event.db().create_object_store(&namespace)?;
+                Ok(())
+            }));
+            database = db_req.await?;
+        }
+
         Ok(IndexedDbStore {
-            database: IdbDatabase::open_u32(DATABASE_NAME, 1)?.await?,
-            object_store_name: namespace.to_string(),
+            database,
+            object_store_name,
             max_stream_queries: config.common_config.max_stream_queries,
         })
     }
@@ -296,9 +301,8 @@ pub async fn create_indexed_db_store_stream_queries(max_stream_queries: usize) -
         cache_size: 1000,
     };
     let config = IndexedDbStoreConfig { common_config };
-    let namespace = "linera";
-    IndexedDbStore::create(&config, namespace).await.unwrap();
-    IndexedDbStore::connect(&config, namespace)
+    let namespace = generate_test_namespace();
+    IndexedDbStore::connect(&config, &namespace)
         .await
         .unwrap()
 }
