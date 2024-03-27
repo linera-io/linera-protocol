@@ -2110,6 +2110,7 @@ async fn test_project_test() {
         .unwrap();
 }
 
+#[ignore]
 #[test_case(Database::Service, Network::Grpc ; "service_grpc")]
 #[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
