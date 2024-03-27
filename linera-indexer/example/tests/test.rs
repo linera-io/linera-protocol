@@ -91,7 +91,7 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client) = config.instantiate().await.unwrap();
-    let mut node_service = client.run_node_service(None).await.unwrap();
+    let mut node_service = client.run_node_service(8080).await.unwrap();
     let mut indexer = run_indexer(&client.path_provider).await;
 
     // check operations plugin

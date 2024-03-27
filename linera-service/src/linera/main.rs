@@ -42,7 +42,7 @@ use linera_service::{
     cli_wrappers::{
         self,
         local_net::{
-            Database, LocalNetConfig, PathProvider, ShiftPortChoice, StorageConfigBuilder,
+            Database, LocalNetConfig, PathProvider, IndexPortChoice, StorageConfigBuilder,
         },
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
@@ -1517,7 +1517,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                     let storage_config_builder =
                         StorageConfigBuilder::ExistingConfig { storage_config };
                     let path_provider = PathProvider::new(path);
-                    let shift_port_choice = ShiftPortChoice::ShiftPort { shift_port: 0 };
+                    let index_port_choice = IndexPortChoice::IndexPort { index: 0 };
                     let config = LocalNetConfig {
                         network: Network::Grpc,
                         database: Database::RocksDb,
@@ -1530,7 +1530,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                         policy: ResourceControlPolicy::default(),
                         storage_config_builder,
                         path_provider,
-                        shift_port_choice,
+                        index_port_choice,
                     };
                     let (mut net, client1) = config.instantiate().await?;
                     let result = Ok(net_up(extra_wallets, &mut net, client1).await?);

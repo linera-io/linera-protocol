@@ -146,11 +146,11 @@ where
 #[cfg(any(test, feature = "test"))]
 struct PortShifts {
     semaphore_ports: Arc<Semaphore>,
-    shift_port: Arc<RwLock<usize>>,
+    index: Arc<RwLock<usize>>,
 }
 
 /// The guard for the shift in ports.
-struct ShiftPortGuard {
+struct IndexPortGuard {
     _semaphore_guard: OwnedSemaphorePermit,
 }
 
@@ -158,20 +158,20 @@ struct ShiftPortGuard {
 impl PortShifts {
     pub fn new(n_ports: usize) -> Self {
         let semaphore_ports = Arc::new(Semaphore::new(n_ports));
-        let shift_port = Arc::new(RwLock::new(0));
+        let index = Arc::new(RwLock::new(0));
         Self {
             semaphore_ports,
-            shift_port,
+            index,
         }
     }
 
-    pub async fn get_guard(&self) -> (Option<ShiftPortGuard>, usize) {
+    pub async fn get_guard(&self) -> (Option<IndexPortGuard>, usize) {
         let semaphore_guard = self.semaphore_ports.clone().acquire_owned().await.unwrap();
-        let mut shift_port = self.shift_port.write().await;
-        let ret_val = (*shift_port) * SHIFT_PORT;
-        *shift_port += 1;
+        let mut index = self.index.write().await;
+        let ret_val = *index;
+        *index += 1;
         (
-            Some(ShiftPortGuard {
+            Some(IndexPortGuard {
                 _semaphore_guard: semaphore_guard,
             }),
             ret_val,
@@ -182,6 +182,9 @@ impl PortShifts {
 /// The number of simultaneous sets of validators
 #[cfg(any(test, feature = "test"))]
 const N_SIMULTANEOUS_VALIDATOR: usize = 2;
+
+/// The maximal number of shards used for local_net
+static MAX_N_CLIENT: usize = 3;
 
 /// The maximal number of shards used for local_net
 static MAX_N_SHARD: usize = 9;
@@ -205,11 +208,11 @@ static FUNCTIONAL_SHIFT_PORT: usize = MAX_N_TEST * SHIFT_PORT;
 
 // A static data to store the validator shift of ports.
 #[cfg(any(test, feature = "test"))]
-static LOCAL_SHIFT_PORT: Lazy<PortShifts> = Lazy::new(|| PortShifts::new(N_SIMULTANEOUS_VALIDATOR));
+static LOCAL_INDEX_PORT: Lazy<PortShifts> = Lazy::new(|| PortShifts::new(N_SIMULTANEOUS_VALIDATOR));
 
-pub enum ShiftPortChoice {
-    ShiftPort {
-        shift_port: usize,
+pub enum IndexPortChoice {
+    IndexPort {
+        index: usize,
     },
     #[cfg(any(test, feature = "test"))]
     ExternalControl,
@@ -321,7 +324,7 @@ pub struct LocalNetConfig {
     pub policy: ResourceControlPolicy,
     pub storage_config_builder: StorageConfigBuilder,
     pub path_provider: PathProvider,
-    pub shift_port_choice: ShiftPortChoice,
+    pub index_port_choice: IndexPortChoice,
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -338,8 +341,8 @@ pub struct LocalNet {
     set_init: HashSet<(usize, usize)>,
     storage_config: StorageConfig,
     path_provider: PathProvider,
-    shift_port: usize,
-    _guard: Option<ShiftPortGuard>,
+    index_port: usize,
+    _guard: Option<IndexPortGuard>,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -415,7 +418,7 @@ impl LocalNetConfig {
         };
         let storage_config_builder = StorageConfigBuilder::TestConfig { database };
         let path_provider = PathProvider::create_temporary_directory().unwrap();
-        let shift_port_choice = ShiftPortChoice::ExternalControl;
+        let index_port_choice = IndexPortChoice::ExternalControl;
         Self {
             database,
             network,
@@ -428,7 +431,7 @@ impl LocalNetConfig {
             num_shards,
             storage_config_builder,
             path_provider,
-            shift_port_choice,
+            index_port_choice,
         }
     }
 }
@@ -451,10 +454,10 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_shards == 1 || self.database != Database::RocksDb,
             "Multiple shards not supported with RocksDB"
         );
-        let (guard, shift_port) = match self.shift_port_choice {
-            ShiftPortChoice::ShiftPort { shift_port } => (None, shift_port),
+        let (guard, index_port) = match self.index_port_choice {
+            IndexPortChoice::IndexPort { index } => (None, index),
             #[cfg(any(test, feature = "test"))]
-            ShiftPortChoice::ExternalControl => LOCAL_SHIFT_PORT.get_guard().await,
+            IndexPortChoice::ExternalControl => LOCAL_INDEX_PORT.get_guard().await,
         };
         //        println!("instanstiate shift_port={}", shift_port);
         //        println!("SHIFT_PORT={}", SHIFT_PORT);
@@ -468,7 +471,7 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_shards,
             server_config,
             self.path_provider,
-            shift_port,
+            index_port,
             guard,
         )?;
         let client = net.make_client().await;
@@ -504,11 +507,13 @@ impl LineraNet for LocalNet {
     }
 
     async fn make_client(&mut self) -> ClientWrapper {
-        let client = ClientWrapper::new(
+        let shift_port = self.index_port * MAX_N_CLIENT;
+        let client = ClientWrapper::new_with_shift(
             self.path_provider.clone(),
             self.network,
             self.testing_prng_seed,
             self.next_client_id,
+            shift_port,
         );
         if let Some(seed) = self.testing_prng_seed {
             self.testing_prng_seed = Some(seed + 1);
@@ -536,10 +541,10 @@ impl LocalNet {
         num_shards: usize,
         storage_config: StorageConfig,
         path_provider: PathProvider,
-        shift_port: usize,
-        guard: Option<ShiftPortGuard>,
+        index_port: usize,
+        guard: Option<IndexPortGuard>,
     ) -> Result<Self> {
-        //        println!("LocalNet shift_port={:?}", shift_port);
+        //        println!("LocalNet index_port={:?}", index_port);
         Ok(Self {
             database,
             network,
@@ -553,7 +558,7 @@ impl LocalNet {
             set_init: HashSet::new(),
             storage_config,
             path_provider,
-            shift_port,
+            index_port,
             _guard: guard,
         })
     }
@@ -566,7 +571,7 @@ impl LocalNet {
     }
 
     pub fn proxy_port(&self, validator: usize) -> usize {
-        let port = BASIC_PORT + self.shift_port + validator * (MAX_N_SHARD + 1);
+        let port = BASIC_PORT + self.index_port * SHIFT_PORT + validator * (MAX_N_SHARD + 1);
         //        println!(
         //            "Self::proxy_port shift_port={} validator={} port={}",
         //           self.shift_port, validator, port
@@ -575,7 +580,7 @@ impl LocalNet {
     }
 
     fn shard_port(&self, validator: usize, shard: usize) -> usize {
-        let port = BASIC_PORT + self.shift_port + validator * (MAX_N_SHARD + 1) + shard + 1;
+        let port = BASIC_PORT + self.index_port * SHIFT_PORT + validator * (MAX_N_SHARD + 1) + shard + 1;
         //        println!(
         //            "Self::shard_port shift_port={} validator={} shard={} port={}",
         //            self.shift_port, validator, shard, port
@@ -585,7 +590,7 @@ impl LocalNet {
 
     fn internal_port(&self, validator: usize) -> usize {
         let port =
-            BASIC_PORT + FUNCTIONAL_SHIFT_PORT + self.shift_port + validator * (MAX_N_SHARD + 1);
+            BASIC_PORT + FUNCTIONAL_SHIFT_PORT + self.index_port * SHIFT_PORT + validator * (MAX_N_SHARD + 1);
         //        println!(
         //            "Self::internal_port shift_port={} validator={} port={}",
         //            self.shift_port, validator, port
@@ -596,7 +601,7 @@ impl LocalNet {
     fn proxy_metrics_port(&self, validator: usize) -> usize {
         let port = BASIC_PORT
             + 2 * FUNCTIONAL_SHIFT_PORT
-            + self.shift_port
+            + self.index_port * SHIFT_PORT
             + validator * (MAX_N_SHARD + 1);
         //        println!(
         //            "Self::proxy_metrics_port shift_port={} validator={} port={}",
@@ -608,7 +613,7 @@ impl LocalNet {
     fn shard_metrics_port(&self, validator: usize, shard: usize) -> usize {
         let port = BASIC_PORT
             + 2 * FUNCTIONAL_SHIFT_PORT
-            + self.shift_port
+            + self.index_port * SHIFT_PORT
             + validator * (MAX_N_SHARD + 1)
             + shard
             + 1;

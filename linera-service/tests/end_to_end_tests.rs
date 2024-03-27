@@ -294,7 +294,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
         )
         .await
         .unwrap();
-    let mut node_service = client.run_node_service(None).await.unwrap();
+    let mut node_service = client.run_node_service(8080).await.unwrap();
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -341,7 +341,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
         .create_application::<CounterAbi>(&bytecode_id, &(), &original_counter_value, &[], None)
         .await
         .unwrap();
-    let mut node_service = client.run_node_service(None).await.unwrap();
+    let mut node_service = client.run_node_service(8080).await.unwrap();
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -503,8 +503,8 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig, example_nam
         .await
         .unwrap();
 
-    let mut node_service1 = client1.run_node_service(8082).await.unwrap();
-    let mut node_service2 = client2.run_node_service(8083).await.unwrap();
+    let mut node_service1 = client1.run_node_service(8080).await.unwrap();
+    let mut node_service2 = client2.run_node_service(8081).await.unwrap();
 
     let app1 = FungibleApp(
         node_service1
@@ -657,7 +657,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         .await
         .unwrap();
 
-    let mut node_service = client1.run_node_service(8084).await.unwrap();
+    let mut node_service = client1.run_node_service(8080).await.unwrap();
 
     let app1 = FungibleApp(
         node_service
@@ -742,8 +742,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) {
         .await
         .unwrap();
 
-    let mut node_service1 = client1.run_node_service(8085).await.unwrap();
-    let mut node_service2 = client2.run_node_service(8086).await.unwrap();
+    let mut node_service1 = client1.run_node_service(8080).await.unwrap();
+    let mut node_service2 = client2.run_node_service(8081).await.unwrap();
 
     let app1 = NonFungibleApp(
         node_service1
@@ -1050,8 +1050,8 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
         .await
         .unwrap();
 
-    let mut node_service1 = client1.run_node_service(8087).await.unwrap();
-    let mut node_service2 = client2.run_node_service(8088).await.unwrap();
+    let mut node_service1 = client1.run_node_service(8080).await.unwrap();
+    let mut node_service2 = client2.run_node_service(8081).await.unwrap();
 
     let app_fungible1 = FungibleApp(
         node_service1
@@ -1193,9 +1193,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
         .unwrap();
 
     // Now creating the service and exporting the applications
-    let mut node_service_admin = client_admin.run_node_service(8089).await.unwrap();
-    let mut node_service_a = client_a.run_node_service(8090).await.unwrap();
-    let mut node_service_b = client_b.run_node_service(8091).await.unwrap();
+    let mut node_service_admin = client_admin.run_node_service(8080).await.unwrap();
+    let mut node_service_a = client_a.run_node_service(8081).await.unwrap();
+    let mut node_service_b = client_b.run_node_service(8082).await.unwrap();
 
     node_service_a
         .request_application(&chain_a, &token1)
@@ -1452,9 +1452,9 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     let owner0 = get_fungible_account_owner(&client0);
     let owner1 = get_fungible_account_owner(&client1);
 
-    let mut node_service_admin = client_admin.run_node_service(8092).await.unwrap();
-    let mut node_service0 = client0.run_node_service(8093).await.unwrap();
-    let mut node_service1 = client1.run_node_service(8094).await.unwrap();
+    let mut node_service_admin = client_admin.run_node_service(8080).await.unwrap();
+    let mut node_service0 = client0.run_node_service(8081).await.unwrap();
+    let mut node_service1 = client1.run_node_service(8082).await.unwrap();
 
     // Amounts of token0 that will be owned by each user
     let state_fungible0 = InitialState {
@@ -1776,7 +1776,7 @@ async fn test_wasm_end_to_end_reconfiguration(config: LocalNetConfig) {
         .await
         .unwrap();
     let node_service_2 = match network {
-        Network::Grpc => Some(client_2.run_node_service(8095).await.unwrap()),
+        Network::Grpc => Some(client_2.run_node_service(8080).await.unwrap()),
         Network::Tcp | Network::Udp => None,
     };
 
@@ -1905,7 +1905,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
         .await
         .unwrap();
 
-    let node_service = client.run_node_service(8096).await.unwrap();
+    let node_service = client.run_node_service(8080).await.unwrap();
 
     // Open a new chain with the same public key.
     // The node service should automatically create a client for it internally.
@@ -1994,7 +1994,7 @@ async fn test_wasm_end_to_end_retry_notification_stream(config: LocalNetConfig) 
         .unwrap();
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
-    let mut node_service2 = client2.run_node_service(8097).await.unwrap();
+    let mut node_service2 = client2.run_node_service(8080).await.unwrap();
     let response = node_service2
         .query_node(format!(
             "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
@@ -2137,7 +2137,7 @@ async fn test_project_publish(database: Database, network: Network) {
         .unwrap();
     let chain = client.get_wallet().unwrap().default_chain().unwrap();
 
-    let node_service = client.run_node_service(None).await.unwrap();
+    let node_service = client.run_node_service(8080).await.unwrap();
 
     assert_eq!(
         node_service
@@ -2171,7 +2171,7 @@ async fn test_example_publish(database: Database, network: Network) {
         .unwrap();
     let chain = client.get_wallet().unwrap().default_chain().unwrap();
 
-    let node_service = client.run_node_service(None).await.unwrap();
+    let node_service = client.run_node_service(8080).await.unwrap();
 
     assert_eq!(
         node_service
