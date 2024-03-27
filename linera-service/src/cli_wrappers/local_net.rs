@@ -179,9 +179,9 @@ impl PortShifts {
     }
 }
 
-/// The number of simulatenous sets of validators
+/// The number of simultaneous sets of validators
 #[cfg(any(test, feature = "test"))]
-const N_SIMUTANEOUS_VALIDATOR: usize = 5;
+const N_SIMULTANEOUS_VALIDATOR: usize = 2;
 
 /// The maximal number of shards used for local_net
 static MAX_N_SHARD: usize = 9;
@@ -205,7 +205,7 @@ static FUNCTIONAL_SHIFT_PORT: usize = MAX_N_TEST * SHIFT_PORT;
 
 // A static data to store the validator shift of ports.
 #[cfg(any(test, feature = "test"))]
-static LOCAL_SHIFT_PORT: Lazy<PortShifts> = Lazy::new(|| PortShifts::new(N_SIMUTANEOUS_VALIDATOR));
+static LOCAL_SHIFT_PORT: Lazy<PortShifts> = Lazy::new(|| PortShifts::new(N_SIMULTANEOUS_VALIDATOR));
 
 pub enum ShiftPortChoice {
     ShiftPort {
