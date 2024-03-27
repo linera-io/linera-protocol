@@ -23,10 +23,16 @@ fn main() {
         wit_hash,
     } = {
         let mut paths = vec![];
-        let version_info = VersionInfo::trace_get(&mut paths).unwrap();
+        let version_info = VersionInfo::trace_get(
+            std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap()),
+            &mut paths,
+        )
+        .unwrap();
+
         for path in paths {
             println!("cargo:rerun-if-changed={}", path.display());
         }
+
         version_info
     };
 
