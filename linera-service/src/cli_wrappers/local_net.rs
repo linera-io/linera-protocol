@@ -21,13 +21,14 @@ use linera_views::rocks_db::create_rocks_db_test_path;
 #[cfg(all(feature = "scylladb", with_testing))]
 use linera_views::scylla_db::create_scylla_db_test_uri;
 use tempfile::{tempdir, TempDir};
-use tokio::process::{Child, Command};
+use tokio::{
+    process::{Child, Command},
+    sync::OwnedSemaphorePermit,
+};
 use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
-use tokio::sync::OwnedSemaphorePermit;
 use tracing::{info, warn};
-
 #[cfg(with_testing)]
 use {
     async_lock::RwLock,
@@ -153,10 +154,6 @@ struct ShiftPortGuard {
     _semaphore_guard: OwnedSemaphorePermit,
 }
 
-/// The shift in ports of the system.
-#[cfg(any(test, feature = "test"))]
-static SHIFT_PORT: usize = 10;
-
 #[cfg(any(test, feature = "test"))]
 impl PortShifts {
     pub fn new(n_ports: usize) -> Self {
@@ -185,6 +182,26 @@ impl PortShifts {
 /// The number of simulatenous sets of validators
 #[cfg(any(test, feature = "test"))]
 const N_SIMUTANEOUS_VALIDATOR: usize = 5;
+
+/// The maximal number of shards used for local_net
+static MAX_N_SHARD: usize = 9;
+
+/// The maximal number of shards used for local_net. That constant is used
+/// for the creation of the ports of the metrics and so needs to be used
+/// in non-test contexts.
+static MAX_N_TEST: usize = 30;
+
+/// The maximum number of validators used.
+static MAX_N_VALIDATOR: usize = 10;
+
+/// The shift in ports froom one set of validators to the next
+static SHIFT_PORT: usize = MAX_N_VALIDATOR * (MAX_N_SHARD + 1);
+
+/// The basic port used
+static BASIC_PORT: usize = 9000;
+
+/// The functional shift in ports from validators to metrics to whatever
+static FUNCTIONAL_SHIFT_PORT: usize = MAX_N_TEST * SHIFT_PORT;
 
 // A static data to store the validator shift of ports.
 #[cfg(any(test, feature = "test"))]
@@ -421,6 +438,14 @@ impl LineraNetConfig for LocalNetConfig {
     type Net = LocalNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
+        ensure!(
+            self.num_shards <= MAX_N_SHARD,
+            "The asked number of shards is too high"
+        );
+        ensure!(
+            self.num_initial_validators <= MAX_N_VALIDATOR,
+            "The asked number of validators is too high"
+        );
         let server_config = self.storage_config_builder.build().await;
         ensure!(
             self.num_shards == 1 || self.database != Database::RocksDb,
@@ -431,6 +456,9 @@ impl LineraNetConfig for LocalNetConfig {
             #[cfg(any(test, feature = "test"))]
             ShiftPortChoice::ExternalControl => LOCAL_SHIFT_PORT.get_guard().await,
         };
+        //        println!("instanstiate shift_port={}", shift_port);
+        //        println!("SHIFT_PORT={}", SHIFT_PORT);
+        //        println!("FUNCTIONAL_SHIFT_PORT={}", FUNCTIONAL_SHIFT_PORT);
         let mut net = LocalNet::new(
             self.database,
             self.network,
@@ -512,7 +540,6 @@ impl LocalNet {
         guard: Option<ShiftPortGuard>,
     ) -> Result<Self> {
         //        println!("LocalNet shift_port={:?}", shift_port);
-        info!("LocalNet shift_port={:?}", shift_port);
         Ok(Self {
             database,
             network,
@@ -539,23 +566,57 @@ impl LocalNet {
     }
 
     pub fn proxy_port(&self, validator: usize) -> usize {
-        9000 + self.shift_port + validator * 100
+        let port = BASIC_PORT + self.shift_port + validator * (MAX_N_SHARD + 1);
+        //        println!(
+        //            "Self::proxy_port shift_port={} validator={} port={}",
+        //           self.shift_port, validator, port
+        //        );
+        port
     }
 
     fn shard_port(&self, validator: usize, shard: usize) -> usize {
-        9000 + self.shift_port + validator * 100 + shard + 1
+        let port = BASIC_PORT + self.shift_port + validator * (MAX_N_SHARD + 1) + shard + 1;
+        //        println!(
+        //            "Self::shard_port shift_port={} validator={} shard={} port={}",
+        //            self.shift_port, validator, shard, port
+        //        );
+        port
     }
 
     fn internal_port(&self, validator: usize) -> usize {
-        10000 + self.shift_port + validator * 100
+        let port =
+            BASIC_PORT + FUNCTIONAL_SHIFT_PORT + self.shift_port + validator * (MAX_N_SHARD + 1);
+        //        println!(
+        //            "Self::internal_port shift_port={} validator={} port={}",
+        //            self.shift_port, validator, port
+        //        );
+        port
     }
 
     fn proxy_metrics_port(&self, validator: usize) -> usize {
-        11000 + self.shift_port + validator * 100
+        let port = BASIC_PORT
+            + 2 * FUNCTIONAL_SHIFT_PORT
+            + self.shift_port
+            + validator * (MAX_N_SHARD + 1);
+        //        println!(
+        //            "Self::proxy_metrics_port shift_port={} validator={} port={}",
+        //            self.shift_port, validator, port
+        //        );
+        port
     }
 
     fn shard_metrics_port(&self, validator: usize, shard: usize) -> usize {
-        11000 + self.shift_port + validator * 100 + shard + 1
+        let port = BASIC_PORT
+            + 2 * FUNCTIONAL_SHIFT_PORT
+            + self.shift_port
+            + validator * (MAX_N_SHARD + 1)
+            + shard
+            + 1;
+        //        println!(
+        //            "Self::shard_metrics_port shift_port={} validator={} shard={} port={}",
+        //            self.shift_port, validator, shard, port
+        //        );
+        port
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {

@@ -2569,9 +2569,7 @@ impl Drop for RestoreVarOnDrop {
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
+async fn test_wasm_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) {
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await.unwrap();
     let client2 = net.make_client().await;

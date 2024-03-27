@@ -207,6 +207,10 @@ impl GrpcProxy {
     pub async fn run(self) -> Result<()> {
         info!("Starting gRPC server");
 
+        //        println!(
+        //            "GrpcProxy::run, before start_metrics address={:?}",
+        //            self.metrics_address()
+        //        );
         prometheus_server::start_metrics(self.metrics_address());
 
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();

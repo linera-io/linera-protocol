@@ -84,6 +84,7 @@ impl ServerContext {
             let cross_chain_config = self.cross_chain_config.clone();
             handles.push(async move {
                 if let Some(port) = shard.metrics_port {
+                    //                    println!("spawn_simple, before start_metrics");
                     Self::start_metrics(listen_address, &port);
                 }
                 let server = simple::Server::new(
@@ -127,6 +128,10 @@ impl ServerContext {
             let notification_config = self.notification_config.clone();
             handles.push(async move {
                 if let Some(port) = shard.metrics_port {
+                    //                    println!(
+                    //                        "spawn_grpc, before start_metrics, listen_address={} port={}",
+                    //                        listen_address, port
+                    //                    );
                     Self::start_metrics(listen_address, &port);
                 }
                 let spawned_server = match grpc::GrpcServer::spawn(
@@ -158,9 +163,16 @@ impl ServerContext {
     }
 
     fn start_metrics(host: &str, port: &u16) {
+        //        println!(
+        //            "spawn_metrics, before start_metrics host={} port={}",
+        //            host, port
+        //        );
         match format!("{}:{}", host, port).parse::<SocketAddr>() {
             Err(err) => panic!("Invalid metrics address for {host}:{port}: {err}"),
-            Ok(address) => prometheus_server::start_metrics(address),
+            Ok(address) => {
+                //                println!("start_metrics, address={:}", address);
+                prometheus_server::start_metrics(address)
+            }
         }
     }
 
