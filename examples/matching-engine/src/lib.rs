@@ -280,14 +280,11 @@ use serde::{Deserialize, Serialize};
 pub struct MatchingEngineAbi;
 
 impl ContractAbi for MatchingEngineAbi {
-    type InitializationArgument = ();
-    type Parameters = Parameters;
     type Operation = Operation;
     type Response = ();
 }
 
 impl ServiceAbi for MatchingEngineAbi {
-    type Parameters = Parameters;
     type Query = Request;
     type QueryResponse = Response;
 }

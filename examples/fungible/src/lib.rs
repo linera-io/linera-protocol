@@ -266,7 +266,7 @@ pub enum Message {
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 pub async fn create_with_accounts(
     validator: &TestValidator,
-    bytecode_id: BytecodeId<FungibleTokenAbi>,
+    bytecode_id: BytecodeId<FungibleTokenAbi, Parameters, InitialState>,
     initial_amounts: impl IntoIterator<Item = Amount>,
 ) -> (
     ApplicationId<FungibleTokenAbi>,

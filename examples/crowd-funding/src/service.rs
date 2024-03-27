@@ -10,7 +10,9 @@ use std::sync::Arc;
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use crowd_funding::Operation;
 use linera_sdk::{
-    base::WithServiceAbi, graphql::GraphQLMutationRoot, Service, ServiceRuntime, ViewStateStorage,
+    base::{ApplicationId, WithServiceAbi},
+    graphql::GraphQLMutationRoot,
+    Service, ServiceRuntime, ViewStateStorage,
 };
 use state::CrowdFunding;
 use thiserror::Error;
@@ -29,6 +31,7 @@ impl Service for CrowdFundingService {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type State = CrowdFunding;
+    type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
     async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(CrowdFundingService {

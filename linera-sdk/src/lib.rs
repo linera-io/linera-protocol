@@ -114,6 +114,16 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// from another chain and accepted in a block.
     type Message: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
+    /// Immutable parameters specific to this application (e.g. the name of a token).
+    type Parameters: Serialize + DeserializeOwned + Send + Sync + Clone + Debug + 'static;
+
+    /// Initialization argument passed to a new application on the chain that created it
+    /// (e.g. an initial amount of tokens minted).
+    ///
+    /// To share configuration data on every chain, use [`Contract::Parameters`]
+    /// instead.
+    type InitializationArgument: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
+
     /// Creates a in-memory instance of the contract handler from the application's `state`.
     async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error>;
 
@@ -186,6 +196,9 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     /// [`ViewStateStorage`]. Accordingly, this associated type may be defined as `type
     /// Storage = SimpleStateStorage<Self>` or `type Storage = ViewStateStorage<Self>`.
     type Storage: ServiceStateStorage;
+
+    /// Immutable parameters specific to this application.
+    type Parameters: Serialize + DeserializeOwned + Send + Sync + Clone + Debug + 'static;
 
     /// Creates a in-memory instance of the service handler from the application's `state`.
     async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error>;

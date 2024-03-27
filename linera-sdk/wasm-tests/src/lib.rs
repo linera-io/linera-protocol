@@ -385,14 +385,11 @@ fn mock_query() {
 pub struct Abi;
 
 impl ContractAbi for Abi {
-    type Parameters = Vec<u8>;
-    type InitializationArgument = Vec<u8>;
     type Operation = Vec<u8>;
     type Response = Vec<u8>;
 }
 
 impl ServiceAbi for Abi {
-    type Parameters = Vec<u8>;
     type Query = Vec<u8>;
     type QueryResponse = Vec<u8>;
 }
@@ -415,6 +412,8 @@ impl Contract for TestApp {
     type Storage = SimpleStateStorage<Self>;
     type State = ();
     type Message = Vec<u8>;
+    type Parameters = Vec<u8>;
+    type InitializationArgument = Vec<u8>;
 
     async fn new(state: (), _runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(TestApp { state })
@@ -447,6 +446,7 @@ impl Service for TestApp {
     type Error = TestAppError;
     type Storage = SimpleStateStorage<Self>;
     type State = ();
+    type Parameters = Vec<u8>;
 
     async fn new(state: (), _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(TestApp { state })

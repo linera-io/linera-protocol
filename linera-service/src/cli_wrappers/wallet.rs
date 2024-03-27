@@ -255,12 +255,16 @@ impl ClientWrapper {
     }
 
     /// Runs `linera wallet publish-and-create`.
-    pub async fn publish_and_create<A: ContractAbi>(
+    pub async fn publish_and_create<
+        A: ContractAbi,
+        Parameters: Serialize,
+        InitializationArgument: Serialize,
+    >(
         &self,
         contract: PathBuf,
         service: PathBuf,
-        parameters: &A::Parameters,
-        argument: &A::InitializationArgument,
+        parameters: &Parameters,
+        argument: &InitializationArgument,
         required_application_ids: &[ApplicationId],
         publisher: impl Into<Option<ChainId>>,
     ) -> Result<ApplicationId<A>> {
@@ -286,12 +290,12 @@ impl ClientWrapper {
     }
 
     /// Runs `linera publish-bytecode`.
-    pub async fn publish_bytecode(
+    pub async fn publish_bytecode<Abi, Parameters, InitializationArgument>(
         &self,
         contract: PathBuf,
         service: PathBuf,
         publisher: impl Into<Option<ChainId>>,
-    ) -> Result<BytecodeId> {
+    ) -> Result<BytecodeId<Abi, Parameters, InitializationArgument>> {
         let stdout = self
             .command()
             .await?
@@ -300,24 +304,29 @@ impl ClientWrapper {
             .args(publisher.into().iter().map(ChainId::to_string))
             .spawn_and_wait_for_stdout()
             .await?;
-        Ok(stdout.trim().parse()?)
+        let bytecode_id: BytecodeId = stdout.trim().parse()?;
+        Ok(bytecode_id.with_abi())
     }
 
     /// Runs `linera create-application`.
-    pub async fn create_application<A: ContractAbi>(
+    pub async fn create_application<
+        Abi: ContractAbi,
+        Parameters: Serialize,
+        InitializationArgument: Serialize,
+    >(
         &self,
-        bytecode_id: &BytecodeId,
-        parameters: &A::Parameters,
-        argument: &A::InitializationArgument,
+        bytecode_id: &BytecodeId<Abi, Parameters, InitializationArgument>,
+        parameters: &Parameters,
+        argument: &InitializationArgument,
         required_application_ids: &[ApplicationId],
         creator: impl Into<Option<ChainId>>,
-    ) -> Result<ApplicationId<A>> {
+    ) -> Result<ApplicationId<Abi>> {
         let json_parameters = serde_json::to_string(parameters)?;
         let json_argument = serde_json::to_string(argument)?;
         let mut command = self.command().await?;
         command
             .arg("create-application")
-            .arg(bytecode_id.to_string())
+            .arg(bytecode_id.forget_abi().to_string())
             .args(["--json-parameters", &json_parameters])
             .args(["--json-argument", &json_argument])
             .args(creator.into().iter().map(ChainId::to_string));
@@ -876,12 +885,12 @@ impl NodeService {
             .collect()
     }
 
-    pub async fn publish_bytecode(
+    pub async fn publish_bytecode<Abi, Parameters, InitializationArgument>(
         &self,
         chain_id: &ChainId,
         contract: PathBuf,
         service: PathBuf,
-    ) -> Result<BytecodeId> {
+    ) -> Result<BytecodeId<Abi, Parameters, InitializationArgument>> {
         let contract_code = Bytecode::load_from_file(&contract).await?;
         let service_code = Bytecode::load_from_file(&service).await?;
         let query = format!(
@@ -894,7 +903,10 @@ impl NodeService {
         let bytecode_str = data["publishBytecode"]
             .as_str()
             .context("bytecode ID not found")?;
-        bytecode_str.parse().context("could not parse bytecode ID")
+        let bytecode_id: BytecodeId = bytecode_str
+            .parse()
+            .context("could not parse bytecode ID")?;
+        Ok(bytecode_id.with_abi())
     }
 
     pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {
@@ -937,14 +949,19 @@ impl NodeService {
         );
     }
 
-    pub async fn create_application<A: ContractAbi>(
+    pub async fn create_application<
+        Abi: ContractAbi,
+        Parameters: Serialize,
+        InitializationArgument: Serialize,
+    >(
         &self,
         chain_id: &ChainId,
-        bytecode_id: &BytecodeId,
-        parameters: &A::Parameters,
-        argument: &A::InitializationArgument,
+        bytecode_id: &BytecodeId<Abi, Parameters, InitializationArgument>,
+        parameters: &Parameters,
+        argument: &InitializationArgument,
         required_application_ids: &[ApplicationId],
-    ) -> Result<ApplicationId<A>> {
+    ) -> Result<ApplicationId<Abi>> {
+        let bytecode_id = bytecode_id.forget_abi();
         let json_required_applications_ids = required_application_ids
             .iter()
             .map(ApplicationId::to_string)

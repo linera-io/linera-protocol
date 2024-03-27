@@ -292,7 +292,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
     let (contract, service) = client.build_example("counter").await.unwrap();
 
     let application_id = client
-        .publish_and_create::<CounterAbi>(
+        .publish_and_create::<CounterAbi, (), u64>(
             contract,
             service,
             &(),
@@ -344,11 +344,11 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     let (contract, service) = client.build_example("counter").await.unwrap();
 
     let bytecode_id = client
-        .publish_bytecode(contract, service, None)
+        .publish_bytecode::<CounterAbi, (), u64>(contract, service, None)
         .await
         .unwrap();
     let application_id = client
-        .create_application::<CounterAbi>(&bytecode_id, &(), &original_counter_value, &[], None)
+        .create_application(&bytecode_id, &(), &original_counter_value, &[], None)
         .await
         .unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
@@ -395,11 +395,11 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .unwrap();
     let (contract, service) = client1.build_example("social").await.unwrap();
     let bytecode_id = client1
-        .publish_bytecode(contract, service, None)
+        .publish_bytecode::<SocialAbi, (), ()>(contract, service, None)
         .await
         .unwrap();
     let application_id = client1
-        .create_application::<SocialAbi>(&bytecode_id, &(), &(), &[], None)
+        .create_application(&bytecode_id, &(), &(), &[], None)
         .await
         .unwrap();
 
@@ -480,7 +480,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None), "native-fungible" ; "native_remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig, example_name: &str) {
-    use fungible::{FungibleTokenAbi, InitialState};
+    use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -508,12 +508,19 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig, example_nam
     let (contract, service) = client1.build_example(example_name).await.unwrap();
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
-        fungible::Parameters::new("NAT")
+        Parameters::new("NAT")
     } else {
-        fungible::Parameters::new("FUN")
+        Parameters::new("FUN")
     };
     let application_id = client1
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
+        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
+            contract,
+            service,
+            &params,
+            &state,
+            &[],
+            None,
+        )
         .await
         .unwrap();
 
@@ -630,7 +637,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     config: impl LineraNetConfig,
     example_name: &str,
 ) {
-    use fungible::{FungibleTokenAbi, InitialState};
+    use fungible::{Account, FungibleTokenAbi, InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client1) = config.instantiate().await.unwrap();
@@ -663,12 +670,19 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     let (contract, service) = client1.build_example(example_name).await.unwrap();
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
-        fungible::Parameters::new("NAT")
+        Parameters::new("NAT")
     } else {
-        fungible::Parameters::new("FUN")
+        Parameters::new("FUN")
     };
     let application_id = client1
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
+        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
+            contract,
+            service,
+            &params,
+            &state,
+            &[],
+            None,
+        )
         .await
         .unwrap();
 
@@ -692,7 +706,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     app1.transfer(
         &account_owner1,
         Amount::ONE,
-        fungible::Account {
+        Account {
             chain_id: chain2,
             owner: account_owner2,
         },
@@ -755,7 +769,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) {
     // Setting up the application and verifying
     let (contract, service) = client1.build_example("non-fungible").await.unwrap();
     let application_id = client1
-        .publish_and_create::<NonFungibleTokenAbi>(contract, service, &(), &(), &[], None)
+        .publish_and_create::<NonFungibleTokenAbi, (), ()>(contract, service, &(), &(), &[], None)
         .await
         .unwrap();
 
@@ -1009,7 +1023,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) {
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
     use crowd_funding::{CrowdFundingAbi, InitializationArgument};
-    use fungible::{FungibleTokenAbi, InitialState};
+    use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -1034,9 +1048,9 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
 
     // Setting up the application fungible
     let (contract_fungible, service_fungible) = client1.build_example("fungible").await.unwrap();
-    let params = fungible::Parameters::new("FUN");
+    let params = Parameters::new("FUN");
     let application_id_fungible = client1
-        .publish_and_create::<FungibleTokenAbi>(
+        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
             contract_fungible,
             service_fungible,
             &params,
@@ -1057,7 +1071,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
     };
     let (contract_crowd, service_crowd) = client1.build_example("crowd-funding").await.unwrap();
     let application_id_crowd = client1
-        .publish_and_create::<CrowdFundingAbi>(
+        .publish_and_create::<CrowdFundingAbi, ApplicationId<FungibleTokenAbi>, InitializationArgument>(
             contract_crowd,
             service_crowd,
             // TODO(#723): This hack will disappear soon.
@@ -1142,7 +1156,6 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
 // #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
-    use fungible::{FungibleTokenAbi, InitialState};
     use matching_engine::{MatchingEngineAbi, OrderNature, Parameters, Price};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1179,18 +1192,18 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     let owner_b = get_fungible_account_owner(&client_b);
     // The initial accounts on chain_a and chain_b
     let accounts0 = BTreeMap::from([(owner_a, Amount::from_tokens(10))]);
-    let state_fungible0 = InitialState {
+    let state_fungible0 = fungible::InitialState {
         accounts: accounts0,
     };
     let accounts1 = BTreeMap::from([(owner_b, Amount::from_tokens(9))]);
-    let state_fungible1 = InitialState {
+    let state_fungible1 = fungible::InitialState {
         accounts: accounts1,
     };
 
     // Setting up the application fungible on chain_a and chain_b
     let params0 = fungible::Parameters::new("ZERO");
     let token0 = client_a
-        .publish_and_create::<FungibleTokenAbi>(
+        .publish_and_create::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
             contract_fungible_a,
             service_fungible_a,
             &params0,
@@ -1202,7 +1215,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
         .unwrap();
     let params1 = fungible::Parameters::new("ONE");
     let token1 = client_b
-        .publish_and_create::<FungibleTokenAbi>(
+        .publish_and_create::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
             contract_fungible_b,
             service_fungible_b,
             &params1,
@@ -1305,11 +1318,15 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
         tokens: [token0, token1],
     };
     let bytecode_id = node_service_admin
-        .publish_bytecode(&chain_admin, contract_matching, service_matching)
+        .publish_bytecode::<MatchingEngineAbi, Parameters, ()>(
+            &chain_admin,
+            contract_matching,
+            service_matching,
+        )
         .await
         .unwrap();
     let application_id_matching = node_service_admin
-        .create_application::<MatchingEngineAbi>(
+        .create_application(
             &chain_admin,
             &bytecode_id,
             &parameter,
@@ -1440,7 +1457,6 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     use amm::{AmmAbi, Parameters};
-    use fungible::{FungibleTokenAbi, InitialState};
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client_admin) = config.instantiate().await.unwrap();
@@ -1479,7 +1495,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     let mut node_service1 = client1.run_node_service(8082).await.unwrap();
 
     // Amounts of token0 that will be owned by each user
-    let state_fungible0 = InitialState {
+    let state_fungible0 = fungible::InitialState {
         accounts: BTreeMap::from([
             (owner0, Amount::ZERO),
             (owner1, Amount::from_tokens(50)),
@@ -1488,7 +1504,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     };
 
     // Amounts of token1 that will be owned by each user
-    let state_fungible1 = InitialState {
+    let state_fungible1 = fungible::InitialState {
         accounts: BTreeMap::from([
             (owner0, Amount::from_tokens(50)),
             (owner1, Amount::ZERO),
@@ -1499,13 +1515,13 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     // Create fungible applications on the Admin chain, which will hold
     // the token0 and token1 amounts
     let fungible_bytecode_id = node_service_admin
-        .publish_bytecode(&chain_admin, contract_fungible, service_fungible)
+        .publish_bytecode::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(&chain_admin, contract_fungible, service_fungible)
         .await
         .unwrap();
 
     let params0 = fungible::Parameters::new("ZERO");
     let token0 = node_service_admin
-        .create_application::<FungibleTokenAbi>(
+        .create_application(
             &chain_admin,
             &fungible_bytecode_id,
             &params0,
@@ -1516,7 +1532,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
         .unwrap();
     let params1 = fungible::Parameters::new("ONE");
     let token1 = node_service_admin
-        .create_application::<FungibleTokenAbi>(
+        .create_application(
             &chain_admin,
             &fungible_bytecode_id,
             &params1,
@@ -1562,11 +1578,11 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
 
     // Create AMM application on Admin chain
     let bytecode_id = node_service_admin
-        .publish_bytecode(&chain_admin, contract_amm, service_amm)
+        .publish_bytecode::<AmmAbi, Parameters, ()>(&chain_admin, contract_amm, service_amm)
         .await
         .unwrap();
     let application_id_amm = node_service_admin
-        .create_application::<AmmAbi>(
+        .create_application(
             &chain_admin,
             &bytecode_id,
             &parameters,
@@ -1902,8 +1918,6 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) {
-    use fungible::{FungibleTokenAbi, InitialState};
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client) = config.instantiate().await.unwrap();
 
@@ -1921,11 +1935,18 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     // Create a fungible token application with 10 tokens for owner 1.
     let owner = get_fungible_account_owner(&client);
     let accounts = BTreeMap::from([(owner, Amount::from_tokens(10))]);
-    let state = InitialState { accounts };
+    let state = fungible::InitialState { accounts };
     let (contract, service) = client.build_example("fungible").await.unwrap();
     let params = fungible::Parameters::new("FUN");
     let application_id = client
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
+        .publish_and_create::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
+            contract,
+            service,
+            &params,
+            &state,
+            &[],
+            None,
+        )
         .await
         .unwrap();
 
@@ -2600,7 +2621,7 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) {
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_benchmark(mut config: LocalNetConfig) {
-    use fungible::{FungibleTokenAbi, InitialState};
+    use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
     config.num_other_initial_chains = 2;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -2617,9 +2638,16 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) {
     let accounts = BTreeMap::from([(account_owner, Amount::from_tokens(1_000_000))]);
     let state = InitialState { accounts };
     let (contract, service) = client.build_example("fungible").await.unwrap();
-    let params = fungible::Parameters::new("FUN");
+    let params = Parameters::new("FUN");
     let application_id = client
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
+        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
+            contract,
+            service,
+            &params,
+            &state,
+            &[],
+            None,
+        )
         .await
         .unwrap();
     client

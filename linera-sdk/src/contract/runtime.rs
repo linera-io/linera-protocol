@@ -22,7 +22,7 @@ pub struct ContractRuntime<Application>
 where
     Application: Contract,
 {
-    application_parameters: Option<<Application::Abi as ContractAbi>::Parameters>,
+    application_parameters: Option<Application::Parameters>,
     application_id: Option<ApplicationId<Application::Abi>>,
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
@@ -53,7 +53,7 @@ where
     }
 
     /// Returns the application parameters provided when the application was created.
-    pub fn application_parameters(&mut self) -> <Application::Abi as ContractAbi>::Parameters {
+    pub fn application_parameters(&mut self) -> Application::Parameters {
         self.application_parameters
             .get_or_insert_with(|| {
                 let bytes = wit::application_parameters();

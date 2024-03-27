@@ -177,8 +177,6 @@ pub struct TokenId {
 pub struct NonFungibleTokenAbi;
 
 impl ContractAbi for NonFungibleTokenAbi {
-    type InitializationArgument = ();
-    type Parameters = ();
     type Operation = Operation;
     type Response = ();
 }
@@ -186,7 +184,6 @@ impl ContractAbi for NonFungibleTokenAbi {
 impl ServiceAbi for NonFungibleTokenAbi {
     type Query = Request;
     type QueryResponse = Response;
-    type Parameters = ();
 }
 
 /// An operation.

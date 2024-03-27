@@ -5,7 +5,7 @@
 
 mod state;
 
-use amm::{AmmAbi, AmmError, Message, Operation};
+use amm::{AmmAbi, AmmError, Message, Operation, Parameters};
 use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
@@ -34,6 +34,8 @@ impl Contract for AmmContract {
     type Storage = ViewStateStorage<Self>;
     type State = Amm;
     type Message = Message;
+    type InitializationArgument = ();
+    type Parameters = Parameters;
 
     async fn new(state: Amm, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(AmmContract { state, runtime })

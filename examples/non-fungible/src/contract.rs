@@ -35,6 +35,8 @@ impl Contract for NonFungibleTokenContract {
     type Storage = ViewStateStorage<Self>;
     type State = NonFungibleToken;
     type Message = Message;
+    type InitializationArgument = ();
+    type Parameters = ();
 
     async fn new(
         state: NonFungibleToken,

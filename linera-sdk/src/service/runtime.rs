@@ -19,7 +19,7 @@ pub struct ServiceRuntime<Application>
 where
     Application: Service,
 {
-    application_parameters: Cell<Option<<Application::Abi as ServiceAbi>::Parameters>>,
+    application_parameters: Cell<Option<Application::Parameters>>,
     application_id: Cell<Option<ApplicationId<Application::Abi>>>,
     chain_id: Cell<Option<ChainId>>,
     next_block_height: Cell<Option<BlockHeight>>,
@@ -48,7 +48,7 @@ where
     }
 
     /// Returns the application parameters provided when the application was created.
-    pub fn application_parameters(&self) -> <Application::Abi as ServiceAbi>::Parameters {
+    pub fn application_parameters(&self) -> Application::Parameters {
         Self::fetch_value_through_cache(&self.application_parameters, || {
             let bytes = wit::application_parameters();
             serde_json::from_slice(&bytes).expect("Application parameters must be deserializable")

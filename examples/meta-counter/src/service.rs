@@ -6,7 +6,10 @@
 mod state;
 
 use async_graphql::{Request, Response};
-use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, SimpleStateStorage};
+use linera_sdk::{
+    base::{ApplicationId, WithServiceAbi},
+    Service, ServiceRuntime, SimpleStateStorage,
+};
 use thiserror::Error;
 
 use self::state::MetaCounter;
@@ -25,6 +28,7 @@ impl Service for MetaCounterService {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
     type State = MetaCounter;
+    type Parameters = ApplicationId<counter::CounterAbi>;
 
     async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(MetaCounterService { runtime })

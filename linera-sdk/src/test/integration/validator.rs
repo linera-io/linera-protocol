@@ -25,6 +25,7 @@ use linera_execution::{
 };
 use linera_storage::{MemoryStorage, Storage, WallClock};
 use linera_views::memory::{MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES};
+use serde::Serialize;
 use tokio::sync::{Mutex, MutexGuard};
 
 use super::ActiveChain;
@@ -93,7 +94,10 @@ impl TestValidator {
     /// calling this method published on it.
     ///
     /// Returns the new [`TestValidator`] and the [`BytecodeId`] of the published bytecode.
-    pub async fn with_current_bytecode<Abi>() -> (TestValidator, BytecodeId<Abi>) {
+    pub async fn with_current_bytecode<Abi, Parameters, InitializationArgument>() -> (
+        TestValidator,
+        BytecodeId<Abi, Parameters, InitializationArgument>,
+    ) {
         let validator = TestValidator::default();
         let publisher = validator.new_chain().await;
 
@@ -109,19 +113,22 @@ impl TestValidator {
     /// another microchain.
     ///
     /// Returns the new [`TestValidator`] and the [`ApplicationId`] of the created application.
-    pub async fn with_current_application<A>(
-        parameters: A::Parameters,
-        initialization_argument: A::InitializationArgument,
-    ) -> (TestValidator, ApplicationId<A>)
+    pub async fn with_current_application<Abi, Parameters, InitializationArgument>(
+        parameters: Parameters,
+        initialization_argument: InitializationArgument,
+    ) -> (TestValidator, ApplicationId<Abi>)
     where
-        A: ContractAbi,
+        Abi: ContractAbi,
+        Parameters: Serialize,
+        InitializationArgument: Serialize,
     {
-        let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
+        let (validator, bytecode_id) =
+            TestValidator::with_current_bytecode::<Abi, Parameters, InitializationArgument>().await;
 
         let mut creator = validator.new_chain().await;
 
         let application_id = creator
-            .create_application::<A>(bytecode_id, parameters, initialization_argument, vec![])
+            .create_application(bytecode_id, parameters, initialization_argument, vec![])
             .await;
 
         (validator, application_id)

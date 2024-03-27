@@ -16,9 +16,10 @@ use std::collections::BTreeMap;
 
 use assert_matches::assert_matches;
 use async_graphql::Request;
+use counter::CounterAbi;
 use linera_base::{
     data_types::Amount,
-    identifiers::{AccountOwner, ChainDescription, ChainId, Destination, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner},
 };
 use linera_chain::data_types::{CertificateValue, MessageAction, OutgoingMessage};
 use linera_execution::{
@@ -121,7 +122,7 @@ where
         .await
         .unwrap()
         .unwrap();
-    let bytecode_id = bytecode_id.with_abi::<counter::CounterAbi>();
+    let bytecode_id = bytecode_id.with_abi::<counter::CounterAbi, (), u64>();
     // Receive our own cert to broadcast the bytecode location.
     publisher.receive_certificate(cert).await.unwrap();
     publisher.process_inbox().await.unwrap();
@@ -274,7 +275,7 @@ where
             .unwrap()
             .unwrap()
     };
-    let bytecode_id1 = bytecode_id1.with_abi::<counter::CounterAbi>();
+    let bytecode_id1 = bytecode_id1.with_abi::<counter::CounterAbi, (), u64>();
     let (bytecode_id2, cert2) = {
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths("meta_counter")?;
@@ -287,7 +288,8 @@ where
             .unwrap()
             .unwrap()
     };
-    let bytecode_id2 = bytecode_id2.with_abi::<meta_counter::MetaCounterAbi>();
+    let bytecode_id2 =
+        bytecode_id2.with_abi::<meta_counter::MetaCounterAbi, ApplicationId<CounterAbi>, ()>();
     // Receive our own certs to broadcast the bytecode locations.
     publisher.receive_certificate(cert1).await.unwrap();
     publisher.receive_certificate(cert2).await.unwrap();
@@ -476,7 +478,8 @@ where
             .unwrap()
             .unwrap()
     };
-    let bytecode_id = bytecode_id.with_abi::<fungible::FungibleTokenAbi>();
+    let bytecode_id = bytecode_id
+        .with_abi::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>();
 
     // Receive our own cert to broadcast the bytecode location.
     sender.receive_certificate(pub_cert.clone()).await.unwrap();
@@ -695,7 +698,7 @@ where
             .unwrap()
             .unwrap()
     };
-    let bytecode_id = bytecode_id.with_abi::<social::SocialAbi>();
+    let bytecode_id = bytecode_id.with_abi::<social::SocialAbi, (), ()>();
 
     // Receive our own cert to broadcast the bytecode location.
     receiver

@@ -6,7 +6,6 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use async_graphql::InputType;
-use fungible::{FungibleTokenAbi, InitialStateBuilder};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ApplicationPermissions},
     test::{ActiveChain, TestValidator},
@@ -67,7 +66,8 @@ pub async fn get_orders(
 ///   * User_b: It has 8 - 3 = 5 token B and the newly acquired 6 token A
 #[tokio::test]
 async fn single_transaction() {
-    let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
+    let (validator, bytecode_id) =
+        TestValidator::with_current_bytecode::<MatchingEngineAbi, Parameters, ()>().await;
 
     let mut user_chain_a = validator.new_chain().await;
     let owner_a = AccountOwner::from(user_chain_a.public_key());
@@ -76,14 +76,18 @@ async fn single_transaction() {
     let mut matching_chain = validator.new_chain().await;
     let admin_account = AccountOwner::from(matching_chain.public_key());
 
-    let fungible_bytecode_id_a = user_chain_a.publish_bytecodes_in("../fungible").await;
-    let fungible_bytecode_id_b = user_chain_b.publish_bytecodes_in("../fungible").await;
+    let fungible_bytecode_id_a = user_chain_a
+        .publish_bytecodes_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
+        .await;
+    let fungible_bytecode_id_b = user_chain_b
+        .publish_bytecodes_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
+        .await;
 
     let initial_state_a =
-        InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10));
+        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10));
     let params_a = fungible::Parameters::new("A");
     let token_id_a = user_chain_a
-        .create_application::<FungibleTokenAbi>(
+        .create_application(
             fungible_bytecode_id_a,
             params_a,
             initial_state_a.build(),
@@ -91,10 +95,10 @@ async fn single_transaction() {
         )
         .await;
     let initial_state_b =
-        InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(9));
+        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(9));
     let params_b = fungible::Parameters::new("B");
     let token_id_b = user_chain_b
-        .create_application::<FungibleTokenAbi>(
+        .create_application(
             fungible_bytecode_id_b,
             params_b,
             initial_state_b.build(),
@@ -127,7 +131,7 @@ async fn single_transaction() {
     let tokens = [token_id_a, token_id_b];
     let matching_parameter = Parameters { tokens };
     let matching_id = matching_chain
-        .create_application::<MatchingEngineAbi>(
+        .create_application(
             bytecode_id,
             matching_parameter,
             (),

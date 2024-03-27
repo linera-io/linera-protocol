@@ -38,6 +38,8 @@ impl Contract for MetaCounterContract {
     type Storage = SimpleStateStorage<Self>;
     type State = MetaCounter;
     type Message = Message;
+    type InitializationArgument = ();
+    type Parameters = ApplicationId<counter::CounterAbi>;
 
     async fn new(state: MetaCounter, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(MetaCounterContract { state, runtime })

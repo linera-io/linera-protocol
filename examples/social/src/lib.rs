@@ -182,8 +182,6 @@ use serde::{Deserialize, Serialize};
 pub struct SocialAbi;
 
 impl ContractAbi for SocialAbi {
-    type InitializationArgument = ();
-    type Parameters = ();
     type Operation = Operation;
     type Response = ();
 }
@@ -191,7 +189,6 @@ impl ContractAbi for SocialAbi {
 impl ServiceAbi for SocialAbi {
     type Query = Request;
     type QueryResponse = Response;
-    type Parameters = ();
 }
 
 /// An operation that can be executed by the application.

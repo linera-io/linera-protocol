@@ -8,7 +8,7 @@ mod state;
 use std::sync::{Arc, Mutex};
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use fungible::Operation;
+use fungible::{Operation, Parameters};
 use linera_sdk::{
     base::{AccountOwner, Amount, WithServiceAbi},
     graphql::GraphQLMutationRoot,
@@ -35,6 +35,7 @@ impl Service for FungibleTokenService {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type State = FungibleToken;
+    type Parameters = Parameters;
 
     async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(FungibleTokenService {

@@ -23,6 +23,7 @@ use linera_execution::{
     system::{SystemChannel, SystemExecutionError, SystemMessage, SystemOperation},
     Bytecode, Message, Query, Response,
 };
+use serde::Serialize;
 use tokio::{fs, sync::Mutex};
 
 use super::{BlockBuilder, TestValidator};
@@ -127,7 +128,9 @@ impl ActiveChain {
     /// Searches the Cargo manifest for binaries that end with `contract` and `service`, builds
     /// them for WebAssembly and uses the generated binaries as the contract and service bytecodes
     /// to be published on this chain. Returns the bytecode ID to reference the published bytecode.
-    pub async fn publish_current_bytecode<Abi>(&self) -> BytecodeId<Abi> {
+    pub async fn publish_current_bytecode<Abi, Parameters, InitializationArgument>(
+        &self,
+    ) -> BytecodeId<Abi, Parameters, InitializationArgument> {
         self.publish_bytecodes_in(".").await
     }
 
@@ -136,10 +139,10 @@ impl ActiveChain {
     /// Searches the Cargo manifest for binaries that end with `contract` and `service`, builds
     /// them for WebAssembly and uses the generated binaries as the contract and service bytecodes
     /// to be published on this chain. Returns the bytecode ID to reference the published bytecode.
-    pub async fn publish_bytecodes_in<Abi>(
+    pub async fn publish_bytecodes_in<Abi, Parameters, InitializationArgument>(
         &self,
         repository_path: impl AsRef<Path>,
-    ) -> BytecodeId<Abi> {
+    ) -> BytecodeId<Abi, Parameters, InitializationArgument> {
         let repository_path = fs::canonicalize(repository_path)
             .await
             .expect("Failed to obtain absolute application repository path");
@@ -300,15 +303,17 @@ impl ActiveChain {
     /// The application is initialized using the initialization parameters, which consist of the
     /// global static `parameters`, the one time `initialization_argument` and the
     /// `required_application_ids` of the applications that the new application will depend on.
-    pub async fn create_application<A>(
+    pub async fn create_application<Abi, Parameters, InitializationArgument>(
         &mut self,
-        bytecode_id: BytecodeId<A>,
-        parameters: A::Parameters,
-        initialization_argument: A::InitializationArgument,
+        bytecode_id: BytecodeId<Abi, Parameters, InitializationArgument>,
+        parameters: Parameters,
+        initialization_argument: InitializationArgument,
         required_application_ids: Vec<ApplicationId>,
-    ) -> ApplicationId<A>
+    ) -> ApplicationId<Abi>
     where
-        A: ContractAbi,
+        Abi: ContractAbi,
+        Parameters: Serialize,
+        InitializationArgument: Serialize,
     {
         let bytecode_location_message = if self.needs_bytecode_location(bytecode_id).await {
             self.subscribe_to_published_bytecodes_from(bytecode_id.message_id.chain_id)
@@ -343,13 +348,16 @@ impl ActiveChain {
         assert_eq!(creation_messages.len(), 1);
 
         ApplicationId {
-            bytecode_id,
+            bytecode_id: bytecode_id.just_abi(),
             creation: creation_messages[0],
         }
     }
 
     /// Checks if the `bytecode_id` is missing from this microchain.
-    async fn needs_bytecode_location<Abi>(&self, bytecode_id: BytecodeId<Abi>) -> bool {
+    async fn needs_bytecode_location<Abi, Parameters, InitializationArgument>(
+        &self,
+        bytecode_id: BytecodeId<Abi, Parameters, InitializationArgument>,
+    ) -> bool {
         let applications = self
             .validator
             .worker()
@@ -366,7 +374,10 @@ impl ActiveChain {
     }
 
     /// Finds the message that sends the message with the bytecode location of `bytecode_id`.
-    async fn find_bytecode_location<Abi>(&self, bytecode_id: BytecodeId<Abi>) -> MessageId {
+    async fn find_bytecode_location<Abi, Parameters, InitializationArgument>(
+        &self,
+        bytecode_id: BytecodeId<Abi, Parameters, InitializationArgument>,
+    ) -> MessageId {
         for height in bytecode_id.message_id.height.0.. {
             let certificate = self
                 .validator

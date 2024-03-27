@@ -13,7 +13,8 @@ use linera_sdk::{
     ensure, Contract, ContractRuntime, ViewStateStorage,
 };
 use matching_engine::{
-    product_price_amount, MatchingEngineAbi, Message, Operation, Order, OrderId, OrderNature, Price,
+    product_price_amount, MatchingEngineAbi, Message, Operation, Order, OrderId, OrderNature,
+    Parameters, Price,
 };
 use state::{LevelView, MatchingEngine, MatchingEngineError};
 
@@ -56,6 +57,8 @@ impl Contract for MatchingEngineContract {
     type Storage = ViewStateStorage<Self>;
     type State = MatchingEngine;
     type Message = Message;
+    type InitializationArgument = ();
+    type Parameters = Parameters;
 
     async fn new(
         state: MatchingEngine,

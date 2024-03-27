@@ -18,8 +18,6 @@ use serde::{Deserialize, Serialize};
 pub struct FungibleTokenAbi;
 
 impl ContractAbi for FungibleTokenAbi {
-    type InitializationArgument = InitialState;
-    type Parameters = Parameters;
     type Operation = Operation;
     type Response = FungibleResponse;
 }
@@ -27,7 +25,6 @@ impl ContractAbi for FungibleTokenAbi {
 impl ServiceAbi for FungibleTokenAbi {
     type Query = Request;
     type QueryResponse = Response;
-    type Parameters = Parameters;
 }
 
 /// An operation

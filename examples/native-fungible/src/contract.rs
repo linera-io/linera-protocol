@@ -6,7 +6,7 @@
 mod state;
 
 use async_trait::async_trait;
-use fungible::{FungibleResponse, FungibleTokenAbi, Operation};
+use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
 use linera_sdk::{
     base::{Account, AccountOwner, ChainId, Owner, WithContractAbi},
     ensure, Contract, ContractRuntime, ViewStateStorage,
@@ -33,6 +33,8 @@ impl Contract for NativeFungibleTokenContract {
     type Storage = ViewStateStorage<Self>;
     type State = NativeFungibleToken;
     type Message = Message;
+    type Parameters = Parameters;
+    type InitializationArgument = InitialState;
 
     async fn new(
         state: NativeFungibleToken,

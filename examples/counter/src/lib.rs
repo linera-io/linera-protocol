@@ -116,8 +116,6 @@ use linera_sdk::base::{ContractAbi, ServiceAbi};
 pub struct CounterAbi;
 
 impl ContractAbi for CounterAbi {
-    type InitializationArgument = u64;
-    type Parameters = ();
     type Operation = u64;
     type Response = u64;
 }
@@ -125,5 +123,4 @@ impl ContractAbi for CounterAbi {
 impl ServiceAbi for CounterAbi {
     type Query = Request;
     type QueryResponse = Response;
-    type Parameters = ();
 }
