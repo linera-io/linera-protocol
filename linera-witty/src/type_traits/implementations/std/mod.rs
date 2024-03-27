@@ -11,5 +11,6 @@ mod phantom_data;
 mod primitives;
 mod result;
 mod string;
+mod time;
 mod tuples;
 mod vec;
