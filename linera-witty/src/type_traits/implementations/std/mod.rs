@@ -3,6 +3,7 @@
 
 //! Implementations of the custom traits for types from the standard library.
 
+mod collections;
 mod floats;
 mod integers;
 mod option;
