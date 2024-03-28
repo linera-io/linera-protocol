@@ -348,8 +348,8 @@ impl Batch {
 /// Certain databases (e.g. DynamoDB) do not support the deletion by prefix.
 /// Thus we need to access the databases in order to replace a `DeletePrefix`
 /// by a vector of the keys to be removed.
-#[async_trait]
-pub trait DeletePrefixExpander {
+#[trait_variant::make(DeletePrefixExpander: Send)]
+pub trait LocalDeletePrefixExpander {
     /// The error type that can happen when expanding the key_prefix.
     type Error: Debug;
 

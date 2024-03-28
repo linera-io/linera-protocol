@@ -10,7 +10,6 @@ use std::{
 };
 
 use async_lock::Mutex;
-use async_trait::async_trait;
 use linked_hash_map::LinkedHashMap;
 #[cfg(with_testing)]
 use {
@@ -111,7 +110,6 @@ pub struct LruCachingStore<K> {
     lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
-#[async_trait]
 impl<K> ReadableKeyValueStore<K::Error> for LruCachingStore<K>
 where
     K: KeyValueStore + Send + Sync,
@@ -215,7 +213,6 @@ where
     }
 }
 
-#[async_trait]
 impl<K> WritableKeyValueStore<K::Error> for LruCachingStore<K>
 where
     K: KeyValueStore + Send + Sync,

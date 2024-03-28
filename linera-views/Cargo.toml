@@ -52,6 +52,7 @@ tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "sync"] }
 tracing.workspace = true
+trait-variant.workspace = true
 
 [dev-dependencies]
 linera-views = { path = ".", features = ["test"] }
