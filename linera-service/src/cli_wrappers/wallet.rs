@@ -55,9 +55,35 @@ pub struct ClientWrapper {
     max_pending_messages: usize,
     network: Network,
     pub path_provider: PathProvider,
+    shift_port: u16,
 }
 
 impl ClientWrapper {
+    pub fn new_with_shift(
+        path_provider: PathProvider,
+        network: Network,
+        testing_prng_seed: Option<u64>,
+        id: usize,
+        shift_port: usize,
+    ) -> Self {
+        let storage = format!(
+            "rocksdb:{}/client_{}.db",
+            path_provider.path().display(),
+            id
+        );
+        let wallet = format!("wallet_{}.json", id);
+        let shift_port = shift_port as u16;
+        Self {
+            testing_prng_seed,
+            storage,
+            wallet,
+            max_pending_messages: 10_000,
+            network,
+            path_provider,
+            shift_port,
+        }
+    }
+
     pub fn new(
         path_provider: PathProvider,
         network: Network,
@@ -70,6 +96,7 @@ impl ClientWrapper {
             id
         );
         let wallet = format!("wallet_{}.json", id);
+        let shift_port = 0;
         Self {
             testing_prng_seed,
             storage,
@@ -77,6 +104,7 @@ impl ClientWrapper {
             max_pending_messages: 10_000,
             network,
             path_provider,
+            shift_port,
         }
     }
 
@@ -353,8 +381,8 @@ impl ClientWrapper {
     }
 
     /// Runs `linera service`.
-    pub async fn run_node_service(&self, port: impl Into<Option<u16>>) -> Result<NodeService> {
-        let port = port.into().unwrap_or(8080);
+    pub async fn run_node_service(&self, port: u16) -> Result<NodeService> {
+        let port = port + self.shift_port;
         let mut command = self.command().await?;
         command.arg("service");
         if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {

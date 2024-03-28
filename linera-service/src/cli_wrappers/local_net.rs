@@ -21,7 +21,10 @@ use linera_views::rocks_db::create_rocks_db_test_path;
 #[cfg(all(feature = "scylladb", with_testing))]
 use linera_views::scylla_db::create_scylla_db_test_uri;
 use tempfile::{tempdir, TempDir};
-use tokio::process::{Child, Command};
+use tokio::{
+    process::{Child, Command},
+    sync::OwnedSemaphorePermit,
+};
 use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
@@ -33,6 +36,7 @@ use {
     linera_storage_service::child::{get_free_port, StorageService, StorageServiceGuard},
     linera_storage_service::common::get_service_storage_binary,
     std::ops::Deref,
+    tokio::sync::Semaphore,
 };
 
 use crate::{
@@ -138,6 +142,82 @@ where
     }
 }
 
+/// A data structure to store the current state of available ports.
+#[cfg(any(test, feature = "test"))]
+struct PortShifts {
+    semaphore_ports: Arc<Semaphore>,
+    index: Arc<RwLock<usize>>,
+}
+
+/// The guard for the shift in ports.
+struct IndexPortGuard {
+    _semaphore_guard: OwnedSemaphorePermit,
+}
+
+#[cfg(any(test, feature = "test"))]
+impl PortShifts {
+    pub fn new(n_ports: usize) -> Self {
+        let semaphore_ports = Arc::new(Semaphore::new(n_ports));
+        let index = Arc::new(RwLock::new(0));
+        Self {
+            semaphore_ports,
+            index,
+        }
+    }
+
+    pub async fn get_guard(&self) -> (Option<IndexPortGuard>, usize) {
+        let semaphore_guard = self.semaphore_ports.clone().acquire_owned().await.unwrap();
+        let mut index = self.index.write().await;
+        let ret_val = *index;
+        *index += 1;
+        (
+            Some(IndexPortGuard {
+                _semaphore_guard: semaphore_guard,
+            }),
+            ret_val,
+        )
+    }
+}
+
+/// The number of simultaneous sets of validators
+#[cfg(any(test, feature = "test"))]
+const N_SIMULTANEOUS_VALIDATOR: usize = 5;
+
+/// The maximal number of shards used for local_net
+static MAX_N_CLIENT: usize = 3;
+
+/// The maximal number of shards used for local_net
+static MAX_N_SHARD: usize = 9;
+
+/// The maximal number of shards used for local_net. That constant is used
+/// for the creation of the ports of the metrics and so needs to be used
+/// in non-test contexts.
+static MAX_N_TEST: usize = 30;
+
+/// The maximum number of validators used.
+static MAX_N_VALIDATOR: usize = 10;
+
+/// The shift in ports froom one set of validators to the next
+static SHIFT_PORT: usize = MAX_N_VALIDATOR * (MAX_N_SHARD + 1);
+
+/// The basic port used
+static BASIC_PORT: usize = 9000;
+
+/// The functional shift in ports from validators to metrics to whatever
+static FUNCTIONAL_SHIFT_PORT: usize = MAX_N_TEST * SHIFT_PORT;
+
+// A static data to store the validator shift of ports.
+#[cfg(any(test, feature = "test"))]
+static LOCAL_INDEX_PORT: Lazy<PortShifts> = Lazy::new(|| PortShifts::new(N_SIMULTANEOUS_VALIDATOR));
+
+pub enum IndexPortChoice {
+    IndexPort {
+        index: usize,
+    },
+    #[cfg(any(test, feature = "test"))]
+    ExternalControl,
+}
+
 // A static data to store the integration test server
 #[cfg(with_testing)]
 static LOCAL_SERVER_SERVICE: Lazy<LocalServer<LocalServerServiceInternal>> =
@@ -186,18 +266,19 @@ async fn make_testing_config(database: Database) -> StorageConfig {
 
 pub enum StorageConfigBuilder {
     #[cfg(with_testing)]
-    TestConfig,
+    TestConfig {
+        database: Database,
+    },
     ExistingConfig {
         storage_config: StorageConfig,
     },
 }
 
 impl StorageConfigBuilder {
-    #[allow(unused_variables)]
-    pub async fn build(self, database: Database) -> StorageConfig {
+    pub async fn build(self) -> StorageConfig {
         match self {
             #[cfg(with_testing)]
-            StorageConfigBuilder::TestConfig => make_testing_config(database).await,
+            StorageConfigBuilder::TestConfig { database } => make_testing_config(database).await,
             StorageConfigBuilder::ExistingConfig { storage_config } => storage_config,
         }
     }
@@ -243,6 +324,7 @@ pub struct LocalNetConfig {
     pub policy: ResourceControlPolicy,
     pub storage_config_builder: StorageConfigBuilder,
     pub path_provider: PathProvider,
+    pub index_port_choice: IndexPortChoice,
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -259,6 +341,8 @@ pub struct LocalNet {
     set_init: HashSet<(usize, usize)>,
     storage_config: StorageConfig,
     path_provider: PathProvider,
+    index_port: usize,
+    _guard: Option<IndexPortGuard>,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -332,8 +416,9 @@ impl LocalNetConfig {
             Database::RocksDb => 1,
             _ => 4,
         };
-        let storage_config_builder = StorageConfigBuilder::TestConfig;
+        let storage_config_builder = StorageConfigBuilder::TestConfig { database };
         let path_provider = PathProvider::create_temporary_directory().unwrap();
+        let index_port_choice = IndexPortChoice::ExternalControl;
         Self {
             database,
             network,
@@ -346,6 +431,7 @@ impl LocalNetConfig {
             num_shards,
             storage_config_builder,
             path_provider,
+            index_port_choice,
         }
     }
 }
@@ -355,11 +441,24 @@ impl LineraNetConfig for LocalNetConfig {
     type Net = LocalNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
-        let server_config = self.storage_config_builder.build(self.database).await;
+        ensure!(
+            self.num_shards <= MAX_N_SHARD,
+            "The asked number of shards is too high"
+        );
+        ensure!(
+            self.num_initial_validators <= MAX_N_VALIDATOR,
+            "The asked number of validators is too high"
+        );
+        let server_config = self.storage_config_builder.build().await;
         ensure!(
             self.num_shards == 1 || self.database != Database::RocksDb,
             "Multiple shards not supported with RocksDB"
         );
+        let (guard, index_port) = match self.index_port_choice {
+            IndexPortChoice::IndexPort { index } => (None, index),
+            #[cfg(any(test, feature = "test"))]
+            IndexPortChoice::ExternalControl => LOCAL_INDEX_PORT.get_guard().await,
+        };
         let mut net = LocalNet::new(
             self.database,
             self.network,
@@ -369,6 +468,8 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_shards,
             server_config,
             self.path_provider,
+            index_port,
+            guard,
         )?;
         let client = net.make_client().await;
         ensure!(
@@ -403,16 +504,21 @@ impl LineraNet for LocalNet {
     }
 
     async fn make_client(&mut self) -> ClientWrapper {
-        let client = ClientWrapper::new(
+        let shift_port = self.index_port * MAX_N_CLIENT;
+        let client = ClientWrapper::new_with_shift(
             self.path_provider.clone(),
             self.network,
             self.testing_prng_seed,
             self.next_client_id,
+            shift_port,
         );
         if let Some(seed) = self.testing_prng_seed {
             self.testing_prng_seed = Some(seed + 1);
         }
         self.next_client_id += 1;
+        if self.next_client_id > MAX_N_CLIENT {
+            panic!("Excessive number of clients created");
+        }
         client
     }
 
@@ -435,6 +541,8 @@ impl LocalNet {
         num_shards: usize,
         storage_config: StorageConfig,
         path_provider: PathProvider,
+        index_port: usize,
+        guard: Option<IndexPortGuard>,
     ) -> Result<Self> {
         Ok(Self {
             database,
@@ -449,6 +557,8 @@ impl LocalNet {
             set_init: HashSet::new(),
             storage_config,
             path_provider,
+            index_port,
+            _guard: guard,
         })
     }
 
@@ -459,24 +569,35 @@ impl LocalNet {
         Ok(command)
     }
 
-    pub fn proxy_port(validator: usize) -> usize {
-        9000 + validator * 100
+    pub fn proxy_port(&self, validator: usize) -> usize {
+        BASIC_PORT + self.index_port * SHIFT_PORT + validator * (MAX_N_SHARD + 1)
     }
 
-    fn shard_port(validator: usize, shard: usize) -> usize {
-        9000 + validator * 100 + shard + 1
+    fn shard_port(&self, validator: usize, shard: usize) -> usize {
+        BASIC_PORT + self.index_port * SHIFT_PORT + validator * (MAX_N_SHARD + 1) + shard + 1
     }
 
-    fn internal_port(validator: usize) -> usize {
-        10000 + validator * 100
+    fn internal_port(&self, validator: usize) -> usize {
+        BASIC_PORT
+            + FUNCTIONAL_SHIFT_PORT
+            + self.index_port * SHIFT_PORT
+            + validator * (MAX_N_SHARD + 1)
     }
 
-    fn proxy_metrics_port(validator: usize) -> usize {
-        11000 + validator * 100
+    fn proxy_metrics_port(&self, validator: usize) -> usize {
+        BASIC_PORT
+            + 2 * FUNCTIONAL_SHIFT_PORT
+            + self.index_port * SHIFT_PORT
+            + validator * (MAX_N_SHARD + 1)
     }
 
-    fn shard_metrics_port(validator: usize, shard: usize) -> usize {
-        11000 + validator * 100 + shard + 1
+    fn shard_metrics_port(&self, validator: usize, shard: usize) -> usize {
+        BASIC_PORT
+            + 2 * FUNCTIONAL_SHIFT_PORT
+            + self.index_port * SHIFT_PORT
+            + validator * (MAX_N_SHARD + 1)
+            + shard
+            + 1
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
@@ -485,9 +606,9 @@ impl LocalNet {
             .path_provider
             .path()
             .join(format!("validator_{n}.toml"));
-        let port = Self::proxy_port(n);
-        let internal_port = Self::internal_port(n);
-        let metrics_port = Self::proxy_metrics_port(n);
+        let port = self.proxy_port(n);
+        let internal_port = self.internal_port(n);
+        let metrics_port = self.proxy_metrics_port(n);
         let external_protocol = self.network.external();
         let internal_protocol = self.network.internal();
         let mut content = format!(
@@ -504,8 +625,8 @@ impl LocalNet {
             "#
         );
         for k in 0..self.num_shards {
-            let shard_port = Self::shard_port(n, k);
-            let shard_metrics_port = Self::shard_metrics_port(n, k);
+            let shard_port = self.shard_port(n, k);
+            let shard_metrics_port = self.shard_metrics_port(n, k);
             content.push_str(&format!(
                 r#"
 
@@ -558,7 +679,7 @@ impl LocalNet {
 
         match self.network {
             Network::Grpc => {
-                let port = Self::proxy_port(validator);
+                let port = self.proxy_port(validator);
                 let nickname = format!("validator proxy {validator}");
                 Self::ensure_grpc_server_has_started(&nickname, port).await?;
             }
@@ -648,7 +769,7 @@ impl LocalNet {
 
         match self.network {
             Network::Grpc => {
-                let port = Self::shard_port(validator, shard);
+                let port = self.shard_port(validator, shard);
                 let nickname = format!("validator server {validator}:{shard}");
                 Self::ensure_grpc_server_has_started(&nickname, port).await?;
             }

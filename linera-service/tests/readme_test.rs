@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg(feature = "rocksdb")]
-
 mod common;
-
 use common::INTEGRATION_TEST_GUARD;
 use linera_service::util::QuotedBashAndGraphQlScript;
 use tokio::{process::Command, time::Duration};
