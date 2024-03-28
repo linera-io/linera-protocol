@@ -516,6 +516,9 @@ impl LineraNet for LocalNet {
             self.testing_prng_seed = Some(seed + 1);
         }
         self.next_client_id += 1;
+        if self.next_client_id > MAX_N_CLIENT {
+            panic!("Excessive number of clients created");
+        }
         client
     }
 
