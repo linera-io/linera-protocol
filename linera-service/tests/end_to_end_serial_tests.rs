@@ -7,7 +7,8 @@ use std::{
     io::{BufRead, BufReader},
     process::{Command, Stdio},
 };
-use linera_service::INTEGRATION_TEST_GUARD;
+mod common;
+use common::INTEGRATION_TEST_GUARD;
 
 #[test_log::test(tokio::test)]
 async fn test_linera_net_up_simple() {

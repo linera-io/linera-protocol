@@ -155,7 +155,7 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
 #[cfg(with_testing)]
 pub struct LocalKubernetesTestNet {
     net: Arc<Mutex<LocalKubernetesNet>>,
-    guard: OwnedMutexGuard<()>,
+    _guard: OwnedMutexGuard<()>,
 }
 
 #[cfg(with_testing)]
@@ -176,7 +176,7 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
             })
             .await;
 
-        let mut net = LocalKubernetesTestNet { net: net.clone(), guard };
+        let mut net = LocalKubernetesTestNet { net: net.clone(), _guard: guard };
         let client = net.make_client().await;
         // The tests assume we've created a genesis config with 10
         // chains with 10 tokens each.
