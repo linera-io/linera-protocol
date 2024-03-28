@@ -3,7 +3,6 @@
 
 use std::fmt::Debug;
 
-use async_trait::async_trait;
 use futures::FutureExt;
 use linera_base::ensure;
 use thiserror::Error;
@@ -45,7 +44,6 @@ pub struct ValueSplittingStore<K> {
     pub store: K,
 }
 
-#[async_trait]
 impl<K> ReadableKeyValueStore<K::Error> for ValueSplittingStore<K>
 where
     K: KeyValueStore + Send + Sync,
@@ -196,7 +194,6 @@ where
     }
 }
 
-#[async_trait]
 impl<K> WritableKeyValueStore<K::Error> for ValueSplittingStore<K>
 where
     K: KeyValueStore + Send + Sync,
@@ -242,7 +239,6 @@ where
     }
 }
 
-#[async_trait]
 impl<K> AdminKeyValueStore for ValueSplittingStore<K>
 where
     K: AdminKeyValueStore + Send + Sync,
@@ -343,7 +339,6 @@ impl Default for TestMemoryStoreInternal {
     }
 }
 
-#[async_trait]
 impl ReadableKeyValueStore<MemoryContextError> for TestMemoryStoreInternal {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
@@ -383,7 +378,6 @@ impl ReadableKeyValueStore<MemoryContextError> for TestMemoryStoreInternal {
     }
 }
 
-#[async_trait]
 impl WritableKeyValueStore<MemoryContextError> for TestMemoryStoreInternal {
     // We set up the MAX_VALUE_SIZE to the artificially low value of 100
     // purely for testing purposes.
@@ -430,7 +424,6 @@ pub struct TestMemoryStore {
     store: ValueSplittingStore<TestMemoryStoreInternal>,
 }
 
-#[async_trait]
 impl ReadableKeyValueStore<MemoryContextError> for TestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
@@ -470,7 +463,6 @@ impl ReadableKeyValueStore<MemoryContextError> for TestMemoryStore {
     }
 }
 
-#[async_trait]
 impl WritableKeyValueStore<MemoryContextError> for TestMemoryStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
