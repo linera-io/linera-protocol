@@ -194,6 +194,14 @@ pub trait Storage: Sized {
                 name: SystemChannel::Admin.name(),
             })?;
             let mut admin_chain = self.load_chain(admin_id).await?;
+            assert!(
+                admin_chain.tip_state.get().is_first_block(),
+                "Attempting to add root chains after blocks have already been created"
+            );
+            assert!(
+                admin_chain.is_active(),
+                "Attempting to add root chains without the admin chain being active"
+            );
             let full_name = ChannelFullName {
                 application_id: GenericApplicationId::System,
                 name: SystemChannel::Admin.name(),
