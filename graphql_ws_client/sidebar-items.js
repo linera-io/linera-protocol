@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"mod":["graphql","websockets"],"struct":["AsyncWebsocketClient","AsyncWebsocketClientBuilder","SubscriptionStream"],"type":["GraphQLClientClient","GraphQLClientClientBuilder"]};

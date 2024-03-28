@@ -1,0 +1,89 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Runs the provided closure on a thread where blocking is acceptable."><title>spawn_blocking in tokio::task - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-9ee3a5e31a2afa3e.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.75.0 (82e1608df 2023-12-21)" data-channel="1.75.0" data-search-js="search-8fbf244ebcf71464.js" data-settings-js="settings-74424d7eec62a23e.js" ><script src="../../static.files/storage-fec3eaa3851e447d.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-9dd44ab47b99a0fb.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-5d8b3c7633ad77ba.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tokio/index.html">tokio</a><span class="version">1.36.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In tokio::task</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">tokio</a>::<wbr><a href="index.html">task</a>::<wbr><a class="fn" href="#">spawn_blocking</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../../src/tokio/task/blocking.rs.html#204-210">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn spawn_blocking&lt;F, R&gt;(f: F) -&gt; <a class="struct" href="struct.JoinHandle.html" title="struct tokio::task::JoinHandle">JoinHandle</a>&lt;R&gt; <a href="#" class="tooltip" data-notable-ty="JoinHandle&lt;R&gt;">ⓘ</a><span class="where fmt-newline">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>() -&gt; R + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,
+    R: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,</span></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Runs the provided closure on a thread where blocking is acceptable.</p>
+<p>In general, issuing a blocking call or performing a lot of compute in a
+future without yielding is problematic, as it may prevent the executor from
+driving other futures forward. This function runs the provided closure on a
+thread dedicated to blocking operations. See the <a href="../index.html#cpu-bound-tasks-and-blocking-code">CPU-bound tasks and
+blocking code</a> section for more information.</p>
+<p>Tokio will spawn more blocking threads when they are requested through this
+function until the upper limit configured on the <a href="../runtime/struct.Builder.html" title="struct tokio::runtime::Builder"><code>Builder</code></a> is reached.
+After reaching the upper limit, the tasks are put in a queue.
+The thread limit is very large by default, because <code>spawn_blocking</code> is often
+used for various kinds of IO operations that cannot be performed
+asynchronously.  When you run CPU-bound code using <code>spawn_blocking</code>, you
+should keep this large upper limit in mind. When running many CPU-bound
+computations, a semaphore or some other synchronization primitive should be
+used to limit the number of computation executed in parallel. Specialized
+CPU-bound executors, such as <a href="https://docs.rs/rayon">rayon</a>, may also be a good fit.</p>
+<p>This function is intended for non-async operations that eventually finish on
+their own. If you want to spawn an ordinary thread, you should use
+<a href="https://doc.rust-lang.org/1.75.0/std/thread/fn.spawn.html" title="fn std::thread::spawn"><code>thread::spawn</code></a> instead.</p>
+<p>Closures spawned using <code>spawn_blocking</code> cannot be cancelled abruptly; there
+is no standard low level API to cause a thread to stop running.  However,
+a useful pattern is to pass some form of “cancellation token” into
+the thread.  This could be an <a href="https://doc.rust-lang.org/1.75.0/core/sync/atomic/struct.AtomicBool.html" title="struct core::sync::atomic::AtomicBool"><code>AtomicBool</code></a> that the task checks periodically.
+Another approach is to have the thread primarily read or write from a channel,
+and to exit when the channel closes; assuming the other side of the channel is dropped
+when cancellation occurs, this will cause the blocking task thread to exit
+soon after as well.</p>
+<p>When you shut down the executor, it will wait indefinitely for all blocking operations to
+finish. You can use <a href="../runtime/struct.Runtime.html#method.shutdown_timeout" title="method tokio::runtime::Runtime::shutdown_timeout"><code>shutdown_timeout</code></a> to stop waiting for them after a
+certain timeout. Be aware that this will still not cancel the tasks — they
+are simply allowed to keep running after the method returns.  It is possible
+for a blocking task to be cancelled if it has not yet started running, but this
+is not guaranteed.</p>
+<p>Note that if you are using the single threaded runtime, this function will
+still spawn additional threads for blocking operations. The current-thread
+scheduler’s single thread is only used for asynchronous code.</p>
+<h2 id="related-apis-and-patterns-for-bridging-asynchronous-and-blocking-code"><a href="#related-apis-and-patterns-for-bridging-asynchronous-and-blocking-code">Related APIs and patterns for bridging asynchronous and blocking code</a></h2>
+<p>In simple cases, it is sufficient to have the closure accept input
+parameters at creation time and return a single value (or struct/tuple, etc.).</p>
+<p>For more complex situations in which it is desirable to stream data to or from
+the synchronous context, the <a href="../sync/mpsc/index.html" title="mod tokio::sync::mpsc"><code>mpsc channel</code></a> has <code>blocking_send</code> and
+<code>blocking_recv</code> methods for use in non-async code such as the thread created
+by <code>spawn_blocking</code>.</p>
+<p>Another option is <a href="https://docs.rs/tokio-util/latest/tokio_util/io/struct.SyncIoBridge.html"><code>SyncIoBridge</code></a> for cases where the synchronous context
+is operating on byte streams.  For example, you might use an asynchronous
+HTTP client such as <a href="https://docs.rs/hyper">hyper</a> to fetch data, but perform complex parsing
+of the payload body using a library written for synchronous I/O.</p>
+<p>Finally, see also <a href="https://tokio.rs/tokio/topics/bridging">Bridging with sync code</a> for discussions
+around the opposite case of using Tokio as part of a larger synchronous
+codebase.</p>
+<h2 id="examples"><a href="#examples">Examples</a></h2>
+<p>Pass an input value and receive result of computation:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task;
+
+<span class="comment">// Initial input
+</span><span class="kw">let </span><span class="kw-2">mut </span>v = <span class="string">&quot;Hello, &quot;</span>.to_string();
+<span class="kw">let </span>res = task::spawn_blocking(<span class="kw">move </span>|| {
+    <span class="comment">// Stand-in for compute-heavy work or using synchronous APIs
+    </span>v.push_str(<span class="string">&quot;world&quot;</span>);
+    <span class="comment">// Pass ownership of the value back to the asynchronous context
+    </span>v
+}).<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="comment">// `res` is the value returned from the thread
+</span><span class="macro">assert_eq!</span>(res.as_str(), <span class="string">&quot;Hello, world&quot;</span>);</code></pre></div>
+<p>Use a channel:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task;
+<span class="kw">use </span>tokio::sync::mpsc;
+
+<span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = mpsc::channel(<span class="number">2</span>);
+<span class="kw">let </span>start = <span class="number">5</span>;
+<span class="kw">let </span>worker = task::spawn_blocking(<span class="kw">move </span>|| {
+    <span class="kw">for </span>x <span class="kw">in </span><span class="number">0</span>..<span class="number">10 </span>{
+        <span class="comment">// Stand in for complex computation
+        </span>tx.blocking_send(start + x).unwrap();
+    }
+});
+
+<span class="kw">let </span><span class="kw-2">mut </span>acc = <span class="number">0</span>;
+<span class="kw">while let </span><span class="prelude-val">Some</span>(v) = rx.recv().<span class="kw">await </span>{
+    acc += v;
+}
+<span class="macro">assert_eq!</span>(acc, <span class="number">95</span>);
+worker.<span class="kw">await</span>.unwrap();</code></pre></div>
+</div></details><script type="text/json" id="notable-traits-data">{"JoinHandle<R>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.JoinHandle.html\" title=\"struct tokio::task::JoinHandle\">JoinHandle</a>&lt;T&gt;</code></h3><pre><code><span class=\"where fmt-newline\">impl&lt;T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.JoinHandle.html\" title=\"struct tokio::task::JoinHandle\">JoinHandle</a>&lt;T&gt;</span><span class=\"where fmt-newline\">    type <a href=\"https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.75.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;T, <a class=\"struct\" href=\"struct.JoinError.html\" title=\"struct tokio::task::JoinError\">JoinError</a>&gt;;</span>"}</script></section></div></main></body></html>

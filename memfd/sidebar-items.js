@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error","FileSeal","HugetlbSize"],"struct":["Memfd","MemfdOptions"],"type":["SealsHashSet"]};

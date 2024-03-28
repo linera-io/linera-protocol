@@ -1,0 +1,197 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `Generator` trait in crate `linera_wit_bindgen_core`."><title>Generator in linera_wit_bindgen_core - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-9ee3a5e31a2afa3e.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="linera_wit_bindgen_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.75.0 (82e1608df 2023-12-21)" data-channel="1.75.0" data-search-js="search-8fbf244ebcf71464.js" data-settings-js="settings-74424d7eec62a23e.js" ><script src="../static.files/storage-fec3eaa3851e447d.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-9dd44ab47b99a0fb.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-5d8b3c7633ad77ba.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../linera_wit_bindgen_core/index.html">linera_wit_bindgen_core</a><span class="version">0.2.0</span></h2></div><h2 class="location"><a href="#">Generator</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.export">export</a></li><li><a href="#tymethod.finish_one">finish_one</a></li><li><a href="#tymethod.import">import</a></li><li><a href="#tymethod.type_alias">type_alias</a></li><li><a href="#tymethod.type_builtin">type_builtin</a></li><li><a href="#tymethod.type_enum">type_enum</a></li><li><a href="#tymethod.type_flags">type_flags</a></li><li><a href="#tymethod.type_list">type_list</a></li><li><a href="#tymethod.type_option">type_option</a></li><li><a href="#tymethod.type_record">type_record</a></li><li><a href="#tymethod.type_resource">type_resource</a></li><li><a href="#tymethod.type_result">type_result</a></li><li><a href="#tymethod.type_tuple">type_tuple</a></li><li><a href="#tymethod.type_union">type_union</a></li><li><a href="#tymethod.type_variant">type_variant</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.finish_all">finish_all</a></li><li><a href="#method.finish_functions">finish_functions</a></li><li><a href="#method.generate_all">generate_all</a></li><li><a href="#method.generate_one">generate_one</a></li><li><a href="#method.preprocess_all">preprocess_all</a></li><li><a href="#method.preprocess_functions">preprocess_functions</a></li><li><a href="#method.preprocess_one">preprocess_one</a></li><li><a href="#method.preprocess_resources">preprocess_resources</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate linera_wit_bindgen_core</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">linera_wit_bindgen_core</a>::<wbr><a class="trait" href="#">Generator</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/linera_wit_bindgen_core/lib.rs.html#42-171">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Generator {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 23 methods</span></summary>    // Required methods
+    fn <a href="#tymethod.type_record" class="fn">type_record</a>(
+        &amp;mut self,
+        iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+        id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+        record: &amp;<a class="struct" href="../linera_wit_parser/struct.Record.html" title="struct linera_wit_parser::Record">Record</a>,
+        docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.type_flags" class="fn">type_flags</a>(
+        &amp;mut self,
+        iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+        id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+        flags: &amp;<a class="struct" href="../linera_wit_parser/struct.Flags.html" title="struct linera_wit_parser::Flags">Flags</a>,
+        docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.type_tuple" class="fn">type_tuple</a>(
+        &amp;mut self,
+        iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+        id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+        flags: &amp;<a class="struct" href="../linera_wit_parser/struct.Tuple.html" title="struct linera_wit_parser::Tuple">Tuple</a>,
+        docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.type_variant" class="fn">type_variant</a>(
+        &amp;mut self,
+        iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+        id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+        variant: &amp;<a class="struct" href="../linera_wit_parser/struct.Variant.html" title="struct linera_wit_parser::Variant">Variant</a>,
+        docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.type_option" class="fn">type_option</a>(
+        &amp;mut self,
+        iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+        id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+        payload: &amp;<a class="enum" href="../linera_wit_parser/enum.Type.html" title="enum linera_wit_parser::Type">Type</a>,
+        docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.type_result" class="fn">type_result</a>(
+        &amp;mut self,
+        iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+        id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+        result: &amp;<a class="struct" href="../linera_wit_parser/struct.Result_.html" title="struct linera_wit_parser::Result_">Result_</a>,
+        docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.type_union" class="fn">type_union</a>(
+        &amp;mut self,
+        iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+        id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+        union: &amp;<a class="struct" href="../linera_wit_parser/struct.Union.html" title="struct linera_wit_parser::Union">Union</a>,
+        docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.type_enum" class="fn">type_enum</a>(
+        &amp;mut self,
+        iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+        id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+        enum_: &amp;<a class="struct" href="../linera_wit_parser/struct.Enum.html" title="struct linera_wit_parser::Enum">Enum</a>,
+        docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.type_resource" class="fn">type_resource</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, ty: <a class="type" href="../linera_wit_parser/type.ResourceId.html" title="type linera_wit_parser::ResourceId">ResourceId</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.type_alias" class="fn">type_alias</a>(
+        &amp;mut self,
+        iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+        id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+        ty: &amp;<a class="enum" href="../linera_wit_parser/enum.Type.html" title="enum linera_wit_parser::Type">Type</a>,
+        docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.type_list" class="fn">type_list</a>(
+        &amp;mut self,
+        iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+        id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+        ty: &amp;<a class="enum" href="../linera_wit_parser/enum.Type.html" title="enum linera_wit_parser::Type">Type</a>,
+        docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.type_builtin" class="fn">type_builtin</a>(
+        &amp;mut self,
+        iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+        id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+        ty: &amp;<a class="enum" href="../linera_wit_parser/enum.Type.html" title="enum linera_wit_parser::Type">Type</a>,
+        docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.import" class="fn">import</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, func: &amp;<a class="struct" href="../linera_wit_parser/struct.Function.html" title="struct linera_wit_parser::Function">Function</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.export" class="fn">export</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, func: &amp;<a class="struct" href="../linera_wit_parser/struct.Function.html" title="struct linera_wit_parser::Function">Function</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.finish_one" class="fn">finish_one</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, files: &amp;mut <a class="struct" href="struct.Files.html" title="struct linera_wit_bindgen_core::Files">Files</a>);
+
+    // Provided methods
+    fn <a href="#method.preprocess_all" class="fn">preprocess_all</a>(&amp;mut self, imports: &amp;[<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>], exports: &amp;[<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.preprocess_one" class="fn">preprocess_one</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, dir: <a class="enum" href="enum.Direction.html" title="enum linera_wit_bindgen_core::Direction">Direction</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.preprocess_resources" class="fn">preprocess_resources</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, dir: <a class="enum" href="enum.Direction.html" title="enum linera_wit_bindgen_core::Direction">Direction</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.preprocess_functions" class="fn">preprocess_functions</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, dir: <a class="enum" href="enum.Direction.html" title="enum linera_wit_bindgen_core::Direction">Direction</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.finish_functions" class="fn">finish_functions</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, dir: <a class="enum" href="enum.Direction.html" title="enum linera_wit_bindgen_core::Direction">Direction</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.finish_all" class="fn">finish_all</a>(&amp;mut self, files: &amp;mut <a class="struct" href="struct.Files.html" title="struct linera_wit_bindgen_core::Files">Files</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.generate_one" class="fn">generate_one</a>(
+        &amp;mut self,
+        iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+        dir: <a class="enum" href="enum.Direction.html" title="enum linera_wit_bindgen_core::Direction">Direction</a>,
+        files: &amp;mut <a class="struct" href="struct.Files.html" title="struct linera_wit_bindgen_core::Files">Files</a>
+    ) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.generate_all" class="fn">generate_all</a>(
+        &amp;mut self,
+        imports: &amp;[<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>],
+        exports: &amp;[<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>],
+        files: &amp;mut <a class="struct" href="struct.Files.html" title="struct linera_wit_bindgen_core::Files">Files</a>
+    ) { ... }
+</details>}</code></pre><h2 id="required-methods" class="small-section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><section id="tymethod.type_record" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#51-58">source</a><h4 class="code-header">fn <a href="#tymethod.type_record" class="fn">type_record</a>(
+    &amp;mut self,
+    iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+    id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+    record: &amp;<a class="struct" href="../linera_wit_parser/struct.Record.html" title="struct linera_wit_parser::Record">Record</a>,
+    docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+)</h4></section><section id="tymethod.type_flags" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#59">source</a><h4 class="code-header">fn <a href="#tymethod.type_flags" class="fn">type_flags</a>(
+    &amp;mut self,
+    iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+    id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+    flags: &amp;<a class="struct" href="../linera_wit_parser/struct.Flags.html" title="struct linera_wit_parser::Flags">Flags</a>,
+    docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+)</h4></section><section id="tymethod.type_tuple" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#60">source</a><h4 class="code-header">fn <a href="#tymethod.type_tuple" class="fn">type_tuple</a>(
+    &amp;mut self,
+    iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+    id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+    flags: &amp;<a class="struct" href="../linera_wit_parser/struct.Tuple.html" title="struct linera_wit_parser::Tuple">Tuple</a>,
+    docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+)</h4></section><section id="tymethod.type_variant" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#61-68">source</a><h4 class="code-header">fn <a href="#tymethod.type_variant" class="fn">type_variant</a>(
+    &amp;mut self,
+    iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+    id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+    variant: &amp;<a class="struct" href="../linera_wit_parser/struct.Variant.html" title="struct linera_wit_parser::Variant">Variant</a>,
+    docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+)</h4></section><section id="tymethod.type_option" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#69-76">source</a><h4 class="code-header">fn <a href="#tymethod.type_option" class="fn">type_option</a>(
+    &amp;mut self,
+    iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+    id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+    payload: &amp;<a class="enum" href="../linera_wit_parser/enum.Type.html" title="enum linera_wit_parser::Type">Type</a>,
+    docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+)</h4></section><section id="tymethod.type_result" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#77-84">source</a><h4 class="code-header">fn <a href="#tymethod.type_result" class="fn">type_result</a>(
+    &amp;mut self,
+    iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+    id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+    result: &amp;<a class="struct" href="../linera_wit_parser/struct.Result_.html" title="struct linera_wit_parser::Result_">Result_</a>,
+    docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+)</h4></section><section id="tymethod.type_union" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#85">source</a><h4 class="code-header">fn <a href="#tymethod.type_union" class="fn">type_union</a>(
+    &amp;mut self,
+    iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+    id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+    union: &amp;<a class="struct" href="../linera_wit_parser/struct.Union.html" title="struct linera_wit_parser::Union">Union</a>,
+    docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+)</h4></section><section id="tymethod.type_enum" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#86">source</a><h4 class="code-header">fn <a href="#tymethod.type_enum" class="fn">type_enum</a>(
+    &amp;mut self,
+    iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+    id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+    enum_: &amp;<a class="struct" href="../linera_wit_parser/struct.Enum.html" title="struct linera_wit_parser::Enum">Enum</a>,
+    docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+)</h4></section><section id="tymethod.type_resource" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#87">source</a><h4 class="code-header">fn <a href="#tymethod.type_resource" class="fn">type_resource</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, ty: <a class="type" href="../linera_wit_parser/type.ResourceId.html" title="type linera_wit_parser::ResourceId">ResourceId</a>)</h4></section><section id="tymethod.type_alias" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#88">source</a><h4 class="code-header">fn <a href="#tymethod.type_alias" class="fn">type_alias</a>(
+    &amp;mut self,
+    iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+    id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+    ty: &amp;<a class="enum" href="../linera_wit_parser/enum.Type.html" title="enum linera_wit_parser::Type">Type</a>,
+    docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+)</h4></section><section id="tymethod.type_list" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#89">source</a><h4 class="code-header">fn <a href="#tymethod.type_list" class="fn">type_list</a>(
+    &amp;mut self,
+    iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+    id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+    ty: &amp;<a class="enum" href="../linera_wit_parser/enum.Type.html" title="enum linera_wit_parser::Type">Type</a>,
+    docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+)</h4></section><section id="tymethod.type_builtin" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#90">source</a><h4 class="code-header">fn <a href="#tymethod.type_builtin" class="fn">type_builtin</a>(
+    &amp;mut self,
+    iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>,
+    id: <a class="type" href="../linera_wit_parser/type.TypeId.html" title="type linera_wit_parser::TypeId">TypeId</a>,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>,
+    ty: &amp;<a class="enum" href="../linera_wit_parser/enum.Type.html" title="enum linera_wit_parser::Type">Type</a>,
+    docs: &amp;<a class="struct" href="../linera_wit_parser/struct.Docs.html" title="struct linera_wit_parser::Docs">Docs</a>
+)</h4></section><section id="tymethod.import" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#99">source</a><h4 class="code-header">fn <a href="#tymethod.import" class="fn">import</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, func: &amp;<a class="struct" href="../linera_wit_parser/struct.Function.html" title="struct linera_wit_parser::Function">Function</a>)</h4></section><section id="tymethod.export" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#100">source</a><h4 class="code-header">fn <a href="#tymethod.export" class="fn">export</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, func: &amp;<a class="struct" href="../linera_wit_parser/struct.Function.html" title="struct linera_wit_parser::Function">Function</a>)</h4></section><section id="tymethod.finish_one" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#105">source</a><h4 class="code-header">fn <a href="#tymethod.finish_one" class="fn">finish_one</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, files: &amp;mut <a class="struct" href="struct.Files.html" title="struct linera_wit_bindgen_core::Files">Files</a>)</h4></section></div><h2 id="provided-methods" class="small-section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><section id="method.preprocess_all" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#43-45">source</a><h4 class="code-header">fn <a href="#method.preprocess_all" class="fn">preprocess_all</a>(&amp;mut self, imports: &amp;[<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>], exports: &amp;[<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>])</h4></section><section id="method.preprocess_one" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#47-49">source</a><h4 class="code-header">fn <a href="#method.preprocess_one" class="fn">preprocess_one</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, dir: <a class="enum" href="enum.Direction.html" title="enum linera_wit_bindgen_core::Direction">Direction</a>)</h4></section><section id="method.preprocess_resources" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#92-94">source</a><h4 class="code-header">fn <a href="#method.preprocess_resources" class="fn">preprocess_resources</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, dir: <a class="enum" href="enum.Direction.html" title="enum linera_wit_bindgen_core::Direction">Direction</a>)</h4></section><section id="method.preprocess_functions" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#96-98">source</a><h4 class="code-header">fn <a href="#method.preprocess_functions" class="fn">preprocess_functions</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, dir: <a class="enum" href="enum.Direction.html" title="enum linera_wit_bindgen_core::Direction">Direction</a>)</h4></section><section id="method.finish_functions" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#101-103">source</a><h4 class="code-header">fn <a href="#method.finish_functions" class="fn">finish_functions</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, dir: <a class="enum" href="enum.Direction.html" title="enum linera_wit_bindgen_core::Direction">Direction</a>)</h4></section><section id="method.finish_all" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#107-109">source</a><h4 class="code-header">fn <a href="#method.finish_all" class="fn">finish_all</a>(&amp;mut self, files: &amp;mut <a class="struct" href="struct.Files.html" title="struct linera_wit_bindgen_core::Files">Files</a>)</h4></section><section id="method.generate_one" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#111-156">source</a><h4 class="code-header">fn <a href="#method.generate_one" class="fn">generate_one</a>(&amp;mut self, iface: &amp;<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>, dir: <a class="enum" href="enum.Direction.html" title="enum linera_wit_bindgen_core::Direction">Direction</a>, files: &amp;mut <a class="struct" href="struct.Files.html" title="struct linera_wit_bindgen_core::Files">Files</a>)</h4></section><section id="method.generate_all" class="method"><a class="src rightside" href="../src/linera_wit_bindgen_core/lib.rs.html#158-170">source</a><h4 class="code-header">fn <a href="#method.generate_all" class="fn">generate_all</a>(
+    &amp;mut self,
+    imports: &amp;[<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>],
+    exports: &amp;[<a class="struct" href="../linera_wit_parser/struct.Interface.html" title="struct linera_wit_parser::Interface">Interface</a>],
+    files: &amp;mut <a class="struct" href="struct.Files.html" title="struct linera_wit_bindgen_core::Files">Files</a>
+)</h4></section></div><h2 id="implementors" class="small-section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/linera_wit_bindgen_core/trait.Generator.js" async></script></section></div></main></body></html>

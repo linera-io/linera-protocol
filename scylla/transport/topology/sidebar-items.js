@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CollectionType","ColumnKind","CqlType","NativeType","Strategy","UntranslatedEndpoint"],"struct":["Column","Keyspace","MaterializedView","MissingUserDefinedType","Peer","PeerEndpoint","Table","UntranslatedPeer","UserDefinedType"]};

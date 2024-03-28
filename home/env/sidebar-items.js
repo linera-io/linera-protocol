@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["OS_ENV"],"fn":["cargo_home_with_cwd_env","cargo_home_with_env","home_dir_with_env","rustup_home_with_cwd_env","rustup_home_with_env"],"struct":["OsEnv"],"trait":["Env"]};

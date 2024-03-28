@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["combine_all_option","combine_n"],"struct":["All","Any","Max","Min","Product"],"trait":["Semigroup"]};

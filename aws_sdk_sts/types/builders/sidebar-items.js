@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AssumedRoleUserBuilder","CredentialsBuilder","FederatedUserBuilder","PolicyDescriptorTypeBuilder","ProvidedContextBuilder","TagBuilder"]};

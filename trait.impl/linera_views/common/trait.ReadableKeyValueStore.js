@@ -1,0 +1,4 @@
+(function() {var implementors = {
+"linera_storage_service":[["impl <a class=\"trait\" href=\"linera_views/common/trait.ReadableKeyValueStore.html\" title=\"trait linera_views::common::ReadableKeyValueStore\">ReadableKeyValueStore</a>&lt;<a class=\"enum\" href=\"linera_storage_service/common/enum.ServiceContextError.html\" title=\"enum linera_storage_service::common::ServiceContextError\">ServiceContextError</a>&gt; for <a class=\"struct\" href=\"linera_storage_service/client/struct.ServiceStoreClient.html\" title=\"struct linera_storage_service::client::ServiceStoreClient\">ServiceStoreClient</a>"]],
+"linera_views":[]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

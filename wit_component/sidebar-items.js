@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DecodedWasm","StringEncoding"],"fn":["decode","encode"],"mod":["metadata"],"struct":["ComponentEncoder","WitPrinter"]};

@@ -1,0 +1,36 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A macro to create a custom keyword parser."><title>custom_keyword in wast - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-9ee3a5e31a2afa3e.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wast" data-themes="" data-resource-suffix="" data-rustdoc-version="1.75.0 (82e1608df 2023-12-21)" data-channel="1.75.0" data-search-js="search-8fbf244ebcf71464.js" data-settings-js="settings-74424d7eec62a23e.js" ><script src="../static.files/storage-fec3eaa3851e447d.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-9dd44ab47b99a0fb.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-5d8b3c7633ad77ba.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wast/index.html">wast</a><span class="version">201.0.0</span></h2></div><div class="sidebar-elems"></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">wast</a>::<wbr><a class="macro" href="#">custom_keyword</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/wast/lib.rs.html#91-128">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules! </span>custom_keyword {
+    (<span class="macro-nonterminal">$name</span>:ident) =&gt; { ... };
+    (<span class="macro-nonterminal">$name</span>:ident = <span class="macro-nonterminal">$kw</span>:expr) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A macro to create a custom keyword parser.</p>
+<p>This macro is invoked in one of two forms:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// keyword derived from the Rust identifier:
+</span><span class="macro">wast::custom_keyword!</span>(foo);
+
+<span class="comment">// or an explicitly specified string representation of the keyword:
+</span><span class="macro">wast::custom_keyword!</span>(my_keyword = <span class="string">&quot;the-wasm-keyword&quot;</span>);</code></pre></div>
+<p>This can then be used to parse custom keyword for custom items, such as:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wast::parser::{Parser, <span class="prelude-ty">Result</span>, Parse};
+
+<span class="kw">struct </span>InlineModule&lt;<span class="lifetime">&#39;a</span>&gt; {
+    inline_text: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
+}
+
+<span class="kw">mod </span>kw {
+    <span class="macro">wast::custom_keyword!</span>(inline);
+}
+
+<span class="comment">// Parse an inline string module of the form:
+//
+//    (inline &quot;(module (func))&quot;)
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; Parse&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">for </span>InlineModule&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">fn </span>parse(parser: Parser&lt;<span class="lifetime">&#39;a</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        parser.parse::&lt;kw::inline&gt;()<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(InlineModule {
+            inline_text: parser.parse()<span class="question-mark">?</span>,
+        })
+    }
+}</code></pre></div>
+<p>Note that the keyword name can only start with a lower-case letter, i.e. ‘a’..‘z’.</p>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BuildError","ConnectorError","DisplayErrorContext","ErrorMetadata"],"trait":["ProvideErrorMetadata"],"type":["BoxError","SdkError"]};

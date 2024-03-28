@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["GraphQLClient","StreamingOperation"],"trait":["GraphqlClient","GraphqlOperation"]};

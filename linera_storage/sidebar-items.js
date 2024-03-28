@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ChainRuntimeContext","DbStorage","TestClock","WallClock"],"trait":["Clock","Storage"],"type":["DynamoDbStorage","MemoryStorage","RocksDbStorage","ScyllaDbStorage","ServiceStorage"]};

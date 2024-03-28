@@ -1,0 +1,107 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Marks async function to be executed by runtime, suitable to test environment. This macro helps set up a `Runtime` without requiring the user to use Runtime or Builder directly."><title>test in tokio - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-9ee3a5e31a2afa3e.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.75.0 (82e1608df 2023-12-21)" data-channel="1.75.0" data-search-js="search-8fbf244ebcf71464.js" data-settings-js="settings-74424d7eec62a23e.js" ><script src="../static.files/storage-fec3eaa3851e447d.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-9dd44ab47b99a0fb.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-5d8b3c7633ad77ba.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../tokio/index.html">tokio</a><span class="version">1.36.0</span></h2></div><div class="sidebar-elems"></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">tokio</a>::<wbr><a class="attr" href="#">test</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/tokio_macros/lib.rs.html#428">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[test]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Marks async function to be executed by runtime, suitable to test environment.
+This macro helps set up a <code>Runtime</code> without requiring the user to use
+<a href="../tokio/runtime/struct.Runtime.html">Runtime</a> or
+<a href="../tokio/runtime/struct.Builder.html">Builder</a> directly.</p>
+<p>Note: This macro is designed to be simplistic and targets applications that
+do not require a complex setup. If the provided functionality is not
+sufficient, you may be interested in using
+<a href="../tokio/runtime/struct.Builder.html">Builder</a>, which provides a more
+powerful interface.</p>
+<h2 id="multi-threaded-runtime"><a href="#multi-threaded-runtime">Multi-threaded runtime</a></h2>
+<p>To use the multi-threaded runtime, the macro can be configured using</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>, worker_threads = <span class="number">1</span>)]
+</span><span class="kw">async fn </span>my_test() {
+    <span class="macro">assert!</span>(<span class="bool-val">true</span>);
+}</code></pre></div>
+<p>The <code>worker_threads</code> option configures the number of worker threads, and
+defaults to the number of cpus on the system.</p>
+<p>Note: The multi-threaded runtime requires the <code>rt-multi-thread</code> feature
+flag.</p>
+<h2 id="current-thread-runtime"><a href="#current-thread-runtime">Current thread runtime</a></h2>
+<p>The default test runtime is single-threaded. Each test gets a
+separate current-thread runtime.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::test]
+</span><span class="kw">async fn </span>my_test() {
+    <span class="macro">assert!</span>(<span class="bool-val">true</span>);
+}</code></pre></div>
+<h3 id="usage"><a href="#usage">Usage</a></h3><h4 id="using-the-multi-thread-runtime"><a href="#using-the-multi-thread-runtime">Using the multi-thread runtime</a></h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+</span><span class="kw">async fn </span>my_test() {
+    <span class="macro">assert!</span>(<span class="bool-val">true</span>);
+}</code></pre></div>
+<p>Equivalent code not using <code>#[tokio::test]</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+</span><span class="kw">fn </span>my_test() {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(<span class="kw">async </span>{
+            <span class="macro">assert!</span>(<span class="bool-val">true</span>);
+        })
+}</code></pre></div>
+<h4 id="using-current-thread-runtime"><a href="#using-current-thread-runtime">Using current thread runtime</a></h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::test]
+</span><span class="kw">async fn </span>my_test() {
+    <span class="macro">assert!</span>(<span class="bool-val">true</span>);
+}</code></pre></div>
+<p>Equivalent code not using <code>#[tokio::test]</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+</span><span class="kw">fn </span>my_test() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(<span class="kw">async </span>{
+            <span class="macro">assert!</span>(<span class="bool-val">true</span>);
+        })
+}</code></pre></div>
+<h4 id="set-number-of-worker-threads"><a href="#set-number-of-worker-threads">Set number of worker threads</a></h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::test(flavor =<span class="string">&quot;multi_thread&quot;</span>, worker_threads = <span class="number">2</span>)]
+</span><span class="kw">async fn </span>my_test() {
+    <span class="macro">assert!</span>(<span class="bool-val">true</span>);
+}</code></pre></div>
+<p>Equivalent code not using <code>#[tokio::test]</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+</span><span class="kw">fn </span>my_test() {
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(<span class="number">2</span>)
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(<span class="kw">async </span>{
+            <span class="macro">assert!</span>(<span class="bool-val">true</span>);
+        })
+}</code></pre></div>
+<h4 id="configure-the-runtime-to-start-with-time-paused"><a href="#configure-the-runtime-to-start-with-time-paused">Configure the runtime to start with time paused</a></h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::test(start_paused = <span class="bool-val">true</span>)]
+</span><span class="kw">async fn </span>my_test() {
+    <span class="macro">assert!</span>(<span class="bool-val">true</span>);
+}</code></pre></div>
+<p>Equivalent code not using <code>#[tokio::test]</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+</span><span class="kw">fn </span>my_test() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .start_paused(<span class="bool-val">true</span>)
+        .build()
+        .unwrap()
+        .block_on(<span class="kw">async </span>{
+            <span class="macro">assert!</span>(<span class="bool-val">true</span>);
+        })
+}</code></pre></div>
+<p>Note that <code>start_paused</code> requires the <code>test-util</code> feature to be enabled.</p>
+<h4 id="rename-package"><a href="#rename-package">Rename package</a></h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio <span class="kw">as </span>tokio1;
+
+<span class="attr">#[tokio1::test(<span class="kw">crate </span>= <span class="string">&quot;tokio1&quot;</span>)]
+</span><span class="kw">async fn </span>my_test() {
+    <span class="macro">println!</span>(<span class="string">&quot;Hello world&quot;</span>);
+}</code></pre></div>
+</div></details></section></div></main></body></html>

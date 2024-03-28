@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ArchivedIndexMap","IndexMapResolver","Iter","Keys","Values"]};

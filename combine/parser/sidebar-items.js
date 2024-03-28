@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["byte","char","choice","combinator","error","function","item","range","repeat","sequence"],"trait":["Parser"]};

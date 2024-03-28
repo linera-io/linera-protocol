@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Arena","DefaultArenaBehavior","Id","IntoIter","Iter","IterMut"],"trait":["ArenaBehavior"]};

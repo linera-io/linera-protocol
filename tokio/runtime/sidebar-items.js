@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RuntimeFlavor"],"struct":["Builder","EnterGuard","Handle","Runtime","TryCurrentError"]};

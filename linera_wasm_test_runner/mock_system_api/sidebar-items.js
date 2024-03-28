@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_to_linker","copy_memory_slices","get_function","load_bytes","load_indirect_bytes","store_bytes_from_resource","store_bytes_in_memory","store_in_memory"],"struct":["Resources"]};

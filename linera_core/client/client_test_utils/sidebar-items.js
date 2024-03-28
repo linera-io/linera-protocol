@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FaultType"],"static":["ROCKS_DB_SEMAPHORE"],"struct":["DynamoDbStorageBuilder","LocalValidatorClient","MemoryStorageBuilder","NodeProvider","RocksDbStorageBuilder","ScyllaDbStorageBuilder","ServiceStorageBuilder","TestBuilder"],"trait":["StorageBuilder"]};

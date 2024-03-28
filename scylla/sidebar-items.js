@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["FromRow","FromUserType","IntoUserType","SerializeCql","SerializeRow","ValueList"],"macro":["impl_from_cql_value_from_method"],"mod":["authentication","cql_to_rust","frame","history","macros","routing","serialize","statement","tracing","transport"],"struct":["Bytes","BytesMut","CachingSession","Metrics"],"trait":["BufMut","FromRow"]};

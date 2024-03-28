@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Void"],"fn":["unreachable"],"trait":["ResultVoidErrExt","ResultVoidExt"]};

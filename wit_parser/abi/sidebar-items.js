@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AbiVariant","Bitcast","Instruction","LiftLower","WasmType"],"struct":["WasmSignature"],"trait":["Bindgen"]};

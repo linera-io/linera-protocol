@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["drain","unfold"],"struct":["Buffer","Close","Drain","Fanout","Feed","Flush","Send","SendAll","SinkErrInto","SinkMapErr","Unfold","With","WithFlatMap"],"trait":["Sink","SinkExt"]};

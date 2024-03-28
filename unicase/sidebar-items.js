@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["eq","eq_ascii"],"struct":["Ascii","UniCase"]};

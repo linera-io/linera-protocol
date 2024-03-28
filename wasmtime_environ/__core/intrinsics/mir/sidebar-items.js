@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["Call","CastTransmute","Checked","CopyForDeref","Deinit","Discriminant","Drop","Field","Goto","Len","Move","Offset","Retag","Return","SetDiscriminant","Static","StaticMut","StorageDead","StorageLive","Unreachable","Variant"],"macro":["mir","place"],"struct":["BasicBlock"]};

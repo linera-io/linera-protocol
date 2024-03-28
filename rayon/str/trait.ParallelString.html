@@ -1,0 +1,126 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Parallel extensions for strings."><title>ParallelString in rayon::str - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-9ee3a5e31a2afa3e.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="rayon" data-themes="" data-resource-suffix="" data-rustdoc-version="1.75.0 (82e1608df 2023-12-21)" data-channel="1.75.0" data-search-js="search-8fbf244ebcf71464.js" data-settings-js="settings-74424d7eec62a23e.js" ><script src="../../static.files/storage-fec3eaa3851e447d.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-9dd44ab47b99a0fb.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-5d8b3c7633ad77ba.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../rayon/index.html">rayon</a><span class="version">1.8.0</span></h2></div><h2 class="location"><a href="#">ParallelString</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.as_parallel_string">as_parallel_string</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.par_bytes">par_bytes</a></li><li><a href="#method.par_char_indices">par_char_indices</a></li><li><a href="#method.par_chars">par_chars</a></li><li><a href="#method.par_encode_utf16">par_encode_utf16</a></li><li><a href="#method.par_lines">par_lines</a></li><li><a href="#method.par_match_indices">par_match_indices</a></li><li><a href="#method.par_matches">par_matches</a></li><li><a href="#method.par_split">par_split</a></li><li><a href="#method.par_split_terminator">par_split_terminator</a></li><li><a href="#method.par_split_whitespace">par_split_whitespace</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-ParallelString-for-str">str</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In rayon::str</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">rayon</a>::<wbr><a href="index.html">str</a>::<wbr><a class="trait" href="#">ParallelString</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../../src/rayon/str.rs.html#60-266">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait ParallelString {
+    // Required method
+    fn <a href="#tymethod.as_parallel_string" class="fn">as_parallel_string</a>(&amp;self) -&gt; &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a>;
+
+    // Provided methods
+    fn <a href="#method.par_chars" class="fn">par_chars</a>(&amp;self) -&gt; <a class="struct" href="struct.Chars.html" title="struct rayon::str::Chars">Chars</a>&lt;'_&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_char_indices" class="fn">par_char_indices</a>(&amp;self) -&gt; <a class="struct" href="struct.CharIndices.html" title="struct rayon::str::CharIndices">CharIndices</a>&lt;'_&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_bytes" class="fn">par_bytes</a>(&amp;self) -&gt; <a class="struct" href="struct.Bytes.html" title="struct rayon::str::Bytes">Bytes</a>&lt;'_&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_encode_utf16" class="fn">par_encode_utf16</a>(&amp;self) -&gt; <a class="struct" href="struct.EncodeUtf16.html" title="struct rayon::str::EncodeUtf16">EncodeUtf16</a>&lt;'_&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_split" class="fn">par_split</a>&lt;P: Pattern&gt;(&amp;self, separator: P) -&gt; <a class="struct" href="struct.Split.html" title="struct rayon::str::Split">Split</a>&lt;'_, P&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_split_terminator" class="fn">par_split_terminator</a>&lt;P: Pattern&gt;(
+        &amp;self,
+        terminator: P
+    ) -&gt; <a class="struct" href="struct.SplitTerminator.html" title="struct rayon::str::SplitTerminator">SplitTerminator</a>&lt;'_, P&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_lines" class="fn">par_lines</a>(&amp;self) -&gt; <a class="struct" href="struct.Lines.html" title="struct rayon::str::Lines">Lines</a>&lt;'_&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_split_whitespace" class="fn">par_split_whitespace</a>(&amp;self) -&gt; <a class="struct" href="struct.SplitWhitespace.html" title="struct rayon::str::SplitWhitespace">SplitWhitespace</a>&lt;'_&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_matches" class="fn">par_matches</a>&lt;P: Pattern&gt;(&amp;self, pattern: P) -&gt; <a class="struct" href="struct.Matches.html" title="struct rayon::str::Matches">Matches</a>&lt;'_, P&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_match_indices" class="fn">par_match_indices</a>&lt;P: Pattern&gt;(&amp;self, pattern: P) -&gt; <a class="struct" href="struct.MatchIndices.html" title="struct rayon::str::MatchIndices">MatchIndices</a>&lt;'_, P&gt; { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Parallel extensions for strings.</p>
+</div></details><h2 id="required-methods" class="small-section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.as_parallel_string" class="method"><a class="src rightside" href="../../src/rayon/str.rs.html#63">source</a><h4 class="code-header">fn <a href="#tymethod.as_parallel_string" class="fn">as_parallel_string</a>(&amp;self) -&gt; &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a></h4></section></summary><div class="docblock"><p>Returns a plain string slice, which is used to implement the rest of
+the parallel methods.</p>
+</div></details></div><h2 id="provided-methods" class="small-section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.par_chars" class="method"><a class="src rightside" href="../../src/rayon/str.rs.html#74-78">source</a><h4 class="code-header">fn <a href="#method.par_chars" class="fn">par_chars</a>(&amp;self) -&gt; <a class="struct" href="struct.Chars.html" title="struct rayon::str::Chars">Chars</a>&lt;'_&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over the characters of a string.</p>
+<h5 id="examples"><a href="#examples">Examples</a></h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span>max = <span class="string">&quot;hello&quot;</span>.par_chars().max_by_key(|c| <span class="kw-2">*</span>c <span class="kw">as </span>i32);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">&#39;o&#39;</span>), max);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_char_indices" class="method"><a class="src rightside" href="../../src/rayon/str.rs.html#89-93">source</a><h4 class="code-header">fn <a href="#method.par_char_indices" class="fn">par_char_indices</a>(&amp;self) -&gt; <a class="struct" href="struct.CharIndices.html" title="struct rayon::str::CharIndices">CharIndices</a>&lt;'_&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over the characters of a string, with their positions.</p>
+<h5 id="examples-1"><a href="#examples-1">Examples</a></h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span>min = <span class="string">&quot;hello&quot;</span>.par_char_indices().min_by_key(|<span class="kw-2">&amp;</span>(_i, c)| c <span class="kw">as </span>i32);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>((<span class="number">1</span>, <span class="string">&#39;e&#39;</span>)), min);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_bytes" class="method"><a class="src rightside" href="../../src/rayon/str.rs.html#109-113">source</a><h4 class="code-header">fn <a href="#method.par_bytes" class="fn">par_bytes</a>(&amp;self) -&gt; <a class="struct" href="struct.Bytes.html" title="struct rayon::str::Bytes">Bytes</a>&lt;'_&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over the bytes of a string.</p>
+<p>Note that multi-byte sequences (for code points greater than <code>U+007F</code>)
+are produced as separate items, but will not be split across threads.
+If you would prefer an indexed iterator without that guarantee, consider
+<code>string.as_bytes().par_iter().copied()</code> instead.</p>
+<h5 id="examples-2"><a href="#examples-2">Examples</a></h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span>max = <span class="string">&quot;hello&quot;</span>.par_bytes().max();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">b&#39;o&#39;</span>), max);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_encode_utf16" class="method"><a class="src rightside" href="../../src/rayon/str.rs.html#133-137">source</a><h4 class="code-header">fn <a href="#method.par_encode_utf16" class="fn">par_encode_utf16</a>(&amp;self) -&gt; <a class="struct" href="struct.EncodeUtf16.html" title="struct rayon::str::EncodeUtf16">EncodeUtf16</a>&lt;'_&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over a string encoded as UTF-16.</p>
+<p>Note that surrogate pairs (for code points greater than <code>U+FFFF</code>) are
+produced as separate items, but will not be split across threads.</p>
+<h5 id="examples-3"><a href="#examples-3">Examples</a></h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>max = <span class="string">&quot;hello&quot;</span>.par_encode_utf16().max();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">b&#39;o&#39; </span><span class="kw">as </span>u16), max);
+
+<span class="kw">let </span>text = <span class="string">&quot;Zażółć gęślą jaźń&quot;</span>;
+<span class="kw">let </span>utf8_len = text.len();
+<span class="kw">let </span>utf16_len = text.par_encode_utf16().count();
+<span class="macro">assert!</span>(utf16_len &lt;= utf8_len);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_split" class="method"><a class="src rightside" href="../../src/rayon/str.rs.html#156-158">source</a><h4 class="code-header">fn <a href="#method.par_split" class="fn">par_split</a>&lt;P: Pattern&gt;(&amp;self, separator: P) -&gt; <a class="struct" href="struct.Split.html" title="struct rayon::str::Split">Split</a>&lt;'_, P&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over substrings separated by a
+given character or predicate, similar to <code>str::split</code>.</p>
+<p>Note: the <code>Pattern</code> trait is private, for use only by Rayon itself.
+It is implemented for <code>char</code>, <code>&amp;[char]</code>, and any function or closure
+<code>F: Fn(char) -&gt; bool + Sync + Send</code>.</p>
+<h5 id="examples-4"><a href="#examples-4">Examples</a></h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span>total = <span class="string">&quot;1, 2, buckle, 3, 4, door&quot;
+   </span>.par_split(<span class="string">&#39;,&#39;</span>)
+   .filter_map(|s| s.trim().parse::&lt;i32&gt;().ok())
+   .sum();
+<span class="macro">assert_eq!</span>(<span class="number">10</span>, total);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_split_terminator" class="method"><a class="src rightside" href="../../src/rayon/str.rs.html#178-180">source</a><h4 class="code-header">fn <a href="#method.par_split_terminator" class="fn">par_split_terminator</a>&lt;P: Pattern&gt;(
+    &amp;self,
+    terminator: P
+) -&gt; <a class="struct" href="struct.SplitTerminator.html" title="struct rayon::str::SplitTerminator">SplitTerminator</a>&lt;'_, P&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over substrings terminated by a
+given character or predicate, similar to <code>str::split_terminator</code>.
+It’s equivalent to <code>par_split</code>, except it doesn’t produce an empty
+substring after a trailing terminator.</p>
+<p>Note: the <code>Pattern</code> trait is private, for use only by Rayon itself.
+It is implemented for <code>char</code>, <code>&amp;[char]</code>, and any function or closure
+<code>F: Fn(char) -&gt; bool + Sync + Send</code>.</p>
+<h5 id="examples-5"><a href="#examples-5">Examples</a></h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span>parts: Vec&lt;<span class="kw">_</span>&gt; = <span class="string">&quot;((1 + 3) * 2)&quot;
+    </span>.par_split_terminator(|c| c == <span class="string">&#39;(&#39; </span>|| c == <span class="string">&#39;)&#39;</span>)
+    .collect();
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[<span class="string">&quot;&quot;</span>, <span class="string">&quot;&quot;</span>, <span class="string">&quot;1 + 3&quot;</span>, <span class="string">&quot; * 2&quot;</span>], parts);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_lines" class="method"><a class="src rightside" href="../../src/rayon/str.rs.html#197-199">source</a><h4 class="code-header">fn <a href="#method.par_lines" class="fn">par_lines</a>(&amp;self) -&gt; <a class="struct" href="struct.Lines.html" title="struct rayon::str::Lines">Lines</a>&lt;'_&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over the lines of a string, ending with an
+optional carriage return and with a newline (<code>\r\n</code> or just <code>\n</code>).
+The final line ending is optional, and line endings are not included in
+the output strings.</p>
+<h5 id="examples-6"><a href="#examples-6">Examples</a></h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span>lengths: Vec&lt;<span class="kw">_</span>&gt; = <span class="string">&quot;hello world\nfizbuzz&quot;
+    </span>.par_lines()
+    .map(|l| l.len())
+    .collect();
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[<span class="number">11</span>, <span class="number">7</span>], lengths);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_split_whitespace" class="method"><a class="src rightside" href="../../src/rayon/str.rs.html#216-218">source</a><h4 class="code-header">fn <a href="#method.par_split_whitespace" class="fn">par_split_whitespace</a>(&amp;self) -&gt; <a class="struct" href="struct.SplitWhitespace.html" title="struct rayon::str::SplitWhitespace">SplitWhitespace</a>&lt;'_&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over the sub-slices of a string that are
+separated by any amount of whitespace.</p>
+<p>As with <code>str::split_whitespace</code>, ‘whitespace’ is defined according to
+the terms of the Unicode Derived Core Property <code>White_Space</code>.</p>
+<h5 id="examples-7"><a href="#examples-7">Examples</a></h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span>longest = <span class="string">&quot;which is the longest word?&quot;
+    </span>.par_split_whitespace()
+    .max_by_key(|word| word.len());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">&quot;longest&quot;</span>), longest);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_matches" class="method"><a class="src rightside" href="../../src/rayon/str.rs.html#237-242">source</a><h4 class="code-header">fn <a href="#method.par_matches" class="fn">par_matches</a>&lt;P: Pattern&gt;(&amp;self, pattern: P) -&gt; <a class="struct" href="struct.Matches.html" title="struct rayon::str::Matches">Matches</a>&lt;'_, P&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over substrings that match a
+given character or predicate, similar to <code>str::matches</code>.</p>
+<p>Note: the <code>Pattern</code> trait is private, for use only by Rayon itself.
+It is implemented for <code>char</code>, <code>&amp;[char]</code>, and any function or closure
+<code>F: Fn(char) -&gt; bool + Sync + Send</code>.</p>
+<h5 id="examples-8"><a href="#examples-8">Examples</a></h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span>total = <span class="string">&quot;1, 2, buckle, 3, 4, door&quot;
+   </span>.par_matches(char::is_numeric)
+   .map(|s| s.parse::&lt;i32&gt;().expect(<span class="string">&quot;digit&quot;</span>))
+   .sum();
+<span class="macro">assert_eq!</span>(<span class="number">10</span>, total);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_match_indices" class="method"><a class="src rightside" href="../../src/rayon/str.rs.html#260-265">source</a><h4 class="code-header">fn <a href="#method.par_match_indices" class="fn">par_match_indices</a>&lt;P: Pattern&gt;(&amp;self, pattern: P) -&gt; <a class="struct" href="struct.MatchIndices.html" title="struct rayon::str::MatchIndices">MatchIndices</a>&lt;'_, P&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over substrings that match a given character
+or predicate, with their positions, similar to <code>str::match_indices</code>.</p>
+<p>Note: the <code>Pattern</code> trait is private, for use only by Rayon itself.
+It is implemented for <code>char</code>, <code>&amp;[char]</code>, and any function or closure
+<code>F: Fn(char) -&gt; bool + Sync + Send</code>.</p>
+<h5 id="examples-9"><a href="#examples-9">Examples</a></h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span>digits: Vec&lt;<span class="kw">_</span>&gt; = <span class="string">&quot;1, 2, buckle, 3, 4, door&quot;
+   </span>.par_match_indices(char::is_numeric)
+   .collect();
+<span class="macro">assert_eq!</span>(digits, <span class="macro">vec!</span>[(<span class="number">0</span>, <span class="string">&quot;1&quot;</span>), (<span class="number">3</span>, <span class="string">&quot;2&quot;</span>), (<span class="number">14</span>, <span class="string">&quot;3&quot;</span>), (<span class="number">17</span>, <span class="string">&quot;4&quot;</span>)]);</code></pre></div>
+</div></details></div><h2 id="object-safety" class="small-section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.75.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="foreign-impls" class="small-section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-ParallelString-for-str" class="impl"><a class="src rightside" href="../../src/rayon/str.rs.html#268-273">source</a><a href="#impl-ParallelString-for-str" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.ParallelString.html" title="trait rayon::str::ParallelString">ParallelString</a> for <a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a></h3></section></summary><div class="impl-items"><section id="method.as_parallel_string" class="method trait-impl"><a class="src rightside" href="../../src/rayon/str.rs.html#270-272">source</a><a href="#method.as_parallel_string" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.as_parallel_string" class="fn">as_parallel_string</a>(&amp;self) -&gt; &amp;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.str.html">str</a></h4></section></div></details><h2 id="implementors" class="small-section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../trait.impl/rayon/str/trait.ParallelString.js" data-ignore-extern-crates="std" async></script></section></div></main></body></html>

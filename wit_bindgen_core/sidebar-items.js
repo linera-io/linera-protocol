@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["uwrite","uwriteln"],"struct":["Files","Ns","Source","TypeInfo","Types"],"trait":["InterfaceGenerator","WorldGenerator"]};

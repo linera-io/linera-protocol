@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["future"],"struct":["AsyncFilter","AsyncFilterLayer","Filter","FilterLayer"],"trait":["AsyncPredicate","Predicate"]};

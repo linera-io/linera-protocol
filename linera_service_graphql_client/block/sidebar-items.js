@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["OPERATION_NAME","QUERY"],"struct":["BlockBlock","BlockBlockValue","BlockBlockValueExecutedBlock","BlockBlockValueExecutedBlockBlock","BlockBlockValueExecutedBlockBlockIncomingMessages","BlockBlockValueExecutedBlockMessages","ResponseData","Variables"]};

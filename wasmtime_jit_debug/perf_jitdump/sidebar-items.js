@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RecordId"],"struct":["CodeLoadRecord","DebugEntry","DebugInfoRecord","FileHeader","JitDumpFile","RecordHeader"]};

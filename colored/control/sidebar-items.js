@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["set_override","unset_override"],"struct":["SHOULD_COLORIZE","ShouldColorize"]};

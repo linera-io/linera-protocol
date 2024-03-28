@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CqlTypeError","FromCqlValError","FromRowError"],"trait":["FromCqlVal","FromRow"]};

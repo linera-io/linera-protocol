@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FirstRowError","FirstRowTypedError","MaybeFirstRowTypedError","SingleRowError","SingleRowTypedError"],"struct":["QueryResult","RowsExpectedError","RowsNotExpectedError"]};

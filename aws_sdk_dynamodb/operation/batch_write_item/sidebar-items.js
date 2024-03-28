@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BatchWriteItemError"],"mod":["builders"],"struct":["BatchWriteItem","BatchWriteItemInput","BatchWriteItemOutput"]};

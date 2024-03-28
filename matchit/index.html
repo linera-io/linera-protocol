@@ -1,0 +1,66 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`matchit`"><title>matchit - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-9ee3a5e31a2afa3e.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="matchit" data-themes="" data-resource-suffix="" data-rustdoc-version="1.75.0 (82e1608df 2023-12-21)" data-channel="1.75.0" data-search-js="search-8fbf244ebcf71464.js" data-settings-js="settings-74424d7eec62a23e.js" ><script src="../static.files/storage-fec3eaa3851e447d.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-9dd44ab47b99a0fb.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-5d8b3c7633ad77ba.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../matchit/index.html">matchit</a><span class="version">0.7.3</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">matchit</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/matchit/lib.rs.html#1-123">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="matchit"><a href="#matchit"><code>matchit</code></a></h2>
+<p><a href="https://docs.rs/matchit"><img src="https://img.shields.io/badge/docs-0.7.3-4d76ae?style=for-the-badge" alt="Documentation" /></a>
+<a href="https://crates.io/crates/matchit"><img src="https://img.shields.io/crates/v/matchit?style=for-the-badge" alt="Version" /></a>
+<a href="https://crates.io/crates/matchit"><img src="https://img.shields.io/crates/l/matchit?style=for-the-badge" alt="License" /></a></p>
+<p>A blazing fast URL router.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>matchit::Router;
+
+<span class="kw">let </span><span class="kw-2">mut </span>router = Router::new();
+router.insert(<span class="string">&quot;/home&quot;</span>, <span class="string">&quot;Welcome!&quot;</span>)<span class="question-mark">?</span>;
+router.insert(<span class="string">&quot;/users/:id&quot;</span>, <span class="string">&quot;A User&quot;</span>)<span class="question-mark">?</span>;
+
+<span class="kw">let </span>matched = router.at(<span class="string">&quot;/users/978&quot;</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(matched.params.get(<span class="string">&quot;id&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;978&quot;</span>));
+<span class="macro">assert_eq!</span>(<span class="kw-2">*</span>matched.value, <span class="string">&quot;A User&quot;</span>);</code></pre></div>
+<h3 id="parameters"><a href="#parameters">Parameters</a></h3>
+<p>Along with static routes, the router also supports dynamic route segments. These can either be named or catch-all parameters:</p>
+<h4 id="named-parameters"><a href="#named-parameters">Named Parameters</a></h4>
+<p>Named parameters like <code>/:id</code> match anything until the next <code>/</code> or the end of the path:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>m = Router::new();
+m.insert(<span class="string">&quot;/users/:id&quot;</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>;
+
+<span class="macro">assert_eq!</span>(m.at(<span class="string">&quot;/users/1&quot;</span>)<span class="question-mark">?</span>.params.get(<span class="string">&quot;id&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;1&quot;</span>));
+<span class="macro">assert_eq!</span>(m.at(<span class="string">&quot;/users/23&quot;</span>)<span class="question-mark">?</span>.params.get(<span class="string">&quot;id&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;23&quot;</span>));
+<span class="macro">assert!</span>(m.at(<span class="string">&quot;/users&quot;</span>).is_err());
+</code></pre></div>
+<h4 id="catch-all-parameters"><a href="#catch-all-parameters">Catch-all Parameters</a></h4>
+<p>Catch-all parameters start with <code>*</code> and match everything after the <code>/</code>. They must always be at the <strong>end</strong> of the route:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>m = Router::new();
+m.insert(<span class="string">&quot;/*p&quot;</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>;
+
+<span class="macro">assert_eq!</span>(m.at(<span class="string">&quot;/foo.js&quot;</span>)<span class="question-mark">?</span>.params.get(<span class="string">&quot;p&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;foo.js&quot;</span>));
+<span class="macro">assert_eq!</span>(m.at(<span class="string">&quot;/c/bar.css&quot;</span>)<span class="question-mark">?</span>.params.get(<span class="string">&quot;p&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;c/bar.css&quot;</span>));
+
+<span class="comment">// note that this would not match
+</span><span class="macro">assert!</span>(m.at(<span class="string">&quot;/&quot;</span>).is_err());
+</code></pre></div>
+<h3 id="routing-priority"><a href="#routing-priority">Routing Priority</a></h3>
+<p>Static and dynamic route segments are allowed to overlap. If they do, static segments will be given higher priority:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>m = Router::new();
+m.insert(<span class="string">&quot;/&quot;</span>, <span class="string">&quot;Welcome!&quot;</span>).unwrap()    ;  <span class="comment">// priority: 1
+</span>m.insert(<span class="string">&quot;/about&quot;</span>, <span class="string">&quot;About Me&quot;</span>).unwrap(); <span class="comment">// priority: 1
+</span>m.insert(<span class="string">&quot;/*filepath&quot;</span>, <span class="string">&quot;...&quot;</span>).unwrap();  <span class="comment">// priority: 2
+</span></code></pre></div>
+<h3 id="how-does-it-work"><a href="#how-does-it-work">How does it work?</a></h3>
+<p>The router takes advantage of the fact that URL routes generally follow a hierarchical structure. Routes are stored them in a radix trie that makes heavy use of common prefixes:</p>
+<div class="example-wrap"><pre class="language-text"><code>Priority   Path             Value
+9          \                1
+3          ├s               None
+2          |├earch\         2
+1          |└upport\        3
+2          ├blog\           4
+1          |    └:post      None
+1          |         └\     5
+2          ├about-us\       6
+1          |        └team\  7
+1          └contact\        8
+</code></pre></div>
+<p>This allows us to reduce the route search to a small number of branches. Child nodes on the same level of the tree are also prioritized
+by the number of children with registered values, increasing the chance of choosing the correct branch of the first try.</p>
+</div></details><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Match.html" title="struct matchit::Match">Match</a></div><div class="desc docblock-short">A successful match consisting of the registered value
+and URL parameters, returned by <a href="struct.Router.html#method.at" title="method matchit::Router::at"><code>Router::at</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Params.html" title="struct matchit::Params">Params</a></div><div class="desc docblock-short">A list of parameters returned by a route match.</div></li><li><div class="item-name"><a class="struct" href="struct.ParamsIter.html" title="struct matchit::ParamsIter">ParamsIter</a></div><div class="desc docblock-short">An iterator over the keys and values of a route’s <a href="struct.Params.html" title="struct matchit::Params">parameters</a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Router.html" title="struct matchit::Router">Router</a></div><div class="desc docblock-short">A URL router.</div></li></ul><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.InsertError.html" title="enum matchit::InsertError">InsertError</a></div><div class="desc docblock-short">Represents errors that can occur when inserting a new route.</div></li><li><div class="item-name"><a class="enum" href="enum.MatchError.html" title="enum matchit::MatchError">MatchError</a></div><div class="desc docblock-short">A failed match attempt.</div></li></ul></section></div></main></body></html>

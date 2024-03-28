@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["canonical_combining_class","compose","decompose_canonical","decompose_cjk_compat_variants","decompose_compatible","is_combining_mark","is_public_assigned"]};

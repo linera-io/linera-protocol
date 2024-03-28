@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"linera_execution":[["impl <a class=\"trait\" href=\"async_graphql/resolver_utils/enum/trait.EnumType.html\" title=\"trait async_graphql::resolver_utils::enum::EnumType\">EnumType</a> for <a class=\"enum\" href=\"linera_execution/system/enum.SystemChannel.html\" title=\"enum linera_execution::system::SystemChannel\">SystemChannel</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

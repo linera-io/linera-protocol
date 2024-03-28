@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ComponentDefinedType","ComponentEntityType","ComponentInstanceTypeKind","ComponentValType","EntityType","InstanceTypeKind","Type"],"struct":["ComponentFuncType","ComponentInstanceType","ComponentType","InstanceType","KebabStr","KebabString","ModuleType","RecordType","TupleType","TypeId","Types","TypesRef","UnionType","VariantCase","VariantType"]};

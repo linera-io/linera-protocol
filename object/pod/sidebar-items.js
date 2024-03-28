@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["bytes_of","bytes_of_mut","bytes_of_slice","bytes_of_slice_mut","from_bytes","from_bytes_mut","slice_from_bytes","slice_from_bytes_mut"],"trait":["Pod"]};

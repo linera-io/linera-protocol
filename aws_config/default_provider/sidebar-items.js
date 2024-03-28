@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["app_name","credentials","region","retry_config","timeout_config","use_dual_stack","use_fips"]};

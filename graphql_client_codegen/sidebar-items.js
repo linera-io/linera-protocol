@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CodegenMode"],"fn":["generate_module_token_stream"],"mod":["deprecation","normalization","schema"],"struct":["GraphQLClientCodegenOptions"]};

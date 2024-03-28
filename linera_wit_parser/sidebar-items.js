@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FlagsRepr","FunctionKind","Int","Type","TypeDefKind"],"fn":["validate_id"],"mod":["abi","mangle"],"struct":["Case","Docs","Enum","EnumCase","Field","Flag","Flags","Function","Global","Interface","Record","Resource","Result_","SizeAlign","Stream","Tuple","TypeDef","Union","UnionCase","Variant"],"type":["InterfaceId","ResourceId","TypeId"]};

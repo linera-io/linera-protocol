@@ -1,0 +1,76 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="rust-url is an implementation of the URL Standard for the Rust programming language."><title>url - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-9ee3a5e31a2afa3e.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="url" data-themes="" data-resource-suffix="" data-rustdoc-version="1.75.0 (82e1608df 2023-12-21)" data-channel="1.75.0" data-search-js="search-8fbf244ebcf71464.js" data-settings-js="settings-74424d7eec62a23e.js" ><script src="../static.files/storage-fec3eaa3851e447d.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-9dd44ab47b99a0fb.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-5d8b3c7633ad77ba.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../url/index.html">url</a><span class="version">2.5.0</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">url</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/url/lib.rs.html#9-3044">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>rust-url is an implementation of the <a href="http://url.spec.whatwg.org/">URL Standard</a>
+for the <a href="http://rust-lang.org/">Rust</a> programming language.</p>
+<h2 id="url-parsing-and-data-structures"><a href="#url-parsing-and-data-structures">URL parsing and data structures</a></h2>
+<p>First, URL parsing may fail for various reasons and therefore returns a <code>Result</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>url::{Url, ParseError};
+
+<span class="macro">assert!</span>(Url::parse(<span class="string">&quot;http://[:::1]&quot;</span>) == <span class="prelude-val">Err</span>(ParseError::InvalidIpv6Address))</code></pre></div>
+<p>Let’s parse a valid URL and look at its components.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>url::{Url, Host, Position};
+<span class="kw">let </span>issue_list_url = Url::parse(
+    <span class="string">&quot;https://github.com/rust-lang/rust/issues?labels=E-easy&amp;state=open&quot;
+</span>)<span class="question-mark">?</span>;
+
+
+<span class="macro">assert!</span>(issue_list_url.scheme() == <span class="string">&quot;https&quot;</span>);
+<span class="macro">assert!</span>(issue_list_url.username() == <span class="string">&quot;&quot;</span>);
+<span class="macro">assert!</span>(issue_list_url.password() == <span class="prelude-val">None</span>);
+<span class="macro">assert!</span>(issue_list_url.host_str() == <span class="prelude-val">Some</span>(<span class="string">&quot;github.com&quot;</span>));
+<span class="macro">assert!</span>(issue_list_url.host() == <span class="prelude-val">Some</span>(Host::Domain(<span class="string">&quot;github.com&quot;</span>)));
+<span class="macro">assert!</span>(issue_list_url.port() == <span class="prelude-val">None</span>);
+<span class="macro">assert!</span>(issue_list_url.path() == <span class="string">&quot;/rust-lang/rust/issues&quot;</span>);
+<span class="macro">assert!</span>(issue_list_url.path_segments().map(|c| c.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()) ==
+        <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="string">&quot;rust-lang&quot;</span>, <span class="string">&quot;rust&quot;</span>, <span class="string">&quot;issues&quot;</span>]));
+<span class="macro">assert!</span>(issue_list_url.query() == <span class="prelude-val">Some</span>(<span class="string">&quot;labels=E-easy&amp;state=open&quot;</span>));
+<span class="macro">assert!</span>(<span class="kw-2">&amp;</span>issue_list_url[Position::BeforePath..] == <span class="string">&quot;/rust-lang/rust/issues?labels=E-easy&amp;state=open&quot;</span>);
+<span class="macro">assert!</span>(issue_list_url.fragment() == <span class="prelude-val">None</span>);
+<span class="macro">assert!</span>(!issue_list_url.cannot_be_a_base());</code></pre></div>
+<p>Some URLs are said to be <em>cannot-be-a-base</em>:
+they don’t have a username, password, host, or port,
+and their “path” is an arbitrary string rather than slash-separated segments:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>url::Url;
+
+<span class="kw">let </span>data_url = Url::parse(<span class="string">&quot;data:text/plain,Hello?World#&quot;</span>)<span class="question-mark">?</span>;
+
+<span class="macro">assert!</span>(data_url.cannot_be_a_base());
+<span class="macro">assert!</span>(data_url.scheme() == <span class="string">&quot;data&quot;</span>);
+<span class="macro">assert!</span>(data_url.path() == <span class="string">&quot;text/plain,Hello&quot;</span>);
+<span class="macro">assert!</span>(data_url.path_segments().is_none());
+<span class="macro">assert!</span>(data_url.query() == <span class="prelude-val">Some</span>(<span class="string">&quot;World&quot;</span>));
+<span class="macro">assert!</span>(data_url.fragment() == <span class="prelude-val">Some</span>(<span class="string">&quot;&quot;</span>));</code></pre></div>
+<h3 id="serde"><a href="#serde">Serde</a></h3>
+<p>Enable the <code>serde</code> feature to include <code>Deserialize</code> and <code>Serialize</code> implementations for <code>url::Url</code>.</p>
+<h2 id="base-url"><a href="#base-url">Base URL</a></h2>
+<p>Many contexts allow URL <em>references</em> that can be relative to a <em>base URL</em>:</p>
+<div class="example-wrap"><pre class="language-html"><code>&lt;link rel=&quot;stylesheet&quot; href=&quot;../main.css&quot;&gt;
+</code></pre></div>
+<p>Since parsed URLs are absolute, giving a base is required for parsing relative URLs:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>url::{Url, ParseError};
+
+<span class="macro">assert!</span>(Url::parse(<span class="string">&quot;../main.css&quot;</span>) == <span class="prelude-val">Err</span>(ParseError::RelativeUrlWithoutBase))</code></pre></div>
+<p>Use the <code>join</code> method on an <code>Url</code> to use it as a base URL:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>url::Url;
+
+<span class="kw">let </span>this_document = Url::parse(<span class="string">&quot;http://servo.github.io/rust-url/url/index.html&quot;</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>css_url = this_document.join(<span class="string">&quot;../main.css&quot;</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(css_url.as_str(), <span class="string">&quot;http://servo.github.io/rust-url/main.css&quot;</span>);</code></pre></div>
+<h2 id="feature-serde"><a href="#feature-serde">Feature: <code>serde</code></a></h2>
+<p>If you enable the <code>serde</code> feature, <a href="struct.Url.html"><code>Url</code></a> will implement
+<a href="https://docs.rs/serde/1/serde/trait.Serialize.html"><code>serde::Serialize</code></a> and
+<a href="https://docs.rs/serde/1/serde/trait.Deserialize.html"><code>serde::Deserialize</code></a>.
+See <a href="https://serde.rs">serde documentation</a> for more information.</p>
+<div class="example-wrap"><pre class="language-toml"><code>url = { version = &quot;2&quot;, features = [&quot;serde&quot;] }
+</code></pre></div><h2 id="feature-debugger_visualizer"><a href="#feature-debugger_visualizer">Feature: <code>debugger_visualizer</code></a></h2>
+<p>If you enable the <code>debugger_visualizer</code> feature, the <code>url</code> crate will include
+a <a href="https://docs.microsoft.com/en-us/visualstudio/debugger/create-custom-views-of-native-objects">natvis file</a>
+for <a href="https://www.visualstudio.com/">Visual Studio</a> that allows you to view
+<a href="struct.Url.html"><code>Url</code></a> objects in the debugger.</p>
+<p>This feature requires Rust 1.71 or later.</p>
+<div class="example-wrap"><pre class="language-toml"><code>url = { version = &quot;2&quot;, features = [&quot;debugger_visualizer&quot;] }
+</code></pre></div></div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.form_urlencoded"><code>pub use <a class="mod" href="../form_urlencoded/index.html" title="mod form_urlencoded">form_urlencoded</a>;</code></div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.OpaqueOrigin.html" title="struct url::OpaqueOrigin">OpaqueOrigin</a></div><div class="desc docblock-short">Opaque identifier for URLs that have file or other schemes</div></li><li><div class="item-name"><a class="struct" href="struct.ParseOptions.html" title="struct url::ParseOptions">ParseOptions</a></div><div class="desc docblock-short">Full configuration for the URL parser.</div></li><li><div class="item-name"><a class="struct" href="struct.PathSegmentsMut.html" title="struct url::PathSegmentsMut">PathSegmentsMut</a></div><div class="desc docblock-short">Exposes methods to manipulate the path of an URL that is not cannot-be-base.</div></li><li><div class="item-name"><a class="struct" href="struct.Url.html" title="struct url::Url">Url</a></div><div class="desc docblock-short">A parsed URL record.</div></li><li><div class="item-name"><a class="struct" href="struct.UrlQuery.html" title="struct url::UrlQuery">UrlQuery</a></div><div class="desc docblock-short">Implementation detail of <code>Url::query_pairs_mut</code>. Typically not used directly.</div></li></ul><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Host.html" title="enum url::Host">Host</a></div><div class="desc docblock-short">The host name of an URL.</div></li><li><div class="item-name"><a class="enum" href="enum.Origin.html" title="enum url::Origin">Origin</a></div><div class="desc docblock-short">The origin of an URL</div></li><li><div class="item-name"><a class="enum" href="enum.ParseError.html" title="enum url::ParseError">ParseError</a></div><div class="desc docblock-short">Errors that can occur during parsing.</div></li><li><div class="item-name"><a class="enum" href="enum.Position.html" title="enum url::Position">Position</a></div><div class="desc docblock-short">Indicates a position within a URL based on its components.</div></li><li><div class="item-name"><a class="enum" href="enum.SyntaxViolation.html" title="enum url::SyntaxViolation">SyntaxViolation</a></div><div class="desc docblock-short">Non-fatal syntax violations that can occur during parsing.</div></li></ul><h2 id="types" class="small-section-header"><a href="#types">Type Aliases</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.EncodingOverride.html" title="type url::EncodingOverride">EncodingOverride</a></div></li></ul></section></div></main></body></html>

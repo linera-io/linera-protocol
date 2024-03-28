@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Constructs a `DynFilterFn` from a function or closure that returns `true` if a span or event should be enabled within a particular span context."><title>dynamic_filter_fn in tracing_subscriber::filter - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-9ee3a5e31a2afa3e.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tracing_subscriber" data-themes="" data-resource-suffix="" data-rustdoc-version="1.75.0 (82e1608df 2023-12-21)" data-channel="1.75.0" data-search-js="search-8fbf244ebcf71464.js" data-settings-js="settings-74424d7eec62a23e.js" ><script src="../../static.files/storage-fec3eaa3851e447d.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-9dd44ab47b99a0fb.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-5d8b3c7633ad77ba.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../../tracing_subscriber/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../tracing_subscriber/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt="logo"></a><h2><a href="../../tracing_subscriber/index.html">tracing_subscriber</a><span class="version">0.3.18</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In tracing_subscriber::filter</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">tracing_subscriber</a>::<wbr><a href="index.html">filter</a>::<wbr><a class="fn" href="#">dynamic_filter_fn</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../../src/tracing_subscriber/filter/filter_fn.rs.html#175-180">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn dynamic_filter_fn&lt;S, F&gt;(f: F) -&gt; <a class="struct" href="struct.DynFilterFn.html" title="struct tracing_subscriber::filter::DynFilterFn">DynFilterFn</a>&lt;S, F&gt;<span class="where fmt-newline">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(&amp;<a class="struct" href="../../tracing_core/metadata/struct.Metadata.html" title="struct tracing_core::metadata::Metadata">Metadata</a>&lt;'_&gt;, &amp;<a class="struct" href="../layer/struct.Context.html" title="struct tracing_subscriber::layer::Context">Context</a>&lt;'_, S&gt;) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.bool.html">bool</a>,</span></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Constructs a <a href="struct.DynFilterFn.html" title="struct tracing_subscriber::filter::DynFilterFn"><code>DynFilterFn</code></a> from a function or closure that returns <code>true</code>
+if a span or event should be enabled within a particular <a href="../layer/struct.Context.html" title="struct tracing_subscriber::layer::Context">span context</a>.</p>
+<p>This is equivalent to calling <a href="struct.DynFilterFn.html#method.new" title="associated function tracing_subscriber::filter::DynFilterFn::new"><code>DynFilterFn::new</code></a>.</p>
+<p>Unlike <a href="fn.filter_fn.html" title="fn tracing_subscriber::filter::filter_fn"><code>filter_fn</code></a>, this function takes a closure or function pointer
+taking the <a href="../../tracing_core/metadata/struct.Metadata.html" title="struct tracing_core::metadata::Metadata"><code>Metadata</code></a> for a span or event <em>and</em> the current <a href="../layer/struct.Context.html" title="struct tracing_subscriber::layer::Context"><code>Context</code></a>.
+This means that a <a href="struct.DynFilterFn.html" title="struct tracing_subscriber::filter::DynFilterFn"><code>DynFilterFn</code></a> can choose whether to enable spans or
+events based on information about the <em>current</em> span (or its parents).</p>
+<p>If this is <em>not</em> necessary, use <a href="fn.filter_fn.html" title="fn tracing_subscriber::filter::filter_fn"><code>filter_fn</code></a> instead.</p>
+<p>The returned <a href="struct.DynFilterFn.html" title="struct tracing_subscriber::filter::DynFilterFn"><code>DynFilterFn</code></a> can be used for both <a href="../layer/index.html#per-layer-filtering" title="mod tracing_subscriber::layer">per-layer filtering</a>
+(using its <a href="../layer/trait.Filter.html" title="trait tracing_subscriber::layer::Filter"><code>Filter</code></a> implementation) and <a href="../layer/index.html#global-filtering" title="mod tracing_subscriber::layer">global filtering</a> (using
+its  <a href="../layer/trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> implementation).</p>
+<p>See the <a href="../layer/index.html#filtering-with-layers" title="mod tracing_subscriber::layer">documentation on filtering with layers</a> for details.</p>
+<h2 id="examples"><a href="#examples">Examples</a></h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_subscriber::{
+    layer::{Layer, SubscriberExt},
+    filter,
+    util::SubscriberInitExt,
+};
+
+<span class="comment">// Only enable spans or events within a span named &quot;interesting_span&quot;.
+</span><span class="kw">let </span>my_filter = filter::dynamic_filter_fn(|metadata, cx| {
+    <span class="comment">// If this *is* &quot;interesting_span&quot;, make sure to enable it.
+    </span><span class="kw">if </span>metadata.is_span() &amp;&amp; metadata.name() == <span class="string">&quot;interesting_span&quot; </span>{
+        <span class="kw">return </span><span class="bool-val">true</span>;
+    }
+
+    <span class="comment">// Otherwise, are we in an interesting span?
+    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(current_span) = cx.lookup_current() {
+        <span class="kw">return </span>current_span.name() == <span class="string">&quot;interesting_span&quot;</span>;
+    }
+
+    <span class="bool-val">false
+</span>});
+
+<span class="kw">let </span>my_layer = tracing_subscriber::fmt::layer();
+
+tracing_subscriber::registry()
+    .with(my_layer.with_filter(my_filter))
+    .init();
+
+<span class="comment">// This event will not be enabled.
+</span><span class="macro">tracing::info!</span>(<span class="string">&quot;something happened&quot;</span>);
+
+<span class="macro">tracing::info_span!</span>(<span class="string">&quot;interesting_span&quot;</span>).in_scope(|| {
+    <span class="comment">// This event will be enabled.
+    </span><span class="macro">tracing::debug!</span>(<span class="string">&quot;something else happened&quot;</span>);
+});</code></pre></div>
+</div></details></section></div></main></body></html>

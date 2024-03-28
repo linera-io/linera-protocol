@@ -1,0 +1,5 @@
+(function() {var implementors = {
+"wasmer":[],
+"wasmer_compiler_cranelift":[["impl <a class=\"trait\" href=\"wasmer_compiler/compiler/trait.CompilerConfig.html\" title=\"trait wasmer_compiler::compiler::CompilerConfig\">CompilerConfig</a> for <a class=\"struct\" href=\"wasmer_compiler_cranelift/struct.Cranelift.html\" title=\"struct wasmer_compiler_cranelift::Cranelift\">Cranelift</a>"]],
+"wasmer_compiler_singlepass":[["impl <a class=\"trait\" href=\"wasmer_compiler/compiler/trait.CompilerConfig.html\" title=\"trait wasmer_compiler::compiler::CompilerConfig\">CompilerConfig</a> for <a class=\"struct\" href=\"wasmer_compiler_singlepass/struct.Singlepass.html\" title=\"struct wasmer_compiler_singlepass::Singlepass\">Singlepass</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

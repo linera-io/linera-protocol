@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["bswap_fallback","bswap_simd"],"trait":["BSwap"]};

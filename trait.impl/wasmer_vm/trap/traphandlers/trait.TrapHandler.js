@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"wasmer":[["impl <a class=\"trait\" href=\"wasmer_vm/trap/traphandlers/trait.TrapHandler.html\" title=\"trait wasmer_vm::trap::traphandlers::TrapHandler\">TrapHandler</a> for <a class=\"struct\" href=\"wasmer/struct.Store.html\" title=\"struct wasmer::Store\">Store</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ErrorKind"],"fn":["config","deserialize","deserialize_from","deserialize_from_custom","options","serialize","serialize_into","serialized_size"],"mod":["config","de"],"struct":["Serializer"],"type":["Error","Result"]};

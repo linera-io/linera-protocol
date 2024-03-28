@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["builders","error"],"struct":["AssumedRoleUser","Credentials","FederatedUser","PolicyDescriptorType","ProvidedContext","Tag"]};

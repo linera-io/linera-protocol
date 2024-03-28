@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ReadGuardedView","ReentrantByteCollectionView","ReentrantCollectionView","ReentrantCustomCollectionView","WriteGuardedView"],"type":["HashedReentrantByteCollectionView","HashedReentrantCollectionView","HashedReentrantCustomCollectionView"]};

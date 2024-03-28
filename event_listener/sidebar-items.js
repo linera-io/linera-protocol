@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["prelude"],"struct":["Event","EventListener"],"trait":["IntoNotification","Notification"]};

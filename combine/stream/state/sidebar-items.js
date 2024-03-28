@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["IndexPositioner","SourcePosition","State"],"trait":["DefaultPositioned","Positioner","RangePositioner"]};

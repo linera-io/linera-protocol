@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RecvTimeoutError","TryRecvError","TrySendError"],"fn":["channel","sync_channel"],"struct":["IntoIter","Iter","Receiver","RecvError","SendError","Sender","SyncSender","TryIter"]};

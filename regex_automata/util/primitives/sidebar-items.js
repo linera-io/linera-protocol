@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["NonMaxUsize","PatternID","PatternIDError","SmallIndex","SmallIndexError","StateID","StateIDError"]};

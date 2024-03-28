@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["enum_value","parse_enum","resolve_container","resolve_container_serial","resolve_list"],"macro":["scalar"],"struct":["EnumItem","Fields"],"trait":["ContainerType","EnumType","ScalarType"]};

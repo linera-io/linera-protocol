@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"linera_service":[["impl <a class=\"trait\" href=\"linera_rpc/grpc/api/validator_node_server/trait.ValidatorNode.html\" title=\"trait linera_rpc::grpc::api::validator_node_server::ValidatorNode\">ValidatorNode</a> for <a class=\"struct\" href=\"linera_service/grpc_proxy/struct.GrpcProxy.html\" title=\"struct linera_service::grpc_proxy::GrpcProxy\">GrpcProxy</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

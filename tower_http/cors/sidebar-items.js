@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["any","preflight_request_headers"],"struct":["AllowCredentials","AllowHeaders","AllowMethods","AllowOrigin","AllowPrivateNetwork","Any","Cors","CorsLayer","ExposeHeaders","MaxAge","ResponseFuture","Vary"]};

@@ -1,0 +1,40 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="HTTP request types."><title>http::request - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-9ee3a5e31a2afa3e.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="http" data-themes="" data-resource-suffix="" data-rustdoc-version="1.75.0 (82e1608df 2023-12-21)" data-channel="1.75.0" data-search-js="search-8fbf244ebcf71464.js" data-settings-js="settings-74424d7eec62a23e.js" ><script src="../../static.files/storage-fec3eaa3851e447d.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-9dd44ab47b99a0fb.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-5d8b3c7633ad77ba.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../http/index.html">http</a><span class="version">1.1.0</span></h2></div><h2 class="location"><a href="#">Module request</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In crate http</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">http</a>::<wbr><a class="mod" href="#">request</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../../src/http/request.rs.html#1-1074">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>HTTP request types.</p>
+<p>This module contains structs related to HTTP requests, notably the
+<code>Request</code> type itself as well as a builder to create requests. Typically
+you’ll import the <code>http::Request</code> type rather than reaching into this
+module itself.</p>
+<h2 id="examples"><a href="#examples">Examples</a></h2>
+<p>Creating a <code>Request</code> to send</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>http::{Request, Response};
+
+<span class="kw">let </span><span class="kw-2">mut </span>request = Request::builder()
+    .uri(<span class="string">&quot;https://www.rust-lang.org/&quot;</span>)
+    .header(<span class="string">&quot;User-Agent&quot;</span>, <span class="string">&quot;my-awesome-agent/1.0&quot;</span>);
+
+<span class="kw">if </span>needs_awesome_header() {
+    request = request.header(<span class="string">&quot;Awesome&quot;</span>, <span class="string">&quot;yes&quot;</span>);
+}
+
+<span class="kw">let </span>response = send(request.body(()).unwrap());
+
+<span class="kw">fn </span>send(req: Request&lt;()&gt;) -&gt; Response&lt;()&gt; {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>Inspecting a request to see what was sent.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>http::{Request, Response, StatusCode};
+
+<span class="kw">fn </span>respond_to(req: Request&lt;()&gt;) -&gt; http::Result&lt;Response&lt;()&gt;&gt; {
+    <span class="kw">if </span>req.uri() != <span class="string">&quot;/awesome-url&quot; </span>{
+        <span class="kw">return </span>Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(())
+    }
+
+    <span class="kw">let </span>has_awesome_header = req.headers().contains_key(<span class="string">&quot;Awesome&quot;</span>);
+    <span class="kw">let </span>body = req.body();
+
+    <span class="comment">// ...
+</span>}</code></pre></div>
+</div></details><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct http::request::Builder">Builder</a></div><div class="desc docblock-short">An HTTP request builder</div></li><li><div class="item-name"><a class="struct" href="struct.Parts.html" title="struct http::request::Parts">Parts</a></div><div class="desc docblock-short">Component parts of an HTTP <code>Request</code></div></li><li><div class="item-name"><a class="struct" href="struct.Request.html" title="struct http::request::Request">Request</a></div><div class="desc docblock-short">Represents an HTTP request.</div></li></ul></section></div></main></body></html>

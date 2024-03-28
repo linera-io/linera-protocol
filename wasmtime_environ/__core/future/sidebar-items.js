@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["pending","poll_fn","ready"],"macro":["join"],"struct":["Pending","PollFn","Ready"],"trait":["Future","IntoFuture"]};

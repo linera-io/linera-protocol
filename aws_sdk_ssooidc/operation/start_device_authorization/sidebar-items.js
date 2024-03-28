@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StartDeviceAuthorizationError"],"mod":["builders"],"struct":["StartDeviceAuthorization","StartDeviceAuthorizationInput","StartDeviceAuthorizationOutput"]};

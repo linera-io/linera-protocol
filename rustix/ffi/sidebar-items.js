@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CStr","CString","FromBytesWithNulError","NulError"],"type":["c_char"]};

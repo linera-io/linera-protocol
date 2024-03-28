@@ -1,0 +1,7 @@
+(function() {var implementors = {
+"linera_base":[],
+"linera_chain":[["impl <a class=\"trait\" href=\"linera_base/crypto/trait.BcsSignable.html\" title=\"trait linera_base::crypto::BcsSignable\">BcsSignable</a> for <a class=\"struct\" href=\"linera_chain/data_types/struct.BlockAndRound.html\" title=\"struct linera_chain::data_types::BlockAndRound\">BlockAndRound</a>"]],
+"linera_core":[["impl <a class=\"trait\" href=\"linera_base/crypto/trait.BcsSignable.html\" title=\"trait linera_base::crypto::BcsSignable\">BcsSignable</a> for <a class=\"struct\" href=\"linera_core/data_types/struct.ChainInfo.html\" title=\"struct linera_core::data_types::ChainInfo\">ChainInfo</a>"]],
+"linera_execution":[["impl <a class=\"trait\" href=\"linera_base/crypto/trait.BcsSignable.html\" title=\"trait linera_base::crypto::BcsSignable\">BcsSignable</a> for <a class=\"struct\" href=\"linera_execution/test_utils/struct.FakeCertificate.html\" title=\"struct linera_execution::test_utils::FakeCertificate\">FakeCertificate</a>"]],
+"linera_service":[["impl <a class=\"trait\" href=\"linera_base/crypto/trait.BcsSignable.html\" title=\"trait linera_base::crypto::BcsSignable\">BcsSignable</a> for <a class=\"struct\" href=\"linera_service/config/struct.GenesisConfig.html\" title=\"struct linera_service::config::GenesisConfig\">GenesisConfig</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
