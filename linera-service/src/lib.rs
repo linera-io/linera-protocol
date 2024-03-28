@@ -14,3 +14,13 @@ pub mod project;
 pub mod prometheus_server;
 pub mod storage;
 pub mod util;
+
+#[cfg(with_testing)]
+use {
+    linera_base::sync::Lazy,
+    tokio::sync::Mutex,
+};
+
+/// A static lock to prevent integration tests from running in parallel.
+#[cfg(with_testing)]
+pub static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));

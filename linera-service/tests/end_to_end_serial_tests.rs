@@ -2,19 +2,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod common;
-
 use std::env;
-
-use common::INTEGRATION_TEST_GUARD;
+use std::{
+    io::{BufRead, BufReader},
+    process::{Command, Stdio},
+};
+use linera_service::INTEGRATION_TEST_GUARD;
 
 #[test_log::test(tokio::test)]
 async fn test_linera_net_up_simple() {
-    use std::{
-        io::{BufRead, BufReader},
-        process::{Command, Stdio},
-    };
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let mut command = Command::new(env!("CARGO_BIN_EXE_linera"));
