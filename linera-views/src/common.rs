@@ -295,8 +295,8 @@ pub trait KeyValueIterable<Error> {
 }
 
 /// Low-level, asynchronous read key-value operations. Useful for storage APIs not based on views.
-#[async_trait]
-pub trait ReadableKeyValueStore<E> {
+#[trait_variant::make(ReadableKeyValueStore: Send)]
+pub trait LocalReadableKeyValueStore<E> {
     /// The maximal size of keys that can be stored.
     const MAX_KEY_SIZE: usize;
 
@@ -324,33 +324,44 @@ pub trait ReadableKeyValueStore<E> {
     /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
     async fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::KeyValues, E>;
 
+    // We can't use `async fn` here in the below implementations due to
+    // https://github.com/rust-lang/impl-trait-utils/issues/17, but once that bug is fixed
+    // we can revert them to `async fn` syntax, which is neater.
+
     /// Reads a single `key` and deserializes the result if present.
-    async fn read_value<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, E>
+    fn read_value<V: DeserializeOwned>(
+        &self,
+        key: &[u8],
+    ) -> impl Future<Output = Result<Option<V>, E>>
     where
+        Self: Sync,
         E: From<bcs::Error>,
     {
-        from_bytes_opt(&self.read_value_bytes(key).await?)
+        async { from_bytes_opt(&self.read_value_bytes(key).await?) }
     }
 
     /// Reads multiple `keys` and deserializes the results if present.
-    async fn read_multi_values<V: DeserializeOwned + Send>(
+    fn read_multi_values<V: DeserializeOwned + Send>(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<V>>, E>
+    ) -> impl Future<Output = Result<Vec<Option<V>>, E>>
     where
+        Self: Sync,
         E: From<bcs::Error>,
     {
-        let mut values = Vec::with_capacity(keys.len());
-        for entry in self.read_multi_values_bytes(keys).await? {
-            values.push(from_bytes_opt(&entry)?);
+        async {
+            let mut values = Vec::with_capacity(keys.len());
+            for entry in self.read_multi_values_bytes(keys).await? {
+                values.push(from_bytes_opt(&entry)?);
+            }
+            Ok(values)
         }
-        Ok(values)
     }
 }
 
 /// Low-level, asynchronous write key-value operations. Useful for storage APIs not based on views.
-#[async_trait]
-pub trait WritableKeyValueStore<E> {
+#[trait_variant::make(WritableKeyValueStore: Send)]
+pub trait LocalWritableKeyValueStore<E> {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
@@ -363,10 +374,10 @@ pub trait WritableKeyValueStore<E> {
 }
 
 /// Low-level trait for the administration of stores and their namespaces.
-#[async_trait]
-pub trait AdminKeyValueStore: Sized {
+#[trait_variant::make(AdminKeyValueStore: Send)]
+pub trait LocalAdminKeyValueStore: Sized {
     /// The error type returned by the store's methods.
-    type Error: Send;
+    type Error;
 
     /// The configuration needed to interact with a new store.
     type Config: Send + Sync;
@@ -378,11 +389,14 @@ pub trait AdminKeyValueStore: Sized {
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error>;
 
     /// Deletes all the existing namespaces.
-    async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
-        for namespace in Self::list_all(config).await? {
-            Self::delete(config, &namespace).await?;
+    fn delete_all(config: &Self::Config) -> impl Future<Output = Result<(), Self::Error>> {
+        async {
+            let namespaces = Self::list_all(config).await?;
+            for namespace in namespaces {
+                Self::delete(config, &namespace).await?;
+            }
+            Ok(())
         }
-        Ok(())
     }
 
     /// Tests if a given namespace exists.
@@ -395,26 +409,30 @@ pub trait AdminKeyValueStore: Sized {
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error>;
 
     /// Initializes a storage if missing and provides it.
-    async fn maybe_create_and_connect(
+    fn maybe_create_and_connect(
         config: &Self::Config,
         namespace: &str,
-    ) -> Result<Self, Self::Error> {
-        if !Self::exists(config, namespace).await? {
-            Self::create(config, namespace).await?;
+    ) -> impl Future<Output = Result<Self, Self::Error>> {
+        async {
+            if !Self::exists(config, namespace).await? {
+                Self::create(config, namespace).await?;
+            }
+            Self::connect(config, namespace).await
         }
-        Self::connect(config, namespace).await
     }
 
     /// Creates a new storage. Overwrites it if this namespace already exists.
-    async fn recreate_and_connect(
+    fn recreate_and_connect(
         config: &Self::Config,
         namespace: &str,
-    ) -> Result<Self, Self::Error> {
-        if Self::exists(config, namespace).await? {
-            Self::delete(config, namespace).await?;
+    ) -> impl Future<Output = Result<Self, Self::Error>> {
+        async {
+            if Self::exists(config, namespace).await? {
+                Self::delete(config, namespace).await?;
+            }
+            Self::create(config, namespace).await?;
+            Self::connect(config, namespace).await
         }
-        Self::create(config, namespace).await?;
-        Self::connect(config, namespace).await
     }
 }
 
@@ -424,6 +442,18 @@ pub trait KeyValueStore:
 {
     /// The error type.
     type Error: Debug;
+}
+
+/// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
+pub trait LocalKeyValueStore:
+    LocalReadableKeyValueStore<Self::Error> + LocalWritableKeyValueStore<Self::Error>
+{
+    /// The error type.
+    type Error: Debug;
+}
+
+impl<S: KeyValueStore> LocalKeyValueStore for S {
+    type Error = <Self as KeyValueStore>::Error;
 }
 
 #[doc(hidden)]

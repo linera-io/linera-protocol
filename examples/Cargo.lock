@@ -1998,7 +1998,6 @@ version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-lock",
- "async-trait",
  "bcs",
  "cfg_aliases",
  "clap",
@@ -2057,6 +2056,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "trait-variant",
 ]
 
 [[package]]

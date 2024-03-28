@@ -4,7 +4,6 @@
 use std::{mem, sync::Arc};
 
 use async_lock::{RwLock, RwLockWriteGuard, Semaphore, SemaphoreGuard};
-use async_trait::async_trait;
 use linera_base::ensure;
 #[cfg(with_testing)]
 use linera_views::test_utils::generate_test_namespace;
@@ -58,7 +57,6 @@ pub struct ServiceStoreClient {
     namespace: Vec<u8>,
 }
 
-#[async_trait]
 impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
@@ -199,14 +197,10 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
     }
 }
 
-#[async_trait]
 impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ServiceContextError> {
-        use linera_views::batch::WriteOperation;
-
-        use crate::client::Operation;
         let mut statements = Vec::new();
         let mut chunk_size = 0;
         for operation in batch.operations {
@@ -345,7 +339,6 @@ impl ServiceStoreClient {
     }
 }
 
-#[async_trait]
 impl AdminKeyValueStore for ServiceStoreClient {
     type Error = ServiceContextError;
     type Config = ServiceStoreConfig;

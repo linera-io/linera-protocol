@@ -10,7 +10,6 @@ use std::{
 };
 
 use async_lock::Mutex;
-use async_trait::async_trait;
 use linked_hash_map::LinkedHashMap;
 #[cfg(with_testing)]
 use {
@@ -111,7 +110,6 @@ pub struct LruCachingStore<K> {
     lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
-#[async_trait]
 impl<K> ReadableKeyValueStore<K::Error> for LruCachingStore<K>
 where
     K: KeyValueStore + Send + Sync,
@@ -126,27 +124,24 @@ where
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, K::Error> {
-        match &self.lru_read_values {
-            None => {
-                return self.store.read_value_bytes(key).await;
-            }
-            Some(lru_read_values) => {
-                // First inquiring in the read_value_bytes LRU
-                let lru_read_values_container = lru_read_values.lock().await;
-                if let Some(value) = lru_read_values_container.query(key) {
-                    #[cfg(with_metrics)]
-                    NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
-                    return Ok(value.clone());
-                }
-                drop(lru_read_values_container);
-                #[cfg(with_metrics)]
-                NUM_CACHE_FAULT.with_label_values(&[]).inc();
-                let value = self.store.read_value_bytes(key).await?;
-                let mut lru_read_values = lru_read_values.lock().await;
-                lru_read_values.insert(key.to_vec(), value.clone());
-                Ok(value)
-            }
+        let Some(lru_read_values) = &self.lru_read_values else {
+            return self.store.read_value_bytes(key).await;
+        };
+
+        // First inquiring in the read_value_bytes LRU
+        let lru_read_values_container = lru_read_values.lock().await;
+        if let Some(value) = lru_read_values_container.query(key) {
+            #[cfg(with_metrics)]
+            NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
+            return Ok(value.clone());
         }
+        drop(lru_read_values_container);
+        #[cfg(with_metrics)]
+        NUM_CACHE_FAULT.with_label_values(&[]).inc();
+        let value = self.store.read_value_bytes(key).await?;
+        let mut lru_read_values = lru_read_values.lock().await;
+        lru_read_values.insert(key.to_vec(), value.clone());
+        Ok(value)
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, K::Error> {
@@ -163,44 +158,41 @@ where
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, K::Error> {
-        match &self.lru_read_values {
-            None => {
-                return self.store.read_multi_values_bytes(keys).await;
-            }
-            Some(lru_read_values) => {
-                let mut result = Vec::with_capacity(keys.len());
-                let mut cache_miss_indices = Vec::new();
-                let mut miss_keys = Vec::new();
-                let lru_read_values_container = lru_read_values.lock().await;
-                for (i, key) in keys.into_iter().enumerate() {
-                    if let Some(value) = lru_read_values_container.query(&key) {
-                        #[cfg(with_metrics)]
-                        NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
-                        result.push(value.clone());
-                    } else {
-                        #[cfg(with_metrics)]
-                        NUM_CACHE_FAULT.with_label_values(&[]).inc();
-                        result.push(None);
-                        cache_miss_indices.push(i);
-                        miss_keys.push(key);
-                    }
-                }
-                drop(lru_read_values_container);
-                let values = self
-                    .store
-                    .read_multi_values_bytes(miss_keys.clone())
-                    .await?;
-                let mut lru_read_values = lru_read_values.lock().await;
-                for (i, (key, value)) in cache_miss_indices
-                    .into_iter()
-                    .zip(miss_keys.into_iter().zip(values))
-                {
-                    lru_read_values.insert(key, value.clone());
-                    result[i] = value;
-                }
-                Ok(result)
+        let Some(lru_read_values) = &self.lru_read_values else {
+            return self.store.read_multi_values_bytes(keys).await;
+        };
+
+        let mut result = Vec::with_capacity(keys.len());
+        let mut cache_miss_indices = Vec::new();
+        let mut miss_keys = Vec::new();
+        let lru_read_values_container = lru_read_values.lock().await;
+        for (i, key) in keys.into_iter().enumerate() {
+            if let Some(value) = lru_read_values_container.query(&key) {
+                #[cfg(with_metrics)]
+                NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
+                result.push(value.clone());
+            } else {
+                #[cfg(with_metrics)]
+                NUM_CACHE_FAULT.with_label_values(&[]).inc();
+                result.push(None);
+                cache_miss_indices.push(i);
+                miss_keys.push(key);
             }
         }
+        drop(lru_read_values_container);
+        let values = self
+            .store
+            .read_multi_values_bytes(miss_keys.clone())
+            .await?;
+        let mut lru_read_values = lru_read_values.lock().await;
+        for (i, (key, value)) in cache_miss_indices
+            .into_iter()
+            .zip(miss_keys.into_iter().zip(values))
+        {
+            lru_read_values.insert(key, value.clone());
+            result[i] = value;
+        }
+        Ok(result)
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, K::Error> {
@@ -215,7 +207,6 @@ where
     }
 }
 
-#[async_trait]
 impl<K> WritableKeyValueStore<K::Error> for LruCachingStore<K>
 where
     K: KeyValueStore + Send + Sync,
@@ -224,29 +215,26 @@ where
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
-        match &self.lru_read_values {
-            None => {
-                return self.store.write_batch(batch, base_key).await;
-            }
-            Some(lru_read_values) => {
-                let mut lru_read_values = lru_read_values.lock().await;
-                for operation in &batch.operations {
-                    match operation {
-                        WriteOperation::Put { key, value } => {
-                            lru_read_values.insert(key.to_vec(), Some(value.to_vec()));
-                        }
-                        WriteOperation::Delete { key } => {
-                            lru_read_values.insert(key.to_vec(), None);
-                        }
-                        WriteOperation::DeletePrefix { key_prefix } => {
-                            lru_read_values.delete_prefix(key_prefix);
-                        }
-                    }
+        let Some(lru_read_values) = &self.lru_read_values else {
+            return self.store.write_batch(batch, base_key).await;
+        };
+
+        let mut lru_read_values = lru_read_values.lock().await;
+        for operation in &batch.operations {
+            match operation {
+                WriteOperation::Put { key, value } => {
+                    lru_read_values.insert(key.to_vec(), Some(value.to_vec()));
                 }
-                drop(lru_read_values);
-                self.store.write_batch(batch, base_key).await
+                WriteOperation::Delete { key } => {
+                    lru_read_values.insert(key.to_vec(), None);
+                }
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    lru_read_values.delete_prefix(key_prefix);
+                }
             }
         }
+        drop(lru_read_values);
+        self.store.write_batch(batch, base_key).await
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), K::Error> {
