@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{future, lock::Mutex};
@@ -176,7 +177,10 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
             })
             .await;
 
-        let mut net = LocalKubernetesTestNet { net: net.clone(), _guard: guard };
+        let mut net = LocalKubernetesTestNet {
+            net: net.clone(),
+            _guard: guard,
+        };
         let client = net.make_client().await;
         // The tests assume we've created a genesis config with 10
         // chains with 10 tokens each.

@@ -154,7 +154,6 @@ impl SimpleProxy {
         info!("Starting simple server");
         let address = self.get_listen_address(self.public_config.port);
 
-        //        println!("Simple_proxy::run, before start_metrics");
         Self::start_metrics(&self.get_listen_address(self.internal_config.metrics_port));
 
         self.public_config
@@ -167,7 +166,6 @@ impl SimpleProxy {
     }
 
     pub fn start_metrics(address: &String) {
-        //        println!("SimpleProxy::start_metrics, before start_metrics");
         match address.parse::<SocketAddr>() {
             Err(err) => panic!("Invalid metrics address for {address}: {err}"),
             Ok(address) => prometheus_server::start_metrics(address),

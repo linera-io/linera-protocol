@@ -2,8 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::env;
 use std::{
+    env,
     io::{BufRead, BufReader},
     process::{Command, Stdio},
 };

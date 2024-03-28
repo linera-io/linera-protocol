@@ -42,7 +42,7 @@ use linera_service::{
     cli_wrappers::{
         self,
         local_net::{
-            Database, LocalNetConfig, PathProvider, IndexPortChoice, StorageConfigBuilder,
+            Database, IndexPortChoice, LocalNetConfig, PathProvider, StorageConfigBuilder,
         },
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },

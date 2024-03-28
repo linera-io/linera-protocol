@@ -459,9 +459,6 @@ impl LineraNetConfig for LocalNetConfig {
             #[cfg(any(test, feature = "test"))]
             IndexPortChoice::ExternalControl => LOCAL_INDEX_PORT.get_guard().await,
         };
-        //        println!("instanstiate shift_port={}", shift_port);
-        //        println!("SHIFT_PORT={}", SHIFT_PORT);
-        //        println!("FUNCTIONAL_SHIFT_PORT={}", FUNCTIONAL_SHIFT_PORT);
         let mut net = LocalNet::new(
             self.database,
             self.network,
@@ -544,7 +541,6 @@ impl LocalNet {
         index_port: usize,
         guard: Option<IndexPortGuard>,
     ) -> Result<Self> {
-        //        println!("LocalNet index_port={:?}", index_port);
         Ok(Self {
             database,
             network,
@@ -571,57 +567,34 @@ impl LocalNet {
     }
 
     pub fn proxy_port(&self, validator: usize) -> usize {
-        let port = BASIC_PORT + self.index_port * SHIFT_PORT + validator * (MAX_N_SHARD + 1);
-        //        println!(
-        //            "Self::proxy_port shift_port={} validator={} port={}",
-        //           self.shift_port, validator, port
-        //        );
-        port
+        BASIC_PORT + self.index_port * SHIFT_PORT + validator * (MAX_N_SHARD + 1)
     }
 
     fn shard_port(&self, validator: usize, shard: usize) -> usize {
-        let port = BASIC_PORT + self.index_port * SHIFT_PORT + validator * (MAX_N_SHARD + 1) + shard + 1;
-        //        println!(
-        //            "Self::shard_port shift_port={} validator={} shard={} port={}",
-        //            self.shift_port, validator, shard, port
-        //        );
-        port
+        BASIC_PORT + self.index_port * SHIFT_PORT + validator * (MAX_N_SHARD + 1) + shard + 1
     }
 
     fn internal_port(&self, validator: usize) -> usize {
-        let port =
-            BASIC_PORT + FUNCTIONAL_SHIFT_PORT + self.index_port * SHIFT_PORT + validator * (MAX_N_SHARD + 1);
-        //        println!(
-        //            "Self::internal_port shift_port={} validator={} port={}",
-        //            self.shift_port, validator, port
-        //        );
-        port
+        BASIC_PORT
+            + FUNCTIONAL_SHIFT_PORT
+            + self.index_port * SHIFT_PORT
+            + validator * (MAX_N_SHARD + 1)
     }
 
     fn proxy_metrics_port(&self, validator: usize) -> usize {
-        let port = BASIC_PORT
+        BASIC_PORT
             + 2 * FUNCTIONAL_SHIFT_PORT
             + self.index_port * SHIFT_PORT
-            + validator * (MAX_N_SHARD + 1);
-        //        println!(
-        //            "Self::proxy_metrics_port shift_port={} validator={} port={}",
-        //            self.shift_port, validator, port
-        //        );
-        port
+            + validator * (MAX_N_SHARD + 1)
     }
 
     fn shard_metrics_port(&self, validator: usize, shard: usize) -> usize {
-        let port = BASIC_PORT
+        BASIC_PORT
             + 2 * FUNCTIONAL_SHIFT_PORT
             + self.index_port * SHIFT_PORT
             + validator * (MAX_N_SHARD + 1)
             + shard
-            + 1;
-        //        println!(
-        //            "Self::shard_metrics_port shift_port={} validator={} shard={} port={}",
-        //            self.shift_port, validator, shard, port
-        //        );
-        port
+            + 1
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
