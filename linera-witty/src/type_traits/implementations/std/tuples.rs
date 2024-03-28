@@ -58,11 +58,7 @@ macro_rules! impl_wit_traits_with_borrow_store_clause {
                     $( $types::wit_type_name(), )*
                 ];
 
-                if elements.is_empty() {
-                    "unit".into()
-                } else {
-                    format!("tuple<{}>", elements.join(", ")).into()
-                }
+                format!("tuple<{}>", elements.join(", ")).into()
             }
 
             fn wit_type_declaration() -> Cow<'static, str> {
