@@ -1017,7 +1017,6 @@ pub struct ViewContainer<C> {
 }
 
 #[cfg(with_testing)]
-#[async_trait]
 impl<C> ReadableKeyValueStore<ViewError> for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
@@ -1062,8 +1061,8 @@ where
         view.find_key_values_by_prefix(key_prefix).await
     }
 }
+
 #[cfg(with_testing)]
-#[async_trait]
 impl<C> WritableKeyValueStore<ViewError> for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
