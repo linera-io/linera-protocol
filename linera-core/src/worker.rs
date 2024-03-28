@@ -1170,7 +1170,7 @@ where
         #[cfg(with_metrics)]
         let (round, log_str, mut confirmed_transactions, mut duplicated) = (
             certificate.round,
-            certificate_value.to_log_str(),
+            certificate.value().to_log_str(),
             0u64,
             false,
         );
@@ -1191,7 +1191,6 @@ where
             } => {
                 #[cfg(with_metrics)]
                 {
-                    #[allow(clippy::used_underscore_bindings)]
                     confirmed_transactions = (_executed_block.block.incoming_messages.len()
                         + _executed_block.block.operations.len())
                         as u64;

@@ -13,8 +13,8 @@ on:
       - 'docker/**'
       - 'kubernetes/**'
       - 'linera-service/src/grpc_proxy.rs'
+      - 'linera-service/src/server.rs'
       - 'linera-rpc/src/grpc/server.rs'
-      - 'linera-rpc/src/grpc_network.rs'
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull-requests

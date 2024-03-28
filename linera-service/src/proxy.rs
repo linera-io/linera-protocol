@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, path::PathBuf, time::Duration};
+use std::{path::PathBuf, time::Duration};
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -17,9 +17,11 @@ use linera_rpc::{
 use linera_service::{
     config::{Import, ValidatorServerConfig},
     grpc_proxy::GrpcProxy,
-    prometheus_server, util,
+    util,
 };
 use tracing::{error, info, instrument};
+#[cfg(with_metrics)]
+use {linera_service::prometheus_server, std::net::SocketAddr};
 
 /// Options for running the proxy.
 #[derive(clap::Parser, Debug)]
@@ -154,6 +156,7 @@ impl SimpleProxy {
         info!("Starting simple server");
         let address = self.get_listen_address(self.public_config.port);
 
+        #[cfg(with_metrics)]
         Self::start_metrics(&self.get_listen_address(self.internal_config.metrics_port));
 
         self.public_config
@@ -165,6 +168,7 @@ impl SimpleProxy {
         Ok(())
     }
 
+    #[cfg(with_metrics)]
     pub fn start_metrics(address: &String) {
         match address.parse::<SocketAddr>() {
             Err(err) => panic!("Invalid metrics address for {address}: {err}"),

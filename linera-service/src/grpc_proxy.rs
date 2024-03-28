@@ -16,7 +16,7 @@ use std::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt};
-use linera_base::{identifiers::ChainId, prometheus_util, sync::Lazy};
+use linera_base::identifiers::ChainId;
 use linera_core::notifier::Notifier;
 use linera_rpc::{
     config::{
@@ -34,7 +34,6 @@ use linera_rpc::{
         GrpcProxyable, GRPC_MAX_MESSAGE_SIZE,
     },
 };
-use prometheus::{HistogramVec, IntCounterVec};
 use rcgen::generate_simple_self_signed;
 use tokio::select;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -44,9 +43,16 @@ use tonic::{
 };
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument};
+#[cfg(with_metrics)]
+use {
+    linera_base::{prometheus_util, sync::Lazy},
+    prometheus::{HistogramVec, IntCounterVec},
+};
 
+#[cfg(with_metrics)]
 use crate::prometheus_server;
 
+#[cfg(with_metrics)]
 static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "proxy_request_latency",
@@ -60,11 +66,13 @@ static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static PROXY_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec("proxy_request_count", "Proxy request count", &[])
         .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static PROXY_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "proxy_request_success",
@@ -74,6 +82,7 @@ static PROXY_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static PROXY_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "proxy_request_error",
@@ -113,14 +122,18 @@ where
     }
 
     fn call(&mut self, request: tonic::codegen::http::Request<Body>) -> Self::Future {
+        #[cfg(with_metrics)]
         let start = std::time::Instant::now();
         let future = self.service.call(request);
         async move {
             let response = future.await?;
-            PROXY_REQUEST_LATENCY
-                .with_label_values(&[])
-                .observe(start.elapsed().as_secs_f64() * 1000.0);
-            PROXY_REQUEST_COUNT.with_label_values(&[]).inc();
+            #[cfg(with_metrics)]
+            {
+                PROXY_REQUEST_LATENCY
+                    .with_label_values(&[])
+                    .observe(start.elapsed().as_secs_f64() * 1000.0);
+                PROXY_REQUEST_COUNT.with_label_values(&[]).inc();
+            }
             Ok(response)
         }
         .boxed()
@@ -207,6 +220,7 @@ impl GrpcProxy {
     pub async fn run(self) -> Result<()> {
         info!("Starting gRPC server");
 
+        #[cfg(with_metrics)]
         prometheus_server::start_metrics(self.metrics_address());
 
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
@@ -276,14 +290,17 @@ impl GrpcProxy {
         result: Result<Response<ChainInfoResult>, Status>,
         method_name: &str,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        #![allow(unused_variables)]
         match result {
             Ok(chain_info_result) => {
+                #[cfg(with_metrics)]
                 PROXY_REQUEST_SUCCESS
                     .with_label_values(&[method_name])
                     .inc();
                 Ok(chain_info_result)
             }
             Err(status) => {
+                #[cfg(with_metrics)]
                 PROXY_REQUEST_ERROR.with_label_values(&[method_name]).inc();
                 Err(status)
             }
