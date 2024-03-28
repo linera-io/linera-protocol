@@ -5,7 +5,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use fungible::{Account, FungibleTokenAbi, InitialStateBuilder, Operation, Parameters};
+use fungible::{Account, InitialStateBuilder, Operation, Parameters};
 use linera_sdk::{
     base::{AccountOwner, Amount},
     test::TestValidator,
@@ -56,14 +56,14 @@ async fn test_cross_chain_transfer() {
         .await;
 
     assert_eq!(
-        FungibleTokenAbi::query_account(application_id, &sender_chain, sender_account).await,
+        fungible::query_account(application_id, &sender_chain, sender_account).await,
         Some(initial_amount.saturating_sub(transfer_amount)),
     );
 
     receiver_chain.handle_received_messages().await;
 
     assert_eq!(
-        FungibleTokenAbi::query_account(application_id, &receiver_chain, receiver_account).await,
+        fungible::query_account(application_id, &receiver_chain, receiver_account).await,
         Some(transfer_amount),
     );
 }

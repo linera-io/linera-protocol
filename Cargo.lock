@@ -3423,6 +3423,7 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-rpc",
+ "linera-sdk",
  "linera-service",
  "linera-storage",
  "linera-storage-service",

@@ -6,7 +6,7 @@
 mod utils;
 
 use proc_macro::TokenStream;
-use proc_macro2::Ident;
+use proc_macro2::{Ident, Span};
 use syn::{
     parse_macro_input, Fields, ItemEnum,
     __private::{quote::quote, TokenStream2},
@@ -17,10 +17,16 @@ use crate::utils::{concat, snakify};
 #[proc_macro_derive(GraphQLMutationRoot)]
 pub fn derive_mutation_root(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemEnum);
-    generate_mutation_root_code(input).into()
+    generate_mutation_root_code(input, "linera_sdk").into()
 }
 
-fn generate_mutation_root_code(input: ItemEnum) -> TokenStream2 {
+#[proc_macro_derive(GraphQLMutationRootInCrate)]
+pub fn derive_mutation_root_in_crate(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemEnum);
+    generate_mutation_root_code(input, "crate").into()
+}
+
+fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream2 {
     let enum_name = input.ident;
     let mutation_root_name = concat(&enum_name, "MutationRoot");
     let mut methods = vec![];
@@ -69,7 +75,9 @@ fn generate_mutation_root_code(input: ItemEnum) -> TokenStream2 {
         };
     }
 
+    let crate_root = Ident::new(crate_root, Span::call_site());
     quote! {
+        /// Mutation root
         pub struct #mutation_root_name;
 
         #[async_graphql::Object]
@@ -81,7 +89,7 @@ fn generate_mutation_root_code(input: ItemEnum) -> TokenStream2 {
             *
         }
 
-        impl linera_sdk::graphql::GraphQLMutationRoot for #enum_name {
+        impl #crate_root::graphql::GraphQLMutationRoot for #enum_name {
             type MutationRoot = #mutation_root_name;
 
             fn mutation_root() -> Self::MutationRoot {
@@ -120,9 +128,10 @@ pub mod tests {
             }
         };
 
-        let output = generate_mutation_root_code(operation);
+        let output = generate_mutation_root_code(operation, "linera_sdk");
 
         let expected = quote! {
+            /// Mutation root
             pub struct SomeOperationMutationRoot;
 
             #[async_graphql::Object]

@@ -111,7 +111,7 @@ async fn single_transaction() {
         (owner_a, Some(Amount::from_tokens(10))),
         (owner_b, None),
     ] {
-        let value = FungibleTokenAbi::query_account(token_id_a, &user_chain_a, owner).await;
+        let value = fungible::query_account(token_id_a, &user_chain_a, owner).await;
         assert_eq!(value, amount);
     }
     for (owner, amount) in [
@@ -119,7 +119,7 @@ async fn single_transaction() {
         (owner_a, None),
         (owner_b, Some(Amount::from_tokens(9))),
     ] {
-        let value = FungibleTokenAbi::query_account(token_id_b, &user_chain_b, owner).await;
+        let value = fungible::query_account(token_id_b, &user_chain_b, owner).await;
         assert_eq!(value, amount);
     }
 
@@ -174,16 +174,16 @@ async fn single_transaction() {
         (owner_a, Some(Amount::ONE)),
         (owner_b, None),
     ] {
-        let value = FungibleTokenAbi::query_account(token_id_a, &user_chain_a, owner).await;
+        let value = fungible::query_account(token_id_a, &user_chain_a, owner).await;
         assert_eq!(value, amount);
     }
     for owner in [admin_account, owner_a, owner_b] {
         assert_eq!(
-            FungibleTokenAbi::query_account(token_id_a, &user_chain_b, owner).await,
+            fungible::query_account(token_id_a, &user_chain_b, owner).await,
             None
         );
         assert_eq!(
-            FungibleTokenAbi::query_account(token_id_a, &matching_chain, owner).await,
+            fungible::query_account(token_id_a, &matching_chain, owner).await,
             None
         );
     }
@@ -231,14 +231,14 @@ async fn single_transaction() {
     // Checking the balances on chain A
     for (owner, amount) in [(owner_a, Some(Amount::from_tokens(1))), (owner_b, None)] {
         assert_eq!(
-            FungibleTokenAbi::query_account(token_id_a, &user_chain_a, owner).await,
+            fungible::query_account(token_id_a, &user_chain_a, owner).await,
             amount
         );
     }
     // Checking the balances on chain B
     for (owner, amount) in [(owner_a, None), (owner_b, Some(Amount::from_tokens(1)))] {
         assert_eq!(
-            FungibleTokenAbi::query_account(token_id_b, &user_chain_b, owner).await,
+            fungible::query_account(token_id_b, &user_chain_b, owner).await,
             amount
         );
     }
@@ -285,7 +285,7 @@ async fn single_transaction() {
         (owner_b, &user_chain_b, Some(Amount::from_tokens(6))),
     ] {
         assert_eq!(
-            FungibleTokenAbi::query_account(token_id_a, user_chain, owner).await,
+            fungible::query_account(token_id_a, user_chain, owner).await,
             amount
         );
     }
@@ -296,7 +296,7 @@ async fn single_transaction() {
         (owner_b, &user_chain_b, Some(Amount::from_tokens(6))),
     ] {
         assert_eq!(
-            FungibleTokenAbi::query_account(token_id_b, user_chain, owner).await,
+            fungible::query_account(token_id_b, user_chain, owner).await,
             amount
         );
     }

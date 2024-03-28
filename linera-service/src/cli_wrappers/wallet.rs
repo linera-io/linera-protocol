@@ -534,7 +534,9 @@ impl ClientWrapper {
         max_in_flight: usize,
         num_chains: usize,
         transactions_per_block: usize,
-        fungible_application_id: Option<ApplicationId<fungible::FungibleTokenAbi>>,
+        fungible_application_id: Option<
+            ApplicationId<linera_sdk::abis::fungible::FungibleTokenAbi>,
+        >,
     ) -> Result<()> {
         let mut command = self.command().await?;
         command

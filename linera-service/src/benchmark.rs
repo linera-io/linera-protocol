@@ -5,7 +5,6 @@ use std::{collections::BTreeMap, path::Path, time::Duration};
 
 use anyhow::{bail, Context as _, Result};
 use clap::Parser as _;
-use fungible::{self, FungibleTokenAbi, InitialState, Parameters};
 use futures::future::{join_all, try_join_all};
 use linera_base::{
     async_graphql::InputType,
@@ -13,6 +12,7 @@ use linera_base::{
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, Owner},
 };
 use linera_execution::system::SystemChannel;
+use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
 use linera_service::cli_wrappers::{
     local_net::PathProvider, ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, Network,
 };
@@ -271,7 +271,7 @@ async fn benchmark_with_fungible(
     Ok(())
 }
 
-struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
+struct FungibleApp(ApplicationWrapper<FungibleTokenAbi>);
 
 impl FungibleApp {
     async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
