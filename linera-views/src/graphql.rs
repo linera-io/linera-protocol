@@ -23,7 +23,11 @@ impl<K: async_graphql::OutputType, V: async_graphql::OutputType> async_graphql::
     for Entry<K, V>
 {
     fn type_name() -> Cow<'static, str> {
-        format!("Entry_{}_{}", K::type_name(), V::type_name()).into()
+        format!("Entry_{}_{}", K::type_name(), V::type_name())
+            .replace('!', "_NonNull")
+            .replace('[', "")
+            .replace(']', "_Array")
+            .into()
     }
 }
 
