@@ -622,18 +622,15 @@ impl Runnable for Job {
                 let Some(certificate) = maybe_certificate else {
                     return Ok(());
                 };
-                info!("Staging committee:\n{:?}", certificate);
-                context.push_to_all_chains(&storage, &certificate).await;
 
                 // Remove the old committee.
                 info!("Finalizing committee:\n{:?}", certificate);
-                let certificate = context
+                context
                     .apply_client_command(&chain_client, |mut chain_client| async move {
                         chain_client.finalize_committee().await
                     })
                     .await
                     .context("Failed to finalize committee")?;
-                context.push_to_all_chains(&storage, &certificate).await;
                 context.save_wallet();
 
                 let time_total = time_start.elapsed();
