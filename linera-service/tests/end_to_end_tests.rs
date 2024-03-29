@@ -28,6 +28,12 @@ use test_case::test_case;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
+use linera_base::sync::Lazy;
+use tokio::sync::Mutex;
+
+/// The `counter` directory should be accessed only once at the same time.
+static COUNTER_DIRECTORY_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     let owner = client.get_owner().unwrap();
     AccountOwner::User(owner)
@@ -621,7 +627,6 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     example_name: &str,
 ) {
     use fungible::{FungibleTokenAbi, InitialState};
-
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
@@ -2106,6 +2111,7 @@ async fn test_project_new() {
 
 #[test_log::test(tokio::test)]
 async fn test_project_test() {
+    let _guard = COUNTER_DIRECTORY_TEST_GUARD.lock().await;
     let path_provider = PathProvider::create_temporary_directory().unwrap();
     let client = ClientWrapper::new(path_provider, Network::Grpc, None, 0);
     client
@@ -2161,6 +2167,7 @@ async fn test_project_publish(database: Database, network: Network) {
 #[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_example_publish(database: Database, network: Network) {
+    let _guard = COUNTER_DIRECTORY_TEST_GUARD.lock().await;
     let config = LocalNetConfig {
         num_initial_validators: 1,
         num_shards: 1,
