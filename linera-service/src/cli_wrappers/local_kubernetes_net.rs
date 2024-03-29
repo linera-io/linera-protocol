@@ -154,7 +154,7 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
 }
 
 #[cfg(with_testing)]
-pub struct LocalKubernetesTestNet {
+pub struct SharedLocalKubernetesTestingNet {
     net: Arc<Mutex<LocalKubernetesNet>>,
     _guard: OwnedMutexGuard<()>,
 }
@@ -162,7 +162,7 @@ pub struct LocalKubernetesTestNet {
 #[cfg(with_testing)]
 #[async_trait]
 impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
-    type Net = LocalKubernetesTestNet;
+    type Net = SharedLocalKubernetesTestingNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
         let guard = KUBERNETES_TEST_GUARD.clone().lock_owned().await;
@@ -177,7 +177,7 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
             })
             .await;
 
-        let mut net = LocalKubernetesTestNet {
+        let mut net = SharedLocalKubernetesTestingNet {
             net: net.clone(),
             _guard: guard,
         };
@@ -201,7 +201,7 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
 }
 
 #[async_trait]
-impl LineraNet for LocalKubernetesTestNet {
+impl LineraNet for SharedLocalKubernetesTestingNet {
     async fn ensure_is_running(&mut self) -> Result<()> {
         let self_clone = self.net.clone();
         let mut self_lock = self_clone.lock().await;

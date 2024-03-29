@@ -12,6 +12,7 @@ use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{Amount, Timestamp},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, Owner},
+    sync::Lazy,
 };
 #[cfg(feature = "remote_net")]
 use linera_service::cli_wrappers::remote_net::RemoteNetTestingConfig;
@@ -25,11 +26,8 @@ use linera_service::cli_wrappers::{
 };
 use serde_json::{json, Value};
 use test_case::test_case;
-use tokio::task::JoinHandle;
+use tokio::{sync::Mutex, task::JoinHandle};
 use tracing::{info, warn};
-
-use linera_base::sync::Lazy;
-use tokio::sync::Mutex;
 
 /// The `counter` directory should be accessed only once at the same time.
 static COUNTER_DIRECTORY_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));

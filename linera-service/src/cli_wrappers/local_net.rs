@@ -197,7 +197,7 @@ static MAX_N_TEST: usize = 30;
 /// The maximum number of validators used.
 static MAX_N_VALIDATOR: usize = 10;
 
-/// The shift in ports froom one set of validators to the next
+/// The shift in ports from one set of validators to the next
 static SHIFT_PORT: usize = MAX_N_VALIDATOR * (MAX_N_SHARD + 1);
 
 /// The basic port used
