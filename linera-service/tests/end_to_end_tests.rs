@@ -45,8 +45,12 @@ impl FungibleApp {
             account_owner.to_value()
         );
         let response_body = self.0.query(&query).await.unwrap();
-        serde_json::from_value(response_body["accounts"]["entry"]["value"].clone())
-            .unwrap_or_default()
+        let amount_option = serde_json::from_value::<Option<Amount>>(
+            response_body["accounts"]["entry"]["value"].clone(),
+        )
+        .unwrap();
+
+        amount_option.unwrap_or(Amount::ZERO)
     }
 
     async fn assert_balances(&self, accounts: impl IntoIterator<Item = (AccountOwner, Amount)>) {
@@ -59,7 +63,7 @@ impl FungibleApp {
     async fn entries(&self) -> Vec<native_fungible::AccountEntry> {
         let query = "accounts { entries { key, value } }";
         let response_body = self.0.query(&query).await.unwrap();
-        serde_json::from_value(response_body["accounts"]["entries"].clone()).unwrap_or_default()
+        serde_json::from_value(response_body["accounts"]["entries"].clone()).unwrap()
     }
 
     async fn assert_entries(&self, accounts: impl IntoIterator<Item = (AccountOwner, Amount)>) {
@@ -78,7 +82,7 @@ impl FungibleApp {
     async fn keys(&self) -> Vec<AccountOwner> {
         let query = "accounts { keys }";
         let response_body = self.0.query(&query).await.unwrap();
-        serde_json::from_value(response_body["accounts"]["keys"].clone()).unwrap_or_default()
+        serde_json::from_value(response_body["accounts"]["keys"].clone()).unwrap()
     }
 
     async fn assert_keys(&self, accounts: impl IntoIterator<Item = AccountOwner>) {
