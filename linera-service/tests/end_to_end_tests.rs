@@ -32,9 +32,17 @@ use tracing::{info, warn};
 /// The `counter` directory should be accessed only once at the same time.
 static COUNTER_DIRECTORY_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
+/// The compilation needs to be guarded so that we do not compile at the same time.
+static COMPILATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     let owner = client.get_owner().unwrap();
     AccountOwner::User(owner)
+}
+
+async fn guarded_build(client: &ClientWrapper, name: &str) -> (PathBuf, PathBuf) {
+    let _guard = COMPILATION_TEST_GUARD.lock().await;
+    client.build_example(name).await.unwrap()
 }
 
 struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
@@ -289,7 +297,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
     let increment = 5;
 
     let chain = client.get_wallet().unwrap().default_chain().unwrap();
-    let (contract, service) = client.build_example("counter").await.unwrap();
+    let (contract, service) = guarded_build(&client, "counter").await;
 
     let application_id = client
         .publish_and_create::<CounterAbi>(
@@ -339,7 +347,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     let increment = 5;
 
     let chain = client.get_wallet().unwrap().default_chain().unwrap();
-    let (contract, service) = client.build_example("counter").await.unwrap();
+    let (contract, service) = guarded_build(&client, "counter").await;
 
     let bytecode_id = client
         .publish_bytecode(contract, service, None)
@@ -390,7 +398,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .open_and_assign(&client2, Amount::ONE)
         .await
         .unwrap();
-    let (contract, service) = client1.build_example("social").await.unwrap();
+    let (contract, service) = guarded_build(&client1, "social").await;
     let bytecode_id = client1
         .publish_bytecode(contract, service, None)
         .await
@@ -499,7 +507,7 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig, example_nam
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example(example_name).await.unwrap();
+    let (contract, service) = guarded_build(&client1, example_name).await;
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
         fungible::Parameters::new("NAT")
@@ -652,7 +660,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example(example_name).await.unwrap();
+    let (contract, service) = guarded_build(&client1, example_name).await;
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
         fungible::Parameters::new("NAT")
@@ -743,7 +751,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) {
     let account_owner2 = get_fungible_account_owner(&client2);
 
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example("non-fungible").await.unwrap();
+    let (contract, service) = guarded_build(&client1, "non-fungible").await;
     let application_id = client1
         .publish_and_create::<NonFungibleTokenAbi>(contract, service, &(), &(), &[], None)
         .await
@@ -1021,7 +1029,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
     let state_fungible = InitialState { accounts };
 
     // Setting up the application fungible
-    let (contract_fungible, service_fungible) = client1.build_example("fungible").await.unwrap();
+    let (contract_fungible, service_fungible) = guarded_build(&client1, "fungible").await;
     let params = fungible::Parameters::new("FUN");
     let application_id_fungible = client1
         .publish_and_create::<FungibleTokenAbi>(
@@ -1043,7 +1051,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
         deadline,
         target,
     };
-    let (contract_crowd, service_crowd) = client1.build_example("crowd-funding").await.unwrap();
+    let (contract_crowd, service_crowd) = guarded_build(&client1, "crowd-funding").await;
     let application_id_crowd = client1
         .publish_and_create::<CrowdFundingAbi>(
             contract_crowd,
@@ -1142,12 +1150,10 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     client_b.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     // Create initial server and client config.
-    let (contract_fungible_a, service_fungible_a) =
-        client_a.build_example("fungible").await.unwrap();
-    let (contract_fungible_b, service_fungible_b) =
-        client_b.build_example("fungible").await.unwrap();
+    let (contract_fungible_a, service_fungible_a) = guarded_build(&client_a, "fungible").await;
+    let (contract_fungible_b, service_fungible_b) = guarded_build(&client_b, "fungible").await;
     let (contract_matching, service_matching) =
-        client_admin.build_example("matching-engine").await.unwrap();
+        guarded_build(&client_admin, "matching-engine").await;
 
     let chain_admin = client_admin.get_wallet().unwrap().default_chain().unwrap();
     let chain_a = client_admin
@@ -1435,9 +1441,8 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     client0.wallet_init(&[], FaucetOption::None).await.unwrap();
     client1.wallet_init(&[], FaucetOption::None).await.unwrap();
 
-    let (contract_fungible, service_fungible) =
-        client_admin.build_example("fungible").await.unwrap();
-    let (contract_amm, service_amm) = client_admin.build_example("amm").await.unwrap();
+    let (contract_fungible, service_fungible) = guarded_build(&client_admin, "fungible").await;
+    let (contract_amm, service_amm) = guarded_build(&client_admin, "amm").await;
 
     // Admin chain
     let chain_admin = client_admin.get_wallet().unwrap().default_chain().unwrap();
@@ -1905,7 +1910,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     let owner = get_fungible_account_owner(&client);
     let accounts = BTreeMap::from([(owner, Amount::from_tokens(10))]);
     let state = InitialState { accounts };
-    let (contract, service) = client.build_example("fungible").await.unwrap();
+    let (contract, service) = guarded_build(&client, "fungible").await;
     let params = fungible::Parameters::new("FUN");
     let application_id = client
         .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
@@ -2534,7 +2539,7 @@ async fn test_wasm_end_to_end_benchmark(mut config: LocalNetConfig) {
     let account_owner = get_fungible_account_owner(&client);
     let accounts = BTreeMap::from([(account_owner, Amount::from_tokens(1_000_000))]);
     let state = InitialState { accounts };
-    let (contract, service) = client.build_example("fungible").await.unwrap();
+    let (contract, service) = guarded_build(&client, "fungible").await;
     let params = fungible::Parameters::new("FUN");
     let application_id = client
         .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
