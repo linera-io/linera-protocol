@@ -1,1 +1,0 @@
-module.exports = require('../lib/locale/tk_TK');

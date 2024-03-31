@@ -21,3 +21,4 @@
 
 # Helm
 kubernetes/linera-validator/working/*
+node_modules
