@@ -1,1 +1,0 @@
-export { PresetColors } from './presetColors';

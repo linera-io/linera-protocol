@@ -1,1 +1,0 @@
-export default function useWinClick(open: boolean, clickToHide: boolean, targetEle: HTMLElement, popupEle: HTMLElement, mask: boolean, maskClosable: boolean, inPopupOrChild: (target: EventTarget) => boolean, triggerOpen: (open: boolean) => void): void;
