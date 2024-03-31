@@ -1,0 +1,6 @@
+# Use `git config blame.ignorerevsfile .git-blame-ignore-revs` to make `git blame` ignore the following commits.
+
+# upload node_modules
+f0a4fad16b59fdf726f03eed9d523dbabd610402
+# remove node_modules
+359c74a60671e54cd017eda7b0622e3c4a5c6c0b
