@@ -1,1 +1,0 @@
-module.exports = require('../lib/locale/fr_FR');

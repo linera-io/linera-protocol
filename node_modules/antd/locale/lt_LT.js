@@ -1,1 +1,0 @@
-module.exports = require('../lib/locale/lt_LT');

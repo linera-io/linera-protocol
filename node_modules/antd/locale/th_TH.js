@@ -1,1 +1,0 @@
-module.exports = require('../lib/locale/th_TH');
