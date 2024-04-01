@@ -11,6 +11,21 @@ use crate::{
 // TODO(#1326): fix the proliferation of constraints from this module
 
 // TODO(#1858): come up with a better name-mangling scheme
+/// Mangle a GraphQL type into something that can be interpolated into a GraphQL type name
+fn mangle(type_name: impl AsRef<str>) -> String {
+    let mut mangled = String::new();
+
+    for c in type_name.as_ref().chars() {
+        match c {
+            '!' | '[' => (),
+            ']' => mangled.push_str("_Array"),
+            c => mangled.push(c),
+        }
+    }
+
+    mangled
+}
+
 fn hash_name<T: ?Sized>() -> u32 {
     use sha3::Digest as _;
     u32::from_le_bytes(
@@ -35,8 +50,8 @@ impl<K: async_graphql::OutputType, V: async_graphql::OutputType> async_graphql::
     fn type_name() -> Cow<'static, str> {
         format!(
             "Entry_{}_{}_{:08x}",
-            K::type_name(),
-            V::type_name(),
+            mangle(K::type_name()),
+            mangle(V::type_name()),
             hash_name::<Self>(),
         )
         .into()
@@ -58,7 +73,7 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapFilters<K> {
     fn type_name() -> Cow<'static, str> {
         Cow::Owned(format!(
             "MapFilters_{}_{:08x}",
-            K::type_name(),
+            mangle(K::type_name()),
             hash_name::<Self>(),
         ))
     }
@@ -133,7 +148,7 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapInput<K> {
     fn type_name() -> Cow<'static, str> {
         Cow::Owned(format!(
             "MapInput_{}_{:08x}",
-            K::type_name(),
+            mangle(K::type_name()),
             hash_name::<Self>(),
         ))
     }
@@ -206,7 +221,12 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapInput<K> {
 use crate::map_view::ByteMapView;
 impl<C: Send + Sync, V: async_graphql::OutputType> async_graphql::TypeName for ByteMapView<C, V> {
     fn type_name() -> Cow<'static, str> {
-        format!("ByteMapView_{}_{:08x}", V::type_name(), hash_name::<Self>()).into()
+        format!(
+            "ByteMapView_{}_{:08x}",
+            mangle(V::type_name()),
+            hash_name::<Self>()
+        )
+        .into()
     }
 }
 #[async_graphql::Object(name_type)]
@@ -272,8 +292,8 @@ impl<C: Send + Sync, I: async_graphql::OutputType, V: async_graphql::OutputType>
     fn type_name() -> Cow<'static, str> {
         format!(
             "MapView_{}_{}_{:08x}",
-            I::type_name(),
-            V::type_name(),
+            mangle(I::type_name()),
+            mangle(V::type_name()),
             hash_name::<Self>(),
         )
         .into()
@@ -467,8 +487,8 @@ impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
     fn type_name() -> Cow<'static, str> {
         format!(
             "CollectionView_{}_{}_{:08x}",
-            K::type_name(),
-            V::type_name(),
+            mangle(K::type_name()),
+            mangle(V::type_name()),
             hash_name::<Self>(),
         )
         .into()
@@ -534,8 +554,8 @@ impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
     fn type_name() -> Cow<'static, str> {
         format!(
             "CustomCollectionView_{}_{}_{:08x}",
-            K::type_name(),
-            V::type_name(),
+            mangle(K::type_name()),
+            mangle(V::type_name()),
             hash_name::<Self>(),
         )
         .into()
@@ -618,8 +638,8 @@ impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
     fn type_name() -> Cow<'static, str> {
         format!(
             "ReentrantCollectionView_{}_{}_{}",
-            K::type_name(),
-            V::type_name(),
+            mangle(K::type_name()),
+            mangle(V::type_name()),
             hash_name::<Self>(),
         )
         .into()
@@ -697,8 +717,8 @@ impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
     fn type_name() -> Cow<'static, str> {
         format!(
             "ReentrantCustomCollectionView_{}_{}_{:08x}",
-            K::type_name(),
-            V::type_name(),
+            mangle(K::type_name()),
+            mangle(V::type_name()),
             hash_name::<Self>(),
         )
         .into()
@@ -830,7 +850,12 @@ where
 use crate::log_view::LogView;
 impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName for LogView<C, T> {
     fn type_name() -> Cow<'static, str> {
-        format!("LogView_{}_{:08x}", T::type_name(), hash_name::<Self>()).into()
+        format!(
+            "LogView_{}_{:08x}",
+            mangle(T::type_name()),
+            hash_name::<Self>()
+        )
+        .into()
     }
 }
 #[async_graphql::Object(name_type)]
@@ -882,7 +907,12 @@ where
 use crate::queue_view::QueueView;
 impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName for QueueView<C, T> {
     fn type_name() -> Cow<'static, str> {
-        format!("QueueView_{}_{:08x}", T::type_name(), hash_name::<Self>()).into()
+        format!(
+            "QueueView_{}_{:08x}",
+            mangle(T::type_name()),
+            hash_name::<Self>()
+        )
+        .into()
     }
 }
 #[async_graphql::Object(name_type)]
