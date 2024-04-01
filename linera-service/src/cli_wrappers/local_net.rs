@@ -181,10 +181,10 @@ impl PortShifts {
 
 /// The number of simultaneous sets of validators
 #[cfg(any(test, feature = "test"))]
-const N_SIMULTANEOUS_VALIDATOR: usize = 5;
+const N_SIMULTANEOUS_VALIDATOR: usize = 2;
 
 /// The maximal number of shards used for local_net
-static MAX_N_CLIENT: usize = 3;
+static MAX_N_CLIENT: usize = 10;
 
 /// The maximal number of shards used for local_net
 static MAX_N_SHARD: usize = 9;
