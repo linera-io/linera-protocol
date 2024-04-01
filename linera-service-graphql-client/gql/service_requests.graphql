@@ -63,9 +63,9 @@ query ChainInbox($chainId: ChainId!, $origin: Origin!) {
 
 query Chain(
   $chainId: ChainId!,
-  $inboxesInput: MapInput_Origin,
-  $outboxesInput: MapInput_Target,
-  $channelsInput: MapInput_ChannelFullName,
+  $inboxesInput: MapInput_Origin_08662377,
+  $outboxesInput: MapInput_Target_16f15470,
+  $channelsInput: MapInput_ChannelFullName_3aa4320a,
 ) {
   chain(chainId: $chainId) {
     chainId
