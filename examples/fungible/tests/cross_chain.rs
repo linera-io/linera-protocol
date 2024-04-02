@@ -67,3 +67,76 @@ async fn test_cross_chain_transfer() {
         Some(transfer_amount),
     );
 }
+
+/// Test bouncing some tokens back to the sender.
+///
+/// Creates the application on a `sender_chain`, initializing it with a single account with some
+/// tokens for that chain's owner. Attempts to transfer some tokens to a new `receiver_chain`,
+/// but makes the `receiver_chain` reject the transfer message, causing the tokens to be
+/// returned back to the sender.
+#[tokio::test]
+async fn test_bouncing_tokens() {
+    let initial_amount = Amount::from_tokens(19);
+    let transfer_amount = Amount::from_tokens(7);
+
+    let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
+    let mut sender_chain = validator.new_chain().await;
+    let sender_account = AccountOwner::from(sender_chain.public_key());
+
+    let initial_state = InitialStateBuilder::default().with_account(sender_account, initial_amount);
+    let params = Parameters::new("RET");
+    let application_id = sender_chain
+        .create_application::<fungible::FungibleTokenAbi>(
+            bytecode_id,
+            params,
+            initial_state.build(),
+            vec![],
+        )
+        .await;
+
+    let receiver_chain = validator.new_chain().await;
+    let receiver_account = AccountOwner::from(receiver_chain.public_key());
+
+    let messages = sender_chain
+        .add_block(|block| {
+            block.with_operation(
+                application_id,
+                Operation::Transfer {
+                    owner: sender_account,
+                    amount: transfer_amount,
+                    target_account: Account {
+                        chain_id: receiver_chain.id(),
+                        owner: receiver_account,
+                    },
+                },
+            );
+        })
+        .await;
+
+    assert_eq!(
+        fungible::query_account(application_id, &sender_chain, sender_account).await,
+        Some(initial_amount.saturating_sub(transfer_amount)),
+    );
+
+    assert_eq!(messages.len(), 2);
+
+    receiver_chain
+        .add_block(move |block| {
+            block
+                .with_incoming_message(messages[0])
+                .with_message_rejection(messages[1]);
+        })
+        .await;
+
+    assert_eq!(
+        fungible::query_account(application_id, &receiver_chain, receiver_account).await,
+        None,
+    );
+
+    sender_chain.handle_received_messages().await;
+
+    assert_eq!(
+        fungible::query_account(application_id, &sender_chain, sender_account).await,
+        Some(initial_amount),
+    );
+}
