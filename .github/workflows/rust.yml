@@ -37,7 +37,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 90
+    timeout-minutes: 95
 
     steps:
     - uses: actions/checkout@v3
@@ -52,6 +52,13 @@ jobs:
       uses: arduino/setup-protoc@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install chromedriver
+      uses: nanasess/setup-chromedriver@v2
+    - name: Install wasm-pack
+      uses: jetli/wasm-pack-action@v0.4.0
+      with:
+        version: 'latest'
+
     - name: Build example applications
       run: |
         cd examples
@@ -76,6 +83,10 @@ jobs:
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime
+    - name: Run the browser tests
+      run: |
+        cd linera-views
+        WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless --features web,indexeddb
     - name: Run the benchmark test
       run: |
         cargo build --locked -p linera-service --bin linera-benchmark --features benchmark
