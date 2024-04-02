@@ -501,8 +501,8 @@ where
             .ok_or(LocalNodeError::InactiveChain(self.chain_id))
     }
 
-    /// Obtains the identity of the current owner of the chain. HACK: In the case of a
-    /// multi-owner chain, we pick one identity for which we know the private key.
+    /// Obtains the identity of the current owner of the chain. Returns an error if we have the
+    /// private key for more than one identity.
     pub async fn identity(&mut self) -> Result<Owner, ChainClientError> {
         let manager = self.chain_info().await?.manager;
         ensure!(
