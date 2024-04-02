@@ -3,7 +3,6 @@
 
 //! Functions and types to interface with the system API available to application views.
 
-use async_trait::async_trait;
 use linera_base::ensure;
 use linera_views::{
     batch::{Batch, WriteOperation},
@@ -40,7 +39,6 @@ impl AppStateStore {
     }
 }
 
-#[async_trait]
 impl ReadableKeyValueStore<ViewError> for AppStateStore {
     // The AppStateStore of the system_api does not have limits
     // on the size of its values.
@@ -101,7 +99,6 @@ impl ReadableKeyValueStore<ViewError> for AppStateStore {
     }
 }
 
-#[async_trait]
 impl WritableKeyValueStore<ViewError> for AppStateStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
@@ -135,7 +132,6 @@ impl WritableKeyValueStore<ViewError> for AppStateStore {
     }
 }
 
-#[async_trait]
 impl KeyValueStore for AppStateStore {
     type Error = ViewError;
 }

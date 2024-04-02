@@ -344,7 +344,6 @@ impl From<ScyllaDbContextError> for crate::views::ViewError {
     }
 }
 
-#[async_trait]
 impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
@@ -373,8 +372,10 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         let handles = keys.into_iter().map(|key| store.read_value_internal(key));
-        let result = join_all(handles).await;
-        Ok(result.into_iter().collect::<Result<_, _>>()?)
+        join_all(handles)
+            .await
+            .into_iter()
+            .collect::<Result<_, _>>()
     }
 
     async fn find_keys_by_prefix(
@@ -426,7 +427,6 @@ impl DirectWritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal
     }
 }
 
-#[async_trait]
 impl AdminKeyValueStore for ScyllaDbStoreInternal {
     type Error = ScyllaDbContextError;
     type Config = ScyllaDbStoreConfig;
@@ -589,7 +589,6 @@ impl DirectKeyValueStore for ScyllaDbStoreInternal {
     type Error = ScyllaDbContextError;
 }
 
-#[async_trait]
 impl DeletePrefixExpander for ScyllaDbClient {
     type Error = ScyllaDbContextError;
 
@@ -645,7 +644,6 @@ pub struct ScyllaDbStoreConfig {
     pub common_config: CommonStoreConfig,
 }
 
-#[async_trait]
 impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
     const MAX_KEY_SIZE: usize = ScyllaDbStoreInternal::MAX_KEY_SIZE;
 
@@ -688,7 +686,6 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
     }
 }
 
-#[async_trait]
 impl WritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
     const MAX_VALUE_SIZE: usize = ScyllaDbStoreInternal::MAX_VALUE_SIZE;
 
@@ -701,7 +698,6 @@ impl WritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
     }
 }
 
-#[async_trait]
 impl AdminKeyValueStore for ScyllaDbStore {
     type Error = ScyllaDbContextError;
     type Config = ScyllaDbStoreConfig;

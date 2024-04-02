@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_trait::async_trait;
 use convert_case::{Case, Casing};
 use linera_base::{
     prometheus_util::{register_histogram_vec, MeasureLatency},
@@ -116,7 +115,6 @@ pub struct MeteredStore<K> {
     pub store: K,
 }
 
-#[async_trait]
 impl<K, E> ReadableKeyValueStore<E> for MeteredStore<K>
 where
     K: ReadableKeyValueStore<E> + Send + Sync,
@@ -155,7 +153,6 @@ where
     }
 }
 
-#[async_trait]
 impl<K, E> WritableKeyValueStore<E> for MeteredStore<K>
 where
     K: WritableKeyValueStore<E> + Send + Sync,

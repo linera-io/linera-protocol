@@ -8,7 +8,6 @@ use std::{
     sync::Arc,
 };
 
-use async_trait::async_trait;
 use linera_base::ensure;
 use thiserror::Error;
 #[cfg(with_testing)]
@@ -74,7 +73,6 @@ impl RocksDbStoreInternal {
     }
 }
 
-#[async_trait]
 impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
@@ -180,7 +178,6 @@ impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
     }
 }
 
-#[async_trait]
 impl WritableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
@@ -245,7 +242,6 @@ impl WritableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
     }
 }
 
-#[async_trait]
 impl AdminKeyValueStore for RocksDbStoreInternal {
     type Error = RocksDbContextError;
     type Config = RocksDbStoreConfig;
@@ -391,7 +387,6 @@ pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
 /// An implementation of [`crate::common::Context`] based on RocksDB
 pub type RocksDbContext<E> = ContextFromStore<E, RocksDbStore>;
 
-#[async_trait]
 impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStore {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
@@ -431,7 +426,6 @@ impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStore {
     }
 }
 
-#[async_trait]
 impl WritableKeyValueStore<RocksDbContextError> for RocksDbStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
@@ -444,7 +438,6 @@ impl WritableKeyValueStore<RocksDbContextError> for RocksDbStore {
     }
 }
 
-#[async_trait]
 impl AdminKeyValueStore for RocksDbStore {
     type Error = RocksDbContextError;
     type Config = RocksDbStoreConfig;
@@ -484,7 +477,6 @@ impl AdminKeyValueStore for RocksDbStore {
     }
 }
 
-#[async_trait]
 impl KeyValueStore for RocksDbStore {
     type Error = RocksDbContextError;
 }

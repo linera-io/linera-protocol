@@ -24,7 +24,6 @@ path = "src/server.rs"
 [dependencies]
 anyhow.workspace = true
 async-lock.workspace = true
-async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true
 linera-base.workspace = true

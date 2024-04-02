@@ -324,7 +324,6 @@ pub struct DynamoDbStoreConfig {
     pub common_config: CommonStoreConfig,
 }
 
-#[async_trait]
 impl AdminKeyValueStore for DynamoDbStoreInternal {
     type Error = DynamoDbContextError;
     type Config = DynamoDbStoreConfig;
@@ -785,7 +784,6 @@ impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
     }
 }
 
-#[async_trait]
 impl ReadableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = DynamoDbKeys;
@@ -818,8 +816,10 @@ impl ReadableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
             let handle = self.read_value_bytes_general(key_db);
             handles.push(handle);
         }
-        let result = join_all(handles).await;
-        Ok(result.into_iter().collect::<Result<_, _>>()?)
+        join_all(handles)
+            .await
+            .into_iter()
+            .collect::<Result<_, _>>()
     }
 
     async fn find_keys_by_prefix(
@@ -890,7 +890,6 @@ pub struct DynamoDbStore {
     store: LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
 }
 
-#[async_trait]
 impl ReadableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE - 4;
     type Keys = Vec<Vec<u8>>;
@@ -930,7 +929,6 @@ impl ReadableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
     }
 }
 
-#[async_trait]
 impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
     const MAX_VALUE_SIZE: usize = DynamoDbStoreInternal::MAX_VALUE_SIZE;
 
@@ -943,12 +941,10 @@ impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
     }
 }
 
-#[async_trait]
 impl KeyValueStore for DynamoDbStore {
     type Error = DynamoDbContextError;
 }
 
-#[async_trait]
 impl AdminKeyValueStore for DynamoDbStore {
     type Error = DynamoDbContextError;
     type Config = DynamoDbStoreConfig;
