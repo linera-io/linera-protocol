@@ -76,6 +76,8 @@ pub struct ChainClientBuilder<ValidatorNodeProvider> {
     validator_node_provider: ValidatorNodeProvider,
     /// Maximum number of pending messages processed at a time in a block.
     max_pending_messages: usize,
+    /// The policy for automatically handling incoming messages.
+    message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
     cross_chain_message_delivery: CrossChainMessageDelivery,
     /// Cached values by hash.
@@ -100,11 +102,18 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
         Self {
             validator_node_provider,
             max_pending_messages,
+            message_policy: MessagePolicy::Accept,
             cross_chain_message_delivery,
             recent_values,
             delivery_notifiers: Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
             notifier: Arc::new(Notifier::default()),
         }
+    }
+
+    /// Returns this builder with the given message policy.
+    pub fn with_message_policy(mut self, message_policy: MessagePolicy) -> Self {
+        self.message_policy = message_policy;
+        self
     }
 
     /// Creates a new `ChainClient`.
@@ -139,6 +148,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
             validator_node_provider: self.validator_node_provider.clone(),
             admin_id,
             max_pending_messages: self.max_pending_messages,
+            message_policy: self.message_policy,
             cross_chain_message_delivery: self.cross_chain_message_delivery,
             received_certificate_trackers: HashMap::new(),
             block_hash,
@@ -147,6 +157,32 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
             pending_block,
             node_client,
         }
+    }
+}
+
+/// Policies for automatically handling incoming messages.
+///
+/// These apply to all messages except for the initial `OpenChain`, which is always accepted.
+#[derive(Copy, Clone)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+pub enum MessagePolicy {
+    /// Automatically accept all incoming messages. Reject them only if execution fails.
+    Accept,
+    /// Automatically reject tracked messages, ignore or skip untracked messages, but accept
+    /// protected ones.
+    Reject,
+    /// Don't include any messages in blocks, and don't make any decision whether to accept or
+    /// reject.
+    Ignore,
+}
+
+impl MessagePolicy {
+    fn is_ignore(&self) -> bool {
+        matches!(self, Self::Ignore)
+    }
+
+    fn is_reject(&self) -> bool {
+        matches!(self, Self::Reject)
     }
 }
 
@@ -176,6 +212,8 @@ pub struct ChainClient<ValidatorNodeProvider, Storage> {
 
     /// Maximum number of pending messages processed at a time in a block.
     max_pending_messages: usize,
+    /// The policy for automatically handling incoming messages.
+    message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
     cross_chain_message_delivery: CrossChainMessageDelivery,
     /// Support synchronization of received certificates.
@@ -321,6 +359,9 @@ where
     /// Messages known to be redundant are filtered out: A `RegisterApplications` message whose
     /// entries are already known never needs to be included in a block.
     async fn pending_messages(&mut self) -> Result<Vec<IncomingMessage>, ChainClientError> {
+        if self.next_block_height != BlockHeight::ZERO && self.message_policy.is_ignore() {
+            return Ok(Vec::new()); // OpenChain is already received, other are ignored.
+        }
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let info = self.node_client.handle_chain_info_query(query).await?.info;
         ensure!(
@@ -348,13 +389,23 @@ where
             let open_chain_message = requested_pending_messages.remove(index);
             pending_messages.push(open_chain_message);
         }
-        for message in requested_pending_messages {
+        if self.message_policy.is_ignore() {
+            return Ok(pending_messages); // Ignore messages other than OpenChain.
+        }
+        for mut message in requested_pending_messages {
             if pending_messages.len() >= self.max_pending_messages {
                 tracing::warn!(
                     "Limiting block to {} incoming messages",
                     self.max_pending_messages
                 );
                 break;
+            }
+            if self.message_policy.is_reject() {
+                if message.event.is_skippable() {
+                    continue;
+                } else if message.event.is_tracked() {
+                    message.action = MessageAction::Reject;
+                }
             }
             if let Message::System(SystemMessage::RegisterApplications { applications }) =
                 &message.event.message

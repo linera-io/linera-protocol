@@ -43,7 +43,7 @@ use crate::client::client_test_utils::{RocksDbStorageBuilder, ROCKS_DB_SEMAPHORE
 use crate::{
     client::{
         client_test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder},
-        ArcChainClient, ChainClientError, ClientOutcome, MessageAction,
+        ArcChainClient, ChainClientError, ClientOutcome, MessageAction, MessagePolicy,
     },
     local_node::LocalNodeError,
     node::{
@@ -2138,5 +2138,70 @@ where
         client.local_balance().await.unwrap(),
         Amount::from_tokens(6)
     );
+    Ok(())
+}
+
+#[test(tokio::test)]
+pub async fn test_memory_message_policy() -> Result<(), anyhow::Error> {
+    run_test_message_policy(MemoryStorageBuilder::default()).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+pub async fn test_service_message_policy() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_message_policy(ServiceStorageBuilder::new(&endpoint)).await
+}
+
+async fn run_test_message_policy<B>(storage_builder: B) -> Result<(), anyhow::Error>
+where
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
+{
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+        .await?
+        .with_policy(ResourceControlPolicy::only_fuel());
+    let mut sender = builder
+        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
+        .await?;
+    let mut receiver = builder
+        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
+        .await?;
+    let recipient = Recipient::chain(ChainId::root(2));
+    let cert = sender
+        .transfer(None, Amount::ONE, recipient, UserData(None))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        sender.local_balance().await.unwrap(),
+        Amount::from_tokens(3)
+    );
+
+    receiver.message_policy = MessagePolicy::Ignore;
+    receiver.receive_certificate(cert).await?;
+    assert!(receiver.process_inbox().await?.0.is_empty());
+    // The message was ignored.
+    assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
+    assert!(sender.process_inbox().await?.0.is_empty());
+    assert_eq!(
+        sender.local_balance().await.unwrap(),
+        Amount::from_tokens(3)
+    );
+
+    receiver.message_policy = MessagePolicy::Reject;
+    let certs = receiver.process_inbox().await?.0;
+    assert_eq!(certs.len(), 1);
+    sender
+        .receive_certificate(certs.into_iter().next().unwrap())
+        .await?;
+    // The message bounces.
+    assert_eq!(sender.process_inbox().await?.0.len(), 1);
+    assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(
+        sender.local_balance().await.unwrap(),
+        Amount::from_tokens(4)
+    );
+
     Ok(())
 }

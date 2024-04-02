@@ -115,6 +115,18 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
   Default value: `10`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
+* `--message-policy <MESSAGE_POLICY>` — The policy for handling incoming messages
+
+  Default value: `accept`
+
+  Possible values:
+  - `accept`:
+    Automatically accept all incoming messages. Reject them only if execution fails
+  - `reject`:
+    Automatically reject tracked messages, ignore or skip untracked messages, but accept protected ones
+  - `ignore`:
+    Don't include any messages in blocks, and don't make any decision whether to accept or reject
+
 
 
 

@@ -11,6 +11,7 @@ use linera_base::{
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
+use linera_core::client::MessagePolicy;
 use linera_execution::{
     committee::ValidatorName, system::SystemChannel, UserApplicationId, WasmRuntime,
     WithWasmDefault,
@@ -96,6 +97,10 @@ pub struct ClientOptions {
     /// The number of Tokio worker threads to use.
     #[arg(long, env = "LINERA_CLIENT_TOKIO_THREADS")]
     pub tokio_threads: Option<usize>,
+
+    /// The policy for handling incoming messages.
+    #[arg(long, default_value = "accept")]
+    pub message_policy: MessagePolicy,
 }
 
 impl ClientOptions {
