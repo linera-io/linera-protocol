@@ -24,7 +24,7 @@ use aws_sdk_dynamodb::{
     Client,
 };
 use aws_smithy_types::error::operation::BuildError;
-use futures::future::join_all;
+use futures::future::{join_all, FutureExt as _};
 use linera_base::ensure;
 use thiserror::Error;
 #[cfg(with_testing)]
@@ -539,6 +539,7 @@ impl DynamoDbStoreInternal {
             .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
             .set_exclusive_start_key(start_key_map)
             .send()
+            .boxed()
             .await?;
         Ok(response)
     }
@@ -554,6 +555,7 @@ impl DynamoDbStoreInternal {
             .table_name(&self.namespace)
             .set_key(Some(key_db))
             .send()
+            .boxed()
             .await?;
 
         match response.item {
@@ -577,6 +579,7 @@ impl DynamoDbStoreInternal {
             .set_key(Some(key_db))
             .projection_expression(PARTITION_ATTRIBUTE)
             .send()
+            .boxed()
             .await?;
 
         Ok(response.item.is_some())
