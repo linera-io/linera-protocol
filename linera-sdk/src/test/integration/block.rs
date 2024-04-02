@@ -12,7 +12,7 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, MessageId, Owner},
 };
 use linera_chain::data_types::{
-    Block, Certificate, HashedValue, IncomingMessage, LiteVote, SignatureAggregator,
+    Block, Certificate, HashedValue, IncomingMessage, LiteVote, MessageAction, SignatureAggregator,
 };
 use linera_execution::{system::SystemOperation, Operation};
 
@@ -23,7 +23,7 @@ use crate::ToBcsBytes;
 /// [`Certificate`]s using a [`TestValidator`].
 pub struct BlockBuilder {
     block: Block,
-    incoming_messages: Vec<MessageId>,
+    incoming_messages: Vec<(MessageId, MessageAction)>,
     validator: TestValidator,
 }
 
@@ -126,7 +126,18 @@ impl BlockBuilder {
     /// The block that produces the message must have already been executed by the test validator,
     /// so that the message is already in the inbox of the microchain this block belongs to.
     pub fn with_incoming_message(&mut self, message_id: MessageId) -> &mut Self {
-        self.incoming_messages.push(message_id);
+        self.incoming_messages
+            .push((message_id, MessageAction::Accept));
+        self
+    }
+
+    /// Rejects an incoming message referenced by the [`MessageId`].
+    ///
+    /// The block that produces the message must have already been executed by the test validator,
+    /// so that the message is already in the inbox of the microchain this block belongs to.
+    pub fn with_message_rejection(&mut self, message_id: MessageId) -> &mut Self {
+        self.incoming_messages
+            .push((message_id, MessageAction::Reject));
         self
     }
 
@@ -138,7 +149,11 @@ impl BlockBuilder {
         &mut self,
         message_ids: impl IntoIterator<Item = MessageId>,
     ) -> &mut Self {
-        self.incoming_messages.extend(message_ids);
+        self.incoming_messages.extend(
+            message_ids
+                .into_iter()
+                .map(|message_id| (message_id, MessageAction::Accept)),
+        );
         self
     }
 
@@ -193,8 +208,8 @@ impl BlockBuilder {
     async fn collect_incoming_messages(&mut self) {
         let chain_id = self.block.chain_id;
 
-        for message_id in mem::take(&mut self.incoming_messages) {
-            let message = self
+        for (message_id, action) in mem::take(&mut self.incoming_messages) {
+            let mut message = self
                 .validator
                 .worker()
                 .await
@@ -202,6 +217,8 @@ impl BlockBuilder {
                 .await
                 .expect("Failed to find message to receive in block")
                 .expect("Message that block should consume has not been emitted");
+
+            message.action = action;
 
             self.block.incoming_messages.push(message);
         }
