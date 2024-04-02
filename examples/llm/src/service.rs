@@ -4,11 +4,14 @@ mod random;
 mod state;
 mod token;
 
-use self::state::Llm;
-use crate::token::TokenOutputStream;
-use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Response, Schema};
+use std::{io::Cursor, sync::Arc};
+
+use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Request, Response, Schema};
 use async_trait::async_trait;
-use candle_core::{quantized::ggml_file, Device, Tensor};
+use candle_core::{
+    quantized::{ggml_file, gguf_file},
+    Device, Tensor,
+};
 use candle_transformers::{
     generation::LogitsProcessor,
     models::{quantized_llama as model, quantized_llama::ModelWeights},
@@ -18,14 +21,15 @@ use linera_sdk::{
     ViewStateStorage,
 };
 use log::error;
-use std::{io::Cursor, sync::Arc};
-use async_graphql::Request;
 use thiserror::Error;
 use tokenizers::Tokenizer;
 
+use self::state::Llm;
+use crate::token::TokenOutputStream;
+
 pub struct LlmService {
     state: Llm,
-    runtime: ServiceRuntime<Self>
+    runtime: ServiceRuntime<Self>,
 }
 
 linera_sdk::service!(LlmService);
@@ -38,7 +42,7 @@ struct QueryRoot {}
 
 #[Object]
 impl QueryRoot {
-    async fn prompt(&self,  ctx: &Context<'_>, prompt: String) -> Result<String, ServiceError> {
+    async fn prompt(&self, ctx: &Context<'_>, prompt: String) -> Result<String, ServiceError> {
         let model_context = ctx.data::<ModelContext>()?;
         Ok(model_context.run_model(&prompt)?)
     }
@@ -48,7 +52,7 @@ struct ModelContext {
     model: Vec<u8>,
     tokenizer: Vec<u8>,
     /// Group query attention
-    gqa: usize
+    gqa: usize,
 }
 
 impl Service for LlmService {
@@ -66,14 +70,14 @@ impl Service for LlmService {
         let raw_weights = self.runtime.fetch_url(
             "http://localhost:10001/model.bin",
         );
-        eprintln!("got weights: {}B", raw_weights.len());
+        error!("got weights: {}B", raw_weights.len());
         let tokenizer_bytes = self.runtime.fetch_url(
             "http://localhost:10001/tokenizer.json",
         );
         let model_context = ModelContext {
             model: raw_weights,
             tokenizer: tokenizer_bytes,
-            gqa: 1
+            gqa: 1,
         };
         let schema = Schema::build(QueryRoot {}, EmptyMutation, EmptySubscription)
             .data(model_context)
@@ -84,51 +88,63 @@ impl Service for LlmService {
     }
 }
 
+const SYSTEM_MESSAGE: &'static str =
+    "You are LineraBot, a helpful chatbot for a company called Linera.";
+
 impl ModelContext {
     fn load_model(&self, model_weights: Vec<u8>, gqa: usize) -> Result<ModelWeights, ServiceError> {
-        let model_contents =
-            ggml_file::Content::read(&mut Cursor::new(model_weights), &Device::Cpu).unwrap();
+        let cursor = &mut Cursor::new(model_weights);
+        let model_contents = gguf_file::Content::read(cursor).unwrap();
         let mut total_size_in_bytes = 0;
-        for (_, tensor) in model_contents.tensors.iter() {
-            let elem_count = tensor.shape().elem_count();
+        for (_, tensor) in model_contents.tensor_infos.iter() {
+            let elem_count = tensor.shape.elem_count();
             total_size_in_bytes +=
-                elem_count * tensor.dtype().type_size() / tensor.dtype().block_size();
+                elem_count * tensor.ggml_dtype.type_size() / tensor.ggml_dtype.block_size();
         }
 
-        println!(
+        error!(
             "loaded {:?} tensors ({}B) ",
-            model_contents.tensors.len(),
+            model_contents.tensor_infos.len(),
             total_size_in_bytes,
         );
 
-        println!("params: {:?}", model_contents.hparams);
-
-        Ok(ModelWeights::from_ggml(model_contents, gqa)?)
+        Ok(ModelWeights::from_gguf(
+            model_contents,
+            cursor,
+            &Device::Cpu,
+        )?)
     }
 
     // Copied mostly from https://github.com/huggingface/candle/blob/57267cd53612ede04090853680125b17956804f3/candle-examples/examples/quantized/main.rs
-    fn run_model(
-        &self,
-        prompt_string: &str,
-    ) -> Result<String, ServiceError> {
+    fn run_model(&self, prompt_string: &str) -> Result<String, ServiceError> {
         let raw_weights = &self.model;
         let tokenizer_bytes = &self.tokenizer;
         let gqa = self.gqa;
+        let prompt_string = format!(
+            r#"
+<|system|>
+{SYSTEM_MESSAGE}</s>
+<|user|>
+{prompt_string}</s>
+<|assistant|>
+        "#
+        );
 
         let mut output = String::new();
         let mut model = self.load_model(raw_weights.clone(), gqa)?;
-        let mut pre_prompt_tokens = vec![];
 
         let tokenizer = Tokenizer::from_bytes(tokenizer_bytes)
             .map_err(|e| ServiceError::Tokenizer(format!("{}", e)))?;
+        error!("tokenizer: {:?}", tokenizer);
         let mut token_output_stream = TokenOutputStream::new(tokenizer);
         let tokens = token_output_stream
             .tokenizer()
             .encode(prompt_string, true)
             .map_err(|e| ServiceError::Tokenizer(format!("{}", e)))?;
 
-        let prompt_tokens = [&pre_prompt_tokens, tokens.get_ids()].concat();
-        let to_sample = 1000usize.saturating_sub(1); // 1000 is the default value in candle example
+        let prompt_tokens = tokens.get_ids().to_vec();
+        error!("prompt tokens: {:?}", prompt_tokens);
+        let to_sample = 20usize.saturating_sub(1); // 1000 is the default value in candle example
         let prompt_tokens = if prompt_tokens.len() + to_sample > model::MAX_SEQ_LEN - 10 {
             let to_remove = prompt_tokens.len() + to_sample + 10 - model::MAX_SEQ_LEN;
             prompt_tokens[prompt_tokens.len().saturating_sub(to_remove)..].to_vec()
@@ -162,6 +178,7 @@ impl ModelContext {
         let repeat_penatly = 1.1; // taken from candle example
         let repeat_last_n = 64; // taken from candle example
         for index in 0..to_sample {
+            error!("index: {}", index);
             let input = Tensor::new(&[next_token], &Device::Cpu)?.unsqueeze(0)?;
             let logits = model.forward(&input, prompt_tokens.len() + index)?;
             let logits = logits.squeeze(0)?;
@@ -212,7 +229,7 @@ pub enum ServiceError {
     Tokenizer(String),
 
     #[error("GraphQL error")]
-    GraphQL(String)
+    GraphQL(String),
 }
 
 impl From<async_graphql::Error> for ServiceError {

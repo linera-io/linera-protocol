@@ -1,5 +1,6 @@
-use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::sync::{Mutex, OnceLock};
+
+use rand::{rngs::StdRng, Rng, SeedableRng};
 
 static RNG: OnceLock<Mutex<StdRng>> = OnceLock::new();
 
