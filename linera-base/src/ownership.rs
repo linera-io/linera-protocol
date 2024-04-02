@@ -17,7 +17,7 @@ pub struct TimeoutConfig {
     pub fast_round_duration: Option<Duration>,
     /// The duration of the first single-leader and all multi-leader rounds.
     pub base_timeout: Duration,
-    /// The number of microseconds by which the timeout increases after each single-leader round.
+    /// The duration by which the timeout increases after each single-leader round.
     pub timeout_increment: Duration,
 }
 
