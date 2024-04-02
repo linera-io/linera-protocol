@@ -38,10 +38,9 @@ struct QueryRoot {}
 
 #[Object]
 impl QueryRoot {
-    async fn prompt(&self,  ctx: &Context<'_>, prompt: String) -> &str {
-        let model_context = ctx.data::<ModelContext>().unwrap();
-        let response = model_context.run_model(&prompt).unwrap();
-        "world"
+    async fn prompt(&self,  ctx: &Context<'_>, prompt: String) -> Result<String, ServiceError> {
+        let model_context = ctx.data::<ModelContext>()?;
+        Ok(model_context.run_model(&prompt)?)
     }
 }
 
@@ -140,7 +139,6 @@ impl ModelContext {
         let seed = 299792458; // taken as the default value from the candle example.
         let mut logits_processor = LogitsProcessor::new(seed, None, None);
 
-        let start_prompt_processing = std::time::Instant::now();
         let mut next_token = 0;
         for (pos, token) in prompt_tokens.iter().enumerate() {
             let input = Tensor::new(&[*token], &Device::Cpu)?.unsqueeze(0)?;
@@ -160,7 +158,6 @@ impl ModelContext {
             .get_vocab(true)
             .get(eos_token)
             .unwrap();
-        let start_post_prompt = std::time::Instant::now();
         let mut sampled = 0;
         let repeat_penatly = 1.1; // taken from candle example
         let repeat_last_n = 64; // taken from candle example
@@ -213,4 +210,13 @@ pub enum ServiceError {
 
     #[error("Tokenizer error")]
     Tokenizer(String),
+
+    #[error("GraphQL error")]
+    GraphQL(String)
+}
+
+impl From<async_graphql::Error> for ServiceError {
+    fn from(value: async_graphql::Error) -> Self {
+        Self::GraphQL(value.message)
+    }
 }
