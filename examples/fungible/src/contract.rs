@@ -200,6 +200,7 @@ impl FungibleTokenContract {
             self.runtime
                 .prepare_message(message)
                 .with_authentication()
+                .with_tracking()
                 .send_to(target_account.chain_id);
         }
     }
