@@ -3095,6 +3095,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "cfg_aliases",
+ "clap",
  "counter",
  "criterion",
  "dashmap",
