@@ -298,24 +298,6 @@ impl ClientContext {
         }
     }
 
-    pub async fn push_to_all_chains<S>(&mut self, storage: &S, certificate: &Certificate)
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        for chain_id in self.wallet_state.own_chain_ids() {
-            let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
-            chain_client
-                .receive_certificate(certificate.clone())
-                .await
-                .unwrap();
-            let chain_client = chain_client.into_arc();
-            self.process_inbox(&chain_client).await.unwrap();
-            let epochs = chain_client.lock().await.epochs().await.unwrap();
-            debug!("{:?} accepts epochs {:?}", chain_id, epochs);
-        }
-    }
-
     pub async fn process_inbox<S>(
         &mut self,
         chain_client: &ArcChainClient<NodeProvider, S>,
