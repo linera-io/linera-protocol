@@ -2,18 +2,15 @@
 
 mod state;
 
-use self::state::Llm;
 use async_trait::async_trait;
-use linera_sdk::{
-    base::WithContractAbi,
-    Contract, ContractRuntime,
-    ViewStateStorage,
-};
+use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, ViewStateStorage};
 use thiserror::Error;
+
+use self::state::Llm;
 
 pub struct LlmContract {
     state: Llm,
-    runtime: ContractRuntime<Self>
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(LlmContract);
@@ -63,7 +60,6 @@ pub enum ContractError {
     #[error("Failed to deserialize JSON string")]
     JsonError(#[from] serde_json::Error),
     // Add more error variants here.
-
     /// Llm application doesn't support any cross-chain messages.
     #[error("Llm application doesn't support any cross-chain messages")]
     MessagesNotSupported,
