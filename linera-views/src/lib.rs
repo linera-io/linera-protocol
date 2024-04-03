@@ -127,6 +127,10 @@ pub mod rocks_db;
 #[cfg(with_dynamodb)]
 pub mod dynamo_db;
 
+/// A storage backend for views in the browser based on IndexedDB
+#[cfg(with_indexeddb)]
+pub mod indexed_db;
+
 /// Helper types for tests.
 #[cfg(with_testing)]
 pub mod test_utils;
