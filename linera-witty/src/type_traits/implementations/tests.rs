@@ -3,7 +3,7 @@
 
 //! Unit tests for implementations of the custom traits for existing types.
 
-use std::{fmt::Debug, time::Duration};
+use std::{collections::BTreeMap, fmt::Debug, time::Duration};
 
 use frunk::hlist;
 
@@ -173,6 +173,33 @@ fn duration() {
         &[],
     );
     test_flattening_roundtrip(&input, hlist![seconds as i64, nanos as i32], &[]);
+}
+
+/// Test roundtrip of `BTreeMap<u8, i32>`.
+#[test]
+fn btree_map() {
+    let input = [(0xaa, 0x1122_3344), (0xbb, 0x7788_99aa)]
+        .into_iter()
+        .collect::<BTreeMap<u8, i32>>();
+
+    assert_eq!(
+        <<BTreeMap<u8, i32> as WitType>::Layout as Layout>::ALIGNMENT,
+        4
+    );
+    test_memory_roundtrip(
+        &input,
+        &[0x08, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00],
+        &[
+            0xaa, 0, 0, 0, 0x44, 0x33, 0x22, 0x11, 0xbb, 0, 0, 0, 0xaa, 0x99, 0x88, 0x77,
+        ],
+    );
+    test_flattening_roundtrip(
+        &input,
+        hlist![0_i32, 2_i32],
+        &[
+            0xaa, 0, 0, 0, 0x44, 0x33, 0x22, 0x11, 0xbb, 0, 0, 0, 0xaa, 0x99, 0x88, 0x77,
+        ],
+    );
 }
 
 /// Test storing an instance of `T` to memory, checking that the `layout_data` bytes followed by
