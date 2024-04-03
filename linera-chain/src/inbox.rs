@@ -57,6 +57,7 @@ where
     Default,
     Clone,
     Copy,
+    Hash,
     Eq,
     PartialEq,
     Ord,
