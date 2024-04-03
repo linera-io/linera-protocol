@@ -230,7 +230,7 @@ pub fn type_name(implementation: &ItemImpl) -> &Ident {
         .segments
         .last()
         .unwrap_or_else(|| {
-            abort!(implementation.self_ty, "Missing type name identifier",);
+            abort!(implementation.self_ty, "Missing type name identifier");
         })
         .ident
 }
