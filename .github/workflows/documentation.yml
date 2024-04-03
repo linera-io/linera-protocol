@@ -14,7 +14,7 @@ on:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
 concurrency:
-  group: '${{ github.workflow }} @ ${{ github.head_ref || github.run_id }}'
+  group: '${{ github.workflow }} ${{ github.ref }}'
   cancel-in-progress: true
 
 env:
