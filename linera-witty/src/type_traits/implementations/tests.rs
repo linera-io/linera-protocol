@@ -3,11 +3,11 @@
 
 //! Unit tests for implementations of the custom traits for existing types.
 
-use std::fmt::Debug;
+use std::{fmt::Debug, time::Duration};
 
 use frunk::hlist;
 
-use crate::{InstanceWithMemory, Layout, MockInstance, WitLoad, WitStore};
+use crate::{InstanceWithMemory, Layout, MockInstance, WitLoad, WitStore, WitType};
 
 /// Test roundtrip of a heterogeneous list that doesn't need any internal padding.
 #[test]
@@ -115,7 +115,7 @@ fn ok_two_bytes_but_large_err() {
     let input = Ok::<_, u128>(0x1234_i16);
 
     assert_eq!(
-        <<Result<i16, u128> as crate::WitType>::Layout as Layout>::ALIGNMENT,
+        <<Result<i16, u128> as WitType>::Layout as Layout>::ALIGNMENT,
         8
     );
     test_memory_roundtrip(
@@ -143,6 +143,26 @@ fn large_err() {
         input,
         hlist![1_i32, 0x0809_0a0b_0c0d_0e0f_i64, 0x0001_0203_0405_0607_i64],
     );
+}
+
+/// Test roundtrip of [`Duration`].
+#[test]
+fn duration() {
+    let seconds = 0x4aab_acad_aeaf_babb;
+    let nanos = 0x3837_3635;
+    let input = Duration::new(seconds, nanos);
+
+    assert_eq!(input.as_secs(), seconds);
+    assert_eq!(input.subsec_nanos(), nanos);
+
+    assert_eq!(<<Duration as WitType>::Layout as Layout>::ALIGNMENT, 8);
+    test_memory_roundtrip(
+        input,
+        &[
+            0xbb, 0xba, 0xaf, 0xae, 0xad, 0xac, 0xab, 0x4a, 0x35, 0x36, 0x37, 0x38, 0, 0, 0, 0,
+        ],
+    );
+    test_flattening_roundtrip(input, hlist![seconds as i64, nanos as i32]);
 }
 
 /// Test storing an instance of `T` to memory, checking that the `memory_data` bytes are correctly
