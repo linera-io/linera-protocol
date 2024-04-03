@@ -1870,6 +1870,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "cfg_aliases",
+ "clap",
  "dashmap",
  "futures",
  "linera-base",

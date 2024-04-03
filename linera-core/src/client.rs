@@ -163,8 +163,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
 /// Policies for automatically handling incoming messages.
 ///
 /// These apply to all messages except for the initial `OpenChain`, which is always accepted.
-#[derive(Copy, Clone)]
-#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+#[derive(Copy, Clone, clap::ValueEnum)]
 pub enum MessagePolicy {
     /// Automatically accept all incoming messages. Reject them only if execution fails.
     Accept,
