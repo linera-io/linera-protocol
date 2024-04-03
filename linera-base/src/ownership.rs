@@ -26,6 +26,9 @@ pub struct TimeoutConfig {
     pub base_timeout: TimeDelta,
     /// The duration by which the timeout increases after each single-leader round.
     pub timeout_increment: TimeDelta,
+    /// The age of an incoming tracked or protected message after which the validators start
+    /// transitioning the chain to fallback mode.
+    pub fallback_duration: TimeDelta,
 }
 
 impl Default for TimeoutConfig {
@@ -34,6 +37,7 @@ impl Default for TimeoutConfig {
             fast_round_duration: None,
             base_timeout: TimeDelta::from_secs(10),
             timeout_increment: TimeDelta::from_secs(1),
+            fallback_duration: TimeDelta::from_secs(60 * 60 * 24),
         }
     }
 }
@@ -178,6 +182,7 @@ mod tests {
                 fast_round_duration: Some(TimeDelta::from_secs(5)),
                 base_timeout: TimeDelta::from_secs(10),
                 timeout_increment: TimeDelta::from_secs(1),
+                fallback_duration: TimeDelta::from_secs(60 * 60),
             },
         };
 

@@ -127,6 +127,7 @@ fn timeout_config_test_case() -> TimeoutConfig {
         fast_round_duration: Some(TimeDelta::from_micros(20)),
         base_timeout: TimeDelta::from_secs(4),
         timeout_increment: TimeDelta::from_millis(125),
+        fallback_duration: TimeDelta::from_secs(1_000),
     }
 }
 
@@ -165,6 +166,7 @@ fn chain_ownership_test_case() -> ChainOwnership {
             fast_round_duration: None,
             base_timeout: TimeDelta::ZERO,
             timeout_increment: TimeDelta::from_secs(3_600),
+            fallback_duration: TimeDelta::from_secs(10_000),
         },
     }
 }

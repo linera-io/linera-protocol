@@ -74,11 +74,13 @@ impl From<contract_system_api::TimeoutConfig> for TimeoutConfig {
             fast_round_duration_us,
             base_timeout_us,
             timeout_increment_us,
+            fallback_duration_us,
         } = guest;
         TimeoutConfig {
             fast_round_duration: fast_round_duration_us.map(TimeDelta::from_micros),
             base_timeout: TimeDelta::from_micros(base_timeout_us),
             timeout_increment: TimeDelta::from_micros(timeout_increment_us),
+            fallback_duration: TimeDelta::from_micros(fallback_duration_us),
         }
     }
 }

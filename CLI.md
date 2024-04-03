@@ -227,6 +227,9 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round
 
   Default value: `1000`
+* `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds
+
+  Default value: `86400000`
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
@@ -255,6 +258,9 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 * `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round
 
   Default value: `1000`
+* `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds
+
+  Default value: `86400000`
 
 
 

@@ -893,6 +893,15 @@ pub struct ChainOwnershipConfig {
         value_parser = util::parse_millis_delta
     )]
     timeout_increment: TimeDelta,
+
+    /// The age of an incoming tracked or protected message after which the validators start
+    /// transitioning the chain to fallback mode, in milliseconds.
+    #[arg(
+        long = "fallback-duration-ms",
+        default_value = "86400000", // 1 day
+        value_parser = util::parse_millis_delta
+    )]
+    pub fallback_duration: TimeDelta,
 }
 
 impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
@@ -907,6 +916,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
             fast_round_duration,
             base_timeout,
             timeout_increment,
+            fallback_duration,
         } = config;
         anyhow::ensure!(
             owner_weights.is_empty() || owner_weights.len() == owner_public_keys.len(),
@@ -928,6 +938,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
             fast_round_duration,
             base_timeout,
             timeout_increment,
+            fallback_duration,
         };
         Ok(ChainOwnership {
             super_owners,

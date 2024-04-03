@@ -419,6 +419,12 @@ where
             default = 1_000
         )]
         timeout_increment_ms: u64,
+        #[graphql(
+            desc = "The age of an incoming tracked or protected message after which the \
+                    validators start transitioning the chain to fallback mode, in milliseconds.",
+            default = 86_400_000
+        )]
+        fallback_duration_ms: u64,
     ) -> Result<ChainId, Error> {
         let owners = if let Some(weights) = weights {
             if weights.len() != public_keys.len() {
@@ -440,6 +446,7 @@ where
             fast_round_duration: fast_round_ms.map(TimeDelta::from_millis),
             base_timeout: TimeDelta::from_millis(base_timeout_ms),
             timeout_increment: TimeDelta::from_millis(timeout_increment_ms),
+            fallback_duration: TimeDelta::from_millis(fallback_duration_ms),
         };
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds, timeout_config);
         let balance = balance.unwrap_or(Amount::ZERO);
@@ -506,6 +513,12 @@ where
             default = 1_000
         )]
         timeout_increment_ms: u64,
+        #[graphql(
+            desc = "The age of an incoming tracked or protected message after which the \
+                    validators start transitioning the chain to fallback mode, in milliseconds.",
+            default = 86_400_000
+        )]
+        fallback_duration_ms: u64,
     ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeOwnership {
             super_owners: Vec::new(),
@@ -515,6 +528,7 @@ where
                 fast_round_duration: fast_round_ms.map(TimeDelta::from_millis),
                 base_timeout: TimeDelta::from_millis(base_timeout_ms),
                 timeout_increment: TimeDelta::from_millis(timeout_increment_ms),
+                fallback_duration: TimeDelta::from_millis(fallback_duration_ms),
             },
         };
         self.execute_system_operation(operation, chain_id).await

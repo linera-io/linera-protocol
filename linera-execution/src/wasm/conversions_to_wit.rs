@@ -128,11 +128,13 @@ impl From<TimeoutConfig> for contract_system_api::TimeoutConfig {
             fast_round_duration,
             base_timeout,
             timeout_increment,
+            fallback_duration,
         } = host;
         Self {
             fast_round_duration_us: fast_round_duration.map(|duration| duration.as_micros()),
             base_timeout_us: base_timeout.as_micros(),
             timeout_increment_us: timeout_increment.as_micros(),
+            fallback_duration_us: fallback_duration.as_micros(),
         }
     }
 }

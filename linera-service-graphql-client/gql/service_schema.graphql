@@ -507,7 +507,11 @@ type MutationRoot {
 		"""
 		The number of milliseconds by which the timeout increases after each single-leader round
 		"""
-		timeoutIncrementMs: Int! = 1000
+		timeoutIncrementMs: Int! = 1000,
+		"""
+		The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds.
+		"""
+		fallbackDurationMs: Int! = 86400000
 	): ChainId!
 	"""
 	Closes the chain.
@@ -532,7 +536,11 @@ type MutationRoot {
 		"""
 		The number of milliseconds by which the timeout increases after each single-leader round
 		"""
-		timeoutIncrementMs: Int! = 1000
+		timeoutIncrementMs: Int! = 1000,
+		"""
+		The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds.
+		"""
+		fallbackDurationMs: Int! = 86400000
 	): CryptoHash!
 	"""
 	Changes the application permissions configuration on this chain.
