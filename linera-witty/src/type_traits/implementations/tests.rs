@@ -28,6 +28,7 @@ fn hlist_without_padding() {
             0x11, 0x10, 0x27, 0x26, 0x25, 0x24, 0x23, 0x22, 0x21, 0x20, 0x33, 0x32, 0x31, 0x30,
             0x41, 0x40, 0x01, 0x00,
         ],
+        &[],
     );
     test_flattening_roundtrip(
         input,
@@ -54,6 +55,7 @@ fn hlist_with_padding_at_the_end_for_size_alignment() {
         &[
             0x87, 0x86, 0x85, 0x84, 0x83, 0x82, 0x81, 0x80, 0x01, 0, 0, 0, 0, 0, 0, 0,
         ],
+        &[],
     );
     test_flattening_roundtrip(
         input,
@@ -78,6 +80,7 @@ fn hlist_with_padding() {
             0x01, 0, 0x11, 0x10, 0x21, 0x20, 0, 0, 0x33, 0x32, 0x31, 0x30, 0, 0, 0, 0, 0x47, 0x46,
             0x45, 0x44, 0x43, 0x42, 0x41, 0x40,
         ],
+        &[],
     );
     test_flattening_roundtrip(
         input,
@@ -96,7 +99,7 @@ fn hlist_with_padding() {
 fn none() {
     let input = None::<i8>;
 
-    test_memory_roundtrip(input, &[0x00, 0]);
+    test_memory_roundtrip(input, &[0x00, 0], &[]);
     test_flattening_roundtrip(input, hlist![0_i32, 0_i32]);
 }
 
@@ -105,7 +108,7 @@ fn none() {
 fn some_byte() {
     let input = Some(-100_i8);
 
-    test_memory_roundtrip(input, &[0x01, 0x9c]);
+    test_memory_roundtrip(input, &[0x01, 0x9c], &[]);
     test_flattening_roundtrip(input, hlist![1_i32, -100_i32]);
 }
 
@@ -123,6 +126,7 @@ fn ok_two_bytes_but_large_err() {
         &[
             0x00, 0, 0, 0, 0, 0, 0, 0, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ],
+        &[],
     );
     test_flattening_roundtrip(input, hlist![0_i32, 0x0000_1234_i64, 0_i64]);
 }
@@ -138,6 +142,7 @@ fn large_err() {
             0x01, 0, 0, 0, 0, 0, 0, 0, 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08, 0x07, 0x06,
             0x05, 0x04, 0x03, 0x02, 0x01, 0x00,
         ],
+        &[],
     );
     test_flattening_roundtrip(
         input,
@@ -161,28 +166,37 @@ fn duration() {
         &[
             0xbb, 0xba, 0xaf, 0xae, 0xad, 0xac, 0xab, 0x4a, 0x35, 0x36, 0x37, 0x38, 0, 0, 0, 0,
         ],
+        &[],
     );
     test_flattening_roundtrip(input, hlist![seconds as i64, nanos as i32]);
 }
 
-/// Test storing an instance of `T` to memory, checking that the `memory_data` bytes are correctly
-/// written, and check that the instance can be loaded from those bytes.
-fn test_memory_roundtrip<T>(input: T, memory_data: &[u8])
+/// Test storing an instance of `T` to memory, checking that the `layout_data` bytes followed by
+/// the `heap_data` bytes are correctly written, and check that the instance can be loaded from
+/// those bytes.
+fn test_memory_roundtrip<T>(input: T, layout_data: &[u8], heap_data: &[u8])
 where
     T: Debug + Eq + WitLoad + WitStore,
 {
     let mut instance = MockInstance::<()>::default();
     let mut memory = instance.memory().unwrap();
-    let length = memory_data.len() as u32;
 
-    assert_eq!(length, T::SIZE);
+    let layout_length = layout_data.len() as u32;
+    let heap_length = heap_data.len() as u32;
 
-    let address = memory.allocate(length).unwrap();
+    assert_eq!(layout_length, T::SIZE);
 
-    input.store(&mut memory, address).unwrap();
+    let layout_address = memory.allocate(layout_length).unwrap();
+    let heap_address = layout_address.after::<T>();
 
-    assert_eq!(memory.read(address, length).unwrap(), memory_data);
-    assert_eq!(T::load(&memory, address).unwrap(), input);
+    input.store(&mut memory, layout_address).unwrap();
+
+    assert_eq!(
+        memory.read(layout_address, layout_length).unwrap(),
+        layout_data
+    );
+    assert_eq!(memory.read(heap_address, heap_length).unwrap(), heap_data);
+    assert_eq!(T::load(&memory, layout_address).unwrap(), input);
 }
 
 /// Test lowering an instance of `T`, checking that the resulting flat layout matches the expected
