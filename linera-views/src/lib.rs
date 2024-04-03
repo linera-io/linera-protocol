@@ -3,9 +3,8 @@
 
 /*!
 This module is used in the Linera protocol to map complex data structures onto a
-key-value store. The central notion is a [`views::View`](crate::views::View) which can
-be loaded from storage, modified in memory, then committed (i.e. the changes are
-atomically persisted in storage).
+key-value store. The central notion is a [`views::View`](https://docs.rs/linera-views/latest/linera_views/views/trait.View.html)
+which can be loaded from storage, modified in memory, and then committed (i.e. the changes are atomically persisted in storage).
 
 The package provides essentially two functionalities:
 * An abstraction to access databases.
@@ -21,11 +20,15 @@ We provide support for the following databases:
 * `MemoryStore` is using the memory
 * `RocksDbStore` is a disk-based key-value store
 * `DynamoDbStore` is the AWS-based DynamoDB service.
-* `ScyllaDbStore` is a cloud based Cassandra compatible database.
+* `ScyllaDbStore` is a cloud-based Cassandra-compatible database.
+* `ServiceStoreClient` is a gRPC-based storage that uses either memory or RocksDB. It is available in `linera-storage-service`.
 
-The corresponding type in the code is the `KeyValueStore`.
-A context is the combination of a client and a path (named `base_key` which is
-of type `Vec<u8>`).
+The corresponding trait in the code is the [`common::KeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.KeyValueStore.html).
+The trait decomposes into a [`common::ReadableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.ReadableKeyValueStore.html)
+and a [`common::WritableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.WritableKeyValueStore.html).
+In addition, there is a [`common::AdminKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.AdminKeyValueStore.html)
+which gives some functionalities for working with stores.
+A context is the combination of a client and a path (named `base_key` which is of type `Vec<u8>`).
 
 ## Views.
 
@@ -34,11 +37,11 @@ When the container is modified the modification lies first in the view before
 being committed to the database. In technical terms, a view implements the trait `View`.
 
 The specific functionalities of the trait `View` are the following:
+* `context` for obtaining a reference to the storage context of the view.
 * `load` for loading the view from a specific context.
 * `rollback` for canceling all modifications that were not committed thus far.
 * `clear` for clearing the view, in other words for reverting it to its default state.
 * `flush` for persisting the changes to storage.
-* `delete` for deleting the changes from the database.
 
 The following views implement the `View` trait:
 * `RegisterView` implements the storing of a single data.
