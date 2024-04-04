@@ -38,6 +38,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera wallet set-default`↴](#linera-wallet-set-default)
 * [`linera wallet init`↴](#linera-wallet-init)
 * [`linera wallet forget-keys`↴](#linera-wallet-forget-keys)
+* [`linera wallet forget-chain`↴](#linera-wallet-forget-chain)
 * [`linera project`↴](#linera-project)
 * [`linera project new`↴](#linera-project-new)
 * [`linera project test`↴](#linera-project-test)
@@ -653,6 +654,7 @@ Show the contents of the wallet
 * `set-default` — Change the wallet default chain
 * `init` — Initialize a wallet from the genesis configuration
 * `forget-keys` — Forgets the specified chain's keys
+* `forget-chain` — Forgets the specified chain, including the associated key pair
 
 
 
@@ -701,6 +703,18 @@ Initialize a wallet from the genesis configuration
 Forgets the specified chain's keys
 
 **Usage:** `linera wallet forget-keys <CHAIN_ID>`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>`
+
+
+
+## `linera wallet forget-chain`
+
+Forgets the specified chain, including the associated key pair
+
+**Usage:** `linera wallet forget-chain <CHAIN_ID>`
 
 ###### **Arguments:**
 

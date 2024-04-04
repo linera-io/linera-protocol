@@ -1564,6 +1564,13 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 Ok(())
             }
 
+            WalletCommand::ForgetChain { chain_id } => {
+                let mut context = ClientContext::from_options(&options)?;
+                context.wallet_state_mut().forget_chain(chain_id)?;
+                context.save_wallet();
+                Ok(())
+            }
+
             WalletCommand::Init {
                 genesis_config_path,
                 faucet,
