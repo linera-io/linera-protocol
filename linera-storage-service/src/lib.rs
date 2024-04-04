@@ -1,7 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module provides a shared key-value store server based on the RocksDB store and the in-memory store of `linera-views`. It also includes the corresponding client and end-to-end tests.
+//! This module provides a shared key-value store server based on the RocksDB store and the in-memory store of `linera-views`.
+//! The corresponding client implements the `KeyValueStore` and `AdminKeyValueStore` traits.
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 // https://github.com/hyperium/tonic/issues/1056
