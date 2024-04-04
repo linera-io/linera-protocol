@@ -5,6 +5,7 @@ use std::{
     collections::HashMap,
     env,
     marker::PhantomData,
+    mem,
     path::{Path, PathBuf},
     str::FromStr,
     time::Duration,
@@ -1027,6 +1028,22 @@ impl NodeService {
         );
         self.query_node(query).await?;
         Ok(())
+    }
+
+    /// Obtains the hash of the `chain`'s tip block, as known by this node service.
+    pub async fn chain_tip_hash(&self, chain: ChainId) -> Result<Option<CryptoHash>> {
+        let query = format!(r#"query {{ block(chainId: "{chain}") {{ hash }} }}"#);
+
+        let mut response = self.query_node(&query).await?;
+
+        match mem::take(&mut response["block"]["hash"]) {
+            Value::Null => Ok(None),
+            Value::String(hash) => Ok(Some(
+                hash.parse()
+                    .context("Received an invalid hash {hash:?} for chain tip")?,
+            )),
+            invalid_data => bail!("Expected a tip hash string, but got {invalid_data:?} instead"),
+        }
     }
 }
 
