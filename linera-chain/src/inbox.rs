@@ -154,7 +154,9 @@ where
     }
 
     /// Consumes an event from the inbox.
-    pub(crate) async fn remove_event(&mut self, event: &Event) -> Result<(), InboxError> {
+    ///
+    /// Returns `true` if the event was already known, i.e. it was present in `added_events`.
+    pub(crate) async fn remove_event(&mut self, event: &Event) -> Result<bool, InboxError> {
         // Record the latest cursor.
         let cursor = Cursor::from(event);
         ensure!(
@@ -179,7 +181,7 @@ where
             tracing::trace!("Skipping previously received event {:?}", previous_event);
         }
         // Reconcile the event with the next added event, or mark it as removed.
-        match self.added_events.front().await? {
+        let already_known = match self.added_events.front().await? {
             Some(previous_event) => {
                 // Rationale: If the two cursors are equal, then the events should match.
                 // Otherwise, at this point we know that `self.next_cursor_to_add >
@@ -195,19 +197,23 @@ where
                 );
                 self.added_events.delete_front();
                 tracing::trace!("Consuming event {:?}", event);
+                true
             }
             None => {
                 tracing::trace!("Marking event as expected: {:?}", event);
                 self.removed_events.push_back(event.clone());
+                false
             }
-        }
+        };
         self.next_cursor_to_remove.set(cursor.try_add_one()?);
-        Ok(())
+        Ok(already_known)
     }
 
     /// Pushes an event to the inbox. The verifications should not fail in production unless
     /// many validators are faulty.
-    pub(crate) async fn add_event(&mut self, event: Event) -> Result<(), InboxError> {
+    ///
+    /// Returns `true` if the event was new, `false` if it was already in `removed_events`.
+    pub(crate) async fn add_event(&mut self, event: Event) -> Result<bool, InboxError> {
         // Record the latest cursor.
         let cursor = Cursor::from(&event);
         ensure!(
@@ -218,7 +224,7 @@ where
             }
         );
         // Find if the message was removed ahead of time.
-        match self.removed_events.front().await? {
+        let newly_added = match self.removed_events.front().await? {
             Some(previous_event) => {
                 if Cursor::from(&previous_event) == cursor {
                     // We already executed this message by anticipation. Remove it from
@@ -242,14 +248,16 @@ where
                         }
                     );
                 }
+                false
             }
             None => {
                 // Otherwise, schedule the message for execution.
-                self.added_events.push_back(event)
+                self.added_events.push_back(event);
+                true
             }
-        }
+        };
         self.next_cursor_to_add.set(cursor.try_add_one()?);
-        Ok(())
+        Ok(newly_added)
     }
 }
 
