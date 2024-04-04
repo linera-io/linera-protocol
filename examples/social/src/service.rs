@@ -30,6 +30,7 @@ impl Service for SocialService {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type State = Social;
+    type Parameters = ();
 
     async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(SocialService {

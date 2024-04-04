@@ -25,6 +25,7 @@ impl Service for CounterService {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
     type State = Counter;
+    type Parameters = ();
 
     async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(CounterService { state })

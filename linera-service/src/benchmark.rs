@@ -133,7 +133,9 @@ async fn benchmark_with_fungible(
     let (contract, service) = publisher.build_application(&path, "fungible", true).await?;
 
     info!("Publishing the fungible application bytecode.");
-    let bytecode_id = publisher.publish_bytecode(contract, service, None).await?;
+    let bytecode_id = publisher
+        .publish_bytecode::<FungibleTokenAbi, Parameters, InitialState>(contract, service, None)
+        .await?;
 
     struct BenchmarkContext {
         application_id: ApplicationId<FungibleTokenAbi>,
@@ -154,7 +156,7 @@ async fn benchmark_with_fungible(
             };
             let parameters = Parameters::new(format!("FUN{}", i).leak());
             let application_id = node_service
-                .create_application::<FungibleTokenAbi>(
+                .create_application(
                     &default_chain,
                     &bytecode_id,
                     &parameters,

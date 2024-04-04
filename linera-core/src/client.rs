@@ -17,7 +17,7 @@ use futures::{
     stream::{self, AbortHandle, FuturesUnordered, StreamExt},
 };
 use linera_base::{
-    abi::{Abi, ContractAbi},
+    abi::Abi,
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Round, Timestamp},
     ensure,
@@ -43,6 +43,7 @@ use linera_execution::{
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;
+use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, error, info};
 
@@ -1810,11 +1811,15 @@ where
     }
 
     /// Creates an application by instantiating some bytecode.
-    pub async fn create_application<A: Abi>(
+    pub async fn create_application<
+        A: Abi,
+        Parameters: Serialize,
+        InitializationArgument: Serialize,
+    >(
         &mut self,
-        bytecode_id: BytecodeId<A>,
-        parameters: &<A as ContractAbi>::Parameters,
-        initialization_argument: &A::InitializationArgument,
+        bytecode_id: BytecodeId<A, Parameters, InitializationArgument>,
+        parameters: &Parameters,
+        initialization_argument: &InitializationArgument,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ClientOutcome<(UserApplicationId<A>, Certificate)>, ChainClientError> {
         let initialization_argument = serde_json::to_vec(initialization_argument)?;

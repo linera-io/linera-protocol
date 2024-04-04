@@ -281,7 +281,7 @@ query {
 
 use async_graphql::{Request, Response, SimpleObject};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, ContractAbi, ServiceAbi, Timestamp},
+    base::{AccountOwner, Amount, ContractAbi, ServiceAbi, Timestamp},
     graphql::GraphQLMutationRoot,
 };
 use serde::{Deserialize, Serialize};
@@ -289,14 +289,11 @@ use serde::{Deserialize, Serialize};
 pub struct CrowdFundingAbi;
 
 impl ContractAbi for CrowdFundingAbi {
-    type InitializationArgument = InitializationArgument;
-    type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
     type Operation = Operation;
     type Response = ();
 }
 
 impl ServiceAbi for CrowdFundingAbi {
-    type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
     type Query = Request;
     type QueryResponse = Response;
 }

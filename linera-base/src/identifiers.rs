@@ -161,10 +161,10 @@ impl From<ApplicationId> for GenericApplicationId {
 
 /// A unique identifier for an application bytecode.
 #[cfg_attr(with_testing, derive(Default))]
-pub struct BytecodeId<A = ()> {
+pub struct BytecodeId<Abi = (), Parameters = (), InitializationArgument = ()> {
     /// The message ID that published the bytecode.
     pub message_id: MessageId,
-    _phantom: std::marker::PhantomData<A>,
+    _phantom: std::marker::PhantomData<(Abi, Parameters, InitializationArgument)>,
 }
 
 /// The name of a subscription channel.
@@ -219,15 +219,22 @@ impl ChannelName {
 }
 
 // Cannot use #[derive(Clone)] because it requires `A: Clone`.
-impl<A> Clone for BytecodeId<A> {
+impl<Abi, Parameters, InitializationArgument> Clone
+    for BytecodeId<Abi, Parameters, InitializationArgument>
+{
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<A> Copy for BytecodeId<A> {}
+impl<Abi, Parameters, InitializationArgument> Copy
+    for BytecodeId<Abi, Parameters, InitializationArgument>
+{
+}
 
-impl<A: PartialEq> PartialEq for BytecodeId<A> {
+impl<Abi: PartialEq, Parameters, InitializationArgument> PartialEq
+    for BytecodeId<Abi, Parameters, InitializationArgument>
+{
     fn eq(&self, other: &Self) -> bool {
         let BytecodeId {
             message_id,
@@ -237,9 +244,14 @@ impl<A: PartialEq> PartialEq for BytecodeId<A> {
     }
 }
 
-impl<A: Eq> Eq for BytecodeId<A> {}
+impl<Abi: Eq, Parameters, InitializationArgument> Eq
+    for BytecodeId<Abi, Parameters, InitializationArgument>
+{
+}
 
-impl<A: PartialOrd> PartialOrd for BytecodeId<A> {
+impl<Abi: PartialOrd, Parameters, InitializationArgument> PartialOrd
+    for BytecodeId<Abi, Parameters, InitializationArgument>
+{
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         let BytecodeId {
             message_id,
@@ -249,7 +261,9 @@ impl<A: PartialOrd> PartialOrd for BytecodeId<A> {
     }
 }
 
-impl<A: Ord> Ord for BytecodeId<A> {
+impl<Abi: Ord, Parameters, InitializationArgument> Ord
+    for BytecodeId<Abi, Parameters, InitializationArgument>
+{
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let BytecodeId {
             message_id,
@@ -259,7 +273,9 @@ impl<A: Ord> Ord for BytecodeId<A> {
     }
 }
 
-impl<A> Hash for BytecodeId<A> {
+impl<Abi, Parameters, InitializationArgument> Hash
+    for BytecodeId<Abi, Parameters, InitializationArgument>
+{
     fn hash<H: Hasher>(&self, state: &mut H) {
         let BytecodeId {
             message_id,
@@ -269,7 +285,9 @@ impl<A> Hash for BytecodeId<A> {
     }
 }
 
-impl<A> Debug for BytecodeId<A> {
+impl<Abi, Parameters, InitializationArgument> Debug
+    for BytecodeId<Abi, Parameters, InitializationArgument>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let BytecodeId {
             message_id,
@@ -287,7 +305,9 @@ struct SerializableBytecodeId {
     message_id: MessageId,
 }
 
-impl<A> Serialize for BytecodeId<A> {
+impl<Abi, Parameters, InitializationArgument> Serialize
+    for BytecodeId<Abi, Parameters, InitializationArgument>
+{
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
@@ -306,7 +326,9 @@ impl<A> Serialize for BytecodeId<A> {
     }
 }
 
-impl<'de, A> Deserialize<'de> for BytecodeId<A> {
+impl<'de, Abi, Parameters, InitializationArgument> Deserialize<'de>
+    for BytecodeId<Abi, Parameters, InitializationArgument>
+{
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
@@ -340,7 +362,9 @@ impl BytecodeId {
     }
 
     /// Specializes a bytecode ID for a given ABI.
-    pub fn with_abi<A>(self) -> BytecodeId<A> {
+    pub fn with_abi<Abi, Parameters, InitializationArgument>(
+        self,
+    ) -> BytecodeId<Abi, Parameters, InitializationArgument> {
         BytecodeId {
             message_id: self.message_id,
             _phantom: std::marker::PhantomData,
@@ -348,9 +372,17 @@ impl BytecodeId {
     }
 }
 
-impl<A> BytecodeId<A> {
+impl<Abi, Parameters, InitializationArgument> BytecodeId<Abi, Parameters, InitializationArgument> {
     /// Forgets the ABI of a bytecode ID (if any).
     pub fn forget_abi(self) -> BytecodeId {
+        BytecodeId {
+            message_id: self.message_id,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Leaves just the ABI of a bytecode ID (if any).
+    pub fn just_abi(self) -> BytecodeId<Abi> {
         BytecodeId {
             message_id: self.message_id,
             _phantom: std::marker::PhantomData,

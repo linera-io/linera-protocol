@@ -21,6 +21,7 @@ impl Service for ApplicationService {{
     type Error = ServiceError;
     type Storage = ViewStateStorage<Self>;
     type State = Application;
+    type Parameters = ();
 
     async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {{
         Ok(ApplicationService {{ state, runtime }})

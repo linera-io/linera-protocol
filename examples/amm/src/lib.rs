@@ -184,8 +184,6 @@ use thiserror::Error;
 pub struct AmmAbi;
 
 impl ContractAbi for AmmAbi {
-    type InitializationArgument = ();
-    type Parameters = Parameters;
     type Operation = Operation;
     type Response = ();
 }
@@ -193,7 +191,6 @@ impl ContractAbi for AmmAbi {
 impl ServiceAbi for AmmAbi {
     type Query = Request;
     type QueryResponse = Response;
-    type Parameters = Parameters;
 }
 
 /// Operations that can be sent to the application.

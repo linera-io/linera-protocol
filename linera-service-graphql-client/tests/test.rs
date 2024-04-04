@@ -62,7 +62,14 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
     };
     let params = fungible::Parameters::new("FUN");
     let application_id = client
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
+        .publish_and_create::<FungibleTokenAbi, fungible::Parameters, InitialState>(
+            contract,
+            service,
+            &params,
+            &state,
+            &[],
+            None,
+        )
         .await
         .unwrap();
 

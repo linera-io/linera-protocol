@@ -8,14 +8,12 @@ This application is only used for testing cross-application calls.
 */
 
 use async_graphql::{Request, Response};
-use linera_sdk::base::{ApplicationId, ChainId, ContractAbi, ServiceAbi};
+use linera_sdk::base::{ChainId, ContractAbi, ServiceAbi};
 use serde::{Deserialize, Serialize};
 
 pub struct MetaCounterAbi;
 
 impl ContractAbi for MetaCounterAbi {
-    type InitializationArgument = ();
-    type Parameters = ApplicationId<counter::CounterAbi>;
     type Operation = Operation;
     type Response = ();
 }
@@ -60,5 +58,4 @@ pub enum Message {
 impl ServiceAbi for MetaCounterAbi {
     type Query = Request;
     type QueryResponse = Response;
-    type Parameters = ApplicationId<counter::CounterAbi>;
 }

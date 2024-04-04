@@ -8,7 +8,9 @@ mod state;
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use fungible::{Account, FungibleResponse, FungibleTokenAbi, Message, Operation};
+use fungible::{
+    Account, FungibleResponse, FungibleTokenAbi, InitialState, Message, Operation, Parameters,
+};
 use linera_sdk::{
     base::{AccountOwner, Amount, WithContractAbi},
     ensure, Contract, ContractRuntime, ViewStateStorage,
@@ -34,6 +36,8 @@ impl Contract for FungibleTokenContract {
     type Storage = ViewStateStorage<Self>;
     type State = FungibleToken;
     type Message = Message;
+    type Parameters = Parameters;
+    type InitializationArgument = InitialState;
 
     async fn new(
         state: FungibleToken,

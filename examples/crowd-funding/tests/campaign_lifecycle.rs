@@ -8,8 +8,9 @@
 use std::iter;
 
 use crowd_funding::{CrowdFundingAbi, InitializationArgument, Operation};
+use fungible::FungibleTokenAbi;
 use linera_sdk::{
-    base::{AccountOwner, Amount, Timestamp},
+    base::{AccountOwner, Amount, ApplicationId, Timestamp},
     test::TestValidator,
 };
 
@@ -24,7 +25,12 @@ async fn collect_pledges() {
     let target_amount = Amount::from_tokens(220);
     let pledge_amount = Amount::from_tokens(75);
 
-    let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
+    let (validator, bytecode_id) = TestValidator::with_current_bytecode::<
+        CrowdFundingAbi,
+        ApplicationId<FungibleTokenAbi>,
+        InitializationArgument,
+    >()
+    .await;
 
     let fungible_publisher_chain = validator.new_chain().await;
     let mut campaign_chain = validator.new_chain().await;
@@ -47,7 +53,7 @@ async fn collect_pledges() {
         target: target_amount,
     };
     let campaign_id = campaign_chain
-        .create_application::<CrowdFundingAbi>(
+        .create_application(
             bytecode_id,
             token_id,
             campaign_state,
@@ -121,7 +127,12 @@ async fn cancel_successful_campaign() {
     let target_amount = Amount::from_tokens(220);
     let pledge_amount = Amount::from_tokens(75);
 
-    let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
+    let (validator, bytecode_id) = TestValidator::with_current_bytecode::<
+        CrowdFundingAbi,
+        ApplicationId<FungibleTokenAbi>,
+        InitializationArgument,
+    >()
+    .await;
 
     let fungible_publisher_chain = validator.new_chain().await;
     let mut campaign_chain = validator.new_chain().await;
@@ -144,7 +155,7 @@ async fn cancel_successful_campaign() {
         target: target_amount,
     };
     let campaign_id = campaign_chain
-        .create_application::<CrowdFundingAbi>(
+        .create_application(
             bytecode_id,
             token_id,
             campaign_state,
