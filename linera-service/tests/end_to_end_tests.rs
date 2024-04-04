@@ -1327,6 +1327,20 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             })
             .await;
     }
+
+    let chain_a_tip_after_cancel = node_service_a
+        .chain_tip_hash(chain_a)
+        .await?
+        .expect("Missing blocks from chain A");
+    node_service_admin
+        .wait_for_messages(chain_admin, chain_a_tip_after_cancel)
+        .await?;
+
+    let chain_a_refund_admin_tip = node_service_admin
+        .chain_tip_hash(chain_admin)
+        .await?
+        .expect("Missing blocks from admin chain");
+
     for order_id in order_ids_b {
         app_matching_b
             .order(matching_engine::Order::Cancel {
@@ -1335,7 +1349,28 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             })
             .await;
     }
-    node_service_admin.process_inbox(&chain_admin).await?;
+
+    let chain_b_tip_after_cancel = node_service_b
+        .chain_tip_hash(chain_b)
+        .await?
+        .expect("Missing blocks from chain B");
+
+    node_service_admin
+        .wait_for_messages(chain_admin, chain_b_tip_after_cancel)
+        .await?;
+
+    let chain_b_refund_admin_tip = node_service_admin
+        .chain_tip_hash(chain_admin)
+        .await?
+        .expect("Missing blocks from admin chain");
+
+    node_service_a
+        .wait_for_messages(chain_a, chain_a_refund_admin_tip)
+        .await?;
+
+    node_service_b
+        .wait_for_messages(chain_b, chain_b_refund_admin_tip)
+        .await?;
 
     // Check balances
     app_fungible0_a
