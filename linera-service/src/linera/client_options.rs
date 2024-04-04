@@ -786,6 +786,9 @@ pub enum WalletCommand {
         #[arg(long)]
         testing_prng_seed: Option<u64>,
     },
+
+    /// Forgets the specified chain's keys.
+    ForgetKeys { chain_id: ChainId },
 }
 
 #[derive(Clone, clap::Parser)]

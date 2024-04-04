@@ -169,6 +169,15 @@ impl WalletState {
         self.inner.chains.insert(chain.chain_id, chain);
     }
 
+    pub fn forget_keys(&mut self, chain_id: &ChainId) -> Result<KeyPair, anyhow::Error> {
+        let chain = self
+            .inner
+            .chains
+            .get_mut(chain_id)
+            .context(format!("Failed to get chain for chain id: {}", chain_id))?;
+        chain.key_pair.take().context("Failed to take keypair")
+    }
+
     pub fn default_chain(&self) -> Option<ChainId> {
         self.inner.default
     }

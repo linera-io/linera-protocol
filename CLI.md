@@ -37,6 +37,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera wallet show`↴](#linera-wallet-show)
 * [`linera wallet set-default`↴](#linera-wallet-set-default)
 * [`linera wallet init`↴](#linera-wallet-init)
+* [`linera wallet forget-keys`↴](#linera-wallet-forget-keys)
 * [`linera project`↴](#linera-project)
 * [`linera project new`↴](#linera-project-new)
 * [`linera project test`↴](#linera-project-test)
@@ -651,6 +652,7 @@ Show the contents of the wallet
 * `show` — Show the contents of the wallet
 * `set-default` — Change the wallet default chain
 * `init` — Initialize a wallet from the genesis configuration
+* `forget-keys` — Forgets the specified chain's keys
 
 
 
@@ -691,6 +693,18 @@ Initialize a wallet from the genesis configuration
 * `--with-new-chain` — Request a new chain from the faucet, credited with tokens. This requires `--faucet`
 * `--with-other-chains <WITH_OTHER_CHAINS>` — Other chains to follow
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
+
+
+
+## `linera wallet forget-keys`
+
+Forgets the specified chain's keys
+
+**Usage:** `linera wallet forget-keys <CHAIN_ID>`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>`
 
 
 
