@@ -1,0 +1,28 @@
+[package]
+name = "linera-ethereum"
+version = "0.11.0"
+description = "Oracle functionality for Ethereum"
+authors = ["Linera <contact@linera.io>"]
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.dev"
+documentation = "https://docs.rs/linera-ethereum/latest/linera_ethereum/"
+license = "Apache-2.0"
+edition = "2021"
+
+
+[dependencies]
+anyhow.workspace = true
+ethers.workspace = true
+ethers-core.workspace = true
+ethers-providers.workspace = true
+ethers-middleware.workspace = true
+ethers-signers.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+rustc-hex.workspace = true
+tokio = { workspace = true, features = ["full"] }
+url.workspace = true
+
+[build-dependencies]
+cfg_aliases.workspace = true
