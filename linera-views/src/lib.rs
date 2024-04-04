@@ -28,7 +28,7 @@ The trait decomposes into a [`common::ReadableKeyValueStore`](https://docs.rs/li
 and a [`common::WritableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.WritableKeyValueStore.html).
 In addition, there is a [`common::AdminKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.AdminKeyValueStore.html)
 which gives some functionalities for working with stores.
-A context is the combination of a client and a path (named `base_key` which is of type `Vec<u8>`).
+A context is the combination of a client and a base key (of type `Vec<u8>`).
 
 ## Views.
 
