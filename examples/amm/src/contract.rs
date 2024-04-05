@@ -9,7 +9,7 @@ use amm::{AmmAbi, AmmError, Message, Operation, Parameters};
 use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
+    base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
     ensure, Contract, ContractRuntime, ViewStateStorage,
 };
 use num_bigint::BigUint;
@@ -47,8 +47,7 @@ impl Contract for AmmContract {
 
     async fn initialize(&mut self, _argument: ()) -> Result<(), AmmError> {
         // Validate that the application parameters were configured correctly.
-        let _ = self.runtime.application_parameters();
-
+        self.runtime.application_parameters();
         Ok(())
     }
 
@@ -56,7 +55,7 @@ impl Contract for AmmContract {
         if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
             self.execute_order_local(operation)?;
         } else {
-            self.execute_order_remote(operation)?;
+            self.execute_order_remote(operation).await?;
         }
 
         Ok(())
@@ -75,47 +74,47 @@ impl Contract for AmmContract {
                 input_amount,
             } => {
                 self.check_account_authentication(owner)?;
-                self.execute_swap(owner, input_token_idx, input_amount)?;
+                // It's assumed that the tokens have already been transferred here at this point
+                if input_amount == Amount::ZERO {
+                    return Err(AmmError::NoZeroAmounts);
+                }
+
+                if input_token_idx > 1 {
+                    return Err(AmmError::InvalidTokenIdx);
+                }
+
+                let output_token_idx = 1 - input_token_idx;
+                let input_pool_balance = self.get_pool_balance(input_token_idx)?;
+                let output_pool_balance = self.get_pool_balance(output_token_idx)?;
+
+                let output_amount = self.calculate_output_amount(
+                    input_amount,
+                    input_pool_balance,
+                    output_pool_balance,
+                )?;
+
+                let amm_account = self.get_amm_account();
+                self.transfer(owner, input_amount, amm_account, input_token_idx);
+
+                let amm_app_owner = self.get_amm_app_owner();
+                let message_origin_account = self.get_message_origin_account(owner);
+                self.transfer(
+                    amm_app_owner,
+                    output_amount,
+                    message_origin_account,
+                    output_token_idx,
+                );
+
+                Ok(())
             }
-        }
 
-        Ok(())
-    }
-}
-
-impl AmmContract {
-    /// authenticate the originator of the message
-    fn check_account_authentication(&mut self, owner: AccountOwner) -> Result<(), AmmError> {
-        match owner {
-            AccountOwner::User(address) => {
-                ensure!(
-                    self.runtime.authenticated_signer() == Some(address),
-                    AmmError::IncorrectAuthentication
-                )
-            }
-            AccountOwner::Application(id) => {
-                ensure!(
-                    self.runtime.authenticated_caller_id() == Some(id),
-                    AmmError::IncorrectAuthentication
-                )
-            }
-        }
-
-        Ok(())
-    }
-
-    fn execute_order_local(&mut self, operation: Operation) -> Result<(), AmmError> {
-        match operation {
-            Operation::Swap {
-                owner: _,
-                input_token_idx: _,
-                input_amount: _,
-            } => Err(AmmError::SwappingLocally),
-            Operation::AddLiquidity {
+            Message::AddLiquidity {
                 owner,
                 max_token0_amount,
                 max_token1_amount,
             } => {
+                self.check_account_authentication(owner)?;
+
                 if max_token0_amount == Amount::ZERO || max_token1_amount == Amount::ZERO {
                     return Err(AmmError::NoZeroAmounts);
                 }
@@ -123,13 +122,14 @@ impl AmmContract {
                 let balance0 = self.get_pool_balance(0)?;
                 let balance1 = self.get_pool_balance(1)?;
 
+                let balance0_bigint = BigUint::from_u128(u128::from(balance0))
+                    .expect("Couldn't generate balance0 in bigint");
+                let balance1_bigint = BigUint::from_u128(u128::from(balance1))
+                    .expect("Couldn't generate balance1 in bigint");
+
                 let token0_amount;
                 let token1_amount;
                 if balance0 > Amount::ZERO && balance1 > Amount::ZERO {
-                    let balance0_bigint = BigUint::from_u128(u128::from(balance0))
-                        .expect("Couldn't generate balance0 in bigint");
-                    let balance1_bigint = BigUint::from_u128(u128::from(balance1))
-                        .expect("Couldn't generate balance1 in bigint");
                     let max_token0_amount_bigint =
                         BigUint::from_u128(u128::from(max_token0_amount))
                             .expect("Couldn't generate max_token0_amount in bigint");
@@ -182,24 +182,62 @@ impl AmmContract {
                     token1_amount = max_token1_amount;
                 }
 
-                self.receive_from_account(&owner, 0, token0_amount);
-                self.receive_from_account(&owner, 1, token1_amount);
+                let amm_account = self.get_amm_account();
+                let message_origin_account = self.get_message_origin_account(owner);
+                // See if we'll need to send refunds
+                if token0_amount < max_token0_amount {
+                    self.transfer(
+                        owner,
+                        max_token0_amount.saturating_sub(token0_amount),
+                        message_origin_account,
+                        0,
+                    );
+                }
+                // Transfer tokens to AMM owner
+                self.transfer(owner, token0_amount, amm_account, 0);
+
+                // See if we'll need to send refunds
+                if token1_amount < max_token1_amount {
+                    self.transfer(
+                        owner,
+                        max_token1_amount.saturating_sub(token1_amount),
+                        message_origin_account,
+                        1,
+                    );
+                }
+                // Transfer tokens to AMM owner
+                self.transfer(owner, token1_amount, amm_account, 1);
+
+                let shares_to_mint =
+                    self.get_shares(token0_amount, token1_amount, &balance0_bigint)?;
+
+                let mut current_shares = self
+                    .state
+                    .current_shares_or_default(&message_origin_account)
+                    .await;
+                current_shares.saturating_add_assign(shares_to_mint);
+                self.state
+                    .shares
+                    .insert(&message_origin_account, current_shares)
+                    .expect("Failed insert statement");
+
+                let total_shares_supply = self.state.total_shares_supply.get_mut();
+                *total_shares_supply = total_shares_supply.saturating_add(shares_to_mint);
 
                 Ok(())
             }
-            // When removing liquidity, you'll specify one of the tokens you want to
-            // remove and the amount, and we'll calculate the amount for the other token that
-            // we'll remove based on the current ratio, and remove them.
-            Operation::RemoveLiquidity {
+
+            Message::RemoveLiquidity {
                 owner,
                 token_to_remove_idx,
                 mut token_to_remove_amount,
             } => {
+                self.check_account_authentication(owner)?;
+
                 if token_to_remove_idx > 1 {
                     return Err(AmmError::InvalidTokenIdx);
                 }
 
-                let other_token_to_remove_idx = 1 - token_to_remove_idx;
                 let balance0 = self.get_pool_balance(0)?;
                 let balance1 = self.get_pool_balance(1)?;
 
@@ -220,87 +258,334 @@ impl AmmContract {
 
                 let other_amount = if token_to_remove_idx == 0 {
                     Amount::from_attos(
-                        ((token_to_remove_amount_bigint * balance1_bigint) / balance0_bigint)
-                            .to_u128()
-                            .expect("Couldn't convert other_amount to u128"),
+                        ((token_to_remove_amount_bigint * balance1_bigint.clone())
+                            / balance0_bigint.clone())
+                        .to_u128()
+                        .expect("Couldn't convert other_amount to u128"),
                     )
                 } else {
                     Amount::from_attos(
-                        ((token_to_remove_amount_bigint * balance0_bigint) / balance1_bigint)
-                            .to_u128()
-                            .expect("Couldn't convert other_amount to u128"),
+                        ((token_to_remove_amount_bigint * balance0_bigint.clone())
+                            / balance1_bigint.clone())
+                        .to_u128()
+                        .expect("Couldn't convert other_amount to u128"),
                     )
                 };
 
-                self.send_to(&owner, token_to_remove_idx, token_to_remove_amount);
-                self.send_to(&owner, other_token_to_remove_idx, other_amount);
+                let shares_to_return = if token_to_remove_idx == 0 {
+                    self.get_shares(token_to_remove_amount, other_amount, &balance0_bigint)?
+                } else {
+                    self.get_shares(other_amount, token_to_remove_amount, &balance0_bigint)?
+                };
+
+                let message_origin_account = self.get_message_origin_account(owner);
+                let current_shares = self
+                    .state
+                    .current_shares_or_default(&message_origin_account)
+                    .await;
+                if shares_to_return <= current_shares {
+                    self.return_shares(
+                        message_origin_account,
+                        current_shares,
+                        shares_to_return,
+                        token_to_remove_idx,
+                        token_to_remove_amount,
+                        other_amount,
+                    )
+                } else {
+                    return Err(AmmError::RemovingMoreLiquidityThanAdded);
+                }
+
+                Ok(())
+            }
+
+            Message::RemoveAllAddedLiquidity { owner } => {
+                self.check_account_authentication(owner)?;
+
+                let message_origin_account = self.get_message_origin_account(owner);
+                let current_shares = self
+                    .state
+                    .current_shares_or_default(&message_origin_account)
+                    .await;
+                let total_shares_supply = *self.state.total_shares_supply.get();
+                let balance0 = self.get_pool_balance(0)?;
+                let balance1 = self.get_pool_balance(1)?;
+
+                let total_shares_supply_bigint =
+                    BigUint::from_u128(u128::from(total_shares_supply))
+                        .expect("Couldn't generate total_shares_supply in bigint");
+                let current_shares_bigint = BigUint::from_u128(u128::from(current_shares))
+                    .expect("Couldn't generate current_shares in bigint");
+                let balance0_bigint = BigUint::from_u128(u128::from(balance0))
+                    .expect("Couldn't generate balance0 in bigint");
+                let balance1_bigint = BigUint::from_u128(u128::from(balance1))
+                    .expect("Couldn't generate balance1 in bigint");
+
+                let amount_token0 = Amount::from_attos(
+                    ((current_shares_bigint.clone() * balance0_bigint)
+                        / total_shares_supply_bigint.clone())
+                    .to_u128()
+                    .expect("Couldn't convert amount_token0 to u128"),
+                );
+                let amount_token1 = Amount::from_attos(
+                    ((current_shares_bigint * balance1_bigint) / total_shares_supply_bigint)
+                        .to_u128()
+                        .expect("Couldn't convert amount_token1 to u128"),
+                );
+
+                self.return_shares(
+                    message_origin_account,
+                    current_shares,
+                    current_shares,
+                    0,
+                    amount_token0,
+                    amount_token1,
+                );
                 Ok(())
             }
         }
     }
+}
 
-    fn execute_swap(
-        &mut self,
-        owner: AccountOwner,
-        input_token_idx: u32,
-        input_amount: Amount,
-    ) -> Result<(), AmmError> {
-        if input_amount == Amount::ZERO {
-            return Err(AmmError::NoZeroAmounts);
+impl AmmContract {
+    /// authenticate the originator of the message
+    fn check_account_authentication(&mut self, owner: AccountOwner) -> Result<(), AmmError> {
+        match owner {
+            AccountOwner::User(address) => {
+                ensure!(
+                    self.runtime.authenticated_signer() == Some(address),
+                    AmmError::IncorrectAuthentication
+                )
+            }
+            AccountOwner::Application(id) => {
+                ensure!(
+                    self.runtime.authenticated_caller_id() == Some(id),
+                    AmmError::IncorrectAuthentication
+                )
+            }
         }
-
-        if input_token_idx > 1 {
-            return Err(AmmError::InvalidTokenIdx);
-        }
-
-        let output_token_idx = 1 - input_token_idx;
-        let input_pool_balance = self.get_pool_balance(input_token_idx)?;
-        let output_pool_balance = self.get_pool_balance(output_token_idx)?;
-
-        let output_amount =
-            self.calculate_output_amount(input_amount, input_pool_balance, output_pool_balance)?;
-
-        self.receive_from_account(&owner, input_token_idx, input_amount);
-        self.send_to(&owner, output_token_idx, output_amount);
 
         Ok(())
     }
 
-    fn execute_order_remote(&mut self, operation: Operation) -> Result<(), AmmError> {
+    fn return_shares(
+        &mut self,
+        account: Account,
+        mut current_shares: Amount,
+        shares_to_return: Amount,
+        token_to_remove_idx: u32,
+        token_to_remove_amount: Amount,
+        other_token_to_remove_amount: Amount,
+    ) {
+        let amm_app_owner = self.get_amm_app_owner();
+        self.transfer(
+            amm_app_owner,
+            token_to_remove_amount,
+            account,
+            token_to_remove_idx,
+        );
+        self.transfer(
+            amm_app_owner,
+            other_token_to_remove_amount,
+            account,
+            1 - token_to_remove_idx,
+        );
+
+        current_shares = current_shares.saturating_sub(shares_to_return);
+
+        if current_shares == Amount::ZERO {
+            self.state
+                .shares
+                .remove(&account)
+                .expect("Failed remove statement");
+        } else {
+            self.state
+                .shares
+                .insert(&account, current_shares)
+                .expect("Failed insert statement");
+        }
+
+        let total_shares_supply = self.state.total_shares_supply.get_mut();
+        *total_shares_supply = total_shares_supply.saturating_sub(shares_to_return);
+    }
+
+    fn get_shares(
+        &self,
+        token0_amount: Amount,
+        token1_amount: Amount,
+        balance0_bigint: &BigUint,
+    ) -> Result<Amount, AmmError> {
+        let token0_amount_bigint = BigUint::from_u128(u128::from(token0_amount))
+            .expect("Converting token0_amount to BigUint should not fail!");
+        let token1_amount_bigint = BigUint::from_u128(u128::from(token1_amount))
+            .expect("Converting token1_amount to BigUint should not fail!");
+
+        if *self.state.total_shares_supply.get() == Amount::ZERO {
+            let tokens_mul_bigint = token0_amount_bigint * token1_amount_bigint;
+            Ok(Amount::from_attos(
+                BigUint::sqrt(&tokens_mul_bigint)
+                    .to_u128()
+                    .expect("Couldn't convert BigUint shares to u128"),
+            ))
+        } else {
+            let total_shares_supply_bigint =
+                BigUint::from_u128(u128::from(*self.state.total_shares_supply.get()))
+                    .expect("Converting total_shares_supply to BigUint should not fail!");
+            Ok(Amount::from_attos(
+                ((token0_amount_bigint * total_shares_supply_bigint.clone()) / balance0_bigint)
+                    .to_u128()
+                    .expect("Couldn't convert BigUint shares to u128"),
+            ))
+        }
+    }
+
+    fn get_amm_app_owner(&mut self) -> AccountOwner {
+        AccountOwner::Application(self.runtime.application_id().forget_abi())
+    }
+
+    fn get_amm_chain_id(&mut self) -> ChainId {
+        self.runtime.application_id().creation.chain_id
+    }
+
+    fn get_amm_account(&mut self) -> Account {
+        Account {
+            chain_id: self.get_amm_chain_id(),
+            owner: self.get_amm_app_owner(),
+        }
+    }
+
+    fn get_message_creation_chain_id(&mut self) -> ChainId {
+        self.runtime
+            .message_id()
+            .expect("Getting message id should not fail")
+            .chain_id
+    }
+
+    fn get_message_origin_account(&mut self, owner: AccountOwner) -> Account {
+        Account {
+            chain_id: self.get_message_creation_chain_id(),
+            owner,
+        }
+    }
+
+    fn get_account_on_amm_chain(&mut self, owner: AccountOwner) -> Account {
+        Account {
+            chain_id: self.get_amm_chain_id(),
+            owner,
+        }
+    }
+
+    fn execute_order_local(&mut self, operation: Operation) -> Result<(), AmmError> {
+        match operation {
+            Operation::Swap {
+                owner: _,
+                input_token_idx: _,
+                input_amount: _,
+            } => Err(AmmError::SwappingLocally),
+
+            Operation::AddLiquidity {
+                owner: _,
+                max_token0_amount: _,
+                max_token1_amount: _,
+            } => Err(AmmError::AddingLiquidityLocally),
+
+            Operation::RemoveLiquidity {
+                owner: _,
+                token_to_remove_idx: _,
+                token_to_remove_amount: _,
+            } => Err(AmmError::RemovingLiquidityLocally),
+
+            Operation::RemoveAllAddedLiquidity { owner: _ } => {
+                Err(AmmError::RemovingLiquidityLocally)
+            }
+        }
+    }
+
+    async fn execute_order_remote(&mut self, operation: Operation) -> Result<(), AmmError> {
         match operation {
             Operation::Swap {
                 owner,
                 input_token_idx,
                 input_amount,
             } => {
-                let chain_id = self.runtime.application_id().creation.chain_id;
+                self.check_account_authentication(owner)?;
+
+                let account_on_amm_chain = self.get_account_on_amm_chain(owner);
+                self.transfer(owner, input_amount, account_on_amm_chain, input_token_idx);
+
                 let message = Message::Swap {
                     owner,
                     input_token_idx,
                     input_amount,
                 };
+
                 self.runtime
                     .prepare_message(message)
                     .with_authentication()
-                    .send_to(chain_id);
+                    .send_to(self.get_amm_chain_id());
+
+                Ok(())
             }
+
             Operation::AddLiquidity {
-                owner: _,
-                max_token0_amount: _,
-                max_token1_amount: _,
+                owner,
+                max_token0_amount,
+                max_token1_amount,
             } => {
-                return Err(AmmError::AddingLiquidityFromRemoteChain);
+                self.check_account_authentication(owner)?;
+
+                let account_on_amm_chain = self.get_account_on_amm_chain(owner);
+                self.transfer(owner, max_token0_amount, account_on_amm_chain, 0);
+                self.transfer(owner, max_token1_amount, account_on_amm_chain, 1);
+
+                let message = Message::AddLiquidity {
+                    owner,
+                    max_token0_amount,
+                    max_token1_amount,
+                };
+                self.runtime
+                    .prepare_message(message)
+                    .with_authentication()
+                    .send_to(self.get_amm_chain_id());
+
+                Ok(())
             }
+
+            // When removing liquidity, you'll specify one of the tokens you want to
+            // remove and the amount, and we'll calculate the amount for the other token that
+            // we'll remove based on the current ratio, and remove them.
             Operation::RemoveLiquidity {
-                owner: _,
-                token_to_remove_idx: _,
-                token_to_remove_amount: _,
+                owner,
+                token_to_remove_idx,
+                token_to_remove_amount,
             } => {
-                return Err(AmmError::RemovingLiquidityFromRemoteChain);
+                self.check_account_authentication(owner)?;
+
+                let message = Message::RemoveLiquidity {
+                    owner,
+                    token_to_remove_idx,
+                    token_to_remove_amount,
+                };
+                self.runtime
+                    .prepare_message(message)
+                    .with_authentication()
+                    .send_to(self.get_amm_chain_id());
+
+                Ok(())
+            }
+
+            Operation::RemoveAllAddedLiquidity { owner } => {
+                self.check_account_authentication(owner)?;
+
+                let message = Message::RemoveAllAddedLiquidity { owner };
+                self.runtime
+                    .prepare_message(message)
+                    .with_authentication()
+                    .send_to(self.get_amm_chain_id());
+
+                Ok(())
             }
         }
-
-        Ok(())
     }
 
     fn calculate_output_amount(
@@ -357,18 +642,19 @@ impl AmmContract {
 
     fn transfer(
         &mut self,
-        owner: &AccountOwner,
+        source_owner: AccountOwner,
         amount: Amount,
         target_account: Account,
         token_idx: u32,
     ) {
-        let transfer = fungible::Operation::Transfer {
-            owner: *owner,
+        let token = self.fungible_id(token_idx);
+        let operation = fungible::Operation::Transfer {
+            owner: source_owner,
             amount,
             target_account,
         };
-        let token = self.fungible_id(token_idx);
-        self.runtime.call_application(true, token, &transfer);
+
+        self.runtime.call_application(true, token, &operation);
     }
 
     fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Result<Amount, AmmError> {
@@ -378,22 +664,5 @@ impl AmmContract {
             fungible::FungibleResponse::Balance(balance) => Ok(balance),
             response => Err(AmmError::UnexpectedFungibleResponse(response)),
         }
-    }
-
-    fn receive_from_account(&mut self, owner: &AccountOwner, token_idx: u32, amount: Amount) {
-        let destination = Account {
-            chain_id: self.runtime.chain_id(),
-            owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
-        };
-        self.transfer(owner, amount, destination, token_idx);
-    }
-
-    fn send_to(&mut self, owner: &AccountOwner, token_idx: u32, amount: Amount) {
-        let destination = Account {
-            chain_id: self.runtime.chain_id(),
-            owner: *owner,
-        };
-        let owner_app = AccountOwner::Application(self.runtime.application_id().forget_abi());
-        self.transfer(&owner_app, amount, destination, token_idx);
     }
 }

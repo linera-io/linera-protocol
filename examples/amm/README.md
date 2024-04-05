@@ -8,11 +8,10 @@ be adding/removing liquidity and also performing a swap.
 
 # How it works
 
-It supports the following operations.
+It supports the following operations. All operations need to be executed remotely.
 
 - Swap: For a given input token and an input amount, it swaps that token amount for an
-amount of the other token calculated based on the current AMM ratio. Note: The `Swap` operations
-need to be performed from a remote chain.
+amount of the other token calculated based on the current AMM ratio.
 
 - Add Liquidity: This operation allows adding liquidity to the AMM. Given a maximum
 `token0` and `token1` amount that you're willing to add, it adds liquidity such that you'll be
@@ -51,10 +50,12 @@ We use the test-only CLI option `--testing-prng-seed` to make keys deterministic
 explanation.
 
 ```bash
-OWNER_1=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f
+OWNER_1=65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f
 OWNER_2=90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f
-CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
+CHAIN_1=dad01517c7a3c428ea903253a9e59964e8db06d323a9bd3f4c74d6366832bdbf
 CHAIN_2=e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3
+CHAIN_AMM=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
+OWNER_AMM=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f
 ```
 
 Now we have to publish and create the fungible applications. The flag `--wait-for-outgoing-messages` waits until a quorum of validators has confirmed that all sent cross-chain messages have been delivered.
@@ -65,8 +66,7 @@ Now we have to publish and create the fungible applications. The flag `--wait-fo
 FUN1_APP_ID=$(linera --wait-for-outgoing-messages \
   publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
     --json-argument "{ \"accounts\": {
-        \"User:$OWNER_1\": \"100.\",
-        \"User:$OWNER_2\": \"150.\"
+        \"User:$OWNER_AMM\": \"100.\"
     } }" \
     --json-parameters "{ \"ticker_symbol\": \"FUN1\" }" \
 )
@@ -74,8 +74,7 @@ FUN1_APP_ID=$(linera --wait-for-outgoing-messages \
 FUN2_APP_ID=$(linera --wait-for-outgoing-messages \
   publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
     --json-argument "{ \"accounts\": {
-        \"User:$OWNER_1\": \"100.\",
-        \"User:$OWNER_2\": \"150.\"
+        \"User:$OWNER_AMM\": \"100.\"
     } }" \
     --json-parameters "{ \"ticker_symbol\": \"FUN2\" }" \
 )
@@ -98,6 +97,79 @@ linera service --port $PORT &
 
 ### Using GraphiQL
 
+To properly setup the tokens in the proper chains, we need to do some transfer operations:
+
+- Transfer 50 FUN1 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain
+```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID
+    mutation {
+        transfer(
+            owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            amount: "50.",
+            targetAccount: {
+                chainId: "dad01517c7a3c428ea903253a9e59964e8db06d323a9bd3f4c74d6366832bdbf",
+                owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
+            }
+        )
+    }
+```
+
+- Transfer 50 FUN1 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_2` in `$CHAIN_2`, so they're in the proper chain
+```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID
+    mutation {
+        transfer(
+            owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            amount: "50.",
+            targetAccount: {
+                chainId: "e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3",
+                owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
+            }
+        )
+    }
+```
+
+- Transfer 50 FUN2 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain
+```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID
+    mutation {
+        transfer(
+            owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            amount: "50.",
+            targetAccount: {
+                chainId: "dad01517c7a3c428ea903253a9e59964e8db06d323a9bd3f4c74d6366832bdbf",
+                owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
+            }
+        )
+    }
+```
+
+- Transfer 50 FUN2 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_2` in `$CHAIN_2`, so they're in the proper chain
+```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID
+    mutation {
+        transfer(
+            owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            amount: "50.",
+            targetAccount: {
+                chainId: "e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3",
+                owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
+            }
+        )
+    }
+```
+
+All operations can only be from a remote chain i.e. other than the chain on which `AMM` is deployed to.
+We can do it from GraphiQL by performing the `requestApplication` mutation so that we can perform the
+operation from the chain.
+
+```gql,uri=http://localhost:8080
+mutation {
+  requestApplication (
+    chainId:"dad01517c7a3c428ea903253a9e59964e8db06d323a9bd3f4c74d6366832bdbf",
+    applicationId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65080000000000000000000000",
+    targetChainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+  )
+}
+```
+Note: The above mutation has to be performed from `http://localhost:8080`.
+
 Before performing any operation we need to provide liquidity to it, so we will use the `AddLiquidity` operation,
 navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID`.
 
@@ -108,18 +180,14 @@ mutation {
   operation(
     operation: {
       AddLiquidity: {
-        owner:"User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+        owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
         max_token0_amount: "50",
-        max_token1_amount: "40",
+        max_token1_amount: "50",
       }
     }
   )
 }
 ```
-
-We can only perform `Swap` from a remote chain i.e. other than the chain on which `AMM` is deployed to,
-we can do it from GraphiQL by performing the `requestApplication` mutation so that we can perform the
-`Swap` operation from the chain.
 
 ```gql,uri=http://localhost:8080
 mutation {
@@ -132,7 +200,7 @@ mutation {
 ```
 Note: The above mutation has to be performed from `http://localhost:8080`.
 
-Now to perform `Swap` operation, navigate to `http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID` and
+To perform `Swap` operation, navigate to `http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID` and
 perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID
@@ -140,7 +208,7 @@ mutation {
   operation(
     operation: {
       Swap: {
-        owner:"User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
+        owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
         input_token_idx: 1,
         input_amount: "1",
       }
@@ -149,17 +217,32 @@ mutation {
 }
 ```
 
-We can also perform the `RemoveLiquidity` operation, navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID` and
+To perform the `RemoveLiquidity` operation, navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID` and
 perform the following mutation:
 
-```gql
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
 mutation {
   operation(
     operation: {
       RemoveLiquidity: {
-        owner:"User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+        owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
         token_to_remove_idx: 1,
         token_to_remove_amount: "1",
+      }
+    }
+  )
+}
+```
+
+To perform the `RemoveAllAddedLiquidity` operation, navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID` and
+perform the following mutation:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
+mutation {
+  operation(
+    operation: {
+      RemoveAllAddedLiquidity: {
+        owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
       }
     }
   )
