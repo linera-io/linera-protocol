@@ -17,29 +17,12 @@ import {
 } from "@chatscope/chat-ui-kit-react";
 
 const PROMPT = gql`
-query Prompt($prompt: string) {
+query Prompt($prompt: String) {
   prompt(prompt: $prompt)
 }
 `;
 
-function Prompt(prompt) {
-    let {
-        data: data,
-        called: called,
-        error: error
-    } = useQuery(PROMPT, {
-        fetchPolicy: "network-only",
-        variables: {prompt: `${prompt}`},
-    });
-
-    if (error != null) {
-        console.log(error);
-    }
-
-    return data;
-}
-
-function handleSend(message, messages, setMessages, setTypingIndicator) {
+function handleSend(message, messages, setMessages, setTypingIndicator, doPrompt) {
     setMessages([...messages, {
         props: {
             model: {
@@ -51,6 +34,7 @@ function handleSend(message, messages, setMessages, setTypingIndicator) {
         }
     }]);
     setTypingIndicator(<TypingIndicator content="LineraGPT is thinking..."/>)
+    doPrompt({variables: {prompt: message}});
 }
 
 function Chat({chainId}) {
@@ -68,6 +52,32 @@ function Chat({chainId}) {
     ;
     const [messages, setMessages] = useState(initial_messages);
     const [typingIndicator, setTypingIndicator] = useState(null);
+
+    const [doPrompt,
+        {
+            data,
+            loading,
+            error
+        }
+    ] = useLazyQuery(PROMPT, {
+        fetchPolicy: "network-only",
+        onCompleted: (data) => {
+            setMessages([...messages, {
+                props: {
+                    model: {
+                        message: data.prompt.replace(/\n/g, ''),
+                        sender: "LineraGPT",
+                        direction: "incoming",
+                        position: "single"
+                    }
+                }
+            }]);
+            setTypingIndicator(null)
+        },
+        onError: (error) => {
+            console.log(error)
+        }
+    });
 
     return (
         <div>
@@ -88,7 +98,7 @@ function Chat({chainId}) {
                         {messages.map((m, i) => <Message key={i} {...m.props} />)}
                     </MessageList>
                     <MessageInput placeholder="Type message here"
-                                  onSend={(innerHtml, textContent, innerText, nodes) => handleSend(textContent, messages, setMessages, setTypingIndicator)}/>
+                                  onSend={(innerHtml, textContent, innerText, nodes) => handleSend(textContent, messages, setMessages, setTypingIndicator, doPrompt)}/>
                 </ChatContainer>
             </MainContainer>
         </div>
