@@ -49,11 +49,12 @@ async fn test_inbox_add_then_remove_skippable() {
     let hash = CryptoHash::test_hash("1");
     let mut view = InboxStateView::new().await;
     // Add one event.
-    view.add_event(make_event(hash, 0, 0, [0])).await.unwrap();
+    assert!(view.add_event(make_event(hash, 0, 0, [0])).await.unwrap());
     // Remove the same event
-    view.remove_event(&make_event(hash, 0, 0, [0]))
+    assert!(view
+        .remove_event(&make_event(hash, 0, 0, [0]))
         .await
-        .unwrap();
+        .unwrap());
     // Fail to add an old event.
     assert_matches!(
         view.add_event(make_event(hash, 0, 0, [0])).await,
@@ -65,23 +66,24 @@ async fn test_inbox_add_then_remove_skippable() {
         Err(InboxError::IncorrectOrder { .. })
     );
     // Add two more events.
-    view.add_event(make_event(hash, 0, 1, [1])).await.unwrap();
-    view.add_event(make_event(hash, 1, 0, [2])).await.unwrap();
+    assert!(view.add_event(make_event(hash, 0, 1, [1])).await.unwrap());
+    assert!(view.add_event(make_event(hash, 1, 0, [2])).await.unwrap());
     // Fail to remove non-matching event.
     assert_matches!(
         view.remove_event(&make_event(hash, 0, 1, [0])).await,
         Err(InboxError::UnexpectedEvent { .. })
     );
-    // Fail to remove non-matching even (hash).
+    // Fail to remove non-matching event (hash).
     assert_matches!(
         view.remove_event(&make_event(CryptoHash::test_hash("2"), 0, 1, [1]))
             .await,
         Err(InboxError::UnexpectedEvent { .. })
     );
     // OK to skip events.
-    view.remove_event(&make_event(hash, 1, 0, [2]))
+    assert!(view
+        .remove_event(&make_event(hash, 1, 0, [2]))
         .await
-        .unwrap();
+        .unwrap());
     // Inbox is empty again.
     assert_eq!(view.added_events.count(), 0);
     assert_eq!(view.removed_events.count(), 0);
@@ -92,11 +94,12 @@ async fn test_inbox_remove_then_add_skippable() {
     let hash = CryptoHash::test_hash("1");
     let mut view = InboxStateView::new().await;
     // Remove one event by anticipation.
-    view.remove_event(&make_event(hash, 0, 0, [0]))
+    assert!(!view
+        .remove_event(&make_event(hash, 0, 0, [0]))
         .await
-        .unwrap();
+        .unwrap());
     // Add the same event
-    view.add_event(make_event(hash, 0, 0, [0])).await.unwrap();
+    assert!(!view.add_event(make_event(hash, 0, 0, [0])).await.unwrap());
     // Fail to remove an old event.
     assert_matches!(
         view.remove_event(&make_event(hash, 0, 0, [0])).await,
@@ -108,12 +111,14 @@ async fn test_inbox_remove_then_add_skippable() {
         Err(InboxError::IncorrectOrder { .. })
     );
     // Remove two more events.
-    view.remove_event(&make_event(hash, 0, 1, [1]))
+    assert!(!view
+        .remove_event(&make_event(hash, 0, 1, [1]))
         .await
-        .unwrap();
-    view.remove_event(&make_event(hash, 1, 1, [3]))
+        .unwrap());
+    assert!(!view
+        .remove_event(&make_event(hash, 1, 1, [3]))
         .await
-        .unwrap();
+        .unwrap());
     // Fail to add non-matching event.
     assert_matches!(
         view.add_event(make_event(hash, 0, 1, [0])).await,
@@ -131,15 +136,15 @@ async fn test_inbox_remove_then_add_skippable() {
         Err(InboxError::UnexpectedEvent { .. })
     );
     // OK to backfill the two consumed events, with one skippable event in the middle.
-    view.add_event(make_event(hash, 0, 1, [1])).await.unwrap();
+    assert!(!view.add_event(make_event(hash, 0, 1, [1])).await.unwrap());
     // Cannot add an unskippable event that was visibly skipped already.
     assert_matches!(
         view.add_event(make_unskippable_event(hash, 1, 0, [2]))
             .await,
         Err(InboxError::UnexpectedEvent { .. })
     );
-    view.add_event(make_event(hash, 1, 0, [2])).await.unwrap();
-    view.add_event(make_event(hash, 1, 1, [3])).await.unwrap();
+    assert!(!view.add_event(make_event(hash, 1, 0, [2])).await.unwrap());
+    assert!(!view.add_event(make_event(hash, 1, 1, [3])).await.unwrap());
     // Inbox is empty again.
     assert_eq!(view.added_events.count(), 0);
     assert_eq!(view.removed_events.count(), 0);
@@ -150,13 +155,15 @@ async fn test_inbox_add_then_remove_unskippable() {
     let hash = CryptoHash::test_hash("1");
     let mut view = InboxStateView::new().await;
     // Add one event.
-    view.add_event(make_unskippable_event(hash, 0, 0, [0]))
+    assert!(view
+        .add_event(make_unskippable_event(hash, 0, 0, [0]))
         .await
-        .unwrap();
+        .unwrap());
     // Remove the same event
-    view.remove_event(&make_unskippable_event(hash, 0, 0, [0]))
+    assert!(view
+        .remove_event(&make_unskippable_event(hash, 0, 0, [0]))
         .await
-        .unwrap();
+        .unwrap());
     // Fail to add an old event.
     assert_matches!(
         view.add_event(make_unskippable_event(hash, 0, 0, [0]))
@@ -170,12 +177,14 @@ async fn test_inbox_add_then_remove_unskippable() {
         Err(InboxError::IncorrectOrder { .. })
     );
     // Add two more events.
-    view.add_event(make_unskippable_event(hash, 0, 1, [1]))
+    assert!(view
+        .add_event(make_unskippable_event(hash, 0, 1, [1]))
         .await
-        .unwrap();
-    view.add_event(make_unskippable_event(hash, 1, 0, [2]))
+        .unwrap());
+    assert!(view
+        .add_event(make_unskippable_event(hash, 1, 0, [2]))
         .await
-        .unwrap();
+        .unwrap());
     // Fail to remove non-matching event.
     assert_matches!(
         view.remove_event(&make_unskippable_event(hash, 0, 1, [0]))
@@ -199,12 +208,14 @@ async fn test_inbox_add_then_remove_unskippable() {
         Err(InboxError::UnskippableEvent {event })
         if event == make_unskippable_event(hash, 0, 1, [1])
     );
-    view.remove_event(&make_unskippable_event(hash, 0, 1, [1]))
+    assert!(view
+        .remove_event(&make_unskippable_event(hash, 0, 1, [1]))
         .await
-        .unwrap();
-    view.remove_event(&make_unskippable_event(hash, 1, 0, [2]))
+        .unwrap());
+    assert!(view
+        .remove_event(&make_unskippable_event(hash, 1, 0, [2]))
         .await
-        .unwrap();
+        .unwrap());
     // Inbox is empty again.
     assert_eq!(view.added_events.count(), 0);
     assert_eq!(view.removed_events.count(), 0);
@@ -215,13 +226,15 @@ async fn test_inbox_remove_then_add_unskippable() {
     let hash = CryptoHash::test_hash("1");
     let mut view = InboxStateView::new().await;
     // Remove one event by anticipation.
-    view.remove_event(&make_unskippable_event(hash, 0, 0, [0]))
+    assert!(!view
+        .remove_event(&make_unskippable_event(hash, 0, 0, [0]))
         .await
-        .unwrap();
+        .unwrap());
     // Add the same event
-    view.add_event(make_unskippable_event(hash, 0, 0, [0]))
+    assert!(!view
+        .add_event(make_unskippable_event(hash, 0, 0, [0]))
         .await
-        .unwrap();
+        .unwrap());
     // Fail to remove an old event.
     assert_matches!(
         view.remove_event(&make_unskippable_event(hash, 0, 0, [0]))
@@ -235,12 +248,14 @@ async fn test_inbox_remove_then_add_unskippable() {
         Err(InboxError::IncorrectOrder { .. })
     );
     // Remove two more events.
-    view.remove_event(&make_unskippable_event(hash, 0, 1, [1]))
+    assert!(!view
+        .remove_event(&make_unskippable_event(hash, 0, 1, [1]))
         .await
-        .unwrap();
-    view.remove_event(&make_unskippable_event(hash, 1, 1, [3]))
+        .unwrap());
+    assert!(!view
+        .remove_event(&make_unskippable_event(hash, 1, 1, [3]))
         .await
-        .unwrap();
+        .unwrap());
     // Fail to add non-matching event.
     assert_matches!(
         view.add_event(make_unskippable_event(hash, 0, 1, [0]))
@@ -265,18 +280,20 @@ async fn test_inbox_remove_then_add_unskippable() {
         Err(InboxError::UnexpectedEvent { .. })
     );
     // OK to add the two events.
-    view.add_event(make_unskippable_event(hash, 0, 1, [1]))
+    assert!(!view
+        .add_event(make_unskippable_event(hash, 0, 1, [1]))
         .await
-        .unwrap();
+        .unwrap());
     // Cannot add an unskippable event that was visibly skipped already.
     assert_matches!(
         view.add_event(make_unskippable_event(hash, 1, 0, [2]))
             .await,
         Err(InboxError::UnexpectedEvent { .. })
     );
-    view.add_event(make_unskippable_event(hash, 1, 1, [3]))
+    assert!(!view
+        .add_event(make_unskippable_event(hash, 1, 1, [3]))
         .await
-        .unwrap();
+        .unwrap());
     // Inbox is empty again.
     assert_eq!(view.added_events.count(), 0);
     assert_eq!(view.removed_events.count(), 0);
@@ -287,10 +304,11 @@ async fn test_inbox_add_then_remove_mixed() {
     let hash = CryptoHash::test_hash("1");
     let mut view = InboxStateView::new().await;
     // Add two events.
-    view.add_event(make_unskippable_event(hash, 0, 1, [1]))
+    assert!(view
+        .add_event(make_unskippable_event(hash, 0, 1, [1]))
         .await
-        .unwrap();
-    view.add_event(make_event(hash, 1, 0, [2])).await.unwrap();
+        .unwrap());
+    assert!(view.add_event(make_event(hash, 1, 0, [2])).await.unwrap());
     // Fail to remove non-matching event (skippability).
     assert_matches!(
         view.remove_event(&make_event(hash, 0, 1, [1])).await,
@@ -313,12 +331,14 @@ async fn test_inbox_add_then_remove_mixed() {
         Err(InboxError::UnskippableEvent { event })
         if event == make_unskippable_event(hash, 0, 1, [1])
     );
-    view.remove_event(&make_unskippable_event(hash, 0, 1, [1]))
+    assert!(view
+        .remove_event(&make_unskippable_event(hash, 0, 1, [1]))
         .await
-        .unwrap();
-    view.remove_event(&make_event(hash, 1, 0, [2]))
+        .unwrap());
+    assert!(view
+        .remove_event(&make_event(hash, 1, 0, [2]))
         .await
-        .unwrap();
+        .unwrap());
     // Inbox is empty again.
     assert_eq!(view.added_events.count(), 0);
     assert_eq!(view.removed_events.count(), 0);
