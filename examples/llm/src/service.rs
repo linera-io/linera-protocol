@@ -4,23 +4,16 @@ mod random;
 mod state;
 mod token;
 
-use std::{io::Cursor, sync::Arc};
+use std::io::Cursor;
 
 use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Request, Response, Schema};
-use async_trait::async_trait;
-use candle_core::{
-    quantized::{ggml_file, gguf_file},
-    Device, Tensor,
-};
+use candle_core::{quantized::gguf_file, Device, Tensor};
 use candle_transformers::{
     generation::LogitsProcessor,
     models::{quantized_llama as model, quantized_llama::ModelWeights},
 };
-use linera_sdk::{
-    abi::ServiceAbi, base::WithServiceAbi, views::RegisterView, Service, ServiceRuntime,
-    ViewStateStorage,
-};
-use log::error;
+use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, ViewStateStorage};
+use log::{error, info};
 use thiserror::Error;
 use tokenizers::Tokenizer;
 
@@ -28,7 +21,6 @@ use self::state::Llm;
 use crate::token::TokenOutputStream;
 
 pub struct LlmService {
-    state: Llm,
     runtime: ServiceRuntime<Self>,
 }
 
@@ -51,8 +43,6 @@ impl QueryRoot {
 struct ModelContext {
     model: Vec<u8>,
     tokenizer: Vec<u8>,
-    /// Group query attention
-    gqa: usize,
 }
 
 impl Service for LlmService {
@@ -61,28 +51,25 @@ impl Service for LlmService {
     type State = Llm;
     type Parameters = ();
 
-    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(LlmService { state, runtime })
+    async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
+        Ok(LlmService { runtime })
     }
 
     async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
-        let prompt_string = &request.query; // TODO is this correct?
-        let raw_weights = self.runtime.fetch_url(
-            "http://localhost:10001/model.bin",
-        );
-        error!("got weights: {}B", raw_weights.len());
-        let tokenizer_bytes = self.runtime.fetch_url(
-            "http://localhost:10001/tokenizer.json",
-        );
+        let query_string = &request.query;
+        info!("query: {}", query_string);
+        let raw_weights = self.runtime.fetch_url("http://localhost:10001/model.bin");
+        info!("got weights: {}B", raw_weights.len());
+        let tokenizer_bytes = self
+            .runtime
+            .fetch_url("http://localhost:10001/tokenizer.json");
         let model_context = ModelContext {
             model: raw_weights,
             tokenizer: tokenizer_bytes,
-            gqa: 1,
         };
         let schema = Schema::build(QueryRoot {}, EmptyMutation, EmptySubscription)
             .data(model_context)
             .finish();
-        error!("prompt: {}", prompt_string);
         let response = schema.execute(request).await;
         return Ok(response);
     }
@@ -92,7 +79,7 @@ const SYSTEM_MESSAGE: &'static str =
     "You are LineraBot, a helpful chatbot for a company called Linera.";
 
 impl ModelContext {
-    fn load_model(&self, model_weights: Vec<u8>, gqa: usize) -> Result<ModelWeights, ServiceError> {
+    fn load_model(&self, model_weights: Vec<u8>) -> Result<ModelWeights, ServiceError> {
         let cursor = &mut Cursor::new(model_weights);
         let model_contents = gguf_file::Content::read(cursor).unwrap();
         let mut total_size_in_bytes = 0;
@@ -102,7 +89,7 @@ impl ModelContext {
                 elem_count * tensor.ggml_dtype.type_size() / tensor.ggml_dtype.block_size();
         }
 
-        error!(
+        info!(
             "loaded {:?} tensors ({}B) ",
             model_contents.tensor_infos.len(),
             total_size_in_bytes,
@@ -119,7 +106,6 @@ impl ModelContext {
     fn run_model(&self, prompt_string: &str) -> Result<String, ServiceError> {
         let raw_weights = &self.model;
         let tokenizer_bytes = &self.tokenizer;
-        let gqa = self.gqa;
         let prompt_string = format!(
             r#"
 <|system|>
@@ -131,11 +117,11 @@ impl ModelContext {
         );
 
         let mut output = String::new();
-        let mut model = self.load_model(raw_weights.clone(), gqa)?;
+        let mut model = self.load_model(raw_weights.clone())?;
 
         let tokenizer = Tokenizer::from_bytes(tokenizer_bytes)
             .map_err(|e| ServiceError::Tokenizer(format!("{}", e)))?;
-        error!("tokenizer: {:?}", tokenizer);
+        info!("tokenizer: {:?}", tokenizer);
         let mut token_output_stream = TokenOutputStream::new(tokenizer);
         let tokens = token_output_stream
             .tokenizer()
@@ -143,7 +129,7 @@ impl ModelContext {
             .map_err(|e| ServiceError::Tokenizer(format!("{}", e)))?;
 
         let prompt_tokens = tokens.get_ids().to_vec();
-        error!("prompt tokens: {:?}", prompt_tokens);
+        info!("prompt tokens: {:?}", prompt_tokens);
         let to_sample = 20usize.saturating_sub(1); // 1000 is the default value in candle example
         let prompt_tokens = if prompt_tokens.len() + to_sample > model::MAX_SEQ_LEN - 10 {
             let to_remove = prompt_tokens.len() + to_sample + 10 - model::MAX_SEQ_LEN;
@@ -174,11 +160,10 @@ impl ModelContext {
             .get_vocab(true)
             .get(eos_token)
             .unwrap();
-        let mut sampled = 0;
         let repeat_penatly = 1.1; // taken from candle example
         let repeat_last_n = 64; // taken from candle example
         for index in 0..to_sample {
-            error!("index: {}", index);
+            info!("index: {}", index);
             let input = Tensor::new(&[next_token], &Device::Cpu)?.unsqueeze(0)?;
             let logits = model.forward(&input, prompt_tokens.len() + index)?;
             let logits = logits.squeeze(0)?;
@@ -195,7 +180,6 @@ impl ModelContext {
             if let Some(t) = token_output_stream.next_token(next_token)? {
                 output.push_str(&t);
             }
-            sampled += 1;
             if next_token == eos_token {
                 break;
             };
