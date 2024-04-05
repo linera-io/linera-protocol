@@ -1,19 +1,19 @@
 import {useState} from "react";
 import {
     gql,
-    useMutation,
     useLazyQuery,
-    useSubscription, useQuery,
 } from "@apollo/client";
-import tw from "tailwind-styled-components";
 
+// eslint-disable-next-line
 import styles from "@chatscope/chat-ui-kit-styles/dist/default/styles.min.css";
+
+
 import {
     MainContainer,
     ChatContainer,
     MessageList,
     Message,
-    MessageInput, ConversationList, Conversation, Avatar, ConversationHeader, InputToolbox, TypingIndicator,
+    MessageInput, ConversationHeader, TypingIndicator,
 } from "@chatscope/chat-ui-kit-react";
 
 const PROMPT = gql`
@@ -53,12 +53,7 @@ function Chat({chainId}) {
     const [messages, setMessages] = useState(initial_messages);
     const [typingIndicator, setTypingIndicator] = useState(null);
 
-    const [doPrompt,
-        {
-            data,
-            loading,
-            error
-        }
+    const [doPrompt
     ] = useLazyQuery(PROMPT, {
         fetchPolicy: "network-only",
         onCompleted: (data) => {

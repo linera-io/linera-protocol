@@ -10,7 +10,6 @@ use self::state::Llm;
 
 pub struct LlmContract {
     state: Llm,
-    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(LlmContract);
@@ -28,8 +27,8 @@ impl Contract for LlmContract {
     type InitializationArgument = ();
     type Parameters = ();
 
-    async fn new(state: Llm, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(LlmContract { state, runtime })
+    async fn new(state: Llm, _runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
+        Ok(LlmContract { state })
     }
 
     fn state_mut(&mut self) -> &mut Self::State {

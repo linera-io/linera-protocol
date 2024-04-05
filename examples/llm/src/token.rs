@@ -20,10 +20,6 @@ impl TokenOutputStream {
         }
     }
 
-    pub fn into_inner(self) -> tokenizers::Tokenizer {
-        self.tokenizer
-    }
-
     fn decode(&self, tokens: &[u32]) -> Result<String> {
         match self.tokenizer.decode(tokens, true) {
             Ok(str) => Ok(str),
@@ -67,21 +63,7 @@ impl TokenOutputStream {
         }
     }
 
-    pub fn decode_all(&self) -> Result<String> {
-        self.decode(&self.tokens)
-    }
-
-    pub fn get_token(&self, token_s: &str) -> Option<u32> {
-        self.tokenizer.get_vocab(true).get(token_s).copied()
-    }
-
     pub fn tokenizer(&self) -> &tokenizers::Tokenizer {
         &self.tokenizer
-    }
-
-    pub fn clear(&mut self) {
-        self.tokens.clear();
-        self.prev_index = 0;
-        self.current_index = 0;
     }
 }
