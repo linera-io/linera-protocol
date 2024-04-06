@@ -6,6 +6,7 @@ mod common;
 
 use std::{collections::BTreeMap, env, path::PathBuf, time::Duration};
 
+use anyhow::Result;
 use assert_matches::assert_matches;
 use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
@@ -144,7 +145,7 @@ impl NonFungibleApp {
         STANDARD_NO_PAD.encode(token_id_vec.id)
     }
 
-    async fn get_nft(&self, token_id: &String) -> anyhow::Result<non_fungible::NftOutput> {
+    async fn get_nft(&self, token_id: &String) -> Result<non_fungible::NftOutput> {
         let query = format!(
             "nft(tokenId: {}) {{ tokenId, owner, name, minter, payload }}",
             token_id.to_value()
@@ -153,7 +154,7 @@ impl NonFungibleApp {
         Ok(serde_json::from_value(response_body["nft"].clone())?)
     }
 
-    async fn get_owned_nfts(&self, owner: &AccountOwner) -> anyhow::Result<Vec<String>> {
+    async fn get_owned_nfts(&self, owner: &AccountOwner) -> Result<Vec<String>> {
         let query = format!("ownedTokenIdsByOwner(owner: {})", owner.to_value());
         let response_body = self.0.query(&query).await?;
         Ok(serde_json::from_value(
@@ -2717,13 +2718,13 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) {
 
     let (mut tx1, mut rx) = mpsc::channel(8);
     let mut tx2 = tx1.clone();
-    let handle1: JoinHandle<Result<(), anyhow::Error>> = tokio::spawn(async move {
+    let handle1: JoinHandle<Result<()>> = tokio::spawn(async move {
         loop {
             client1.transfer(Amount::ONE, chain2, chain1).await?;
             tx1.send(()).await.unwrap();
         }
     });
-    let handle2: JoinHandle<Result<(), anyhow::Error>> = tokio::spawn(async move {
+    let handle2: JoinHandle<Result<()>> = tokio::spawn(async move {
         loop {
             client2.transfer(Amount::ONE, chain2, chain1).await?;
             tx2.send(()).await.unwrap();
