@@ -6,7 +6,9 @@
 
 use std::{collections::BTreeMap, iter, time::Duration};
 
+use linera_witty::{WitStore, WitType};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::{crypto::PublicKey, data_types::Round, doc_scalar, identifiers::Owner};
 
@@ -166,6 +168,14 @@ impl ChainOwnership {
         };
         Some(previous_round)
     }
+}
+
+/// Errors that can happen when attempting to close a chain.
+#[derive(Clone, Copy, Debug, Error, WitStore, WitType)]
+pub enum CloseChainError {
+    /// Authenticated signer wasn't allowed to close the chain.
+    #[error("Unauthorized attempt to close the chain")]
+    NotPermitted,
 }
 
 #[cfg(test)]
