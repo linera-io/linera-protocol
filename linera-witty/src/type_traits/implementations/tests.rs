@@ -202,6 +202,17 @@ fn btree_map() {
     );
 }
 
+/// Test roundtrip of [`log::Level`].
+#[cfg(with_log)]
+#[test]
+fn log_level() {
+    use log::Level::*;
+    for (index, level) in [Error, Warn, Info, Debug, Trace].into_iter().enumerate() {
+        test_memory_roundtrip(&level, &[index as u8], &[]);
+        test_flattening_roundtrip(&level, hlist![index as i32], &[]);
+    }
+}
+
 /// Test storing an instance of `T` to memory, checking that the `layout_data` bytes followed by
 /// the `heap_data` bytes are correctly written, and check that the instance can be loaded from
 /// those bytes.

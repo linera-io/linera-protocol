@@ -3806,6 +3806,7 @@ dependencies = [
  "frunk",
  "linera-witty",
  "linera-witty-macros",
+ "log",
  "test-case",
  "thiserror",
  "tracing",
