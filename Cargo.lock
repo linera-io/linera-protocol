@@ -3102,6 +3102,7 @@ dependencies = [
  "getrandom",
  "hex",
  "linera-base",
+ "linera-witty",
  "prometheus",
  "proptest",
  "rand",

@@ -4,10 +4,14 @@
 
 //! Define the cryptographic primitives used by the Linera protocol.
 
-use std::{num::ParseIntError, str::FromStr};
+use std::{borrow::Cow, num::ParseIntError, str::FromStr};
 
 use ed25519_dalek::{self as dalek, Signer, Verifier};
 use generic_array::typenum::Unsigned;
+use linera_witty::{
+    GuestPointer, HList, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
+    WitLoad, WitStore, WitType,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 #[cfg(with_testing)]
@@ -516,6 +520,81 @@ impl Signature {
                 type_name: T::type_name().to_string(),
             }
         })
+    }
+}
+
+impl WitType for CryptoHash {
+    const SIZE: u32 = <(u64, u64, u64, u64) as WitType>::SIZE;
+    type Layout = <(u64, u64, u64, u64) as WitType>::Layout;
+    type Dependencies = HList![];
+
+    fn wit_type_name() -> Cow<'static, str> {
+        "crypto-hash".into()
+    }
+
+    fn wit_type_declaration() -> Cow<'static, str> {
+        concat!(
+            "    record crypto-hash {\n",
+            "        part1: u64,\n",
+            "        part2: u64,\n",
+            "        part3: u64,\n",
+            "        part4: u64,\n",
+            "    }\n",
+        )
+        .into()
+    }
+}
+
+impl WitLoad for CryptoHash {
+    fn load<Instance>(
+        memory: &Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<Self, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let (part1, part2, part3, part4) = WitLoad::load(memory, location)?;
+        Ok(CryptoHash::from([part1, part2, part3, part4]))
+    }
+
+    fn lift_from<Instance>(
+        flat_layout: <Self::Layout as Layout>::Flat,
+        memory: &Memory<'_, Instance>,
+    ) -> Result<Self, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let (part1, part2, part3, part4) = WitLoad::lift_from(flat_layout, memory)?;
+        Ok(CryptoHash::from([part1, part2, part3, part4]))
+    }
+}
+
+impl WitStore for CryptoHash {
+    fn store<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<(), RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let [part1, part2, part3, part4] = (*self).into();
+        (part1, part2, part3, part4).store(memory, location)
+    }
+
+    fn lower<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+    ) -> Result<<Self::Layout as Layout>::Flat, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let [part1, part2, part3, part4] = (*self).into();
+        (part1, part2, part3, part4).lower(memory)
     }
 }
 
