@@ -1549,9 +1549,17 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 context.wallet_state().pretty_print(*chain_id);
                 Ok(())
             }
+
             WalletCommand::SetDefault { chain_id } => {
                 let mut context = ClientContext::from_options(&options)?;
                 context.wallet_state_mut().set_default_chain(*chain_id)?;
+                context.save_wallet();
+                Ok(())
+            }
+
+            WalletCommand::ForgetKeys { chain_id } => {
+                let mut context = ClientContext::from_options(&options)?;
+                context.wallet_state_mut().forget_keys(chain_id)?;
                 context.save_wallet();
                 Ok(())
             }
