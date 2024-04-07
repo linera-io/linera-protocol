@@ -6,14 +6,14 @@
 
 use std::{collections::BTreeMap, iter, time::Duration};
 
-use linera_witty::{WitStore, WitType};
+use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{crypto::PublicKey, data_types::Round, doc_scalar, identifiers::Owner};
 
 /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
-#[derive(PartialEq, Eq, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Hash, Debug, Serialize, Deserialize, WitLoad, WitStore, WitType)]
 pub struct TimeoutConfig {
     /// The duration of the fast round.
     pub fast_round_duration: Option<Duration>,
@@ -34,7 +34,9 @@ impl Default for TimeoutConfig {
 }
 
 /// Represents the owner(s) of a chain.
-#[derive(PartialEq, Eq, Clone, Hash, Debug, Default, Serialize, Deserialize)]
+#[derive(
+    PartialEq, Eq, Clone, Hash, Debug, Default, Serialize, Deserialize, WitLoad, WitStore, WitType,
+)]
 pub struct ChainOwnership {
     /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
     pub super_owners: BTreeMap<Owner, PublicKey>,
