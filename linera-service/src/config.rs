@@ -178,6 +178,13 @@ impl WalletState {
         chain.key_pair.take().context("Failed to take keypair")
     }
 
+    pub fn forget_chain(&mut self, chain_id: &ChainId) -> Result<UserChain, anyhow::Error> {
+        self.inner
+            .chains
+            .remove(chain_id)
+            .context(format!("Failed to remove chain: {}", chain_id))
+    }
+
     pub fn default_chain(&self) -> Option<ChainId> {
         self.inner.default
     }
