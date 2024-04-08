@@ -8,11 +8,9 @@
 
 #![allow(clippy::duplicate_mod)]
 
-use std::time::Duration;
-
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, Resources, SendMessageRequest},
+    data_types::{Amount, BlockHeight, Resources, SendMessageRequest, TimeDelta},
     identifiers::{Account, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -73,14 +71,14 @@ impl From<contract_system_api::PublicKey> for PublicKey {
 impl From<contract_system_api::TimeoutConfig> for TimeoutConfig {
     fn from(guest: contract_system_api::TimeoutConfig) -> TimeoutConfig {
         let contract_system_api::TimeoutConfig {
-            fast_round_duration_ms,
-            base_timeout_ms,
-            timeout_increment_ms,
+            fast_round_duration_us,
+            base_timeout_us,
+            timeout_increment_us,
         } = guest;
         TimeoutConfig {
-            fast_round_duration: fast_round_duration_ms.map(Duration::from_millis),
-            base_timeout: Duration::from_millis(base_timeout_ms),
-            timeout_increment: Duration::from_millis(timeout_increment_ms),
+            fast_round_duration: fast_round_duration_us.map(TimeDelta::from_micros),
+            base_timeout: TimeDelta::from_micros(base_timeout_us),
+            timeout_increment: TimeDelta::from_micros(timeout_increment_us),
         }
     }
 }

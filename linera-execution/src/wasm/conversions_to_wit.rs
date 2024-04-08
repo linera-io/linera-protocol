@@ -130,10 +130,9 @@ impl From<TimeoutConfig> for contract_system_api::TimeoutConfig {
             timeout_increment,
         } = host;
         Self {
-            fast_round_duration_ms: fast_round_duration
-                .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)),
-            base_timeout_ms: u64::try_from(base_timeout.as_millis()).unwrap_or(u64::MAX),
-            timeout_increment_ms: u64::try_from(timeout_increment.as_millis()).unwrap_or(u64::MAX),
+            fast_round_duration_us: fast_round_duration.map(|duration| duration.as_micros()),
+            base_timeout_us: base_timeout.as_micros(),
+            timeout_increment_us: timeout_increment.as_micros(),
         }
     }
 }
