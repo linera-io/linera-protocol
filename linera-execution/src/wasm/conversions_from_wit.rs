@@ -10,7 +10,7 @@
 
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, Duration, Resources, SendMessageRequest},
+    data_types::{Amount, BlockHeight, Resources, SendMessageRequest, TimeDelta},
     identifiers::{Account, BytecodeId, ChainId, MessageId, Owner},
 };
 
@@ -75,9 +75,9 @@ impl From<contract_system_api::TimeoutConfig> for TimeoutConfig {
             timeout_increment_us,
         } = guest;
         TimeoutConfig {
-            fast_round_duration: fast_round_duration_us.map(Duration::from_micros),
-            base_timeout: Duration::from_micros(base_timeout_us),
-            timeout_increment: Duration::from_micros(timeout_increment_us),
+            fast_round_duration: fast_round_duration_us.map(TimeDelta::from_micros),
+            base_timeout: TimeDelta::from_micros(base_timeout_us),
+            timeout_increment: TimeDelta::from_micros(timeout_increment_us),
         }
     }
 }

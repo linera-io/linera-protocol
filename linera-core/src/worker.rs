@@ -1098,7 +1098,7 @@ where
         // Write the values so that the bytecode is available during execution.
         self.storage.write_values(blobs).await?;
         let local_time = self.storage.current_time();
-        let time_till_block = block.timestamp.std_duration_since(local_time);
+        let time_till_block = block.timestamp.duration_since(local_time);
         ensure!(
             time_till_block <= self.grace_period,
             WorkerError::InvalidTimestamp

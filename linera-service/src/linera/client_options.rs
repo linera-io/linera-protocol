@@ -7,7 +7,7 @@ use anyhow::Error;
 use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::PublicKey,
-    data_types::Amount,
+    data_types::{Amount, TimeDelta},
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_core::client::MessagePolicy;
@@ -873,25 +873,25 @@ pub struct ChainOwnershipConfig {
     multi_leader_rounds: Option<u32>,
 
     /// The duration of the fast round, in milliseconds.
-    #[arg(long = "fast-round-ms", value_parser = util::parse_millis_linera)]
-    fast_round_duration: Option<linera_base::data_types::Duration>,
+    #[arg(long = "fast-round-ms", value_parser = util::parse_millis_delta)]
+    fast_round_duration: Option<TimeDelta>,
 
     /// The duration of the first single-leader and all multi-leader rounds.
     #[arg(
         long = "base-timeout-ms",
         default_value = "10000",
-        value_parser = util::parse_millis_linera
+        value_parser = util::parse_millis_delta
     )]
-    base_timeout: linera_base::data_types::Duration,
+    base_timeout: TimeDelta,
 
     /// The number of milliseconds by which the timeout increases after each
     /// single-leader round.
     #[arg(
         long = "timeout-increment-ms",
         default_value = "1000",
-        value_parser = util::parse_millis_linera
+        value_parser = util::parse_millis_delta
     )]
-    timeout_increment: linera_base::data_types::Duration,
+    timeout_increment: TimeDelta,
 }
 
 impl TryFrom<ChainOwnershipConfig> for ChainOwnership {

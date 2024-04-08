@@ -140,9 +140,9 @@ where
             if local_time < self.end_timestamp {
                 let full_duration = self
                     .end_timestamp
-                    .duration_since(self.start_timestamp)
+                    .delta_since(self.start_timestamp)
                     .as_micros();
-                let remaining_duration = self.end_timestamp.duration_since(local_time).as_micros();
+                let remaining_duration = self.end_timestamp.delta_since(local_time).as_micros();
                 let balance = client.local_balance().await?;
                 let Ok(remaining_balance) = balance.try_sub(self.amount) else {
                     return Err(Error::new("The faucet is empty."));

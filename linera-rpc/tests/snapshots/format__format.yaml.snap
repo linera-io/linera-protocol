@@ -348,8 +348,6 @@ Destination:
       Subscribers:
         NEWTYPE:
           TYPENAME: ChannelName
-Duration:
-  NEWTYPESTRUCT: U64
 Epoch:
   NEWTYPESTRUCT: U32
 Event:
@@ -906,15 +904,17 @@ SystemOperation:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation
+TimeDelta:
+  NEWTYPESTRUCT: U64
 TimeoutConfig:
   STRUCT:
     - fast_round_duration:
         OPTION:
-          TYPENAME: Duration
+          TYPENAME: TimeDelta
     - base_timeout:
-        TYPENAME: Duration
+        TYPENAME: TimeDelta
     - timeout_increment:
-        TYPENAME: Duration
+        TYPENAME: TimeDelta
 Timestamp:
   NEWTYPESTRUCT: U64
 UserApplicationDescription:

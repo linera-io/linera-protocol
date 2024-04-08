@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, iter};
 
 use linera_base::{
     crypto::PublicKey,
-    data_types::{Duration, Round},
+    data_types::{Round, TimeDelta},
     doc_scalar,
     identifiers::Owner,
 };
@@ -18,19 +18,19 @@ use serde::{Deserialize, Serialize};
 #[derive(PartialEq, Eq, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct TimeoutConfig {
     /// The duration of the fast round.
-    pub fast_round_duration: Option<Duration>,
+    pub fast_round_duration: Option<TimeDelta>,
     /// The duration of the first single-leader and all multi-leader rounds.
-    pub base_timeout: Duration,
+    pub base_timeout: TimeDelta,
     /// The duration by which the timeout increases after each single-leader round.
-    pub timeout_increment: Duration,
+    pub timeout_increment: TimeDelta,
 }
 
 impl Default for TimeoutConfig {
     fn default() -> Self {
         Self {
             fast_round_duration: None,
-            base_timeout: Duration::from_secs(10),
-            timeout_increment: Duration::from_secs(1),
+            base_timeout: TimeDelta::from_secs(10),
+            timeout_increment: TimeDelta::from_secs(1),
         }
     }
 }
@@ -98,7 +98,7 @@ impl ChainOwnership {
     }
 
     /// Returns the duration of the given round.
-    pub fn round_timeout(&self, round: Round) -> Option<Duration> {
+    pub fn round_timeout(&self, round: Round) -> Option<TimeDelta> {
         let tc = &self.timeout_config;
         match round {
             Round::Fast => tc.fast_round_duration,
@@ -190,32 +190,32 @@ mod tests {
             owners: BTreeMap::from_iter([(owner, (pub_key, 100))]),
             multi_leader_rounds: 10,
             timeout_config: TimeoutConfig {
-                fast_round_duration: Some(Duration::from_secs(5)),
-                base_timeout: Duration::from_secs(10),
-                timeout_increment: Duration::from_secs(1),
+                fast_round_duration: Some(TimeDelta::from_secs(5)),
+                base_timeout: TimeDelta::from_secs(10),
+                timeout_increment: TimeDelta::from_secs(1),
             },
         };
 
         assert_eq!(
             ownership.round_timeout(Round::Fast),
-            Some(Duration::from_secs(5))
+            Some(TimeDelta::from_secs(5))
         );
         assert_eq!(ownership.round_timeout(Round::MultiLeader(8)), None);
         assert_eq!(
             ownership.round_timeout(Round::MultiLeader(9)),
-            Some(Duration::from_secs(10))
+            Some(TimeDelta::from_secs(10))
         );
         assert_eq!(
             ownership.round_timeout(Round::SingleLeader(0)),
-            Some(Duration::from_secs(10))
+            Some(TimeDelta::from_secs(10))
         );
         assert_eq!(
             ownership.round_timeout(Round::SingleLeader(1)),
-            Some(Duration::from_secs(11))
+            Some(TimeDelta::from_secs(11))
         );
         assert_eq!(
             ownership.round_timeout(Round::SingleLeader(8)),
-            Some(Duration::from_secs(18))
+            Some(TimeDelta::from_secs(18))
         );
     }
 }

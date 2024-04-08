@@ -1999,7 +1999,7 @@ where
         owners: vec![(pub_key0, 100), (pub_key1, 100)],
         multi_leader_rounds: 10,
         timeout_config: TimeoutConfig {
-            fast_round_duration: Some(Duration::from_secs(5)),
+            fast_round_duration: Some(TimeDelta::from_secs(5)),
             ..TimeoutConfig::default()
         },
     }

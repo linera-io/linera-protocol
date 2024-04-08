@@ -18,7 +18,7 @@ use futures::{
 };
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
-    data_types::{Amount, ApplicationPermissions, Duration, Timestamp},
+    data_types::{Amount, ApplicationPermissions, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
     BcsHexParseError,
 };
@@ -436,9 +436,9 @@ where
         };
         let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
         let timeout_config = TimeoutConfig {
-            fast_round_duration: fast_round_ms.map(Duration::from_millis),
-            base_timeout: Duration::from_millis(base_timeout_ms),
-            timeout_increment: Duration::from_millis(timeout_increment_ms),
+            fast_round_duration: fast_round_ms.map(TimeDelta::from_millis),
+            base_timeout: TimeDelta::from_millis(base_timeout_ms),
+            timeout_increment: TimeDelta::from_millis(timeout_increment_ms),
         };
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds, timeout_config);
         let balance = balance.unwrap_or(Amount::ZERO);
@@ -511,9 +511,9 @@ where
             owners: new_public_keys.into_iter().zip(new_weights).collect(),
             multi_leader_rounds,
             timeout_config: TimeoutConfig {
-                fast_round_duration: fast_round_ms.map(Duration::from_millis),
-                base_timeout: Duration::from_millis(base_timeout_ms),
-                timeout_increment: Duration::from_millis(timeout_increment_ms),
+                fast_round_duration: fast_round_ms.map(TimeDelta::from_millis),
+                base_timeout: TimeDelta::from_millis(base_timeout_ms),
+                timeout_increment: TimeDelta::from_millis(timeout_increment_ms),
             },
         };
         self.execute_system_operation(operation, chain_id).await
@@ -1090,7 +1090,7 @@ pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: Round
     future::select(
         Box::pin(stream.next()),
         Box::pin(tokio::time::sleep(
-            timeout.timestamp.std_duration_since(Timestamp::now()),
+            timeout.timestamp.duration_since(Timestamp::now()),
         )),
     )
     .await;
