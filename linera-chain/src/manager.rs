@@ -69,9 +69,8 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
-    ownership::ChainOwnership,
 };
-use linera_execution::committee::Epoch;
+use linera_execution::{committee::Epoch, ChainOwnership};
 use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use rand_distr::{Distribution, WeightedAliasIndex};
 use serde::{Deserialize, Serialize};

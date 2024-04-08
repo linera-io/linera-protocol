@@ -15,7 +15,6 @@ use linera_base::{
     },
     ensure,
     identifiers::{Account, ChainId, ChannelName, MessageId, Owner},
-    ownership::ChainOwnership,
 };
 use linera_views::batch::Batch;
 use oneshot::Receiver;
@@ -25,8 +24,8 @@ use crate::{
     execution_state_actor::{ExecutionStateSender, Request},
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, FinalizeContext,
-    MessageContext, OperationContext, RawExecutionOutcome, ServiceRuntime,
+    BaseRuntime, ChainOwnership, ContractRuntime, ExecutionError, ExecutionOutcome,
+    FinalizeContext, MessageContext, OperationContext, RawExecutionOutcome, ServiceRuntime,
     UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
 };
 

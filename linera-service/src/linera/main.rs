@@ -21,7 +21,6 @@ use linera_base::{
     crypto::{CryptoHash, CryptoRng, PublicKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ChainDescription, ChainId, MessageId, Owner},
-    ownership::ChainOwnership,
 };
 use linera_chain::data_types::{CertificateValue, ExecutedBlock};
 use linera_core::{
@@ -35,7 +34,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     system::{SystemChannel, UserData},
-    Message, ResourceControlPolicy, SystemMessage,
+    ChainOwnership, Message, ResourceControlPolicy, SystemMessage,
 };
 use linera_service::{
     chain_listener::ClientContext as _,

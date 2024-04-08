@@ -15,7 +15,6 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, ArithmeticError, Timestamp},
     ensure, hex_debug,
     identifiers::{Account, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
-    ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_views::{
     common::Context,
@@ -36,9 +35,10 @@ use {
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
-    Destination, MessageContext, MessageKind, OperationContext, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
+    ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelName,
+    ChannelSubscription, Destination, MessageContext, MessageKind, OperationContext, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage, TimeoutConfig, UserApplicationDescription,
+    UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.

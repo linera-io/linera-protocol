@@ -7,12 +7,14 @@ use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
-    ownership::ChainOwnership,
 };
 use serde::Serialize;
 
-use super::{wit_system_api as wit, CloseChainError};
-use crate::Contract;
+use crate::{
+    contract::{wit_system_api as wit, CloseChainError},
+    ownership::ChainOwnership,
+    Contract,
+};
 
 /// The common runtime to interface with the host executing the contract.
 ///

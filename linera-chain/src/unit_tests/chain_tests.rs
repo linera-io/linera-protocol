@@ -8,14 +8,13 @@ use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, ApplicationPermissions, BlockHeight, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
-    ownership::ChainOwnership,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
     system::OpenChainConfig,
     test_utils::{ExpectedCall, MockApplication},
-    BytecodeLocation, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, SystemMessage,
-    TestExecutionRuntimeContext, UserApplicationDescription,
+    BytecodeLocation, ChainOwnership, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation,
+    SystemMessage, TestExecutionRuntimeContext, UserApplicationDescription,
 };
 use linera_views::{
     memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},

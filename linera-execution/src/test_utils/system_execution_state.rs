@@ -10,7 +10,6 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ApplicationId, ChainDescription, ChainId, Owner},
-    ownership::ChainOwnership,
 };
 use linera_views::{
     common::Context,
@@ -23,9 +22,10 @@ use crate::{
     committee::{Committee, Epoch},
     execution::UserAction,
     system::SystemChannel,
-    ChannelSubscription, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    ExecutionStateView, OperationContext, ResourceControlPolicy, ResourceController,
-    ResourceTracker, TestExecutionRuntimeContext, UserApplicationDescription, UserContractCode,
+    ChainOwnership, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, ExecutionStateView, OperationContext, ResourceControlPolicy,
+    ResourceController, ResourceTracker, TestExecutionRuntimeContext, UserApplicationDescription,
+    UserContractCode,
 };
 
 /// A system execution state, not represented as a view but as a simple struct.

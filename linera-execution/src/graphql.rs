@@ -8,14 +8,13 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     doc_scalar,
     identifiers::{ChainDescription, ChainId, Owner},
-    ownership::ChainOwnership,
 };
 use linera_views::{common::Context, map_view::MapView, views::ViewError};
 
 use crate::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
     system::{Recipient, UserData},
-    Bytecode, ChannelSubscription, ExecutionStateView, SystemExecutionStateView,
+    Bytecode, ChainOwnership, ChannelSubscription, ExecutionStateView, SystemExecutionStateView,
     UserApplicationDescription,
 };
 

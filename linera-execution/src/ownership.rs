@@ -6,14 +6,13 @@
 
 use std::{collections::BTreeMap, iter};
 
-use serde::{Deserialize, Serialize};
-
-use crate::{
+use linera_base::{
     crypto::PublicKey,
     data_types::{Duration, Round},
     doc_scalar,
     identifiers::Owner,
 };
+use serde::{Deserialize, Serialize};
 
 /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
 #[derive(PartialEq, Eq, Clone, Hash, Debug, Serialize, Deserialize)]
@@ -179,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_ownership_round_timeouts() {
-        use crate::crypto::KeyPair;
+        use linera_base::crypto::KeyPair;
 
         let super_pub_key = KeyPair::generate().public();
         let super_owner = Owner::from(super_pub_key);

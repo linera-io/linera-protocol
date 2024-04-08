@@ -25,7 +25,6 @@ use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{ChainDescription, ChainId, GenericApplicationId},
-    ownership::ChainOwnership,
 };
 use linera_chain::{
     data_types::{Certificate, ChannelFullName, HashedValue},
@@ -34,8 +33,9 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::SystemChannel,
-    ChannelSubscription, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime,
+    ChainOwnership, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, UserApplicationDescription, UserApplicationId, UserContractCode,
+    UserServiceCode, WasmRuntime,
 };
 use linera_views::{
     common::Context,

@@ -9,7 +9,6 @@ use futures::channel::mpsc;
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{Account, MessageId, Owner},
-    ownership::ChainOwnership,
 };
 #[cfg(with_metrics)]
 use linera_base::{
@@ -28,9 +27,9 @@ use prometheus::HistogramVec;
 use crate::{
     system::{OpenChainConfig, Recipient, UserData},
     util::RespondExt,
-    ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
-    RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserServiceCode,
+    ChainOwnership, ExecutionError, ExecutionRuntimeContext, ExecutionStateView,
+    RawExecutionOutcome, RawOutgoingMessage, SystemExecutionError, SystemMessage,
+    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };
 
 #[cfg(with_metrics)]

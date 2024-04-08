@@ -43,6 +43,7 @@ pub mod contract;
 mod extensions;
 pub mod graphql;
 mod log;
+pub mod ownership;
 pub mod service;
 #[cfg(feature = "test")]
 #[cfg_attr(not(target_arch = "wasm32"), path = "./test/integration/mod.rs")]

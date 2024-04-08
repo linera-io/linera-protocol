@@ -8,6 +8,7 @@ pub mod committee;
 mod execution;
 mod execution_state_actor;
 mod graphql;
+mod ownership;
 mod policy;
 mod resources;
 mod runtime;
@@ -39,9 +40,9 @@ use linera_base::{
         Account, BytecodeId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId,
         Owner,
     },
-    ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, views::ViewError};
+pub use ownership::{ChainOwnership, TimeoutConfig};
 pub use policy::ResourceControlPolicy;
 pub use resources::{ResourceController, ResourceTracker};
 use serde::{Deserialize, Serialize};

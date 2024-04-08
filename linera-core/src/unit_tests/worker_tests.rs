@@ -18,7 +18,6 @@ use linera_base::{
         Account, ChainDescription, ChainId, ChannelName, Destination, GenericApplicationId,
         MessageId, Owner,
     },
-    ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
     data_types::{
@@ -35,8 +34,8 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
     test_utils::SystemExecutionState,
-    ChannelSubscription, ExecutionError, Message, MessageKind, Query, Response,
-    SystemExecutionError, SystemQuery, SystemResponse,
+    ChainOwnership, ChannelSubscription, ExecutionError, Message, MessageKind, Query, Response,
+    SystemExecutionError, SystemQuery, SystemResponse, TimeoutConfig,
 };
 #[cfg(feature = "aws")]
 use linera_storage::DynamoDbStorage;

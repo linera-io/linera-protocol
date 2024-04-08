@@ -13,7 +13,6 @@ use linera_base::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, Owner},
-    ownership::ChainOwnership,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -22,8 +21,8 @@ use linera_execution::{
         create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
         SystemExecutionState,
     },
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, MessageKind, Operation,
-    OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
+    BaseRuntime, ChainOwnership, ContractRuntime, ExecutionError, ExecutionOutcome, MessageKind,
+    Operation, OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
     ResourceControlPolicy, ResourceController, Response, SystemOperation,
 };
 use linera_views::batch::Batch;

@@ -12,11 +12,10 @@ use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight, Duration, Resources, SendMessageRequest},
     identifiers::{Account, BytecodeId, ChainId, MessageId, Owner},
-    ownership::{ChainOwnership, TimeoutConfig},
 };
 
 use super::{contract_system_api, service_system_api};
-use crate::{ChannelName, Destination, UserApplicationId};
+use crate::{ChainOwnership, ChannelName, Destination, TimeoutConfig, UserApplicationId};
 
 impl From<contract_system_api::ApplicationId> for UserApplicationId {
     fn from(guest: contract_system_api::ApplicationId) -> Self {

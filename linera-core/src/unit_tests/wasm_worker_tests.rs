@@ -17,7 +17,6 @@ use linera_base::{
     identifiers::{
         BytecodeId, ChainDescription, ChainId, Destination, GenericApplicationId, MessageId,
     },
-    ownership::ChainOwnership,
 };
 use linera_chain::{
     data_types::{
@@ -30,8 +29,8 @@ use linera_execution::{
     committee::Epoch,
     system::{SystemChannel, SystemMessage, SystemOperation},
     test_utils::SystemExecutionState,
-    Bytecode, BytecodeLocation, ChannelSubscription, Message, MessageKind, Operation,
-    OperationContext, ResourceController, UserApplicationDescription, UserApplicationId,
+    Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, Message, MessageKind,
+    Operation, OperationContext, ResourceController, UserApplicationDescription, UserApplicationId,
     WasmContractModule, WasmRuntime,
 };
 #[cfg(feature = "aws")]

@@ -349,9 +349,7 @@ Destination:
         NEWTYPE:
           TYPENAME: ChannelName
 Duration:
-  STRUCT:
-    - secs: U64
-    - nanos: U32
+  NEWTYPESTRUCT: U64
 Epoch:
   NEWTYPESTRUCT: U32
 Event:

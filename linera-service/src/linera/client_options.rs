@@ -9,12 +9,11 @@ use linera_base::{
     crypto::PublicKey,
     data_types::Amount,
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
-    ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::client::MessagePolicy;
 use linera_execution::{
-    committee::ValidatorName, system::SystemChannel, UserApplicationId, WasmRuntime,
-    WithWasmDefault,
+    committee::ValidatorName, system::SystemChannel, ChainOwnership, TimeoutConfig,
+    UserApplicationId, WasmRuntime, WithWasmDefault,
 };
 use linera_service::{
     chain_listener::{ChainListenerConfig, ClientContext as _},
