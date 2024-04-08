@@ -117,6 +117,8 @@ pub struct ChainManager {
     pub pending: Option<Vote>,
     /// Latest timeout vote we cast.
     pub timeout_vote: Option<Vote>,
+    /// Fallback vote we cast.
+    pub fallback_vote: Option<Vote>,
     /// The time after which we are ready to sign a timeout certificate for the current round.
     pub round_timeout: Option<Timestamp>,
     /// The lowest round where we can still vote to validate or confirm a block. This is
@@ -192,6 +194,7 @@ impl ChainManager {
             leader_timeout: None,
             pending: None,
             timeout_vote: None,
+            fallback_vote: None,
             round_timeout,
             current_round,
             fallback_owners,
@@ -308,6 +311,29 @@ impl ChainManager {
         }
         let value = HashedValue::new_leader_timeout(chain_id, height, epoch);
         self.timeout_vote = Some(Vote::new(value, current_round, key_pair));
+        true
+    }
+
+    /// Signs a `LeaderTimeout` certificate to switch to fallback mode.
+    ///
+    /// This must only be called after verifying that the condition for fallback mode is
+    /// satisfied locally.
+    pub fn vote_fallback(
+        &mut self,
+        chain_id: ChainId,
+        height: BlockHeight,
+        epoch: Epoch,
+        key_pair: Option<&KeyPair>,
+    ) -> bool {
+        let Some(key_pair) = key_pair else {
+            return false; // We are not a validator.
+        };
+        if self.fallback_vote.is_some() || self.current_round >= Round::Validator(0) {
+            return false; // We already signed this or are already in fallback mode.
+        }
+        let value = HashedValue::new_leader_timeout(chain_id, height, epoch);
+        let last_regular_round = Round::SingleLeader(u32::MAX);
+        self.fallback_vote = Some(Vote::new(value, last_regular_round, key_pair));
         true
     }
 
@@ -532,6 +558,8 @@ pub struct ChainManagerInfo {
     pub pending: Option<LiteVote>,
     /// Latest timeout vote we cast.
     pub timeout_vote: Option<LiteVote>,
+    /// Fallback vote we cast.
+    pub fallback_vote: Option<LiteVote>,
     /// The value we voted for, if requested.
     pub requested_pending_value: Option<Box<HashedValue>>,
     /// The current round, i.e. the lowest round where we can still vote to validate a block.
@@ -553,6 +581,7 @@ impl From<&ChainManager> for ChainManagerInfo {
             leader_timeout: manager.leader_timeout.clone().map(Box::new),
             pending: manager.pending.as_ref().map(|vote| vote.lite()),
             timeout_vote: manager.timeout_vote.as_ref().map(Vote::lite),
+            fallback_vote: manager.fallback_vote.as_ref().map(Vote::lite),
             requested_pending_value: None,
             current_round,
             leader: manager.round_leader(current_round).cloned(),

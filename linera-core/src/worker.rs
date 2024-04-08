@@ -1244,6 +1244,25 @@ where
                 }
             }
         }
+        if query.request_fallback {
+            if let (Some(epoch), Some(entry)) = (
+                chain.execution_state.system.epoch.get(),
+                chain.unskippable.front().await?,
+            ) {
+                let ownership = chain.execution_state.system.ownership.get();
+                let elapsed = self.storage.current_time().delta_since(entry.seen);
+                if elapsed >= ownership.timeout_config.fallback_duration
+                    && chain.manager.get_mut().vote_fallback(
+                        query.chain_id,
+                        chain.tip_state.get().next_block_height,
+                        *epoch,
+                        self.key_pair(),
+                    )
+                {
+                    chain.save().await?;
+                }
+            }
+        }
         let mut info = ChainInfo::from(&chain);
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());

@@ -357,6 +357,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout: chain_info_query.request_leader_timeout,
+            request_fallback: chain_info_query.request_fallback,
             request_blob,
         })
     }
@@ -386,6 +387,7 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
                 .request_received_log_excluding_first_nth,
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout: chain_info_query.request_leader_timeout,
+            request_fallback: chain_info_query.request_fallback,
             request_blob,
         })
     }
@@ -642,6 +644,7 @@ pub mod tests {
             request_received_log_excluding_first_nth: None,
             request_manager_values: false,
             request_leader_timeout: false,
+            request_fallback: true,
             request_blob: None,
         };
         round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);
