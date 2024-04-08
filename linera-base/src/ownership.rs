@@ -92,9 +92,11 @@ impl ChainOwnership {
         self
     }
 
-    /// Returns whether there are any owners or super owners.
+    /// Returns whether there are any owners or super owners or it is a public chain.
     pub fn is_active(&self) -> bool {
-        !self.super_owners.is_empty() || !self.owners.is_empty()
+        !self.super_owners.is_empty()
+            || !self.owners.is_empty()
+            || self.timeout_config.fallback_duration == TimeDelta::ZERO
     }
 
     /// Returns the given owner's public key, if they are an owner or super owner.

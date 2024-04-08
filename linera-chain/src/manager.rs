@@ -64,6 +64,8 @@
 //! round. Then they download the highest `ValidatedBlock` certificate known to any honest validator
 //! and include that in their block proposal, just like in the cooperative case.
 
+use std::collections::BTreeMap;
+
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
@@ -101,6 +103,8 @@ pub struct ChainManager {
     pub seed: u64,
     /// The probability distribution for choosing a round leader.
     pub distribution: Option<WeightedAliasIndex<u64>>,
+    /// The probability distribution for choosing a fallback round leader.
+    pub fallback_distribution: Option<WeightedAliasIndex<u64>>,
     /// Highest-round authenticated block that we have received and checked. If there are multiple
     /// proposals in the same round, this contains only the first one.
     pub proposed: Option<BlockProposal>,
@@ -122,6 +126,8 @@ pub struct ChainManager {
     /// current. Seeing a validated block certificate or a valid proposal in any round causes that
     /// round to become current, unless a higher one already is.
     pub current_round: Round,
+    /// The owners that take over in fallback mode.
+    pub fallback_owners: BTreeMap<Owner, (PublicKey, u64)>,
 }
 
 doc_scalar!(
@@ -131,25 +137,39 @@ doc_scalar!(
 
 impl ChainManager {
     /// Replaces `self` with a new chain manager.
-    pub fn reset(
+    pub fn reset<'a>(
         &mut self,
         ownership: &ChainOwnership,
         height: BlockHeight,
         local_time: Timestamp,
+        fallback_owners: impl Iterator<Item = (PublicKey, u64)> + 'a,
     ) -> Result<(), ChainError> {
-        *self = ChainManager::new(ownership.clone(), height.0, local_time)?;
+        *self = ChainManager::new(ownership.clone(), height.0, local_time, fallback_owners)?;
         Ok(())
     }
 
     /// Creates a new `ChainManager`, and starts the first round.
-    fn new(
+    fn new<'a>(
         ownership: ChainOwnership,
         seed: u64,
         local_time: Timestamp,
+        fallback_owners: impl Iterator<Item = (PublicKey, u64)> + 'a,
     ) -> Result<Self, ChainError> {
         let distribution = if !ownership.owners.is_empty() {
             let weights = ownership
                 .owners
+                .values()
+                .map(|(_, weight)| *weight)
+                .collect();
+            Some(WeightedAliasIndex::new(weights)?)
+        } else {
+            None
+        };
+        let fallback_owners = fallback_owners
+            .map(|(pub_key, weight)| (Owner::from(pub_key), (pub_key, weight)))
+            .collect::<BTreeMap<_, _>>();
+        let fallback_distribution = if !fallback_owners.is_empty() {
+            let weights = fallback_owners
                 .values()
                 .map(|(_, weight)| *weight)
                 .collect();
@@ -166,6 +186,7 @@ impl ChainManager {
             ownership,
             seed,
             distribution,
+            fallback_distribution,
             proposed: None,
             locked: None,
             leader_timeout: None,
@@ -173,6 +194,7 @@ impl ChainManager {
             timeout_vote: None,
             round_timeout,
             current_round,
+            fallback_owners,
         })
     }
 

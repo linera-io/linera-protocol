@@ -616,11 +616,13 @@ where
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash().await?;
         self.execution_state_hash.set(Some(hash));
+        let maybe_committee = self.execution_state.system.current_committee().into_iter();
         // Last, reset the consensus state based on the current ownership.
         self.manager.get_mut().reset(
             self.execution_state.system.ownership.get(),
             BlockHeight(0),
             local_time,
+            maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights()),
         )?;
         Ok(true)
     }
@@ -922,10 +924,12 @@ where
         };
         self.execution_state_hash.set(Some(state_hash));
         // Last, reset the consensus state based on the current ownership.
+        let maybe_committee = self.execution_state.system.current_committee().into_iter();
         self.manager.get_mut().reset(
             self.execution_state.system.ownership.get(),
             block.height.try_add_one()?,
             local_time,
+            maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights()),
         )?;
 
         #[cfg(with_metrics)]
