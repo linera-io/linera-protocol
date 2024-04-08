@@ -198,27 +198,6 @@ impl ChainManager {
         })
     }
 
-    /// Returns the lowest round where we can still vote to validate or confirm a block. This is
-    /// the round to which the current timeout applies.
-    ///
-    /// Having a leader timeout certificate in any given round causes the next one to become
-    /// current. Seeing a validated block certificate or a valid proposal in any round causes that
-    /// round to become current, unless a higher one already is.
-    pub fn current_round(&self) -> Round {
-        self.leader_timeout
-            .iter()
-            .map(|certificate| {
-                self.ownership
-                    .next_round(certificate.round)
-                    .unwrap_or(Round::SingleLeader(u32::MAX))
-            })
-            .chain(self.locked.iter().map(|certificate| certificate.round))
-            .chain(self.proposed.iter().map(|proposal| proposal.content.round))
-            .max()
-            .unwrap_or_default()
-            .max(self.ownership.first_round())
-    }
-
     /// Returns the most recent vote we cast.
     pub fn pending(&self) -> Option<&Vote> {
         self.pending.as_ref()
@@ -441,7 +420,7 @@ impl ChainManager {
             .map(|certificate| {
                 self.ownership
                     .next_round(certificate.round)
-                    .unwrap_or(Round::SingleLeader(u32::MAX))
+                    .unwrap_or(Round::Validator(u32::MAX))
             })
             .chain(self.locked.iter().map(|certificate| certificate.round))
             .chain(self.proposed.iter().map(|proposal| proposal.content.round))
@@ -496,6 +475,11 @@ impl ChainManager {
                 let (leader, (public_key, _)) = self.ownership.owners.iter().nth(index)?;
                 (*leader == proposal.owner).then_some(*public_key)
             }
+            Round::Validator(r) => {
+                let index = self.fallback_round_leader_index(r)?;
+                let (leader, (public_key, _)) = self.fallback_owners.iter().nth(index)?;
+                (*leader == proposal.owner).then_some(*public_key)
+            }
         }
     }
 
@@ -515,6 +499,14 @@ impl ChainManager {
         let seed = u64::from(round).rotate_left(32).wrapping_add(self.seed);
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         Some(self.distribution.as_ref()?.sample(&mut rng))
+    }
+
+    /// Returns the index of the fallback leader who is allowed to propose a block in the given
+    /// round.
+    fn fallback_round_leader_index(&self, round: u32) -> Option<usize> {
+        let seed = u64::from(round).rotate_left(32).wrapping_add(self.seed);
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        Some(self.fallback_distribution.as_ref()?.sample(&mut rng))
     }
 
     /// Returns whether the owner is a super owner.

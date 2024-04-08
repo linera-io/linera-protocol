@@ -88,6 +88,8 @@ pub enum Round {
     MultiLeader(u32),
     /// The N-th single-leader round.
     SingleLeader(u32),
+    /// The N-th round where the validators rotate as leaders.
+    Validator(u32),
 }
 
 /// A duration in microseconds.
@@ -547,6 +549,7 @@ impl fmt::Display for Round {
             Round::Fast => write!(f, "fast round"),
             Round::MultiLeader(r) => write!(f, "multi-leader round {}", r),
             Round::SingleLeader(r) => write!(f, "single-leader round {}", r),
+            Round::Validator(r) => write!(f, "validator round {}", r),
         }
     }
 }
@@ -566,7 +569,7 @@ impl Round {
     pub fn number(&self) -> u32 {
         match self {
             Round::Fast => 0,
-            Round::MultiLeader(r) | Round::SingleLeader(r) => *r,
+            Round::MultiLeader(r) | Round::SingleLeader(r) | Round::Validator(r) => *r,
         }
     }
 
@@ -576,6 +579,7 @@ impl Round {
             Round::Fast => "fast",
             Round::MultiLeader(_) => "multi",
             Round::SingleLeader(_) => "single",
+            Round::Validator(_) => "validator",
         }
     }
 }

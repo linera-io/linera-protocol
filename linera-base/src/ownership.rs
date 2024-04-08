@@ -121,6 +121,10 @@ impl ChainOwnership {
                 let increment = tc.timeout_increment.saturating_mul(u64::from(r));
                 Some(tc.base_timeout.saturating_add(increment))
             }
+            Round::Validator(r) => {
+                let increment = tc.timeout_increment.saturating_mul(u64::from(r));
+                Some(tc.base_timeout.saturating_add(increment))
+            }
         }
     }
 
@@ -128,6 +132,8 @@ impl ChainOwnership {
     pub fn first_round(&self) -> Round {
         if !self.super_owners.is_empty() {
             Round::Fast
+        } else if self.owners.is_empty() {
+            Round::Validator(0)
         } else if self.multi_leader_rounds > 0 {
             Round::MultiLeader(0)
         } else {
@@ -145,11 +151,14 @@ impl ChainOwnership {
         let next_round = match round {
             Round::Fast if self.multi_leader_rounds == 0 => Round::SingleLeader(0),
             Round::Fast => Round::MultiLeader(0),
-            Round::MultiLeader(r) if r >= self.multi_leader_rounds.saturating_sub(1) => {
-                Round::SingleLeader(0)
-            }
-            Round::MultiLeader(r) => Round::MultiLeader(r.checked_add(1)?),
-            Round::SingleLeader(r) => Round::SingleLeader(r.checked_add(1)?),
+            Round::MultiLeader(r) => r
+                .checked_add(1)
+                .filter(|r| *r < self.multi_leader_rounds)
+                .map_or(Round::SingleLeader(0), Round::MultiLeader),
+            Round::SingleLeader(r) => r
+                .checked_add(1)
+                .map_or(Round::Validator(0), Round::SingleLeader),
+            Round::Validator(r) => Round::Validator(r.checked_add(1)?),
         };
         Some(next_round)
     }

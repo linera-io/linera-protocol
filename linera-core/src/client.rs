@@ -1612,7 +1612,7 @@ where
         let can_propose = match round {
             Round::Fast => manager.ownership.super_owners.contains_key(&identity),
             Round::MultiLeader(_) => true,
-            Round::SingleLeader(_) => manager.leader == Some(identity),
+            Round::SingleLeader(_) | Round::Validator(_) => manager.leader == Some(identity),
         };
         if can_propose {
             let certificate = self.propose_block(block.clone(), round).await?;
