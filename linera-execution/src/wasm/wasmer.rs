@@ -38,8 +38,8 @@ use bytes::Bytes;
 use linera_base::sync::Lazy;
 use tokio::sync::Mutex;
 use wasmer::{
-    imports, wasmparser::Operator, CompilerConfig, Engine, EngineBuilder, Instance, Module,
-    Singlepass, Store,
+    imports, wasmparser::Operator, CompilerConfig, Cranelift, Engine, EngineBuilder, Instance,
+    Module, Singlepass, Store,
 };
 use wasmer_middlewares::metering::{self, Metering, MeteringPoints};
 
@@ -52,7 +52,7 @@ use crate::{
 
 /// An [`Engine`] instance configured to run application services.
 static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(|| {
-    let compiler_config = Singlepass::default();
+    let compiler_config = Cranelift::new();
     EngineBuilder::new(compiler_config).into()
 });
 
