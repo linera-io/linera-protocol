@@ -21,6 +21,8 @@ pub mod ownership;
 #[cfg(with_metrics)]
 pub mod prometheus_util;
 pub mod sync;
+#[cfg(test)]
+mod unit_tests;
 
 pub use graphql::BcsHexParseError;
 #[doc(hidden)]

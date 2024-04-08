@@ -205,7 +205,7 @@ pub struct Resources {
 
 /// A request to send a message.
 #[derive(Clone, Debug, Deserialize, Serialize, WitLoad, WitType)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+#[cfg_attr(with_testing, derive(Eq, PartialEq, WitStore))]
 #[witty_specialize_with(Message = Vec<u8>)]
 pub struct SendMessageRequest<Message> {
     /// The destination of the message.

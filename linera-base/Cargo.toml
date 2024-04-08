@@ -46,6 +46,8 @@ prometheus.workspace = true
 [dev-dependencies]
 custom_debug_derive.workspace = true
 linera-base = { path = ".", features = ["test"] }
+linera-witty = { workspace = true, features = ["test"] }
+test-case.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true

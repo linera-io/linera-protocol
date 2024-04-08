@@ -3110,6 +3110,7 @@ dependencies = [
  "serde-name",
  "serde_bytes",
  "sha3",
+ "test-case",
  "test-strategy",
  "thiserror",
  "tokio",
