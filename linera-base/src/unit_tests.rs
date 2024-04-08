@@ -3,14 +3,14 @@
 
 //! Unit tests for `linera-base` types.
 
-use std::{collections::BTreeMap, fmt::Debug, time::Duration};
+use std::{collections::BTreeMap, fmt::Debug};
 
 use linera_witty::{Layout, WitLoad, WitStore};
 use test_case::test_case;
 
 use crate::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
+    data_types::{Amount, BlockHeight, Resources, SendMessageRequest, TimeDelta, Timestamp},
     identifiers::{
         Account, ApplicationId, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner,
     },
@@ -124,9 +124,9 @@ fn bytecode_id_test_case() -> BytecodeId {
 /// Creates a dummy [`TimeoutConfig`] instance to use for the WIT roundtrip test.
 fn timeout_config_test_case() -> TimeoutConfig {
     TimeoutConfig {
-        fast_round_duration: Some(Duration::from_nanos(20)),
-        base_timeout: Duration::from_secs(4),
-        timeout_increment: Duration::from_millis(125),
+        fast_round_duration: Some(TimeDelta::from_micros(20)),
+        base_timeout: TimeDelta::from_secs(4),
+        timeout_increment: TimeDelta::from_millis(125),
     }
 }
 
@@ -163,8 +163,8 @@ fn chain_ownership_test_case() -> ChainOwnership {
         multi_leader_rounds: 5,
         timeout_config: TimeoutConfig {
             fast_round_duration: None,
-            base_timeout: Duration::ZERO,
-            timeout_increment: Duration::from_secs(3_600),
+            base_timeout: TimeDelta::ZERO,
+            timeout_increment: TimeDelta::from_secs(3_600),
         },
     }
 }

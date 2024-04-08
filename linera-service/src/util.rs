@@ -11,6 +11,7 @@ use axum::response::{self, IntoResponse};
 use http::Uri;
 #[cfg(test)]
 use linera_base::command::parse_version_message;
+use linera_base::data_types::TimeDelta;
 use tracing::debug;
 
 /// Extension trait for [`tokio::process::Child`].
@@ -140,6 +141,10 @@ pub(crate) async fn graphiql(uri: Uri) -> impl IntoResponse {
 
 pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
+}
+
+pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
+    Ok(TimeDelta::from_millis(s.parse()?))
 }
 
 #[test]

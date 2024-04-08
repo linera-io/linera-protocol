@@ -2187,7 +2187,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
             vec![100, 100],
             u32::MAX,
             Amount::from_tokens(6),
-            Duration::from_secs(10),
+            10_000,
         )
         .await?;
 
@@ -2563,7 +2563,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
             vec![100, 100],
             0,
             Amount::from_tokens(9),
-            Duration::from_secs(60 * 60 * 24),
+            u64::MAX,
         )
         .await?;
     client1.assign(client1_key, message_id).await?;

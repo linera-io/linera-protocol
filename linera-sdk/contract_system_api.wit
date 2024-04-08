@@ -126,7 +126,7 @@ record chain-ownership {
 }
 
 record timeout-config {
-    fast-round-duration-ms: option<duration>,
-    base-timeout-ms: duration,
-    timeout-increment-ms: duration,
+    fast-round-duration-us: option<duration>,
+    base-timeout-us: duration,
+    timeout-increment-us: duration,
 }
