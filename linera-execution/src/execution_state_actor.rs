@@ -261,6 +261,11 @@ where
                     callback.respond(Ok(()));
                 }
             }
+            #[cfg(not(target_arch = "wasm32"))]
+            FetchUrl { url, callback } => {
+                let bytes = reqwest::get(url).await?.bytes().await?.to_vec();
+                callback.respond(bytes);
+            }
         }
 
         Ok(())
@@ -367,6 +372,12 @@ pub enum Request {
     CloseChain {
         application_id: UserApplicationId,
         callback: oneshot::Sender<Result<(), ExecutionError>>,
+    },
+
+    #[cfg(not(target_arch = "wasm32"))]
+    FetchUrl {
+        url: String,
+        callback: Sender<Vec<u8>>,
     },
 }
 
@@ -480,6 +491,11 @@ impl Debug for Request {
             Request::CloseChain { application_id, .. } => formatter
                 .debug_struct("Request::CloseChain")
                 .field("application_id", application_id)
+                .finish_non_exhaustive(),
+            #[cfg(not(target_arch = "wasm32"))]
+            Request::FetchUrl { url, .. } => formatter
+                .debug_struct("Request::FetchUrl")
+                .field("url", url)
                 .finish_non_exhaustive(),
         }
     }

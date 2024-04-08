@@ -7,6 +7,7 @@ read-owner-balance: func(owner: owner) -> amount
 read-owner-balances: func() -> list<tuple<owner, amount>>
 read-balance-owners: func() -> list<owner>
 read-system-timestamp: func() -> timestamp
+fetch-url: func(url: url) -> list<u8>
 
 log: func(message: string, level: log-level)
 
@@ -24,6 +25,8 @@ record application-id {
     bytecode-id: bytecode-id,
     creation: message-id,
 }
+
+type url = string
 
 type bytecode-id = message-id
 

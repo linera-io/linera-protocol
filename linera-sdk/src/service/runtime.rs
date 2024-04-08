@@ -123,6 +123,11 @@ where
             .expect("Failed to deserialize query response from application")
     }
 
+    /// Fetches a blob of bytes from a given URL.
+    pub fn fetch_url(&self, url: &str) -> Vec<u8> {
+        wit::fetch_url(url)
+    }
+
     /// Loads a value from the `cell` cache or fetches it and stores it in the cache.
     fn fetch_value_through_cache<T>(cell: &Cell<Option<T>>, fetch: impl FnOnce() -> T) -> T
     where
