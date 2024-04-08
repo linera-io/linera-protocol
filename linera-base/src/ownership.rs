@@ -4,11 +4,16 @@
 //! Structures defining the set of owners and super owners, as well as the consensus
 //! round types and timeouts for chains.
 
-use std::{collections::BTreeMap, iter, time::Duration};
+use std::{collections::BTreeMap, iter};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{crypto::PublicKey, data_types::Round, doc_scalar, identifiers::Owner};
+use crate::{
+    crypto::PublicKey,
+    data_types::{Duration, Round},
+    doc_scalar,
+    identifiers::Owner,
+};
 
 /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
 #[derive(PartialEq, Eq, Clone, Hash, Debug, Serialize, Deserialize)]
@@ -103,7 +108,7 @@ impl ChainOwnership {
             }
             Round::MultiLeader(_) => None,
             Round::SingleLeader(r) => {
-                let increment = tc.timeout_increment.saturating_mul(r);
+                let increment = tc.timeout_increment.saturating_mul(u64::from(r));
                 Some(tc.base_timeout.saturating_add(increment))
             }
         }

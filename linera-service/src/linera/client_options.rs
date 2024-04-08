@@ -874,25 +874,25 @@ pub struct ChainOwnershipConfig {
     multi_leader_rounds: Option<u32>,
 
     /// The duration of the fast round, in milliseconds.
-    #[arg(long = "fast-round-ms", value_parser = util::parse_millis)]
-    fast_round_duration: Option<Duration>,
+    #[arg(long = "fast-round-ms", value_parser = util::parse_millis_linera)]
+    fast_round_duration: Option<linera_base::data_types::Duration>,
 
     /// The duration of the first single-leader and all multi-leader rounds.
     #[arg(
         long = "base-timeout-ms",
         default_value = "10000",
-        value_parser = util::parse_millis
+        value_parser = util::parse_millis_linera
     )]
-    base_timeout: Duration,
+    base_timeout: linera_base::data_types::Duration,
 
     /// The number of milliseconds by which the timeout increases after each
     /// single-leader round.
     #[arg(
         long = "timeout-increment-ms",
         default_value = "1000",
-        value_parser = util::parse_millis
+        value_parser = util::parse_millis_linera
     )]
-    timeout_increment: Duration,
+    timeout_increment: linera_base::data_types::Duration,
 }
 
 impl TryFrom<ChainOwnershipConfig> for ChainOwnership {

@@ -614,7 +614,7 @@ impl ClientWrapper {
         weights: Vec<u64>,
         multi_leader_rounds: u32,
         balance: Amount,
-        base_timeout: Duration,
+        base_timeout_ms: u64,
     ) -> Result<(MessageId, ChainId)> {
         let mut command = self.command().await?;
         command
@@ -622,7 +622,7 @@ impl ClientWrapper {
             .args(["--from", &from.to_string()])
             .arg("--owner-public-keys")
             .args(to_public_keys.iter().map(PublicKey::to_string))
-            .args(["--base-timeout-ms", &base_timeout.as_millis().to_string()]);
+            .args(["--base-timeout-ms", &base_timeout_ms.to_string()]);
         if !weights.is_empty() {
             command
                 .arg("--owner-weights")

@@ -1,9 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc, time::Duration,
-};
+use std::{collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{
     futures_util::Stream,
@@ -20,7 +18,7 @@ use futures::{
 };
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
-    data_types::{Amount, ApplicationPermissions, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Duration, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
@@ -1093,7 +1091,7 @@ pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: Round
     future::select(
         Box::pin(stream.next()),
         Box::pin(tokio::time::sleep(
-            timeout.timestamp.duration_since(Timestamp::now()),
+            timeout.timestamp.std_duration_since(Timestamp::now()),
         )),
     )
     .await;

@@ -5,8 +5,6 @@
 #[path = "./wasm_client_tests.rs"]
 mod wasm;
 
-use std::time::Duration;
-
 use assert_matches::assert_matches;
 use futures::StreamExt;
 use linera_base::{

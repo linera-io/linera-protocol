@@ -8,7 +8,6 @@ mod wasm;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
-    time::Duration,
 };
 
 use assert_matches::assert_matches;
@@ -76,7 +75,7 @@ where
     let worker = WorkerState::new("Single validator node".to_string(), Some(key_pair), storage)
         .with_allow_inactive_chains(is_client)
         .with_allow_messages_from_deprecated_epochs(is_client)
-        .with_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
+        .with_grace_period(std::time::Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
     (committee, worker)
 }
 

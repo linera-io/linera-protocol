@@ -142,6 +142,10 @@ pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
 }
 
+pub fn parse_millis_linera(s: &str) -> Result<linera_base::data_types::Duration, ParseIntError> {
+    Ok(linera_base::data_types::Duration::from_millis(s.parse()?))
+}
+
 #[test]
 fn test_parse_version_message() {
     let s = "something\n . . . version12\nother things";

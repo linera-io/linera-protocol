@@ -4,10 +4,7 @@
 
 //! Core data-types used in the Linera protocol.
 
-use std::{
-    fmt,
-    time::{Duration, SystemTime},
-};
+use std::{fmt, time::SystemTime};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -74,6 +71,34 @@ pub enum Round {
     SingleLeader(u32),
 }
 
+/// A duration in microseconds.
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
+pub struct Duration(u64);
+
+impl Duration {
+    /// Returns the given number of microseconds as a `Duration`.
+    pub fn from_micros(micros: u64) -> Self {
+        Duration(micros)
+    }
+
+    /// Returns the given number of milliseconds as a `Duration`.
+    pub fn from_millis(millis: u64) -> Self {
+        Duration(millis.saturating_mul(1_000))
+    }
+
+    /// Returns the given number of seconds as a `Duration`.
+    pub fn from_secs(secs: u64) -> Self {
+        Duration(secs.saturating_mul(1_000_000))
+    }
+
+    /// Returns this `Duration` as a number of microseconds.
+    pub fn as_micros(&self) -> u64 {
+        self.0
+    }
+}
+
 /// A timestamp, in microseconds since the Unix epoch.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
@@ -98,22 +123,21 @@ impl Timestamp {
         self.0
     }
 
-    /// Returns the number of microseconds from `other` until `self`, or `0` if `other` is not
-    /// earlier than `self`.
-    pub fn saturating_diff_micros(&self, other: Timestamp) -> u64 {
-        self.0.saturating_sub(other.0)
-    }
-
-    /// Returns the `Duration` between `other` and `self`, or `0` if `other` is not earlier than
+    /// Returns the `Duration` between `other` and `self`, or zero if `other` is not earlier than
     /// `self`.
     pub fn duration_since(&self, other: Timestamp) -> Duration {
-        Duration::from_micros(self.saturating_diff_micros(other))
+        Duration::from_micros(self.0.saturating_sub(other.0))
+    }
+
+    /// Returns the `std::time::Duration` between `other` and `self`, or zero if `other` is not
+    /// earlier than `self`.
+    pub fn std_duration_since(&self, other: Timestamp) -> std::time::Duration {
+        std::time::Duration::from_micros(self.0.saturating_sub(other.0))
     }
 
     /// Returns the timestamp that is `duration` later than `self`.
     pub fn saturating_add(&self, duration: Duration) -> Timestamp {
-        let micros = u64::try_from(duration.as_micros()).unwrap_or(u64::MAX);
-        Timestamp(self.0.saturating_add(micros))
+        Timestamp(self.0.saturating_add(duration.0))
     }
 
     /// Returns a timestamp `micros` microseconds later than `self`, or the highest possible value
@@ -374,6 +398,7 @@ impl From<u64> for BlockHeight {
 
 impl_wrapped_number!(Amount, u128);
 impl_wrapped_number!(BlockHeight, u64);
+impl_wrapped_number!(Duration, u64);
 
 impl fmt::Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
