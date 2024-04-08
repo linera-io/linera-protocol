@@ -19,6 +19,8 @@ mod imported_function_interface;
 mod memory_layout;
 mod primitive_types;
 mod runtime;
+#[cfg(with_testing)]
+pub mod test;
 mod type_traits;
 mod util;
 
