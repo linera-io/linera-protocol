@@ -83,8 +83,13 @@ async fn single_transaction() {
         .publish_bytecodes_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
         .await;
 
-    let initial_state_a =
-        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10));
+    let initial_state_a = fungible::InitialStateBuilder::default().with_account(
+        fungible::Account {
+            owner: owner_a,
+            chain_id: user_chain_a.id(),
+        },
+        Amount::from_tokens(10),
+    );
     let params_a = fungible::Parameters::new("A");
     let token_id_a = user_chain_a
         .create_application(
@@ -94,8 +99,13 @@ async fn single_transaction() {
             vec![],
         )
         .await;
-    let initial_state_b =
-        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(9));
+    let initial_state_b = fungible::InitialStateBuilder::default().with_account(
+        fungible::Account {
+            owner: owner_b,
+            chain_id: user_chain_b.id(),
+        },
+        Amount::from_tokens(9),
+    );
     let params_b = fungible::Parameters::new("B");
     let token_id_b = user_chain_b
         .create_application(

@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fungible::InitialState;
 use linera_sdk::{
     base::{AccountOwner, Amount},
     views::{linera_views, MapView, RootView, ViewStorageContext},
@@ -17,17 +16,6 @@ pub struct FungibleToken {
 
 #[allow(dead_code)]
 impl FungibleToken {
-    /// Initializes the application state with some accounts with initial balances.
-    pub(crate) async fn initialize_accounts(&mut self, state: InitialState) {
-        for (k, v) in state.accounts {
-            if v != Amount::ZERO {
-                self.accounts
-                    .insert(&k, v)
-                    .expect("Error in insert statement");
-            }
-        }
-    }
-
     /// Obtains the balance for an `account`, returning None if there's no entry for the account.
     pub(crate) async fn balance(&self, account: &AccountOwner) -> Option<Amount> {
         self.accounts

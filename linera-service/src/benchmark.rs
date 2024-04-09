@@ -150,7 +150,10 @@ async fn benchmark_with_fungible(
             let default_chain = client.default_chain().context("missing default chain")?;
             let initial_state = InitialState {
                 accounts: BTreeMap::from([(
-                    AccountOwner::User(owner),
+                    fungible::Account {
+                        owner: AccountOwner::User(owner),
+                        chain_id: default_chain,
+                    },
                     Amount::from_tokens(num_transactions as u128),
                 )]),
             };

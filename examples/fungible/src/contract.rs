@@ -61,12 +61,35 @@ impl Contract for FungibleTokenContract {
         if state.accounts.is_empty() {
             if let Some(owner) = self.runtime.authenticated_signer() {
                 state.accounts.insert(
-                    AccountOwner::User(owner),
+                    Account {
+                        chain_id: self.runtime.chain_id(),
+                        owner: AccountOwner::User(owner),
+                    },
                     Amount::from_str("1000000").unwrap(),
                 );
             }
         }
-        self.state.initialize_accounts(state).await;
+
+        for (account, amount) in state.accounts {
+            if amount != Amount::ZERO {
+                if account.chain_id == self.runtime.chain_id() {
+                    self.state
+                        .accounts
+                        .insert(&account.owner, amount)
+                        .expect("Error in insert statement");
+                } else {
+                    let message = Message::CreditInitialBalance {
+                        target: account.owner,
+                        amount,
+                    };
+                    self.runtime
+                        .prepare_message(message)
+                        .with_authentication()
+                        .with_tracking()
+                        .send_to(account.chain_id);
+                }
+            }
+        }
 
         Ok(())
     }
@@ -124,6 +147,11 @@ impl Contract for FungibleTokenContract {
                 let receiver = if is_bouncing { source } else { target };
                 self.state.credit(receiver, amount).await;
             }
+
+            Message::CreditInitialBalance { target, amount } => {
+                self.state.credit(target, amount).await;
+            }
+
             Message::Withdraw {
                 owner,
                 amount,

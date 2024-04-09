@@ -75,7 +75,7 @@ pub enum FungibleResponse {
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct InitialState {
     /// Accounts and their respective initial balances
-    pub accounts: BTreeMap<AccountOwner, Amount>,
+    pub accounts: BTreeMap<Account, Amount>,
 }
 
 /// The parameters to initialize fungible with
@@ -118,12 +118,12 @@ pub struct Account {
 #[derive(Debug, Default)]
 pub struct InitialStateBuilder {
     /// Accounts and their respective initial balances
-    account_balances: BTreeMap<AccountOwner, Amount>,
+    account_balances: BTreeMap<Account, Amount>,
 }
 
 impl InitialStateBuilder {
     /// Adds an account to the initial state of the application.
-    pub fn with_account(mut self, account: AccountOwner, balance: impl Into<Amount>) -> Self {
+    pub fn with_account(mut self, account: Account, balance: impl Into<Amount>) -> Self {
         self.account_balances.insert(account, balance.into());
         self
     }

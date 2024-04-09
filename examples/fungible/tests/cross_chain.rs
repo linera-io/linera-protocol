@@ -32,7 +32,13 @@ async fn test_cross_chain_transfer() {
     let mut sender_chain = validator.new_chain().await;
     let sender_account = AccountOwner::from(sender_chain.public_key());
 
-    let initial_state = InitialStateBuilder::default().with_account(sender_account, initial_amount);
+    let initial_state = InitialStateBuilder::default().with_account(
+        fungible::Account {
+            chain_id: sender_chain.id(),
+            owner: sender_account,
+        },
+        initial_amount,
+    );
     let params = Parameters::new("FUN");
     let application_id = sender_chain
         .create_application(bytecode_id, params, initial_state.build(), vec![])
@@ -86,7 +92,13 @@ async fn test_bouncing_tokens() {
     let mut sender_chain = validator.new_chain().await;
     let sender_account = AccountOwner::from(sender_chain.public_key());
 
-    let initial_state = InitialStateBuilder::default().with_account(sender_account, initial_amount);
+    let initial_state = InitialStateBuilder::default().with_account(
+        Account {
+            owner: sender_account,
+            chain_id: sender_chain.id(),
+        },
+        initial_amount,
+    );
     let params = Parameters::new("RET");
     let application_id = sender_chain
         .create_application(bytecode_id, params, initial_state.build(), vec![])

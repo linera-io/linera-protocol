@@ -488,7 +488,13 @@ where
     let sender_owner = AccountOwner::User(Owner::from(sender.key_pair().await?.public()));
     let receiver_owner = AccountOwner::User(Owner::from(receiver.key_pair().await?.public()));
 
-    let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
+    let accounts = BTreeMap::from_iter([(
+        fungible::Account {
+            owner: sender_owner,
+            chain_id: sender.chain_id,
+        },
+        Amount::from_tokens(1_000_000),
+    )]);
     let state = fungible::InitialState { accounts };
     let params = fungible::Parameters::new("FUN");
     let (application_id, _cert) = sender

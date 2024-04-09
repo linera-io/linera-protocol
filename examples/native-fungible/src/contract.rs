@@ -53,8 +53,8 @@ impl Contract for NativeFungibleTokenContract {
             self.runtime.application_parameters().ticker_symbol == "NAT",
             "Only NAT is accepted as ticker symbol"
         );
-        for (owner, amount) in state.accounts {
-            let owner = self.normalize_owner(owner);
+        for (account, amount) in state.accounts {
+            let owner = self.normalize_owner(account.owner);
             let account = Account {
                 chain_id: self.runtime.chain_id(),
                 owner: Some(owner),

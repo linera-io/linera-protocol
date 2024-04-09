@@ -474,7 +474,7 @@ async fn test_wasm_end_to_end_fungible(
     config: impl LineraNetConfig,
     example_name: &str,
 ) -> Result<()> {
-    use fungible::{FungibleTokenAbi, InitialState, Parameters};
+    use fungible::{Account, FungibleTokenAbi, InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -491,8 +491,20 @@ async fn test_wasm_end_to_end_fungible(
     let account_owner2 = get_fungible_account_owner(&client2);
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
-        (account_owner1, Amount::from_tokens(5)),
-        (account_owner2, Amount::from_tokens(2)),
+        (
+            Account {
+                owner: account_owner1,
+                chain_id: chain1,
+            },
+            Amount::from_tokens(5),
+        ),
+        (
+            Account {
+                owner: account_owner2,
+                chain_id: chain2,
+            },
+            Amount::from_tokens(2),
+        ),
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
@@ -651,8 +663,20 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     };
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
-        (account_owner1, Amount::from_tokens(5)),
-        (account_owner2, Amount::from_tokens(2)),
+        (
+            Account {
+                owner: account_owner1,
+                chain_id: chain1,
+            },
+            Amount::from_tokens(5),
+        ),
+        (
+            Account {
+                owner: account_owner2,
+                chain_id: chain2,
+            },
+            Amount::from_tokens(2),
+        ),
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
@@ -995,7 +1019,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Result<()> {
     use crowd_funding::{CrowdFundingAbi, InitializationArgument};
-    use fungible::{FungibleTokenAbi, InitialState, Parameters};
+    use fungible::{Account, FungibleTokenAbi, InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -1012,7 +1036,13 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     let account_owner2 = get_fungible_account_owner(&client2); // contributor
 
     // The initial accounts on chain1
-    let accounts = BTreeMap::from([(account_owner1, Amount::from_tokens(6))]);
+    let accounts = BTreeMap::from([(
+        Account {
+            owner: account_owner1,
+            chain_id: chain1,
+        },
+        Amount::from_tokens(6),
+    )]);
     let state_fungible = InitialState { accounts };
 
     // Setting up the application fungible
@@ -1148,11 +1178,23 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let owner_a = get_fungible_account_owner(&client_a);
     let owner_b = get_fungible_account_owner(&client_b);
     // The initial accounts on chain_a and chain_b
-    let accounts0 = BTreeMap::from([(owner_a, Amount::from_tokens(10))]);
+    let accounts0 = BTreeMap::from([(
+        fungible::Account {
+            owner: owner_a,
+            chain_id: chain_a,
+        },
+        Amount::from_tokens(10),
+    )]);
     let state_fungible0 = fungible::InitialState {
         accounts: accounts0,
     };
-    let accounts1 = BTreeMap::from([(owner_b, Amount::from_tokens(9))]);
+    let accounts1 = BTreeMap::from([(
+        fungible::Account {
+            owner: owner_b,
+            chain_id: chain_b,
+        },
+        Amount::from_tokens(9),
+    )]);
     let state_fungible1 = fungible::InitialState {
         accounts: accounts1,
     };
@@ -1408,18 +1450,54 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     // Amounts of token0 that will be owned by each user
     let state_fungible0 = fungible::InitialState {
         accounts: BTreeMap::from([
-            (owner0, Amount::ZERO),
-            (owner1, Amount::from_tokens(50)),
-            (owner_admin, Amount::from_tokens(200)),
+            (
+                fungible::Account {
+                    owner: owner0,
+                    chain_id: chain0,
+                },
+                Amount::ZERO,
+            ),
+            (
+                fungible::Account {
+                    owner: owner1,
+                    chain_id: chain1,
+                },
+                Amount::from_tokens(50),
+            ),
+            (
+                fungible::Account {
+                    owner: owner_admin,
+                    chain_id: chain_admin,
+                },
+                Amount::from_tokens(200),
+            ),
         ]),
     };
 
     // Amounts of token1 that will be owned by each user
     let state_fungible1 = fungible::InitialState {
         accounts: BTreeMap::from([
-            (owner0, Amount::from_tokens(50)),
-            (owner1, Amount::ZERO),
-            (owner_admin, Amount::from_tokens(200)),
+            (
+                fungible::Account {
+                    owner: owner0,
+                    chain_id: chain0,
+                },
+                Amount::from_tokens(50),
+            ),
+            (
+                fungible::Account {
+                    owner: owner1,
+                    chain_id: chain1,
+                },
+                Amount::ZERO,
+            ),
+            (
+                fungible::Account {
+                    owner: owner_admin,
+                    chain_id: chain_admin,
+                },
+                Amount::from_tokens(200),
+            ),
         ]),
     };
 
@@ -1820,7 +1898,13 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
 
     // Create a fungible token application with 10 tokens for owner 1.
     let owner = get_fungible_account_owner(&client);
-    let accounts = BTreeMap::from([(owner, Amount::from_tokens(10))]);
+    let accounts = BTreeMap::from([(
+        fungible::Account {
+            owner,
+            chain_id: chain1,
+        },
+        Amount::from_tokens(10),
+    )]);
     let state = fungible::InitialState { accounts };
     let (contract, service) = client.build_example("fungible").await?;
     let params = fungible::Parameters::new("FUN");
@@ -2478,7 +2562,7 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
-    use fungible::{FungibleTokenAbi, InitialState, Parameters};
+    use fungible::{Account, FungibleTokenAbi, InitialState, Parameters};
 
     config.num_other_initial_chains = 2;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -2492,7 +2576,13 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     // Now we run the benchmark again, with the fungible token application instead of the
     // native token.
     let account_owner = get_fungible_account_owner(&client);
-    let accounts = BTreeMap::from([(account_owner, Amount::from_tokens(1_000_000))]);
+    let accounts = BTreeMap::from([(
+        Account {
+            owner: account_owner,
+            chain_id: client.get_wallet()?.default_chain().unwrap(),
+        },
+        Amount::from_tokens(1_000_000),
+    )]);
     let state = InitialState { accounts };
     let (contract, service) = client.build_example("fungible").await?;
     let params = Parameters::new("FUN");

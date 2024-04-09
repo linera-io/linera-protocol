@@ -250,6 +250,14 @@ pub enum Message {
         source: AccountOwner,
     },
 
+    /// Credits the given `target` account with an initial balance amount
+    CreditInitialBalance {
+        /// Target account to credit amount to
+        target: AccountOwner,
+        /// Amount to be credited
+        amount: Amount,
+    },
+
     /// Withdraws from the given account and starts a transfer to the target account.
     Withdraw {
         /// Account to withdraw from
@@ -285,8 +293,14 @@ pub async fn create_with_accounts(
         .collect::<Vec<_>>()
         .await;
 
-    for (_chain, account, initial_amount) in &accounts {
-        initial_state = initial_state.with_account(*account, *initial_amount);
+    for (chain, account, initial_amount) in &accounts {
+        initial_state = initial_state.with_account(
+            Account {
+                chain_id: chain.id(),
+                owner: *account,
+            },
+            *initial_amount,
+        );
     }
 
     let params = Parameters::new("FUN");
