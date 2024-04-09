@@ -788,7 +788,7 @@ where
             ));
         }
         self.cache_validated(&certificate.value).await;
-        let old_round = chain.manager.get().current_round();
+        let old_round = chain.manager.get().current_round;
         chain.manager.get_mut().create_final_vote(
             certificate,
             self.key_pair(),
@@ -796,7 +796,7 @@ where
         );
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
-        let round = chain.manager.get().current_round();
+        let round = chain.manager.get().current_round;
         if round > old_round {
             actions.notifications.push(Notification {
                 chain_id,
@@ -841,18 +841,16 @@ where
         if chain.tip_state.get().already_validated_block(height)? {
             return Ok((ChainInfoResponse::new(&chain, self.key_pair()), actions));
         }
-        let current_round = chain.manager.get().current_round();
+        let old_round = chain.manager.get().current_round;
         chain
             .manager
             .get_mut()
             .handle_timeout_certificate(certificate.clone(), self.storage.current_time());
-        if chain.manager.get().current_round() > current_round {
+        let round = chain.manager.get().current_round;
+        if round > old_round {
             actions.notifications.push(Notification {
                 chain_id,
-                reason: Reason::NewRound {
-                    height,
-                    round: chain.manager.get().current_round(),
-                },
+                reason: Reason::NewRound { height, round },
             })
         }
         let info = ChainInfoResponse::new(&chain, self.key_pair());

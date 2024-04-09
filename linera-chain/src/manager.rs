@@ -115,6 +115,13 @@ pub struct ChainManager {
     pub timeout_vote: Option<Vote>,
     /// The time after which we are ready to sign a timeout certificate for the current round.
     pub round_timeout: Option<Timestamp>,
+    /// The lowest round where we can still vote to validate or confirm a block. This is
+    /// the round to which the timeout applies.
+    ///
+    /// Having a leader timeout certificate in any given round causes the next one to become
+    /// current. Seeing a validated block certificate or a valid proposal in any round causes that
+    /// round to become current, unless a higher one already is.
+    pub current_round: Round,
 }
 
 doc_scalar!(
@@ -151,7 +158,8 @@ impl ChainManager {
             None
         };
 
-        let round_duration = ownership.round_timeout(ownership.first_round());
+        let current_round = ownership.first_round();
+        let round_duration = ownership.round_timeout(current_round);
         let round_timeout = round_duration.map(|rd| local_time.saturating_add(rd));
 
         Ok(ChainManager {
@@ -164,6 +172,7 @@ impl ChainManager {
             pending: None,
             timeout_vote: None,
             round_timeout,
+            current_round,
         })
     }
 
@@ -212,12 +221,12 @@ impl ChainManager {
             );
         }
         let expected_round = match validated {
-            None => self.current_round(),
+            None => self.current_round,
             Some(cert) => self
                 .ownership
                 .next_round(cert.round)
                 .ok_or_else(|| ChainError::ArithmeticError(ArithmeticError::Overflow))?
-                .max(self.current_round()),
+                .max(self.current_round),
         };
         // In leader rotation mode, the round must equal the expected one exactly.
         // Only the first single-leader round can be entered at any time.
@@ -290,7 +299,7 @@ impl ChainManager {
         if local_time < round_timeout || self.ownership.owners.is_empty() {
             return false; // Round has not timed out yet, or there are no regular owners.
         }
-        let current_round = self.current_round();
+        let current_round = self.current_round;
         if let Some(vote) = &self.timeout_vote {
             if vote.round == current_round {
                 return false; // We already signed this timeout.
@@ -346,11 +355,9 @@ impl ChainManager {
         key_pair: Option<&KeyPair>,
         local_time: Timestamp,
     ) {
-        if let Some(round) = self.ownership.previous_round(proposal.content.round) {
-            self.update_timeout(round, local_time);
-        }
         // Record the proposed block, so it can be supplied to clients that request it.
         self.proposed = Some(proposal.clone());
+        self.update_current_round(local_time);
         // If the validated block certificate is more recent, update our locked block.
         if let Some(validated) = &proposal.validated {
             if self
@@ -384,7 +391,7 @@ impl ChainManager {
         let round = certificate.round;
         // Validators only change their locked block if the new one is included in a proposal in the
         // current round, or it is itself in the current round.
-        if key_pair.is_some() && round < self.current_round() {
+        if key_pair.is_some() && round < self.current_round {
             return;
         }
         let Some(value) = certificate.value.validated_to_confirmed() else {
@@ -392,8 +399,8 @@ impl ChainManager {
             error!("Unexpected certificate; expected ValidatedBlock");
             return;
         };
-        self.update_timeout(round, local_time);
         self.locked = Some(certificate);
+        self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
             let vote = Vote::new(value, round, key_pair);
@@ -402,14 +409,29 @@ impl ChainManager {
         }
     }
 
-    /// Resets the timer if `round` has just ended.
-    fn update_timeout(&mut self, round: Round, local_time: Timestamp) {
-        if self.current_round() > round {
+    /// Updates `current_round` and `round_timeout` if necessary.
+    ///
+    /// This must be after every change to `leader_timeout`, `locked` or `proposed`.
+    fn update_current_round(&mut self, local_time: Timestamp) {
+        let current_round = self
+            .leader_timeout
+            .iter()
+            .map(|certificate| {
+                self.ownership
+                    .next_round(certificate.round)
+                    .unwrap_or(Round::SingleLeader(u32::MAX))
+            })
+            .chain(self.locked.iter().map(|certificate| certificate.round))
+            .chain(self.proposed.iter().map(|proposal| proposal.content.round))
+            .max()
+            .unwrap_or_default()
+            .max(self.ownership.first_round());
+        if current_round <= self.current_round {
             return;
         }
-        let new_round = self.ownership.next_round(round);
-        let round_duration = new_round.and_then(|round| self.ownership.round_timeout(round));
+        let round_duration = self.ownership.round_timeout(current_round);
         self.round_timeout = round_duration.map(|rd| local_time.saturating_add(rd));
+        self.current_round = current_round;
     }
 
     /// Updates the round number and timer if the timeout certificate is from a higher round than
@@ -426,8 +448,8 @@ impl ChainManager {
                 return;
             }
         }
-        self.update_timeout(round, local_time);
         self.leader_timeout = Some(certificate);
+        self.update_current_round(local_time);
     }
 
     /// Returns the public key of the block proposal's signer, if they are a valid owner and allowed
@@ -509,7 +531,7 @@ pub struct ChainManagerInfo {
 
 impl From<&ChainManager> for ChainManagerInfo {
     fn from(manager: &ChainManager) -> Self {
-        let current_round = manager.current_round();
+        let current_round = manager.current_round;
         ChainManagerInfo {
             ownership: manager.ownership.clone(),
             requested_proposed: None,

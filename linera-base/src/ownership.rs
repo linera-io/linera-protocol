@@ -147,34 +147,6 @@ impl ChainOwnership {
         };
         Some(next_round)
     }
-
-    /// Returns the round preceding the specified one, if any.
-    pub fn previous_round(&self, round: Round) -> Option<Round> {
-        let previous_round = match round {
-            Round::Fast => return None,
-            Round::MultiLeader(r) => {
-                if let Some(prev_r) = r.checked_sub(1) {
-                    Round::MultiLeader(prev_r)
-                } else if self.super_owners.is_empty() {
-                    return None;
-                } else {
-                    Round::Fast
-                }
-            }
-            Round::SingleLeader(r) => {
-                if let Some(prev_r) = r.checked_sub(1) {
-                    Round::SingleLeader(prev_r)
-                } else if let Some(last_multi_r) = self.multi_leader_rounds.checked_sub(1) {
-                    Round::MultiLeader(last_multi_r)
-                } else if self.super_owners.is_empty() {
-                    return None;
-                } else {
-                    Round::Fast
-                }
-            }
-        };
-        Some(previous_round)
-    }
 }
 
 /// Errors that can happen when attempting to close a chain.
