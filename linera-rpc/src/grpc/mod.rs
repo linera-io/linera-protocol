@@ -44,4 +44,4 @@ pub enum GrpcError {
 }
 
 const MEBIBYTE: usize = 1024 * 1024;
-pub const GRPC_MAX_MESSAGE_SIZE: usize = 8 * MEBIBYTE;
+pub const GRPC_MAX_MESSAGE_SIZE: usize = 16 * MEBIBYTE;
