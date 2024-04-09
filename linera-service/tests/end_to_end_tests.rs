@@ -623,7 +623,6 @@ async fn test_wasm_end_to_end_fungible(
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None), "fungible" ; "remote_net_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None), "native-fungible" ; "native_remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-
 async fn test_wasm_end_to_end_same_wallet_fungible(
     config: impl LineraNetConfig,
     example_name: &str,
