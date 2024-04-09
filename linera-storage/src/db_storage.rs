@@ -5,7 +5,11 @@ use std::{fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::{crypto::CryptoHash, data_types::Timestamp, identifiers::ChainId};
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::{TimeDelta, Timestamp},
+    identifiers::ChainId,
+};
 use linera_chain::{
     data_types::{Certificate, CertificateValue, HashedValue, LiteCertificate},
     ChainStateView,
@@ -235,10 +239,10 @@ impl TestClock {
             .store(timestamp.micros(), std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// Advances the current time by the specified number of microseconds.
-    pub fn add_micros(&self, micros: u64) {
+    /// Advances the current time by the specified delta.
+    pub fn add(&self, delta: TimeDelta) {
         self.0
-            .fetch_add(micros, std::sync::atomic::Ordering::SeqCst);
+            .fetch_add(delta.as_micros(), std::sync::atomic::Ordering::SeqCst);
     }
 }
 

@@ -10,7 +10,7 @@
 //!
 //! The protocol proceeds in rounds, until it reaches a round where a block gets confirmed.
 //!
-//! There are three kinds of rounds:
+//! There are four kinds of rounds:
 //!
 //! * In `Round::Fast`, only super owners can propose blocks, and validators vote to confirm a
 //!   block immediately. Super owners must be careful to make only one block proposal, or else they
@@ -21,6 +21,9 @@
 //! * In leader rotation mode (`Round::SingleLeader`), chain owners take turns at proposing blocks.
 //!   It can make progress as long as at least one owner is honest, even if other owners try to
 //!   prevent it.
+//! * In fallback/publich mode (`Round::Validator`), validators take turns at proposing blocks.
+//!   It can always make progress under the standard assumption that there is a quorum of honest
+//!   validators.
 //!
 //! ## Safety, i.e. at most one block will be confirmed
 //!
@@ -57,12 +60,13 @@
 //! If the owners fail to cooperate, any honest owner can initiate the last multi-leader round by
 //! making a proposal there, then wait for it to time out, which starts the leader-based mode:
 //!
-//! In leader-based mode, an honest owner should subscribe to notifications from all validators,
-//! and follow the chain. Whenever another leader's round takes too long, they should request
-//! timeout votes from the validators to make the next round begin. Once the honest owner becomes
-//! the round leader, they should update all validators, so that they all agree on the current
-//! round. Then they download the highest `ValidatedBlock` certificate known to any honest validator
-//! and include that in their block proposal, just like in the cooperative case.
+//! In leader-based and fallback/public mode, an honest participant should subscribe to
+//! notifications from all validators, and follow the chain. Whenever another leader's round takes
+//! too long, they should request timeout votes from the validators to make the next round begin.
+//! Once the honest participant becomes the round leader, they should update all validators, so
+//! that they all agree on the current round. Then they download the highest `ValidatedBlock`
+//! certificate known to any honest validator and include that in their block proposal, just like
+//! in the cooperative case.
 
 use std::collections::BTreeMap;
 
@@ -512,11 +516,16 @@ impl ChainManager {
     /// Returns the leader who is allowed to propose a block in the given round, or `None` if every
     /// owner is allowed to propose. Exception: In `Round::Fast`, only super owners can propose.
     fn round_leader(&self, round: Round) -> Option<&Owner> {
-        if let Round::SingleLeader(r) = round {
-            let index = self.round_leader_index(r)?;
-            self.ownership.owners.keys().nth(index)
-        } else {
-            None
+        match round {
+            Round::SingleLeader(r) => {
+                let index = self.round_leader_index(r)?;
+                self.ownership.owners.keys().nth(index)
+            }
+            Round::Validator(r) => {
+                let index = self.fallback_round_leader_index(r)?;
+                self.fallback_owners.keys().nth(index)
+            }
+            Round::Fast | Round::MultiLeader(_) => None,
         }
     }
 
