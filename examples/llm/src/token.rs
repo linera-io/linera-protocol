@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// This is taken from https://github.com/huggingface/candle/blob/4fd00b890036ef67391a9cc03f896247d0a75711/candle-examples/src/token_output_stream.rs
 use candle_core::Result;
 
