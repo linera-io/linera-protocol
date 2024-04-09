@@ -6,7 +6,7 @@
 #[path = "common/types.rs"]
 mod types;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use linera_witty::{HList, Layout, RegisterWitTypes, WitType};
 
@@ -207,17 +207,13 @@ fn wit_type_declaration_of<T>() -> String
 where
     T: WitType,
 {
-    let mut wit_types = HashMap::new();
+    let mut wit_types = BTreeMap::new();
 
     <HList![T] as RegisterWitTypes>::register_wit_types(&mut wit_types);
 
-    let sorted_wit_types = wit_types
-        .into_iter()
-        .filter(|(_, declaration)| !declaration.is_empty())
-        .collect::<BTreeMap<_, _>>();
-
-    sorted_wit_types
+    wit_types
         .into_values()
+        .filter(|declaration| !declaration.is_empty())
         .collect::<Vec<_>>()
         .join("\n")
 }
