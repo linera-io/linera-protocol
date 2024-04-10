@@ -1585,12 +1585,7 @@ where
         .await?;
     assert_eq!(BlockHeight::from(1), inbox.next_block_height_to_receive()?);
     assert_matches!(
-        inbox
-            .added_events
-            .front()
-            .await
-            ?
-            .unwrap(),
+        inbox.added_events.front().await?.unwrap(),
         Event {
             certificate_hash,
             height,
