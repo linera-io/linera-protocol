@@ -28,7 +28,7 @@ use self::test_instance::WasmerInstanceFactory;
 use self::test_instance::WasmtimeInstanceFactory;
 use self::{
     test_instance::{MockInstanceFactory, TestInstanceFactory},
-    wit_interface_test::{GETTERS, OPERATIONS, SETTERS, SIMPLE_FUNCTION},
+    wit_interface_test::{ENTRYPOINT, GETTERS, OPERATIONS, SETTERS, SIMPLE_FUNCTION},
 };
 
 /// An interface to call into the test modules.
@@ -468,6 +468,7 @@ where
 }
 
 /// Test the generated [`WitInterface`] implementations for the types used in this test.
+#[test_case(PhantomData::<Entrypoint<MockInstance<()>>>, ENTRYPOINT; "of_entrypoint")]
 #[test_case(
     PhantomData::<ImportedSimpleFunction<MockInstance<()>>>, SIMPLE_FUNCTION;
     "of_imported_simple_funciton"

@@ -11,8 +11,8 @@ mod wit_interface_test;
 use std::marker::PhantomData;
 
 use linera_witty::{
-    wit_export, wit_generation::WitInterface, wit_import, ExportTo, Instance, Runtime,
-    RuntimeMemory,
+    wit_export, wit_generation::WitInterface, wit_import, ExportTo, Instance, MockInstance,
+    Runtime, RuntimeMemory,
 };
 use test_case::test_case;
 
@@ -22,7 +22,7 @@ use self::test_instance::WasmerInstanceFactory;
 use self::test_instance::WasmtimeInstanceFactory;
 use self::{
     test_instance::{MockInstanceFactory, TestInstanceFactory},
-    wit_interface_test::{GETTERS, OPERATIONS, SETTERS, SIMPLE_FUNCTION},
+    wit_interface_test::{ENTRYPOINT, GETTERS, OPERATIONS, SETTERS, SIMPLE_FUNCTION},
 };
 
 /// An interface to call into the test modules.
@@ -273,6 +273,7 @@ where
 }
 
 /// Test the generated [`WitInterface`] implementations for the types used in this test.
+#[test_case(PhantomData::<Entrypoint<MockInstance<()>>>, ENTRYPOINT; "of_entrypoint")]
 #[test_case(PhantomData::<SimpleFunction>, SIMPLE_FUNCTION; "of_simple_funciton")]
 #[test_case(PhantomData::<Getters>, GETTERS; "of_getters")]
 #[test_case(PhantomData::<Setters>, SETTERS; "of_setters")]
