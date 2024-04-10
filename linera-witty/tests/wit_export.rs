@@ -5,15 +5,25 @@
 
 #[path = "common/test_instance.rs"]
 mod test_instance;
+#[path = "common/wit_interface_test.rs"]
+mod wit_interface_test;
 
-use linera_witty::{wit_export, wit_import, ExportTo, Instance, Runtime, RuntimeMemory};
+use std::marker::PhantomData;
+
+use linera_witty::{
+    wit_export, wit_generation::WitInterface, wit_import, ExportTo, Instance, Runtime,
+    RuntimeMemory,
+};
 use test_case::test_case;
 
 #[cfg(with_wasmer)]
 use self::test_instance::WasmerInstanceFactory;
 #[cfg(with_wasmtime)]
 use self::test_instance::WasmtimeInstanceFactory;
-use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
+use self::{
+    test_instance::{MockInstanceFactory, TestInstanceFactory},
+    wit_interface_test::{GETTERS, OPERATIONS, SETTERS, SIMPLE_FUNCTION},
+};
 
 /// An interface to call into the test modules.
 #[wit_import(package = "witty-macros:test-modules")]
@@ -260,4 +270,18 @@ where
     Entrypoint::new(instance)
         .entrypoint()
         .expect("Failed to execute test of imported operations");
+}
+
+/// Test the generated [`WitInterface`] implementations for the types used in this test.
+#[test_case(PhantomData::<SimpleFunction>, SIMPLE_FUNCTION; "of_simple_funciton")]
+#[test_case(PhantomData::<Getters>, GETTERS; "of_getters")]
+#[test_case(PhantomData::<Setters>, SETTERS; "of_setters")]
+#[test_case(PhantomData::<Operations>, OPERATIONS; "of_operations")]
+fn test_wit_interface<Interface>(
+    _: PhantomData<Interface>,
+    expected_snippets: (&str, &[&str], &[(&str, &str)]),
+) where
+    Interface: WitInterface,
+{
+    wit_interface_test::test_wit_interface::<Interface>(expected_snippets);
 }
