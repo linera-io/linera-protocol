@@ -10,6 +10,7 @@
 mod util;
 mod wit_export;
 mod wit_import;
+mod wit_interface;
 mod wit_load;
 mod wit_store;
 mod wit_type;
