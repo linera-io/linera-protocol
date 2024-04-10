@@ -218,6 +218,7 @@ ChainInfoQuery:
         OPTION: U64
     - request_manager_values: BOOL
     - request_leader_timeout: BOOL
+    - request_fallback: BOOL
     - request_blob:
         OPTION:
           TYPENAME: CryptoHash
@@ -245,6 +246,9 @@ ChainManagerInfo:
         OPTION:
           TYPENAME: LiteVote
     - timeout_vote:
+        OPTION:
+          TYPENAME: LiteVote
+    - fallback_vote:
         OPTION:
           TYPENAME: LiteVote
     - requested_pending_value:
@@ -678,6 +682,9 @@ Round:
     2:
       SingleLeader:
         NEWTYPE: U32
+    3:
+      Validator:
+        NEWTYPE: U32
 RpcMessage:
   ENUM:
     0:
@@ -914,6 +921,8 @@ TimeoutConfig:
     - base_timeout:
         TYPENAME: TimeDelta
     - timeout_increment:
+        TYPENAME: TimeDelta
+    - fallback_duration:
         TYPENAME: TimeDelta
 Timestamp:
   NEWTYPESTRUCT: U64
