@@ -25,7 +25,7 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use test_log::test;
+use test_case::test_case;
 
 #[cfg(feature = "aws")]
 use crate::client::client_test_utils::DynamoDbStorageBuilder;
@@ -49,42 +49,15 @@ use crate::{
     worker::{Notification, Reason, WorkerError},
 };
 
-#[test(tokio::test)]
-pub async fn test_memory_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
-{
-    run_test_initiating_valid_transfer_with_notifications(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-pub async fn test_service_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
-{
-    run_test_initiating_valid_transfer_with_notifications(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_with_notifications(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
-{
-    run_test_initiating_valid_transfer_with_notifications(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
-{
-    run_test_initiating_valid_transfer_with_notifications(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_initiating_valid_transfer_with_notifications<B>(
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_initiating_valid_transfer_with_notifications<B>(
     storage_builder: B,
-) -> Result<(), anyhow::Error>
+) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -136,36 +109,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_claim_amount() -> Result<(), anyhow::Error> {
-    run_test_claim_amount(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_claim_amount() -> Result<(), anyhow::Error> {
-    run_test_claim_amount(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_claim_amount() -> Result<(), anyhow::Error> {
-    run_test_claim_amount(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_claim_amount() -> Result<(), anyhow::Error> {
-    run_test_claim_amount(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_claim_amount() -> Result<(), anyhow::Error> {
-    run_test_claim_amount(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_claim_amount<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_claim_amount<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -286,36 +236,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_rotate_key_pair() -> Result<(), anyhow::Error> {
-    run_test_rotate_key_pair(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_rotate_key_pair() -> Result<(), anyhow::Error> {
-    run_test_rotate_key_pair(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_rotate_key_pair() -> Result<(), anyhow::Error> {
-    run_test_rotate_key_pair(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_rotate_key_pair() -> Result<(), anyhow::Error> {
-    run_test_rotate_key_pair(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_rotate_key_pair() -> Result<(), anyhow::Error> {
-    run_test_rotate_key_pair(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_rotate_key_pair<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_rotate_key_pair<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -358,36 +285,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_transfer_ownership() -> Result<(), anyhow::Error> {
-    run_test_transfer_ownership(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_transfer_ownership() -> Result<(), anyhow::Error> {
-    run_test_transfer_ownership(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_transfer_ownership() -> Result<(), anyhow::Error> {
-    run_test_transfer_ownership(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_transfer_ownership() -> Result<(), anyhow::Error> {
-    run_test_transfer_ownership(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_transfer_ownership() -> Result<(), anyhow::Error> {
-    run_test_transfer_ownership(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_transfer_ownership<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_transfer_ownership<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -439,36 +343,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_share_ownership() -> Result<(), anyhow::Error> {
-    run_test_share_ownership(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_share_ownership() -> Result<(), anyhow::Error> {
-    run_test_share_ownership(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_share_ownership() -> Result<(), anyhow::Error> {
-    run_test_share_ownership(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_share_ownership() -> Result<(), anyhow::Error> {
-    run_test_share_ownership(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_share_ownership() -> Result<(), anyhow::Error> {
-    run_test_share_ownership(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_share_ownership<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_share_ownership<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -607,36 +488,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_close_it(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_close_it(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_close_it(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_close_it(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_close_it(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_open_chain_then_close_it<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_open_chain_then_close_it<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -670,36 +528,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    run_test_transfer_then_open_chain(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    run_test_transfer_then_open_chain(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    run_test_transfer_then_open_chain(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    run_test_transfer_then_open_chain(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    run_test_transfer_then_open_chain(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_transfer_then_open_chain<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_transfer_then_open_chain<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -793,36 +628,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_open_chain_must_be_first() -> Result<(), anyhow::Error> {
-    run_test_open_chain_must_be_first(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_open_chain_must_be_first() -> Result<(), anyhow::Error> {
-    run_test_open_chain_must_be_first(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_open_chain_must_be_first() -> Result<(), anyhow::Error> {
-    run_test_open_chain_must_be_first(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_open_chain_must_be_first() -> Result<(), anyhow::Error> {
-    run_test_open_chain_must_be_first(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_open_chain_must_be_first() -> Result<(), anyhow::Error> {
-    run_test_open_chain_must_be_first(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_open_chain_must_be_first<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_open_chain_must_be_first<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -902,36 +714,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_transfer(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_transfer(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_transfer(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_transfer(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_transfer(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_open_chain_then_transfer<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_open_chain_then_transfer<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -999,36 +788,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_close_chain() -> Result<(), anyhow::Error> {
-    run_test_close_chain(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_close_chain() -> Result<(), anyhow::Error> {
-    run_test_close_chain(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_close_chain() -> Result<(), anyhow::Error> {
-    run_test_close_chain(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_close_chain() -> Result<(), anyhow::Error> {
-    run_test_close_chain(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_close_chain() -> Result<(), anyhow::Error> {
-    run_test_close_chain(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_close_chain<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_close_chain<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -1138,38 +904,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_initiating_valid_transfer_too_many_faults<B>(
-    storage_builder: B,
-) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_initiating_valid_transfer_too_many_faults<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -1202,36 +943,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    run_test_bidirectional_transfer(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    run_test_bidirectional_transfer(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    run_test_bidirectional_transfer(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    run_test_bidirectional_transfer(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylla")]
-#[test(tokio::test)]
-async fn test_scylla_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    run_test_bidirectional_transfer(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_bidirectional_transfer<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_bidirectional_transfer<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -1328,36 +1046,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_receiving_unconfirmed_transfer<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_receiving_unconfirmed_transfer<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -1400,58 +1095,15 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-) -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-        MemoryStorageBuilder::default(),
-    )
-    .await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-) -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-        ServiceStorageBuilder::new().await,
-    )
-    .await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-) -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-        RocksDbStorageBuilder::new().await,
-    )
-    .await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-) -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-        DynamoDbStorageBuilder::default(),
-    )
-    .await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-) -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-        ScyllaDbStorageBuilder::default(),
-    )
-    .await
-}
-
-async fn run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(
     storage_builder: B,
-) -> Result<(), anyhow::Error>
+) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -1547,36 +1199,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_change_voting_rights() -> Result<(), anyhow::Error> {
-    run_test_change_voting_rights(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_change_voting_rights() -> Result<(), anyhow::Error> {
-    run_test_change_voting_rights(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_change_voting_rights() -> Result<(), anyhow::Error> {
-    run_test_change_voting_rights(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_change_voting_rights() -> Result<(), anyhow::Error> {
-    run_test_change_voting_rights(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_change_voting_rights() -> Result<(), anyhow::Error> {
-    run_test_change_voting_rights(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_change_voting_rights<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_change_voting_rights<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -1702,18 +1331,10 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-pub async fn test_memory_insufficient_balance() -> Result<(), anyhow::Error> {
-    run_test_insufficient_balance(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-pub async fn test_service_insufficient_balance() -> Result<(), anyhow::Error> {
-    run_test_insufficient_balance(ServiceStorageBuilder::new().await).await
-}
-
-async fn run_test_insufficient_balance<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[test_log::test(tokio::test)]
+async fn test_insufficient_balance<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -1763,36 +1384,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_request_leader_timeout() -> Result<(), anyhow::Error> {
-    run_test_request_leader_timeout(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_request_leader_timeout() -> Result<(), anyhow::Error> {
-    run_test_request_leader_timeout(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_request_leader_timeout() -> Result<(), anyhow::Error> {
-    run_test_request_leader_timeout(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_request_leader_timeout() -> Result<(), anyhow::Error> {
-    run_test_request_leader_timeout(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_request_leader_timeout() -> Result<(), anyhow::Error> {
-    run_test_request_leader_timeout(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_request_leader_timeout<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_request_leader_timeout<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -1912,36 +1510,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_propose_validated() -> Result<(), anyhow::Error> {
-    run_test_propose_validated(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_propose_validated() -> Result<(), anyhow::Error> {
-    run_test_propose_validated(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_propose_validated() -> Result<(), anyhow::Error> {
-    run_test_propose_validated(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_propose_validated() -> Result<(), anyhow::Error> {
-    run_test_propose_validated(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_propose_validated() -> Result<(), anyhow::Error> {
-    run_test_propose_validated(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_propose_validated<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_propose_validated<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -2030,36 +1605,13 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_propose_pending_block() -> Result<(), anyhow::Error> {
-    run_test_propose_pending_block(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-async fn test_service_propose_pending_block() -> Result<(), anyhow::Error> {
-    run_test_propose_pending_block(ServiceStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_propose_pending_block() -> Result<(), anyhow::Error> {
-    run_test_propose_pending_block(RocksDbStorageBuilder::new().await).await
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_propose_pending_block() -> Result<(), anyhow::Error> {
-    run_test_propose_pending_block(DynamoDbStorageBuilder::default()).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_propose_pending_block() -> Result<(), anyhow::Error> {
-    run_test_propose_pending_block(ScyllaDbStorageBuilder::default()).await
-}
-
-async fn run_test_propose_pending_block<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_propose_pending_block<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -2098,18 +1650,10 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-pub async fn test_memory_message_policy() -> Result<(), anyhow::Error> {
-    run_test_message_policy(MemoryStorageBuilder::default()).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test(tokio::test)]
-pub async fn test_service_message_policy() -> Result<(), anyhow::Error> {
-    run_test_message_policy(ServiceStorageBuilder::new().await).await
-}
-
-async fn run_test_message_policy<B>(storage_builder: B) -> Result<(), anyhow::Error>
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[test_log::test(tokio::test)]
+async fn test_message_policy<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,

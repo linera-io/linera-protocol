@@ -51,7 +51,7 @@ use super::{init_worker_with_chains, make_certificate};
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
-) -> Result<(), anyhow::Error> {
+) -> anyhow::Result<()> {
     let storage = MemoryStorage::make_test_storage(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
@@ -62,7 +62,7 @@ async fn test_memory_handle_certificates_to_create_application(
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_rocks_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
-) -> Result<(), anyhow::Error> {
+) -> anyhow::Result<()> {
     let (storage, _dir) = RocksDbStorage::make_test_storage(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
@@ -73,7 +73,7 @@ async fn test_rocks_db_handle_certificates_to_create_application(
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_dynamo_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
-) -> Result<(), anyhow::Error> {
+) -> anyhow::Result<()> {
     let storage = DynamoDbStorage::make_test_storage(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
@@ -84,7 +84,7 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_scylla_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
-) -> Result<(), anyhow::Error> {
+) -> anyhow::Result<()> {
     let storage = ScyllaDbStorage::make_test_storage(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
@@ -92,7 +92,7 @@ async fn test_scylla_db_handle_certificates_to_create_application(
 async fn run_test_handle_certificates_to_create_application<S>(
     storage: S,
     wasm_runtime: WasmRuntime,
-) -> Result<(), anyhow::Error>
+) -> anyhow::Result<()>
 where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
