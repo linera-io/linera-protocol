@@ -34,7 +34,7 @@ use linera_execution::{
     OperationContext, ResourceController, UserApplicationDescription, UserApplicationId,
     WasmContractModule, WasmRuntime,
 };
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 use linera_storage::DynamoDbStorage;
 #[cfg(feature = "rocksdb")]
 use linera_storage::RocksDbStorage;
@@ -67,7 +67,7 @@ async fn test_rocks_db_handle_certificates_to_create_application(
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]

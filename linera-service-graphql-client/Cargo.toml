@@ -12,7 +12,7 @@ license = "Apache-2.0"
 [features]
 default = ["rocksdb"]
 rocksdb = ["linera-service/rocksdb"]
-aws = ["linera-service/aws"]
+dynamodb = ["linera-service/dynamodb"]
 scylladb = ["linera-service/scylladb"]
 
 [dependencies]

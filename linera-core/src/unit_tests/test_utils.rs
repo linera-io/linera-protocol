@@ -25,7 +25,7 @@ use linera_version::VersionInfo;
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 use {
     linera_storage::DynamoDbStorage,
     linera_views::dynamo_db::DynamoDbStoreConfig,
@@ -809,7 +809,7 @@ impl StorageBuilder for ServiceStorageBuilder {
     }
 }
 
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 #[derive(Default)]
 pub struct DynamoDbStorageBuilder {
     instance_counter: usize,
@@ -818,7 +818,7 @@ pub struct DynamoDbStorageBuilder {
     clock: TestClock,
 }
 
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 impl DynamoDbStorageBuilder {
     /// Creates a [`DynamoDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
@@ -831,7 +831,7 @@ impl DynamoDbStorageBuilder {
     }
 }
 
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 #[async_trait]
 impl StorageBuilder for DynamoDbStorageBuilder {
     type Storage = DynamoDbStorage<TestClock>;
