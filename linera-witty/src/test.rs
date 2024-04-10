@@ -101,3 +101,19 @@ pub fn assert_interface_dependencies<'i, Interface>(
         expected_types.into_iter().collect::<Vec<_>>(),
     );
 }
+
+/// Asserts that the function declarations of the `Interface` are the `expected_declarations`.
+pub fn assert_interface_functions<Interface>(expected_declarations: &[impl AsRef<str>])
+where
+    Interface: WitInterface,
+{
+    let wit_functions = Interface::wit_functions();
+
+    assert_eq!(
+        wit_functions.iter().map(String::as_str).collect::<Vec<_>>(),
+        expected_declarations
+            .iter()
+            .map(AsRef::as_ref)
+            .collect::<Vec<_>>()
+    );
+}
