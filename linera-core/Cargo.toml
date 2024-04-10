@@ -27,7 +27,7 @@ test = [
     "tokio/parking_lot",
 ]
 rocksdb = ["linera-views/rocksdb", "linera-storage/rocksdb"]
-aws = ["linera-views/dynamodb", "linera-storage/dynamodb"]
+dynamodb = ["linera-views/dynamodb", "linera-storage/dynamodb"]
 scylladb = ["linera-views/scylladb", "linera-storage/scylladb"]
 metrics = [
     "prometheus",

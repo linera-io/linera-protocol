@@ -14,7 +14,7 @@ edition = "2021"
 default = ["rocksdb"]
 benchmark = ["linera-base/test"]
 rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb"]
-aws = ["linera-views/dynamodb", "linera-core/aws"]
+dynamodb = ["linera-views/dynamodb", "linera-core/dynamodb"]
 scylladb = ["linera-views/scylladb", "linera-core/scylladb"]
 
 [dependencies]

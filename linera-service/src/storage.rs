@@ -22,7 +22,7 @@ use {
     std::num::NonZeroU16,
     tracing::debug,
 };
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 use {
     linera_storage::DynamoDbStorage,
     linera_views::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig},
@@ -49,7 +49,7 @@ pub enum StoreConfig {
     #[cfg(feature = "rocksdb")]
     RocksDb(RocksDbStoreConfig, String),
     /// The DynamoDb key value store
-    #[cfg(feature = "aws")]
+    #[cfg(feature = "dynamodb")]
     DynamoDb(DynamoDbStoreConfig, String),
     /// The ScyllaDb key value store
     #[cfg(feature = "scylladb")]
@@ -74,7 +74,7 @@ pub enum StorageConfig {
         path: PathBuf,
     },
     /// The DynamoDB description
-    #[cfg(feature = "aws")]
+    #[cfg(feature = "dynamodb")]
     DynamoDb {
         /// Whether to use the localstack system
         use_localstack: bool,
@@ -102,7 +102,7 @@ const MEMORY_EXT: &str = "memory:";
 const STORAGE_SERVICE: &str = "service:";
 #[cfg(feature = "rocksdb")]
 const ROCKS_DB: &str = "rocksdb:";
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 const DYNAMO_DB: &str = "dynamodb:";
 #[cfg(feature = "scylladb")]
 const SCYLLA_DB: &str = "scylladb:";
@@ -183,7 +183,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             }
             return Err(format_err!("We should have one or two parts"));
         }
-        #[cfg(feature = "aws")]
+        #[cfg(feature = "dynamodb")]
         if let Some(s) = input.strip_prefix(DYNAMO_DB) {
             let mut parts = s.splitn(2, ':');
             let namespace = parts
@@ -258,7 +258,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
         error!("available storage: memory");
         #[cfg(feature = "rocksdb")]
         error!("Also available is RocksDB");
-        #[cfg(feature = "aws")]
+        #[cfg(feature = "dynamodb")]
         error!("Also available is DynamoDB");
         #[cfg(feature = "scylladb")]
         error!("Also available is ScyllaDB");
@@ -295,7 +295,7 @@ impl StorageConfigNamespace {
                 };
                 Ok(StoreConfig::RocksDb(config, namespace))
             }
-            #[cfg(feature = "aws")]
+            #[cfg(feature = "dynamodb")]
             StorageConfig::DynamoDb { use_localstack } => {
                 let aws_config = get_config(*use_localstack).await?;
                 let config = DynamoDbStoreConfig {
@@ -330,7 +330,7 @@ impl std::fmt::Display for StorageConfigNamespace {
             StorageConfig::RocksDb { path } => {
                 write!(f, "rocksdb:{}:{}", path.display(), namespace)
             }
-            #[cfg(feature = "aws")]
+            #[cfg(feature = "dynamodb")]
             StorageConfig::DynamoDb { use_localstack } => match use_localstack {
                 true => write!(f, "dynamodb:{}:localstack", namespace),
                 false => write!(f, "dynamodb:{}:env", namespace),
@@ -360,7 +360,7 @@ impl StoreConfig {
                 RocksDbStore::delete_all(&config).await?;
                 Ok(())
             }
-            #[cfg(feature = "aws")]
+            #[cfg(feature = "dynamodb")]
             StoreConfig::DynamoDb(config, _namespace) => {
                 DynamoDbStore::delete_all(&config).await?;
                 Ok(())
@@ -389,7 +389,7 @@ impl StoreConfig {
                 RocksDbStore::delete(&config, &namespace).await?;
                 Ok(())
             }
-            #[cfg(feature = "aws")]
+            #[cfg(feature = "dynamodb")]
             StoreConfig::DynamoDb(config, namespace) => {
                 DynamoDbStore::delete(&config, &namespace).await?;
                 Ok(())
@@ -416,7 +416,7 @@ impl StoreConfig {
             StoreConfig::RocksDb(config, namespace) => {
                 Ok(RocksDbStore::exists(&config, &namespace).await?)
             }
-            #[cfg(feature = "aws")]
+            #[cfg(feature = "dynamodb")]
             StoreConfig::DynamoDb(config, namespace) => {
                 Ok(DynamoDbStore::exists(&config, &namespace).await?)
             }
@@ -443,7 +443,7 @@ impl StoreConfig {
                 RocksDbStore::maybe_create_and_connect(&config, &namespace).await?;
                 Ok(())
             }
-            #[cfg(feature = "aws")]
+            #[cfg(feature = "dynamodb")]
             StoreConfig::DynamoDb(config, namespace) => {
                 DynamoDbStore::maybe_create_and_connect(&config, &namespace).await?;
                 Ok(())
@@ -472,7 +472,7 @@ impl StoreConfig {
                 let tables = RocksDbStore::list_all(&config).await?;
                 Ok(tables)
             }
-            #[cfg(feature = "aws")]
+            #[cfg(feature = "dynamodb")]
             StoreConfig::DynamoDb(config, _namespace) => {
                 let tables = DynamoDbStore::list_all(&config).await?;
                 Ok(tables)
@@ -526,7 +526,7 @@ where
             let storage = RocksDbStorage::new(config, &namespace, wasm_runtime).await?;
             job.run(storage).await
         }
-        #[cfg(feature = "aws")]
+        #[cfg(feature = "dynamodb")]
         StoreConfig::DynamoDb(config, namespace) => {
             let storage = DynamoDbStorage::new(config, &namespace, wasm_runtime).await?;
             job.run(storage).await
@@ -559,7 +559,7 @@ pub async fn full_initialize_storage(
             let mut storage = RocksDbStorage::initialize(config, &namespace, wasm_runtime).await?;
             genesis_config.initialize_storage(&mut storage).await
         }
-        #[cfg(feature = "aws")]
+        #[cfg(feature = "dynamodb")]
         StoreConfig::DynamoDb(config, namespace) => {
             let wasm_runtime = None;
             let mut storage = DynamoDbStorage::initialize(config, &namespace, wasm_runtime).await?;
@@ -638,7 +638,7 @@ fn test_rocks_db_storage_config_from_str() {
     );
 }
 
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 #[test]
 fn test_aws_storage_config_from_str() {
     assert_eq!(

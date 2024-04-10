@@ -31,7 +31,7 @@ use linera_views::views::ViewError;
 use serde_json::json;
 use test_case::test_case;
 
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 use crate::client::client_tests::DynamoDbStorageBuilder;
 #[cfg(feature = "rocksdb")]
 use crate::client::client_tests::RocksDbStorageBuilder;
@@ -66,7 +66,7 @@ async fn test_rocks_db_create_application(wasm_runtime: WasmRuntime) -> anyhow::
 }
 
 #[ignore]
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -197,7 +197,7 @@ async fn test_rocks_db_run_application_with_dependency(
 }
 
 #[ignore]
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -414,7 +414,7 @@ async fn test_rocks_db_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow:
 }
 
 #[ignore]
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -623,7 +623,7 @@ async fn test_rocks_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyho
 }
 
 #[ignore]
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]

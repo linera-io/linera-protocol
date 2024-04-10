@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
+#![cfg(any(feature = "rocksdb", feature = "dynamodb", feature = "scylladb"))]
 
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 use linera_views::dynamo_db::{create_dynamo_db_test_config, DynamoDbStore};
 #[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStore};
@@ -18,7 +18,7 @@ async fn admin_test_rocks_db() {
     admin_test::<RocksDbStore>(&config).await;
 }
 
-#[cfg(feature = "aws")]
+#[cfg(feature = "dynamodb")]
 #[tokio::test]
 async fn admin_test_dynamo_db() {
     let config = create_dynamo_db_test_config().await;

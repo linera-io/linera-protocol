@@ -164,12 +164,12 @@ async fn make_testing_config(database: Database) -> StorageConfig {
             panic!("Database::RocksDb is selected without the feature rocksdb");
         }
         Database::DynamoDb => {
-            #[cfg(feature = "aws")]
+            #[cfg(feature = "dynamodb")]
             {
                 let use_localstack = true;
                 StorageConfig::DynamoDb { use_localstack }
             }
-            #[cfg(not(feature = "aws"))]
+            #[cfg(not(feature = "dynamodb"))]
             panic!("Database::DynamoDb is selected without the feature aws");
         }
         Database::ScyllaDb => {

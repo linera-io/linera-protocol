@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
+#![cfg(any(feature = "rocksdb", feature = "dynamodb", feature = "scylladb"))]
 
 use std::{str::FromStr, time::Duration};
 
@@ -84,7 +84,7 @@ const TRANSFER_DELAY_MILLIS: u64 = 100;
 
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "service_grpc")]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     // launching network, service and indexer
