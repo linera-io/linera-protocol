@@ -21,7 +21,6 @@ use linera_execution::{
     ResourceControlPolicy, WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage, TestClock};
-use linera_storage_service::child::get_free_port;
 use linera_version::VersionInfo;
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 use tokio::sync::oneshot;
@@ -645,7 +644,7 @@ where
 
 #[cfg(feature = "rocksdb")]
 /// Limit concurrency for RocksDB tests to avoid "too many open files" errors.
-pub static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
+static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
 
 #[derive(Default)]
 pub struct MemoryStorageBuilder {
@@ -764,7 +763,9 @@ impl ServiceStorageBuilder {
     /// Creates a `ServiceStorage` with the given Wasm runtime.
     pub async fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         let _guard = None;
-        let endpoint = get_free_port().await.unwrap();
+        let endpoint = linera_storage_service::child::get_free_port()
+            .await
+            .unwrap();
         let clock = TestClock::default();
         let namespace = generate_test_namespace();
         let use_child = true;

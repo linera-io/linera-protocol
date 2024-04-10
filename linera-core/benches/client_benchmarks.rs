@@ -8,9 +8,9 @@ use linera_base::{
     data_types::Amount,
     identifiers::{Account, ChainDescription},
 };
-use linera_core::client::{
-    self,
-    client_test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder, TestBuilder},
+use linera_core::{
+    client,
+    test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder, TestBuilder},
 };
 use linera_execution::system::{Recipient, UserData};
 use linera_storage::{

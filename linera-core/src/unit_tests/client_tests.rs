@@ -28,23 +28,21 @@ use linera_views::views::ViewError;
 use test_case::test_case;
 
 #[cfg(feature = "aws")]
-use crate::client::client_test_utils::DynamoDbStorageBuilder;
+use crate::test_utils::DynamoDbStorageBuilder;
 #[cfg(feature = "rocksdb")]
-use crate::client::client_test_utils::RocksDbStorageBuilder;
+use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
-use crate::client::client_test_utils::ScyllaDbStorageBuilder;
+use crate::test_utils::ScyllaDbStorageBuilder;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::client::client_test_utils::ServiceStorageBuilder;
+use crate::test_utils::ServiceStorageBuilder;
 use crate::{
-    client::{
-        client_test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder},
-        ArcChainClient, ChainClientError, ClientOutcome, MessageAction, MessagePolicy,
-    },
+    client::{ArcChainClient, ChainClientError, ClientOutcome, MessageAction, MessagePolicy},
     local_node::LocalNodeError,
     node::{
         CrossChainMessageDelivery,
         NodeError::{self, ClientIoError},
     },
+    test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder},
     updater::CommunicationError,
     worker::{Notification, Reason, WorkerError},
 };

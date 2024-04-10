@@ -39,24 +39,23 @@ use linera_execution::{
     ChannelSubscription, ExecutionError, Message, MessageKind, Query, Response,
     SystemExecutionError, SystemQuery, SystemResponse,
 };
-#[cfg(feature = "aws")]
-use linera_storage::DynamoDbStorage;
-#[cfg(feature = "scylladb")]
-use linera_storage::ScyllaDbStorage;
-use linera_storage::{DbStorage, MemoryStorage, Storage, TestClock};
-use linera_views::{
-    common::KeyValueStore, memory::TEST_MEMORY_MAX_STREAM_QUERIES,
-    value_splitting::DatabaseConsistencyError, views::ViewError,
-};
+use linera_storage::{MemoryStorage, Storage, TestClock};
+use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
+use test_case::test_case;
 use test_log::test;
-#[cfg(feature = "rocksdb")]
-use {linera_core::client::client_test_utils::ROCKS_DB_SEMAPHORE, linera_storage::RocksDbStorage};
 
+#[cfg(feature = "aws")]
+use crate::test_utils::DynamoDbStorageBuilder;
+#[cfg(feature = "rocksdb")]
+use crate::test_utils::RocksDbStorageBuilder;
+#[cfg(feature = "scylladb")]
+use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::{
     data_types::*,
+    test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
-        CrossChainUpdateHelper, Notification, Reason,
-        Reason::{NewBlock, NewIncomingMessage},
+        CrossChainUpdateHelper, Notification,
+        Reason::{self, NewBlock, NewIncomingMessage},
         ValidatorWorker, WorkerError, WorkerState,
     },
 };
@@ -355,42 +354,19 @@ fn update_recipient_direct(recipient: ChainId, certificate: &Certificate) -> Cro
     }
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_block_proposal_bad_signature() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_bad_signature(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_block_proposal_bad_signature() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_bad_signature(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_bad_signature() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_bad_signature(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_block_proposal_bad_signature() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_bad_signature(storage).await;
-}
-
-async fn run_test_handle_block_proposal_bad_signature<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_block_proposal_bad_signature<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![
             (
                 ChainDescription::Root(1),
@@ -421,50 +397,27 @@ where
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
-        .await
-        .unwrap()
+        .await?
         .manager
         .get()
         .pending()
         .is_none());
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_block_proposal_zero_amount() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_zero_amount(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_block_proposal_zero_amount() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_zero_amount(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_zero_amount() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_zero_amount(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_block_proposal_zero_amount() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_zero_amount(storage).await;
-}
-
-async fn run_test_handle_block_proposal_zero_amount<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_block_proposal_zero_amount<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![
             (
                 ChainDescription::Root(1),
@@ -500,54 +453,30 @@ where
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
-        .await
-        .unwrap()
+        .await?
         .manager
         .get()
         .pending()
         .is_none());
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_block_proposal_ticks() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_ticks(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_block_proposal_ticks() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_ticks(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_ticks() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_ticks(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_block_proposal_ticks() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_ticks(storage).await;
-}
-
-async fn run_test_handle_block_proposal_ticks<C>(storage: DbStorage<C, TestClock>)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_block_proposal_ticks<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    C: KeyValueStore + Clone + Send + Sync + 'static,
-    ViewError: From<<C as KeyValueStore>::Error>,
-    <C as KeyValueStore>::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
+    let storage = storage_builder.build().await?;
+    let clock = storage_builder.clock();
     let key_pair = KeyPair::generate();
     let balance: Amount = Amount::from_tokens(5);
     let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
     let epoch = Epoch::ZERO;
-    let clock = storage.clock.clone();
     let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
 
     {
@@ -565,7 +494,7 @@ where
     let certificate = {
         let block = make_first_block(ChainId::root(1)).with_timestamp(block_0_time);
         let block_proposal = block.clone().into_fast_proposal(&key_pair);
-        assert!(worker.handle_block_proposal(block_proposal).await.is_ok());
+        worker.handle_block_proposal(block_proposal).await?;
 
         let system_state = SystemExecutionState {
             committees: [(epoch, committee.clone())].into_iter().collect(),
@@ -597,44 +526,22 @@ where
             Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InvalidBlockTimestamp {..})
         );
     }
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_block_proposal_unknown_sender() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_unknown_sender(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_block_proposal_unknown_sender() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_unknown_sender(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_unknown_sender() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_unknown_sender(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_block_proposal_unknown_sender() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_unknown_sender(storage).await;
-}
-
-async fn run_test_handle_block_proposal_unknown_sender<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_block_proposal_unknown_sender<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![
             (
                 ChainDescription::Root(1),
@@ -665,50 +572,27 @@ where
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
-        .await
-        .unwrap()
+        .await?
         .manager
         .get()
         .pending()
         .is_none());
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_block_proposal_with_chaining() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_with_chaining(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_block_proposal_with_chaining() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_with_chaining(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_with_chaining() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_with_chaining(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_block_proposal_with_chaining() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_with_chaining(storage).await;
-}
-
-async fn run_test_handle_block_proposal_with_chaining<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_block_proposal_with_chaining<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![(
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -742,8 +626,7 @@ where
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
-        .await
-        .unwrap()
+        .await?
         .manager
         .get()
         .pending()
@@ -751,27 +634,23 @@ where
 
     worker
         .handle_block_proposal(block_proposal0.clone())
-        .await
-        .unwrap();
+        .await?;
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
-        .await
-        .unwrap()
+        .await?
         .manager
         .get()
         .pending()
         .is_some());
     worker
         .handle_certificate(certificate0, vec![], None)
-        .await
-        .unwrap();
-    worker.handle_block_proposal(block_proposal1).await.unwrap();
+        .await?;
+    worker.handle_block_proposal(block_proposal1).await?;
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
-        .await
-        .unwrap()
+        .await?
         .manager
         .get()
         .pending()
@@ -780,45 +659,25 @@ where
         worker.handle_block_proposal(block_proposal0.clone()).await,
         Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight {..})
     );
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_block_proposal_with_incoming_messages() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_with_incoming_messages(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_block_proposal_with_incoming_messages() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_with_incoming_messages(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_with_incoming_messages() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_with_incoming_messages(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_block_proposal_with_incoming_messages() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_with_incoming_messages(storage).await;
-}
-
-async fn run_test_handle_block_proposal_with_incoming_messages<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_block_proposal_with_incoming_messages<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![
             (
                 ChainDescription::Root(1),
@@ -895,16 +754,14 @@ where
             vec![],
             Some(&mut notifications),
         )
-        .await
-        .unwrap();
+        .await?;
     worker
         .fully_handle_certificate_with_notifications(
             certificate1.clone(),
             vec![],
             Some(&mut notifications),
         )
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(
         notifications,
         vec![
@@ -1116,10 +973,7 @@ where
             })
             .into_fast_proposal(&recipient_key_pair);
         // Taking the first message only is ok.
-        worker
-            .handle_block_proposal(block_proposal.clone())
-            .await
-            .unwrap();
+        worker.handle_block_proposal(block_proposal.clone()).await?;
         let certificate = make_certificate(
             &committee,
             &worker,
@@ -1138,8 +992,7 @@ where
         );
         worker
             .handle_certificate(certificate.clone(), vec![], None)
-            .await
-            .unwrap();
+            .await?;
 
         // Then receive the next two messages.
         let block_proposal = make_child_block(&certificate.value)
@@ -1175,49 +1028,24 @@ where
                 action: MessageAction::Accept,
             })
             .into_fast_proposal(&recipient_key_pair);
-        worker
-            .handle_block_proposal(block_proposal.clone())
-            .await
-            .unwrap();
+        worker.handle_block_proposal(block_proposal.clone()).await?;
     }
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_block_proposal_exceed_balance() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_exceed_balance(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_block_proposal_exceed_balance() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_exceed_balance(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_exceed_balance() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_exceed_balance(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_block_proposal_exceed_balance() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_exceed_balance(storage).await;
-}
-
-async fn run_test_handle_block_proposal_exceed_balance<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_block_proposal_exceed_balance<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![
             (
                 ChainDescription::Root(1),
@@ -1250,50 +1078,27 @@ where
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
-        .await
-        .unwrap()
+        .await?
         .manager
         .get()
         .pending()
         .is_none());
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_block_proposal() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_block_proposal() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_block_proposal() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal(storage).await;
-}
-
-async fn run_test_handle_block_proposal<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_block_proposal<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![(
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -1305,16 +1110,12 @@ where
         .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
         .into_fast_proposal(&sender_key_pair);
 
-    let (chain_info_response, _actions) =
-        worker.handle_block_proposal(block_proposal).await.unwrap();
-    chain_info_response
-        .check(ValidatorName(worker.key_pair.unwrap().public()))
-        .unwrap();
+    let (chain_info_response, _actions) = worker.handle_block_proposal(block_proposal).await?;
+    chain_info_response.check(ValidatorName(worker.key_pair.unwrap().public()))?;
     let pending_value = worker
         .storage
         .load_active_chain(ChainId::root(1))
-        .await
-        .unwrap()
+        .await?
         .manager
         .get()
         .pending()
@@ -1324,44 +1125,22 @@ where
         chain_info_response.info.manager.pending.unwrap(),
         pending_value
     );
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_block_proposal_replay() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_replay(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_block_proposal_replay() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_replay(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_replay() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_replay(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_block_proposal_replay() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_block_proposal_replay(storage).await;
-}
-
-async fn run_test_handle_block_proposal_replay<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_block_proposal_replay<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![
             (
                 ChainDescription::Root(1),
@@ -1380,58 +1159,30 @@ where
         .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
         .into_fast_proposal(&sender_key_pair);
 
-    let (response, _actions) = worker
-        .handle_block_proposal(block_proposal.clone())
-        .await
-        .unwrap();
-    response
-        .check(ValidatorName(worker.key_pair.as_ref().unwrap().public()))
-        .as_ref()
-        .unwrap();
-    let (replay_response, _actions) = worker.handle_block_proposal(block_proposal).await.unwrap();
+    let (response, _actions) = worker.handle_block_proposal(block_proposal.clone()).await?;
+    response.check(ValidatorName(worker.key_pair.as_ref().unwrap().public()))?;
+    let (replay_response, _actions) = worker.handle_block_proposal(block_proposal).await?;
     // Workaround lack of equality.
     assert_eq!(
         CryptoHash::new(&*response.info),
         CryptoHash::new(&*replay_response.info)
     );
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_certificate_unknown_sender() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_certificate_unknown_sender(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_certificate_unknown_sender() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_unknown_sender(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_unknown_sender() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_unknown_sender(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_certificate_unknown_sender() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_unknown_sender(storage).await;
-}
-
-async fn run_test_handle_certificate_unknown_sender<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_certificate_unknown_sender<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
             PublicKey::test_key(2),
@@ -1457,44 +1208,22 @@ where
             .await,
         Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InactiveChain {..})
     );
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_certificate_with_open_chain() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_certificate_with_open_chain(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_certificate_with_open_chain() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_with_open_chain(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_with_open_chain() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_with_open_chain(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_certificate_with_open_chain() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_with_open_chain(storage).await;
-}
-
-async fn run_test_handle_certificate_with_open_chain<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_certificate_with_open_chain<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
             PublicKey::test_key(2),
@@ -1555,48 +1284,25 @@ where
     let certificate = make_certificate(&committee, &worker, value);
     let info = worker
         .fully_handle_certificate(certificate, vec![])
-        .await
-        .unwrap()
+        .await?
         .info;
     assert_eq!(info.next_block_height, BlockHeight::from(1));
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_certificate_wrong_owner() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_certificate_wrong_owner(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_certificate_wrong_owner() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_wrong_owner(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_wrong_owner() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_wrong_owner(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_certificate_wrong_owner() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_wrong_owner(storage).await;
-}
-
-async fn run_test_handle_certificate_wrong_owner<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_certificate_wrong_owner<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
             PublicKey::test_key(2),
@@ -1622,44 +1328,22 @@ where
         worker.fully_handle_certificate(certificate, vec![]).await,
         Err(WorkerError::IncorrectStateHash)
     );
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_certificate_bad_block_height() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_certificate_bad_block_height(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_certificate_bad_block_height() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_bad_block_height(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_bad_block_height() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_bad_block_height(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_certificate_bad_block_height() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_bad_block_height(storage).await;
-}
-
-async fn run_test_handle_certificate_bad_block_height<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_certificate_bad_block_height<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![
             (
                 ChainDescription::Root(1),
@@ -1689,50 +1373,26 @@ where
     // Replays are ignored.
     worker
         .fully_handle_certificate(certificate.clone(), vec![])
-        .await
-        .unwrap();
-    worker
-        .fully_handle_certificate(certificate, vec![])
-        .await
-        .unwrap();
+        .await?;
+    worker.fully_handle_certificate(certificate, vec![]).await?;
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_certificate_with_anticipated_incoming_message() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_certificate_with_anticipated_incoming_message(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_certificate_with_anticipated_incoming_message() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_with_anticipated_incoming_message(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_with_anticipated_incoming_message() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_with_anticipated_incoming_message(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_certificate_with_anticipated_incoming_message() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_with_anticipated_incoming_message(storage).await;
-}
-
-async fn run_test_handle_certificate_with_anticipated_incoming_message<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_certificate_with_anticipated_incoming_message<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![
             (
                 ChainDescription::Root(1),
@@ -1776,13 +1436,8 @@ where
     .await;
     worker
         .fully_handle_certificate(certificate.clone(), vec![])
-        .await
-        .unwrap();
-    let mut chain = worker
-        .storage
-        .load_active_chain(ChainId::root(1))
-        .await
-        .unwrap();
+        .await?;
+    let mut chain = worker.storage.load_active_chain(ChainId::root(1)).await?;
     assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get());
     assert_eq!(
         BlockHeight::from(1),
@@ -1791,19 +1446,14 @@ where
     let inbox = chain
         .inboxes
         .try_load_entry_mut(&Origin::chain(ChainId::root(3)))
-        .await
-        .unwrap();
-    assert_eq!(
-        BlockHeight::ZERO,
-        inbox.next_block_height_to_receive().unwrap()
-    );
+        .await?;
+    assert_eq!(BlockHeight::ZERO, inbox.next_block_height_to_receive()?);
     assert_eq!(inbox.added_events.count(), 0);
     assert_matches!(
         inbox
             .removed_events
             .front()
-            .await
-            .unwrap()
+            .await?
             .unwrap(),
         Event {
             certificate_hash,
@@ -1823,49 +1473,25 @@ where
     );
     assert_eq!(chain.confirmed_log.count(), 1);
     assert_eq!(Some(certificate.hash()), chain.tip_state.get().block_hash);
-    worker
-        .storage
-        .load_active_chain(ChainId::root(2))
-        .await
-        .unwrap();
+    worker.storage.load_active_chain(ChainId::root(2)).await?;
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_certificate_receiver_balance_overflow() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_certificate_receiver_balance_overflow(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_certificate_receiver_balance_overflow() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_receiver_balance_overflow(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_receiver_balance_overflow() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_receiver_balance_overflow(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_certificate_receiver_balance_overflow() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_receiver_balance_overflow(storage).await;
-}
-
-async fn run_test_handle_certificate_receiver_balance_overflow<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_certificate_receiver_balance_overflow<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![
             (
                 ChainDescription::Root(1),
@@ -1895,13 +1521,8 @@ where
     .await;
     worker
         .fully_handle_certificate(certificate.clone(), vec![])
-        .await
-        .unwrap();
-    let new_sender_chain = worker
-        .storage
-        .load_active_chain(ChainId::root(1))
-        .await
-        .unwrap();
+        .await?;
+    let new_sender_chain = worker.storage.load_active_chain(ChainId::root(1)).await?;
     assert_eq!(
         Amount::ZERO,
         *new_sender_chain.execution_state.system.balance.get()
@@ -1915,50 +1536,27 @@ where
         Some(certificate.hash()),
         new_sender_chain.tip_state.get().block_hash
     );
-    let new_recipient_chain = worker
-        .storage
-        .load_active_chain(ChainId::root(2))
-        .await
-        .unwrap();
+    let new_recipient_chain = worker.storage.load_active_chain(ChainId::root(2)).await?;
     assert_eq!(
         Amount::MAX,
         *new_recipient_chain.execution_state.system.balance.get()
     );
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_certificate_receiver_equal_sender() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_certificate_receiver_equal_sender(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_certificate_receiver_equal_sender() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_receiver_equal_sender(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_receiver_equal_sender() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_receiver_equal_sender(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_certificate_receiver_equal_sender() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_receiver_equal_sender(storage).await;
-}
-
-async fn run_test_handle_certificate_receiver_equal_sender<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_certificate_receiver_equal_sender<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
+    let storage = storage_builder.build().await?;
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
     let (committee, mut worker) =
@@ -1978,29 +1576,20 @@ where
     .await;
     worker
         .fully_handle_certificate(certificate.clone(), vec![])
-        .await
-        .unwrap();
-    let mut chain = worker
-        .storage
-        .load_active_chain(ChainId::root(1))
-        .await
-        .unwrap();
+        .await?;
+    let mut chain = worker.storage.load_active_chain(ChainId::root(1)).await?;
     assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get());
     let inbox = chain
         .inboxes
         .try_load_entry_mut(&Origin::chain(ChainId::root(1)))
-        .await
-        .unwrap();
-    assert_eq!(
-        BlockHeight::from(1),
-        inbox.next_block_height_to_receive().unwrap()
-    );
+        .await?;
+    assert_eq!(BlockHeight::from(1), inbox.next_block_height_to_receive()?);
     assert_matches!(
         inbox
             .added_events
             .front()
             .await
-            .unwrap()
+            ?
             .unwrap(),
         Event {
             certificate_hash,
@@ -2024,44 +1613,22 @@ where
     );
     assert_eq!(chain.confirmed_log.count(), 1);
     assert_eq!(Some(certificate.hash()), chain.tip_state.get().block_hash);
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_cross_chain_request() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_cross_chain_request(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_cross_chain_request() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_cross_chain_request(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_cross_chain_request() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_cross_chain_request(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_cross_chain_request() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_cross_chain_request(storage).await;
-}
-
-async fn run_test_handle_cross_chain_request<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_cross_chain_request<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
             PublicKey::test_key(2),
@@ -2083,30 +1650,20 @@ where
     .await;
     worker
         .handle_cross_chain_request(update_recipient_direct(ChainId::root(2), &certificate))
-        .await
-        .unwrap();
-    let mut chain = worker
-        .storage
-        .load_active_chain(ChainId::root(2))
-        .await
-        .unwrap();
+        .await?;
+    let mut chain = worker.storage.load_active_chain(ChainId::root(2)).await?;
     assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
     assert_eq!(BlockHeight::ZERO, chain.tip_state.get().next_block_height);
     let inbox = chain
         .inboxes
         .try_load_entry_mut(&Origin::chain(ChainId::root(1)))
-        .await
-        .unwrap();
-    assert_eq!(
-        BlockHeight::from(1),
-        inbox.next_block_height_to_receive().unwrap()
-    );
+        .await?;
+    assert_eq!(BlockHeight::from(1), inbox.next_block_height_to_receive()?);
     assert_matches!(
         inbox
             .added_events
             .front()
-            .await
-            .unwrap()
+            .await?
             .unwrap(),
         Event {
             certificate_hash,
@@ -2127,41 +1684,22 @@ where
     assert_eq!(chain.confirmed_log.count(), 0);
     assert_eq!(None, chain.tip_state.get().block_hash);
     assert_eq!(chain.received_log.count(), 1);
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_cross_chain_request_no_recipient_chain() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_cross_chain_request_no_recipient_chain() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_cross_chain_request_no_recipient_chain() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain(storage).await;
-}
-
-async fn run_test_handle_cross_chain_request_no_recipient_chain<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_cross_chain_request_no_recipient_chain<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
+    let storage = storage_builder.build().await?;
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker(storage, /* is_client */ false);
     let certificate = make_simple_transfer_certificate(
@@ -2178,48 +1716,28 @@ where
     .await;
     assert!(worker
         .handle_cross_chain_request(update_recipient_direct(ChainId::root(2), &certificate))
-        .await
-        .unwrap()
+        .await?
         .cross_chain_requests
         .is_empty());
-    let chain = worker.storage.load_chain(ChainId::root(2)).await.unwrap();
+    let chain = worker.storage.load_chain(ChainId::root(2)).await?;
     // The target chain did not receive the message
-    assert!(chain.inboxes.indices().await.unwrap().is_empty());
+    assert!(chain.inboxes.indices().await?.is_empty());
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain_on_client(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain_on_client(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain_on_client(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain_on_client(storage).await;
-}
-
-async fn run_test_handle_cross_chain_request_no_recipient_chain_on_client<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_cross_chain_request_no_recipient_chain_on_client<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
+    let storage = storage_builder.build().await?;
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker(storage, /* is_client */ true);
     let certificate = make_simple_transfer_certificate(
@@ -2237,8 +1755,7 @@ where
     // An inactive target chain is created and it acknowledges the message.
     let actions = worker
         .handle_cross_chain_request(update_recipient_direct(ChainId::root(2), &certificate))
-        .await
-        .unwrap();
+        .await?;
     assert_matches!(
         actions.cross_chain_requests.as_slice(),
         &[CrossChainRequest::ConfirmUpdatedRecipient { .. }]
@@ -2253,47 +1770,27 @@ where
             }
         }]
     );
-    let chain = worker.storage.load_chain(ChainId::root(2)).await.unwrap();
-    assert!(!chain.inboxes.indices().await.unwrap().is_empty());
+    let chain = worker.storage.load_chain(ChainId::root(2)).await?;
+    assert!(!chain.inboxes.indices().await?.is_empty());
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_certificate_to_active_recipient() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_certificate_to_active_recipient(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_certificate_to_active_recipient() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_to_active_recipient(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_to_active_recipient() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_to_active_recipient(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_certificate_to_active_recipient() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_to_active_recipient(storage).await;
-}
-
-async fn run_test_handle_certificate_to_active_recipient<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_certificate_to_active_recipient<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![
             (
                 ChainDescription::Root(1),
@@ -2311,8 +1808,7 @@ where
     assert_eq!(
         worker
             .query_application(ChainId::root(1), Query::System(SystemQuery))
-            .await
-            .unwrap(),
+            .await?,
         Response::System(SystemResponse {
             chain_id: ChainId::root(1),
             balance: Amount::from_tokens(5),
@@ -2321,8 +1817,7 @@ where
     assert_eq!(
         worker
             .query_application(ChainId::root(2), Query::System(SystemQuery))
-            .await
-            .unwrap(),
+            .await?,
         Response::System(SystemResponse {
             chain_id: ChainId::root(2),
             balance: Amount::ZERO,
@@ -2344,8 +1839,7 @@ where
 
     let info = worker
         .fully_handle_certificate(certificate.clone(), vec![])
-        .await
-        .unwrap()
+        .await?
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
     assert_eq!(Amount::ZERO, info.chain_balance);
@@ -2355,8 +1849,7 @@ where
     assert_eq!(
         worker
             .query_application(ChainId::root(1), Query::System(SystemQuery))
-            .await
-            .unwrap(),
+            .await?,
         Response::System(SystemResponse {
             chain_id: ChainId::root(1),
             balance: Amount::ZERO,
@@ -2392,14 +1885,12 @@ where
     .await;
     worker
         .fully_handle_certificate(certificate.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(
         worker
             .query_application(ChainId::root(2), Query::System(SystemQuery))
-            .await
-            .unwrap(),
+            .await?,
         Response::System(SystemResponse {
             chain_id: ChainId::root(2),
             balance: Amount::from_tokens(4),
@@ -2407,11 +1898,7 @@ where
     );
 
     {
-        let recipient_chain = worker
-            .storage
-            .load_active_chain(ChainId::root(2))
-            .await
-            .unwrap();
+        let recipient_chain = worker.storage.load_active_chain(ChainId::root(2)).await?;
         assert_eq!(
             *recipient_chain.execution_state.system.balance.get(),
             Amount::from_tokens(4)
@@ -2432,7 +1919,7 @@ where
         assert_eq!(recipient_chain.received_log.count(), 1);
     }
     let query = ChainInfoQuery::new(ChainId::root(2)).with_received_log_excluding_first_nth(0);
-    let (response, _actions) = worker.handle_chain_info_query(query).await.unwrap();
+    let (response, _actions) = worker.handle_chain_info_query(query).await?;
     assert_eq!(response.info.requested_received_log.len(), 1);
     assert_eq!(
         response.info.requested_received_log[0],
@@ -2441,44 +1928,24 @@ where
             height: BlockHeight::ZERO
         }
     );
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_certificate_to_inactive_recipient() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_certificate_to_inactive_recipient(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_certificate_to_inactive_recipient() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_to_inactive_recipient(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_to_inactive_recipient() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_to_inactive_recipient(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_certificate_to_inactive_recipient() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_to_inactive_recipient(storage).await;
-}
-
-async fn run_test_handle_certificate_to_inactive_recipient<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_certificate_to_inactive_recipient<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![(
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -2501,48 +1968,27 @@ where
 
     let info = worker
         .fully_handle_certificate(certificate.clone(), vec![])
-        .await
-        .unwrap()
+        .await?
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
     assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash()), info.block_hash);
     assert!(info.manager.pending.is_none());
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_handle_certificate_with_rejected_transfer() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_handle_certificate_with_rejected_transfer(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_handle_certificate_with_rejected_transfer() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_with_rejected_transfer(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_with_rejected_transfer() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_with_rejected_transfer(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_handle_certificate_with_rejected_transfer() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_handle_certificate_with_rejected_transfer(storage).await;
-}
-
-async fn run_test_handle_certificate_with_rejected_transfer<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_certificate_with_rejected_transfer<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let sender = Owner::from(sender_key_pair.public());
@@ -2559,7 +2005,7 @@ where
     };
 
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![
             (
                 ChainDescription::Root(1),
@@ -2594,8 +2040,7 @@ where
 
     worker
         .fully_handle_certificate(certificate00.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     let certificate01 = make_transfer_certificate(
         ChainDescription::Root(1),
@@ -2632,16 +2077,11 @@ where
 
     worker
         .fully_handle_certificate(certificate01.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     {
-        let chain = worker
-            .storage
-            .load_active_chain(ChainId::root(1))
-            .await
-            .unwrap();
-        chain.validate_incoming_messages().await.unwrap();
+        let chain = worker.storage.load_active_chain(ChainId::root(1)).await?;
+        chain.validate_incoming_messages().await?;
     }
 
     // Then, make two transfers to the recipient.
@@ -2662,8 +2102,7 @@ where
 
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     let certificate2 = make_transfer_certificate(
         ChainDescription::Root(1),
@@ -2682,8 +2121,7 @@ where
 
     worker
         .fully_handle_certificate(certificate2.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     // Reject the first transfer and try to use the money of the second one.
     let certificate = make_transfer_certificate(
@@ -2742,16 +2180,11 @@ where
 
     worker
         .fully_handle_certificate(certificate.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     {
-        let chain = worker
-            .storage
-            .load_active_chain(ChainId::root(2))
-            .await
-            .unwrap();
-        chain.validate_incoming_messages().await.unwrap();
+        let chain = worker.storage.load_active_chain(ChainId::root(2)).await?;
+        chain.validate_incoming_messages().await?;
     }
 
     // Process the bounced message and try to use the refund.
@@ -2790,55 +2223,30 @@ where
 
     worker
         .fully_handle_certificate(certificate3.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     {
-        let chain = worker
-            .storage
-            .load_active_chain(ChainId::root(1))
-            .await
-            .unwrap();
-        chain.validate_incoming_messages().await.unwrap();
+        let chain = worker.storage.load_active_chain(ChainId::root(1)).await?;
+        chain.validate_incoming_messages().await?;
     }
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_chain_creation_with_committee_creation() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_chain_creation_with_committee_creation(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_chain_creation_with_committee_creation() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_chain_creation_with_committee_creation(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_chain_creation_with_committee_creation() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_chain_creation_with_committee_creation(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_chain_creation_with_committee_creation() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_chain_creation_with_committee_creation(storage).await;
-}
-
-async fn run_test_chain_creation_with_committee_creation<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn run_test_chain_creation_with_committee_creation<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![(
             ChainDescription::Root(0),
             key_pair.public(),
@@ -2918,16 +2326,15 @@ where
     );
     worker
         .fully_handle_certificate(certificate0.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
     {
-        let admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
-        admin_chain.validate_incoming_messages().await.unwrap();
+        let admin_chain = worker.storage.load_active_chain(admin_id).await?;
+        admin_chain.validate_incoming_messages().await?;
         assert_eq!(
             BlockHeight::from(1),
             admin_chain.tip_state.get().next_block_height
         );
-        assert!(admin_chain.outboxes.indices().await.unwrap().is_empty());
+        assert!(admin_chain.outboxes.indices().await?.is_empty());
         assert_eq!(
             *admin_chain.execution_state.system.admin_id.get(),
             Some(admin_id)
@@ -2936,8 +2343,7 @@ where
         assert!(!admin_chain
             .channels
             .indices()
-            .await
-            .unwrap()
+            .await?
             .contains(&admin_channel_full_name));
     }
 
@@ -2976,8 +2382,7 @@ where
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     // Have the admin chain accept the subscription now.
     let certificate2 = make_certificate(
@@ -3022,29 +2427,26 @@ where
     );
     worker
         .fully_handle_certificate(certificate2.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
     {
         // The root chain has 1 subscribers.
-        let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
-        admin_chain.validate_incoming_messages().await.unwrap();
+        let mut admin_chain = worker.storage.load_active_chain(admin_id).await?;
+        admin_chain.validate_incoming_messages().await?;
         assert_eq!(
             admin_chain
                 .channels
                 .try_load_entry_mut(&admin_channel_full_name)
-                .await
-                .unwrap()
+                .await?
                 .subscribers
                 .indices()
-                .await
-                .unwrap()
+                .await?
                 .len(),
             1
         );
     }
     {
         // The child is active and has not migrated yet.
-        let mut user_chain = worker.storage.load_active_chain(user_id).await.unwrap();
+        let mut user_chain = worker.storage.load_active_chain(user_id).await?;
         assert_eq!(
             BlockHeight::ZERO,
             user_chain.tip_state.get().next_block_height
@@ -3059,22 +2461,19 @@ where
                 .system
                 .subscriptions
                 .indices()
-                .await
-                .unwrap()
+                .await?
                 .len(),
             1
         );
-        user_chain.validate_incoming_messages().await.unwrap();
+        user_chain.validate_incoming_messages().await?;
         matches!(
             user_chain
                 .inboxes
                 .try_load_entry_mut(&Origin::chain(admin_id))
-                .await
-                .unwrap()
+                .await?
                 .added_events
                 .read_front(10)
-                .await
-                .unwrap()[..],
+                .await?[..],
             [
                 Event {
                     message: Message::System(SystemMessage::OpenChain(_)),
@@ -3093,10 +2492,9 @@ where
         let channel_inbox = user_chain
             .inboxes
             .try_load_entry_mut(&admin_channel_origin)
-            .await
-            .unwrap();
+            .await?;
         matches!(
-            channel_inbox.added_events.read_front(10).await.unwrap()[..],
+            channel_inbox.added_events.read_front(10).await?[..],
             [Event {
                 message: Message::System(SystemMessage::SetCommittees { .. }),
                 ..
@@ -3202,10 +2600,9 @@ where
     );
     worker
         .fully_handle_certificate(certificate3, vec![])
-        .await
-        .unwrap();
+        .await?;
     {
-        let mut user_chain = worker.storage.load_active_chain(user_id).await.unwrap();
+        let mut user_chain = worker.storage.load_active_chain(user_id).await?;
         assert_eq!(
             BlockHeight::from(1),
             user_chain.tip_state.get().next_block_height
@@ -3220,23 +2617,18 @@ where
                 .system
                 .subscriptions
                 .indices()
-                .await
-                .unwrap()
+                .await?
                 .len(),
             1
         );
         assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
-        user_chain.validate_incoming_messages().await.unwrap();
+        user_chain.validate_incoming_messages().await?;
         {
             let inbox = user_chain
                 .inboxes
                 .try_load_entry_mut(&Origin::chain(admin_id))
-                .await
-                .unwrap();
-            assert_eq!(
-                inbox.next_block_height_to_receive().unwrap(),
-                BlockHeight(3)
-            );
+                .await?;
+            assert_eq!(inbox.next_block_height_to_receive()?, BlockHeight(3));
             assert_eq!(inbox.added_events.count(), 0);
             assert_eq!(inbox.removed_events.count(), 0);
         }
@@ -3244,55 +2636,29 @@ where
             let inbox = user_chain
                 .inboxes
                 .try_load_entry_mut(&admin_channel_origin)
-                .await
-                .unwrap();
-            assert_eq!(
-                inbox.next_block_height_to_receive().unwrap(),
-                BlockHeight(2)
-            );
+                .await?;
+            assert_eq!(inbox.next_block_height_to_receive()?, BlockHeight(2));
             assert_eq!(inbox.added_events.count(), 0);
             assert_eq!(inbox.removed_events.count(), 0);
         }
+        Ok(())
     }
 }
 
-#[test(tokio::test)]
-async fn test_memory_transfers_and_committee_creation() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_transfers_and_committee_creation(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_transfers_and_committee_creation() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_transfers_and_committee_creation(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_transfers_and_committee_creation() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_transfers_and_committee_creation(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_transfers_and_committee_creation() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_transfers_and_committee_creation(storage).await;
-}
-
-async fn run_test_transfers_and_committee_creation<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_transfers_and_committee_creation<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![
             (ChainDescription::Root(0), key_pair0.public(), Amount::ZERO),
             (
@@ -3357,17 +2723,15 @@ where
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     // Try to execute the transfer.
     worker
         .fully_handle_certificate(certificate0.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     // The transfer was started..
-    let user_chain = worker.storage.load_active_chain(user_id).await.unwrap();
+    let user_chain = worker.storage.load_active_chain(user_id).await?;
     assert_eq!(
         BlockHeight::from(1),
         user_chain.tip_state.get().next_block_height
@@ -3382,62 +2746,38 @@ where
     );
 
     // .. and the message has gone through.
-    let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
-    assert_eq!(admin_chain.inboxes.indices().await.unwrap().len(), 1);
+    let mut admin_chain = worker.storage.load_active_chain(admin_id).await?;
+    assert_eq!(admin_chain.inboxes.indices().await?.len(), 1);
     matches!(
         admin_chain
             .inboxes
             .try_load_entry_mut(&Origin::chain(user_id))
-            .await
-            .unwrap()
+            .await?
             .added_events
             .read_front(10)
-            .await
-            .unwrap()[..],
+            .await?[..],
         [Event {
             message: Message::System(SystemMessage::Credit { .. }),
             ..
         }]
     );
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_transfers_and_committee_removal() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_transfers_and_committee_removal(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_transfers_and_committee_removal() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_transfers_and_committee_removal(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_transfers_and_committee_removal() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_transfers_and_committee_removal(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_transfers_and_committee_removal() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_transfers_and_committee_removal(storage).await;
-}
-
-async fn run_test_transfers_and_committee_removal<S>(storage: S)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_transfers_and_committee_removal<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        storage,
+        storage_builder.build().await?,
         vec![
             (ChainDescription::Root(0), key_pair0.public(), Amount::ZERO),
             (
@@ -3511,18 +2851,16 @@ where
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     // Try to execute the transfer from the user chain to the admin chain.
     worker
         .fully_handle_certificate(certificate0.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     {
         // The transfer was started..
-        let user_chain = worker.storage.load_active_chain(user_id).await.unwrap();
+        let user_chain = worker.storage.load_active_chain(user_id).await?;
         assert_eq!(
             BlockHeight::from(1),
             user_chain.tip_state.get().next_block_height
@@ -3537,8 +2875,8 @@ where
         );
 
         // .. but the message hasn't gone through.
-        let admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
-        assert!(admin_chain.inboxes.indices().await.unwrap().is_empty());
+        let admin_chain = worker.storage.load_active_chain(admin_id).await?;
+        assert!(admin_chain.inboxes.indices().await?.is_empty());
     }
 
     // Force the admin chain to receive the money nonetheless by anticipation.
@@ -3577,12 +2915,11 @@ where
     );
     worker
         .fully_handle_certificate(certificate2.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     {
         // The admin chain has an anticipated message.
-        let admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
+        let admin_chain = worker.storage.load_active_chain(admin_id).await?;
         assert_matches!(
             admin_chain.validate_incoming_messages().await,
             Err(ChainError::MissingCrossChainUpdate { .. })
@@ -3593,23 +2930,22 @@ where
     // This time, the epoch verification should be overruled.
     worker
         .fully_handle_certificate(certificate0.clone(), vec![])
-        .await
-        .unwrap();
+        .await?;
 
     {
         // The admin chain has no more anticipated messages.
-        let admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
-        admin_chain.validate_incoming_messages().await.unwrap();
+        let admin_chain = worker.storage.load_active_chain(admin_id).await?;
+        admin_chain.validate_incoming_messages().await?;
     }
+    Ok(())
 }
 
 #[test(tokio::test)]
-async fn test_cross_chain_helper() {
+async fn test_cross_chain_helper() -> anyhow::Result<()> {
     // Make a committee and worker (only used for signing certificates)
     let store =
         MemoryStorage::new_for_testing(None, TEST_MEMORY_MAX_STREAM_QUERIES, TestClock::new())
-            .await
-            .expect("store");
+            .await?;
     let (committee, worker) = init_worker(store, true);
     let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
 
@@ -3699,40 +3035,34 @@ async fn test_cross_chain_helper() {
     };
     // Epoch is not tested when `allow_messages_from_deprecated_epochs` is true.
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &Origin::chain(id0),
-                id1,
-                BlockHeight::ZERO,
-                None,
-                vec![bundle0.clone(), bundle1.clone()]
-            )
-            .unwrap(),
+        helper.select_message_bundles(
+            &Origin::chain(id0),
+            id1,
+            BlockHeight::ZERO,
+            None,
+            vec![bundle0.clone(), bundle1.clone()]
+        )?,
         vec![bundle0.clone(), bundle1.clone()]
     );
     // Received heights is removing prefixes.
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &Origin::chain(id0),
-                id1,
-                BlockHeight::from(1),
-                None,
-                vec![bundle0.clone(), bundle1.clone()]
-            )
-            .unwrap(),
+        helper.select_message_bundles(
+            &Origin::chain(id0),
+            id1,
+            BlockHeight::from(1),
+            None,
+            vec![bundle0.clone(), bundle1.clone()]
+        )?,
         vec![bundle1.clone()]
     );
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &Origin::chain(id0),
-                id1,
-                BlockHeight::from(2),
-                None,
-                vec![bundle0.clone(), bundle1.clone()]
-            )
-            .unwrap(),
+        helper.select_message_bundles(
+            &Origin::chain(id0),
+            id1,
+            BlockHeight::from(2),
+            None,
+            vec![bundle0.clone(), bundle1.clone()]
+        )?,
         vec![]
     );
     // Order of certificates is checked.
@@ -3755,109 +3085,76 @@ async fn test_cross_chain_helper() {
     };
     // Epoch is tested when `allow_messages_from_deprecated_epochs` is false.
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &Origin::chain(id0),
-                id1,
-                BlockHeight::ZERO,
-                None,
-                vec![bundle0.clone(), bundle1.clone()]
-            )
-            .unwrap(),
+        helper.select_message_bundles(
+            &Origin::chain(id0),
+            id1,
+            BlockHeight::ZERO,
+            None,
+            vec![bundle0.clone(), bundle1.clone()]
+        )?,
         vec![]
     );
     // A certificate with a recent epoch certifies all the previous blocks.
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &Origin::chain(id0),
-                id1,
-                BlockHeight::ZERO,
-                None,
-                vec![bundle0.clone(), bundle1.clone(), bundle2.clone(), bundle3]
-            )
-            .unwrap(),
+        helper.select_message_bundles(
+            &Origin::chain(id0),
+            id1,
+            BlockHeight::ZERO,
+            None,
+            vec![bundle0.clone(), bundle1.clone(), bundle2.clone(), bundle3]
+        )?,
         vec![bundle0.clone(), bundle1.clone(), bundle2.clone()]
     );
     // Received heights is still removing prefixes.
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &Origin::chain(id0),
-                id1,
-                BlockHeight::from(1),
-                None,
-                vec![bundle0.clone(), bundle1.clone(), bundle2.clone()]
-            )
-            .unwrap(),
+        helper.select_message_bundles(
+            &Origin::chain(id0),
+            id1,
+            BlockHeight::from(1),
+            None,
+            vec![bundle0.clone(), bundle1.clone(), bundle2.clone()]
+        )?,
         vec![bundle1.clone(), bundle2.clone()]
     );
     // Anticipated messages re-certify blocks up to the given height.
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &Origin::chain(id0),
-                id1,
-                BlockHeight::from(1),
-                Some(BlockHeight::from(1)),
-                vec![bundle0.clone(), bundle1.clone()]
-            )
-            .unwrap(),
+        helper.select_message_bundles(
+            &Origin::chain(id0),
+            id1,
+            BlockHeight::from(1),
+            Some(BlockHeight::from(1)),
+            vec![bundle0.clone(), bundle1.clone()]
+        )?,
         vec![bundle1.clone()]
     );
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &Origin::chain(id0),
-                id1,
-                BlockHeight::ZERO,
-                Some(BlockHeight::from(1)),
-                vec![bundle0.clone(), bundle1.clone()]
-            )
-            .unwrap(),
+        helper.select_message_bundles(
+            &Origin::chain(id0),
+            id1,
+            BlockHeight::ZERO,
+            Some(BlockHeight::from(1)),
+            vec![bundle0.clone(), bundle1.clone()]
+        )?,
         vec![bundle0.clone(), bundle1.clone()]
     );
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_leader_timeouts() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_leader_timeouts(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_leader_timeouts() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_leader_timeouts(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_leader_timeouts() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_leader_timeouts(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_leader_timeouts() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_leader_timeouts(storage).await;
-}
-
-async fn run_test_leader_timeouts<C>(storage: DbStorage<C, TestClock>)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_leader_timeouts<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    C: KeyValueStore + Clone + Send + Sync + 'static,
-    ViewError: From<<C as KeyValueStore>::Error>,
-    <C as KeyValueStore>::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
+    let storage = storage_builder.build().await?;
+    let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
     let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
-    let clock = storage.clock.clone();
     let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
     let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
 
@@ -3868,13 +3165,12 @@ where
         multi_leader_rounds: 0,
         timeout_config: TimeoutConfig::default(),
     });
-    let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();
+    let (executed_block0, _) = worker.stage_block_execution(block0).await?;
     let value0 = HashedValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
         .fully_handle_certificate(certificate0, vec![])
-        .await
-        .unwrap();
+        .await?;
 
     // The leader sequence is pseudorandom but deterministic. The first leader is owner 1.
     assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key1)));
@@ -3893,7 +3189,7 @@ where
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
-    let (response, _) = worker.handle_chain_info_query(query).await.unwrap();
+    let (response, _) = worker.handle_chain_info_query(query).await?;
     assert!(response.info.manager.timeout_vote.is_none());
 
     // Set the clock to the end of the round.
@@ -3901,7 +3197,7 @@ where
 
     // Now the validator will sign a leader timeout vote.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
-    let (response, _) = worker.handle_chain_info_query(query).await.unwrap();
+    let (response, _) = worker.handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout =
         HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
@@ -3914,13 +3210,12 @@ where
         .into_certificate();
     let (response, _) = worker
         .handle_certificate(certificate_timeout, vec![], None)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key0)));
 
     // Now owner 0 can propose a block, but owner 1 can't.
     let block1 = make_child_block(&value0);
-    let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await.unwrap();
+    let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await?;
     let proposal1_wrong_owner = block1
         .clone()
         .into_proposal_with_round(&key_pairs[1], Round::SingleLeader(1));
@@ -3929,7 +3224,7 @@ where
     let proposal1 = block1
         .clone()
         .into_proposal_with_round(&key_pairs[0], Round::SingleLeader(1));
-    let (response, _) = worker.handle_block_proposal(proposal1).await.unwrap();
+    let (response, _) = worker.handle_block_proposal(proposal1).await?;
     let value1 = HashedValue::new_validated(executed_block1.clone());
 
     // If we send the validated block certificate to the worker, it votes to confirm.
@@ -3937,8 +3232,7 @@ where
     let certificate1 = vote.with_value(value1.clone()).unwrap().into_certificate();
     let (response, _) = worker
         .handle_certificate(certificate1.clone(), vec![], None)
-        .await
-        .unwrap();
+        .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     let value = HashedValue::new_confirmed(executed_block1.clone());
     assert_eq!(vote.value, value.lite());
@@ -3952,30 +3246,23 @@ where
     );
     let (response, _) = worker
         .handle_certificate(certificate_timeout, vec![], None)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key1)));
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(5));
 
     // Create block2, also at height 1, but different from block 1.
     let amount = Amount::from_tokens(1);
     let block2 = make_child_block(&value0).with_simple_transfer(ChainId::root(1), amount);
-    let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await.unwrap();
+    let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await?;
 
     // Since round 3 is already over, a validated block from round 3 won't update the validator's
     // locked block; certificate1 (with block1) remains locked.
     let value2 = HashedValue::new_validated(executed_block2.clone());
     let certificate =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(2));
-    worker
-        .handle_certificate(certificate, vec![], None)
-        .await
-        .unwrap();
+    worker.handle_certificate(certificate, vec![], None).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = worker
-        .handle_chain_info_query(query_values.clone())
-        .await
-        .unwrap();
+    let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
         response.info.manager.requested_locked,
         Some(Box::new(certificate1))
@@ -3996,11 +3283,8 @@ where
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(4));
     proposal.validated = Some(certificate2.clone());
-    let (_, _) = worker.handle_block_proposal(proposal).await.unwrap();
-    let (response, _) = worker
-        .handle_chain_info_query(query_values.clone())
-        .await
-        .unwrap();
+    let (_, _) = worker.handle_block_proposal(proposal).await?;
+    let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
         response.info.manager.requested_locked,
         Some(Box::new(certificate2))
@@ -4018,8 +3302,7 @@ where
     );
     let (response, _) = worker
         .handle_certificate(certificate_timeout, vec![], None)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key0)));
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(6));
 
@@ -4035,8 +3318,7 @@ where
         make_certificate_with_round(&committee, &worker, value_timeout, Round::SingleLeader(7));
     let (response, _) = worker
         .handle_certificate(certificate_timeout, vec![], None)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(8));
 
     // If the worker does not belong to a validator, it does update its locked block even if it's
@@ -4046,54 +3328,30 @@ where
     let mut worker = worker.with_key_pair(None); // Forget validator keys.
     worker
         .handle_certificate(certificate.clone(), vec![], None)
-        .await
-        .unwrap();
-    let (response, _) = worker.handle_chain_info_query(query_values).await.unwrap();
+        .await?;
+    let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locked,
         Some(Box::new(certificate))
     );
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_round_types() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_round_types(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_round_types() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_round_types(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_round_types() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_round_types(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_round_types() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_round_types(storage).await;
-}
-
-async fn run_test_round_types<C>(storage: DbStorage<C, TestClock>)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_round_types<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    C: KeyValueStore + Clone + Send + Sync + 'static,
-    ViewError: From<<C as KeyValueStore>::Error>,
-    <C as KeyValueStore>::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
+    let storage = storage_builder.build().await?;
+    let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
     let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
-    let clock = storage.clock.clone();
     let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
     let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
 
@@ -4107,13 +3365,12 @@ where
             ..TimeoutConfig::default()
         },
     });
-    let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();
+    let (executed_block0, _) = worker.stage_block_execution(block0).await?;
     let value0 = HashedValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
         .fully_handle_certificate(certificate0, vec![])
-        .await
-        .unwrap();
+        .await?;
 
     // The first round is the fast-block round, and owner 0 is a super owner.
     assert_eq!(response.info.manager.current_round, Round::Fast);
@@ -4132,7 +3389,7 @@ where
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
-    let (response, _) = worker.handle_chain_info_query(query).await.unwrap();
+    let (response, _) = worker.handle_chain_info_query(query).await?;
     assert!(response.info.manager.timeout_vote.is_none());
 
     // Set the clock to the end of the round.
@@ -4140,7 +3397,7 @@ where
 
     // Now the validator will sign a leader timeout vote.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
-    let (response, _) = worker.handle_chain_info_query(query).await.unwrap();
+    let (response, _) = worker.handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout =
         HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
@@ -4152,8 +3409,7 @@ where
         .into_certificate();
     let (response, _) = worker
         .handle_certificate(certificate_timeout, vec![], None)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
     assert_eq!(response.info.manager.leader, None);
 
@@ -4162,51 +3418,28 @@ where
     let proposal1 = block1
         .clone()
         .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
-    let _ = worker.handle_block_proposal(proposal1).await.unwrap();
+    let _ = worker.handle_block_proposal(proposal1).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = worker.handle_chain_info_query(query_values).await.unwrap();
+    let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(1));
+    Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_fast_proposal_is_locked() {
-    let storage = MemoryStorage::make_test_storage(None).await;
-    run_test_fast_proposal_is_locked(storage).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test(tokio::test)]
-async fn test_rocks_db_fast_proposal_is_locked() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
-    run_test_fast_proposal_is_locked(storage).await;
-}
-
-#[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_fast_proposal_is_locked() {
-    let storage = DynamoDbStorage::make_test_storage(None).await;
-    run_test_fast_proposal_is_locked(storage).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test(tokio::test)]
-async fn test_scylla_db_fast_proposal_is_locked() {
-    let storage = ScyllaDbStorage::make_test_storage(None).await;
-    run_test_fast_proposal_is_locked(storage).await;
-}
-
-async fn run_test_fast_proposal_is_locked<C>(storage: DbStorage<C, TestClock>)
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_fast_proposal_is_locked<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
-    C: KeyValueStore + Clone + Send + Sync + 'static,
-    ViewError: From<<C as KeyValueStore>::Error>,
-    <C as KeyValueStore>::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
+    let storage = storage_builder.build().await?;
+    let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
     let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
-    let clock = storage.clock.clone();
     let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
     let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
 
@@ -4220,13 +3453,12 @@ where
             ..TimeoutConfig::default()
         },
     });
-    let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();
+    let (executed_block0, _) = worker.stage_block_execution(block0).await?;
     let value0 = HashedValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
         .fully_handle_certificate(certificate0, vec![])
-        .await
-        .unwrap();
+        .await?;
 
     // The first round is the fast-block round, and owner 0 is a super owner.
     assert_eq!(response.info.manager.current_round, Round::Fast);
@@ -4237,9 +3469,9 @@ where
     let proposal1 = block1
         .clone()
         .into_proposal_with_round(&key_pairs[0], Round::Fast);
-    let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await.unwrap();
+    let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await?;
     let value1 = HashedValue::new_confirmed(executed_block1);
-    let (response, _) = worker.handle_block_proposal(proposal1).await.unwrap();
+    let (response, _) = worker.handle_block_proposal(proposal1).await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value.value_hash, value1.hash());
 
@@ -4253,8 +3485,7 @@ where
         make_certificate_with_round(&committee, &worker, value_timeout.clone(), Round::Fast);
     let (response, _) = worker
         .handle_certificate(certificate_timeout, vec![], None)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
     assert_eq!(response.info.manager.leader, None);
 
@@ -4273,7 +3504,7 @@ where
     assert!(worker.handle_block_proposal(proposal3).await.is_ok());
 
     // A validated block certificate from a later round can override the locked fast block.
-    let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await.unwrap();
+    let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await?;
     let value2 = HashedValue::new_validated(executed_block2.clone());
     let mut proposal = block2
         .clone()
@@ -4282,9 +3513,9 @@ where
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
     proposal.validated = Some(certificate2.clone());
-    let (_, _) = worker.handle_block_proposal(proposal).await.unwrap();
+    let (_, _) = worker.handle_block_proposal(proposal).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = worker.handle_chain_info_query(query_values).await.unwrap();
+    let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locked,
         Some(Box::new(certificate2))
@@ -4295,15 +3526,14 @@ where
 
     // Re-proposing the locked block also works.
     let proposal = block2.into_proposal_with_round(&key_pairs[1], Round::MultiLeader(2));
-    let (_, _) = worker.handle_block_proposal(proposal).await.unwrap();
+    let (_, _) = worker.handle_block_proposal(proposal).await?;
     let certificate3 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(2));
     worker
         .handle_certificate(certificate3.clone(), vec![], None)
-        .await
-        .unwrap();
+        .await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = worker.handle_chain_info_query(query_values).await.unwrap();
+    let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locked,
         Some(Box::new(certificate3))
@@ -4311,4 +3541,5 @@ where
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, value2.validated_to_confirmed().unwrap().lite());
     assert_eq!(vote.round, Round::MultiLeader(2));
+    Ok(())
 }
