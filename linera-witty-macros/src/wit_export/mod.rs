@@ -19,6 +19,7 @@ use syn::{
 
 use self::caller_type_parameter::CallerTypeParameter;
 pub(crate) use self::function_information::{ok_type_inside_result, FunctionInformation};
+use super::wit_interface;
 use crate::util::AttributeParameters;
 
 /// Returns the code generated for exporting host functions to guest Wasm instances.
@@ -76,12 +77,14 @@ impl<'input> WitExportGenerator<'input> {
         let wasmer = self.generate_for_wasmer();
         let wasmtime = self.generate_for_wasmtime();
         let mock_instance = self.generate_for_mock_instance();
+        let wit_interface = self.generate_wit_interface();
 
         quote! {
             #implementation
             #wasmer
             #wasmtime
             #mock_instance
+            #wit_interface
         }
     }
 
@@ -213,6 +216,29 @@ impl<'input> WitExportGenerator<'input> {
                     elems: Punctuated::new(),
                 })
             })
+    }
+
+    /// Generates the implementation of `WitInterface` for the type.
+    fn generate_wit_interface(&self) -> TokenStream {
+        let self_type = &self.implementation.self_ty;
+        let type_name = self.type_name;
+
+        let wit_interface_implementation = wit_interface::generate(
+            self.parameters.package_name(),
+            self.parameters.interface_name(type_name),
+            &self.functions,
+        );
+
+        let (impl_generics, _type_generics, where_clause) =
+            self.implementation.generics.split_for_impl();
+
+        quote! {
+            impl #impl_generics linera_witty::wit_generation::WitInterface for #self_type
+            #where_clause
+            {
+                #wit_interface_implementation
+            }
+        }
     }
 }
 
