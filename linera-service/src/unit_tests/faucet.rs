@@ -10,11 +10,9 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
-use linera_core::client::{
-    client_test_utils::{
-        FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder,
-    },
-    ChainClient,
+use linera_core::{
+    client::ChainClient,
+    test_utils::{FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{memory::MemoryStore, views::ViewError};

@@ -33,8 +33,10 @@ use {
 };
 #[cfg(feature = "rocksdb")]
 use {
-    linera_storage::RocksDbStorage, linera_views::rocks_db::create_rocks_db_common_config,
-    linera_views::rocks_db::RocksDbStoreConfig, tokio::sync::Semaphore,
+    linera_storage::RocksDbStorage,
+    linera_views::rocks_db::create_rocks_db_common_config,
+    linera_views::rocks_db::RocksDbStoreConfig,
+    tokio::sync::{Semaphore, SemaphorePermit},
 };
 #[cfg(feature = "scylladb")]
 use {
@@ -641,8 +643,8 @@ where
 }
 
 #[cfg(feature = "rocksdb")]
-/// Limit concurrency for rocksdb tests to avoid "too many open files" errors.
-pub static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
+/// Limit concurrency for RocksDB tests to avoid "too many open files" errors.
+static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
 
 #[derive(Default)]
 pub struct MemoryStorageBuilder {
@@ -681,22 +683,31 @@ impl MemoryStorageBuilder {
 }
 
 #[cfg(feature = "rocksdb")]
-#[derive(Default)]
 pub struct RocksDbStorageBuilder {
     temp_dirs: Vec<tempfile::TempDir>,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
+    _permit: SemaphorePermit<'static>,
 }
 
 #[cfg(feature = "rocksdb")]
 impl RocksDbStorageBuilder {
+    pub async fn new() -> Self {
+        RocksDbStorageBuilder {
+            temp_dirs: Vec::new(),
+            wasm_runtime: None,
+            clock: TestClock::default(),
+            _permit: ROCKS_DB_SEMAPHORE.acquire().await.unwrap(),
+        }
+    }
+
     /// Creates a [`RocksDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
-    #[allow(dead_code)]
-    pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
+    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+    pub async fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         RocksDbStorageBuilder {
             wasm_runtime: wasm_runtime.into(),
-            ..RocksDbStorageBuilder::default()
+            ..RocksDbStorageBuilder::new().await
         }
     }
 }
@@ -743,36 +754,18 @@ pub struct ServiceStorageBuilder {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl Default for ServiceStorageBuilder {
-    fn default() -> ServiceStorageBuilder {
-        let _guard = None;
-        let clock = TestClock::default();
-        let endpoint = "127.0.0.1:8742".to_string();
-        let namespace = generate_test_namespace();
-        let use_child = true;
-        Self {
-            _guard,
-            endpoint,
-            namespace,
-            use_child,
-            instance_counter: 0,
-            wasm_runtime: None,
-            clock,
-        }
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
 impl ServiceStorageBuilder {
-    /// Creates a `ServiceStorage` from just an endpoint
-    pub fn new(endpoint: &str) -> Self {
-        Self::with_wasm_runtime(endpoint, None)
+    /// Creates a `ServiceStorage`.
+    pub async fn new() -> Self {
+        Self::with_wasm_runtime(None).await
     }
 
-    /// Creates a `ServiceStorage` from an endpoint and the wasm runtime.
-    pub fn with_wasm_runtime(endpoint: &str, wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
+    /// Creates a `ServiceStorage` with the given Wasm runtime.
+    pub async fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         let _guard = None;
-        let endpoint = endpoint.to_string();
+        let endpoint = linera_storage_service::child::get_free_port()
+            .await
+            .unwrap();
         let clock = TestClock::default();
         let namespace = generate_test_namespace();
         let use_child = true;

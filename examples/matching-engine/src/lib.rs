@@ -170,7 +170,7 @@ owners, allow only Matching Engine operations on the chain, and allow only the M
 Engine to close the chain.
 
 ```bash
-kill %%    # Kill the service so we can use CLI commands for chain 1.
+kill %% && sleep 1    # Kill the service so we can use CLI commands for chain 1.
 
 linera --wait-for-outgoing-messages change-ownership \
     --owner-public-keys $PUB_KEY_1 $PUB_KEY_2

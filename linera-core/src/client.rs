@@ -63,10 +63,6 @@ use crate::{
     },
 };
 
-#[cfg(with_testing)]
-#[path = "unit_tests/client_test_utils.rs"]
-pub mod client_test_utils;
-
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
 mod client_tests;
