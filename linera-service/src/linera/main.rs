@@ -39,22 +39,17 @@ use linera_execution::{
 };
 use linera_service::{
     chain_listener::ClientContext as _,
-    cli_wrappers::{
-        self,
-        local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
-        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
-    },
+    cli_wrappers::{self, ClientWrapper, FaucetOption, LineraNet},
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain},
     faucet::FaucetService,
     node_service::NodeService,
     project::{self, Project},
-    storage::{Runnable, StorageConfig},
+    storage::Runnable,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::Rng as _;
 use serde_json::Value;
-use tempfile::tempdir;
 use tokio::{signal::unix, sync::mpsc};
 use tracing::{debug, info, warn};
 
@@ -1458,6 +1453,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
         }
 
         ClientCommand::Net(net_command) => match net_command {
+            #[cfg(feature = "kubernetes")]
             NetCommand::Up {
                 extra_wallets,
                 other_initial_chains,
@@ -1465,12 +1461,12 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 validators,
                 shards,
                 testing_prng_seed,
-                table_name,
-                #[cfg(feature = "kubernetes")]
-                kubernetes,
-                #[cfg(feature = "kubernetes")]
+                table_name: _,
+                kubernetes: true,
                 binaries,
             } => {
+                use linera_service::cli_wrappers::{LineraNetConfig, Network};
+
                 if *validators < 1 {
                     panic!("The local test network must have at least one validator.");
                 }
@@ -1481,55 +1477,80 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 let (shutdown_sender, mut shutdown_receiver) = mpsc::channel(1);
                 tokio::spawn(handle_signals(shutdown_sender));
 
-                #[cfg(not(feature = "kubernetes"))]
-                let kubernetes = &false;
+                let config = cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig {
+                    network: Network::Grpc,
+                    testing_prng_seed: *testing_prng_seed,
+                    num_other_initial_chains: *other_initial_chains,
+                    initial_amount: Amount::from_tokens(*initial_amount),
+                    num_initial_validators: *validators,
+                    num_shards: *shards,
+                    binaries: binaries.clone().into(),
+                    policy: ResourceControlPolicy::default(),
+                };
+                let (mut net, client1) = config.instantiate().await?;
+                let result = Ok(net_up(extra_wallets, &mut net, client1).await?);
+                listen_for_signals(&mut shutdown_receiver, &mut net).await?;
+                result
+            }
 
-                if *kubernetes {
-                    #[cfg(feature = "kubernetes")]
-                    {
-                        let config = cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig {
-                            network: Network::Grpc,
-                            testing_prng_seed: *testing_prng_seed,
-                            num_other_initial_chains: *other_initial_chains,
-                            initial_amount: Amount::from_tokens(*initial_amount),
-                            num_initial_validators: *validators,
-                            num_shards: *shards,
-                            binaries: binaries.clone().into(),
-                            policy: ResourceControlPolicy::default(),
-                        };
-                        let (mut net, client1) = config.instantiate().await?;
-                        let result = Ok(net_up(extra_wallets, &mut net, client1).await?);
-                        listen_for_signals(&mut shutdown_receiver, &mut net).await?;
-                        result
-                    }
-                    #[cfg(not(feature = "kubernetes"))]
-                    bail!("Cannot use the kubernetes flag with the kubernetes feature off")
-                } else {
-                    let tmp_dir = tempdir()?;
-                    let path = tmp_dir.path();
-                    let path_buf = path.to_path_buf();
-                    let storage_config = StorageConfig::RocksDb { path: path_buf };
-                    let storage_config_builder =
-                        StorageConfigBuilder::ExistingConfig { storage_config };
-                    let path_provider = PathProvider::new(path);
-                    let config = LocalNetConfig {
-                        network: Network::Grpc,
-                        database: Database::RocksDb,
-                        testing_prng_seed: *testing_prng_seed,
-                        table_name: table_name.to_string(),
-                        num_other_initial_chains: *other_initial_chains,
-                        initial_amount: Amount::from_tokens(*initial_amount),
-                        num_initial_validators: *validators,
-                        num_shards: *shards,
-                        policy: ResourceControlPolicy::default(),
-                        storage_config_builder,
-                        path_provider,
-                    };
-                    let (mut net, client1) = config.instantiate().await?;
-                    let result = Ok(net_up(extra_wallets, &mut net, client1).await?);
-                    listen_for_signals(&mut shutdown_receiver, &mut net).await?;
-                    result
+            #[cfg(feature = "rocksdb")]
+            NetCommand::Up {
+                extra_wallets,
+                other_initial_chains,
+                initial_amount,
+                validators,
+                shards,
+                testing_prng_seed,
+                table_name,
+                ..
+            } => {
+                use linera_service::{
+                    cli_wrappers::{
+                        local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
+                        LineraNetConfig, Network,
+                    },
+                    storage::StorageConfig,
+                };
+
+                if *validators < 1 {
+                    panic!("The local test network must have at least one validator.");
                 }
+                if *shards < 1 {
+                    panic!("The local test network must have at least one shard per validator.");
+                }
+
+                let (shutdown_sender, mut shutdown_receiver) = mpsc::channel(1);
+                tokio::spawn(handle_signals(shutdown_sender));
+
+                let tmp_dir = tempfile::tempdir()?;
+                let path = tmp_dir.path();
+                let path_buf = path.to_path_buf();
+                let storage_config = StorageConfig::RocksDb { path: path_buf };
+                let storage_config_builder =
+                    StorageConfigBuilder::ExistingConfig { storage_config };
+                let path_provider = PathProvider::new(path);
+                let config = LocalNetConfig {
+                    network: Network::Grpc,
+                    database: Database::RocksDb,
+                    testing_prng_seed: *testing_prng_seed,
+                    table_name: table_name.to_string(),
+                    num_other_initial_chains: *other_initial_chains,
+                    initial_amount: Amount::from_tokens(*initial_amount),
+                    num_initial_validators: *validators,
+                    num_shards: *shards,
+                    policy: ResourceControlPolicy::default(),
+                    storage_config_builder,
+                    path_provider,
+                };
+                let (mut net, client1) = config.instantiate().await?;
+                let result = Ok(net_up(extra_wallets, &mut net, client1).await?);
+                listen_for_signals(&mut shutdown_receiver, &mut net).await?;
+                result
+            }
+
+            #[cfg(not(feature = "rocksdb"))]
+            NetCommand::Up { .. } => {
+                bail!("Kubernetes or the rocksdb feature is required")
             }
 
             NetCommand::Helper => {

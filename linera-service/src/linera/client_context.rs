@@ -28,7 +28,7 @@ use linera_service::{
     chain_listener,
     config::{GenesisConfig, UserChain, WalletState},
     node_service::wait_for_next_round,
-    storage::{StorageConfig, StorageConfigNamespace},
+    storage::StorageConfigNamespace,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -189,7 +189,7 @@ impl ClientContext {
             Some(config) => config.parse(),
             #[cfg(feature = "rocksdb")]
             None => {
-                let storage_config = StorageConfig::RocksDb {
+                let storage_config = linera_service::storage::StorageConfig::RocksDb {
                     path: Self::create_default_config_path()?.join("wallet.db"),
                 };
                 let namespace = "default".to_string();

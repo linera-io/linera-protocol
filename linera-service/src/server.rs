@@ -21,9 +21,7 @@ use linera_service::{
     config::{
         CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
     },
-    storage::{
-        full_initialize_storage, run_with_storage, Runnable, StorageConfig, StorageConfigNamespace,
-    },
+    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
     util,
 };
 use linera_storage::Storage;
@@ -437,7 +435,7 @@ async fn run(options: ServerOptions) {
 
             #[cfg(feature = "rocksdb")]
             if server_config.internal_network.shards.len() > 1
-                && matches!(storage_config.storage_config, StorageConfig::RocksDb { .. })
+                && storage_config.storage_config.is_rocks_db()
             {
                 panic!("Multiple shards not supported with RocksDB");
             }

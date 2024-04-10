@@ -184,7 +184,8 @@ jobs:
         cargo clippy --all-targets --all-features --target x86_64-unknown-linux-gnu --locked
     - name: Run clippy
       run: |
-        cargo clippy --all-targets --all-features --tests --locked
+        cargo clippy --all-targets --all-features --locked
+        cargo clippy --no-default-features --features kubernetes --locked
     - name: Run cargo doc
       run: |
         cargo doc --locked --all-features
