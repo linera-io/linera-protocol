@@ -33,13 +33,13 @@ use test_case::test_case;
 
 #[cfg(feature = "aws")]
 use crate::client::client_tests::DynamoDbStorageBuilder;
+#[cfg(feature = "rocksdb")]
+use crate::client::client_tests::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
 use crate::client::client_tests::ScyllaDbStorageBuilder;
 use crate::client::client_tests::{
-    get_free_port, MemoryStorageBuilder, ServiceStorageBuilder, StorageBuilder, TestBuilder,
+    MemoryStorageBuilder, ServiceStorageBuilder, StorageBuilder, TestBuilder,
 };
-#[cfg(feature = "rocksdb")]
-use crate::client::client_tests::{RocksDbStorageBuilder, ROCKS_DB_SEMAPHORE};
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -53,12 +53,7 @@ async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> Result<(),
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_service_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    let endpoint = get_free_port().await.unwrap();
-    run_test_create_application(ServiceStorageBuilder::with_wasm_runtime(
-        &endpoint,
-        wasm_runtime,
-    ))
-    .await
+    run_test_create_application(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
 }
 
 #[ignore]
@@ -67,8 +62,7 @@ async fn test_service_create_application(wasm_runtime: WasmRuntime) -> Result<()
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_rocks_db_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_create_application(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+    run_test_create_application(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
 }
 
 #[ignore]
@@ -182,11 +176,9 @@ async fn test_memory_run_application_with_dependency(
 async fn test_service_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let endpoint = get_free_port().await.unwrap();
-    run_test_run_application_with_dependency(ServiceStorageBuilder::with_wasm_runtime(
-        &endpoint,
-        wasm_runtime,
-    ))
+    run_test_run_application_with_dependency(
+        ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await,
+    )
     .await
 }
 
@@ -198,9 +190,10 @@ async fn test_service_run_application_with_dependency(
 async fn test_rocks_db_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_run_application_with_dependency(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime))
-        .await
+    run_test_run_application_with_dependency(
+        RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await,
+    )
+    .await
 }
 
 #[ignore]
@@ -410,12 +403,7 @@ async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<()
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_service_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    let endpoint = get_free_port().await.unwrap();
-    run_test_cross_chain_message(ServiceStorageBuilder::with_wasm_runtime(
-        &endpoint,
-        wasm_runtime,
-    ))
-    .await
+    run_test_cross_chain_message(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
 }
 
 #[ignore]
@@ -424,8 +412,7 @@ async fn test_service_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_cross_chain_message(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+    run_test_cross_chain_message(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
 }
 
 #[ignore]
@@ -629,12 +616,8 @@ async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> Result<
 async fn test_service_user_pub_sub_channels(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let endpoint = get_free_port().await.unwrap();
-    run_test_user_pub_sub_channels(ServiceStorageBuilder::with_wasm_runtime(
-        &endpoint,
-        wasm_runtime,
-    ))
-    .await
+    run_test_user_pub_sub_channels(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await)
+        .await
 }
 
 #[ignore]
@@ -645,8 +628,8 @@ async fn test_service_user_pub_sub_channels(
 async fn test_rocks_db_user_pub_sub_channels(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_user_pub_sub_channels(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+    run_test_user_pub_sub_channels(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await)
+        .await
 }
 
 #[ignore]
