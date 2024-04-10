@@ -807,12 +807,12 @@ where
     }
 
     /// Processes a leader timeout issued from a multi-owner chain.
-    async fn process_leader_timeout(
+    async fn process_timeout(
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let (chain_id, height, epoch) = match certificate.value() {
-            CertificateValue::LeaderTimeout {
+            CertificateValue::Timeout {
                 chain_id,
                 height,
                 epoch,
@@ -1201,9 +1201,9 @@ where
                 )
                 .await?
             }
-            CertificateValue::LeaderTimeout { .. } => {
+            CertificateValue::Timeout { .. } => {
                 // Handle the leader timeout.
-                self.process_leader_timeout(certificate).await?
+                self.process_timeout(certificate).await?
             }
         };
 
@@ -1231,9 +1231,9 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, query);
         let mut chain = self.storage.load_chain(query.chain_id).await?;
-        if query.request_leader_timeout {
+        if query.request_timeout {
             if let Some(epoch) = chain.execution_state.system.epoch.get() {
-                if chain.manager.get_mut().vote_leader_timeout(
+                if chain.manager.get_mut().vote_timeout(
                     query.chain_id,
                     chain.tip_state.get().next_block_height,
                     *epoch,

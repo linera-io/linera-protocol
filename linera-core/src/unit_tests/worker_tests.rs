@@ -3140,7 +3140,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_leader_timeouts<B>(mut storage_builder: B) -> anyhow::Result<()>
+async fn test_timeouts<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -3183,7 +3183,7 @@ where
     );
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
-    let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
+    let query = ChainInfoQuery::new(chain_id).with_timeout();
     let (response, _) = worker.handle_chain_info_query(query).await?;
     assert!(response.info.manager.timeout_vote.is_none());
 
@@ -3191,11 +3191,10 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
+    let query = ChainInfoQuery::new(chain_id).with_timeout();
     let (response, _) = worker.handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
-    let value_timeout =
-        HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
+    let value_timeout = HashedValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
 
     // Once we provide the validator with a timeout certificate, the next round starts, where owner
     // 0 happens to be the leader.
@@ -3383,7 +3382,7 @@ where
     );
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
-    let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
+    let query = ChainInfoQuery::new(chain_id).with_timeout();
     let (response, _) = worker.handle_chain_info_query(query).await?;
     assert!(response.info.manager.timeout_vote.is_none());
 
@@ -3391,11 +3390,10 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
+    let query = ChainInfoQuery::new(chain_id).with_timeout();
     let (response, _) = worker.handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
-    let value_timeout =
-        HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
+    let value_timeout = HashedValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
 
     // Once we provide the validator with a timeout certificate, the next round starts.
     let certificate_timeout = vote
@@ -3474,8 +3472,7 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Once we provide the validator with a timeout certificate, the next round starts.
-    let value_timeout =
-        HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
+    let value_timeout = HashedValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
     let certificate_timeout =
         make_certificate_with_round(&committee, &worker, value_timeout.clone(), Round::Fast);
     let (response, _) = worker
@@ -3586,7 +3583,7 @@ where
     clock.add(fallback_duration);
     let (response, _) = worker.handle_chain_info_query(query.clone()).await?;
     let vote = response.info.manager.fallback_vote.unwrap();
-    let value = HashedValue::new_leader_timeout(chain_id, BlockHeight(1), Epoch::ZERO);
+    let value = HashedValue::new_timeout(chain_id, BlockHeight(1), Epoch::ZERO);
     let round = Round::SingleLeader(u32::MAX);
     assert_eq!(vote.value.value_hash, value.hash());
     assert_eq!(vote.round, round);

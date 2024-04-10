@@ -116,7 +116,7 @@ pub struct ChainManager {
     /// validator).
     pub locked: Option<Certificate>,
     /// Latest leader timeout certificate we have received.
-    pub leader_timeout: Option<Certificate>,
+    pub timeout: Option<Certificate>,
     /// Latest vote we have cast, to validate or confirm.
     pub pending: Option<Vote>,
     /// Latest timeout vote we cast.
@@ -195,7 +195,7 @@ impl ChainManager {
             fallback_distribution,
             proposed: None,
             locked: None,
-            leader_timeout: None,
+            timeout: None,
             pending: None,
             timeout_vote: None,
             fallback_vote: None,
@@ -289,8 +289,8 @@ impl ChainManager {
         Ok(Outcome::Accept)
     }
 
-    /// Checks if the current round has timed out, and signs a `LeaderTimeout`.
-    pub fn vote_leader_timeout(
+    /// Checks if the current round has timed out, and signs a `Timeout`.
+    pub fn vote_timeout(
         &mut self,
         chain_id: ChainId,
         height: BlockHeight,
@@ -313,12 +313,12 @@ impl ChainManager {
                 return false; // We already signed this timeout.
             }
         }
-        let value = HashedValue::new_leader_timeout(chain_id, height, epoch);
+        let value = HashedValue::new_timeout(chain_id, height, epoch);
         self.timeout_vote = Some(Vote::new(value, current_round, key_pair));
         true
     }
 
-    /// Signs a `LeaderTimeout` certificate to switch to fallback mode.
+    /// Signs a `Timeout` certificate to switch to fallback mode.
     ///
     /// This must only be called after verifying that the condition for fallback mode is
     /// satisfied locally.
@@ -335,7 +335,7 @@ impl ChainManager {
         if self.fallback_vote.is_some() || self.current_round >= Round::Validator(0) {
             return false; // We already signed this or are already in fallback mode.
         }
-        let value = HashedValue::new_leader_timeout(chain_id, height, epoch);
+        let value = HashedValue::new_timeout(chain_id, height, epoch);
         let last_regular_round = Round::SingleLeader(u32::MAX);
         self.fallback_vote = Some(Vote::new(value, last_regular_round, key_pair));
         true
@@ -355,7 +355,7 @@ impl ChainManager {
                 CertificateValue::ValidatedBlock { .. } => {
                     ensure!(new_round >= *round, ChainError::InsufficientRound(*round))
                 }
-                CertificateValue::LeaderTimeout { .. } => {
+                CertificateValue::Timeout { .. } => {
                     // Unreachable: We only put validated or confirmed blocks in pending.
                     return Err(ChainError::InternalError(
                         "pending can only be validated or confirmed block".to_string(),
@@ -442,10 +442,10 @@ impl ChainManager {
 
     /// Updates `current_round` and `round_timeout` if necessary.
     ///
-    /// This must be after every change to `leader_timeout`, `locked` or `proposed`.
+    /// This must be after every change to `timeout`, `locked` or `proposed`.
     fn update_current_round(&mut self, local_time: Timestamp) {
         let current_round = self
-            .leader_timeout
+            .timeout
             .iter()
             .map(|certificate| {
                 self.ownership
@@ -474,12 +474,12 @@ impl ChainManager {
             return;
         }
         let round = certificate.round;
-        if let Some(known_certificate) = &self.leader_timeout {
+        if let Some(known_certificate) = &self.timeout {
             if known_certificate.round >= round {
                 return;
             }
         }
-        self.leader_timeout = Some(certificate);
+        self.timeout = Some(certificate);
         self.update_current_round(local_time);
     }
 
@@ -562,7 +562,7 @@ pub struct ChainManagerInfo {
     /// validator).
     pub requested_locked: Option<Box<Certificate>>,
     /// Latest timeout certificate we have seen.
-    pub leader_timeout: Option<Box<Certificate>>,
+    pub timeout: Option<Box<Certificate>>,
     /// Latest vote we cast (either to validate or to confirm a block).
     pub pending: Option<LiteVote>,
     /// Latest timeout vote we cast.
@@ -587,7 +587,7 @@ impl From<&ChainManager> for ChainManagerInfo {
             ownership: manager.ownership.clone(),
             requested_proposed: None,
             requested_locked: None,
-            leader_timeout: manager.leader_timeout.clone().map(Box::new),
+            timeout: manager.timeout.clone().map(Box::new),
             pending: manager.pending.as_ref().map(|vote| vote.lite()),
             timeout_vote: manager.timeout_vote.as_ref().map(Vote::lite),
             fallback_vote: manager.fallback_vote.as_ref().map(Vote::lite),

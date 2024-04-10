@@ -677,7 +677,7 @@ where
         let round = match action {
             CommunicateAction::SubmitBlock { proposal } => proposal.content.round,
             CommunicateAction::FinalizeBlock { certificate, .. } => certificate.round,
-            CommunicateAction::RequestLeaderTimeout { round, .. } => round,
+            CommunicateAction::RequestTimeout { round, .. } => round,
         };
         ensure!(
             (votes_hash, votes_round) == (value.hash(), round),
@@ -994,7 +994,7 @@ where
 
     /// Requests a leader timeout vote from all validators. If a quorum signs it, creates a
     /// certificate and sends it to all validators, to make them enter the next round.
-    pub async fn request_leader_timeout(&mut self) -> Result<Certificate, ChainClientError> {
+    pub async fn request_timeout(&mut self) -> Result<Certificate, ChainClientError> {
         let chain_id = self.chain_id;
         let query = ChainInfoQuery::new(chain_id).with_committees();
         let info = self.node_client.handle_chain_info_query(query).await?.info;
@@ -1006,12 +1006,12 @@ where
             .ok_or(LocalNodeError::InactiveChain(chain_id))?;
         let height = info.next_block_height;
         let round = info.manager.current_round;
-        let action = CommunicateAction::RequestLeaderTimeout {
+        let action = CommunicateAction::RequestTimeout {
             height,
             round,
             chain_id,
         };
-        let value = HashedValue::new_leader_timeout(chain_id, height, epoch);
+        let value = HashedValue::new_timeout(chain_id, height, epoch);
         let certificate = self
             .communicate_chain_action(&committee, action, value)
             .await?;
@@ -1534,7 +1534,7 @@ where
         // the next round.
         if let Some(round_timeout) = info.manager.round_timeout {
             if round_timeout <= self.storage_client().await.current_time() {
-                self.request_leader_timeout().await?;
+                self.request_timeout().await?;
                 info = self.chain_info_with_manager_values().await?;
             }
         }

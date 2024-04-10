@@ -137,7 +137,7 @@ message ChainInfoQuery {
   bool request_manager_values = 7;
 
   // Request a signed vote for a leader timeout.
-  bool request_leader_timeout = 8;
+  bool request_timeout = 8;
 
   // Query a value that contains a binary blob (e.g. bytecode) required by this chain.
   optional bytes request_blob = 9;
