@@ -33,8 +33,8 @@ pub struct WitImportGenerator<'input> {
 }
 
 /// Pieces of information extracted from a function's definition.
-struct FunctionInformation<'input> {
-    function: &'input TraitItemFn,
+pub(crate) struct FunctionInformation<'input> {
+    pub(crate) function: &'input TraitItemFn,
     parameter_definitions: TokenStream,
     parameter_bindings: TokenStream,
     return_type: TokenStream,
