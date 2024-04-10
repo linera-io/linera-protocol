@@ -11,6 +11,7 @@ use proc_macro_error::abort;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{spanned::Spanned, FnArg, Ident, ItemTrait, LitStr, ReturnType, TraitItem, TraitItemFn};
 
+use super::wit_interface;
 use crate::util::{AttributeParameters, TokensSetItem};
 
 /// Returns the code generated for calling imported Wasm functions.
@@ -71,6 +72,12 @@ impl<'input> WitImportGenerator<'input> {
 
         let trait_name = self.trait_name;
 
+        let wit_interface_implementation = wit_interface::generate(
+            self.parameters.package_name(),
+            self.parameters.interface_name(trait_name),
+            &self.functions,
+        );
+
         quote! {
             #[allow(clippy::type_complexity)]
             pub struct #trait_name<Instance>
@@ -97,6 +104,15 @@ impl<'input> WitImportGenerator<'input> {
                 }
 
                 #( #imported_functions )*
+            }
+
+            impl<Instance> linera_witty::wit_generation::WitInterface for #trait_name<Instance>
+            where
+                Instance: #instance_trait_alias_name,
+                <Instance::Runtime as linera_witty::Runtime>::Memory:
+                    linera_witty::RuntimeMemory<Instance>,
+            {
+                #wit_interface_implementation
             }
 
             #instance_trait_alias
