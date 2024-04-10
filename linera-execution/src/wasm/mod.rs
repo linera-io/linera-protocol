@@ -223,7 +223,7 @@ pub enum WasmExecutionError {
     CreateWasmtimeEngine(#[source] anyhow::Error),
     #[cfg(with_wasmer)]
     #[error(
-        "Failed to execute Wasm module in Wasmer. This may be caused by panics or insufficient fuel."
+        "Failed to execute Wasm module in Wasmer. This may be caused by panics or insufficient fuel. {0}"
     )]
     ExecuteModuleInWasmer(#[from] ::wasmer::RuntimeError),
     #[cfg(with_wasmtime)]
