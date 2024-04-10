@@ -7,8 +7,12 @@ use async_lock::RwLock;
 use linera_storage_service::common::{KeyTag, MAX_PAYLOAD_SIZE};
 use linera_views::{
     batch::Batch,
-    common::{AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
+    common::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
     memory::{create_memory_store_stream_queries, MemoryStore},
+};
+#[cfg(feature = "rocksdb")]
+use linera_views::{
+    common::AdminKeyValueStore,
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
 use serde::Serialize;
@@ -208,6 +212,7 @@ enum ServiceStoreServerOptions {
         endpoint: String,
     },
 
+    #[cfg(feature = "rocksdb")]
     #[command(name = "rocksdb")]
     RocksDb {
         #[arg(long = "endpoint")]
@@ -480,6 +485,7 @@ async fn main() {
             let store = ServiceStoreServerInternal::Memory(store);
             (store, endpoint)
         }
+        #[cfg(feature = "rocksdb")]
         ServiceStoreServerOptions::RocksDb { path, endpoint } => {
             let path_buf = path.into();
             let config = RocksDbStoreConfig {
