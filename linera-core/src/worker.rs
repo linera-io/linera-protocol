@@ -1231,7 +1231,7 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, query);
         let mut chain = self.storage.load_chain(query.chain_id).await?;
-        if query.request_timeout {
+        if query.request_leader_timeout {
             if let Some(epoch) = chain.execution_state.system.epoch.get() {
                 if chain.manager.get_mut().vote_timeout(
                     query.chain_id,

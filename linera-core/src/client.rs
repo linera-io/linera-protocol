@@ -994,7 +994,7 @@ where
 
     /// Requests a leader timeout vote from all validators. If a quorum signs it, creates a
     /// certificate and sends it to all validators, to make them enter the next round.
-    pub async fn request_timeout(&mut self) -> Result<Certificate, ChainClientError> {
+    pub async fn request_leader_timeout(&mut self) -> Result<Certificate, ChainClientError> {
         let chain_id = self.chain_id;
         let query = ChainInfoQuery::new(chain_id).with_committees();
         let info = self.node_client.handle_chain_info_query(query).await?.info;
@@ -1534,7 +1534,7 @@ where
         // the next round.
         if let Some(round_timeout) = info.manager.round_timeout {
             if round_timeout <= self.storage_client().await.current_time() {
-                self.request_timeout().await?;
+                self.request_leader_timeout().await?;
                 info = self.chain_info_with_manager_values().await?;
             }
         }

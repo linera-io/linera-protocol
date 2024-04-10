@@ -65,7 +65,7 @@ pub struct ChainInfoQuery {
     /// Query values from the chain manager, not just votes.
     pub request_manager_values: bool,
     /// Include a timeout vote for the current round, if appropriate.
-    pub request_timeout: bool,
+    pub request_leader_timeout: bool,
     /// Include a vote to switch to fallback mode, if appropriate.
     pub request_fallback: bool,
     /// Query a value that contains a binary blob (e.g. bytecode) required by this chain.
@@ -83,7 +83,7 @@ impl ChainInfoQuery {
             request_sent_certificates_in_range: None,
             request_received_log_excluding_first_nth: None,
             request_manager_values: false,
-            request_timeout: false,
+            request_leader_timeout: false,
             request_fallback: false,
             request_blob: None,
         }
@@ -125,7 +125,7 @@ impl ChainInfoQuery {
     }
 
     pub fn with_timeout(mut self) -> Self {
-        self.request_timeout = true;
+        self.request_leader_timeout = true;
         self
     }
 

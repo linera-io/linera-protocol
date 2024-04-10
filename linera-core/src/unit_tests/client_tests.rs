@@ -1388,7 +1388,7 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_request_timeout<B>(storage_builder: B) -> anyhow::Result<()>
+async fn test_request_leader_timeout<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -1417,7 +1417,7 @@ where
     // If the malicious and one honest validator happen to be much faster than the other
     // two honest validators, only those two samples may be returned. Otherwise we get
     // a trusted MissingVoteInValidatorResponse, because at least two returned that.
-    let result = client.request_timeout().await;
+    let result = client.request_leader_timeout().await;
     if !matches!(
         result,
         Err(ChainClientError::CommunicationError(
@@ -1433,7 +1433,7 @@ where
     clock.set(manager.round_timeout.unwrap());
 
     // After the timeout they will.
-    let certificate = client.request_timeout().await.unwrap();
+    let certificate = client.request_leader_timeout().await.unwrap();
     assert_eq!(
         *certificate.value(),
         CertificateValue::Timeout {
@@ -1455,7 +1455,7 @@ where
             break manager.current_round;
         }
         clock.set(manager.round_timeout.unwrap());
-        assert!(client.request_timeout().await.is_ok());
+        assert!(client.request_leader_timeout().await.is_ok());
     };
     let round_number = match round {
         Round::SingleLeader(round_number) => round_number,
@@ -1472,9 +1472,9 @@ where
         ClientOutcome::WaitForTimeout(timeout) => timeout,
     };
     client.clear_pending_block();
-    assert!(client.request_timeout().await.is_err());
+    assert!(client.request_leader_timeout().await.is_err());
     clock.set(timeout.timestamp);
-    client.request_timeout().await.unwrap();
+    client.request_leader_timeout().await.unwrap();
     let expected_round = Round::SingleLeader(round_number + 1);
     builder
         .check_that_validators_are_in_round(chain_id, BlockHeight::from(1), expected_round, 3)
@@ -1486,7 +1486,7 @@ where
             break;
         }
         clock.set(manager.round_timeout.unwrap());
-        assert!(client.request_timeout().await.is_ok());
+        assert!(client.request_leader_timeout().await.is_ok());
     }
 
     // Now we are the leader, and the transfer should succeed.
