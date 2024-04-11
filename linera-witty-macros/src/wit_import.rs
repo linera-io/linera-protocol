@@ -11,6 +11,7 @@ use proc_macro_error::abort;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{spanned::Spanned, FnArg, Ident, ItemTrait, LitStr, ReturnType, TraitItem, TraitItemFn};
 
+use super::wit_interface;
 use crate::util::{AttributeParameters, TokensSetItem};
 
 /// Returns the code generated for calling imported Wasm functions.
@@ -27,14 +28,15 @@ pub fn generate(trait_definition: ItemTrait, parameters: AttributeParameters) ->
 /// Code generating is done in two phases. First the necessary pieces are collected and stored in
 /// this type. Then, they are used to generate the final code.
 pub struct WitImportGenerator<'input> {
+    parameters: AttributeParameters,
     trait_name: &'input Ident,
     namespace: LitStr,
     functions: Vec<FunctionInformation<'input>>,
 }
 
 /// Pieces of information extracted from a function's definition.
-struct FunctionInformation<'input> {
-    function: &'input TraitItemFn,
+pub(crate) struct FunctionInformation<'input> {
+    pub(crate) function: &'input TraitItemFn,
     parameter_definitions: TokenStream,
     parameter_bindings: TokenStream,
     return_type: TokenStream,
@@ -55,6 +57,7 @@ impl<'input> WitImportGenerator<'input> {
 
         WitImportGenerator {
             trait_name,
+            parameters,
             namespace,
             functions,
         }
@@ -68,6 +71,12 @@ impl<'input> WitImportGenerator<'input> {
         let (instance_trait_alias_name, instance_trait_alias) = self.instance_trait_alias();
 
         let trait_name = self.trait_name;
+
+        let wit_interface_implementation = wit_interface::generate(
+            self.parameters.package_name(),
+            self.parameters.interface_name(trait_name),
+            &self.functions,
+        );
 
         quote! {
             #[allow(clippy::type_complexity)]
@@ -95,6 +104,15 @@ impl<'input> WitImportGenerator<'input> {
                 }
 
                 #( #imported_functions )*
+            }
+
+            impl<Instance> linera_witty::wit_generation::WitInterface for #trait_name<Instance>
+            where
+                Instance: #instance_trait_alias_name,
+                <Instance::Runtime as linera_witty::Runtime>::Memory:
+                    linera_witty::RuntimeMemory<Instance>,
+            {
+                #wit_interface_implementation
             }
 
             #instance_trait_alias

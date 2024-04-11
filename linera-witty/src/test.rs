@@ -3,9 +3,12 @@
 
 //! Functions and types useful for writing tests.
 
-use std::fmt::Debug;
+use std::{collections::BTreeMap, fmt::Debug};
 
-use crate::{InstanceWithMemory, Layout, MockInstance, WitLoad, WitStore};
+use crate::{
+    wit_generation::WitInterface, InstanceWithMemory, Layout, MockInstance, RegisterWitTypes,
+    WitLoad, WitStore,
+};
 
 /// Test storing an instance of `T` to memory, checking that the instance can be loaded from those
 /// bytes.
@@ -78,4 +81,39 @@ where
     );
 
     Ok(())
+}
+
+/// Asserts that the WIT type dependencies of the `Interface` are the `expected_types`.
+pub fn assert_interface_dependencies<'i, Interface>(
+    expected_types: impl IntoIterator<Item = (&'i str, &'i str)>,
+) where
+    Interface: WitInterface,
+{
+    let mut wit_types = BTreeMap::new();
+
+    Interface::Dependencies::register_wit_types(&mut wit_types);
+
+    assert_eq!(
+        wit_types
+            .iter()
+            .map(|(name, declaration)| (name.as_str(), declaration.as_str()))
+            .collect::<Vec<_>>(),
+        expected_types.into_iter().collect::<Vec<_>>(),
+    );
+}
+
+/// Asserts that the function declarations of the `Interface` are the `expected_declarations`.
+pub fn assert_interface_functions<Interface>(expected_declarations: &[impl AsRef<str>])
+where
+    Interface: WitInterface,
+{
+    let wit_functions = Interface::wit_functions();
+
+    assert_eq!(
+        wit_functions.iter().map(String::as_str).collect::<Vec<_>>(),
+        expected_declarations
+            .iter()
+            .map(AsRef::as_ref)
+            .collect::<Vec<_>>()
+    );
 }

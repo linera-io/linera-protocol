@@ -15,11 +15,11 @@ use syn::{
 
 /// Pieces of information extracted from a function's definition.
 pub struct FunctionInformation<'input> {
-    function: &'input ImplItemFn,
+    pub(crate) function: &'input ImplItemFn,
+    pub(crate) is_reentrant: bool,
+    pub(crate) call_early_return: Option<Token![?]>,
     wit_name: String,
-    is_reentrant: bool,
     parameter_bindings: TokenStream,
-    call_early_return: Option<Token![?]>,
     interface_type: TokenStream,
 }
 
@@ -61,10 +61,10 @@ impl<'input> FunctionInformation<'input> {
 
         FunctionInformation {
             function,
-            wit_name,
             is_reentrant,
-            parameter_bindings,
             call_early_return: is_fallible.then(|| Token![?](Span::call_site())),
+            wit_name,
+            parameter_bindings,
             interface_type,
         }
     }
@@ -301,7 +301,7 @@ impl<'input> FunctionInformation<'input> {
 /// Returns the type inside the `Ok` variant of the `maybe_result_type`.
 ///
 /// The type is only considered if it's a [`Result`] type with `RuntimeError` as its error variant.
-fn ok_type_inside_result(maybe_result_type: &Type) -> Option<&Type> {
+pub(crate) fn ok_type_inside_result(maybe_result_type: &Type) -> Option<&Type> {
     let Type::Path(TypePath { qself: None, path }) = maybe_result_type else {
         return None;
     };

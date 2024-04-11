@@ -5,6 +5,8 @@
 
 #[path = "common/test_instance.rs"]
 mod test_instance;
+#[path = "common/wit_interface_test.rs"]
+mod wit_interface_test;
 
 use std::{
     marker::PhantomData,
@@ -15,7 +17,8 @@ use std::{
 };
 
 use linera_witty::{
-    wit_export, wit_import, ExportTo, Instance, Runtime, RuntimeError, RuntimeMemory,
+    wit_export, wit_generation::WitInterface, wit_import, ExportTo, Instance, MockInstance,
+    Runtime, RuntimeError, RuntimeMemory,
 };
 use test_case::test_case;
 
@@ -23,7 +26,10 @@ use test_case::test_case;
 use self::test_instance::WasmerInstanceFactory;
 #[cfg(with_wasmtime)]
 use self::test_instance::WasmtimeInstanceFactory;
-use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
+use self::{
+    test_instance::{MockInstanceFactory, TestInstanceFactory},
+    wit_interface_test::{ENTRYPOINT, GETTERS, OPERATIONS, SETTERS, SIMPLE_FUNCTION},
+};
 
 /// An interface to call into the test modules.
 #[wit_import(package = "witty-macros:test-modules")]
@@ -459,4 +465,32 @@ where
         .expect("Failed to call guest's `entrypoint` function");
 
     assert_eq!(user_data.load(Ordering::Relaxed), true);
+}
+
+/// Test the generated [`WitInterface`] implementations for the types used in this test.
+#[test_case(PhantomData::<Entrypoint<MockInstance<()>>>, ENTRYPOINT; "of_entrypoint")]
+#[test_case(
+    PhantomData::<ImportedSimpleFunction<MockInstance<()>>>, SIMPLE_FUNCTION;
+    "of_imported_simple_function"
+)]
+#[test_case(PhantomData::<ImportedGetters<MockInstance<()>>>, GETTERS; "of_imported_getters")]
+#[test_case(PhantomData::<ImportedSetters<MockInstance<()>>>, SETTERS; "of_imported_setters")]
+#[test_case(
+    PhantomData::<ImportedOperations<MockInstance<()>>>, OPERATIONS;
+    "of_imported_operations"
+)]
+#[test_case(PhantomData::<ExportedSimpleFunction>, SIMPLE_FUNCTION; "of_exported_simple_function")]
+#[test_case(PhantomData::<ExportedGetters<MockInstance<()>>>, GETTERS; "of_exported_getters")]
+#[test_case(PhantomData::<ExportedSetters<MockInstance<()>>>, SETTERS; "of_exported_setters")]
+#[test_case(
+    PhantomData::<ExportedOperations<MockInstance<()>>>, OPERATIONS;
+    "of_exported_operations"
+)]
+fn test_wit_interface<Interface>(
+    _: PhantomData<Interface>,
+    expected_snippets: (&str, &[&str], &[(&str, &str)]),
+) where
+    Interface: WitInterface,
+{
+    wit_interface_test::test_wit_interface::<Interface>(expected_snippets);
 }

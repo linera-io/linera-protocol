@@ -23,6 +23,7 @@ mod runtime;
 pub mod test;
 mod type_traits;
 mod util;
+pub mod wit_generation;
 
 pub use frunk::{hlist, hlist::HList, hlist_pat, HCons, HList, HNil};
 #[cfg(with_wit_export)]

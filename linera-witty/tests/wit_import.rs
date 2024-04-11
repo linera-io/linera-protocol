@@ -7,15 +7,24 @@
 
 #[path = "common/test_instance.rs"]
 mod test_instance;
+#[path = "common/wit_interface_test.rs"]
+mod wit_interface_test;
 
-use linera_witty::{wit_import, Instance, Runtime, RuntimeMemory};
+use std::marker::PhantomData;
+
+use linera_witty::{
+    wit_generation::WitInterface, wit_import, Instance, MockInstance, Runtime, RuntimeMemory,
+};
 use test_case::test_case;
 
 #[cfg(with_wasmer)]
 use self::test_instance::WasmerInstanceFactory;
 #[cfg(with_wasmtime)]
 use self::test_instance::WasmtimeInstanceFactory;
-use self::test_instance::{MockInstanceFactory, TestInstanceFactory, WithoutExports};
+use self::{
+    test_instance::{MockInstanceFactory, TestInstanceFactory, WithoutExports},
+    wit_interface_test::{GETTERS, OPERATIONS, SETTERS, SIMPLE_FUNCTION},
+};
 
 /// An interface to import a single function without parameters or return values.
 #[wit_import(package = "witty-macros:test-modules")]
@@ -316,4 +325,18 @@ where
             .expect("Failed to run guest's `add-f64` function"),
         128.25
     );
+}
+
+/// Tests the generated [`WitInterface`] implementations for the types used in this test.
+#[test_case(PhantomData::<SimpleFunction<MockInstance<()>>>, SIMPLE_FUNCTION; "of_simple_function")]
+#[test_case(PhantomData::<Getters<MockInstance<()>>>, GETTERS; "of_getters")]
+#[test_case(PhantomData::<Setters<MockInstance<()>>>, SETTERS; "of_setters")]
+#[test_case(PhantomData::<Operations<MockInstance<()>>>, OPERATIONS; "of_operations")]
+fn test_wit_interface<Interface>(
+    _: PhantomData<Interface>,
+    expected_snippets: (&str, &[&str], &[(&str, &str)]),
+) where
+    Interface: WitInterface,
+{
+    wit_interface_test::test_wit_interface::<Interface>(expected_snippets);
 }
