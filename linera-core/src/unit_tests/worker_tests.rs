@@ -474,7 +474,7 @@ where
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
     let key_pair = KeyPair::generate();
-    let balance: Amount = Amount::from_tokens(5);
+    let balance = Amount::from_tokens(5);
     let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
     let epoch = Epoch::ZERO;
     let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
@@ -3550,7 +3550,7 @@ where
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(1);
     let key_pair = KeyPair::generate();
-    let balance: Amount = Amount::from_tokens(5);
+    let balance = Amount::from_tokens(5);
     let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
     let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
 

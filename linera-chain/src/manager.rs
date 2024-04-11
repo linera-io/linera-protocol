@@ -21,7 +21,7 @@
 //! * In leader rotation mode (`Round::SingleLeader`), chain owners take turns at proposing blocks.
 //!   It can make progress as long as at least one owner is honest, even if other owners try to
 //!   prevent it.
-//! * In fallback/publich mode (`Round::Validator`), validators take turns at proposing blocks.
+//! * In fallback/public mode (`Round::Validator`), validators take turns at proposing blocks.
 //!   It can always make progress under the standard assumption that there is a quorum of honest
 //!   validators.
 //!
