@@ -508,6 +508,7 @@ where
         let mut identities = manager
             .ownership
             .all_owners()
+            .chain(&manager.leader)
             .filter(|owner| self.known_key_pairs.contains_key(owner));
         let Some(identity) = identities.next() else {
             return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
