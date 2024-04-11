@@ -10,6 +10,7 @@
 
 #![cfg(with_wasm_runtime)]
 
+mod entrypoints;
 mod module_cache;
 mod sanitizer;
 #[macro_use]
@@ -34,6 +35,7 @@ use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 #[cfg(with_wasmtime)]
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
 
+pub use self::entrypoints::{ContractEntrypoints, ServiceEntrypoints};
 use self::sanitizer::sanitize;
 use crate::{
     Bytecode, ContractSyncRuntime, ExecutionError, ServiceSyncRuntime, UserContractInstance,

@@ -3208,6 +3208,7 @@ dependencies = [
  "linera-views-derive",
  "linera-wit-bindgen-host-wasmer-rust",
  "linera-wit-bindgen-host-wasmtime-rust",
+ "linera-witty",
  "lru",
  "once_cell",
  "oneshot",

@@ -1970,6 +1970,7 @@ dependencies = [
  "linera-views",
  "linera-views-derive",
  "linera-wit-bindgen-host-wasmer-rust",
+ "linera-witty",
  "lru",
  "once_cell",
  "oneshot",

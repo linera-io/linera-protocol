@@ -45,6 +45,7 @@ futures.workspace = true
 linera-base.workspace = true
 linera-views.workspace = true
 linera-views-derive.workspace = true
+linera-witty = { workspace = true, features = ["macros"] }
 lru.workspace = true
 once_cell.workspace = true
 oneshot.workspace = true
