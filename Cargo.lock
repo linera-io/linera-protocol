@@ -3627,6 +3627,7 @@ dependencies = [
  "linera-base",
  "linera-views",
  "linera-views-derive",
+ "linera-witty",
  "linked-hash-map",
  "prometheus",
  "rand",

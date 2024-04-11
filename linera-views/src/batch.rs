@@ -25,6 +25,7 @@ use std::{
 
 use async_trait::async_trait;
 use bcs::serialized_size;
+use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -37,7 +38,7 @@ use crate::{
 /// * Deletion of a specific key.
 /// * Deletion of all keys matching a specific prefix.
 /// * Insertion or replacement of a key with a value.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
 pub enum WriteOperation {
     /// Delete the given key.
     Delete {

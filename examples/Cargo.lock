@@ -2101,6 +2101,7 @@ dependencies = [
  "hex",
  "linera-base",
  "linera-views-derive",
+ "linera-witty",
  "linked-hash-map",
  "prometheus",
  "rand",
