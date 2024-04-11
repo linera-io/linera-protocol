@@ -736,17 +736,17 @@ impl BlockExecutionOutcome {
 }
 
 impl HashedValue {
-    /// Creates a `ConfirmedBlock` value.
+    /// Creates a [`ConfirmedBlock`](CertificateValue::ConfirmedBlock) value.
     pub fn new_confirmed(executed_block: ExecutedBlock) -> HashedValue {
         CertificateValue::ConfirmedBlock { executed_block }.into()
     }
 
-    /// Creates a new `ValidatedBlock` value.
+    /// Creates a [`ValidatedBlock`](CertificateValue::ValidatedBlock) value.
     pub fn new_validated(executed_block: ExecutedBlock) -> HashedValue {
         CertificateValue::ValidatedBlock { executed_block }.into()
     }
 
-    /// Creates a new `Timeout` value.
+    /// Creates a [`Timeout`](CertificateValue::Timeout) value.
     pub fn new_timeout(chain_id: ChainId, height: BlockHeight, epoch: Epoch) -> HashedValue {
         CertificateValue::Timeout {
             chain_id,
