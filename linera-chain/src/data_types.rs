@@ -293,7 +293,7 @@ pub enum CertificateValue {
     ConfirmedBlock {
         executed_block: ExecutedBlock,
     },
-    LeaderTimeout {
+    Timeout {
         chain_id: ChainId,
         height: BlockHeight,
         epoch: Epoch,
@@ -311,7 +311,7 @@ impl CertificateValue {
         match self {
             CertificateValue::ValidatedBlock { .. } => "validated".to_string(),
             CertificateValue::ConfirmedBlock { .. } => "confirmed".to_string(),
-            CertificateValue::LeaderTimeout { .. } => "timeout".to_string(),
+            CertificateValue::Timeout { .. } => "timeout".to_string(),
         }
     }
 }
@@ -573,7 +573,7 @@ impl CertificateValue {
             | CertificateValue::ValidatedBlock { executed_block, .. } => {
                 executed_block.block.chain_id
             }
-            CertificateValue::LeaderTimeout { chain_id, .. } => *chain_id,
+            CertificateValue::Timeout { chain_id, .. } => *chain_id,
         }
     }
 
@@ -583,7 +583,7 @@ impl CertificateValue {
             | CertificateValue::ValidatedBlock { executed_block, .. } => {
                 executed_block.block.height
             }
-            CertificateValue::LeaderTimeout { height, .. } => *height,
+            CertificateValue::Timeout { height, .. } => *height,
         }
     }
 
@@ -591,7 +591,7 @@ impl CertificateValue {
         match self {
             CertificateValue::ConfirmedBlock { executed_block, .. }
             | CertificateValue::ValidatedBlock { executed_block, .. } => executed_block.block.epoch,
-            CertificateValue::LeaderTimeout { epoch, .. } => *epoch,
+            CertificateValue::Timeout { epoch, .. } => *epoch,
         }
     }
 
@@ -622,7 +622,7 @@ impl CertificateValue {
     }
 
     pub fn is_timeout(&self) -> bool {
-        matches!(self, CertificateValue::LeaderTimeout { .. })
+        matches!(self, CertificateValue::Timeout { .. })
     }
 
     #[cfg(with_testing)]
@@ -634,7 +634,7 @@ impl CertificateValue {
         match self {
             CertificateValue::ConfirmedBlock { executed_block, .. }
             | CertificateValue::ValidatedBlock { executed_block, .. } => Some(executed_block),
-            CertificateValue::LeaderTimeout { .. } => None,
+            CertificateValue::Timeout { .. } => None,
         }
     }
 
@@ -647,7 +647,7 @@ impl CertificateValue {
         match self {
             CertificateValue::ConfirmedBlock { .. } => "confirmed_block",
             CertificateValue::ValidatedBlock { .. } => "validated_block",
-            CertificateValue::LeaderTimeout { .. } => "leader_timeout",
+            CertificateValue::Timeout { .. } => "timeout",
         }
     }
 }
@@ -736,19 +736,19 @@ impl BlockExecutionOutcome {
 }
 
 impl HashedValue {
-    /// Creates a `ConfirmedBlock` value.
+    /// Creates a [`ConfirmedBlock`](CertificateValue::ConfirmedBlock) value.
     pub fn new_confirmed(executed_block: ExecutedBlock) -> HashedValue {
         CertificateValue::ConfirmedBlock { executed_block }.into()
     }
 
-    /// Creates a new `ValidatedBlock` value.
+    /// Creates a [`ValidatedBlock`](CertificateValue::ValidatedBlock) value.
     pub fn new_validated(executed_block: ExecutedBlock) -> HashedValue {
         CertificateValue::ValidatedBlock { executed_block }.into()
     }
 
-    /// Creates a new `LeaderTimeout` value.
-    pub fn new_leader_timeout(chain_id: ChainId, height: BlockHeight, epoch: Epoch) -> HashedValue {
-        CertificateValue::LeaderTimeout {
+    /// Creates a [`Timeout`](CertificateValue::Timeout) value.
+    pub fn new_timeout(chain_id: ChainId, height: BlockHeight, epoch: Epoch) -> HashedValue {
+        CertificateValue::Timeout {
             chain_id,
             height,
             epoch,
@@ -776,9 +776,7 @@ impl HashedValue {
                 }
                 .into(),
             ),
-            CertificateValue::ConfirmedBlock { .. } | CertificateValue::LeaderTimeout { .. } => {
-                None
-            }
+            CertificateValue::ConfirmedBlock { .. } | CertificateValue::Timeout { .. } => None,
         }
     }
 

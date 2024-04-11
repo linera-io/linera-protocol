@@ -44,7 +44,7 @@ pub enum CommunicateAction {
         certificate: Certificate,
         delivery: CrossChainMessageDelivery,
     },
-    RequestLeaderTimeout {
+    RequestTimeout {
         chain_id: ChainId,
         height: BlockHeight,
         round: Round,
@@ -210,7 +210,7 @@ where
                 | CertificateValue::ValidatedBlock { executed_block, .. } => {
                     executed_block.block.bytecode_locations()
                 }
-                CertificateValue::LeaderTimeout { .. } => HashMap::new(),
+                CertificateValue::Timeout { .. } => HashMap::new(),
             };
             for location in locations {
                 if !required.contains_key(location) {
@@ -313,7 +313,7 @@ where
                     .await?;
             }
         }
-        if let Some(cert) = manager.leader_timeout {
+        if let Some(cert) = manager.timeout {
             if cert.value().is_timeout() && cert.value().chain_id() == chain_id {
                 self.send_certificate(cert, CrossChainMessageDelivery::NonBlocking)
                     .await?;
@@ -359,7 +359,7 @@ where
                 let value = certificate.value();
                 (value.height(), value.chain_id())
             }
-            CommunicateAction::RequestLeaderTimeout {
+            CommunicateAction::RequestTimeout {
                 height, chain_id, ..
             } => (*height, *chain_id),
         };
@@ -380,8 +380,8 @@ where
                 let info = self.send_certificate(certificate, delivery).await?;
                 info.manager.pending
             }
-            CommunicateAction::RequestLeaderTimeout { .. } => {
-                let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
+            CommunicateAction::RequestTimeout { .. } => {
+                let query = ChainInfoQuery::new(chain_id).with_timeout();
                 let info = self.node.handle_chain_info_query(query).await?.info;
                 info.manager.timeout_vote
             }

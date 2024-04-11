@@ -508,6 +508,7 @@ where
         let mut identities = manager
             .ownership
             .all_owners()
+            .chain(&manager.leader)
             .filter(|owner| self.known_key_pairs.contains_key(owner));
         let Some(identity) = identities.next() else {
             return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
@@ -677,7 +678,7 @@ where
         let round = match action {
             CommunicateAction::SubmitBlock { proposal } => proposal.content.round,
             CommunicateAction::FinalizeBlock { certificate, .. } => certificate.round,
-            CommunicateAction::RequestLeaderTimeout { round, .. } => round,
+            CommunicateAction::RequestTimeout { round, .. } => round,
         };
         ensure!(
             (votes_hash, votes_round) == (value.hash(), round),
@@ -1006,12 +1007,12 @@ where
             .ok_or(LocalNodeError::InactiveChain(chain_id))?;
         let height = info.next_block_height;
         let round = info.manager.current_round;
-        let action = CommunicateAction::RequestLeaderTimeout {
+        let action = CommunicateAction::RequestTimeout {
             height,
             round,
             chain_id,
         };
-        let value = HashedValue::new_leader_timeout(chain_id, height, epoch);
+        let value = HashedValue::new_timeout(chain_id, height, epoch);
         let certificate = self
             .communicate_chain_action(&committee, action, value)
             .await?;
@@ -1612,7 +1613,7 @@ where
         let can_propose = match round {
             Round::Fast => manager.ownership.super_owners.contains_key(&identity),
             Round::MultiLeader(_) => true,
-            Round::SingleLeader(_) => manager.leader == Some(identity),
+            Round::SingleLeader(_) | Round::Validator(_) => manager.leader == Some(identity),
         };
         if can_propose {
             let certificate = self.propose_block(block.clone(), round).await?;

@@ -807,12 +807,12 @@ where
     }
 
     /// Processes a leader timeout issued from a multi-owner chain.
-    async fn process_leader_timeout(
+    async fn process_timeout(
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let (chain_id, height, epoch) = match certificate.value() {
-            CertificateValue::LeaderTimeout {
+            CertificateValue::Timeout {
                 chain_id,
                 height,
                 epoch,
@@ -1201,9 +1201,9 @@ where
                 )
                 .await?
             }
-            CertificateValue::LeaderTimeout { .. } => {
+            CertificateValue::Timeout { .. } => {
                 // Handle the leader timeout.
-                self.process_leader_timeout(certificate).await?
+                self.process_timeout(certificate).await?
             }
         };
 
@@ -1230,17 +1230,33 @@ where
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, query);
-        let mut chain = self.storage.load_chain(query.chain_id).await?;
+        let chain_id = query.chain_id;
+        let mut chain = self.storage.load_chain(chain_id).await?;
         if query.request_leader_timeout {
             if let Some(epoch) = chain.execution_state.system.epoch.get() {
-                if chain.manager.get_mut().vote_leader_timeout(
-                    query.chain_id,
-                    chain.tip_state.get().next_block_height,
-                    *epoch,
-                    self.key_pair(),
-                    self.storage.current_time(),
-                ) {
+                let height = chain.tip_state.get().next_block_height;
+                let key_pair = self.key_pair();
+                let local_time = self.storage.current_time();
+                let manager = chain.manager.get_mut();
+                if manager.vote_timeout(chain_id, height, *epoch, key_pair, local_time) {
                     chain.save().await?;
+                }
+            }
+        }
+        if query.request_fallback {
+            if let (Some(epoch), Some(entry)) = (
+                chain.execution_state.system.epoch.get(),
+                chain.unskippable.front().await?,
+            ) {
+                let ownership = chain.execution_state.system.ownership.get();
+                let elapsed = self.storage.current_time().delta_since(entry.seen);
+                if elapsed >= ownership.timeout_config.fallback_duration {
+                    let height = chain.tip_state.get().next_block_height;
+                    let key_pair = self.key_pair();
+                    let manager = chain.manager.get_mut();
+                    if manager.vote_fallback(chain_id, height, *epoch, key_pair) {
+                        chain.save().await?;
+                    }
                 }
             }
         }

@@ -22,6 +22,7 @@ use linera_execution::{
 use linera_views::{
     common::Context,
     log_view::LogView,
+    queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     set_view::SetView,
@@ -34,7 +35,7 @@ use crate::{
         Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, IncomingMessage,
         MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
     },
-    inbox::{InboxError, InboxStateView},
+    inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
     outbox::OutboxStateView,
     ChainError, ChainExecutionContext,
@@ -197,6 +198,35 @@ static STATE_HASH_COMPUTATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Histogram can be created")
 });
 
+/// An origin, cursor and timestamp of a unskippable message in our inbox.
+#[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
+pub struct TimestampedInboxEntry {
+    /// The origin and cursor of the message.
+    pub entry: InboxEntry,
+    /// The timestamp when the message was added to the inbox.
+    pub seen: Timestamp,
+}
+
+/// An origin and cursor of a unskippable message that is no longer in our inbox.
+#[derive(
+    Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize, async_graphql::SimpleObject,
+)]
+pub struct InboxEntry {
+    /// The origin from which we received the message.
+    pub origin: Origin,
+    /// The cursor of the message in the inbox.
+    pub cursor: Cursor,
+}
+
+impl InboxEntry {
+    fn new(origin: Origin, event: &Event) -> Self {
+        InboxEntry {
+            cursor: Cursor::from(event),
+            origin,
+        }
+    }
+}
+
 /// A view accessing the state of a chain.
 #[derive(Debug, RootView, SimpleObject)]
 pub struct ChainStateView<C>
@@ -223,6 +253,10 @@ where
 
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, Origin, InboxStateView<C>>,
+    /// A queue of unskippable events, with the timestamp when we added them to the inbox.
+    pub unskippable: QueueView<C, TimestampedInboxEntry>,
+    /// Non-skippable events that have been removed but are still in the queue.
+    pub removed_unskippable: SetView<C, InboxEntry>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, Target, OutboxStateView<C>>,
     /// Number of outgoing messages in flight for each block height.
@@ -543,12 +577,19 @@ where
         // Process the inbox events and update the inbox state.
         let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
         for event in events {
-            inbox.add_event(event).await.map_err(|error| match error {
+            let entry = InboxEntry::new(origin.clone(), &event);
+            let skippable = event.is_skippable();
+            let newly_added = inbox.add_event(event).await.map_err(|error| match error {
                 InboxError::ViewError(error) => ChainError::ViewError(error),
                 error => ChainError::InternalError(format!(
                     "while processing messages in certified block: {error}"
                 )),
             })?;
+            if newly_added && !skippable {
+                let seen = local_time;
+                self.unskippable
+                    .push_back(TimestampedInboxEntry { entry, seen });
+            }
         }
         // Remember the certificate for future validator/client synchronizations.
         self.received_log.push(ChainAndHeight {
@@ -575,11 +616,13 @@ where
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash().await?;
         self.execution_state_hash.set(Some(hash));
+        let maybe_committee = self.execution_state.system.current_committee().into_iter();
         // Last, reset the consensus state based on the current ownership.
         self.manager.get_mut().reset(
             self.execution_state.system.ownership.get(),
             BlockHeight(0),
             local_time,
+            maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights()),
         )?;
         Ok(true)
     }
@@ -602,14 +645,37 @@ where
         }
         let origins = events_by_origin.keys().copied();
         let inboxes = self.inboxes.try_load_entries_mut(origins).await?;
+        let mut removed_unskippable = HashSet::new();
         for ((origin, events), mut inbox) in events_by_origin.into_iter().zip(inboxes) {
             tracing::trace!("Updating inbox {:?} in chain {:?}", origin, chain_id);
             for event in events {
                 // Mark the message as processed in the inbox.
-                inbox
+                let was_present = inbox
                     .remove_event(event)
                     .await
                     .map_err(|error| ChainError::from((chain_id, origin.clone(), error)))?;
+                if was_present && !event.is_skippable() {
+                    removed_unskippable.insert(InboxEntry::new(origin.clone(), event));
+                }
+            }
+        }
+        if !removed_unskippable.is_empty() {
+            // Delete all removed events from the front of the unskippable queue.
+            let maybe_front = self.unskippable.front().await?;
+            if maybe_front.is_some_and(|ts_entry| removed_unskippable.remove(&ts_entry.entry)) {
+                self.unskippable.delete_front();
+                while let Some(ts_entry) = self.unskippable.front().await? {
+                    if !removed_unskippable.remove(&ts_entry.entry) {
+                        if !self.removed_unskippable.contains(&ts_entry.entry).await? {
+                            break;
+                        }
+                        self.removed_unskippable.remove(&ts_entry.entry)?;
+                    }
+                    self.unskippable.delete_front();
+                }
+            }
+            for entry in removed_unskippable {
+                self.removed_unskippable.insert(&entry)?;
             }
         }
         Ok(())
@@ -858,10 +924,12 @@ where
         };
         self.execution_state_hash.set(Some(state_hash));
         // Last, reset the consensus state based on the current ownership.
+        let maybe_committee = self.execution_state.system.current_committee().into_iter();
         self.manager.get_mut().reset(
             self.execution_state.system.ownership.get(),
             block.height.try_add_one()?,
             local_time,
+            maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights()),
         )?;
 
         #[cfg(with_metrics)]

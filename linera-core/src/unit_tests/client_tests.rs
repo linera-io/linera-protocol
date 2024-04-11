@@ -1436,7 +1436,7 @@ where
     let certificate = client.request_leader_timeout().await.unwrap();
     assert_eq!(
         *certificate.value(),
-        CertificateValue::LeaderTimeout {
+        CertificateValue::Timeout {
             chain_id,
             height: BlockHeight::from(1),
             epoch: Epoch::ZERO

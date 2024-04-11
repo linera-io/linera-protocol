@@ -129,4 +129,5 @@ record timeout-config {
     fast-round-duration-us: option<duration>,
     base-timeout-us: duration,
     timeout-increment-us: duration,
+    fallback-duration-us: duration,
 }

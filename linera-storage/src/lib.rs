@@ -173,6 +173,12 @@ pub trait Storage: Sized {
         let id = description.into();
         let mut chain = self.load_chain(id).await?;
         assert!(!chain.is_active(), "Attempting to create a chain twice");
+        chain.manager.get_mut().reset(
+            &ChainOwnership::single(public_key),
+            BlockHeight(0),
+            self.current_time(),
+            committee.keys_and_weights(),
+        )?;
         let system_state = &mut chain.execution_state.system;
         system_state.description.set(Some(description));
         system_state.epoch.set(Some(Epoch::ZERO));
@@ -207,11 +213,6 @@ pub trait Storage: Sized {
 
         let state_hash = chain.execution_state.crypto_hash().await?;
         chain.execution_state_hash.set(Some(state_hash));
-        chain.manager.get_mut().reset(
-            &ChainOwnership::single(public_key),
-            BlockHeight(0),
-            self.current_time(),
-        )?;
         chain.save().await?;
         Ok(())
     }

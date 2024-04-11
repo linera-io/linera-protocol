@@ -10,7 +10,7 @@
 //!
 //! The protocol proceeds in rounds, until it reaches a round where a block gets confirmed.
 //!
-//! There are three kinds of rounds:
+//! There are four kinds of rounds:
 //!
 //! * In `Round::Fast`, only super owners can propose blocks, and validators vote to confirm a
 //!   block immediately. Super owners must be careful to make only one block proposal, or else they
@@ -21,6 +21,9 @@
 //! * In leader rotation mode (`Round::SingleLeader`), chain owners take turns at proposing blocks.
 //!   It can make progress as long as at least one owner is honest, even if other owners try to
 //!   prevent it.
+//! * In fallback/public mode (`Round::Validator`), validators take turns at proposing blocks.
+//!   It can always make progress under the standard assumption that there is a quorum of honest
+//!   validators.
 //!
 //! ## Safety, i.e. at most one block will be confirmed
 //!
@@ -57,12 +60,15 @@
 //! If the owners fail to cooperate, any honest owner can initiate the last multi-leader round by
 //! making a proposal there, then wait for it to time out, which starts the leader-based mode:
 //!
-//! In leader-based mode, an honest owner should subscribe to notifications from all validators,
-//! and follow the chain. Whenever another leader's round takes too long, they should request
-//! timeout votes from the validators to make the next round begin. Once the honest owner becomes
-//! the round leader, they should update all validators, so that they all agree on the current
-//! round. Then they download the highest `ValidatedBlock` certificate known to any honest validator
-//! and include that in their block proposal, just like in the cooperative case.
+//! In leader-based and fallback/public mode, an honest participant should subscribe to
+//! notifications from all validators, and follow the chain. Whenever another leader's round takes
+//! too long, they should request timeout votes from the validators to make the next round begin.
+//! Once the honest participant becomes the round leader, they should update all validators, so
+//! that they all agree on the current round. Then they download the highest `ValidatedBlock`
+//! certificate known to any honest validator and include that in their block proposal, just like
+//! in the cooperative case.
+
+use std::collections::BTreeMap;
 
 use linera_base::{
     crypto::{KeyPair, PublicKey},
@@ -101,6 +107,8 @@ pub struct ChainManager {
     pub seed: u64,
     /// The probability distribution for choosing a round leader.
     pub distribution: Option<WeightedAliasIndex<u64>>,
+    /// The probability distribution for choosing a fallback round leader.
+    pub fallback_distribution: Option<WeightedAliasIndex<u64>>,
     /// Highest-round authenticated block that we have received and checked. If there are multiple
     /// proposals in the same round, this contains only the first one.
     pub proposed: Option<BlockProposal>,
@@ -108,11 +116,13 @@ pub struct ChainManager {
     /// validator).
     pub locked: Option<Certificate>,
     /// Latest leader timeout certificate we have received.
-    pub leader_timeout: Option<Certificate>,
+    pub timeout: Option<Certificate>,
     /// Latest vote we have cast, to validate or confirm.
     pub pending: Option<Vote>,
     /// Latest timeout vote we cast.
     pub timeout_vote: Option<Vote>,
+    /// Fallback vote we cast.
+    pub fallback_vote: Option<Vote>,
     /// The time after which we are ready to sign a timeout certificate for the current round.
     pub round_timeout: Option<Timestamp>,
     /// The lowest round where we can still vote to validate or confirm a block. This is
@@ -122,6 +132,8 @@ pub struct ChainManager {
     /// current. Seeing a validated block certificate or a valid proposal in any round causes that
     /// round to become current, unless a higher one already is.
     pub current_round: Round,
+    /// The owners that take over in fallback mode.
+    pub fallback_owners: BTreeMap<Owner, (PublicKey, u64)>,
 }
 
 doc_scalar!(
@@ -131,25 +143,39 @@ doc_scalar!(
 
 impl ChainManager {
     /// Replaces `self` with a new chain manager.
-    pub fn reset(
+    pub fn reset<'a>(
         &mut self,
         ownership: &ChainOwnership,
         height: BlockHeight,
         local_time: Timestamp,
+        fallback_owners: impl Iterator<Item = (PublicKey, u64)> + 'a,
     ) -> Result<(), ChainError> {
-        *self = ChainManager::new(ownership.clone(), height.0, local_time)?;
+        *self = ChainManager::new(ownership.clone(), height.0, local_time, fallback_owners)?;
         Ok(())
     }
 
     /// Creates a new `ChainManager`, and starts the first round.
-    fn new(
+    fn new<'a>(
         ownership: ChainOwnership,
         seed: u64,
         local_time: Timestamp,
+        fallback_owners: impl Iterator<Item = (PublicKey, u64)> + 'a,
     ) -> Result<Self, ChainError> {
         let distribution = if !ownership.owners.is_empty() {
             let weights = ownership
                 .owners
+                .values()
+                .map(|(_, weight)| *weight)
+                .collect();
+            Some(WeightedAliasIndex::new(weights)?)
+        } else {
+            None
+        };
+        let fallback_owners = fallback_owners
+            .map(|(pub_key, weight)| (Owner::from(pub_key), (pub_key, weight)))
+            .collect::<BTreeMap<_, _>>();
+        let fallback_distribution = if !fallback_owners.is_empty() {
+            let weights = fallback_owners
                 .values()
                 .map(|(_, weight)| *weight)
                 .collect();
@@ -166,35 +192,17 @@ impl ChainManager {
             ownership,
             seed,
             distribution,
+            fallback_distribution,
             proposed: None,
             locked: None,
-            leader_timeout: None,
+            timeout: None,
             pending: None,
             timeout_vote: None,
+            fallback_vote: None,
             round_timeout,
             current_round,
+            fallback_owners,
         })
-    }
-
-    /// Returns the lowest round where we can still vote to validate or confirm a block. This is
-    /// the round to which the current timeout applies.
-    ///
-    /// Having a leader timeout certificate in any given round causes the next one to become
-    /// current. Seeing a validated block certificate or a valid proposal in any round causes that
-    /// round to become current, unless a higher one already is.
-    pub fn current_round(&self) -> Round {
-        self.leader_timeout
-            .iter()
-            .map(|certificate| {
-                self.ownership
-                    .next_round(certificate.round)
-                    .unwrap_or(Round::SingleLeader(u32::MAX))
-            })
-            .chain(self.locked.iter().map(|certificate| certificate.round))
-            .chain(self.proposed.iter().map(|proposal| proposal.content.round))
-            .max()
-            .unwrap_or_default()
-            .max(self.ownership.first_round())
     }
 
     /// Returns the most recent vote we cast.
@@ -281,8 +289,8 @@ impl ChainManager {
         Ok(Outcome::Accept)
     }
 
-    /// Checks if the current round has timed out, and signs a `LeaderTimeout`.
-    pub fn vote_leader_timeout(
+    /// Checks if the current round has timed out, and signs a `Timeout`.
+    pub fn vote_timeout(
         &mut self,
         chain_id: ChainId,
         height: BlockHeight,
@@ -305,8 +313,31 @@ impl ChainManager {
                 return false; // We already signed this timeout.
             }
         }
-        let value = HashedValue::new_leader_timeout(chain_id, height, epoch);
+        let value = HashedValue::new_timeout(chain_id, height, epoch);
         self.timeout_vote = Some(Vote::new(value, current_round, key_pair));
+        true
+    }
+
+    /// Signs a `Timeout` certificate to switch to fallback mode.
+    ///
+    /// This must only be called after verifying that the condition for fallback mode is
+    /// satisfied locally.
+    pub fn vote_fallback(
+        &mut self,
+        chain_id: ChainId,
+        height: BlockHeight,
+        epoch: Epoch,
+        key_pair: Option<&KeyPair>,
+    ) -> bool {
+        let Some(key_pair) = key_pair else {
+            return false; // We are not a validator.
+        };
+        if self.fallback_vote.is_some() || self.current_round >= Round::Validator(0) {
+            return false; // We already signed this or are already in fallback mode.
+        }
+        let value = HashedValue::new_timeout(chain_id, height, epoch);
+        let last_regular_round = Round::SingleLeader(u32::MAX);
+        self.fallback_vote = Some(Vote::new(value, last_regular_round, key_pair));
         true
     }
 
@@ -324,7 +355,7 @@ impl ChainManager {
                 CertificateValue::ValidatedBlock { .. } => {
                     ensure!(new_round >= *round, ChainError::InsufficientRound(*round))
                 }
-                CertificateValue::LeaderTimeout { .. } => {
+                CertificateValue::Timeout { .. } => {
                     // Unreachable: We only put validated or confirmed blocks in pending.
                     return Err(ChainError::InternalError(
                         "pending can only be validated or confirmed block".to_string(),
@@ -411,15 +442,15 @@ impl ChainManager {
 
     /// Updates `current_round` and `round_timeout` if necessary.
     ///
-    /// This must be after every change to `leader_timeout`, `locked` or `proposed`.
+    /// This must be after every change to `timeout`, `locked` or `proposed`.
     fn update_current_round(&mut self, local_time: Timestamp) {
         let current_round = self
-            .leader_timeout
+            .timeout
             .iter()
             .map(|certificate| {
                 self.ownership
                     .next_round(certificate.round)
-                    .unwrap_or(Round::SingleLeader(u32::MAX))
+                    .unwrap_or(Round::Validator(u32::MAX))
             })
             .chain(self.locked.iter().map(|certificate| certificate.round))
             .chain(self.proposed.iter().map(|proposal| proposal.content.round))
@@ -443,12 +474,12 @@ impl ChainManager {
             return;
         }
         let round = certificate.round;
-        if let Some(known_certificate) = &self.leader_timeout {
+        if let Some(known_certificate) = &self.timeout {
             if known_certificate.round >= round {
                 return;
             }
         }
-        self.leader_timeout = Some(certificate);
+        self.timeout = Some(certificate);
         self.update_current_round(local_time);
     }
 
@@ -474,17 +505,27 @@ impl ChainManager {
                 let (leader, (public_key, _)) = self.ownership.owners.iter().nth(index)?;
                 (*leader == proposal.owner).then_some(*public_key)
             }
+            Round::Validator(r) => {
+                let index = self.fallback_round_leader_index(r)?;
+                let (leader, (public_key, _)) = self.fallback_owners.iter().nth(index)?;
+                (*leader == proposal.owner).then_some(*public_key)
+            }
         }
     }
 
     /// Returns the leader who is allowed to propose a block in the given round, or `None` if every
     /// owner is allowed to propose. Exception: In `Round::Fast`, only super owners can propose.
     fn round_leader(&self, round: Round) -> Option<&Owner> {
-        if let Round::SingleLeader(r) = round {
-            let index = self.round_leader_index(r)?;
-            self.ownership.owners.keys().nth(index)
-        } else {
-            None
+        match round {
+            Round::SingleLeader(r) => {
+                let index = self.round_leader_index(r)?;
+                self.ownership.owners.keys().nth(index)
+            }
+            Round::Validator(r) => {
+                let index = self.fallback_round_leader_index(r)?;
+                self.fallback_owners.keys().nth(index)
+            }
+            Round::Fast | Round::MultiLeader(_) => None,
         }
     }
 
@@ -493,6 +534,14 @@ impl ChainManager {
         let seed = u64::from(round).rotate_left(32).wrapping_add(self.seed);
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         Some(self.distribution.as_ref()?.sample(&mut rng))
+    }
+
+    /// Returns the index of the fallback leader who is allowed to propose a block in the given
+    /// round.
+    fn fallback_round_leader_index(&self, round: u32) -> Option<usize> {
+        let seed = u64::from(round).rotate_left(32).wrapping_add(self.seed);
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        Some(self.fallback_distribution.as_ref()?.sample(&mut rng))
     }
 
     /// Returns whether the owner is a super owner.
@@ -513,11 +562,13 @@ pub struct ChainManagerInfo {
     /// validator).
     pub requested_locked: Option<Box<Certificate>>,
     /// Latest timeout certificate we have seen.
-    pub leader_timeout: Option<Box<Certificate>>,
+    pub timeout: Option<Box<Certificate>>,
     /// Latest vote we cast (either to validate or to confirm a block).
     pub pending: Option<LiteVote>,
     /// Latest timeout vote we cast.
     pub timeout_vote: Option<LiteVote>,
+    /// Fallback vote we cast.
+    pub fallback_vote: Option<LiteVote>,
     /// The value we voted for, if requested.
     pub requested_pending_value: Option<Box<HashedValue>>,
     /// The current round, i.e. the lowest round where we can still vote to validate a block.
@@ -536,9 +587,10 @@ impl From<&ChainManager> for ChainManagerInfo {
             ownership: manager.ownership.clone(),
             requested_proposed: None,
             requested_locked: None,
-            leader_timeout: manager.leader_timeout.clone().map(Box::new),
+            timeout: manager.timeout.clone().map(Box::new),
             pending: manager.pending.as_ref().map(|vote| vote.lite()),
             timeout_vote: manager.timeout_vote.as_ref().map(Vote::lite),
+            fallback_vote: manager.fallback_vote.as_ref().map(Vote::lite),
             requested_pending_value: None,
             current_round,
             leader: manager.round_leader(current_round).cloned(),

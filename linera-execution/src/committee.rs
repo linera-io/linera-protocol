@@ -334,6 +334,12 @@ impl Committee {
         }
     }
 
+    pub fn keys_and_weights(&self) -> impl Iterator<Item = (PublicKey, u64)> + '_ {
+        self.validators
+            .iter()
+            .map(|(name, validator)| (name.0, validator.votes))
+    }
+
     pub fn network_address(&self, author: &ValidatorName) -> Option<&str> {
         self.validators
             .get(author)

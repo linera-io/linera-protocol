@@ -26,6 +26,9 @@ pub struct TimeoutConfig {
     pub base_timeout: TimeDelta,
     /// The duration by which the timeout increases after each single-leader round.
     pub timeout_increment: TimeDelta,
+    /// The age of an incoming tracked or protected message after which the validators start
+    /// transitioning the chain to fallback mode.
+    pub fallback_duration: TimeDelta,
 }
 
 impl Default for TimeoutConfig {
@@ -34,6 +37,7 @@ impl Default for TimeoutConfig {
             fast_round_duration: None,
             base_timeout: TimeDelta::from_secs(10),
             timeout_increment: TimeDelta::from_secs(1),
+            fallback_duration: TimeDelta::from_secs(60 * 60 * 24),
         }
     }
 }
@@ -88,9 +92,11 @@ impl ChainOwnership {
         self
     }
 
-    /// Returns whether there are any owners or super owners.
+    /// Returns whether there are any owners or super owners or it is a public chain.
     pub fn is_active(&self) -> bool {
-        !self.super_owners.is_empty() || !self.owners.is_empty()
+        !self.super_owners.is_empty()
+            || !self.owners.is_empty()
+            || self.timeout_config.fallback_duration == TimeDelta::ZERO
     }
 
     /// Returns the given owner's public key, if they are an owner or super owner.
@@ -115,6 +121,10 @@ impl ChainOwnership {
                 let increment = tc.timeout_increment.saturating_mul(u64::from(r));
                 Some(tc.base_timeout.saturating_add(increment))
             }
+            Round::Validator(r) => {
+                let increment = tc.timeout_increment.saturating_mul(u64::from(r));
+                Some(tc.base_timeout.saturating_add(increment))
+            }
         }
     }
 
@@ -122,6 +132,8 @@ impl ChainOwnership {
     pub fn first_round(&self) -> Round {
         if !self.super_owners.is_empty() {
             Round::Fast
+        } else if self.owners.is_empty() {
+            Round::Validator(0)
         } else if self.multi_leader_rounds > 0 {
             Round::MultiLeader(0)
         } else {
@@ -139,11 +151,14 @@ impl ChainOwnership {
         let next_round = match round {
             Round::Fast if self.multi_leader_rounds == 0 => Round::SingleLeader(0),
             Round::Fast => Round::MultiLeader(0),
-            Round::MultiLeader(r) if r >= self.multi_leader_rounds.saturating_sub(1) => {
-                Round::SingleLeader(0)
-            }
-            Round::MultiLeader(r) => Round::MultiLeader(r.checked_add(1)?),
-            Round::SingleLeader(r) => Round::SingleLeader(r.checked_add(1)?),
+            Round::MultiLeader(r) => r
+                .checked_add(1)
+                .filter(|r| *r < self.multi_leader_rounds)
+                .map_or(Round::SingleLeader(0), Round::MultiLeader),
+            Round::SingleLeader(r) => r
+                .checked_add(1)
+                .map_or(Round::Validator(0), Round::SingleLeader),
+            Round::Validator(r) => Round::Validator(r.checked_add(1)?),
         };
         Some(next_round)
     }
@@ -178,6 +193,7 @@ mod tests {
                 fast_round_duration: Some(TimeDelta::from_secs(5)),
                 base_timeout: TimeDelta::from_secs(10),
                 timeout_increment: TimeDelta::from_secs(1),
+                fallback_duration: TimeDelta::from_secs(60 * 60),
             },
         };
 

@@ -235,10 +235,10 @@ impl TestClock {
             .store(timestamp.micros(), std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// Advances the current time by the specified number of microseconds.
-    pub fn add_micros(&self, micros: u64) {
+    /// Advances the current time by the specified delta.
+    pub fn add(&self, delta: linera_base::data_types::TimeDelta) {
         self.0
-            .fetch_add(micros, std::sync::atomic::Ordering::SeqCst);
+            .fetch_add(delta.as_micros(), std::sync::atomic::Ordering::SeqCst);
     }
 }
 

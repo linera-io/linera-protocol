@@ -150,6 +150,14 @@ type ChainStateExtendedView {
 	"""
 	inboxes: ReentrantCollectionView_Origin_InboxStateView_2059505700!
 	"""
+	A queue of unskippable events, with the timestamp when we added them to the inbox.
+	"""
+	unskippable: QueueView_TimestampedInboxEntry_ce4d8b86!
+	"""
+	Non-skippable events that have been removed but are still in the queue.
+	"""
+	removedUnskippable: [InboxEntry!]!
+	"""
 	Mailboxes used to send messages, indexed by their target.
 	"""
 	outboxes: ReentrantCollectionView_Target_OutboxStateView_3775022202!
@@ -348,6 +356,20 @@ type HashedValue {
 
 
 """
+An origin and cursor of a unskippable message that is no longer in our inbox.
+"""
+type InboxEntry {
+	"""
+	The origin from which we received the message.
+	"""
+	origin: Origin!
+	"""
+	The cursor of the message in the inbox.
+	"""
+	cursor: Cursor!
+}
+
+"""
 The state of a inbox.
 * An inbox is used to track events received and executed locally.
 * An `Event` consists of a logical cursor `(height, index)` and some message content `message`.
@@ -507,7 +529,11 @@ type MutationRoot {
 		"""
 		The number of milliseconds by which the timeout increases after each single-leader round
 		"""
-		timeoutIncrementMs: Int! = 1000
+		timeoutIncrementMs: Int! = 1000,
+		"""
+		The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds.
+		"""
+		fallbackDurationMs: Int! = 86400000
 	): ChainId!
 	"""
 	Closes the chain.
@@ -532,7 +558,11 @@ type MutationRoot {
 		"""
 		The number of milliseconds by which the timeout increases after each single-leader round
 		"""
-		timeoutIncrementMs: Int! = 1000
+		timeoutIncrementMs: Int! = 1000,
+		"""
+		The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds.
+		"""
+		fallbackDurationMs: Int! = 86400000
 	): CryptoHash!
 	"""
 	Changes the application permissions configuration on this chain.
@@ -669,6 +699,10 @@ type QueueView_Event_fd202526 {
 	entries(count: Int): [Event!]!
 }
 
+type QueueView_TimestampedInboxEntry_ce4d8b86 {
+	entries(count: Int): [TimestampedInboxEntry!]!
+}
+
 """
 The recipient of a transfer
 """
@@ -793,6 +827,20 @@ scalar Target
 A timestamp, in microseconds since the Unix epoch
 """
 scalar Timestamp
+
+"""
+An origin, cursor and timestamp of a unskippable message in our inbox.
+"""
+type TimestampedInboxEntry {
+	"""
+	The origin and cursor of the message.
+	"""
+	entry: InboxEntry!
+	"""
+	The timestamp when the message was added to the inbox.
+	"""
+	seen: Timestamp!
+}
 
 """
 Description of the necessary information to run a user application
