@@ -8,11 +8,12 @@ use linera_base::{
     identifiers::{Account, ApplicationId, ChainId, ChannelName, MessageId, Owner},
     ownership::{ChainOwnership, CloseChainError},
 };
+use linera_views::batch::{Batch, WriteOperation};
 use linera_witty::{wit_export, Instance, RuntimeError};
 use tracing::log;
 
 use super::WasmExecutionError;
-use crate::{ContractRuntime, ExecutionError, ServiceRuntime};
+use crate::{BaseRuntime, ContractRuntime, ExecutionError, ServiceRuntime};
 
 /// Common host data used as the `UserData` of the system API implementations.
 pub struct SystemApiData<Runtime> {
@@ -422,6 +423,148 @@ where
             log::Level::Error => tracing::error!("{message}"),
         }
         Ok(())
+    }
+}
+
+/// An implementation of the system API used to access the view storage for both contracts and
+/// services.
+#[derive(Default)]
+pub struct ViewSystemApi<Caller>(PhantomData<Caller>);
+
+#[linera_witty::wit_export(package = "linera:app")]
+impl<Caller, Runtime> ViewSystemApi<Caller>
+where
+    Caller: Instance<UserData = SystemApiData<Runtime>>,
+    Runtime: BaseRuntime + Send + 'static,
+{
+    /// Creates a new promise to check if the `key` is in storage.
+    fn contains_key_new(caller: &mut Caller, key: Vec<u8>) -> Result<u32, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data
+            .runtime
+            .contains_key_new(key)
+            .map_err(|error| RuntimeError::Custom(error.into()))?;
+
+        data.register_promise(promise)
+    }
+
+    /// Waits for the promise to check if the `key` is in storage.
+    fn contains_key_wait(caller: &mut Caller, promise_id: u32) -> Result<bool, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data.take_promise(promise_id)?;
+
+        data.runtime
+            .contains_key_wait(&promise)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Creates a new promise to read multiple entries from storage.
+    fn read_multi_values_bytes_new(
+        caller: &mut Caller,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<u32, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data
+            .runtime
+            .read_multi_values_bytes_new(keys)
+            .map_err(|error| RuntimeError::Custom(error.into()))?;
+
+        data.register_promise(promise)
+    }
+
+    /// Waits for the promise to read multiple entries from storage.
+    fn read_multi_values_bytes_wait(
+        caller: &mut Caller,
+        promise_id: u32,
+    ) -> Result<Vec<Option<Vec<u8>>>, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data.take_promise(promise_id)?;
+
+        data.runtime
+            .read_multi_values_bytes_wait(&promise)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Creates a new promise to read a single entry from storage.
+    fn read_value_bytes_new(caller: &mut Caller, key: Vec<u8>) -> Result<u32, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data
+            .runtime
+            .read_value_bytes_new(key)
+            .map_err(|error| RuntimeError::Custom(error.into()))?;
+
+        data.register_promise(promise)
+    }
+
+    /// Waits for the promise to read a single entry from storage.
+    fn read_value_bytes_wait(
+        caller: &mut Caller,
+        promise_id: u32,
+    ) -> Result<Option<Vec<u8>>, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data.take_promise(promise_id)?;
+
+        data.runtime
+            .read_value_bytes_wait(&promise)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Creates a new promise to search for keys that start with the `key_prefix`.
+    fn find_keys_new(caller: &mut Caller, key_prefix: Vec<u8>) -> Result<u32, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data
+            .runtime
+            .find_keys_by_prefix_new(key_prefix)
+            .map_err(|error| RuntimeError::Custom(error.into()))?;
+
+        data.register_promise(promise)
+    }
+
+    /// Waits for the promise to search for keys that start with the `key_prefix`.
+    fn find_keys_wait(caller: &mut Caller, promise_id: u32) -> Result<Vec<Vec<u8>>, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data.take_promise(promise_id)?;
+
+        data.runtime
+            .find_keys_by_prefix_wait(&promise)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Creates a new promise to search for entries whose keys that start with the `key_prefix`.
+    fn find_key_values_new(caller: &mut Caller, key_prefix: Vec<u8>) -> Result<u32, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data
+            .runtime
+            .find_key_values_by_prefix_new(key_prefix)
+            .map_err(|error| RuntimeError::Custom(error.into()))?;
+
+        data.register_promise(promise)
+    }
+
+    /// Waits for the promise to search for entries whose keys that start with the `key_prefix`.
+    #[allow(clippy::type_complexity)]
+    fn find_key_values_wait(
+        caller: &mut Caller,
+        promise_id: u32,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data.take_promise(promise_id)?;
+
+        data.runtime
+            .find_key_values_by_prefix_wait(&promise)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Writes a batch of `operations` to storage.
+    fn write_batch(
+        caller: &mut Caller,
+        operations: Vec<WriteOperation>,
+    ) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .write_batch(Batch { operations })
+            .map_err(|error| RuntimeError::Custom(error.into()))
     }
 }
 
