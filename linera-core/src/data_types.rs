@@ -13,7 +13,8 @@ use linera_chain::{
     data_types::{
         Certificate, ChainAndHeight, HashedValue, IncomingMessage, Medium, MessageBundle,
     },
-    ChainManagerInfo, ChainStateView,
+    manager::ChainManagerInfo,
+    ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},

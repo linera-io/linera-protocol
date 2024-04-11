@@ -35,8 +35,9 @@ use crate::{
         MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
     },
     inbox::{InboxError, InboxStateView},
+    manager::ChainManager,
     outbox::OutboxStateView,
-    ChainError, ChainExecutionContext, ChainManager,
+    ChainError, ChainExecutionContext,
 };
 
 #[cfg(test)]

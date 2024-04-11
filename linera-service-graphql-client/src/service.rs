@@ -60,7 +60,7 @@ mod types {
     pub use linera_base::ownership::ChainOwnership;
     pub use linera_chain::{
         data_types::{ChannelFullName, Event, MessageAction, Origin, Target},
-        ChainManager,
+        manager::ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};
     pub use linera_execution::{
