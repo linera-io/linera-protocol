@@ -87,6 +87,13 @@ pub enum StorageConfig {
     },
 }
 
+impl StorageConfig {
+    #[cfg(feature = "rocksdb")]
+    pub fn is_rocks_db(&self) -> bool {
+        matches!(self, StorageConfig::RocksDb { .. })
+    }
+}
+
 /// The description of a storage implementation.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
