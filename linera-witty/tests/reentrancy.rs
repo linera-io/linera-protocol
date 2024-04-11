@@ -471,7 +471,7 @@ where
 #[test_case(PhantomData::<Entrypoint<MockInstance<()>>>, ENTRYPOINT; "of_entrypoint")]
 #[test_case(
     PhantomData::<ImportedSimpleFunction<MockInstance<()>>>, SIMPLE_FUNCTION;
-    "of_imported_simple_funciton"
+    "of_imported_simple_function"
 )]
 #[test_case(PhantomData::<ImportedGetters<MockInstance<()>>>, GETTERS; "of_imported_getters")]
 #[test_case(PhantomData::<ImportedSetters<MockInstance<()>>>, SETTERS; "of_imported_setters")]
@@ -479,7 +479,7 @@ where
     PhantomData::<ImportedOperations<MockInstance<()>>>, OPERATIONS;
     "of_imported_operations"
 )]
-#[test_case(PhantomData::<ExportedSimpleFunction>, SIMPLE_FUNCTION; "of_exported_simple_funciton")]
+#[test_case(PhantomData::<ExportedSimpleFunction>, SIMPLE_FUNCTION; "of_exported_simple_function")]
 #[test_case(PhantomData::<ExportedGetters<MockInstance<()>>>, GETTERS; "of_exported_getters")]
 #[test_case(PhantomData::<ExportedSetters<MockInstance<()>>>, SETTERS; "of_exported_setters")]
 #[test_case(
