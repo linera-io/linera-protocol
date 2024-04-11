@@ -231,6 +231,10 @@ pub enum WasmExecutionError {
     #[cfg(with_wasmtime)]
     #[error("Failed to execute Wasm module in Wasmtime: {0}")]
     ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
+    #[error("Attempt to wait for an unknown promise")]
+    UnknownPromise,
+    #[error("Attempt to call incorrect `wait` function for a promise")]
+    IncorrectPromise,
 }
 
 /// This assumes that the current directory is one of the crates.

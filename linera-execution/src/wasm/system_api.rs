@@ -1,6 +1,65 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{any::Any, collections::HashMap};
+
+use linera_witty::RuntimeError;
+
+use super::WasmExecutionError;
+
+/// Common host data used as the `UserData` of the system API implementations.
+pub struct SystemApiData<Runtime> {
+    runtime: Runtime,
+    active_promises: HashMap<u32, Box<dyn Any + Send + Sync>>,
+    promise_counter: u32,
+}
+
+impl<Runtime> SystemApiData<Runtime> {
+    /// Creates a new [`SystemApiData`] using the provided `runtime` to execute the system APIs.
+    pub fn new(runtime: Runtime) -> Self {
+        SystemApiData {
+            runtime,
+            active_promises: HashMap::new(),
+            promise_counter: 0,
+        }
+    }
+
+    /// Returns a mutable reference the system API `Runtime`.
+    pub fn runtime_mut(&mut self) -> &mut Runtime {
+        &mut self.runtime
+    }
+
+    /// Registers a `promise` internally, returning an ID that is unique for the lifetime of this
+    /// [`SystemApiData`].
+    fn register_promise<Promise>(&mut self, promise: Promise) -> Result<u32, RuntimeError>
+    where
+        Promise: Send + Sync + 'static,
+    {
+        let id = self.promise_counter;
+
+        self.active_promises.insert(id, Box::new(promise));
+        self.promise_counter += 1;
+
+        Ok(id)
+    }
+
+    /// Returns a `Promise` registered to the provided `promise_id`.
+    fn take_promise<Promise>(&mut self, promise_id: u32) -> Result<Promise, RuntimeError>
+    where
+        Promise: Send + Sync + 'static,
+    {
+        let type_erased_promise = self
+            .active_promises
+            .remove(&promise_id)
+            .ok_or_else(|| RuntimeError::Custom(WasmExecutionError::UnknownPromise.into()))?;
+
+        type_erased_promise
+            .downcast()
+            .map(|boxed_promise| *boxed_promise)
+            .map_err(|_| RuntimeError::Custom(WasmExecutionError::IncorrectPromise.into()))
+    }
+}
+
 /// Generates an implementation of `ContractSystemApi` for the provided `contract_system_api` type.
 ///
 /// Generates the common code for contract system API types for all Wasm runtimes.
