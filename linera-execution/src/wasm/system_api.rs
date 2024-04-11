@@ -12,7 +12,7 @@ use linera_witty::{wit_export, Instance, RuntimeError};
 use tracing::log;
 
 use super::WasmExecutionError;
-use crate::{ContractRuntime, ExecutionError};
+use crate::{ContractRuntime, ExecutionError, ServiceRuntime};
 
 /// Common host data used as the `UserData` of the system API implementations.
 pub struct SystemApiData<Runtime> {
@@ -292,6 +292,123 @@ where
             .user_data_mut()
             .runtime
             .try_call_application(authenticated, callee_id, argument)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Logs a `message` with the provided information `level`.
+    fn log(_caller: &mut Caller, message: String, level: log::Level) -> Result<(), RuntimeError> {
+        match level {
+            log::Level::Trace => tracing::trace!("{message}"),
+            log::Level::Debug => tracing::debug!("{message}"),
+            log::Level::Info => tracing::info!("{message}"),
+            log::Level::Warn => tracing::warn!("{message}"),
+            log::Level::Error => tracing::error!("{message}"),
+        }
+        Ok(())
+    }
+}
+
+/// An implementation of the system API made available to services.
+#[derive(Default)]
+pub struct ServiceSystemApi<Caller>(PhantomData<Caller>);
+
+#[linera_witty::wit_export(package = "linera:app")]
+impl<Caller, Runtime> ServiceSystemApi<Caller>
+where
+    Caller: Instance<UserData = SystemApiData<Runtime>>,
+    Runtime: ServiceRuntime + Send + 'static,
+{
+    /// Returns the ID of the current chain.
+    fn get_chain_id(caller: &mut Caller) -> Result<ChainId, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .chain_id()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the height of the next block that can be added to the current chain.
+    fn get_next_block_height(caller: &mut Caller) -> Result<BlockHeight, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .block_height()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the ID of the current application.
+    fn get_application_id(caller: &mut Caller) -> Result<ApplicationId, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .application_id()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the application parameters provided when the application was created.
+    fn get_application_parameters(caller: &mut Caller) -> Result<Vec<u8>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .application_parameters()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the current chain balance.
+    fn read_chain_balance(caller: &mut Caller) -> Result<Amount, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_chain_balance()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the balance of one of the accounts on this chain.
+    fn read_owner_balance(caller: &mut Caller, owner: Owner) -> Result<Amount, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_owner_balance(owner)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.
+    fn read_system_timestamp(caller: &mut Caller) -> Result<Timestamp, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_system_timestamp()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the balances of all accounts on the chain.
+    fn read_owner_balances(caller: &mut Caller) -> Result<Vec<(Owner, Amount)>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_owner_balances()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the owners of accounts on this chain.
+    fn read_balance_owners(caller: &mut Caller) -> Result<Vec<Owner>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_balance_owners()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Queries another application.
+    fn try_query_application(
+        caller: &mut Caller,
+        application: ApplicationId,
+        argument: Vec<u8>,
+    ) -> Result<Vec<u8>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .try_query_application(application, argument)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
