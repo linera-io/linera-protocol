@@ -22,6 +22,7 @@ pub struct SystemApiData<Runtime> {
     promise_counter: u32,
 }
 
+#[allow(dead_code)]
 impl<Runtime> SystemApiData<Runtime> {
     /// Creates a new [`SystemApiData`] using the provided `runtime` to execute the system APIs.
     pub fn new(runtime: Runtime) -> Self {

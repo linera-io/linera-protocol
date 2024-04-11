@@ -35,6 +35,7 @@ use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 #[cfg(with_wasmtime)]
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
 
+#[allow(unused_imports)]
 pub use self::entrypoints::{ContractEntrypoints, ServiceEntrypoints};
 use self::sanitizer::sanitize;
 use crate::{
