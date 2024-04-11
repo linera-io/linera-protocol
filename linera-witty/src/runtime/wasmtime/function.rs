@@ -28,7 +28,11 @@ macro_rules! impl_instance_with_function {
                 export: <Self::Runtime as Runtime>::Export,
             ) -> Result<Option<Self::Function>, RuntimeError> {
                 Ok(match export {
-                    Extern::Func(function) => Some(function.typed(self.as_context())?),
+                    Extern::Func(function) => Some(
+                        function
+                            .typed(self.as_context())
+                            .map_err(RuntimeError::Wasmtime)?,
+                    ),
                     _ => None,
                 })
             }
