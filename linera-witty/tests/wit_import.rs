@@ -327,7 +327,7 @@ where
     );
 }
 
-/// Test the generated [`WitInterface`] implementations for the types used in this test.
+/// Tests the generated [`WitInterface`] implementations for the types used in this test.
 #[test_case(PhantomData::<SimpleFunction<MockInstance<()>>>, SIMPLE_FUNCTION; "of_simple_funciton")]
 #[test_case(PhantomData::<Getters<MockInstance<()>>>, GETTERS; "of_getters")]
 #[test_case(PhantomData::<Setters<MockInstance<()>>>, SETTERS; "of_setters")]
