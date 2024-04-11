@@ -1230,16 +1230,15 @@ where
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, query);
-        let mut chain = self.storage.load_chain(query.chain_id).await?;
+        let chain_id = query.chain_id;
+        let mut chain = self.storage.load_chain(chain_id).await?;
         if query.request_leader_timeout {
             if let Some(epoch) = chain.execution_state.system.epoch.get() {
-                if chain.manager.get_mut().vote_timeout(
-                    query.chain_id,
-                    chain.tip_state.get().next_block_height,
-                    *epoch,
-                    self.key_pair(),
-                    self.storage.current_time(),
-                ) {
+                let height = chain.tip_state.get().next_block_height;
+                let key_pair = self.key_pair();
+                let local_time = self.storage.current_time();
+                let manager = chain.manager.get_mut();
+                if manager.vote_timeout(chain_id, height, *epoch, key_pair, local_time) {
                     chain.save().await?;
                 }
             }
@@ -1251,15 +1250,13 @@ where
             ) {
                 let ownership = chain.execution_state.system.ownership.get();
                 let elapsed = self.storage.current_time().delta_since(entry.seen);
-                if elapsed >= ownership.timeout_config.fallback_duration
-                    && chain.manager.get_mut().vote_fallback(
-                        query.chain_id,
-                        chain.tip_state.get().next_block_height,
-                        *epoch,
-                        self.key_pair(),
-                    )
-                {
-                    chain.save().await?;
+                if elapsed >= ownership.timeout_config.fallback_duration {
+                    let height = chain.tip_state.get().next_block_height;
+                    let key_pair = self.key_pair();
+                    let manager = chain.manager.get_mut();
+                    if manager.vote_fallback(chain_id, height, *epoch, key_pair) {
+                        chain.save().await?;
+                    }
                 }
             }
         }
