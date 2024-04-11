@@ -37,6 +37,8 @@ use linera_execution::{
     system::{SystemChannel, UserData},
     Message, ResourceControlPolicy, SystemMessage,
 };
+#[cfg(any(feature = "kubernetes", feature = "rocksdb"))]
+use linera_service::cli_wrappers::{LineraNetConfig, Network};
 use linera_service::{
     chain_listener::ClientContext as _,
     cli_wrappers::{self, ClientWrapper, FaucetOption, LineraNet},
@@ -45,6 +47,11 @@ use linera_service::{
     node_service::NodeService,
     project::{self, Project},
     storage::Runnable,
+};
+#[cfg(feature = "rocksdb")]
+use linera_service::{
+    cli_wrappers::local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
+    storage::StorageConfig,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -1465,8 +1472,6 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 kubernetes: true,
                 binaries,
             } => {
-                use linera_service::cli_wrappers::{LineraNetConfig, Network};
-
                 if *validators < 1 {
                     panic!("The local test network must have at least one validator.");
                 }
@@ -1504,14 +1509,6 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 table_name,
                 ..
             } => {
-                use linera_service::{
-                    cli_wrappers::{
-                        local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
-                        LineraNetConfig, Network,
-                    },
-                    storage::StorageConfig,
-                };
-
                 if *validators < 1 {
                     panic!("The local test network must have at least one validator.");
                 }
