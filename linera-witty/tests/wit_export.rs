@@ -274,7 +274,7 @@ where
 
 /// Test the generated [`WitInterface`] implementations for the types used in this test.
 #[test_case(PhantomData::<Entrypoint<MockInstance<()>>>, ENTRYPOINT; "of_entrypoint")]
-#[test_case(PhantomData::<SimpleFunction>, SIMPLE_FUNCTION; "of_simple_funciton")]
+#[test_case(PhantomData::<SimpleFunction>, SIMPLE_FUNCTION; "of_simple_function")]
 #[test_case(PhantomData::<Getters>, GETTERS; "of_getters")]
 #[test_case(PhantomData::<Setters>, SETTERS; "of_setters")]
 #[test_case(PhantomData::<Operations>, OPERATIONS; "of_operations")]
