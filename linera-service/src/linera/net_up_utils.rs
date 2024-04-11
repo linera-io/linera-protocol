@@ -1,0 +1,221 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use std::time::Duration;
+
+use colored::Colorize as _;
+use linera_base::data_types::Amount;
+use linera_execution::ResourceControlPolicy;
+use linera_service::cli_wrappers::{
+    ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+};
+#[cfg(feature = "rocksdb")]
+use linera_service::{
+    cli_wrappers::local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
+    storage::StorageConfig,
+};
+use tokio::{signal::unix, sync::mpsc};
+use tracing::info;
+#[cfg(feature = "kubernetes")]
+use {
+    linera_service::cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig,
+    std::path::PathBuf,
+};
+
+#[cfg(feature = "kubernetes")]
+pub async fn handle_net_up_kubernetes(
+    extra_wallets: Option<usize>,
+    num_other_initial_chains: u32,
+    initial_amount: u128,
+    num_initial_validators: usize,
+    num_shards: usize,
+    testing_prng_seed: Option<u64>,
+    binaries: &Option<Option<PathBuf>>,
+) -> anyhow::Result<()> {
+    if num_initial_validators < 1 {
+        panic!("The local test network must have at least one validator.");
+    }
+    if num_shards < 1 {
+        panic!("The local test network must have at least one shard per validator.");
+    }
+
+    let (shutdown_sender, mut shutdown_receiver) = mpsc::channel(1);
+    tokio::spawn(handle_signals(shutdown_sender));
+
+    let config = LocalKubernetesNetConfig {
+        network: Network::Grpc,
+        testing_prng_seed,
+        num_other_initial_chains,
+        initial_amount: Amount::from_tokens(initial_amount),
+        num_initial_validators,
+        num_shards,
+        binaries: binaries.clone().into(),
+        policy: ResourceControlPolicy::default(),
+    };
+    let (mut net, client1) = config.instantiate().await?;
+    net_up(extra_wallets, &mut net, client1).await?;
+    listen_for_signals(&mut shutdown_receiver, &mut net).await
+}
+
+#[cfg(feature = "rocksdb")]
+pub async fn handle_net_up_rocks_db(
+    extra_wallets: Option<usize>,
+    num_other_initial_chains: u32,
+    initial_amount: u128,
+    num_initial_validators: usize,
+    num_shards: usize,
+    testing_prng_seed: Option<u64>,
+    table_name: &str,
+) -> anyhow::Result<()> {
+    if num_initial_validators < 1 {
+        panic!("The local test network must have at least one validator.");
+    }
+    if num_shards < 1 {
+        panic!("The local test network must have at least one shard per validator.");
+    }
+
+    let (shutdown_sender, mut shutdown_receiver) = mpsc::channel(1);
+    tokio::spawn(handle_signals(shutdown_sender));
+
+    let tmp_dir = tempfile::tempdir()?;
+    let path = tmp_dir.path();
+    let path_buf = path.to_path_buf();
+    let storage_config = StorageConfig::RocksDb { path: path_buf };
+    let storage_config_builder = StorageConfigBuilder::ExistingConfig { storage_config };
+    let path_provider = PathProvider::new(path);
+    let config = LocalNetConfig {
+        network: Network::Grpc,
+        database: Database::RocksDb,
+        testing_prng_seed,
+        table_name: table_name.to_string(),
+        num_other_initial_chains,
+        initial_amount: Amount::from_tokens(initial_amount),
+        num_initial_validators,
+        num_shards,
+        policy: ResourceControlPolicy::default(),
+        storage_config_builder,
+        path_provider,
+    };
+    let (mut net, client1) = config.instantiate().await?;
+    net_up(extra_wallets, &mut net, client1).await?;
+    listen_for_signals(&mut shutdown_receiver, &mut net).await
+}
+
+async fn handle_signals(shutdown_sender: mpsc::Sender<()>) {
+    let mut sigint =
+        unix::signal(unix::SignalKind::interrupt()).expect("Failed to set up SIGINT handler");
+    let mut sigterm =
+        unix::signal(unix::SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
+    let mut sigpipe =
+        unix::signal(unix::SignalKind::pipe()).expect("Failed to set up SIGPIPE handler");
+    let mut sighup =
+        unix::signal(unix::SignalKind::hangup()).expect("Failed to set up SIGHUP handler");
+
+    tokio::select! {
+        _ = sigint.recv() => (),
+        _ = sigterm.recv() => (),
+        _ = sigpipe.recv() => (),
+        _ = sighup.recv() => (),
+    }
+
+    let _ = shutdown_sender.send(()).await;
+}
+
+async fn listen_for_signals(
+    shutdown_receiver: &mut tokio::sync::mpsc::Receiver<()>,
+    net: &mut impl LineraNet,
+) -> anyhow::Result<()> {
+    if shutdown_receiver.recv().await.is_some() {
+        eprintln!("\nTerminating the local test network");
+        net.terminate().await?;
+        eprintln!("\nDone.");
+    }
+
+    Ok(())
+}
+
+async fn net_up(
+    extra_wallets: Option<usize>,
+    net: &mut impl LineraNet,
+    client1: ClientWrapper,
+) -> Result<(), anyhow::Error> {
+    let default_chain = client1
+        .default_chain()
+        .expect("Initialized clients should always have a default chain");
+
+    // Make time to (hopefully) display the message after the tracing logs.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Create the wallet for the initial "root" chains.
+    info!("Local test network successfully started.");
+    let suffix = if let Some(extra_wallets) = extra_wallets {
+        eprintln!(
+            "To use the initial wallet and the extra wallets of this test \
+        network, you may set the environment variables LINERA_WALLET_$N \
+        and LINERA_STORAGE_$N (N = 0..={extra_wallets}) as printed on \
+        the standard output, then use the option `--with-wallet $N` (or \
+        `-w $N` for short) to select a wallet in the linera tool.\n"
+        );
+        "_0"
+    } else {
+        eprintln!(
+            "To use the initial wallet of this test network, you may set \
+        the environment variables LINERA_WALLET and LINERA_STORAGE as follows.\n"
+        );
+        ""
+    };
+    println!(
+        "{}",
+        format!(
+            "export LINERA_WALLET{suffix}=\"{}\"",
+            client1.wallet_path().display()
+        )
+        .bold()
+    );
+    println!(
+        "{}",
+        format!(
+            "export LINERA_STORAGE{suffix}=\"{}\"\n",
+            client1.storage_path()
+        )
+        .bold()
+    );
+
+    // Create the extra wallets.
+    if let Some(extra_wallets) = extra_wallets {
+        for wallet in 1..=extra_wallets {
+            let extra_wallet = net.make_client().await;
+            extra_wallet.wallet_init(&[], FaucetOption::None).await?;
+            let unassigned_key = extra_wallet.keygen().await?;
+            let new_chain_msg_id = client1
+                .open_chain(default_chain, Some(unassigned_key), Amount::ZERO)
+                .await?
+                .0;
+            extra_wallet
+                .assign(unassigned_key, new_chain_msg_id)
+                .await?;
+            println!(
+                "{}",
+                format!(
+                    "export LINERA_WALLET_{wallet}=\"{}\"",
+                    extra_wallet.wallet_path().display(),
+                )
+                .bold()
+            );
+            println!(
+                "{}",
+                format!(
+                    "export LINERA_STORAGE_{wallet}=\"{}\"\n",
+                    extra_wallet.storage_path(),
+                )
+                .bold()
+            );
+        }
+    }
+
+    eprintln!(
+        "\nREADY!\nPress ^C to terminate the local test network and clean the temporary directory."
+    );
+
+    Ok(())
+}

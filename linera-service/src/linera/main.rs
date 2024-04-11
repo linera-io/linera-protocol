@@ -2,13 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::HashMap,
-    env,
-    path::PathBuf,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, env, path::PathBuf, sync::Arc, time::Instant};
 
 use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
@@ -19,7 +13,7 @@ use colored::Colorize;
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::{CryptoHash, CryptoRng, PublicKey},
-    data_types::{Amount, ApplicationPermissions, Timestamp},
+    data_types::{ApplicationPermissions, Timestamp},
     identifiers::{ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
@@ -37,31 +31,25 @@ use linera_execution::{
     system::{SystemChannel, UserData},
     Message, ResourceControlPolicy, SystemMessage,
 };
-#[cfg(any(feature = "kubernetes", feature = "rocksdb"))]
-use linera_service::cli_wrappers::{LineraNetConfig, Network};
 use linera_service::{
     chain_listener::ClientContext as _,
-    cli_wrappers::{self, ClientWrapper, FaucetOption, LineraNet},
+    cli_wrappers,
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain},
     faucet::FaucetService,
     node_service::NodeService,
     project::{self, Project},
     storage::Runnable,
 };
-#[cfg(feature = "rocksdb")]
-use linera_service::{
-    cli_wrappers::local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
-    storage::StorageConfig,
-};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::Rng as _;
 use serde_json::Value;
-use tokio::{signal::unix, sync::mpsc};
 use tracing::{debug, info, warn};
 
 mod client_context;
 mod client_options;
+#[cfg(any(feature = "kubernetes", feature = "rocksdb"))]
+mod net_up_utils;
 
 #[cfg(feature = "benchmark")]
 use {
@@ -91,7 +79,7 @@ fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
 
 struct Job(ClientContext, ClientCommand);
 
-fn read_json(string: Option<String>, path: Option<PathBuf>) -> Result<Vec<u8>, anyhow::Error> {
+fn read_json(string: Option<String>, path: Option<PathBuf>) -> anyhow::Result<Vec<u8>> {
     let value = match (string, path) {
         (Some(_), Some(_)) => bail!("cannot have both a json string and file"),
         (Some(s), None) => serde_json::from_str(&s)?,
@@ -108,7 +96,7 @@ fn read_json(string: Option<String>, path: Option<PathBuf>) -> Result<Vec<u8>, a
 impl Runnable for Job {
     type Output = ();
 
-    async fn run<S>(self, storage: S) -> Result<(), anyhow::Error>
+    async fn run<S>(self, storage: S) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
@@ -1194,126 +1182,7 @@ impl Job {
     }
 }
 
-async fn handle_signals(shutdown_sender: mpsc::Sender<()>) {
-    let mut sigint =
-        unix::signal(unix::SignalKind::interrupt()).expect("Failed to set up SIGINT handler");
-    let mut sigterm =
-        unix::signal(unix::SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
-    let mut sigpipe =
-        unix::signal(unix::SignalKind::pipe()).expect("Failed to set up SIGPIPE handler");
-    let mut sighup =
-        unix::signal(unix::SignalKind::hangup()).expect("Failed to set up SIGHUP handler");
-
-    tokio::select! {
-        _ = sigint.recv() => (),
-        _ = sigterm.recv() => (),
-        _ = sigpipe.recv() => (),
-        _ = sighup.recv() => (),
-    }
-
-    let _ = shutdown_sender.send(()).await;
-}
-
-async fn listen_for_signals(
-    shutdown_receiver: &mut tokio::sync::mpsc::Receiver<()>,
-    net: &mut impl LineraNet,
-) -> anyhow::Result<()> {
-    if shutdown_receiver.recv().await.is_some() {
-        eprintln!("\nTerminating the local test network");
-        net.terminate().await?;
-        eprintln!("\nDone.");
-    }
-
-    Ok(())
-}
-
-async fn net_up(
-    extra_wallets: &Option<usize>,
-    net: &mut impl LineraNet,
-    client1: ClientWrapper,
-) -> Result<(), anyhow::Error> {
-    let default_chain = client1
-        .default_chain()
-        .expect("Initialized clients should always have a default chain");
-
-    // Make time to (hopefully) display the message after the tracing logs.
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    // Create the wallet for the initial "root" chains.
-    info!("Local test network successfully started.");
-    let suffix = if let Some(extra_wallets) = *extra_wallets {
-        eprintln!(
-            "To use the initial wallet and the extra wallets of this test \
-            network, you may set the environment variables LINERA_WALLET_$N \
-            and LINERA_STORAGE_$N (N = 0..={extra_wallets}) as printed on \
-            the standard output, then use the option `--with-wallet $N` (or \
-            `-w $N` for short) to select a wallet in the linera tool.\n"
-        );
-        "_0"
-    } else {
-        eprintln!(
-            "To use the initial wallet of this test network, you may set \
-            the environment variables LINERA_WALLET and LINERA_STORAGE as follows.\n"
-        );
-        ""
-    };
-    println!(
-        "{}",
-        format!(
-            "export LINERA_WALLET{suffix}=\"{}\"",
-            client1.wallet_path().display()
-        )
-        .bold()
-    );
-    println!(
-        "{}",
-        format!(
-            "export LINERA_STORAGE{suffix}=\"{}\"\n",
-            client1.storage_path()
-        )
-        .bold()
-    );
-
-    // Create the extra wallets.
-    if let Some(extra_wallets) = *extra_wallets {
-        for wallet in 1..=extra_wallets {
-            let extra_wallet = net.make_client().await;
-            extra_wallet.wallet_init(&[], FaucetOption::None).await?;
-            let unassigned_key = extra_wallet.keygen().await?;
-            let new_chain_msg_id = client1
-                .open_chain(default_chain, Some(unassigned_key), Amount::ZERO)
-                .await?
-                .0;
-            extra_wallet
-                .assign(unassigned_key, new_chain_msg_id)
-                .await?;
-            println!(
-                "{}",
-                format!(
-                    "export LINERA_WALLET_{wallet}=\"{}\"",
-                    extra_wallet.wallet_path().display(),
-                )
-                .bold()
-            );
-            println!(
-                "{}",
-                format!(
-                    "export LINERA_STORAGE_{wallet}=\"{}\"\n",
-                    extra_wallet.storage_path(),
-                )
-                .bold()
-            );
-        }
-    }
-
-    eprintln!(
-        "\nREADY!\nPress ^C to terminate the local test network and clean the temporary directory."
-    );
-
-    Ok(())
-}
-
-fn main() -> Result<(), anyhow::Error> {
+fn main() -> anyhow::Result<()> {
     let env_filter = tracing_subscriber::EnvFilter::builder()
         .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
         .from_env_lossy();
@@ -1342,7 +1211,7 @@ fn main() -> Result<(), anyhow::Error> {
         .block_on(run(options))
 }
 
-async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
+async fn run(options: ClientOptions) -> anyhow::Result<()> {
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();
@@ -1472,30 +1341,16 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 kubernetes: true,
                 binaries,
             } => {
-                if *validators < 1 {
-                    panic!("The local test network must have at least one validator.");
-                }
-                if *shards < 1 {
-                    panic!("The local test network must have at least one shard per validator.");
-                }
-
-                let (shutdown_sender, mut shutdown_receiver) = mpsc::channel(1);
-                tokio::spawn(handle_signals(shutdown_sender));
-
-                let config = cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig {
-                    network: Network::Grpc,
-                    testing_prng_seed: *testing_prng_seed,
-                    num_other_initial_chains: *other_initial_chains,
-                    initial_amount: Amount::from_tokens(*initial_amount),
-                    num_initial_validators: *validators,
-                    num_shards: *shards,
-                    binaries: binaries.clone().into(),
-                    policy: ResourceControlPolicy::default(),
-                };
-                let (mut net, client1) = config.instantiate().await?;
-                let result = Ok(net_up(extra_wallets, &mut net, client1).await?);
-                listen_for_signals(&mut shutdown_receiver, &mut net).await?;
-                result
+                net_up_utils::handle_net_up_kubernetes(
+                    *extra_wallets,
+                    *other_initial_chains,
+                    *initial_amount,
+                    *validators,
+                    *shards,
+                    *testing_prng_seed,
+                    binaries,
+                )
+                .await
             }
 
             #[cfg(feature = "rocksdb")]
@@ -1509,40 +1364,16 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 table_name,
                 ..
             } => {
-                if *validators < 1 {
-                    panic!("The local test network must have at least one validator.");
-                }
-                if *shards < 1 {
-                    panic!("The local test network must have at least one shard per validator.");
-                }
-
-                let (shutdown_sender, mut shutdown_receiver) = mpsc::channel(1);
-                tokio::spawn(handle_signals(shutdown_sender));
-
-                let tmp_dir = tempfile::tempdir()?;
-                let path = tmp_dir.path();
-                let path_buf = path.to_path_buf();
-                let storage_config = StorageConfig::RocksDb { path: path_buf };
-                let storage_config_builder =
-                    StorageConfigBuilder::ExistingConfig { storage_config };
-                let path_provider = PathProvider::new(path);
-                let config = LocalNetConfig {
-                    network: Network::Grpc,
-                    database: Database::RocksDb,
-                    testing_prng_seed: *testing_prng_seed,
-                    table_name: table_name.to_string(),
-                    num_other_initial_chains: *other_initial_chains,
-                    initial_amount: Amount::from_tokens(*initial_amount),
-                    num_initial_validators: *validators,
-                    num_shards: *shards,
-                    policy: ResourceControlPolicy::default(),
-                    storage_config_builder,
-                    path_provider,
-                };
-                let (mut net, client1) = config.instantiate().await?;
-                let result = Ok(net_up(extra_wallets, &mut net, client1).await?);
-                listen_for_signals(&mut shutdown_receiver, &mut net).await?;
-                result
+                net_up_utils::handle_net_up_rocks_db(
+                    *extra_wallets,
+                    *other_initial_chains,
+                    *initial_amount,
+                    *validators,
+                    *shards,
+                    *testing_prng_seed,
+                    table_name,
+                )
+                .await
             }
 
             #[cfg(not(feature = "rocksdb"))]
