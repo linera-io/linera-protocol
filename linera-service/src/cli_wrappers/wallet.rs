@@ -5,6 +5,7 @@ use std::{
     collections::HashMap,
     env,
     marker::PhantomData,
+    mem,
     path::{Path, PathBuf},
     str::FromStr,
     time::Duration,
@@ -1026,6 +1027,54 @@ impl NodeService {
             channel.to_value(),
         );
         self.query_node(query).await?;
+        Ok(())
+    }
+
+    /// Obtains the hash of the `chain`'s tip block, as known by this node service.
+    pub async fn chain_tip_hash(&self, chain: ChainId) -> Result<Option<CryptoHash>> {
+        let query = format!(r#"query {{ block(chainId: "{chain}") {{ hash }} }}"#);
+
+        let mut response = self.query_node(&query).await?;
+
+        match mem::take(&mut response["block"]["hash"]) {
+            Value::Null => Ok(None),
+            Value::String(hash) => Ok(Some(
+                hash.parse()
+                    .context("Received an invalid hash {hash:?} for chain tip")?,
+            )),
+            invalid_data => bail!("Expected a tip hash string, but got {invalid_data:?} instead"),
+        }
+    }
+
+    /// Waits until this node service has the certificate with the provided `certificate_hash` in
+    /// storage.
+    ///
+    /// This is usually used to check that the block from the `certificate_hash` has been
+    /// processed, and consequently its messages have been placed in the inbox of the
+    /// `receiver_chain`. Note that if the sender chain does not send a message to the
+    /// `receiver_chain` in the block referenced by the `certificate_hash` (or to any of the chains
+    /// tracked by this node service) the node service will never receive a notification for the
+    /// block, and consequently wait forever.
+    ///
+    /// In practice, the `receiver_chain` is only used by the node service to access the storage.
+    pub async fn wait_for_messages(
+        &self,
+        receiver_chain: ChainId,
+        certificate_hash: CryptoHash,
+    ) -> Result<()> {
+        let query = format!(
+            r#"query {{
+                block(hash: "{certificate_hash}", chainId: "{receiver_chain}") {{ hash }}
+            }}"#
+        );
+
+        let data = self.query_node(query).await?;
+
+        assert_eq!(
+            data["block"]["hash"].as_str(),
+            Some(&*certificate_hash.to_string())
+        );
+
         Ok(())
     }
 }
