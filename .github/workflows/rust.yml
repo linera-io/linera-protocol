@@ -186,6 +186,7 @@ jobs:
       run: |
         cargo clippy --all-targets --all-features --locked
         cargo clippy --no-default-features --features kubernetes --locked
+        cargo clippy --no-default-features --locked
     - name: Run cargo doc
       run: |
         cargo doc --locked --all-features
