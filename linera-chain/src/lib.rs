@@ -6,7 +6,7 @@
 mod chain;
 pub mod data_types;
 mod inbox;
-mod manager;
+pub mod manager;
 mod outbox;
 #[cfg(with_testing)]
 pub mod test;
@@ -20,7 +20,6 @@ use linera_base::{
 };
 use linera_execution::ExecutionError;
 use linera_views::views::ViewError;
-pub use manager::{ChainManager, ChainManagerInfo, Outcome as ChainManagerOutcome};
 use rand_distr::WeightedError;
 use thiserror::Error;
 

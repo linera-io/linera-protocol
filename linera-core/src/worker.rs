@@ -24,7 +24,7 @@ use linera_chain::{
         HashedValue, IncomingMessage, LiteCertificate, Medium, MessageAction, MessageBundle,
         Origin, OutgoingMessage, Target,
     },
-    ChainError, ChainManagerOutcome, ChainStateView,
+    manager, ChainError, ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -778,7 +778,7 @@ where
         certificate.check(committee)?;
         let mut actions = NetworkActions::default();
         if chain.tip_state.get().already_validated_block(height)?
-            || chain.manager.get().check_validated_block(&certificate)? == ChainManagerOutcome::Skip
+            || chain.manager.get().check_validated_block(&certificate)? == manager::Outcome::Skip
         {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
@@ -1081,7 +1081,7 @@ where
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
         chain.tip_state.get().verify_block_chaining(block)?;
-        if chain.manager.get().check_proposed_block(&proposal)? == ChainManagerOutcome::Skip {
+        if chain.manager.get().check_proposed_block(&proposal)? == manager::Outcome::Skip {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
                 ChainInfoResponse::new(&chain, self.key_pair()),

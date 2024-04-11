@@ -9,7 +9,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{CertificateValue, HashedValue, Medium, MessageAction},
-    ChainManagerInfo,
+    manager::ChainManagerInfo,
 };
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
 use linera_execution::{
