@@ -3840,6 +3840,7 @@ dependencies = [
  "either",
  "frunk",
  "genawaiter",
+ "insta",
  "linera-witty",
  "linera-witty-macros",
  "log",

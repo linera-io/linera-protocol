@@ -1,0 +1,9 @@
+---
+source: linera-witty/tests/wit_export.rs
+expression: "WitInterfaceWriter::new::<Interface>().generate_file_contents().collect::<String>()"
+---
+package witty-macros:test-modules;
+
+interface simple-function {
+    simple: func();
+}

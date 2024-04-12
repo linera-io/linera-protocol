@@ -12,8 +12,10 @@ mod wit_interface_test;
 
 use std::marker::PhantomData;
 
+use insta::assert_snapshot;
 use linera_witty::{
-    wit_generation::WitInterface, wit_import, Instance, MockInstance, Runtime, RuntimeMemory,
+    wit_generation::{WitInterface, WitInterfaceWriter},
+    wit_import, Instance, MockInstance, Runtime, RuntimeMemory,
 };
 use test_case::test_case;
 
@@ -339,4 +341,22 @@ fn test_wit_interface<Interface>(
     Interface: WitInterface,
 {
     wit_interface_test::test_wit_interface::<Interface>(expected_snippets);
+}
+
+/// Tests the generated file contents for the [`WitInterface`] implementations for the types used
+/// in this test.
+#[test_case(PhantomData::<SimpleFunction<MockInstance<()>>>, "simple-function"; "of_simple_function")]
+#[test_case(PhantomData::<Getters<MockInstance<()>>>, "getters"; "of_getters")]
+#[test_case(PhantomData::<Setters<MockInstance<()>>>, "setters"; "of_setters")]
+#[test_case(PhantomData::<Operations<MockInstance<()>>>, "operations"; "of_operations")]
+fn test_wit_interface_file<Interface>(_: PhantomData<Interface>, name: &str)
+where
+    Interface: WitInterface,
+{
+    assert_snapshot!(
+        name,
+        WitInterfaceWriter::new::<Interface>()
+            .generate_file_contents()
+            .collect::<String>()
+    );
 }

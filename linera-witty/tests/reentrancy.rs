@@ -16,9 +16,11 @@ use std::{
     },
 };
 
+use insta::assert_snapshot;
 use linera_witty::{
-    wit_export, wit_generation::WitInterface, wit_import, ExportTo, Instance, MockInstance,
-    Runtime, RuntimeError, RuntimeMemory,
+    wit_export,
+    wit_generation::{WitInterface, WitInterfaceWriter},
+    wit_import, ExportTo, Instance, MockInstance, Runtime, RuntimeError, RuntimeMemory,
 };
 use test_case::test_case;
 
@@ -493,4 +495,34 @@ fn test_wit_interface<Interface>(
     Interface: WitInterface,
 {
     wit_interface_test::test_wit_interface::<Interface>(expected_snippets);
+}
+
+#[test_case(PhantomData::<Entrypoint<MockInstance<()>>>, "entrypoint"; "of_entrypoint")]
+#[test_case(
+    PhantomData::<ImportedSimpleFunction<MockInstance<()>>>, "simple_function";
+    "of_imported_simple_function"
+)]
+#[test_case(PhantomData::<ImportedGetters<MockInstance<()>>>, "getters"; "of_imported_getters")]
+#[test_case(PhantomData::<ImportedSetters<MockInstance<()>>>, "setters"; "of_imported_setters")]
+#[test_case(
+    PhantomData::<ImportedOperations<MockInstance<()>>>, "operations";
+    "of_imported_operations"
+)]
+#[test_case(PhantomData::<ExportedSimpleFunction>, "simple_function"; "of_exported_simple_function")]
+#[test_case(PhantomData::<ExportedGetters<MockInstance<()>>>, "getters"; "of_exported_getters")]
+#[test_case(PhantomData::<ExportedSetters<MockInstance<()>>>, "setters"; "of_exported_setters")]
+#[test_case(
+    PhantomData::<ExportedOperations<MockInstance<()>>>, "operations";
+    "of_exported_operations"
+)]
+fn test_wit_interface_file<Interface>(_: PhantomData<Interface>, name: &str)
+where
+    Interface: WitInterface,
+{
+    assert_snapshot!(
+        name,
+        WitInterfaceWriter::new::<Interface>()
+            .generate_file_contents()
+            .collect::<String>()
+    );
 }
