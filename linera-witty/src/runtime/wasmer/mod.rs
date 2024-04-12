@@ -41,7 +41,7 @@ where
     UserData: Send + 'static,
 {
     /// Creates a new [`InstanceBuilder`].
-    pub fn new(engine: Engine, user_data: UserData) -> Self {
+    pub fn new(engine: &Engine, user_data: UserData) -> Self {
         InstanceBuilder {
             store: Store::new(engine),
             imports: Imports::default(),

@@ -110,7 +110,7 @@ where
         )
         .expect("Failed to load module");
 
-        let mut builder = wasmer::InstanceBuilder::new(engine, UserData::default());
+        let mut builder = wasmer::InstanceBuilder::new(&engine, UserData::default());
 
         ExportedFunctions::export_to(&mut builder)
             .expect("Failed to export functions to Wasmer instance builder");
