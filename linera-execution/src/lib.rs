@@ -129,6 +129,10 @@ pub enum ExecutionError {
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
     UnauthorizedApplication(UserApplicationId),
+    #[error("Failed to make network reqwest")]
+    ReqwestError(#[from] reqwest::Error),
+    #[error("Encountered IO error")]
+    IoError(#[from] std::io::Error),
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -414,6 +418,10 @@ pub trait ServiceRuntime: BaseRuntime {
         queried_id: UserApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    /// Fetches blob of bytes from an arbitrary URL.
+    fn fetch_url(&mut self, url: &str) -> Result<Vec<u8>, ExecutionError>;
 }
 
 pub trait ContractRuntime: BaseRuntime {

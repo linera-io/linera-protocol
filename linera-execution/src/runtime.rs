@@ -1223,6 +1223,16 @@ impl ServiceRuntime for ServiceSyncRuntime {
         self.inner().pop_application();
         Ok(response)
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    /// Get a blob of bytes from an arbitrary URL.
+    fn fetch_url(&mut self, url: &str) -> Result<Vec<u8>, ExecutionError> {
+        let this = self.inner();
+        let url = url.to_string();
+        this.execution_state_sender
+            .send_request(|callback| Request::FetchUrl { url, callback })?
+            .recv_response()
+    }
 }
 
 /// The origin of the execution.

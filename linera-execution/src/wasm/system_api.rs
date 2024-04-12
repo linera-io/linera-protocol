@@ -260,6 +260,11 @@ macro_rules! impl_service_system_api {
                 ServiceRuntime::try_query_application(self, application.into(), argument.to_vec())
             }
 
+            /// Fetches a blob of bytes from an arbitrary URL.
+            fn fetch_url(&mut self, url: &str) -> Result<Vec<u8>, Self::Error> {
+                ServiceRuntime::fetch_url(self, url)
+            }
+
             fn log(
                 &mut self,
                 message: &str,
