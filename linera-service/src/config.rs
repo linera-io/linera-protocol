@@ -13,7 +13,7 @@ use comfy_table::{
     modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
     Table,
 };
-use file_lock::{FileLock, FileOptions};
+use fs4::FileExt as _;
 use fs_err::{self, File, OpenOptions};
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, CryptoRng, KeyPair, PublicKey},
@@ -136,6 +136,35 @@ impl UserChain {
             timestamp,
             next_block_height: BlockHeight::ZERO,
             pending_block: None,
+        }
+    }
+}
+
+/// A guard that keeps an exclusive lock on a file.
+pub struct FileLock {
+    file: File,
+}
+
+impl FileLock {
+    /// Acquires an exclusive lock on a provided `file`, returning a [`FileLock`] which will
+    /// release the lock when dropped.
+    pub fn new(file: File, path: &Path) -> Result<Self, anyhow::Error> {
+        file.file().try_lock_exclusive().with_context(|| {
+            format!(
+                "Error getting write lock to wallet \"{}\". Please make sure the file exists \
+                 and that it is not in use by another process already.",
+                path.display()
+            )
+        })?;
+
+        Ok(FileLock { file })
+    }
+}
+
+impl Drop for FileLock {
+    fn drop(&mut self) {
+        if let Err(error) = self.file.file().unlock() {
+            tracing::warn!("Failed to unlock wallet file: {error}");
         }
     }
 }
@@ -309,15 +338,8 @@ impl WalletState {
     }
 
     pub fn from_file(path: &Path) -> Result<Self, anyhow::Error> {
-        let file = FileOptions::new().read(true).write(true);
-        let block = false;
-        let file_lock = FileLock::lock(path, block, file).with_context(|| {
-            format!(
-                "Error getting write lock to wallet \"{}\". Please make sure the file exists \
-                 and that it is not in use by another process already.",
-                path.display()
-            )
-        })?;
+        let file = OpenOptions::new().read(true).write(true).open(path)?;
+        let file_lock = FileLock::new(file, path)?;
         let inner = serde_json::from_reader(BufReader::new(&file_lock.file))?;
         Ok(Self {
             inner,
@@ -331,15 +353,12 @@ impl WalletState {
         genesis_config: GenesisConfig,
         testing_prng_seed: Option<u64>,
     ) -> Result<Self, anyhow::Error> {
-        let file = FileOptions::new().create(true).write(true).read(true);
-        let block = false;
-        let file_lock = FileLock::lock(path, block, file).with_context(|| {
-            format!(
-                "Error getting write lock to wallet \"{}\". Please make sure the file exists \
-                 and that it is not in use by another process already.",
-                path.display()
-            )
-        })?;
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .read(true)
+            .open(path)?;
+        let file_lock = FileLock::new(file, path)?;
         let mut reader = BufReader::new(&file_lock.file);
         if reader.fill_buf()?.is_empty() {
             let inner = InnerWallet {

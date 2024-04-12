@@ -48,8 +48,8 @@ colored.workspace = true
 comfy-table.workspace = true
 current_platform = "0.2.0"
 dirs.workspace = true
-file-lock = "2.1.11"
 fs-err.workspace = true
+fs4.workspace = true
 fs_extra = { workspace = true, optional = true }
 futures.workspace = true
 hex.workspace = true

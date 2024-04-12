@@ -4,7 +4,7 @@
 
 mod common;
 
-use std::{collections::BTreeMap, env, path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, env, mem, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use assert_matches::assert_matches;
@@ -272,6 +272,26 @@ impl AmmApp {
         let mutation = format!("operation(operation: {})", operation.to_value());
         self.0.mutate(mutation).await.unwrap();
     }
+}
+
+/// Test if the wallet file is correctly locked when used.
+#[test_log::test(tokio::test)]
+async fn test_wallet_lock() -> Result<()> {
+    let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let (_net, client) = config.instantiate().await?;
+
+    let wallet = client.get_wallet()?;
+    let chain_id = wallet.default_chain().unwrap();
+
+    let lock = wallet;
+    assert!(client.process_inbox(chain_id).await.is_err());
+
+    mem::drop(lock);
+    assert!(client.process_inbox(chain_id).await.is_ok());
+
+    Ok(())
 }
 
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "service_grpc")]
