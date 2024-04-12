@@ -22,6 +22,7 @@ wasmtime = ["dep:wasmtime", "linera-witty-macros?/wasmtime"]
 anyhow.workspace = true
 either.workspace = true
 frunk.workspace = true
+genawaiter.workspace = true
 linera-witty-macros = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 thiserror.workspace = true
