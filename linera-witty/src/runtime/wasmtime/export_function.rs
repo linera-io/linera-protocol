@@ -41,7 +41,8 @@ macro_rules! export_function {
                             .map_err(|error| Trap::new(error.to_string()))?;
                         Ok(response)
                     },
-                )?;
+                )
+                .map_err(RuntimeError::Wasmtime)?;
                 Ok(())
             }
         }

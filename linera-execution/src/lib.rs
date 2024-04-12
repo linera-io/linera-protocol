@@ -278,12 +278,12 @@ pub struct QueryContext {
 }
 
 pub trait BaseRuntime {
-    type Read: fmt::Debug + Send;
-    type ContainsKey: fmt::Debug + Send;
-    type ReadMultiValuesBytes: fmt::Debug + Send;
-    type ReadValueBytes: fmt::Debug + Send;
-    type FindKeysByPrefix: fmt::Debug + Send;
-    type FindKeyValuesByPrefix: fmt::Debug + Send;
+    type Read: fmt::Debug + Send + Sync;
+    type ContainsKey: fmt::Debug + Send + Sync;
+    type ReadMultiValuesBytes: fmt::Debug + Send + Sync;
+    type ReadValueBytes: fmt::Debug + Send + Sync;
+    type FindKeysByPrefix: fmt::Debug + Send + Sync;
+    type FindKeyValuesByPrefix: fmt::Debug + Send + Sync;
 
     /// The current chain ID.
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError>;

@@ -17,6 +17,7 @@ metrics = ["prometheus", "linera-views/metrics"]
 wasmer = [
     "bytes",
     "dep:wasmer",
+    "linera-witty/wasmer",
     "wasm-encoder",
     "wasmer-middlewares",
     "wasmparser",
@@ -24,6 +25,7 @@ wasmer = [
 ]
 wasmtime = [
     "dep:wasmtime",
+    "linera-witty/wasmtime",
     "wasm-encoder",
     "wasmparser",
     "wit-bindgen-host-wasmtime-rust",
@@ -45,6 +47,7 @@ futures.workspace = true
 linera-base.workspace = true
 linera-views.workspace = true
 linera-views-derive.workspace = true
+linera-witty = { workspace = true, features = ["log", "macros"] }
 lru.workspace = true
 once_cell.workspace = true
 oneshot.workspace = true
@@ -54,7 +57,7 @@ serde.workspace = true
 serde_bytes.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tracing.workspace = true
+tracing = { workspace = true, features = ["log"] }
 wasm-encoder = { workspace = true, optional = true }
 wasmer = { workspace = true, optional = true }
 wasmer-middlewares = { workspace = true, optional = true }
@@ -76,6 +79,7 @@ bcs.workspace = true
 counter.workspace = true
 linera-base = { workspace = true, features = ["test"] }
 linera-execution = { path = ".", features = ["test"] }
+linera-witty = { workspace = true, features = ["log", "macros", "test"] }
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
 tokio = { workspace = true, features = ["rt", "test-util"] }

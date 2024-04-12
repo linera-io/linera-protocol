@@ -10,6 +10,7 @@
 
 #![cfg(with_wasm_runtime)]
 
+mod entrypoints;
 mod module_cache;
 mod sanitizer;
 #[macro_use]
@@ -34,6 +35,8 @@ use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 #[cfg(with_wasmtime)]
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
 
+#[allow(unused_imports)]
+pub use self::entrypoints::{ContractEntrypoints, ServiceEntrypoints};
 use self::sanitizer::sanitize;
 use crate::{
     Bytecode, ContractSyncRuntime, ExecutionError, ServiceSyncRuntime, UserContractInstance,
@@ -229,6 +232,10 @@ pub enum WasmExecutionError {
     #[cfg(with_wasmtime)]
     #[error("Failed to execute Wasm module in Wasmtime: {0}")]
     ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
+    #[error("Attempt to wait for an unknown promise")]
+    UnknownPromise,
+    #[error("Attempt to call incorrect `wait` function for a promise")]
+    IncorrectPromise,
 }
 
 /// This assumes that the current directory is one of the crates.
