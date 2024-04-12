@@ -64,6 +64,7 @@ ed25519-dalek = { version = "2.1.1", features = ["batch", "serde"] }
 either = "1.10.0"
 frunk = "0.4.2"
 fs-err = { version = "2.11.0", features = ["tokio"] }
+fs4 = "0.8.2"
 fs_extra = "1.3.0"
 futures = "0.3.30"
 generic-array = { version = "0.14.7", features = ["serde"] }
