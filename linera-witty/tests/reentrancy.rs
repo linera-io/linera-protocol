@@ -19,7 +19,7 @@ use std::{
 use insta::assert_snapshot;
 use linera_witty::{
     wit_export,
-    wit_generation::{WitInterface, WitInterfaceWriter},
+    wit_generation::{WitInterface, WitInterfaceWriter, WitWorldWriter},
     wit_import, ExportTo, Instance, MockInstance, Runtime, RuntimeError, RuntimeMemory,
 };
 use test_case::test_case;
@@ -522,6 +522,26 @@ where
     assert_snapshot!(
         name,
         WitInterfaceWriter::new::<Interface>()
+            .generate_file_contents()
+            .collect::<String>()
+    );
+}
+
+/// Tests the generated file contents for a WIT world containing all the interfaces used in this
+/// test.
+#[test]
+fn test_wit_world_file() {
+    assert_snapshot!(
+        WitWorldWriter::new("witty-macros:test-modules", "test-world")
+            .export::<Entrypoint<MockInstance<()>>>()
+            .export::<ImportedSimpleFunction<MockInstance<()>>>()
+            .export::<ImportedGetters<MockInstance<()>>>()
+            .export::<ImportedSetters<MockInstance<()>>>()
+            .export::<ImportedOperations<MockInstance<()>>>()
+            .import::<ExportedSimpleFunction>()
+            .import::<ExportedGetters<MockInstance<()>>>()
+            .import::<ExportedSetters<MockInstance<()>>>()
+            .import::<ExportedOperations<MockInstance<()>>>()
             .generate_file_contents()
             .collect::<String>()
     );

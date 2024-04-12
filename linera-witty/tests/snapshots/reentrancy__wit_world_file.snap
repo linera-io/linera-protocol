@@ -1,0 +1,18 @@
+---
+source: linera-witty/tests/reentrancy.rs
+expression: "WitWorldWriter::new(\"witty-macros:test-modules\",\n                                                \"test-world\").export::<Entrypoint<MockInstance<()>>>().export::<ImportedSimpleFunction<MockInstance<()>>>().export::<ImportedGetters<MockInstance<()>>>().export::<ImportedSetters<MockInstance<()>>>().export::<ImportedOperations<MockInstance<()>>>().import::<ExportedSimpleFunction>().import::<ExportedGetters<MockInstance<()>>>().import::<ExportedSetters<MockInstance<()>>>().import::<ExportedOperations<MockInstance<()>>>().generate_file_contents().collect::<String>()"
+---
+package witty-macros:test-modules;
+
+world test-world {
+    import simple-function;
+    import getters;
+    import setters;
+    import operations;
+
+    export entrypoint;
+    export simple-function;
+    export getters;
+    export setters;
+    export operations;
+}
