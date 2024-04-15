@@ -123,7 +123,7 @@ impl ClientOptions {
 
     pub async fn run_command_with_storage(self) -> Result<(), Error> {
         let context = ClientContext::from_options(&self)?;
-        let genesis_config = context.wallet_state().genesis_config().clone();
+        let genesis_config = context.wallet().genesis_config().clone();
         let wasm_runtime = self.wasm_runtime.with_wasm_default();
         let max_concurrent_queries = self.max_concurrent_queries;
         let max_stream_queries = self.max_stream_queries;
@@ -147,7 +147,7 @@ impl ClientOptions {
 
     pub async fn initialize_storage(&self) -> Result<(), Error> {
         let context = ClientContext::from_options(self)?;
-        let genesis_config = context.wallet_state().genesis_config().clone();
+        let genesis_config = context.wallet().genesis_config().clone();
         let max_concurrent_queries = self.max_concurrent_queries;
         let max_stream_queries = self.max_stream_queries;
         let cache_size = self.cache_size;

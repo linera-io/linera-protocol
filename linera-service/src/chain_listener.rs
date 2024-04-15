@@ -21,7 +21,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use tracing::{error, info, warn};
 
-use crate::{config::WalletState, node_service::ChainClients};
+use crate::{node_service::ChainClients, wallet::Wallet};
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct ChainListenerConfig {
@@ -36,7 +36,7 @@ pub struct ChainListenerConfig {
 
 #[async_trait]
 pub trait ClientContext<P: ValidatorNodeProvider> {
-    fn wallet_state(&self) -> &WalletState;
+    fn wallet(&self) -> &Wallet;
 
     fn make_chain_client<S>(&self, storage: S, chain_id: ChainId) -> ChainClient<P, S>;
 
@@ -77,7 +77,7 @@ where
     where
         C: ClientContext<P> + Send + 'static,
     {
-        let chain_ids = context.lock().await.wallet_state().chain_ids();
+        let chain_ids = context.lock().await.wallet().chain_ids();
         for chain_id in chain_ids {
             Self::run_with_chain_id(
                 chain_id,
@@ -169,7 +169,7 @@ where
                                 .map(|(public_key, _)| public_key);
                             let super_owners = open_chain_config.ownership.super_owners.values();
                             let key_pair = owners.chain(super_owners).find_map(|public_key| {
-                                context_guard.wallet_state().key_pair_for_pk(public_key)
+                                context_guard.wallet().key_pair_for_pk(public_key)
                             });
                             context_guard.update_wallet_for_new_chain(*new_id, key_pair, timestamp);
                         }
