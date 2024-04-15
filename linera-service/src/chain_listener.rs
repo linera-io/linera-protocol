@@ -27,7 +27,11 @@ use tracing::{error, info, warn};
 
 use crate::{node_service::ChainClients, wallet::Wallet};
 
-#[derive(Debug, Clone, clap::Args)]
+#[cfg(test)]
+#[path = "unit_tests/chain_listener.rs"]
+mod tests;
+
+#[derive(Debug, Default, Clone, clap::Args)]
 pub struct ChainListenerConfig {
     /// Wait before processing any notification (useful for testing).
     #[arg(long = "listener-delay-before-ms", default_value = "0")]
@@ -136,9 +140,9 @@ where
             client
         };
         let (_listen_handle, mut local_stream) = client.listen().await?;
-        let mut timeout = storage.current_time();
+        let mut timeout = storage.clock().current_time();
         loop {
-            let sleep = Box::pin(Self::sleep_until(timeout, &storage));
+            let sleep = Box::pin(storage.clock().sleep_until(timeout));
             let notification = match future::select(local_stream.next(), sleep).await {
                 Either::Left((Some(notification), _)) => notification,
                 Either::Left((None, _)) => break,
@@ -154,7 +158,7 @@ where
             info!("Received new notification: {:?}", notification);
             Self::maybe_sleep(config.delay_before_ms).await;
             match &notification.reason {
-                Reason::NewIncomingMessage { .. } => timeout = storage.current_time(),
+                Reason::NewIncomingMessage { .. } => timeout = storage.clock().current_time(),
                 Reason::NewBlock { .. } | Reason::NewRound { .. } => {
                     if let Err(error) = client.lock().await.update_validators().await {
                         warn!(
@@ -225,9 +229,5 @@ where
         if delay_ms > 0 {
             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
         }
-    }
-
-    async fn sleep_until(timeout: Timestamp, storage: &S) {
-        tokio::time::sleep(timeout.duration_since(storage.current_time())).await
     }
 }

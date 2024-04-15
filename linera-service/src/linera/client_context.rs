@@ -94,6 +94,7 @@ impl chain_listener::ClientContext<NodeProvider> for ClientContext {
         timestamp: Timestamp,
     ) {
         self.update_wallet_for_new_chain(chain_id, key_pair, timestamp);
+        self.save_wallet();
     }
 
     async fn update_wallet<'a, S>(&'a mut self, client: &'a mut ChainClient<NodeProvider, S>)
