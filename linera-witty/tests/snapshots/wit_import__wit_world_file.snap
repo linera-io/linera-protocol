@@ -1,0 +1,12 @@
+---
+source: linera-witty/tests/wit_import.rs
+expression: "WitWorldWriter::new(\"witty-macros:test-modules\",\n                            \"test-world\").export::<SimpleFunction<MockInstance<()>>>().export::<Getters<MockInstance<()>>>().export::<Setters<MockInstance<()>>>().export::<Operations<MockInstance<()>>>().generate_file_contents().collect::<String>()"
+---
+package witty-macros:test-modules;
+
+world test-world {
+    export simple-function;
+    export getters;
+    export setters;
+    export operations;
+}

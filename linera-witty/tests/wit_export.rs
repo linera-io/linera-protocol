@@ -10,9 +10,11 @@ mod wit_interface_test;
 
 use std::marker::PhantomData;
 
+use insta::assert_snapshot;
 use linera_witty::{
-    wit_export, wit_generation::WitInterface, wit_import, ExportTo, Instance, MockInstance,
-    Runtime, RuntimeMemory,
+    wit_export,
+    wit_generation::{WitInterface, WitInterfaceWriter, WitWorldWriter},
+    wit_import, ExportTo, Instance, MockInstance, Runtime, RuntimeMemory,
 };
 use test_case::test_case;
 
@@ -285,4 +287,39 @@ fn test_wit_interface<Interface>(
     Interface: WitInterface,
 {
     wit_interface_test::test_wit_interface::<Interface>(expected_snippets);
+}
+
+/// Tests the generated file contents for the [`WitInterface`] implementations for the types used
+/// in this test.
+#[test_case(PhantomData::<Entrypoint<MockInstance<()>>>, "entrypoint"; "of_entrypoint")]
+#[test_case(PhantomData::<SimpleFunction>, "simple-function"; "of_simple_function")]
+#[test_case(PhantomData::<Getters>, "getters"; "of_getters")]
+#[test_case(PhantomData::<Setters>, "setters"; "of_setters")]
+#[test_case(PhantomData::<Operations>, "operations"; "of_operations")]
+fn test_wit_interface_file<Interface>(_: PhantomData<Interface>, name: &str)
+where
+    Interface: WitInterface,
+{
+    assert_snapshot!(
+        name,
+        WitInterfaceWriter::new::<Interface>()
+            .generate_file_contents()
+            .collect::<String>()
+    );
+}
+
+/// Tests the generated file contents for a WIT world containing all the interfaces used in this
+/// test.
+#[test]
+fn test_wit_world_file() {
+    assert_snapshot!(
+        WitWorldWriter::new("witty-macros:test-modules", "test-world")
+            .export::<Entrypoint<MockInstance<()>>>()
+            .import::<SimpleFunction>()
+            .import::<Getters>()
+            .import::<Setters>()
+            .import::<Operations>()
+            .generate_file_contents()
+            .collect::<String>()
+    );
 }
