@@ -125,6 +125,19 @@ impl<UserData> AsStoreMut for EntrypointInstance<UserData> {
     }
 }
 
+impl<UserData> EntrypointInstance<UserData> {
+    /// Returns mutable references to the [`Store`] and the [`wasmer::Instance`] stored inside this
+    /// [`EntrypointInstance`].
+    ///
+    /// The [`wasmer::Instance`] is wrapped inside an [`Option`] which might be [`None`] if this
+    /// [`EntrypointInstance`] was not initialized by [`InstanceBuilder::instantiate`].
+    pub fn as_store_and_instance_mut(
+        &mut self,
+    ) -> (&mut Store, MutexGuard<Option<wasmer::Instance>>) {
+        (&mut self.store, self.instance.instance())
+    }
+}
+
 impl<UserData> Instance for EntrypointInstance<UserData> {
     type Runtime = Wasmer;
     type UserData = UserData;
