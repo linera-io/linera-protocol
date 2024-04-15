@@ -213,6 +213,17 @@ impl<UserData> InstanceSlot<UserData> {
             .cloned()
     }
 
+    /// Returns a reference to the [`wasmer::Instance`] stored in this [`InstanceSlot`].
+    ///
+    /// # Panics
+    ///
+    /// If the underlying instance is accessed concurrently.
+    fn instance(&mut self) -> MutexGuard<Option<wasmer::Instance>> {
+        self.instance
+            .try_lock()
+            .expect("Unexpected reentrant access to data")
+    }
+
     /// Returns a reference to the `UserData` stored in this [`InstanceSlot`].
     fn user_data(&self) -> MutexGuard<'_, UserData> {
         self.user_data
