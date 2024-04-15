@@ -35,6 +35,7 @@ use crate::{
     config::{GenesisConfig, WalletState},
     faucet::ClaimOutcome,
     util::ChildExt,
+    wallet::Wallet,
 };
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -597,7 +598,7 @@ impl ClientWrapper {
         initial_balance: Amount,
     ) -> Result<ChainId> {
         let our_chain = self
-            .get_wallet()?
+            .wallet()?
             .default_chain()
             .context("no default chain found")?;
         let key = client.keygen().await?;
@@ -687,6 +688,10 @@ impl ClientWrapper {
         WalletState::from_file(self.wallet_path().as_path())
     }
 
+    pub fn wallet(&self) -> Result<Wallet> {
+        Ok(WalletState::from_file(self.wallet_path().as_path())?.into_inner())
+    }
+
     pub fn wallet_path(&self) -> PathBuf {
         self.path_provider.path().join(&self.wallet)
     }
@@ -696,14 +701,14 @@ impl ClientWrapper {
     }
 
     pub fn get_owner(&self) -> Option<Owner> {
-        let wallet = self.get_wallet().ok()?;
+        let wallet = self.wallet().ok()?;
         let chain_id = wallet.default_chain()?;
         let public_key = wallet.get(chain_id)?.key_pair.as_ref()?.public();
         Some(public_key.into())
     }
 
     pub async fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {
-        self.get_wallet()
+        self.wallet()
             .ok()
             .map_or(false, |wallet| wallet.get(chain).is_some())
     }
@@ -744,7 +749,7 @@ impl ClientWrapper {
 
     /// Returns the default chain.
     pub fn default_chain(&self) -> Option<ChainId> {
-        self.get_wallet().ok()?.default_chain()
+        self.wallet().ok()?.default_chain()
     }
 
     /// Runs `linera assign`.

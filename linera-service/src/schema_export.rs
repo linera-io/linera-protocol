@@ -15,8 +15,8 @@ use linera_core::{
 use linera_execution::committee::Committee;
 use linera_service::{
     chain_listener::{ChainListenerConfig, ClientContext},
-    config::WalletState,
     node_service::NodeService,
+    wallet::Wallet,
 };
 use linera_storage::{MemoryStorage, Storage};
 use linera_version::VersionInfo;
@@ -97,7 +97,7 @@ struct DummyContext;
 
 #[async_trait]
 impl ClientContext<DummyValidatorNodeProvider> for DummyContext {
-    fn wallet_state(&self) -> &WalletState {
+    fn wallet(&self) -> &Wallet {
         unimplemented!()
     }
 
