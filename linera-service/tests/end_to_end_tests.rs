@@ -23,9 +23,12 @@ use linera_service::cli_wrappers::remote_net::RemoteNetTestingConfig;
 use linera_service::cli_wrappers::{
     docker::BuildArg, local_kubernetes_net::SharedLocalKubernetesNetTestingConfig,
 };
-use linera_service::cli_wrappers::{
-    local_net::{Database, LocalNet, LocalNetConfig, PathProvider},
-    ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+use linera_service::{
+    cli_wrappers::{
+        local_net::{Database, LocalNet, LocalNetConfig, PathProvider},
+        ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+    },
+    config::WalletState,
 };
 use serde_json::{json, Value};
 use test_case::test_case;
@@ -282,10 +285,10 @@ async fn test_wallet_lock() -> Result<()> {
 
     let (_net, client) = config.instantiate().await?;
 
-    let wallet = client.load_wallet()?;
-    let chain_id = wallet.default_chain().unwrap();
+    let wallet_state = WalletState::from_file(client.wallet_path().as_path())?;
+    let chain_id = wallet_state.inner().default_chain().unwrap();
 
-    let lock = wallet;
+    let lock = wallet_state;
     assert!(client.process_inbox(chain_id).await.is_err());
 
     mem::drop(lock);
