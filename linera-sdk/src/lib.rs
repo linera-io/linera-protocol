@@ -43,6 +43,8 @@ pub mod contract;
 mod extensions;
 pub mod graphql;
 mod log;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod mock_system_api;
 pub mod service;
 #[cfg(feature = "test")]
 #[cfg_attr(not(target_arch = "wasm32"), path = "./test/integration/mod.rs")]
@@ -65,6 +67,8 @@ use serde::{de::DeserializeOwned, Serialize};
 pub use wit_bindgen_guest_rust;
 
 use self::contract::ContractStateStorage;
+#[cfg(not(target_arch = "wasm32"))]
+pub use self::mock_system_api::MockSystemApi;
 pub use self::{
     contract::ContractRuntime,
     extensions::{FromBcsBytes, ToBcsBytes},

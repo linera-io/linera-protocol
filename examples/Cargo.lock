@@ -2077,6 +2077,7 @@ dependencies = [
  "linera-views",
  "linera-wit-bindgen-guest-rust",
  "linera-wit-bindgen-host-wasmtime-rust",
+ "linera-witty",
  "log",
  "serde",
  "serde_json",
