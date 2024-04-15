@@ -18,7 +18,7 @@ use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{memory::MemoryStore, views::ViewError};
 
 use super::MutationRoot;
-use crate::{chain_listener, config::WalletState};
+use crate::{chain_listener, wallet::Wallet};
 
 #[derive(Default)]
 struct ClientContext {
@@ -29,7 +29,7 @@ struct ClientContext {
 impl chain_listener::ClientContext<NodeProvider<DbStorage<MemoryStore, TestClock>>>
     for ClientContext
 {
-    fn wallet_state(&self) -> &WalletState {
+    fn wallet(&self) -> &Wallet {
         unimplemented!()
     }
 

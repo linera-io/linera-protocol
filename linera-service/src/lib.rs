@@ -15,3 +15,4 @@ pub mod project;
 pub mod prometheus_server;
 pub mod storage;
 pub mod util;
+pub mod wallet;

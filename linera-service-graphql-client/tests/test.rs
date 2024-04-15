@@ -50,7 +50,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
     let (mut net, client) = config.instantiate().await.unwrap();
 
     let node_chains = {
-        let wallet = client.get_wallet().unwrap();
+        let wallet = client.load_wallet().unwrap();
         (wallet.default_chain(), wallet.chain_ids())
     };
     let chain_id = node_chains.0.unwrap();

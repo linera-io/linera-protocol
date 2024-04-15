@@ -34,11 +34,12 @@ use linera_execution::{
 use linera_service::{
     chain_listener::ClientContext as _,
     cli_wrappers,
-    config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain},
+    config::{CommitteeConfig, Export, GenesisConfig, Import},
     faucet::FaucetService,
     node_service::NodeService,
     project::{self, Project},
     storage::Runnable,
+    wallet::UserChain,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -451,10 +452,7 @@ impl Runnable for Job {
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
                 let chain_client = context
-                    .make_chain_client(
-                        storage.clone(),
-                        context.wallet_state().genesis_admin_chain(),
-                    )
+                    .make_chain_client(storage.clone(), context.wallet().genesis_admin_chain())
                     .into_arc();
                 let n = context
                     .process_inbox(&chain_client)
@@ -751,7 +749,7 @@ impl Runnable for Job {
             }
 
             Service { config, port } => {
-                let default_chain = context.wallet_state().default_chain();
+                let default_chain = context.wallet().default_chain();
                 let service = NodeService::new(config, port, default_chain, storage, context);
                 service.run().await?;
             }
@@ -772,7 +770,7 @@ impl Runnable for Job {
                         Timestamp::from(micros)
                     })
                     .unwrap_or_else(Timestamp::now);
-                let genesis_config = Arc::new(context.wallet_state().genesis_config().clone());
+                let genesis_config = Arc::new(context.wallet().genesis_config().clone());
                 let faucet = FaucetService::new(
                     port,
                     chain_client,
@@ -1014,7 +1012,7 @@ impl Runnable for Job {
                     Owner::from(&public_key),
                     faucet_url,
                 );
-                context.wallet_state_mut().add_unassigned_key_pair(key_pair);
+                context.wallet_mut().add_unassigned_key_pair(key_pair);
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let outcome = faucet.claim(&public_key).await?;
                 let validators = faucet.current_validators().await?;
@@ -1030,14 +1028,12 @@ impl Runnable for Job {
                     &mut context,
                 )
                 .await?;
-                let admin_id = context.wallet_state().genesis_admin_chain();
+                let admin_id = context.wallet().genesis_admin_chain();
                 let chains = with_other_chains
                     .into_iter()
                     .chain([admin_id, outcome.chain_id]);
                 Self::print_peg_certificate_hash(storage, chains, &context).await?;
-                context
-                    .wallet_state_mut()
-                    .set_default_chain(outcome.chain_id)?;
+                context.wallet_mut().set_default_chain(outcome.chain_id)?;
                 context.save_wallet();
             }
 
@@ -1068,7 +1064,7 @@ impl Job {
         let mut node_client = LocalNodeClient::new(state, Arc::new(Notifier::default()));
 
         // Take the latest committee we know of.
-        let admin_chain_id = context.wallet_state().genesis_admin_chain();
+        let admin_chain_id = context.wallet().genesis_admin_chain();
         let query = ChainInfoQuery::new(admin_chain_id).with_committees();
         let nodes = if let Some(validators) = validators {
             context
@@ -1115,7 +1111,7 @@ impl Job {
             Please make sure you are connecting to a genuine faucet."
         );
         context
-            .wallet_state_mut()
+            .wallet_mut()
             .assign_new_chain_to_key(public_key, chain_id, executed_block.block.timestamp)
             .context("could not assign the new chain")?;
         Ok(())
@@ -1165,7 +1161,7 @@ impl Job {
         }
         // This proves that once we have verified that the peg chain's tip is a block in the real
         // network, we can be confident that all downloaded chains are.
-        let config_hash = CryptoHash::new(context.wallet_state().genesis_config());
+        let config_hash = CryptoHash::new(context.wallet().genesis_config());
         let maybe_epoch = peg_chain.execution_state.system.epoch.get();
         let epoch = maybe_epoch.context("missing epoch in peg chain")?.0;
         info!(
@@ -1322,7 +1318,7 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
             let mut context = ClientContext::from_options(&options)?;
             let key_pair = context.generate_key_pair();
             let public = key_pair.public();
-            context.wallet_state_mut().add_unassigned_key_pair(key_pair);
+            context.wallet_mut().add_unassigned_key_pair(key_pair);
             context.save_wallet();
             println!("{}", public);
             Ok(())
@@ -1395,27 +1391,27 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
         ClientCommand::Wallet(wallet_command) => match wallet_command {
             WalletCommand::Show { chain_id } => {
                 let context = ClientContext::from_options(&options)?;
-                context.wallet_state().pretty_print(*chain_id);
+                context.wallet().pretty_print(*chain_id);
                 Ok(())
             }
 
             WalletCommand::SetDefault { chain_id } => {
                 let mut context = ClientContext::from_options(&options)?;
-                context.wallet_state_mut().set_default_chain(*chain_id)?;
+                context.wallet_mut().set_default_chain(*chain_id)?;
                 context.save_wallet();
                 Ok(())
             }
 
             WalletCommand::ForgetKeys { chain_id } => {
                 let mut context = ClientContext::from_options(&options)?;
-                context.wallet_state_mut().forget_keys(chain_id)?;
+                context.wallet_mut().forget_keys(chain_id)?;
                 context.save_wallet();
                 Ok(())
             }
 
             WalletCommand::ForgetChain { chain_id } => {
                 let mut context = ClientContext::from_options(&options)?;
-                context.wallet_state_mut().forget_chain(chain_id)?;
+                context.wallet_mut().forget_chain(chain_id)?;
                 context.save_wallet();
                 Ok(())
             }
