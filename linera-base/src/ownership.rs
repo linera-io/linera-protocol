@@ -141,9 +141,16 @@ impl ChainOwnership {
         }
     }
 
-    /// Returns an iterator over all super owners' keys, followed by all owners'.
+    /// Returns an iterator over all super owners, followed by all owners.
     pub fn all_owners(&self) -> impl Iterator<Item = &Owner> {
         self.super_owners.keys().chain(self.owners.keys())
+    }
+
+    /// Returns an iterator over all super owners' keys, followed by all owners'.
+    pub fn all_public_keys(&self) -> impl Iterator<Item = &PublicKey> {
+        self.super_owners
+            .values()
+            .chain(self.owners.values().map(|(public_key, _)| public_key))
     }
 
     /// Returns the round following the specified one, if any.

@@ -4,7 +4,11 @@
 use std::{collections::btree_map, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use futures::{lock::Mutex, StreamExt};
+use futures::{
+    future::{self, Either},
+    lock::Mutex,
+    StreamExt,
+};
 use linera_base::{
     crypto::KeyPair,
     data_types::Timestamp,
@@ -14,7 +18,7 @@ use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
     client::{ArcChainClient, ChainClient},
     node::{ValidatorNode, ValidatorNodeProvider},
-    worker::{Notification, Reason},
+    worker::Reason,
 };
 use linera_execution::{Message, SystemMessage};
 use linera_storage::Storage;
@@ -113,7 +117,7 @@ where
         context: Arc<Mutex<C>>,
         storage: S,
         config: ChainListenerConfig,
-    ) -> Result<(), anyhow::Error>
+    ) -> anyhow::Result<()>
     where
         C: ClientContext<P> + Send + 'static,
     {
@@ -132,92 +136,98 @@ where
             client
         };
         let (_listen_handle, mut local_stream) = client.listen().await?;
-        if let Err(error) = client.lock().await.process_inbox_if_owned().await {
-            warn!(%error, "Failed to process inbox after starting stream.");
-        }
-        while let Some(notification) = local_stream.next().await {
-            info!("Received new notification: {:?}", notification);
-            if config.delay_before_ms > 0 {
-                tokio::time::sleep(Duration::from_millis(config.delay_before_ms)).await;
-            }
-            {
-                let mut client = client.lock().await;
-                Self::handle_notification(&mut *client, notification.clone()).await;
-            }
-            if config.delay_after_ms > 0 {
-                tokio::time::sleep(Duration::from_millis(config.delay_after_ms)).await;
-            }
-            if let Reason::NewBlock { hash, .. } = notification.reason {
-                let value = storage.read_value(hash).await?;
-                let Some(executed_block) = value.inner().executed_block() else {
+        let mut timeout = storage.current_time();
+        loop {
+            let sleep = Box::pin(Self::sleep_until(timeout, &storage));
+            let notification = match future::select(local_stream.next(), sleep).await {
+                Either::Left((Some(notification), _)) => notification,
+                Either::Left((None, _)) => break,
+                Either::Right(((), _)) => {
+                    match client.lock().await.process_inbox_if_owned().await {
+                        Err(error) => warn!(%error, "Failed to process inbox."),
+                        Ok((_, None)) => timeout = Timestamp::from(u64::MAX),
+                        Ok((_, Some(new_timeout))) => timeout = new_timeout.timestamp,
+                    }
                     continue;
-                };
-                let timestamp = executed_block.block.timestamp;
-                for outgoing_message in &executed_block.messages {
+                }
+            };
+            info!("Received new notification: {:?}", notification);
+            Self::maybe_sleep(config.delay_before_ms).await;
+            match &notification.reason {
+                Reason::NewIncomingMessage { .. } => timeout = storage.current_time(),
+                Reason::NewBlock { .. } | Reason::NewRound { .. } => {
+                    if let Err(error) = client.lock().await.update_validators().await {
+                        warn!(
+                            "Failed to update validators about the local chain after \
+                            receiving notification {:?} with error: {:?}",
+                            notification, error
+                        );
+                    }
+                }
+            }
+            Self::maybe_sleep(config.delay_after_ms).await;
+            let Reason::NewBlock { hash, .. } = notification.reason else {
+                continue;
+            };
+            {
+                let mut client_guard = client.lock().await;
+                context.lock().await.update_wallet(&mut *client_guard).await;
+            }
+            let value = storage.read_value(hash).await?;
+            let Some(executed_block) = value.inner().executed_block() else {
+                error!("NewBlock notification about value without a block: {hash}");
+                continue;
+            };
+            let new_chains = executed_block
+                .messages
+                .iter()
+                .filter_map(|outgoing_message| {
                     if let OutgoingMessage {
                         destination: Destination::Recipient(new_id),
                         message: Message::System(SystemMessage::OpenChain(open_chain_config)),
                         ..
                     } = outgoing_message
                     {
-                        {
-                            let mut context_guard = context.lock().await;
-                            let owners = open_chain_config
-                                .ownership
-                                .owners
-                                .values()
-                                .map(|(public_key, _)| public_key);
-                            let super_owners = open_chain_config.ownership.super_owners.values();
-                            let key_pair = owners.chain(super_owners).find_map(|public_key| {
-                                context_guard.wallet().key_pair_for_pk(public_key)
-                            });
-                            context_guard.update_wallet_for_new_chain(*new_id, key_pair, timestamp);
-                        }
-                        Self::run_with_chain_id(
-                            *new_id,
-                            clients.clone(),
-                            context.clone(),
-                            storage.clone(),
-                            config.clone(),
-                        );
+                        let keys = open_chain_config
+                            .ownership
+                            .all_public_keys()
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        let timestamp = executed_block.block.timestamp;
+                        Some((*new_id, keys, timestamp))
+                    } else {
+                        None
                     }
-                }
+                })
+                .collect::<Vec<_>>();
+            if new_chains.is_empty() {
+                continue;
             }
-            let mut client_guard = client.lock().await;
-            context.lock().await.update_wallet(&mut *client_guard).await;
+            let mut context_guard = context.lock().await;
+            for (new_id, owners, timestamp) in new_chains {
+                let key_pair = owners
+                    .iter()
+                    .find_map(|public_key| context_guard.wallet().key_pair_for_pk(public_key));
+                context_guard.update_wallet_for_new_chain(new_id, key_pair, timestamp);
+                Self::run_with_chain_id(
+                    new_id,
+                    clients.clone(),
+                    context.clone(),
+                    storage.clone(),
+                    config.clone(),
+                );
+            }
         }
         Ok(())
     }
 
-    async fn handle_notification(client: &mut ChainClient<P, S>, notification: Notification) {
-        match &notification.reason {
-            Reason::NewBlock { .. } => {
-                if let Err(e) = client.update_validators().await {
-                    warn!(
-                        "Failed to update validators about the local chain after \
-                        receiving notification {:?} with error: {:?}",
-                        notification, e
-                    );
-                }
-            }
-            Reason::NewIncomingMessage { .. } => {
-                if let Err(e) = client.process_inbox_if_owned().await {
-                    warn!(
-                        "Failed to process inbox after receiving new message: {:?} \
-                        with error: {:?}",
-                        notification, e
-                    );
-                }
-            }
-            Reason::NewRound { .. } => {
-                if let Err(e) = client.update_validators().await {
-                    warn!(
-                        "Failed to update validators about the local chain after \
-                        receiving notification {:?} with error: {:?}",
-                        notification, e
-                    );
-                }
-            }
+    async fn maybe_sleep(delay_ms: u64) {
+        if delay_ms > 0 {
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
         }
+    }
+
+    async fn sleep_until(timeout: Timestamp, storage: &S) {
+        tokio::time::sleep(timeout.duration_since(storage.current_time())).await
     }
 }
