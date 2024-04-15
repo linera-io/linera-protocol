@@ -53,7 +53,10 @@ use thiserror::Error;
 #[cfg(all(with_testing, any(with_wasmer, with_wasmtime)))]
 pub use wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
-pub use wasm::{WasmContractModule, WasmExecutionError, WasmServiceModule};
+pub use wasm::{
+    ContractEntrypoints, ContractSystemApi, ServiceEntrypoints, ServiceSystemApi, SystemApiData,
+    ViewSystemApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
+};
 
 pub use crate::runtime::{ContractSyncRuntime, ServiceSyncRuntime};
 
