@@ -139,12 +139,12 @@ impl ClientContext {
         Ok(Self::configure(options, wallet_state))
     }
 
-    /// Returns the `Wallet` as an immutable reference.
+    /// Returns the [`Wallet`] as an immutable reference.
     fn wallet(&self) -> &Wallet {
         self.wallet_state.inner()
     }
 
-    /// Returns the `Wallet` as a mutable reference.
+    /// Returns the [`Wallet`] as a mutable reference.
     pub fn wallet_mut(&mut self) -> &mut Wallet {
         self.wallet_state.inner_mut()
     }

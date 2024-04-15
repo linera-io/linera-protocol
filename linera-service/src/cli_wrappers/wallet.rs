@@ -598,7 +598,7 @@ impl ClientWrapper {
         initial_balance: Amount,
     ) -> Result<ChainId> {
         let our_chain = self
-            .wallet()?
+            .load_wallet()?
             .default_chain()
             .context("no default chain found")?;
         let key = client.keygen().await?;
@@ -684,11 +684,7 @@ impl ClientWrapper {
         }
     }
 
-    pub fn get_wallet(&self) -> Result<WalletState> {
-        WalletState::from_file(self.wallet_path().as_path())
-    }
-
-    pub fn wallet(&self) -> Result<Wallet> {
+    pub fn load_wallet(&self) -> Result<Wallet> {
         Ok(WalletState::from_file(self.wallet_path().as_path())?.into_inner())
     }
 
@@ -701,14 +697,14 @@ impl ClientWrapper {
     }
 
     pub fn get_owner(&self) -> Option<Owner> {
-        let wallet = self.wallet().ok()?;
+        let wallet = self.load_wallet().ok()?;
         let chain_id = wallet.default_chain()?;
         let public_key = wallet.get(chain_id)?.key_pair.as_ref()?.public();
         Some(public_key.into())
     }
 
     pub async fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {
-        self.wallet()
+        self.load_wallet()
             .ok()
             .map_or(false, |wallet| wallet.get(chain).is_some())
     }
@@ -749,7 +745,7 @@ impl ClientWrapper {
 
     /// Returns the default chain.
     pub fn default_chain(&self) -> Option<ChainId> {
-        self.wallet().ok()?.default_chain()
+        self.load_wallet().ok()?.default_chain()
     }
 
     /// Runs `linera assign`.
