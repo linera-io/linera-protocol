@@ -253,14 +253,7 @@ impl TestClockInner {
     }
 
     fn add_sleep(&mut self, delta: TimeDelta) -> Receiver<()> {
-        let (sender, receiver) = oneshot::channel();
-        if delta == TimeDelta::ZERO {
-            let _ = sender.send(());
-        } else {
-            let until = self.time.saturating_add(delta);
-            self.sleeps.entry(Reverse(until)).or_default().push(sender);
-        }
-        receiver
+        self.add_sleep_until(self.time.saturating_add(delta))
     }
 
     fn add_sleep_until(&mut self, time: Timestamp) -> Receiver<()> {

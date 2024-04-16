@@ -112,33 +112,33 @@ pub enum Round {
 pub struct TimeDelta(u64);
 
 impl TimeDelta {
-    /// Returns the given number of microseconds as a `TimeDelta`.
+    /// Returns the given number of microseconds as a [`TimeDelta`].
     pub fn from_micros(micros: u64) -> Self {
         TimeDelta(micros)
     }
 
-    /// Returns the given number of milliseconds as a `TimeDelta`.
+    /// Returns the given number of milliseconds as a [`TimeDelta`].
     pub fn from_millis(millis: u64) -> Self {
         TimeDelta(millis.saturating_mul(1_000))
     }
 
-    /// Returns the given number of seconds as a `TimeDelta`.
+    /// Returns the given number of seconds as a [`TimeDelta`].
     pub fn from_secs(secs: u64) -> Self {
         TimeDelta(secs.saturating_mul(1_000_000))
     }
 
     /// Returns the given duration, rounded to the nearest microsecond and capped to the maximum
-    /// `TimeDelta` value.
+    /// [`TimeDelta`] value.
     pub fn from_duration(duration: Duration) -> Self {
         TimeDelta::from_micros(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
     }
 
-    /// Returns this `TimeDelta` as a number of microseconds.
+    /// Returns this [`TimeDelta`] as a number of microseconds.
     pub fn as_micros(&self) -> u64 {
         self.0
     }
 
-    /// Returns this `TimeDelta` as a `Duration`.
+    /// Returns this [`TimeDelta`] as a [`Duration`].
     pub fn as_duration(&self) -> Duration {
         Duration::from_micros(self.as_micros())
     }
