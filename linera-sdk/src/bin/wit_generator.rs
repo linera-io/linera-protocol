@@ -33,6 +33,13 @@ pub struct WitGeneratorOptions {
 fn main() -> Result<()> {
     let options = WitGeneratorOptions::parse();
 
+    run_operation(options, WriteToFile)?;
+
+    Ok(())
+}
+
+/// Runs the main `operation` on all the WIT files.
+fn run_operation(options: WitGeneratorOptions, mut operation: impl Operation) -> Result<()> {
     let contract_entrypoints = WitInterfaceWriter::new::<ContractEntrypoints<MockInstance<()>>>();
     let service_entrypoints = WitInterfaceWriter::new::<ServiceEntrypoints<MockInstance<()>>>();
     let mock_system_api = WitInterfaceWriter::new::<MockSystemApi<MockInstance<()>>>();
@@ -61,41 +68,41 @@ fn main() -> Result<()> {
         .import::<ServiceSystemApi<MockInstance<SystemApiData<ServiceSyncRuntime>>>>()
         .import::<ViewSystemApi<MockInstance<SystemApiData<ContractSyncRuntime>>>>();
 
-    write_to_file(
+    operation.run_for_file(
         &options.base_directory.join("contract-entrypoints.wit"),
         contract_entrypoints.generate_file_contents(),
     )?;
-    write_to_file(
+    operation.run_for_file(
         &options.base_directory.join("service-entrypoints.wit"),
         service_entrypoints.generate_file_contents(),
     )?;
-    write_to_file(
+    operation.run_for_file(
         &options.base_directory.join("mock-system-api.wit"),
         mock_system_api.generate_file_contents(),
     )?;
 
-    write_to_file(
+    operation.run_for_file(
         &options.base_directory.join("contract-system-api.wit"),
         contract_system_api.generate_file_contents(),
     )?;
-    write_to_file(
+    operation.run_for_file(
         &options.base_directory.join("service-system-api.wit"),
         service_system_api.generate_file_contents(),
     )?;
-    write_to_file(
+    operation.run_for_file(
         &options.base_directory.join("view-system-api.wit"),
         view_system_api.generate_file_contents(),
     )?;
 
-    write_to_file(
+    operation.run_for_file(
         &options.base_directory.join("contract.wit"),
         contract_world.generate_file_contents(),
     )?;
-    write_to_file(
+    operation.run_for_file(
         &options.base_directory.join("service.wit"),
         service_world.generate_file_contents(),
     )?;
-    write_to_file(
+    operation.run_for_file(
         &options.base_directory.join("unit-tests.wit"),
         unit_tests_world.generate_file_contents(),
     )?;
@@ -103,20 +110,38 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// Writes the provided `contents` to a new file at the specified `path`.
-fn write_to_file<'c>(path: &Path, contents: impl Iterator<Item = &'c str>) -> Result<()> {
-    let mut file = BufWriter::new(
-        File::create(path)
-            .with_context(|| format!("Failed to create file at {}", path.display()))?,
-    );
+/// An operation that this WIT generator binary can perform.
+trait Operation {
+    /// Executes the operation for a file at `path`, using the WIT `contents`.
+    fn run_for_file<'c>(
+        &mut self,
+        path: &Path,
+        contents: impl Iterator<Item = &'c str>,
+    ) -> Result<()>;
+}
 
-    for part in contents {
-        file.write_all(part.as_bytes())
-            .with_context(|| format!("Failed to write to {}", path.display()))?;
+/// Writes out the WIT file.
+pub struct WriteToFile;
+
+impl Operation for WriteToFile {
+    fn run_for_file<'c>(
+        &mut self,
+        path: &Path,
+        contents: impl Iterator<Item = &'c str>,
+    ) -> Result<()> {
+        let mut file = BufWriter::new(
+            File::create(path)
+                .with_context(|| format!("Failed to create file at {}", path.display()))?,
+        );
+
+        for part in contents {
+            file.write_all(part.as_bytes())
+                .with_context(|| format!("Failed to write to {}", path.display()))?;
+        }
+
+        file.flush()
+            .with_context(|| format!("Failed to flush to {}", path.display()))?;
+
+        Ok(())
     }
-
-    file.flush()
-        .with_context(|| format!("Failed to flush to {}", path.display()))?;
-
-    Ok(())
 }
