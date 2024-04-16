@@ -5,11 +5,11 @@
 
 use std::{
     fs::File,
-    io::{BufWriter, Write},
+    io::{BufReader, BufWriter, Read, Write},
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use clap::Parser as _;
 use linera_execution::{
     ContractEntrypoints, ContractSyncRuntime, ContractSystemApi, ServiceEntrypoints,
@@ -27,13 +27,21 @@ pub struct WitGeneratorOptions {
     /// The base directory of where the WIT files should be placed.
     #[arg(short, long, default_value = "linera-sdk/wit")]
     base_directory: PathBuf,
+
+    /// Check if the existing files are correct.
+    #[arg(short, long)]
+    check: bool,
 }
 
 /// WIT file generator entrypoint.
 fn main() -> Result<()> {
     let options = WitGeneratorOptions::parse();
 
-    run_operation(options, WriteToFile)?;
+    if options.check {
+        run_operation(options, CheckFile)?;
+    } else {
+        run_operation(options, WriteToFile)?;
+    }
 
     Ok(())
 }
@@ -141,6 +149,42 @@ impl Operation for WriteToFile {
 
         file.flush()
             .with_context(|| format!("Failed to flush to {}", path.display()))?;
+
+        Ok(())
+    }
+}
+
+/// Checks that a WIT file has the expected contents.
+pub struct CheckFile;
+
+impl Operation for CheckFile {
+    fn run_for_file<'c>(
+        &mut self,
+        path: &Path,
+        contents: impl Iterator<Item = &'c str>,
+    ) -> Result<()> {
+        let mut buffer = Vec::new();
+        let mut file = BufReader::new(
+            File::open(path)
+                .with_context(|| format!("Failed to open file at {}", path.display()))?,
+        );
+
+        for part in contents {
+            buffer.resize(part.as_bytes().len(), 0);
+            file.read_exact(&mut buffer)
+                .with_context(|| format!("Failed to read from {}", path.display()))?;
+
+            ensure!(
+                buffer == part.as_bytes(),
+                format!("WIT file {} does not match", path.display())
+            );
+        }
+
+        buffer.resize(1, 0);
+        ensure!(
+            file.read(&mut buffer)? == 0,
+            format!("WIT file {} has extra contents", path.display())
+        );
 
         Ok(())
     }
