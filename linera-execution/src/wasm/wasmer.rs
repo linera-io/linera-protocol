@@ -3,29 +3,6 @@
 
 //! Code specific to the usage of the [Wasmer](https://wasmer.io/) runtime.
 
-// Export the system interface used by a user contract.
-wit_bindgen_host_wasmer_rust::export!({
-    custom_error: true,
-    paths: ["contract_system_api.wit"],
-});
-
-// Export the system interface used by a user service.
-wit_bindgen_host_wasmer_rust::export!({
-    custom_error: true,
-    paths: ["service_system_api.wit"],
-});
-
-// Export the system interface used by views.
-wit_bindgen_host_wasmer_rust::export!({
-    custom_error: true,
-    paths: ["view_system_api.wit"],
-});
-
-#[path = "conversions_from_wit.rs"]
-mod conversions_from_wit;
-#[path = "conversions_to_wit.rs"]
-mod conversions_to_wit;
-
 use std::{marker::Unpin, sync::Arc};
 
 use bytes::Bytes;
@@ -186,8 +163,7 @@ impl WasmServiceModule {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache
             .get_or_insert_with(service_bytecode, |bytecode| {
-                Module::new(&*SERVICE_ENGINE, bytecode)
-                    .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)
+                Module::new(&*SERVICE_ENGINE, bytecode).map_err(anyhow::Error::from)
             })
             .map_err(WasmExecutionError::LoadServiceModule)?;
         Ok(WasmServiceModule::Wasmer { module })

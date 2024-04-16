@@ -3,29 +3,6 @@
 
 //! Code specific to the usage of the [Wasmtime](https://wasmtime.dev/) runtime.
 
-// Export the system interface used by a user contract.
-wit_bindgen_host_wasmtime_rust::export!({
-    custom_error: true,
-    paths: ["contract_system_api.wit"],
-});
-
-// Export the system interface used by a user service.
-wit_bindgen_host_wasmtime_rust::export!({
-    custom_error: true,
-    paths: ["service_system_api.wit"],
-});
-
-// Export the system interface used by views.
-wit_bindgen_host_wasmtime_rust::export!({
-    custom_error: true,
-    paths: ["view_system_api.wit"],
-});
-
-#[path = "conversions_from_wit.rs"]
-mod conversions_from_wit;
-#[path = "conversions_to_wit.rs"]
-mod conversions_to_wit;
-
 use std::error::Error;
 
 use linera_witty::{wasmtime::EntrypointInstance, ExportTo, Instance};

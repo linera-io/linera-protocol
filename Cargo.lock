@@ -3236,8 +3236,6 @@ dependencies = [
  "linera-execution",
  "linera-views",
  "linera-views-derive",
- "linera-wit-bindgen-host-wasmer-rust",
- "linera-wit-bindgen-host-wasmtime-rust",
  "linera-witty",
  "lru",
  "once_cell",
@@ -3714,17 +3712,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "linera-wit-bindgen-gen-host-wasmer-rust"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95d531afaf2990383a8a0c3dbdd200dfd4c4ccd58c62e43f9efd74d5b0b70927"
-dependencies = [
- "heck 0.3.3",
- "linera-wit-bindgen-core",
- "linera-wit-bindgen-gen-rust-lib",
-]
-
-[[package]]
 name = "linera-wit-bindgen-gen-host-wasmtime-rust"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3763,32 +3750,6 @@ checksum = "0f801077a95d0562bc4a9de0a7e0710c5cafc5e788ad47790c14deaaf10617bd"
 dependencies = [
  "linera-wit-bindgen-core",
  "linera-wit-bindgen-gen-guest-rust",
- "proc-macro2",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "linera-wit-bindgen-host-wasmer-rust"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b21ae41a07f0b8ec5aaa1edd8d3fdb49e7207d5fe356ebebc2f73cbf2175be2f"
-dependencies = [
- "anyhow",
- "bitflags 1.3.2",
- "linera-wit-bindgen-host-wasmer-rust-macro",
- "once_cell",
- "thiserror",
- "wasmer",
-]
-
-[[package]]
-name = "linera-wit-bindgen-host-wasmer-rust-macro"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "312a20bdb905db009a3344314062b1c137249dd761d4421b151da19d87ba1be6"
-dependencies = [
- "linera-wit-bindgen-core",
- "linera-wit-bindgen-gen-host-wasmer-rust",
  "proc-macro2",
  "syn 1.0.109",
 ]
