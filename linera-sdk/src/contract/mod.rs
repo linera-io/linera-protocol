@@ -7,13 +7,9 @@ mod conversions_from_wit;
 mod conversions_to_wit;
 mod runtime;
 mod storage;
-pub(crate) mod wit_system_api;
-pub mod wit_types;
+pub(crate) mod wit;
 
-pub use self::{
-    runtime::ContractRuntime, storage::ContractStateStorage,
-    wit_system_api::Closechainerror as CloseChainError,
-};
+pub use self::{runtime::ContractRuntime, storage::ContractStateStorage};
 use crate::{log::ContractLogger, util::BlockingWait, Contract};
 
 /// Declares an implementation of the [`Contract`][`crate::Contract`] trait, exporting it from the

@@ -24,14 +24,15 @@ hex = "0.4.3"
 linera-sdk = { path = "../linera-sdk" }
 linera-views = { path = "../linera-views", default-features = false }
 log = "0.4.20"
+num-bigint = "0.4.3"
+num-traits = "0.2.16"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.93"
 sha3 = "0.10.8"
 thiserror = "1.0.38"
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 webassembly-test = "0.1.0"
-num-bigint = "0.4.3"
-num-traits = "0.2.16"
+wit-bindgen = "0.16.0"
 
 counter = { path = "./counter" }
 crowd-funding = { path = "./crowd-funding" }

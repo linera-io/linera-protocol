@@ -5,6 +5,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
+    data_types::BlockHeight,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
 };
 use linera_views::batch::WriteOperation;
@@ -15,7 +16,7 @@ impl From<wit::WriteOperation> for WriteOperation {
     fn from(operation: wit::WriteOperation) -> Self {
         match operation {
             wit::WriteOperation::Delete(key) => WriteOperation::Delete { key },
-            wit::WriteOperation::Deleteprefix(key_prefix) => {
+            wit::WriteOperation::DeletePrefix(key_prefix) => {
                 WriteOperation::DeletePrefix { key_prefix }
             }
             wit::WriteOperation::Put((key, value)) => WriteOperation::Put { key, value },
@@ -32,9 +33,9 @@ impl From<wit::ApplicationId> for ApplicationId {
     }
 }
 
-impl From<wit::MessageId> for BytecodeId {
-    fn from(message_id: wit::MessageId) -> Self {
-        BytecodeId::new(MessageId::from(message_id))
+impl From<wit::BytecodeId> for BytecodeId {
+    fn from(bytecode_id: wit::BytecodeId) -> Self {
+        BytecodeId::new(bytecode_id.message_id.into())
     }
 }
 
@@ -42,15 +43,15 @@ impl From<wit::MessageId> for MessageId {
     fn from(message_id: wit::MessageId) -> Self {
         MessageId {
             chain_id: message_id.chain_id.into(),
-            height: message_id.height.into(),
+            height: BlockHeight(message_id.height.inner0),
             index: message_id.index,
         }
     }
 }
 
-impl From<wit::CryptoHash> for ChainId {
-    fn from(crypto_hash: wit::CryptoHash) -> Self {
-        ChainId(crypto_hash.into())
+impl From<wit::ChainId> for ChainId {
+    fn from(chain_id: wit::ChainId) -> Self {
+        ChainId(chain_id.inner0.into())
     }
 }
 

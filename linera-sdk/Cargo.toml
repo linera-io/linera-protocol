@@ -18,11 +18,17 @@ features = ["test", "wasmer"]
 targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-gnu"]
 
 [features]
-wasmer = ["linera-core/wasmer", "linera-execution/wasmer", "linera-storage/wasmer"]
+wasmer = [
+    "linera-core/wasmer",
+    "linera-execution/wasmer",
+    "linera-storage/wasmer",
+    "linera-witty/wasmer",
+]
 wasmtime = [
     "linera-core/wasmtime",
     "linera-execution/wasmtime",
     "linera-storage/wasmtime",
+    "linera-witty/wasmtime",
 ]
 test = ["linera-base/test"]
 
@@ -38,7 +44,7 @@ linera-views.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-wit-bindgen-guest-rust.workspace = true
+wit-bindgen.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-graphql.workspace = true
@@ -55,7 +61,6 @@ linera-witty = { workspace = true, features = ["test"] }
 serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 wasmtime.workspace = true
-wit-bindgen-host-wasmtime-rust.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true

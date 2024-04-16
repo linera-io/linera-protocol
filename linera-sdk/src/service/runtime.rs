@@ -11,7 +11,7 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, Owner},
 };
 
-use super::wit_system_api as wit;
+use super::wit::service_system_api as wit;
 use crate::Service;
 
 /// The runtime available during execution of a query.
@@ -50,7 +50,7 @@ where
     /// Returns the application parameters provided when the application was created.
     pub fn application_parameters(&self) -> Application::Parameters {
         Self::fetch_value_through_cache(&self.application_parameters, || {
-            let bytes = wit::application_parameters();
+            let bytes = wit::get_application_parameters();
             serde_json::from_slice(&bytes).expect("Application parameters must be deserializable")
         })
     }
@@ -58,18 +58,20 @@ where
     /// Returns the ID of the current application.
     pub fn application_id(&self) -> ApplicationId<Application::Abi> {
         Self::fetch_value_through_cache(&self.application_id, || {
-            ApplicationId::from(wit::application_id()).with_abi()
+            ApplicationId::from(wit::get_application_id()).with_abi()
         })
     }
 
     /// Returns the ID of the current chain.
     pub fn chain_id(&self) -> ChainId {
-        Self::fetch_value_through_cache(&self.chain_id, || wit::chain_id().into())
+        Self::fetch_value_through_cache(&self.chain_id, || wit::get_chain_id().into())
     }
 
     /// Returns the height of the next block that can be added to the current chain.
     pub fn next_block_height(&self) -> BlockHeight {
-        Self::fetch_value_through_cache(&self.next_block_height, || wit::next_block_height().into())
+        Self::fetch_value_through_cache(&self.next_block_height, || {
+            wit::get_next_block_height().into()
+        })
     }
 
     /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.
