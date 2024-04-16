@@ -494,7 +494,9 @@ where
     let certificate = {
         let block = make_first_block(ChainId::root(1)).with_timestamp(block_0_time);
         let block_proposal = block.clone().into_fast_proposal(&key_pair);
-        worker.handle_block_proposal(block_proposal).await?;
+        let future = worker.handle_block_proposal(block_proposal);
+        clock.set(block_0_time);
+        future.await?;
 
         let system_state = SystemExecutionState {
             committees: [(epoch, committee.clone())].into_iter().collect(),
@@ -512,9 +514,9 @@ where
         });
         make_certificate(&committee, &worker, value)
     };
-    let future = worker.fully_handle_certificate(certificate.clone(), vec![]);
-    clock.set(block_0_time);
-    future.await.expect("handle certificate with valid tick");
+    worker
+        .fully_handle_certificate(certificate.clone(), vec![])
+        .await?;
 
     {
         let block_proposal = make_child_block(&certificate.value)

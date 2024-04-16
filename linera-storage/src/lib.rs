@@ -80,7 +80,7 @@ pub trait Storage: Sized {
     type ContextError: std::error::Error + Debug + Sync + Send;
 
     /// Returns the current wall clock time.
-    fn current_time(&self) -> Timestamp;
+    fn clock(&self) -> &dyn Clock;
 
     /// Loads the view of a chain state.
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>
@@ -176,7 +176,7 @@ pub trait Storage: Sized {
         chain.manager.get_mut().reset(
             &ChainOwnership::single(public_key),
             BlockHeight(0),
-            self.current_time(),
+            self.clock().current_time(),
             committee.keys_and_weights(),
         )?;
         let system_state = &mut chain.execution_state.system;

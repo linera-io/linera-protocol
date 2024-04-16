@@ -1286,7 +1286,7 @@ where
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
     async fn next_timestamp(&self, incoming_messages: &[IncomingMessage]) -> Timestamp {
-        let local_time = self.storage_client().await.current_time();
+        let local_time = self.storage_client().await.clock().current_time();
         incoming_messages
             .iter()
             .map(|msg| msg.event.timestamp)
@@ -1534,7 +1534,7 @@ where
         // If the current round has timed out, we request a timeout certificate and retry in
         // the next round.
         if let Some(round_timeout) = info.manager.round_timeout {
-            if round_timeout <= self.storage_client().await.current_time() {
+            if round_timeout <= self.storage_client().await.clock().current_time() {
                 self.request_leader_timeout().await?;
                 info = self.chain_info_with_manager_values().await?;
             }
