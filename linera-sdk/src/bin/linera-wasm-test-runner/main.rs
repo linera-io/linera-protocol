@@ -27,8 +27,6 @@
 #[cfg(target_arch = "wasm32")]
 compile_error!("The test runner is meant to be compiled for the host target");
 
-mod mock_system_api;
-
 use std::{
     path::{Path, PathBuf},
     process::ExitCode,
@@ -36,7 +34,8 @@ use std::{
 
 use anyhow::Result;
 use clap::Parser as _;
-use mock_system_api::Resources;
+use linera_sdk::mock_system_api::{ContractSystemApi, Resources, ServiceSystemApi, ViewSystemApi};
+use linera_witty::ExportTo;
 use wasmtime::*;
 
 #[derive(clap::Parser)]
@@ -59,7 +58,6 @@ async fn main() -> Result<ExitCode> {
     let mut report = TestReport::default();
     let mut engine_config = Config::default();
     engine_config.wasm_backtrace_details(WasmBacktraceDetails::Enable);
-    engine_config.async_support(true);
     let engine = Engine::new(&engine_config)?;
     let mut linker = Linker::new(&engine);
     let test_module = load_test_module(&options.module_path, &engine)?;
@@ -68,7 +66,9 @@ async fn main() -> Result<ExitCode> {
         .filter_map(Test::new)
         .collect::<Vec<_>>();
 
-    mock_system_api::add_to_linker(&mut linker)?;
+    ContractSystemApi::export_to(&mut linker)?;
+    ServiceSystemApi::export_to(&mut linker)?;
+    ViewSystemApi::export_to(&mut linker)?;
 
     linker.define_unknown_imports_as_traps(&test_module)?;
 
@@ -123,11 +123,11 @@ impl<'a> Test<'a> {
             report.ignore();
         } else {
             let mut store = Store::new(linker.engine(), Resources::default());
-            let instance = linker.instantiate_async(&mut store, test_module).await?;
+            let instance = linker.instantiate(&mut store, test_module)?;
 
             let function = instance.get_typed_func::<(), (), _>(&mut store, self.function)?;
 
-            report.result(function.call_async(&mut store, ()).await);
+            report.result(function.call(&mut store, ()));
         }
 
         Ok(())
