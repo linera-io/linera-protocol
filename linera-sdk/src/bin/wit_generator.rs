@@ -6,9 +6,10 @@
 use std::{
     fs::File,
     io::{self, BufWriter, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
+use clap::Parser as _;
 use linera_execution::{
     ContractEntrypoints, ContractSyncRuntime, ContractSystemApi, ServiceEntrypoints,
     ServiceSyncRuntime, ServiceSystemApi, SystemApiData, ViewSystemApi,
@@ -19,9 +20,17 @@ use linera_witty::{
     MockInstance,
 };
 
+/// Command line parameters for the WIT generator.
+#[derive(Debug, clap::Parser)]
+pub struct WitGeneratorOptions {
+    /// The base directory of where the WIT files should be placed.
+    #[arg(short, long, default_value = "linera-sdk/wit")]
+    base_directory: PathBuf,
+}
+
 /// WIT file generator entrypoint.
 fn main() -> Result<(), io::Error> {
-    let base_directory = Path::new("linera-sdk/wit");
+    let options = WitGeneratorOptions::parse();
 
     let contract_entrypoints = WitInterfaceWriter::new::<ContractEntrypoints<MockInstance<()>>>();
     let service_entrypoints = WitInterfaceWriter::new::<ServiceEntrypoints<MockInstance<()>>>();
@@ -52,41 +61,41 @@ fn main() -> Result<(), io::Error> {
         .import::<ViewSystemApi<MockInstance<SystemApiData<ContractSyncRuntime>>>>();
 
     write_to_file(
-        &base_directory.join("contract-entrypoints.wit"),
+        &options.base_directory.join("contract-entrypoints.wit"),
         contract_entrypoints.generate_file_contents(),
     )?;
     write_to_file(
-        &base_directory.join("service-entrypoints.wit"),
+        &options.base_directory.join("service-entrypoints.wit"),
         service_entrypoints.generate_file_contents(),
     )?;
     write_to_file(
-        &base_directory.join("mock-system-api.wit"),
+        &options.base_directory.join("mock-system-api.wit"),
         mock_system_api.generate_file_contents(),
     )?;
 
     write_to_file(
-        &base_directory.join("contract-system-api.wit"),
+        &options.base_directory.join("contract-system-api.wit"),
         contract_system_api.generate_file_contents(),
     )?;
     write_to_file(
-        &base_directory.join("service-system-api.wit"),
+        &options.base_directory.join("service-system-api.wit"),
         service_system_api.generate_file_contents(),
     )?;
     write_to_file(
-        &base_directory.join("view-system-api.wit"),
+        &options.base_directory.join("view-system-api.wit"),
         view_system_api.generate_file_contents(),
     )?;
 
     write_to_file(
-        &base_directory.join("contract.wit"),
+        &options.base_directory.join("contract.wit"),
         contract_world.generate_file_contents(),
     )?;
     write_to_file(
-        &base_directory.join("service.wit"),
+        &options.base_directory.join("service.wit"),
         service_world.generate_file_contents(),
     )?;
     write_to_file(
-        &base_directory.join("unit-tests.wit"),
+        &options.base_directory.join("unit-tests.wit"),
         unit_tests_world.generate_file_contents(),
     )?;
 
