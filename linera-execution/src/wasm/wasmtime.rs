@@ -21,12 +21,6 @@ wit_bindgen_host_wasmtime_rust::export!({
     paths: ["view_system_api.wit"],
 });
 
-// Import the interface implemented by a user contract.
-wit_bindgen_host_wasmtime_rust::import!("contract.wit");
-
-// Import the interface implemented by a user service.
-wit_bindgen_host_wasmtime_rust::import!("service.wit");
-
 #[path = "conversions_from_wit.rs"]
 mod conversions_from_wit;
 #[path = "conversions_to_wit.rs"]
@@ -34,16 +28,20 @@ mod conversions_to_wit;
 
 use std::error::Error;
 
+use linera_witty::{wasmtime::EntrypointInstance, ExportTo, Instance};
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
-use wasmtime::{Config, Engine, Linker, Module, Store};
+use wasmtime::{AsContextMut, Config, Engine, Linker, Module, Store};
 
-use self::{contract::ContractData, service::ServiceData, view_system_api::ViewSystemApiTables};
-use super::{module_cache::ModuleCache, WasmExecutionError};
+use super::{
+    module_cache::ModuleCache,
+    system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi},
+    ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
+};
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
-    BaseRuntime, Bytecode, ContractRuntime, ExecutionError, FinalizeContext, MessageContext,
-    OperationContext, QueryContext, ServiceRuntime,
+    Bytecode, ContractRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
+    QueryContext, ServiceRuntime,
 };
 
 /// An [`Engine`] instance configured to run application contracts.
@@ -73,11 +71,8 @@ pub(crate) struct WasmtimeContractInstance<Runtime>
 where
     Runtime: ContractRuntime + Send + Sync + 'static,
 {
-    /// The application type.
-    application: contract::Contract<ContractState<Runtime>>,
-
-    /// The application's memory state.
-    store: Store<ContractState<Runtime>>,
+    /// The Wasm module instance.
+    instance: EntrypointInstance<SystemApiData<Runtime>>,
 
     /// The starting amount of fuel.
     initial_fuel: u64,
@@ -90,26 +85,26 @@ where
     Runtime: ContractRuntime + Send + Sync,
 {
     fn configure_initial_fuel(&mut self) -> Result<(), ExecutionError> {
-        let runtime = &mut self.store.data_mut().runtime;
+        let runtime = &mut self.instance.user_data_mut().runtime_mut();
         let fuel = runtime.remaining_fuel()?;
+        let mut context = self.instance.as_context_mut();
 
         self.initial_fuel = fuel;
 
-        self.store
+        context
             .add_fuel(1)
             .expect("Fuel consumption should be enabled");
 
-        let existing_fuel = self
-            .store
+        let existing_fuel = context
             .consume_fuel(0)
             .expect("Fuel consumption should be enabled");
 
         if existing_fuel > fuel {
-            self.store
+            context
                 .consume_fuel(existing_fuel - fuel)
                 .expect("Existing fuel was incorrectly calculated");
         } else {
-            self.store
+            context
                 .add_fuel(fuel - existing_fuel)
                 .expect("Fuel consumption wasn't properly enabled");
         }
@@ -119,10 +114,11 @@ where
 
     fn persist_remaining_fuel(&mut self) -> Result<(), ExecutionError> {
         let remaining_fuel = self
-            .store
+            .instance
+            .as_context_mut()
             .consume_fuel(0)
-            .expect("Failed to read consumed fuel");
-        let runtime = &mut self.store.data_mut().runtime;
+            .expect("Failed to read remaining fuel");
+        let runtime = &mut self.instance.user_data_mut().runtime_mut();
 
         assert!(self.initial_fuel >= remaining_fuel);
 
@@ -131,15 +127,9 @@ where
 }
 
 /// Type representing a running [Wasmtime](https://wasmtime.dev/) service.
-pub struct WasmtimeServiceInstance<Runtime>
-where
-    Runtime: ServiceRuntime + Send + Sync + 'static,
-{
-    /// The application type.
-    application: service::Service<ServiceState<Runtime>>,
-
-    /// The application's memory state.
-    store: Store<ServiceState<Runtime>>,
+pub struct WasmtimeServiceInstance<Runtime> {
+    /// The Wasm module instance.
+    instance: EntrypointInstance<SystemApiData<Runtime>>,
 }
 
 impl WasmContractModule {
@@ -163,24 +153,17 @@ where
     pub fn prepare(contract_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
         let mut linker = Linker::new(&CONTRACT_ENGINE);
 
-        contract_system_api::add_to_linker(&mut linker, ContractState::system_api)
-            .map_err(WasmExecutionError::LoadContractModule)?;
-        view_system_api::add_to_linker(&mut linker, ContractState::views_api)
-            .map_err(WasmExecutionError::LoadContractModule)?;
+        ContractSystemApi::export_to(&mut linker)?;
+        ViewSystemApi::export_to(&mut linker)?;
 
-        let state = ContractState::new(runtime);
-        let mut store = Store::new(&CONTRACT_ENGINE, state);
-        let (application, _instance) = contract::Contract::instantiate(
-            &mut store,
-            contract_module,
-            &mut linker,
-            ContractState::data,
-        )
-        .map_err(WasmExecutionError::LoadContractModule)?;
+        let user_data = SystemApiData::new(runtime);
+        let mut store = Store::new(&CONTRACT_ENGINE, user_data);
+        let instance = linker
+            .instantiate(&mut store, contract_module)
+            .map_err(WasmExecutionError::LoadContractModule)?;
 
         Ok(Self {
-            application,
-            store,
+            instance: EntrypointInstance::new(instance, store),
             initial_fuel: 0,
         })
     }
@@ -207,104 +190,18 @@ where
     pub fn prepare(service_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
         let mut linker = Linker::new(&SERVICE_ENGINE);
 
-        service_system_api::add_to_linker(&mut linker, ServiceState::system_api)
+        ServiceSystemApi::export_to(&mut linker)?;
+        ViewSystemApi::export_to(&mut linker)?;
+
+        let user_data = SystemApiData::new(runtime);
+        let mut store = Store::new(&SERVICE_ENGINE, user_data);
+        let instance = linker
+            .instantiate(&mut store, service_module)
             .map_err(WasmExecutionError::LoadServiceModule)?;
-        view_system_api::add_to_linker(&mut linker, ServiceState::views_api)
-            .map_err(WasmExecutionError::LoadServiceModule)?;
 
-        let state = ServiceState::new(runtime);
-        let mut store = Store::new(&SERVICE_ENGINE, state);
-        let (application, _instance) = service::Service::instantiate(
-            &mut store,
-            service_module,
-            &mut linker,
-            ServiceState::data,
-        )
-        .map_err(WasmExecutionError::LoadServiceModule)?;
-
-        Ok(Self { application, store })
-    }
-}
-
-/// Data stored by the runtime that's necessary for handling calls to and from the Wasm module.
-pub struct ContractState<Runtime>
-where
-    Runtime: ContractRuntime + Send + Sync + 'static,
-{
-    data: ContractData,
-    runtime: Runtime,
-    views_tables: ViewSystemApiTables<Runtime>,
-}
-
-/// Data stored by the runtime that's necessary for handling queries to and from the Wasm module.
-pub struct ServiceState<Runtime>
-where
-    Runtime: ServiceRuntime + Send + Sync + 'static,
-{
-    data: ServiceData,
-    runtime: Runtime,
-    views_tables: ViewSystemApiTables<Runtime>,
-}
-
-impl<Runtime> ContractState<Runtime>
-where
-    Runtime: ContractRuntime + Send + Sync + 'static,
-{
-    /// Creates a new instance of [`ContractState`].
-    ///
-    /// Uses `runtime` to export the system API.
-    pub fn new(runtime: Runtime) -> Self {
-        Self {
-            data: ContractData::default(),
-            runtime,
-            views_tables: ViewSystemApiTables::default(),
-        }
-    }
-
-    /// Obtains the runtime instance specific [`ContractData`].
-    pub fn data(&mut self) -> &mut ContractData {
-        &mut self.data
-    }
-
-    /// Obtains the data required by the runtime to export the system API.
-    pub fn system_api(&mut self) -> &mut Runtime {
-        &mut self.runtime
-    }
-
-    /// Obtains the data required by the runtime to export the views API.
-    pub fn views_api(&mut self) -> (&mut Runtime, &mut ViewSystemApiTables<Runtime>) {
-        (&mut self.runtime, &mut self.views_tables)
-    }
-}
-
-impl<Runtime> ServiceState<Runtime>
-where
-    Runtime: ServiceRuntime + Send + Sync + 'static,
-{
-    /// Creates a new instance of [`ServiceState`].
-    ///
-    /// Uses `runtime` to export the system API.
-    pub fn new(runtime: Runtime) -> Self {
-        Self {
-            data: ServiceData::default(),
-            runtime,
-            views_tables: ViewSystemApiTables::default(),
-        }
-    }
-
-    /// Obtains the runtime instance specific [`ServiceData`].
-    pub fn data(&mut self) -> &mut ServiceData {
-        &mut self.data
-    }
-
-    /// Obtains the data required by the runtime to export the system API.
-    pub fn system_api(&mut self) -> &mut Runtime {
-        &mut self.runtime
-    }
-
-    /// Obtains the data required by the runtime to export the views API.
-    pub fn views_api(&mut self) -> (&mut Runtime, &mut ViewSystemApiTables<Runtime>) {
-        (&mut self.runtime, &mut self.views_tables)
+        Ok(Self {
+            instance: EntrypointInstance::new(instance, store),
+        })
     }
 }
 
@@ -318,9 +215,11 @@ where
         argument: Vec<u8>,
     ) -> Result<(), ExecutionError> {
         self.configure_initial_fuel()?;
-        let result = contract::Contract::initialize(&self.application, &mut self.store, &argument);
+        let result = ContractEntrypoints::new(&mut self.instance).initialize(argument);
         self.persist_remaining_fuel()?;
-        result?.map_err(ExecutionError::UserError)
+        result
+            .map_err(WasmExecutionError::from)?
+            .map_err(ExecutionError::UserError)
     }
 
     fn execute_operation(
@@ -329,10 +228,11 @@ where
         operation: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         self.configure_initial_fuel()?;
-        let result =
-            contract::Contract::execute_operation(&self.application, &mut self.store, &operation);
+        let result = ContractEntrypoints::new(&mut self.instance).execute_operation(operation);
         self.persist_remaining_fuel()?;
-        result?.map_err(ExecutionError::UserError)
+        result
+            .map_err(WasmExecutionError::from)?
+            .map_err(ExecutionError::UserError)
     }
 
     fn execute_message(
@@ -341,17 +241,20 @@ where
         message: Vec<u8>,
     ) -> Result<(), ExecutionError> {
         self.configure_initial_fuel()?;
-        let result =
-            contract::Contract::execute_message(&self.application, &mut self.store, &message);
+        let result = ContractEntrypoints::new(&mut self.instance).execute_message(message);
         self.persist_remaining_fuel()?;
-        result?.map_err(ExecutionError::UserError)
+        result
+            .map_err(WasmExecutionError::from)?
+            .map_err(ExecutionError::UserError)
     }
 
     fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {
         self.configure_initial_fuel()?;
-        let result = contract::Contract::finalize(&self.application, &mut self.store);
+        let result = ContractEntrypoints::new(&mut self.instance).finalize();
         self.persist_remaining_fuel()?;
-        result?.map_err(ExecutionError::UserError)
+        result
+            .map_err(WasmExecutionError::from)?
+            .map_err(ExecutionError::UserError)
     }
 }
 
@@ -364,14 +267,12 @@ where
         _context: QueryContext,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        service::Service::handle_query(&self.application, &mut self.store, &argument)?
+        ServiceEntrypoints::new(&mut self.instance)
+            .handle_query(argument)
+            .map_err(WasmExecutionError::from)?
             .map_err(ExecutionError::UserError)
     }
 }
-
-impl_contract_system_api!(wasmtime::Trap);
-impl_service_system_api!(wasmtime::Trap);
-impl_view_system_api!(wasmtime::Trap);
 
 impl From<ExecutionError> for wasmtime::Trap {
     fn from(error: ExecutionError) -> Self {
