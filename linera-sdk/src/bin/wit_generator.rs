@@ -5,10 +5,11 @@
 
 use std::{
     fs::File,
-    io::{self, BufWriter, Write},
+    io::{BufWriter, Write},
     path::{Path, PathBuf},
 };
 
+use anyhow::{Context, Result};
 use clap::Parser as _;
 use linera_execution::{
     ContractEntrypoints, ContractSyncRuntime, ContractSystemApi, ServiceEntrypoints,
@@ -29,7 +30,7 @@ pub struct WitGeneratorOptions {
 }
 
 /// WIT file generator entrypoint.
-fn main() -> Result<(), io::Error> {
+fn main() -> Result<()> {
     let options = WitGeneratorOptions::parse();
 
     let contract_entrypoints = WitInterfaceWriter::new::<ContractEntrypoints<MockInstance<()>>>();
@@ -103,10 +104,19 @@ fn main() -> Result<(), io::Error> {
 }
 
 /// Writes the provided `contents` to a new file at the specified `path`.
-fn write_to_file<'c>(path: &Path, contents: impl Iterator<Item = &'c str>) -> io::Result<()> {
-    let mut file = BufWriter::new(File::create(path)?);
+fn write_to_file<'c>(path: &Path, contents: impl Iterator<Item = &'c str>) -> Result<()> {
+    let mut file = BufWriter::new(
+        File::create(path)
+            .with_context(|| format!("Failed to create file at {}", path.display()))?,
+    );
+
     for part in contents {
-        file.write_all(part.as_bytes())?;
+        file.write_all(part.as_bytes())
+            .with_context(|| format!("Failed to write to {}", path.display()))?;
     }
+
     file.flush()
+        .with_context(|| format!("Failed to flush to {}", path.display()))?;
+
+    Ok(())
 }
