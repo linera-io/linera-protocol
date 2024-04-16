@@ -414,6 +414,15 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Fetches a blob of bytes from a given URL.
+    fn fetch_url(caller: &mut Caller, url: String) -> Result<Vec<u8>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .fetch_url(&url)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Logs a `message` with the provided information `level`.
     fn log(_caller: &mut Caller, message: String, level: log::Level) -> Result<(), RuntimeError> {
         match level {
