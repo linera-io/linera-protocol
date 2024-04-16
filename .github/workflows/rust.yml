@@ -80,6 +80,9 @@ jobs:
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
+    - name: Check that the WIT files are up-to-date
+      run: |
+        cargo run --bin wit-generator -- -c
     - name: Run all tests using the default features
       run: |
         cargo test --locked
