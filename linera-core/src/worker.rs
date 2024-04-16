@@ -417,7 +417,7 @@ where
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        let local_time = self.storage.current_time();
+        let local_time = self.storage.clock().current_time();
         let signer = block.authenticated_signer;
         let executed_block = chain.execute_block(&block, local_time).await?.with(block);
         let mut response = ChainInfoResponse::new(&chain, None);
@@ -610,7 +610,7 @@ where
             return Ok((info, actions));
         }
         if tip.is_first_block() && !chain.is_active() {
-            let local_time = self.storage.current_time();
+            let local_time = self.storage.clock().current_time();
             for message in &block.incoming_messages {
                 if chain
                     .execute_init_message(
@@ -653,7 +653,7 @@ where
         result_certificate?;
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
-        let local_time = self.storage.current_time();
+        let local_time = self.storage.clock().current_time();
         let verified_outcome = chain.execute_block(block, local_time).await?;
         // We should always agree on the messages and state hash.
         ensure!(
@@ -792,7 +792,7 @@ where
         chain.manager.get_mut().create_final_vote(
             certificate,
             self.key_pair(),
-            self.storage.current_time(),
+            self.storage.clock().current_time(),
         );
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
@@ -845,7 +845,7 @@ where
         chain
             .manager
             .get_mut()
-            .handle_timeout_certificate(certificate.clone(), self.storage.current_time());
+            .handle_timeout_certificate(certificate.clone(), self.storage.clock().current_time());
         let round = chain.manager.get().current_round;
         if round > old_round {
             actions.notifications.push(Notification {
@@ -885,7 +885,7 @@ where
             return Ok(None);
         };
         // Process the received messages in certificates.
-        let local_time = self.storage.current_time();
+        let local_time = self.storage.clock().current_time();
         for bundle in bundles {
             // Update the staged chain state with the received block.
             chain
@@ -1095,16 +1095,13 @@ where
         self.check_no_missing_bytecode(block, blobs).await?;
         // Write the values so that the bytecode is available during execution.
         self.storage.write_values(blobs).await?;
-        let local_time = self.storage.current_time();
-        let time_till_block = block.timestamp.duration_since(local_time);
+        let local_time = self.storage.clock().current_time();
         ensure!(
-            time_till_block <= self.grace_period,
+            block.timestamp.duration_since(local_time) <= self.grace_period,
             WorkerError::InvalidTimestamp
         );
-        if time_till_block > Duration::ZERO {
-            tokio::time::sleep(time_till_block).await;
-        }
-        let local_time = self.storage.current_time();
+        self.storage.clock().sleep_until(block.timestamp).await;
+        let local_time = self.storage.clock().current_time();
         let outcome = chain.execute_block(block, local_time).await?;
         // Check if the counters of tip_state would be valid.
         chain.tip_state.get().verify_counters(block, &outcome)?;
@@ -1236,7 +1233,7 @@ where
             if let Some(epoch) = chain.execution_state.system.epoch.get() {
                 let height = chain.tip_state.get().next_block_height;
                 let key_pair = self.key_pair();
-                let local_time = self.storage.current_time();
+                let local_time = self.storage.clock().current_time();
                 let manager = chain.manager.get_mut();
                 if manager.vote_timeout(chain_id, height, *epoch, key_pair, local_time) {
                     chain.save().await?;
@@ -1249,7 +1246,7 @@ where
                 chain.unskippable.front().await?,
             ) {
                 let ownership = chain.execution_state.system.ownership.get();
-                let elapsed = self.storage.current_time().delta_since(entry.seen);
+                let elapsed = self.storage.clock().current_time().delta_since(entry.seen);
                 if elapsed >= ownership.timeout_config.fallback_duration {
                     let height = chain.tip_state.get().next_block_height;
                     let key_pair = self.key_pair();

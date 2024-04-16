@@ -5,7 +5,11 @@ use std::{fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::{crypto::CryptoHash, data_types::Timestamp, identifiers::ChainId};
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::{TimeDelta, Timestamp},
+    identifiers::ChainId,
+};
 use linera_chain::{
     data_types::{Certificate, CertificateValue, HashedValue, LiteCertificate},
     ChainStateView,
@@ -20,6 +24,11 @@ use linera_views::{
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
+#[cfg(with_testing)]
+use {
+    futures::channel::oneshot::{self, Receiver},
+    std::{cmp::Reverse, collections::BTreeMap},
+};
 #[cfg(with_metrics)]
 use {
     linera_base::{
@@ -195,17 +204,73 @@ enum BaseKey {
 }
 
 /// A clock that can be used to get the current `Timestamp`.
+#[async_trait]
 pub trait Clock {
     fn current_time(&self) -> Timestamp;
+
+    async fn sleep(&self, delta: TimeDelta);
+
+    async fn sleep_until(&self, timestamp: Timestamp);
 }
 
 /// A `Clock` implementation using the system clock.
 #[derive(Clone)]
 pub struct WallClock;
 
+#[async_trait]
 impl Clock for WallClock {
     fn current_time(&self) -> Timestamp {
         Timestamp::now()
+    }
+
+    async fn sleep(&self, delta: TimeDelta) {
+        tokio::time::sleep(delta.as_duration()).await
+    }
+
+    async fn sleep_until(&self, timestamp: Timestamp) {
+        let delta = timestamp.delta_since(Timestamp::now());
+        if delta > TimeDelta::ZERO {
+            self.sleep(delta).await
+        }
+    }
+}
+
+#[cfg(with_testing)]
+#[derive(Default)]
+struct TestClockInner {
+    time: Timestamp,
+    sleeps: BTreeMap<Reverse<Timestamp>, Vec<oneshot::Sender<()>>>,
+}
+
+#[cfg(with_testing)]
+impl TestClockInner {
+    fn set(&mut self, time: Timestamp) {
+        self.time = time;
+        let senders = self.sleeps.split_off(&Reverse(time));
+        for sender in senders.into_values().flatten() {
+            let _ = sender.send(());
+        }
+    }
+
+    fn add_sleep(&mut self, delta: TimeDelta) -> Receiver<()> {
+        let (sender, receiver) = oneshot::channel();
+        if delta == TimeDelta::ZERO {
+            let _ = sender.send(());
+        } else {
+            let until = self.time.saturating_add(delta);
+            self.sleeps.entry(Reverse(until)).or_default().push(sender);
+        }
+        receiver
+    }
+
+    fn add_sleep_until(&mut self, time: Timestamp) -> Receiver<()> {
+        let (sender, receiver) = oneshot::channel();
+        if self.time >= time {
+            let _ = sender.send(());
+        } else {
+            self.sleeps.entry(Reverse(time)).or_default().push(sender);
+        }
+        receiver
     }
 }
 
@@ -213,12 +278,26 @@ impl Clock for WallClock {
 /// explicitly. All clones share the same time, and setting it in one clone updates all the others.
 #[cfg(with_testing)]
 #[derive(Clone, Default)]
-pub struct TestClock(Arc<std::sync::atomic::AtomicU64>);
+pub struct TestClock(Arc<std::sync::Mutex<TestClockInner>>);
 
 #[cfg(with_testing)]
+#[async_trait]
 impl Clock for TestClock {
     fn current_time(&self) -> Timestamp {
-        Timestamp::from(self.0.load(std::sync::atomic::Ordering::SeqCst))
+        self.lock().time
+    }
+
+    async fn sleep(&self, delta: TimeDelta) {
+        if delta == TimeDelta::ZERO {
+            return;
+        }
+        let receiver = self.lock().add_sleep(delta);
+        let _ = receiver.await;
+    }
+
+    async fn sleep_until(&self, timestamp: Timestamp) {
+        let receiver = self.lock().add_sleep_until(timestamp);
+        let _ = receiver.await;
     }
 }
 
@@ -226,19 +305,23 @@ impl Clock for TestClock {
 impl TestClock {
     /// Creates a new clock with its time set to 0, i.e. the Unix epoch.
     pub fn new() -> Self {
-        TestClock(Arc::new(0.into()))
+        TestClock(Arc::default())
     }
 
     /// Sets the current time.
-    pub fn set(&self, timestamp: Timestamp) {
-        self.0
-            .store(timestamp.micros(), std::sync::atomic::Ordering::SeqCst);
+    pub fn set(&self, time: Timestamp) {
+        self.lock().set(time);
     }
 
     /// Advances the current time by the specified delta.
-    pub fn add(&self, delta: linera_base::data_types::TimeDelta) {
-        self.0
-            .fetch_add(delta.as_micros(), std::sync::atomic::Ordering::SeqCst);
+    pub fn add(&self, delta: TimeDelta) {
+        let mut guard = self.lock();
+        let time = guard.time.saturating_add(delta);
+        guard.set(time);
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<TestClockInner> {
+        self.0.lock().expect("poisoned TestClock mutex")
     }
 }
 
@@ -254,8 +337,8 @@ where
     type Context = ContextFromStore<ChainRuntimeContext<Self>, Client>;
     type ContextError = <Client as KeyValueStore>::Error;
 
-    fn current_time(&self) -> Timestamp {
-        self.clock.current_time()
+    fn clock(&self) -> &dyn Clock {
+        &self.clock
     }
 
     async fn load_chain(

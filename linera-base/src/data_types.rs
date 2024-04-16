@@ -127,9 +127,20 @@ impl TimeDelta {
         TimeDelta(secs.saturating_mul(1_000_000))
     }
 
+    /// Returns the given duration, rounded to the nearest microsecond and capped to the maximum
+    /// `TimeDelta` value.
+    pub fn from_duration(duration: Duration) -> Self {
+        TimeDelta::from_micros(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
+    }
+
     /// Returns this `TimeDelta` as a number of microseconds.
     pub fn as_micros(&self) -> u64 {
         self.0
+    }
+
+    /// Returns this `TimeDelta` as a `Duration`.
+    pub fn as_duration(&self) -> Duration {
+        Duration::from_micros(self.as_micros())
     }
 }
 
