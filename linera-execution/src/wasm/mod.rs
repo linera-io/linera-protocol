@@ -35,9 +35,11 @@ use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 #[cfg(with_wasmtime)]
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
 
-#[allow(unused_imports)]
-pub use self::entrypoints::{ContractEntrypoints, ServiceEntrypoints};
 use self::sanitizer::sanitize;
+pub use self::{
+    entrypoints::{ContractEntrypoints, ServiceEntrypoints},
+    system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi},
+};
 use crate::{
     Bytecode, ContractSyncRuntime, ExecutionError, ServiceSyncRuntime, UserContractInstance,
     UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,

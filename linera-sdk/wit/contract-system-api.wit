@@ -1,0 +1,139 @@
+package linera:app;
+
+interface contract-system-api {
+    get-chain-id: func() -> chain-id;
+    get-block-height: func() -> block-height;
+    get-application-id: func() -> application-id;
+    application-parameters: func() -> list<u8>;
+    authenticated-signer: func() -> option<owner>;
+    read-system-timestamp: func() -> timestamp;
+    get-message-id: func() -> option<message-id>;
+    message-is-bouncing: func() -> option<bool>;
+    authenticated-caller-id: func() -> option<application-id>;
+    read-chain-balance: func() -> amount;
+    read-owner-balance: func(owner: owner) -> amount;
+    send-message: func(message: send-message-request);
+    subscribe: func(chain: chain-id, channel: channel-name);
+    unsubscribe: func(chain: chain-id, channel: channel-name);
+    transfer: func(source: option<owner>, destination: account, amount: amount);
+    claim: func(source: account, destination: account, amount: amount);
+    get-chain-ownership: func() -> chain-ownership;
+    open-chain: func(chain-ownership: chain-ownership, balance: amount) -> chain-id;
+    close-chain: func() -> result<tuple<>, close-chain-error>;
+    try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
+    log: func(message: string, level: log-level);
+
+    record account {
+        chain-id: chain-id,
+        owner: option<owner>,
+    }
+
+    record amount {
+        inner0: u128,
+    }
+
+    record application-id {
+        bytecode-id: bytecode-id,
+        creation: message-id,
+    }
+
+    record block-height {
+        inner0: u64,
+    }
+
+    record bytecode-id {
+        message-id: message-id,
+    }
+
+    record chain-id {
+        inner0: crypto-hash,
+    }
+
+    record chain-ownership {
+        super-owners: list<tuple<owner, public-key>>,
+        owners: list<tuple<owner, tuple<public-key, u64>>>,
+        multi-leader-rounds: u32,
+        timeout-config: timeout-config,
+    }
+
+    record channel-name {
+        inner0: list<u8>,
+    }
+
+    enum close-chain-error {
+        not-permitted,
+    }
+
+    record crypto-hash {
+        part1: u64,
+        part2: u64,
+        part3: u64,
+        part4: u64,
+    }
+
+    variant destination {
+        recipient(chain-id),
+        subscribers(channel-name),
+    }
+
+    enum log-level {
+        error,
+        warn,
+        info,
+        debug,
+        trace,
+    }
+
+    record message-id {
+        chain-id: chain-id,
+        height: block-height,
+        index: u32,
+    }
+
+    record owner {
+        inner0: crypto-hash,
+    }
+
+    record public-key {
+        part1: u64,
+        part2: u64,
+        part3: u64,
+        part4: u64,
+    }
+
+    record resources {
+        fuel: u64,
+        read-operations: u32,
+        write-operations: u32,
+        bytes-to-read: u32,
+        bytes-to-write: u32,
+        messages: u32,
+        message-size: u32,
+        storage-size-delta: u32,
+    }
+
+    record send-message-request {
+        destination: destination,
+        authenticated: bool,
+        is-tracked: bool,
+        grant: resources,
+        message: list<u8>,
+    }
+
+    record time-delta {
+        inner0: u64,
+    }
+
+    record timeout-config {
+        fast-round-duration: option<time-delta>,
+        base-timeout: time-delta,
+        timeout-increment: time-delta,
+        fallback-duration: time-delta,
+    }
+
+    record timestamp {
+        inner0: u64,
+    }
+
+    type u128 = tuple<u64, u64>;
+}

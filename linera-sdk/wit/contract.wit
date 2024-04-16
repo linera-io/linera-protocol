@@ -1,0 +1,8 @@
+package linera:app;
+
+world contract {
+    import contract-system-api;
+    import view-system-api;
+
+    export contract-entrypoints;
+}
