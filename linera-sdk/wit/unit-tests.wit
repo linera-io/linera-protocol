@@ -1,0 +1,9 @@
+package linera:app;
+
+world unit-tests {
+    import contract-system-api;
+    import service-system-api;
+    import view-system-api;
+
+    export mock-system-api;
+}

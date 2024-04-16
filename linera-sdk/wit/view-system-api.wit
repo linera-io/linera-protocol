@@ -1,0 +1,21 @@
+package linera:app;
+
+interface view-system-api {
+    contains-key-new: func(key: list<u8>) -> u32;
+    contains-key-wait: func(promise-id: u32) -> bool;
+    read-multi-values-bytes-new: func(keys: list<list<u8>>) -> u32;
+    read-multi-values-bytes-wait: func(promise-id: u32) -> list<option<list<u8>>>;
+    read-value-bytes-new: func(key: list<u8>) -> u32;
+    read-value-bytes-wait: func(promise-id: u32) -> option<list<u8>>;
+    find-keys-new: func(key-prefix: list<u8>) -> u32;
+    find-keys-wait: func(promise-id: u32) -> list<list<u8>>;
+    find-key-values-new: func(key-prefix: list<u8>) -> u32;
+    find-key-values-wait: func(promise-id: u32) -> list<tuple<list<u8>, list<u8>>>;
+    write-batch: func(operations: list<write-operation>);
+
+    variant write-operation {
+        delete(list<u8>),
+        delete-prefix(list<u8>),
+        put(tuple<list<u8>, list<u8>>),
+    }
+}
