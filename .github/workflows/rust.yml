@@ -83,6 +83,10 @@ jobs:
     - name: Check that the WIT files are up-to-date
       run: |
         cargo run --bin wit-generator -- -c
+    - name: Build Wasm test runner
+      # use debug mode to avoid building wasmtime in release mode
+      run: |
+        cargo build --locked --bin linera-wasm-test-runner --features wasmtime
     - name: Run all tests using the default features
       run: |
         cargo test --locked
@@ -97,10 +101,6 @@ jobs:
       run: |
         cargo build --locked -p linera-service --bin linera-benchmark --features benchmark
         cargo test --locked -p linera-service --features benchmark benchmark
-    - name: Build Wasm test runner
-      # use debug mode to avoid building wasmtime in release mode
-      run: |
-        cargo build --locked --bin linera-wasm-test-runner --features wasmtime
     - name: Run Linera SDK Wasm tests
       env:
         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "target/debug/linera-wasm-test-runner"
