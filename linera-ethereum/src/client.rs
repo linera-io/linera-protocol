@@ -13,7 +13,7 @@ use crate::common::EthereumServiceError;
 
 pub async fn get_accounts_node(url: &str) -> Result<Vec<String>, EthereumServiceError> {
     let provider = Provider::<Http>::try_from(url)?;
-    Ok(provider.get_accounts().await?.into_iter().map(|x| x.to_string()).collect::<Vec<_>>())
+    Ok(provider.get_accounts().await?.into_iter().map(|x| format!("{:?}", x)).collect::<Vec<_>>())
 }
 
 pub async fn get_block_number_node(url: &str) -> Result<u64, EthereumServiceError> {
