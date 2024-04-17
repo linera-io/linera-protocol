@@ -42,6 +42,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - uses: foundry-rs/foundry-toolchain@v1
     - name: Clear up some space
       run: |
         sudo rm -rf /usr/share/dotnet
