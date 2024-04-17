@@ -17,12 +17,10 @@ use crate::{
     config::Export,
 };
 
-#[cfg(with_testing)]
 pub struct RemoteNetTestingConfig {
     faucet: Faucet,
 }
 
-#[cfg(with_testing)]
 impl RemoteNetTestingConfig {
     pub fn new(faucet_url: Option<String>) -> Self {
         Self {
@@ -36,7 +34,6 @@ impl RemoteNetTestingConfig {
     }
 }
 
-#[cfg(with_testing)]
 #[async_trait]
 impl LineraNetConfig for RemoteNetTestingConfig {
     type Net = RemoteNet;
@@ -76,7 +73,6 @@ impl LineraNetConfig for RemoteNetTestingConfig {
 }
 
 /// Remote net
-#[cfg(with_testing)]
 #[derive(Clone)]
 pub struct RemoteNet {
     network: Network,
@@ -85,7 +81,6 @@ pub struct RemoteNet {
     tmp_dir: Arc<TempDir>,
 }
 
-#[cfg(with_testing)]
 #[async_trait]
 impl LineraNet for RemoteNet {
     async fn ensure_is_running(&mut self) -> Result<()> {
@@ -118,7 +113,6 @@ impl LineraNet for RemoteNet {
     }
 }
 
-#[cfg(with_testing)]
 impl RemoteNet {
     async fn new(testing_prng_seed: Option<u64>, faucet: &Faucet) -> Result<Self> {
         let tmp_dir = Arc::new(tempdir()?);
