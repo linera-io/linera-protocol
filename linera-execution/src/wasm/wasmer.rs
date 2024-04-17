@@ -95,7 +95,6 @@ where
 
 /// Type representing a running [Wasmer](https://wasmer.io/) service.
 pub struct WasmerServiceInstance<Runtime> {
-    /// The application type.
     /// The Wasmer instance.
     instance: EntrypointInstance<SystemApiData<Runtime>>,
 }
