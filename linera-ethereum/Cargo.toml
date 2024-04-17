@@ -18,6 +18,7 @@ ethers-core.workspace = true
 ethers-providers.workspace = true
 ethers-middleware.workspace = true
 ethers-signers.workspace = true
+linera-storage-service.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 rustc-hex.workspace = true

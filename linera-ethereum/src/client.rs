@@ -1,19 +1,25 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use ethers::prelude::Http;
 use std::sync::Arc;
-use ethers_core::types::Filter;
-use ethers::prelude::Provider;
-use ethers::types::Log;
+
+use ethers::{
+    prelude::{Http, Provider},
+    types::Log,
+};
+use ethers_core::types::{Address, BlockId, BlockNumber, Filter, U64};
 use ethers_middleware::Middleware;
-use ethers_core::types::{Address, U64, BlockId, BlockNumber};
 
 use crate::common::EthereumServiceError;
 
 pub async fn get_accounts_node(url: &str) -> Result<Vec<String>, EthereumServiceError> {
     let provider = Provider::<Http>::try_from(url)?;
-    Ok(provider.get_accounts().await?.into_iter().map(|x| format!("{:?}", x)).collect::<Vec<_>>())
+    Ok(provider
+        .get_accounts()
+        .await?
+        .into_iter()
+        .map(|x| format!("{:?}", x))
+        .collect::<Vec<_>>())
 }
 
 pub async fn get_block_number_node(url: &str) -> Result<u64, EthereumServiceError> {
@@ -32,10 +38,10 @@ pub async fn get_balance_node(
     let block_nr = match block_nr {
         None => None,
         Some(val) => {
-            let val : U64 = val.into();
-            let val : BlockNumber = BlockNumber::Number(val);
+            let val: U64 = val.into();
+            let val: BlockNumber = BlockNumber::Number(val);
             Some(BlockId::Number(val))
-        },
+        }
     };
     let balance = provider.get_balance(address, block_nr).await?;
     Ok(balance.0)

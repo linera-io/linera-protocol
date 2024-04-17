@@ -4040,6 +4040,7 @@ dependencies = [
  "ethers-middleware",
  "ethers-providers",
  "ethers-signers",
+ "linera-storage-service",
  "rustc-hex",
  "serde",
  "thiserror",

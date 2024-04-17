@@ -1,18 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use ethers::contract::abigen;
-use linera_ethereum::client::{
-    get_accounts_node, get_balance_node, get_block_number_node,
-};
 use std::{path::Path, sync::Arc};
+
 use ethers::{
+    contract::abigen,
     prelude::{ContractFactory, SignerMiddleware},
     solc::Solc,
     types::U256,
 };
-use linera_ethereum::test_utils::get_anvil;
-
+use linera_ethereum::{
+    client::{get_accounts_node, get_balance_node, get_block_number_node},
+    test_utils::get_anvil,
+};
 
 abigen!(
     SimpleContract,
@@ -22,7 +22,7 @@ abigen!(
 
 #[tokio::test]
 async fn test_get_accounts_balance() {
-    let anvil_test = get_anvil();
+    let anvil_test = get_anvil().await.unwrap();
     let url = anvil_test.endpoint;
     let addresses = get_accounts_node(&url).await.unwrap();
     let block_nr = get_block_number_node(&url).await.unwrap();
@@ -50,7 +50,7 @@ async fn test_contract() -> anyhow::Result<()> {
         .into_parts_or_default();
 
     // 3. Access to the wallets
-    let anvil_test = get_anvil();
+    let anvil_test = get_anvil().await.unwrap();
     let (wallet0, addr0) = anvil_test.get_wallet(0);
     let (_wallet1, addr1) = anvil_test.get_wallet(1);
 
