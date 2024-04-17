@@ -21,14 +21,12 @@ wasmer = [
     "wasm-encoder",
     "wasmer-middlewares",
     "wasmparser",
-    "wit-bindgen-host-wasmer-rust",
 ]
 wasmtime = [
     "dep:wasmtime",
     "linera-witty/wasmtime",
     "wasm-encoder",
     "wasmparser",
-    "wit-bindgen-host-wasmtime-rust",
 ]
 web = ["linera-base/web", "linera-views/web"]
 
@@ -63,8 +61,6 @@ wasmer = { workspace = true, optional = true }
 wasmer-middlewares = { workspace = true, optional = true }
 wasmparser = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true }
-wit-bindgen-host-wasmer-rust = { workspace = true, optional = true }
-wit-bindgen-host-wasmtime-rust = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }

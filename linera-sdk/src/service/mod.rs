@@ -7,8 +7,7 @@ mod conversions_from_wit;
 mod conversions_to_wit;
 mod runtime;
 mod storage;
-pub(crate) mod wit_system_api;
-pub mod wit_types;
+pub(crate) mod wit;
 
 use std::future::Future;
 
@@ -68,19 +67,17 @@ macro_rules! service {
 
 /// Runs an asynchronous entrypoint in a blocking manner, by repeatedly polling the entrypoint
 /// future.
-pub fn run_async_entrypoint<Entrypoint, Output, Error, RawOutput>(
+pub fn run_async_entrypoint<Entrypoint, Output, Error>(
     entrypoint: Entrypoint,
-) -> Result<RawOutput, String>
+) -> Result<Output, String>
 where
     Entrypoint: Future<Output = Result<Output, Error>>,
-    Output: Into<RawOutput> + 'static,
     Error: ToString + 'static,
 {
     ServiceLogger::install();
 
     entrypoint
         .blocking_wait()
-        .map(|output| output.into())
         .map_err(|error| error.to_string())
 }
 

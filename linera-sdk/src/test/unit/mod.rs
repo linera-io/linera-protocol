@@ -10,11 +10,11 @@
 //! The system API isn't available to the tests by default. However, calls to them are intercepted
 //! and can be controlled by the test to return mock values using the functions in this module.
 
-// Import the contract system interface.
-wit_bindgen_guest_rust::export!("mock_system_api.wit");
+#![allow(missing_docs)]
 
 mod conversions_from_wit;
 mod conversions_to_wit;
+mod wit;
 
 use futures::FutureExt;
 use linera_base::{
@@ -28,14 +28,12 @@ use linera_views::{
 };
 use serde::Serialize;
 
-use self::mock_system_api as wit;
 use crate::{Contract, ContractRuntime, Service, ServiceRuntime};
 
 static mut MOCK_CHAIN_ID: Option<ChainId> = None;
 static mut MOCK_APPLICATION_ID: Option<ApplicationId> = None;
 static mut MOCK_APPLICATION_PARAMETERS: Option<Vec<u8>> = None;
 static mut MOCK_SYSTEM_BALANCE: Option<Amount> = None;
-static mut MOCK_OWNER_BALANCE: Option<Amount> = None;
 static mut MOCK_SYSTEM_TIMESTAMP: Option<Timestamp> = None;
 static mut MOCK_LOG_COLLECTOR: Vec<(log::Level, String)> = Vec::new();
 static mut MOCK_KEY_VALUE_STORE: Option<MemoryContext<()>> = None;
@@ -76,10 +74,6 @@ pub fn mock_chain_balance(chain_balance: impl Into<Option<Amount>>) {
 }
 
 /// Sets the mocked owner balance.
-pub fn mock_owner_balance(owner_balance: impl Into<Option<Amount>>) {
-    unsafe { MOCK_OWNER_BALANCE = owner_balance.into() };
-}
-
 /// Sets the mocked system timestamp.
 pub fn mock_system_timestamp(system_timestamp: impl Into<Option<Timestamp>>) {
     unsafe { MOCK_SYSTEM_TIMESTAMP = system_timestamp.into() };
@@ -107,8 +101,8 @@ pub fn mock_try_query_application(
 /// Implementation of type that exports an interface for using the mock system API.
 pub struct MockSystemApi;
 
-impl wit::MockSystemApi for MockSystemApi {
-    fn mocked_chain_id() -> wit::CryptoHash {
+impl wit::Guest for MockSystemApi {
+    fn mocked_chain_id() -> wit::ChainId {
         unsafe { MOCK_CHAIN_ID }
             .expect(
                 "Unexpected call to the `chain_id` system API. Please call `mock_chain_id` first",
@@ -143,22 +137,13 @@ impl wit::MockSystemApi for MockSystemApi {
             .into()
     }
 
-    fn mocked_read_owner_balance() -> wit::Amount {
-        unsafe { MOCK_OWNER_BALANCE }
-            .expect(
-                "Unexpected call to the `read_owner_balance` system API. \
-                Please call `mock_owner_balance` first",
-            )
-            .into()
-    }
-
-    fn mocked_read_system_timestamp() -> u64 {
+    fn mocked_read_system_timestamp() -> wit::Timestamp {
         unsafe { MOCK_SYSTEM_TIMESTAMP }
             .expect(
                 "Unexpected call to the `read_system_timestamp` system API. \
                 Please call `mock_system_timestamp` first",
             )
-            .micros()
+            .into()
     }
 
     fn mocked_log(message: String, level: wit::LogLevel) {
@@ -224,7 +209,7 @@ impl wit::MockSystemApi for MockSystemApi {
             })
             .now_or_never()
             .expect("Attempt to write to key-value store while it is being used")
-            .expect("Failed to write to memory store")
+            .expect("Failed to write to memory store");
     }
 
     fn mocked_try_query_application(application: wit::ApplicationId, query: Vec<u8>) -> Vec<u8> {

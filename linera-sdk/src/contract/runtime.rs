@@ -7,11 +7,11 @@ use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
-    ownership::ChainOwnership,
+    ownership::{ChainOwnership, CloseChainError},
 };
 use serde::Serialize;
 
-use super::{wit_system_api as wit, CloseChainError};
+use super::wit::contract_system_api as wit;
 use crate::Contract;
 
 /// The common runtime to interface with the host executing the contract.
@@ -67,12 +67,14 @@ where
     pub fn application_id(&mut self) -> ApplicationId<Application::Abi> {
         *self
             .application_id
-            .get_or_insert_with(|| ApplicationId::from(wit::application_id()).with_abi())
+            .get_or_insert_with(|| ApplicationId::from(wit::get_application_id()).with_abi())
     }
 
     /// Returns the ID of the current chain.
     pub fn chain_id(&mut self) -> ChainId {
-        *self.chain_id.get_or_insert_with(|| wit::chain_id().into())
+        *self
+            .chain_id
+            .get_or_insert_with(|| wit::get_chain_id().into())
     }
 
     /// Returns the authenticated signer for this execution, if there is one.
@@ -86,7 +88,7 @@ where
     pub fn block_height(&mut self) -> BlockHeight {
         *self
             .block_height
-            .get_or_insert_with(|| wit::block_height().into())
+            .get_or_insert_with(|| wit::get_block_height().into())
     }
 
     /// Returns the ID of the incoming message that is being handled, or [`None`] if not executing
@@ -94,7 +96,7 @@ where
     pub fn message_id(&mut self) -> Option<MessageId> {
         *self
             .message_id
-            .get_or_insert_with(|| wit::message_id().map(MessageId::from))
+            .get_or_insert_with(|| wit::get_message_id().map(MessageId::from))
     }
 
     /// Returns [`true`] if the incoming message was rejected from the original destination and is
@@ -149,12 +151,12 @@ where
 
     /// Subscribes to a message channel from another chain.
     pub fn subscribe(&mut self, chain: ChainId, channel: ChannelName) {
-        wit::subscribe(chain.into(), (&channel).into());
+        wit::subscribe(chain.into(), &channel.into());
     }
 
     /// Unsubscribes to a message channel from another chain.
     pub fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) {
-        wit::unsubscribe(chain.into(), (&channel).into());
+        wit::unsubscribe(chain.into(), &channel.into());
     }
 
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
@@ -174,13 +176,13 @@ where
 
     /// Retrieves the owner configuration for the current chain.
     pub fn chain_ownership(&mut self) -> ChainOwnership {
-        wit::chain_ownership().into()
+        wit::get_chain_ownership().into()
     }
 
     /// Closes the current chain. Returns an error if the application doesn't have
     /// permission to do so.
     pub fn close_chain(&mut self) -> Result<(), CloseChainError> {
-        wit::close_chain()
+        wit::close_chain().map_err(|error| error.into())
     }
 
     /// Calls another application.
@@ -260,6 +262,6 @@ where
             message: serialized_message,
         };
 
-        wit::send_message((&raw_message).into())
+        wit::send_message(&raw_message.into())
     }
 }

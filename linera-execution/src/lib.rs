@@ -19,17 +19,11 @@ mod wasm;
 
 use std::{fmt, str::FromStr, sync::Arc};
 
-#[cfg(with_testing)]
-pub use applications::ApplicationRegistry;
-pub use applications::{
-    ApplicationRegistryView, BytecodeLocation, UserApplicationDescription, UserApplicationId,
-};
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
 use dashmap::DashMap;
 use derive_more::Display;
-pub use execution::ExecutionStateView;
 use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
@@ -42,23 +36,31 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, views::ViewError};
-pub use policy::ResourceControlPolicy;
-pub use resources::{ResourceController, ResourceTracker};
 use serde::{Deserialize, Serialize};
-pub use system::{
-    SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery,
-    SystemResponse,
-};
 use thiserror::Error;
-#[cfg(all(with_testing, any(with_wasmer, with_wasmtime)))]
-pub use wasm::test as wasm_test;
+
+#[cfg(with_testing)]
+pub use crate::applications::ApplicationRegistry;
+#[cfg(all(with_testing, with_wasm_runtime))]
+pub use crate::wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
-pub use wasm::{
+pub use crate::wasm::{
     ContractEntrypoints, ContractSystemApi, ServiceEntrypoints, ServiceSystemApi, SystemApiData,
     ViewSystemApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
-
-pub use crate::runtime::{ContractSyncRuntime, ServiceSyncRuntime};
+pub use crate::{
+    applications::{
+        ApplicationRegistryView, BytecodeLocation, UserApplicationDescription, UserApplicationId,
+    },
+    execution::ExecutionStateView,
+    policy::ResourceControlPolicy,
+    resources::{ResourceController, ResourceTracker},
+    runtime::{ContractSyncRuntime, ServiceSyncRuntime},
+    system::{
+        SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation,
+        SystemQuery, SystemResponse,
+    },
+};
 
 /// An implementation of [`UserContractModule`].
 pub type UserContractCode = Arc<dyn UserContractModule + Send + Sync + 'static>;

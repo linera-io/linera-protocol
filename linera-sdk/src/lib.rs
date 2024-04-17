@@ -37,6 +37,9 @@
 
 #![deny(missing_docs)]
 
+#[macro_use]
+pub mod util;
+
 pub mod abis;
 pub mod base;
 pub mod contract;
@@ -50,7 +53,6 @@ pub mod service;
 #[cfg_attr(not(target_arch = "wasm32"), path = "./test/integration/mod.rs")]
 #[cfg_attr(target_arch = "wasm32", path = "./test/unit/mod.rs")]
 pub mod test;
-pub mod util;
 pub mod views;
 
 use std::{error::Error, fmt::Debug};
@@ -63,8 +65,6 @@ pub use linera_base::{
     ensure,
 };
 use serde::{de::DeserializeOwned, Serialize};
-#[doc(hidden)]
-pub use wit_bindgen_guest_rust;
 
 use self::contract::ContractStateStorage;
 #[cfg(not(target_arch = "wasm32"))]
