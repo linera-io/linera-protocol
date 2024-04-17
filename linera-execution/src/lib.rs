@@ -41,7 +41,7 @@ use thiserror::Error;
 
 #[cfg(with_testing)]
 pub use crate::applications::ApplicationRegistry;
-#[cfg(all(with_testing, any(with_wasmer, with_wasmtime)))]
+#[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
 pub use crate::wasm::{
