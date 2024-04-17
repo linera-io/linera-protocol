@@ -13,7 +13,7 @@ use linera_views::{
 
 const MESSAGE: &str = "Attempt to call a contract system API when not running as a Wasm guest";
 
-/// A type to interface with the key value storage provided to applications.
+/// A type to interface with the key-value storage provided to applications.
 #[derive(Default, Clone)]
 pub struct AppStateStore;
 
