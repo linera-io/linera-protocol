@@ -4,6 +4,7 @@
 
 //! This module defines the core Linera protocol.
 
+pub mod chain_worker;
 pub mod client;
 pub mod data_types;
 pub mod local_node;
