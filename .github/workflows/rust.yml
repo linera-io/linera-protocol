@@ -197,6 +197,7 @@ jobs:
         cargo doc --locked --all-features
     - name: Run cargo check-all-features
       run: |
+        cargo check-all-features
         cargo check-all-features --all-targets
     - name: Restore `rust-toolchain.toml` file
       if: '!cancelled()'
