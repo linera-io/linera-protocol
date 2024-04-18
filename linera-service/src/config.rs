@@ -158,11 +158,7 @@ impl WalletState {
         genesis_config: GenesisConfig,
         testing_prng_seed: Option<u64>,
     ) -> Result<Self, anyhow::Error> {
-        let file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .read(true)
-            .open(path)?;
+        let file = Self::open_options().read(true).open(path)?;
         let file_lock = FileLock::new(file, path)?;
         let mut reader = BufReader::new(&file_lock.file);
         if reader.fill_buf()?.is_empty() {
@@ -193,7 +189,7 @@ impl WalletState {
     pub fn write(&mut self) -> Result<(), anyhow::Error> {
         let mut temp_file_path = self.wallet_path.clone();
         temp_file_path.set_extension("json.bak");
-        let backup_file = File::create(&temp_file_path)?;
+        let backup_file = Self::open_options().open(&temp_file_path)?;
         let mut temp_file_writer = BufWriter::new(backup_file);
         if let Err(e) = serde_json::to_writer_pretty(&mut temp_file_writer, &self.inner) {
             fs_err::remove_file(&temp_file_path)?;
@@ -205,6 +201,17 @@ impl WalletState {
         }
         fs_err::rename(&temp_file_path, &self.wallet_path)?;
         Ok(())
+    }
+
+    /// Returns options for opening and writing to the wallet file, creating it if it doesn't
+    /// exist. On Unix, this restricts read and write permissions to the current user.
+    // TODO(#1924): Implement better key management.
+    fn open_options() -> OpenOptions {
+        let mut options = OpenOptions::new();
+        #[cfg(target_family = "unix")]
+        fs_err::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        options.create(true).write(true);
+        options
     }
 }
 
