@@ -7,13 +7,8 @@
 //! between the Linera protocol (compiled from Rust to native code) and Linera
 //! applications (compiled from Rust to Wasm).
 
-#[cfg(not(web))]
-pub use std::time;
-
 #[doc(hidden)]
 pub use async_trait::async_trait;
-#[cfg(web)]
-pub use web_time as time;
 
 pub mod abi;
 #[cfg(not(target_arch = "wasm32"))]
@@ -32,6 +27,15 @@ mod unit_tests;
 pub use graphql::BcsHexParseError;
 #[doc(hidden)]
 pub use {async_graphql, bcs, hex};
+
+cfg_if::cfg_if! {
+    if #[cfg(web)] {
+        #[cfg(web)]
+        pub use web_time as time;
+    } else {
+        pub use std::time;
+    }
+}
 
 /// A macro for asserting that a condition is true, returning an error if it is not.
 ///

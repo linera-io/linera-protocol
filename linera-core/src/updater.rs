@@ -20,16 +20,20 @@ use linera_execution::committee::{Committee, ValidatorName};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use thiserror::Error;
-#[cfg(not(web))]
-use tokio::time::timeout;
 use tracing::{error, warn};
-#[cfg(web)]
-use wasmtimer::tokio::timeout;
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, LocalValidatorNode, NodeError},
 };
+
+cfg_if::cfg_if! {
+    if #[cfg(web)] {
+        use wasmtimer::tokio::timeout;
+    } else {
+        use tokio::time::timeout;
+    }
+}
 
 /// The amount of time we wait for additional validators to contribute to the result, as a fraction
 /// of how long it took to reach a quorum.
