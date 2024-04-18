@@ -7,8 +7,13 @@
 //! between the Linera protocol (compiled from Rust to native code) and Linera
 //! applications (compiled from Rust to Wasm).
 
+#[cfg(not(web))]
+pub use std::time;
+
 #[doc(hidden)]
 pub use async_trait::async_trait;
+#[cfg(web)]
+pub use web_time as time;
 
 pub mod abi;
 #[cfg(not(target_arch = "wasm32"))]

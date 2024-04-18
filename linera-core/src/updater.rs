@@ -7,20 +7,24 @@ use std::{
     fmt,
     hash::Hash,
     ops::Range,
-    time::{Duration, Instant},
 };
 
 use futures::{future, Future, StreamExt};
 use linera_base::{
     data_types::{BlockHeight, Round},
     identifiers::ChainId,
+    time::{Duration, Instant},
 };
 use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
 use linera_execution::committee::{Committee, ValidatorName};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use thiserror::Error;
+#[cfg(not(web))]
+use tokio::time::timeout;
 use tracing::{error, warn};
+#[cfg(web)]
+use wasmtimer::tokio::timeout;
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
@@ -111,7 +115,7 @@ where
     let mut value_scores = HashMap::new();
     let mut error_scores = HashMap::new();
 
-    while let Ok(Some((name, result))) = tokio::time::timeout(
+    while let Ok(Some((name, result))) = timeout(
         end_time.map_or(MAX_TIMEOUT, |t| t.saturating_duration_since(Instant::now())),
         responses.next(),
     )

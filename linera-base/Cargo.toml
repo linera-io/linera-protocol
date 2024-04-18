@@ -13,7 +13,7 @@ edition = "2021"
 [features]
 test = ["test-strategy", "proptest"]
 metrics = ["prometheus"]
-web = ["getrandom/js", "rand/getrandom", "rand/std", "rand/std_rng"]
+web = ["getrandom/js", "rand/getrandom", "rand/std", "rand/std_rng", "web-time"]
 
 [dependencies]
 anyhow.workspace = true
@@ -35,6 +35,7 @@ serde_bytes.workspace = true
 sha3.workspace = true
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
+web-time = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono.workspace = true
