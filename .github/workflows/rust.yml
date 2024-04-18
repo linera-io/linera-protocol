@@ -45,7 +45,7 @@ jobs:
     - uses: foundry-rs/foundry-toolchain@v1
     - uses: pontem-network/get-solc@master
       with:
-        version: v0.8.15
+        version: v0.8.25
     - name: Clear up some space
       run: |
         sudo rm -rf /usr/share/dotnet

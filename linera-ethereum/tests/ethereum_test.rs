@@ -43,6 +43,7 @@ async fn test_contract() -> anyhow::Result<()> {
         .compile_source(source)
         .expect("Could not compile contracts");
 
+    let contracts = compiled.contracts_iter().map(|x| x.0).collect::<Vec<_>>();
     // 2. Access to the contract that interests us
     let (abi, bytecode, _runtime_bytecode) = compiled
         .find("SimpleToken")
