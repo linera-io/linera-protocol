@@ -442,24 +442,10 @@ where
         &mut self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
-        let chain_actor = ChainWorkerActor::spawn(
-            self.chain_worker_config.clone(),
-            self.storage.clone(),
-            self.recent_hashed_certificate_values.clone(),
-            self.recent_hashed_blobs.clone(),
-            block.chain_id,
-            &mut *self.chain_worker_tasks.lock().await,
-        )
-        .await?;
-        let (callback, response) = oneshot::channel();
-
-        chain_actor
-            .send(ChainWorkerRequest::StageBlockExecution { block, callback })
-            .expect("`ChainWorkerActor` stopped executing unexpectedly");
-
-        response
-            .await
-            .expect("`ChainWorkerActor` stopped executing without responding")
+        self.query_chain_worker(block.chain_id, move |callback| {
+            ChainWorkerRequest::StageBlockExecution { block, callback }
+        })
+        .await
     }
 
     // Schedule a notification when cross-chain messages are delivered up to the given height.
@@ -500,24 +486,10 @@ where
         chain_id: ChainId,
         query: Query,
     ) -> Result<Response, WorkerError> {
-        let chain_actor = ChainWorkerActor::spawn(
-            self.chain_worker_config.clone(),
-            self.storage.clone(),
-            self.recent_hashed_certificate_values.clone(),
-            self.recent_hashed_blobs.clone(),
-            chain_id,
-            &mut *self.chain_worker_tasks.lock().await,
-        )
-        .await?;
-        let (callback, response) = oneshot::channel();
-
-        chain_actor
-            .send(ChainWorkerRequest::QueryApplication { query, callback })
-            .expect("`ChainWorkerActor` stopped executing unexpectedly");
-
-        response
-            .await
-            .expect("`ChainWorkerActor` stopped executing without responding")
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::QueryApplication { query, callback }
+        })
+        .await
     }
 
     #[cfg(with_testing)]
@@ -726,6 +698,34 @@ where
             chain_id,
         )
         .await
+    }
+
+    /// Sends a request to the [`ChainWorker`] for a [`ChainId`] and waits for the `Response`.
+    async fn query_chain_worker<Response>(
+        &self,
+        chain_id: ChainId,
+        request_builder: impl FnOnce(
+            oneshot::Sender<Result<Response, WorkerError>>,
+        ) -> ChainWorkerRequest,
+    ) -> Result<Response, WorkerError> {
+        let chain_actor = ChainWorkerActor::spawn(
+            self.chain_worker_config.clone(),
+            self.storage.clone(),
+            self.recent_hashed_certificate_values.clone(),
+            self.recent_hashed_blobs.clone(),
+            chain_id,
+            &mut *self.chain_worker_tasks.lock().await,
+        )
+        .await?;
+        let (callback, response) = oneshot::channel();
+
+        chain_actor
+            .send(request_builder(callback))
+            .expect("`ChainWorkerActor` stopped executing unexpectedly");
+
+        response
+            .await
+            .expect("`ChainWorkerActor` stopped executing without responding")
     }
 }
 
