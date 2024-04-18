@@ -4,7 +4,6 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     slice::SliceIndex,
-    str::FromStr,
     sync::Arc,
 };
 
@@ -326,16 +325,31 @@ where
 {
     type Node = LocalValidatorClient<S>;
 
-    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
-        let name = ValidatorName::from_str(address).unwrap();
-        let client = self
-            .0
-            .get(&name)
-            .ok_or_else(|| NodeError::CannotResolveValidatorAddress {
-                address: address.to_string(),
-            })?
-            .clone();
-        Ok(LocalValidatorClient { name, client })
+    fn make_node(&self, _: &str) -> Result<Self::Node, NodeError> {
+        unimplemented!()
+    }
+
+    fn make_nodes_from_list<I, A>(
+        &self,
+        validators: impl IntoIterator<Item = (ValidatorName, A)>,
+    ) -> Result<I, NodeError>
+    where
+        I: FromIterator<(ValidatorName, Self::Node)>,
+        A: AsRef<str>,
+    {
+        validators
+            .into_iter()
+            .map(|(name, address)| {
+                let client = self
+                    .0
+                    .get(&name)
+                    .ok_or_else(|| NodeError::CannotResolveValidatorAddress {
+                        address: address.as_ref().to_string(),
+                    })?
+                    .clone();
+                Ok((name, LocalValidatorClient { name, client }))
+            })
+            .collect()
     }
 }
 
@@ -547,6 +561,37 @@ where
             .await
     }
 
+    pub fn genesis_chains(&self) -> Vec<(PublicKey, Amount)> {
+        let mut result = Vec::new();
+        for (i, genesis_account) in self.genesis_storage_builder.accounts.iter().enumerate() {
+            assert_eq!(
+                genesis_account.description,
+                ChainDescription::Root(i as u32)
+            );
+            result.push((genesis_account.public_key, genesis_account.balance));
+        }
+        result
+    }
+
+    pub fn admin_id(&self) -> ChainId {
+        self.admin_id
+    }
+
+    pub fn make_node_provider(&self) -> NodeProvider<B::Storage> {
+        self.validator_clients.iter().cloned().collect()
+    }
+
+    pub async fn make_storage(&mut self) -> anyhow::Result<B::Storage> {
+        Ok(self
+            .genesis_storage_builder
+            .build(
+                self.storage_builder.build().await?,
+                self.initial_committee.clone(),
+                self.admin_id,
+            )
+            .await)
+    }
+
     pub async fn make_client(
         &mut self,
         chain_id: ChainId,
@@ -556,16 +601,9 @@ where
     ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
-        let storage = self
-            .genesis_storage_builder
-            .build(
-                self.storage_builder.build().await?,
-                self.initial_committee.clone(),
-                self.admin_id,
-            )
-            .await;
+        let storage = self.make_storage().await?;
         self.chain_client_storages.push(storage.clone());
-        let provider = self.validator_clients.iter().cloned().collect();
+        let provider = self.make_node_provider();
         let builder = ChainClientBuilder::new(provider, 10, CrossChainMessageDelivery::NonBlocking);
         Ok(builder.build(
             chain_id,
