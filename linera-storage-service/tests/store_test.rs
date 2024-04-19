@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_storage_service::{
-    child::{get_free_port, StorageService},
+    child::{get_free_endpoint, StorageService},
     client::{create_service_test_store, service_config_from_endpoint, ServiceStoreClient},
 };
 use linera_views::{
@@ -23,7 +23,7 @@ fn get_storage_service_guard(endpoint: &str) -> StorageService {
 
 #[tokio::test]
 async fn test_reads_service_store() {
-    let endpoint = get_free_port().await.unwrap();
+    let endpoint = get_free_endpoint().await.unwrap();
     for scenario in get_random_test_scenarios() {
         let _guard = get_storage_service_guard(&endpoint).run().await;
         let key_value_store = create_service_test_store(&endpoint).await.unwrap();
@@ -33,7 +33,7 @@ async fn test_reads_service_store() {
 
 #[tokio::test]
 async fn test_service_store_writes_from_blank() {
-    let endpoint = get_free_port().await.unwrap();
+    let endpoint = get_free_endpoint().await.unwrap();
     let _guard = get_storage_service_guard(&endpoint).run().await;
     let key_value_store = create_service_test_store(&endpoint).await.unwrap();
     run_writes_from_blank(&key_value_store).await;
@@ -41,7 +41,7 @@ async fn test_service_store_writes_from_blank() {
 
 #[tokio::test]
 async fn test_service_store_writes_from_state() {
-    let endpoint = get_free_port().await.unwrap();
+    let endpoint = get_free_endpoint().await.unwrap();
     let _guard = get_storage_service_guard(&endpoint).run().await;
     let key_value_store = create_service_test_store(&endpoint).await.unwrap();
     run_writes_from_state(&key_value_store).await;
@@ -49,7 +49,7 @@ async fn test_service_store_writes_from_state() {
 
 #[tokio::test]
 async fn test_service_admin() {
-    let endpoint = get_free_port().await.unwrap();
+    let endpoint = get_free_endpoint().await.unwrap();
     let _guard = get_storage_service_guard(&endpoint).run().await;
     let config = service_config_from_endpoint(&endpoint).expect("config");
     admin_test::<ServiceStoreClient>(&config).await;
@@ -57,7 +57,7 @@ async fn test_service_admin() {
 
 #[tokio::test]
 async fn test_service_big_raw_write() {
-    let endpoint = get_free_port().await.unwrap();
+    let endpoint = get_free_endpoint().await.unwrap();
     let _guard = get_storage_service_guard(&endpoint).run().await;
     let key_value_store = create_service_test_store(&endpoint).await.unwrap();
     let n = 5000000;

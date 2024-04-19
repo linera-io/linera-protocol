@@ -46,7 +46,7 @@ use {
 use {
     linera_storage::ServiceStorage,
     linera_storage_service::{
-        child::{StorageService, StorageServiceGuard},
+        child::{get_free_endpoint, StorageService, StorageServiceGuard},
         client::service_config_from_endpoint,
         common::get_service_storage_binary,
     },
@@ -801,9 +801,7 @@ impl ServiceStorageBuilder {
     /// Creates a `ServiceStorage` with the given Wasm runtime.
     pub async fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         let _guard = None;
-        let endpoint = linera_storage_service::child::get_free_port()
-            .await
-            .unwrap();
+        let endpoint = get_free_endpoint().await.unwrap();
         let clock = TestClock::default();
         let namespace = generate_test_namespace();
         let use_child = true;
