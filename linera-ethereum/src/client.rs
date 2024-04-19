@@ -12,7 +12,7 @@ use ethers_middleware::Middleware;
 
 use crate::common::EthereumServiceError;
 
-pub async fn get_accounts_node(url: &str) -> Result<Vec<String>, EthereumServiceError> {
+pub async fn get_accounts(url: &str) -> Result<Vec<String>, EthereumServiceError> {
     let provider = Provider::<Http>::try_from(url)?;
     Ok(provider
         .get_accounts()
@@ -22,13 +22,13 @@ pub async fn get_accounts_node(url: &str) -> Result<Vec<String>, EthereumService
         .collect::<Vec<_>>())
 }
 
-pub async fn get_block_number_node(url: &str) -> Result<u64, EthereumServiceError> {
+pub async fn get_block_number(url: &str) -> Result<u64, EthereumServiceError> {
     let provider = Provider::<Http>::try_from(url)?;
     let block_number = provider.get_block_number().await?;
     Ok(block_number.as_u64())
 }
 
-pub async fn get_balance_node(
+pub async fn get_balance(
     url: &str,
     address: &str,
     block_nr: Option<u64>,

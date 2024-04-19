@@ -10,7 +10,7 @@ use ethers::{
     types::U256,
 };
 use linera_ethereum::{
-    client::{get_accounts_node, get_balance_node, get_block_number_node},
+    client::{get_accounts, get_balance, get_block_number},
     test_utils::get_anvil,
 };
 
@@ -24,13 +24,11 @@ abigen!(
 async fn test_get_accounts_balance() {
     let anvil_test = get_anvil().await.unwrap();
     let url = anvil_test.endpoint;
-    let addresses = get_accounts_node(&url).await.unwrap();
-    let block_nr = get_block_number_node(&url).await.unwrap();
+    let addresses = get_accounts(&url).await.unwrap();
+    let block_nr = get_block_number(&url).await.unwrap();
     let target_balance = U256::from_dec_str("10000000000000000000000").unwrap();
     for address in addresses {
-        let balance = get_balance_node(&url, &address, Some(block_nr))
-            .await
-            .unwrap();
+        let balance = get_balance(&url, &address, Some(block_nr)).await.unwrap();
         assert_eq!(balance, target_balance.0);
     }
 }
@@ -43,7 +41,6 @@ async fn test_contract() -> anyhow::Result<()> {
         .compile_source(source)
         .expect("Could not compile contracts");
 
-    let contracts = compiled.contracts_iter().map(|x| x.0).collect::<Vec<_>>();
     // 2. Access to the contract that interests us
     let (abi, bytecode, _runtime_bytecode) = compiled
         .find("SimpleToken")

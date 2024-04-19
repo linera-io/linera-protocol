@@ -1,6 +1,6 @@
 <!-- cargo-rdme start -->
 
-This module provides functionalities for accessing an ethereum blockchain node.
+This module provides functionalities for accessing an Ethereum blockchain node.
 
 <!-- cargo-rdme end -->
 
