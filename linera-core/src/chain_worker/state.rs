@@ -12,6 +12,7 @@ use linera_execution::{Query, Response, UserApplicationDescription, UserApplicat
 use linera_storage::Storage;
 use linera_views::views::{RootView, View, ViewError};
 
+use super::ChainWorkerConfig;
 use crate::{data_types::ChainInfoResponse, worker::WorkerError};
 
 /// The state of the chain worker.
@@ -20,6 +21,7 @@ where
     StorageClient: Storage + Send + Sync + 'static,
     ViewError: From<StorageClient::ContextError>,
 {
+    config: ChainWorkerConfig,
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     knows_chain_is_active: bool,
@@ -31,10 +33,15 @@ where
     ViewError: From<StorageClient::ContextError>,
 {
     /// Creates a new [`ChainWorkerState`] using the provided `storage` client.
-    pub async fn new(storage: StorageClient, chain_id: ChainId) -> Result<Self, WorkerError> {
+    pub async fn new(
+        config: ChainWorkerConfig,
+        storage: StorageClient,
+        chain_id: ChainId,
+    ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 
         Ok(ChainWorkerState {
+            config,
             storage,
             chain,
             knows_chain_is_active: false,
