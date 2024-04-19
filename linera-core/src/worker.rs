@@ -887,14 +887,14 @@ where
 
     async fn process_cross_chain_update(
         &mut self,
-        origin: &Origin,
+        origin: Origin,
         recipient: ChainId,
         bundles: Vec<MessageBundle>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         let mut chain = self.storage.load_chain(recipient).await?;
         // Only process certificates with relevant heights and epochs.
-        let next_height_to_receive = chain.next_block_height_to_receive(origin).await?;
-        let last_anticipated_block_height = chain.last_anticipated_block_height(origin).await?;
+        let next_height_to_receive = chain.next_block_height_to_receive(&origin).await?;
+        let last_anticipated_block_height = chain.last_anticipated_block_height(&origin).await?;
         let helper = CrossChainUpdateHelper {
             allow_messages_from_deprecated_epochs: self
                 .chain_worker_config
@@ -903,7 +903,7 @@ where
             committees: chain.execution_state.system.committees.get(),
         };
         let bundles = helper.select_message_bundles(
-            origin,
+            &origin,
             recipient,
             next_height_to_receive,
             last_anticipated_block_height,
@@ -917,7 +917,7 @@ where
         for bundle in bundles {
             // Update the staged chain state with the received block.
             chain
-                .receive_message_bundle(origin, bundle, local_time)
+                .receive_message_bundle(&origin, bundle, local_time)
                 .await?
         }
         if !self.chain_worker_config.allow_inactive_chains && !chain.is_active() {
@@ -1388,7 +1388,7 @@ where
                 for (medium, bundles) in bundle_vecs {
                     let origin = Origin { sender, medium };
                     if let Some(height) = self
-                        .process_cross_chain_update(&origin, recipient, bundles)
+                        .process_cross_chain_update(origin.clone(), recipient, bundles)
                         .await?
                     {
                         height_by_origin.push((origin, height));
