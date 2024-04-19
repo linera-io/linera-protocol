@@ -1551,7 +1551,7 @@ where
 
                 for (medium, height) in latest_heights {
                     let target = Target { recipient, medium };
-                    let fully_delivered = chain.mark_messages_as_received(target, height).await?
+                    let fully_delivered = chain.mark_messages_as_received(&target, height).await?
                         && chain.all_messages_delivered_up_to(height);
 
                     if fully_delivered && height > height_with_fully_delivered_messages {
