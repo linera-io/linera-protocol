@@ -15,7 +15,10 @@ use linera_execution::{
     Query, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
-use linera_views::views::{RootView, View, ViewError};
+use linera_views::{
+    common::Context,
+    views::{RootView, View, ViewError},
+};
 use tracing::{debug, warn};
 
 use super::ChainWorkerConfig;
@@ -118,13 +121,7 @@ where
         let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
         let last_anticipated_block_height =
             self.chain.last_anticipated_block_height(&origin).await?;
-        let helper = CrossChainUpdateHelper {
-            allow_messages_from_deprecated_epochs: self
-                .config
-                .allow_messages_from_deprecated_epochs,
-            current_epoch: *self.chain.execution_state.system.epoch.get(),
-            committees: self.chain.execution_state.system.committees.get(),
-        };
+        let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
         let recipient = self.chain_id();
         let bundles = helper.select_message_bundles(
             &origin,
@@ -201,6 +198,19 @@ pub(crate) struct CrossChainUpdateHelper<'a> {
 }
 
 impl<'a> CrossChainUpdateHelper<'a> {
+    /// Creates a new [`CrossChainUpdateHelper`].
+    pub fn new<C>(config: &ChainWorkerConfig, chain: &'a ChainStateView<C>) -> Self
+    where
+        C: Context + Clone + Send + Sync + 'static,
+        ViewError: From<C::Error>,
+    {
+        CrossChainUpdateHelper {
+            allow_messages_from_deprecated_epochs: config.allow_messages_from_deprecated_epochs,
+            current_epoch: *chain.execution_state.system.epoch.get(),
+            committees: chain.execution_state.system.committees.get(),
+        }
+    }
+
     /// Checks basic invariants and deals with repeated heights and deprecated epochs.
     /// * Returns a range of message bundles that are both new to us and not relying on
     /// an untrusted set of validators.
