@@ -43,7 +43,6 @@ use tracing::{error, instrument, trace, warn};
 use {
     linera_base::identifiers::{BytecodeId, Destination, MessageId},
     linera_chain::data_types::ChannelFullName,
-    linera_execution::ApplicationRegistryView,
 };
 #[cfg(with_metrics)]
 use {
@@ -1032,21 +1031,6 @@ where
             .await?
             .read_certificate(height)
             .await
-    }
-
-    /// Returns the application registry for a specific chain.
-    ///
-    /// # Notes
-    ///
-    /// The returned [`ApplicationRegistryView`] holds a lock of the chain it belongs to. Incorrect
-    /// usage of this method may cause deadlocks.
-    #[cfg(with_testing)]
-    pub async fn load_application_registry(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<ApplicationRegistryView<StorageClient::Context>, WorkerError> {
-        let chain = self.storage.load_active_chain(chain_id).await?;
-        Ok(chain.execution_state.system.registry)
     }
 
     /// Returns an [`IncomingMessage`] that's awaiting to be received by the chain specified by
