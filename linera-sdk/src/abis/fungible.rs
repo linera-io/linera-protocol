@@ -107,6 +107,7 @@ impl Parameters {
     SimpleObject,
     InputObject,
 )]
+#[graphql(input_name = "FungibleAccount")]
 pub struct Account {
     /// Chain ID of the account
     pub chain_id: ChainId,
