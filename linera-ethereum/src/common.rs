@@ -17,7 +17,7 @@ pub enum EthereumServiceError {
     #[error("Json error occurred")]
     JsonError,
 
-    /// Url Pare error
+    /// URL parsing error
     #[error(transparent)]
     UrlParseError(#[from] url::ParseError),
 
