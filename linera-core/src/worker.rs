@@ -998,7 +998,6 @@ where
         let next_height_to_receive = chain.next_block_height_to_receive(origin).await?;
         let last_anticipated_block_height = chain.last_anticipated_block_height(origin).await?;
         let helper = CrossChainUpdateHelper {
-            nickname: &self.nickname,
             allow_messages_from_deprecated_epochs: self.allow_messages_from_deprecated_epochs,
             current_epoch: *chain.execution_state.system.epoch.get(),
             committees: chain.execution_state.system.committees.get(),
@@ -1582,7 +1581,6 @@ where
 }
 
 struct CrossChainUpdateHelper<'a> {
-    nickname: &'a str,
     allow_messages_from_deprecated_epochs: bool,
     current_epoch: Option<Epoch>,
     committees: &'a BTreeMap<Epoch, Committee>,
@@ -1632,16 +1630,16 @@ impl<'a> CrossChainUpdateHelper<'a> {
         if skipped_len > 0 {
             let sample_bundle = &bundles[skipped_len - 1];
             debug!(
-                "[{}] Ignoring repeated messages to {recipient:?} from {origin:?} at height {}",
-                self.nickname, sample_bundle.height,
+                "Ignoring repeated messages to {recipient:?} from {origin:?} at height {}",
+                sample_bundle.height,
             );
         }
         if skipped_len < bundles.len() && trusted_len < bundles.len() {
             let sample_bundle = &bundles[trusted_len];
             warn!(
-                "[{}] Refusing messages to {recipient:?} from {origin:?} at height {} \
+                "Refusing messages to {recipient:?} from {origin:?} at height {} \
                  because the epoch {:?} is not trusted any more",
-                self.nickname, sample_bundle.height, sample_bundle.epoch,
+                sample_bundle.height, sample_bundle.epoch,
             );
         }
         let certificates = if skipped_len < trusted_len {
