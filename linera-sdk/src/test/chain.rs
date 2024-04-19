@@ -361,16 +361,10 @@ impl ActiveChain {
         &self,
         bytecode_id: BytecodeId<Abi, Parameters, InstantiationArgument>,
     ) -> bool {
-        let applications = self
-            .validator
+        self.validator
             .worker()
             .await
-            .load_application_registry(self.id())
-            .await
-            .expect("Failed to load application registry");
-
-        applications
-            .bytecode_location_for(&bytecode_id.forget_abi())
+            .read_bytecode_location(self.id(), bytecode_id.forget_abi())
             .await
             .expect("Failed to check known bytecode locations")
             .is_none()
