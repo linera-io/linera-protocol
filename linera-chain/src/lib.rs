@@ -149,4 +149,6 @@ pub enum ChainExecutionContext {
     IncomingMessage(u32),
     Operation(u32),
     Block,
+    #[cfg(with_testing)]
+    ReadBytecodeLocation,
 }
