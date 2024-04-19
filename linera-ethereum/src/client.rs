@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use ethers::{
     prelude::{Http, Provider},
-    types::Log,
+    types::{Log, U256},
 };
 use ethers_core::types::{Address, BlockId, BlockNumber, Filter, U64};
 use ethers_middleware::Middleware;
@@ -32,7 +32,7 @@ pub async fn get_balance(
     url: &str,
     address: &str,
     block_nr: Option<u64>,
-) -> Result<[u64; 4], EthereumServiceError> {
+) -> Result<U256, EthereumServiceError> {
     let provider = Provider::<Http>::try_from(url)?;
     let address = address.parse::<Address>()?;
     let block_nr = match block_nr {
@@ -44,7 +44,7 @@ pub async fn get_balance(
         }
     };
     let balance = provider.get_balance(address, block_nr).await?;
-    Ok(balance.0)
+    Ok(balance)
 }
 
 pub async fn read_events(

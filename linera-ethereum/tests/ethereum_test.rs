@@ -29,7 +29,7 @@ async fn test_get_accounts_balance() {
     let target_balance = U256::from_dec_str("10000000000000000000000").unwrap();
     for address in addresses {
         let balance = get_balance(&url, &address, Some(block_nr)).await.unwrap();
-        assert_eq!(balance, target_balance.0);
+        assert_eq!(balance, target_balance);
     }
 }
 
