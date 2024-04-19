@@ -517,11 +517,6 @@ where
         .await
     }
 
-    /// Gets a reference to the [`KeyPair`], if available.
-    fn key_pair(&self) -> Option<&KeyPair> {
-        self.key_pair.as_ref().map(Arc::as_ref)
-    }
-
     /// Creates an `UpdateRecipient` request that informs the `recipient` about new
     /// cross-chain messages from `sender`.
     async fn create_cross_chain_request(
@@ -1022,6 +1017,13 @@ where
             }
         );
         Ok(())
+    }
+}
+
+impl<StorageClient> WorkerState<StorageClient> {
+    /// Gets a reference to the [`KeyPair`], if available.
+    fn key_pair(&self) -> Option<&KeyPair> {
+        self.key_pair.as_ref().map(Arc::as_ref)
     }
 }
 

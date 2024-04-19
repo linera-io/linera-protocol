@@ -134,7 +134,7 @@ fn make_certificate_with_round<S>(
     value: HashedCertificateValue,
     round: Round,
 ) -> Certificate {
-    let vote = LiteVote::new(value.lite(), round, worker.key_pair.as_ref().unwrap());
+    let vote = LiteVote::new(value.lite(), round, worker.key_pair().unwrap());
     let mut builder = SignatureAggregator::new(value, round, committee);
     builder
         .append(vote.validator, vote.signature)
@@ -1140,7 +1140,7 @@ where
         .into_fast_proposal(&sender_key_pair);
 
     let (chain_info_response, _actions) = worker.handle_block_proposal(block_proposal).await?;
-    chain_info_response.check(ValidatorName(worker.key_pair.unwrap().public()))?;
+    chain_info_response.check(ValidatorName(worker.key_pair().unwrap().public()))?;
     let pending_value = worker
         .storage
         .load_active_chain(ChainId::root(1))
@@ -1189,7 +1189,7 @@ where
         .into_fast_proposal(&sender_key_pair);
 
     let (response, _actions) = worker.handle_block_proposal(block_proposal.clone()).await?;
-    response.check(ValidatorName(worker.key_pair.as_ref().unwrap().public()))?;
+    response.check(ValidatorName(worker.key_pair().unwrap().public()))?;
     let (replay_response, _actions) = worker.handle_block_proposal(block_proposal).await?;
     // Workaround lack of equality.
     assert_eq!(
