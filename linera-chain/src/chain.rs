@@ -29,6 +29,8 @@ use linera_views::{
     views::{CryptoHashView, RootView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
+#[cfg(with_testing)]
+use {linera_base::identifiers::BytecodeId, linera_execution::BytecodeLocation};
 
 use crate::{
     data_types::{
@@ -378,6 +380,23 @@ where
             .await
             .map_err(|error| ChainError::ExecutionError(error, ChainExecutionContext::Query))?;
         Ok(response)
+    }
+
+    /// Reads the [`BytecodeLocation`] for the requested [`BytecodeId`], if it is registered in
+    /// this chain's [`ApplicationRegistryView`][`linera_execution::ApplicationRegistryView`].
+    #[cfg(with_testing)]
+    pub async fn read_bytecode_location(
+        &mut self,
+        bytecode_id: BytecodeId,
+    ) -> Result<Option<BytecodeLocation>, ChainError> {
+        self.execution_state
+            .system
+            .registry
+            .bytecode_location_for(&bytecode_id)
+            .await
+            .map_err(|err| {
+                ChainError::ExecutionError(err.into(), ChainExecutionContext::ReadBytecodeLocation)
+            })
     }
 
     pub async fn describe_application(

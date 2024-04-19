@@ -145,6 +145,8 @@ pub enum ChainError {
 #[derive(Copy, Clone, Debug)]
 pub enum ChainExecutionContext {
     Query,
+    #[cfg(with_testing)]
+    ReadBytecodeLocation,
     DescribeApplication,
     IncomingMessage(u32),
     Operation(u32),
