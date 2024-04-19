@@ -265,6 +265,12 @@ impl ChainInfoResponse {
         Self { info, signature }
     }
 
+    /// Signs the [`ChainInfo`] stored inside this [`ChainInfoResponse`] with the provided
+    /// [`KeyPair`].
+    pub fn sign(&mut self, key_pair: &KeyPair) {
+        self.signature = Some(Signature::new(&*self.info, key_pair));
+    }
+
     pub fn check(&self, name: ValidatorName) -> Result<(), CryptoError> {
         Signature::check_optional_signature(self.signature.as_ref(), &*self.info, name.0)
     }
