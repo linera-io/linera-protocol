@@ -499,7 +499,7 @@ where
             .await
     }
 
-    pub(crate) async fn describe_application(
+    pub async fn describe_application(
         &mut self,
         chain_id: ChainId,
         application_id: UserApplicationId,
