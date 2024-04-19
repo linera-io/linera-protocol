@@ -239,13 +239,12 @@ impl AmmApp {
         input_token_idx: u32,
         input_amount: Amount,
     ) -> Result<Value> {
-        let operation = amm::Operation::Swap {
-            owner,
+        let mutation = format!(
+            "swap(owner: {}, inputTokenIdx: {}, inputAmount: \"{}\")",
+            owner.to_value(),
             input_token_idx,
-            input_amount,
-        };
-
-        let mutation = format!("operation(operation: {})", operation.to_value());
+            input_amount
+        );
         self.0.mutate(mutation).await
     }
 
@@ -255,13 +254,12 @@ impl AmmApp {
         max_token0_amount: Amount,
         max_token1_amount: Amount,
     ) -> Result<Value> {
-        let operation = amm::Operation::AddLiquidity {
-            owner,
+        let mutation = format!(
+            "addLiquidity(owner: {}, maxToken0Amount: \"{}\", maxToken1Amount: \"{}\")",
+            owner.to_value(),
             max_token0_amount,
-            max_token1_amount,
-        };
-
-        let mutation = format!("operation(operation: {})", operation.to_value());
+            max_token1_amount
+        );
         self.0.mutate(mutation).await
     }
 
@@ -271,20 +269,17 @@ impl AmmApp {
         token_to_remove_idx: u32,
         token_to_remove_amount: Amount,
     ) -> Result<Value> {
-        let operation = amm::Operation::RemoveLiquidity {
-            owner,
+        let mutation = format!(
+            "removeLiquidity(owner: {}, tokenToRemoveIdx: {}, tokenToRemoveAmount: \"{}\")",
+            owner.to_value(),
             token_to_remove_idx,
-            token_to_remove_amount,
-        };
-
-        let mutation = format!("operation(operation: {})", operation.to_value());
+            token_to_remove_amount
+        );
         self.0.mutate(mutation).await
     }
 
     async fn remove_all_added_liquidity(&self, owner: AccountOwner) -> Result<Value> {
-        let operation = amm::Operation::RemoveAllAddedLiquidity { owner };
-
-        let mutation = format!("operation(operation: {})", operation.to_value());
+        let mutation = format!("removeAllAddedLiquidity(owner: {})", owner.to_value(),);
         self.0.mutate(mutation).await
     }
 }

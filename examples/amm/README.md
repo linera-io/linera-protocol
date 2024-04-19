@@ -177,14 +177,10 @@ To perform `AddLiquidity` operation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
 mutation {
-  operation(
-    operation: {
-      AddLiquidity: {
-        owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
-        max_token0_amount: "50",
-        max_token1_amount: "50",
-      }
-    }
+  addLiquidity(
+    owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
+    maxToken0Amount: "50",
+    maxToken1Amount: "50",
   )
 }
 ```
@@ -205,14 +201,10 @@ perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID
 mutation {
-  operation(
-    operation: {
-      Swap: {
-        owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
-        input_token_idx: 1,
-        input_amount: "1",
-      }
-    }
+  swap(
+    owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
+    inputTokenIdx: 1,
+    inputAmount: "1",
   )
 }
 ```
@@ -222,14 +214,10 @@ perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
 mutation {
-  operation(
-    operation: {
-      RemoveLiquidity: {
-        owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
-        token_to_remove_idx: 1,
-        token_to_remove_amount: "1",
-      }
-    }
+  removeLiquidity(
+    owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
+    tokenToRemoveIdx: 1,
+    tokenToRemoveAmount: "1",
   )
 }
 ```
@@ -239,12 +227,8 @@ perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
 mutation {
-  operation(
-    operation: {
-      RemoveAllAddedLiquidity: {
-        owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
-      }
-    }
+  removeAllAddedLiquidity(
+    owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
   )
 }
 ```
