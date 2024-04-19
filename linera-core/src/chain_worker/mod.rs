@@ -3,6 +3,7 @@
 
 //! A worker to handle a single chain.
 
+mod config;
 mod state;
 
-pub use self::state::ChainWorkerState;
+pub use self::{config::ChainWorkerConfig, state::ChainWorkerState};

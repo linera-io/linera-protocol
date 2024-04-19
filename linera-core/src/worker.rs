@@ -52,7 +52,7 @@ use {
 };
 
 use crate::{
-    chain_worker::ChainWorkerState,
+    chain_worker::{ChainWorkerConfig, ChainWorkerState},
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
 };
@@ -279,10 +279,8 @@ pub struct WorkerState<StorageClient> {
     key_pair: Option<Arc<KeyPair>>,
     /// Access to local persistent storage.
     storage: StorageClient,
-    /// Whether inactive chains are allowed in storage.
-    allow_inactive_chains: bool,
-    /// Whether new messages from deprecated epochs are allowed.
-    allow_messages_from_deprecated_epochs: bool,
+    /// Configuration options for the [`ChainWorker`]s.
+    chain_worker_config: ChainWorkerConfig,
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
     grace_period: Duration,
@@ -304,8 +302,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             nickname,
             key_pair: key_pair.map(Arc::new),
             storage,
-            allow_inactive_chains: false,
-            allow_messages_from_deprecated_epochs: false,
+            chain_worker_config: ChainWorkerConfig::default(),
             grace_period: Duration::ZERO,
             recent_hashed_certificate_values: Arc::new(ValueCache::default()),
             recent_hashed_blobs: Arc::new(ValueCache::default()),
@@ -324,8 +321,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             nickname,
             key_pair: None,
             storage,
-            allow_inactive_chains: false,
-            allow_messages_from_deprecated_epochs: false,
+            chain_worker_config: ChainWorkerConfig::default(),
             grace_period: Duration::ZERO,
             recent_hashed_certificate_values,
             recent_hashed_blobs,
@@ -334,12 +330,13 @@ impl<StorageClient> WorkerState<StorageClient> {
     }
 
     pub fn with_allow_inactive_chains(mut self, value: bool) -> Self {
-        self.allow_inactive_chains = value;
+        self.chain_worker_config.allow_inactive_chains = value;
         self
     }
 
     pub fn with_allow_messages_from_deprecated_epochs(mut self, value: bool) -> Self {
-        self.allow_messages_from_deprecated_epochs = value;
+        self.chain_worker_config
+            .allow_messages_from_deprecated_epochs = value;
         self
     }
 
@@ -998,7 +995,9 @@ where
         let next_height_to_receive = chain.next_block_height_to_receive(origin).await?;
         let last_anticipated_block_height = chain.last_anticipated_block_height(origin).await?;
         let helper = CrossChainUpdateHelper {
-            allow_messages_from_deprecated_epochs: self.allow_messages_from_deprecated_epochs,
+            allow_messages_from_deprecated_epochs: self
+                .chain_worker_config
+                .allow_messages_from_deprecated_epochs,
             current_epoch: *chain.execution_state.system.epoch.get(),
             committees: chain.execution_state.system.committees.get(),
         };
@@ -1020,7 +1019,7 @@ where
                 .receive_message_bundle(origin, bundle, local_time)
                 .await?
         }
-        if !self.allow_inactive_chains && !chain.is_active() {
+        if !self.chain_worker_config.allow_inactive_chains && !chain.is_active() {
             // Refuse to create a chain state if the chain is still inactive by
             // now. Accordingly, do not send a confirmation, so that the
             // cross-chain update is retried later.
@@ -1157,7 +1156,12 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<ChainWorkerState<StorageClient>, WorkerError> {
-        ChainWorkerState::load(self.storage.clone(), chain_id).await
+        ChainWorkerState::load(
+            self.chain_worker_config.clone(),
+            self.storage.clone(),
+            chain_id,
+        )
+        .await
     }
 }
 
