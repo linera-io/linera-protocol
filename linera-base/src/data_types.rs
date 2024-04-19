@@ -4,10 +4,7 @@
 
 //! Core data-types used in the Linera protocol.
 
-use std::{
-    fmt,
-    time::{Duration, SystemTime},
-};
+use std::fmt;
 
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
@@ -16,6 +13,7 @@ use thiserror::Error;
 use crate::{
     doc_scalar,
     identifiers::{ApplicationId, Destination, GenericApplicationId},
+    time::{Duration, SystemTime},
 };
 
 /// A non-negative amount of tokens.

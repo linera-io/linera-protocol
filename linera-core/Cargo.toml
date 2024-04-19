@@ -43,6 +43,7 @@ web = [
     "linera-execution/web",
     "linera-storage/web",
     "linera-views/web",
+    "wasmtimer",
 ]
 
 [dependencies]
@@ -50,6 +51,7 @@ anyhow = { workspace = true, optional = true }
 async-graphql.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
+cfg-if.workspace = true
 clap.workspace = true
 dashmap.workspace = true
 futures.workspace = true
@@ -74,6 +76,7 @@ tokio-stream.workspace = true
 tonic.workspace = true
 tracing.workspace = true
 trait-variant.workspace = true
+wasmtimer = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 linera-storage-service.workspace = true

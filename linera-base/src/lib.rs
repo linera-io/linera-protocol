@@ -28,6 +28,15 @@ pub use graphql::BcsHexParseError;
 #[doc(hidden)]
 pub use {async_graphql, bcs, hex};
 
+cfg_if::cfg_if! {
+    if #[cfg(web)] {
+        #[cfg(web)]
+        pub use web_time as time;
+    } else {
+        pub use std::time;
+    }
+}
+
 /// A macro for asserting that a condition is true, returning an error if it is not.
 ///
 /// # Examples
