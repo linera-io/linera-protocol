@@ -8,8 +8,10 @@ mod state;
 use std::sync::Arc;
 
 use amm::{AmmError, Operation, Parameters};
-use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, ViewStateStorage};
+use async_graphql::{EmptySubscription, Request, Response, Schema};
+use linera_sdk::{
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, Service, ServiceRuntime, ViewStateStorage,
+};
 
 use self::state::Amm;
 
@@ -36,17 +38,13 @@ impl Service for AmmService {
     }
 
     async fn handle_query(&self, request: Request) -> Result<Response, AmmError> {
-        let schema = Schema::build(self.state.clone(), MutationRoot, EmptySubscription).finish();
+        let schema = Schema::build(
+            self.state.clone(),
+            Operation::mutation_root(),
+            EmptySubscription,
+        )
+        .finish();
         let response = schema.execute(request).await;
         Ok(response)
-    }
-}
-
-struct MutationRoot;
-
-#[Object]
-impl MutationRoot {
-    async fn operation(&self, operation: Operation) -> Vec<u8> {
-        bcs::to_bytes(&operation).unwrap()
     }
 }
