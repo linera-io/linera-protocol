@@ -7,15 +7,16 @@ edition = "2021"
 async-graphql.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
-candle-core = "0.4.1"
-candle-transformers = "0.4.1"
-getrandom = { version = "0.2.12", default-features = false, features = ["custom"] }
+candle-core.workspace = true
+candle-transformers.workspace = true
+getrandom.workspace = true
 linera-sdk.workspace = true
-log = "0.4.21"
-rand = "0.8.5"
+log.workspace = true
+rand.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokenizers = { git = "https://github.com/christos-h/tokenizers", default-features = false, features = ["unstable_wasm"] }
+tokenizers.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }

@@ -6,6 +6,8 @@
 
 This example application runs a large language model in an application's service.
 
+NOTE: Due to [lack of hardware acceleration](https://github.com/linera-io/linera-protocol/issues/1931) performance is wanting.
+
 # How It Works
 
 Models and tokenizers are served locally using a local Python server. They are expected
@@ -14,8 +16,8 @@ at `model.bin` and `tokenizer.json`.
 The application's service exposes a single GraphQL field called `prompt` which takes a prompt
 as input and returns a response.
 
-When a prompt is submitted, the application's service uses the `get_blob_from_url`
-System API to inject the model and tokenizer. Subsequently, the model bytes are converted
+When a prompt is submitted, the application's service uses the `fetch_url`
+system API to inject the model and tokenizer. Subsequently, the model bytes are converted
 to the GGUF format where it can be used for inference.
 
 # Usage

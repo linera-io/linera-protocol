@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Runtime types to interface with the host executing the service.
+
 use std::cell::Cell;
 
 use linera_base::{

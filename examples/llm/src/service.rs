@@ -15,12 +15,11 @@ use candle_transformers::{
     generation::LogitsProcessor,
     models::{quantized_llama as model, quantized_llama::ModelWeights},
 };
-use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, ViewStateStorage};
+use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, SimpleStateStorage};
 use log::{error, info};
 use thiserror::Error;
 use tokenizers::Tokenizer;
 
-use self::state::Llm;
 use crate::token::TokenOutputStream;
 
 pub struct LlmService {
@@ -50,8 +49,8 @@ struct ModelContext {
 
 impl Service for LlmService {
     type Error = ServiceError;
-    type Storage = ViewStateStorage<Self>;
-    type State = Llm;
+    type Storage = SimpleStateStorage<Self>;
+    type State = ();
     type Parameters = ();
 
     async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
@@ -61,6 +60,7 @@ impl Service for LlmService {
     async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
         let query_string = &request.query;
         info!("query: {}", query_string);
+        // TODO: the URL should be provided by the request.
         let raw_weights = self.runtime.fetch_url("http://localhost:10001/model.bin");
         info!("got weights: {}B", raw_weights.len());
         let tokenizer_bytes = self
@@ -78,7 +78,8 @@ impl Service for LlmService {
     }
 }
 
-const SYSTEM_MESSAGE: &str = "You are LineraBot, a helpful chatbot for a company called Linera.";
+const SYSTEM_MESSAGE: &str =
+    "You are LineraGPT, a helpful chatbot for a blockchain protocol called Linera.";
 
 impl ModelContext {
     fn load_model(&self, model_weights: Vec<u8>) -> Result<ModelWeights, ServiceError> {
@@ -199,14 +200,10 @@ impl ModelContext {
 /// An error that can occur while querying the service.
 #[derive(Debug, Error)]
 pub enum ServiceError {
-    /// Query not supported by the application.
-    #[error("Queries not supported by application")]
-    QueriesNotSupported,
-
     /// Invalid query argument; could not deserialize request.
     #[error("Invalid query argument; could not deserialize request")]
     InvalidQuery(#[from] serde_json::Error),
-    // Add error variants here.
+
     /// Invalid query argument; could not deserialize request.
     #[error("Candle error")]
     Candle(#[from] candle_core::Error),
