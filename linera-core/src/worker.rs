@@ -41,7 +41,7 @@ use tokio::sync::{oneshot, Mutex};
 use tracing::{error, instrument, trace, warn};
 #[cfg(with_testing)]
 use {
-    linera_base::identifiers::{Destination, MessageId},
+    linera_base::identifiers::{BytecodeId, Destination, MessageId},
     linera_chain::data_types::ChannelFullName,
     linera_execution::ApplicationRegistryView,
 };
@@ -496,6 +496,18 @@ where
         self.create_chain_worker(chain_id)
             .await?
             .query_application(query)
+            .await
+    }
+
+    #[cfg(with_testing)]
+    pub async fn read_bytecode_location(
+        &mut self,
+        chain_id: ChainId,
+        bytecode_id: BytecodeId,
+    ) -> Result<Option<BytecodeLocation>, WorkerError> {
+        self.create_chain_worker(chain_id)
+            .await?
+            .read_bytecode_location(bytecode_id)
             .await
     }
 
