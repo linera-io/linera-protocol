@@ -30,7 +30,7 @@ use tracing::{info, warn};
 use {
     async_lock::RwLock,
     linera_base::sync::Lazy,
-    linera_storage_service::child::{get_free_port, StorageService, StorageServiceGuard},
+    linera_storage_service::child::{get_free_endpoint, StorageService, StorageServiceGuard},
     linera_storage_service::common::get_service_storage_binary,
     std::ops::Deref,
 };
@@ -61,7 +61,7 @@ impl LocalServerInternal for LocalServerServiceInternal {
     type Config = String;
 
     async fn new_test() -> Result<Self> {
-        let service_endpoint = get_free_port().await.unwrap();
+        let service_endpoint = get_free_endpoint().await.unwrap();
         let binary = get_service_storage_binary().await?.display().to_string();
         let service = StorageService::new(&service_endpoint, binary);
         let _service_guard = service.run().await?;
