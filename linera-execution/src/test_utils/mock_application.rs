@@ -56,7 +56,7 @@ impl MockApplication {
     }
 }
 
-type InitializeHandler = Box<
+type InstantiateHandler = Box<
     dyn FnOnce(&mut ContractSyncRuntime, OperationContext, Vec<u8>) -> Result<(), ExecutionError>
         + Send
         + Sync,
@@ -88,8 +88,8 @@ type HandleQueryHandler = Box<
 
 /// An expected call to a [`MockApplicationInstance`].
 pub enum ExpectedCall {
-    /// An expected call to [`UserContract::initialize`].
-    Initialize(InitializeHandler),
+    /// An expected call to [`UserContract::instantiate`].
+    Instantiate(InstantiateHandler),
     /// An expected call to [`UserContract::execute_operation`].
     ExecuteOperation(ExecuteOperationHandler),
     /// An expected call to [`UserContract::execute_message`].
@@ -103,7 +103,7 @@ pub enum ExpectedCall {
 impl Display for ExpectedCall {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         let name = match self {
-            ExpectedCall::Initialize(_) => "initialize",
+            ExpectedCall::Instantiate(_) => "instantiate",
             ExpectedCall::ExecuteOperation(_) => "execute_operation",
             ExpectedCall::ExecuteMessage(_) => "execute_message",
             ExpectedCall::Finalize(_) => "finalize",
@@ -116,8 +116,8 @@ impl Display for ExpectedCall {
 
 impl ExpectedCall {
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
-    /// [`UserContract::initialize`] implementation, which is handled by the provided `handler`.
-    pub fn initialize(
+    /// [`UserContract::instantiate`] implementation, which is handled by the provided `handler`.
+    pub fn instantiate(
         handler: impl FnOnce(
                 &mut ContractSyncRuntime,
                 OperationContext,
@@ -127,7 +127,7 @@ impl ExpectedCall {
             + Sync
             + 'static,
     ) -> Self {
-        ExpectedCall::Initialize(Box::new(handler))
+        ExpectedCall::Instantiate(Box::new(handler))
     }
 
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
@@ -223,13 +223,13 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
         argument: Vec<u8>,
     ) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
-            Some(ExpectedCall::Initialize(handler)) => {
+            Some(ExpectedCall::Instantiate(handler)) => {
                 handler(&mut self.runtime, context, argument)
             }
             Some(unexpected_call) => panic!(
-                "Expected a call to `initialize`, got a call to `{unexpected_call}` instead."
+                "Expected a call to `instantiate`, got a call to `{unexpected_call}` instead."
             ),
-            None => panic!("Unexpected call to `initialize`"),
+            None => panic!("Unexpected call to `instantiate`"),
         }
     }
 
