@@ -26,7 +26,7 @@ impl Contract for ApplicationContract {{
     type State = Application;
     type Message = ();
     type Parameters = ();
-    type InitializationArgument = ();
+    type InstantiationArgument = ();
 
     async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {{
         Ok(ApplicationContract {{ state, runtime }})
@@ -38,7 +38,7 @@ impl Contract for ApplicationContract {{
 
     async fn instantiate(
         &mut self,
-        _argument: Self::InitializationArgument,
+        _argument: Self::InstantiationArgument,
     ) -> Result<(), Self::Error> {{
         Ok(())
     }}

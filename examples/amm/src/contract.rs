@@ -34,7 +34,7 @@ impl Contract for AmmContract {
     type Storage = ViewStateStorage<Self>;
     type State = Amm;
     type Message = Message;
-    type InitializationArgument = ();
+    type InstantiationArgument = ();
     type Parameters = Parameters;
 
     async fn new(state: Amm, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {

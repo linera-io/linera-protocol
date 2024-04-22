@@ -35,7 +35,7 @@ impl Contract for NonFungibleTokenContract {
     type Storage = ViewStateStorage<Self>;
     type State = NonFungibleToken;
     type Message = Message;
-    type InitializationArgument = ();
+    type InstantiationArgument = ();
     type Parameters = ();
 
     async fn new(
@@ -51,7 +51,7 @@ impl Contract for NonFungibleTokenContract {
 
     async fn instantiate(
         &mut self,
-        _state: Self::InitializationArgument,
+        _state: Self::InstantiationArgument,
     ) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();

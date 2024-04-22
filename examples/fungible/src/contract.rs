@@ -37,7 +37,7 @@ impl Contract for FungibleTokenContract {
     type State = FungibleToken;
     type Message = Message;
     type Parameters = Parameters;
-    type InitializationArgument = InitialState;
+    type InstantiationArgument = InitialState;
 
     async fn new(
         state: FungibleToken,
@@ -52,7 +52,7 @@ impl Contract for FungibleTokenContract {
 
     async fn instantiate(
         &mut self,
-        mut state: Self::InitializationArgument,
+        mut state: Self::InstantiationArgument,
     ) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();

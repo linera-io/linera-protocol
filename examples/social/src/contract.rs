@@ -37,7 +37,7 @@ impl Contract for SocialContract {
     type Storage = ViewStateStorage<Self>;
     type State = Social;
     type Message = Message;
-    type InitializationArgument = ();
+    type InstantiationArgument = ();
     type Parameters = ();
 
     async fn new(state: Social, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {

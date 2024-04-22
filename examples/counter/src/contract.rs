@@ -29,7 +29,7 @@ impl Contract for CounterContract {
     type Storage = SimpleStateStorage<Self>;
     type State = Counter;
     type Message = ();
-    type InitializationArgument = u64;
+    type InstantiationArgument = u64;
     type Parameters = ();
 
     async fn new(state: Counter, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {

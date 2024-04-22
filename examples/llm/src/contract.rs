@@ -25,7 +25,7 @@ impl Contract for LlmContract {
     type Storage = SimpleStateStorage<Self>;
     type State = ();
     type Message = ();
-    type InitializationArgument = ();
+    type InstantiationArgument = ();
     type Parameters = ();
 
     async fn new(state: (), _runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {

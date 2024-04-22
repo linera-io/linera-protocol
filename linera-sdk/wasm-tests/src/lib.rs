@@ -413,7 +413,7 @@ impl Contract for TestApp {
     type State = ();
     type Message = Vec<u8>;
     type Parameters = Vec<u8>;
-    type InitializationArgument = Vec<u8>;
+    type InstantiationArgument = Vec<u8>;
 
     async fn new(state: (), _runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(TestApp { state })
@@ -425,7 +425,7 @@ impl Contract for TestApp {
 
     async fn instantiate(
         &mut self,
-        _argument: Self::InitializationArgument,
+        _argument: Self::InstantiationArgument,
     ) -> Result<(), Self::Error> {
         Ok(())
     }

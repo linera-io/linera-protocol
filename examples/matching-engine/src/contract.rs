@@ -57,7 +57,7 @@ impl Contract for MatchingEngineContract {
     type Storage = ViewStateStorage<Self>;
     type State = MatchingEngine;
     type Message = Message;
-    type InitializationArgument = ();
+    type InstantiationArgument = ();
     type Parameters = Parameters;
 
     async fn new(

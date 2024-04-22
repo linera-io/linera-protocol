@@ -34,7 +34,7 @@ impl Contract for CrowdFundingContract {
     type Storage = ViewStateStorage<Self>;
     type State = CrowdFunding;
     type Message = Message;
-    type InitializationArgument = InitializationArgument;
+    type InstantiationArgument = InitializationArgument;
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
     async fn new(state: CrowdFunding, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
@@ -280,7 +280,7 @@ pub enum Error {
     #[error("Pledge is empty")]
     EmptyPledge,
 
-    /// Pledge used a token that's not the same as the one in the campaign's [`InitializationArgument`].
+    /// Pledge used a token that's not the same as the one in the campaign's [`InstantiationArgument`].
     #[error("Pledge uses the incorrect token")]
     IncorrectToken,
 

@@ -34,7 +34,7 @@ impl Contract for NativeFungibleTokenContract {
     type State = NativeFungibleToken;
     type Message = Message;
     type Parameters = Parameters;
-    type InitializationArgument = InitialState;
+    type InstantiationArgument = InitialState;
 
     async fn new(
         state: NativeFungibleToken,
@@ -47,10 +47,7 @@ impl Contract for NativeFungibleTokenContract {
         &mut self.state
     }
 
-    async fn instantiate(
-        &mut self,
-        state: Self::InitializationArgument,
-    ) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, state: Self::InstantiationArgument) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         assert!(
             self.runtime.application_parameters().ticker_symbol == "NAT",
