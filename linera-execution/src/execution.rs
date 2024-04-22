@@ -65,7 +65,7 @@ where
             next_message_index: 0,
         };
 
-        let action = UserAction::Initialize(context, initialization_argument);
+        let action = UserAction::Instantiate(context, initialization_argument);
 
         let application_id = self
             .system
@@ -100,7 +100,7 @@ where
 }
 
 pub enum UserAction {
-    Initialize(OperationContext, Vec<u8>),
+    Instantiate(OperationContext, Vec<u8>),
     Operation(OperationContext, Vec<u8>),
     Message(MessageContext, Vec<u8>),
 }
@@ -109,7 +109,7 @@ impl UserAction {
     pub(crate) fn signer(&self) -> Option<Owner> {
         use UserAction::*;
         match self {
-            Initialize(context, _) => context.authenticated_signer,
+            Instantiate(context, _) => context.authenticated_signer,
             Operation(context, _) => context.authenticated_signer,
             Message(context, _) => context.authenticated_signer,
         }
@@ -117,7 +117,7 @@ impl UserAction {
 
     pub(crate) fn height(&self) -> BlockHeight {
         match self {
-            UserAction::Initialize(context, _) => context.height,
+            UserAction::Instantiate(context, _) => context.height,
             UserAction::Operation(context, _) => context.height,
             UserAction::Message(context, _) => context.height,
         }
@@ -125,7 +125,7 @@ impl UserAction {
 
     pub(crate) fn next_message_index(&self) -> u32 {
         match self {
-            UserAction::Initialize(context, _) => context.next_message_index,
+            UserAction::Instantiate(context, _) => context.next_message_index,
             UserAction::Operation(context, _) => context.next_message_index,
             UserAction::Message(context, _) => context.next_message_index,
         }
@@ -284,7 +284,7 @@ where
                 result.refund_grant_to = context.refund_grant_to();
                 let mut outcomes = vec![ExecutionOutcome::System(result)];
                 if let Some((application_id, argument)) = new_application {
-                    let user_action = UserAction::Initialize(context, argument);
+                    let user_action = UserAction::Instantiate(context, argument);
                     outcomes.extend(
                         self.run_user_action(
                             application_id,
