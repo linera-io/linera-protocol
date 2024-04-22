@@ -48,12 +48,12 @@ where
     ViewError:
         From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::common::Context>::Error>,
 {
-    /// Simulates the initialization of an application.
-    pub async fn simulate_initialization(
+    /// Simulates the instantiation of an application.
+    pub async fn simulate_instantiation(
         &mut self,
         contract: UserContractCode,
         application_description: UserApplicationDescription,
-        initialization_argument: Vec<u8>,
+        instantiation_argument: Vec<u8>,
     ) -> Result<(), ExecutionError> {
         let chain_id = application_description.creation.chain_id;
         let context = OperationContext {
@@ -65,7 +65,7 @@ where
             next_message_index: 0,
         };
 
-        let action = UserAction::Instantiate(context, initialization_argument);
+        let action = UserAction::Instantiate(context, instantiation_argument);
 
         let application_id = self
             .system
