@@ -339,7 +339,7 @@ impl ActiveChain {
                 block.with_system_operation(SystemOperation::CreateApplication {
                     bytecode_id: bytecode_id.forget_abi(),
                     parameters,
-                    initialization_argument: instantiation_argument,
+                    instantiation_argument,
                     required_application_ids,
                 });
             })

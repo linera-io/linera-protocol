@@ -337,7 +337,7 @@ where
     let create_operation = SystemOperation::CreateApplication {
         bytecode_id,
         parameters: parameters_bytes.clone(),
-        initialization_argument: initial_value_bytes.clone(),
+        instantiation_argument: initial_value_bytes.clone(),
         required_application_ids: vec![],
     };
     let application_id = UserApplicationId {

@@ -1837,13 +1837,13 @@ where
         &mut self,
         bytecode_id: BytecodeId,
         parameters: Vec<u8>,
-        initialization_argument: Vec<u8>,
+        instantiation_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ClientOutcome<(UserApplicationId, Certificate)>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::CreateApplication {
             bytecode_id,
             parameters,
-            initialization_argument,
+            instantiation_argument,
             required_application_ids,
         }))
         .await?
