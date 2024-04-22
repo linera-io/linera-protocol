@@ -1,4 +1,0 @@
-initialize: func(argument: list<u8>) -> result<tuple<>, string>
-execute-operation: func(operation: list<u8>) -> result<list<u8>, string>
-execute-message: func(message: list<u8>) -> result<tuple<>, string>
-finalize: func() -> result<tuple<>, string>
