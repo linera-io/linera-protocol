@@ -90,7 +90,7 @@ mod tests {
     #[webassembly_test]
     fn operation() {
         let initial_value = 72_u64;
-        let mut counter = create_and_initialize_counter(initial_value);
+        let mut counter = create_and_instantiate_counter(initial_value);
 
         let increment = 42_308_u64;
 
@@ -106,7 +106,7 @@ mod tests {
     #[webassembly_test]
     fn message() {
         let initial_value = 72_u64;
-        let mut counter = create_and_initialize_counter(initial_value);
+        let mut counter = create_and_instantiate_counter(initial_value);
 
         let result = counter
             .execute_message(())
@@ -120,7 +120,7 @@ mod tests {
     #[webassembly_test]
     fn cross_application_call() {
         let initial_value = 2_845_u64;
-        let mut counter = create_and_initialize_counter(initial_value);
+        let mut counter = create_and_instantiate_counter(initial_value);
 
         let increment = 8_u64;
 
@@ -136,7 +136,7 @@ mod tests {
         assert_eq!(counter.state.value, expected_value);
     }
 
-    fn create_and_initialize_counter(initial_value: u64) -> CounterContract {
+    fn create_and_instantiate_counter(initial_value: u64) -> CounterContract {
         let counter = Counter::default();
         let mut contract = CounterContract {
             state: counter,
@@ -146,7 +146,7 @@ mod tests {
         mock_application_parameters(&());
 
         let result = contract
-            .initialize(initial_value)
+            .instantiate(initial_value)
             .now_or_never()
             .expect("Initialization of counter state should not await anything");
 
