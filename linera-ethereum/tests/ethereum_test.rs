@@ -9,10 +9,7 @@ use ethers::{
     solc::Solc,
     types::U256,
 };
-use linera_ethereum::{
-    client::{get_accounts, get_balance, get_block_number},
-    test_utils::get_anvil,
-};
+use linera_ethereum::test_utils::get_anvil;
 
 abigen!(
     SimpleContract,
@@ -23,12 +20,15 @@ abigen!(
 #[tokio::test]
 async fn test_get_accounts_balance() {
     let anvil_test = get_anvil().await.unwrap();
-    let url = anvil_test.endpoint;
-    let addresses = get_accounts(&url).await.unwrap();
-    let block_nr = get_block_number(&url).await.unwrap();
+    let ethereum_endpoint = anvil_test.ethereum_endpoint;
+    let addresses = ethereum_endpoint.get_accounts().await.unwrap();
+    let block_nr = ethereum_endpoint.get_block_number().await.unwrap();
     let target_balance = U256::from_dec_str("10000000000000000000000").unwrap();
     for address in addresses {
-        let balance = get_balance(&url, &address, Some(block_nr)).await.unwrap();
+        let balance = ethereum_endpoint
+            .get_balance(&address, Some(block_nr))
+            .await
+            .unwrap();
         assert_eq!(balance, target_balance);
     }
 }
@@ -53,7 +53,7 @@ async fn test_contract() -> anyhow::Result<()> {
     let (_wallet1, addr1) = anvil_test.get_wallet(1);
 
     // 4. instantiate the client with the wallet
-    let client0 = SignerMiddleware::new(anvil_test.provider, wallet0);
+    let client0 = SignerMiddleware::new(anvil_test.ethereum_endpoint.provider, wallet0);
     let client0 = Arc::new(client0);
 
     // 5. create a factory which will be used to deploy instances of the contract
@@ -83,7 +83,7 @@ async fn test_contract() -> anyhow::Result<()> {
     let value_read = contract.balance_of(addr1).call().await?;
     assert_eq!(value_read, value);
     let value_read = contract.balance_of(addr_contract).call().await?;
-    assert_eq!(value_read, U256::from_dec_str("0")?);
+    assert_eq!(value_read, U256::zero());
     let value_read = contract.balance_of(addr0).call().await?;
     assert_eq!(value_read, U256::from_dec_str("990")?);
     // Add queries to the state of the chain.

@@ -6,6 +6,5 @@
 pub mod client;
 pub mod common;
 
-/// Helper types for tests.
-//#[cfg(with_testing)]
+/// Helper types for tests and similar purposes.
 pub mod test_utils;
