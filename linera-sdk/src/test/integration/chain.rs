@@ -128,9 +128,9 @@ impl ActiveChain {
     /// Searches the Cargo manifest for binaries that end with `contract` and `service`, builds
     /// them for WebAssembly and uses the generated binaries as the contract and service bytecodes
     /// to be published on this chain. Returns the bytecode ID to reference the published bytecode.
-    pub async fn publish_current_bytecode<Abi, Parameters, InitializationArgument>(
+    pub async fn publish_current_bytecode<Abi, Parameters, InstantiationArgument>(
         &self,
-    ) -> BytecodeId<Abi, Parameters, InitializationArgument> {
+    ) -> BytecodeId<Abi, Parameters, InstantiationArgument> {
         self.publish_bytecodes_in(".").await
     }
 
@@ -139,10 +139,10 @@ impl ActiveChain {
     /// Searches the Cargo manifest for binaries that end with `contract` and `service`, builds
     /// them for WebAssembly and uses the generated binaries as the contract and service bytecodes
     /// to be published on this chain. Returns the bytecode ID to reference the published bytecode.
-    pub async fn publish_bytecodes_in<Abi, Parameters, InitializationArgument>(
+    pub async fn publish_bytecodes_in<Abi, Parameters, InstantiationArgument>(
         &self,
         repository_path: impl AsRef<Path>,
-    ) -> BytecodeId<Abi, Parameters, InitializationArgument> {
+    ) -> BytecodeId<Abi, Parameters, InstantiationArgument> {
         let repository_path = fs::canonicalize(repository_path)
             .await
             .expect("Failed to obtain absolute application repository path");
@@ -300,20 +300,20 @@ impl ActiveChain {
     /// If necessary, this microchain will subscribe to the microchain that published the
     /// bytecode to use, and fetch it.
     ///
-    /// The application is initialized using the initialization parameters, which consist of the
-    /// global static `parameters`, the one time `initialization_argument` and the
+    /// The application is instantiated using the instantiation parameters, which consist of the
+    /// global static `parameters`, the one time `instantiation_argument` and the
     /// `required_application_ids` of the applications that the new application will depend on.
-    pub async fn create_application<Abi, Parameters, InitializationArgument>(
+    pub async fn create_application<Abi, Parameters, InstantiationArgument>(
         &mut self,
-        bytecode_id: BytecodeId<Abi, Parameters, InitializationArgument>,
+        bytecode_id: BytecodeId<Abi, Parameters, InstantiationArgument>,
         parameters: Parameters,
-        initialization_argument: InitializationArgument,
+        instantiation_argument: InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
     ) -> ApplicationId<Abi>
     where
         Abi: ContractAbi,
         Parameters: Serialize,
-        InitializationArgument: Serialize,
+        InstantiationArgument: Serialize,
     {
         let bytecode_location_message = if self.needs_bytecode_location(bytecode_id).await {
             self.subscribe_to_published_bytecodes_from(bytecode_id.message_id.chain_id)
@@ -324,7 +324,7 @@ impl ActiveChain {
         };
 
         let parameters = serde_json::to_vec(&parameters).unwrap();
-        let initialization_argument = serde_json::to_vec(&initialization_argument).unwrap();
+        let instantiation_argument = serde_json::to_vec(&instantiation_argument).unwrap();
 
         for &dependency in &required_application_ids {
             self.register_application(dependency).await;
@@ -339,7 +339,7 @@ impl ActiveChain {
                 block.with_system_operation(SystemOperation::CreateApplication {
                     bytecode_id: bytecode_id.forget_abi(),
                     parameters,
-                    initialization_argument,
+                    initialization_argument: instantiation_argument,
                     required_application_ids,
                 });
             })
@@ -354,9 +354,9 @@ impl ActiveChain {
     }
 
     /// Checks if the `bytecode_id` is missing from this microchain.
-    async fn needs_bytecode_location<Abi, Parameters, InitializationArgument>(
+    async fn needs_bytecode_location<Abi, Parameters, InstantiationArgument>(
         &self,
-        bytecode_id: BytecodeId<Abi, Parameters, InitializationArgument>,
+        bytecode_id: BytecodeId<Abi, Parameters, InstantiationArgument>,
     ) -> bool {
         let applications = self
             .validator
@@ -374,9 +374,9 @@ impl ActiveChain {
     }
 
     /// Finds the message that sends the message with the bytecode location of `bytecode_id`.
-    async fn find_bytecode_location<Abi, Parameters, InitializationArgument>(
+    async fn find_bytecode_location<Abi, Parameters, InstantiationArgument>(
         &self,
-        bytecode_id: BytecodeId<Abi, Parameters, InitializationArgument>,
+        bytecode_id: BytecodeId<Abi, Parameters, InstantiationArgument>,
     ) -> MessageId {
         for height in bytecode_id.message_id.height.0.. {
             let certificate = self

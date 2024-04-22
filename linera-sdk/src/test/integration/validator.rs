@@ -94,9 +94,9 @@ impl TestValidator {
     /// calling this method published on it.
     ///
     /// Returns the new [`TestValidator`] and the [`BytecodeId`] of the published bytecode.
-    pub async fn with_current_bytecode<Abi, Parameters, InitializationArgument>() -> (
+    pub async fn with_current_bytecode<Abi, Parameters, InstantiationArgument>() -> (
         TestValidator,
-        BytecodeId<Abi, Parameters, InitializationArgument>,
+        BytecodeId<Abi, Parameters, InstantiationArgument>,
     ) {
         let validator = TestValidator::default();
         let publisher = validator.new_chain().await;
@@ -113,22 +113,22 @@ impl TestValidator {
     /// another microchain.
     ///
     /// Returns the new [`TestValidator`] and the [`ApplicationId`] of the created application.
-    pub async fn with_current_application<Abi, Parameters, InitializationArgument>(
+    pub async fn with_current_application<Abi, Parameters, InstantiationArgument>(
         parameters: Parameters,
-        initialization_argument: InitializationArgument,
+        instantiation_argument: InstantiationArgument,
     ) -> (TestValidator, ApplicationId<Abi>)
     where
         Abi: ContractAbi,
         Parameters: Serialize,
-        InitializationArgument: Serialize,
+        InstantiationArgument: Serialize,
     {
         let (validator, bytecode_id) =
-            TestValidator::with_current_bytecode::<Abi, Parameters, InitializationArgument>().await;
+            TestValidator::with_current_bytecode::<Abi, Parameters, InstantiationArgument>().await;
 
         let mut creator = validator.new_chain().await;
 
         let application_id = creator
-            .create_application(bytecode_id, parameters, initialization_argument, vec![])
+            .create_application(bytecode_id, parameters, instantiation_argument, vec![])
             .await;
 
         (validator, application_id)
