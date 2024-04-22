@@ -217,7 +217,7 @@ impl<Runtime> MockApplicationInstance<Runtime> {
 }
 
 impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
-    fn initialize(
+    fn instantiate(
         &mut self,
         context: OperationContext,
         argument: Vec<u8>,

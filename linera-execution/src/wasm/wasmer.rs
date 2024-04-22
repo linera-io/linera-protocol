@@ -191,7 +191,7 @@ impl<Runtime> crate::UserContract for WasmerContractInstance<Runtime>
 where
     Runtime: ContractRuntime + Send + Unpin + 'static,
 {
-    fn initialize(
+    fn instantiate(
         &mut self,
         _context: OperationContext,
         argument: Vec<u8>,

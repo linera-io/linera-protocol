@@ -186,7 +186,7 @@ impl<Runtime> crate::UserContract for WasmtimeContractInstance<Runtime>
 where
     Runtime: ContractRuntime + Send + Sync + 'static,
 {
-    fn initialize(
+    fn instantiate(
         &mut self,
         _context: OperationContext,
         argument: Vec<u8>,
