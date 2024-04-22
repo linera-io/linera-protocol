@@ -1379,26 +1379,19 @@ where
             } => {
                 let mut chain = self.storage.load_chain(sender).await?;
                 let mut height_with_fully_delivered_messages = BlockHeight::ZERO;
-                let mut chain_state_changed = false;
 
                 for (medium, height) in latest_heights {
                     let target = Target { recipient, medium };
-                    let marked_messages_as_received =
-                        chain.mark_messages_as_received(target, height).await?;
-                    let fully_delivered =
-                        marked_messages_as_received && chain.all_messages_delivered_up_to(height);
-
-                    chain_state_changed |= marked_messages_as_received;
+                    let fully_delivered = chain.mark_messages_as_received(target, height).await?
+                        && chain.all_messages_delivered_up_to(height);
 
                     if fully_delivered && height > height_with_fully_delivered_messages {
                         height_with_fully_delivered_messages = height;
                     }
                 }
 
-                if chain_state_changed {
-                    // Save the chain state.
-                    chain.save().await?;
-                }
+                // Save the chain state.
+                chain.save().await?;
 
                 // Handle delivery notifiers for this chain, if any.
                 if let hash_map::Entry::Occupied(mut map) =
