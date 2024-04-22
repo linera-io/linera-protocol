@@ -233,4 +233,79 @@ mutation {
 }
 ```
 
+### Atomic Swaps
+
+In general, if you send tokens to a chain owned by someone else, you rely on them
+for asset availability: If they don't handle your messages, you don't have access to
+your tokens.
+
+Fortunately, Linera provides a solution based on temporary chains:
+If the number of parties who want to swap tokens is limited, we can make them all chain
+owners, allow only AMM operations on the chain, and allow only the AMM to close the chain.
+
+```bash
+PUB_KEY_AMM=fcf518d56455283ace2bbc11c71e684eb58af81bc98b96a18129e825ce24ea84
+PUB_KEY_2=ca909dcf60df014c166be17eb4a9f6e2f9383314a57510206a54cd841ade455e
+
+kill %% && sleep 1    # Kill the service so we can use CLI commands for chain 1.
+
+linera --wait-for-outgoing-messages change-ownership \
+    --owner-public-keys $PUB_KEY_AMM $PUB_KEY_2
+
+linera --wait-for-outgoing-messages change-application-permissions \
+    --execute-operations $AMM_APPLICATION_ID \
+    --close-chain $AMM_APPLICATION_ID
+
+linera service --port $PORT &
+```
+
+First, let's add some liquidity again to the AMM. Navigate to
+`http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID` and perform the following mutation:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
+mutation {
+  addLiquidity(
+    owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
+    maxToken0Amount: "40",
+    maxToken1Amount: "40",
+  )
+}
+```
+
+The only way to close the chain is via the application. Navigate to
+`http://localhost:8080/chains/$CHAIN_AMM/applications/$AMM_APPLICATION_ID` and perform the following mutation:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$AMM_APPLICATION_ID
+mutation { closeChain }
+```
+
+Owner 1 should now get back their tokens, and have around 49 FUN1 left and 51 FUN2 left. To check that, navigate
+to `http://localhost:8080/chains/$CHAIN_1/applications/$FUN1_APP_ID`, and perform the following mutation:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$FUN1_APP_ID
+query {
+    accounts {
+        entry(
+            key: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f"
+        ) {
+            value
+        }
+    }
+}
+```
+
+Then navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$FUN2_APP_ID`, and perform the following mutation:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$FUN2_APP_ID
+query {
+    accounts {
+        entry(
+            key: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f"
+        ) {
+            value
+        }
+    }
+}
+```
+
 <!-- cargo-rdme end -->

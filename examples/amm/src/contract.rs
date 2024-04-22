@@ -53,7 +53,7 @@ impl Contract for AmmContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Result<(), AmmError> {
         if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
-            self.execute_order_local(operation)?;
+            self.execute_order_local(operation).await?;
         } else {
             self.execute_order_remote(operation).await?;
         }
@@ -212,7 +212,6 @@ impl Contract for AmmContract {
                     self.get_shares(token0_amount, token1_amount, &balance0_bigint)?;
 
                 let mut current_shares = self
-                    .state
                     .current_shares_or_default(&message_origin_account)
                     .await;
                 current_shares.saturating_add_assign(shares_to_mint);
@@ -280,7 +279,6 @@ impl Contract for AmmContract {
 
                 let message_origin_account = self.get_message_origin_account(owner);
                 let current_shares = self
-                    .state
                     .current_shares_or_default(&message_origin_account)
                     .await;
                 if shares_to_return <= current_shares {
@@ -304,35 +302,11 @@ impl Contract for AmmContract {
 
                 let message_origin_account = self.get_message_origin_account(owner);
                 let current_shares = self
-                    .state
                     .current_shares_or_default(&message_origin_account)
                     .await;
-                let total_shares_supply = *self.state.total_shares_supply.get();
-                let balance0 = self.get_pool_balance(0)?;
-                let balance1 = self.get_pool_balance(1)?;
 
-                let total_shares_supply_bigint =
-                    BigUint::from_u128(u128::from(total_shares_supply))
-                        .expect("Couldn't generate total_shares_supply in bigint");
-                let current_shares_bigint = BigUint::from_u128(u128::from(current_shares))
-                    .expect("Couldn't generate current_shares in bigint");
-                let balance0_bigint = BigUint::from_u128(u128::from(balance0))
-                    .expect("Couldn't generate balance0 in bigint");
-                let balance1_bigint = BigUint::from_u128(u128::from(balance1))
-                    .expect("Couldn't generate balance1 in bigint");
-
-                let amount_token0 = Amount::from_attos(
-                    ((current_shares_bigint.clone() * balance0_bigint)
-                        / total_shares_supply_bigint.clone())
-                    .to_u128()
-                    .expect("Couldn't convert amount_token0 to u128"),
-                );
-                let amount_token1 = Amount::from_attos(
-                    ((current_shares_bigint * balance1_bigint) / total_shares_supply_bigint)
-                        .to_u128()
-                        .expect("Couldn't convert amount_token1 to u128"),
-                );
-
+                let (amount_token0, amount_token1) =
+                    self.get_amounts_from_shares(current_shares)?;
                 self.return_shares(
                     message_origin_account,
                     current_shares,
@@ -366,6 +340,16 @@ impl AmmContract {
         }
 
         Ok(())
+    }
+
+    /// Obtains the current shares for an `account`.
+    async fn current_shares_or_default(&self, account: &Account) -> Amount {
+        self.state
+            .shares
+            .get(account)
+            .await
+            .expect("Failure in the retrieval")
+            .unwrap_or_default()
     }
 
     fn return_shares(
@@ -439,6 +423,38 @@ impl AmmContract {
         }
     }
 
+    fn get_amounts_from_shares(
+        &mut self,
+        current_shares: Amount,
+    ) -> Result<(Amount, Amount), AmmError> {
+        let total_shares_supply = *self.state.total_shares_supply.get();
+        let balance0 = self.get_pool_balance(0)?;
+        let balance1 = self.get_pool_balance(1)?;
+
+        let total_shares_supply_bigint = BigUint::from_u128(u128::from(total_shares_supply))
+            .expect("Couldn't generate total_shares_supply in bigint");
+        let current_shares_bigint = BigUint::from_u128(u128::from(current_shares))
+            .expect("Couldn't generate current_shares in bigint");
+        let balance0_bigint =
+            BigUint::from_u128(u128::from(balance0)).expect("Couldn't generate balance0 in bigint");
+        let balance1_bigint =
+            BigUint::from_u128(u128::from(balance1)).expect("Couldn't generate balance1 in bigint");
+
+        Ok((
+            Amount::from_attos(
+                ((current_shares_bigint.clone() * balance0_bigint)
+                    / total_shares_supply_bigint.clone())
+                .to_u128()
+                .expect("Couldn't convert amount_token0 to u128"),
+            ),
+            Amount::from_attos(
+                ((current_shares_bigint * balance1_bigint) / total_shares_supply_bigint)
+                    .to_u128()
+                    .expect("Couldn't convert amount_token1 to u128"),
+            ),
+        ))
+    }
+
     fn get_amm_app_owner(&mut self) -> AccountOwner {
         AccountOwner::Application(self.runtime.application_id().forget_abi())
     }
@@ -475,7 +491,7 @@ impl AmmContract {
         }
     }
 
-    fn execute_order_local(&mut self, operation: Operation) -> Result<(), AmmError> {
+    async fn execute_order_local(&mut self, operation: Operation) -> Result<(), AmmError> {
         match operation {
             Operation::Swap {
                 owner: _,
@@ -497,6 +513,34 @@ impl AmmContract {
 
             Operation::RemoveAllAddedLiquidity { owner: _ } => {
                 Err(AmmError::RemovingLiquidityLocally)
+            }
+
+            Operation::CloseChain => {
+                for account in self.state.shares.indices().await? {
+                    let current_shares = self.current_shares_or_default(&account).await;
+                    let (amount_token0, amount_token1) = self
+                        .get_amounts_from_shares(current_shares)
+                        .expect("Getting amounts from shares shouldn't fail!");
+
+                    self.return_shares(
+                        account,
+                        current_shares,
+                        current_shares,
+                        0,
+                        amount_token0,
+                        amount_token1,
+                    );
+                }
+
+                ensure!(
+                    *self.state.total_shares_supply.get() == Amount::ZERO,
+                    AmmError::UntrackedLiquidity
+                );
+
+                self.runtime
+                    .close_chain()
+                    .map_err(|_| AmmError::CloseChainError)?;
+                Ok(())
             }
         }
     }
@@ -585,6 +629,8 @@ impl AmmContract {
 
                 Ok(())
             }
+
+            Operation::CloseChain => Err(AmmError::ClosingChainRemotely),
         }
     }
 
