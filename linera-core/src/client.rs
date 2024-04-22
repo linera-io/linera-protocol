@@ -1811,21 +1811,21 @@ where
     pub async fn create_application<
         A: Abi,
         Parameters: Serialize,
-        InitializationArgument: Serialize,
+        InstantiationArgument: Serialize,
     >(
         &mut self,
-        bytecode_id: BytecodeId<A, Parameters, InitializationArgument>,
+        bytecode_id: BytecodeId<A, Parameters, InstantiationArgument>,
         parameters: &Parameters,
-        initialization_argument: &InitializationArgument,
+        instantiation_argument: &InstantiationArgument,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ClientOutcome<(UserApplicationId<A>, Certificate)>, ChainClientError> {
-        let initialization_argument = serde_json::to_vec(initialization_argument)?;
+        let instantiation_argument = serde_json::to_vec(instantiation_argument)?;
         let parameters = serde_json::to_vec(parameters)?;
         Ok(self
             .create_application_untyped(
                 bytecode_id.forget_abi(),
                 parameters,
-                initialization_argument,
+                instantiation_argument,
                 required_application_ids,
             )
             .await?
