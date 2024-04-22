@@ -6,7 +6,7 @@
 mod state;
 
 use async_trait::async_trait;
-use crowd_funding::{CrowdFundingAbi, InitializationArgument, Message, Operation};
+use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
 use fungible::{Account, FungibleResponse, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
@@ -34,7 +34,7 @@ impl Contract for CrowdFundingContract {
     type Storage = ViewStateStorage<Self>;
     type State = CrowdFunding;
     type Message = Message;
-    type InstantiationArgument = InitializationArgument;
+    type InstantiationArgument = InstantiationArgument;
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
     async fn new(state: CrowdFunding, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
@@ -45,13 +45,13 @@ impl Contract for CrowdFundingContract {
         &mut self.state
     }
 
-    async fn instantiate(&mut self, argument: InitializationArgument) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, argument: InstantiationArgument) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
 
-        self.state.initialization_argument.set(Some(argument));
+        self.state.instantiation_argument.set(Some(argument));
 
-        let deadline = self.initialization_argument().deadline;
+        let deadline = self.instantiation_argument().deadline;
         ensure!(
             deadline > self.runtime.system_time(),
             Error::DeadlineInThePast
@@ -151,7 +151,7 @@ impl CrowdFundingContract {
                 Ok(())
             }
             Status::Complete => {
-                self.send_to(amount, self.initialization_argument().owner);
+                self.send_to(amount, self.instantiation_argument().owner);
                 Ok(())
             }
             Status::Cancelled => Err(Error::Cancelled),
@@ -165,7 +165,7 @@ impl CrowdFundingContract {
         match self.state.status.get() {
             Status::Active => {
                 ensure!(
-                    total >= self.initialization_argument().target,
+                    total >= self.instantiation_argument().target,
                     Error::TargetNotReached
                 );
             }
@@ -173,7 +173,7 @@ impl CrowdFundingContract {
             Status::Cancelled => return Err(Error::Cancelled),
         }
 
-        self.send_to(total, self.initialization_argument().owner);
+        self.send_to(total, self.instantiation_argument().owner);
         self.state.pledges.clear();
         self.state.status.set(Status::Complete);
 
@@ -187,7 +187,7 @@ impl CrowdFundingContract {
         // TODO(#728): Remove this.
         #[cfg(not(any(test, feature = "test")))]
         ensure!(
-            self.runtime.system_time() >= self.initialization_argument().deadline,
+            self.runtime.system_time() >= self.instantiation_argument().deadline,
             Error::DeadlineNotReached
         );
 
@@ -205,7 +205,7 @@ impl CrowdFundingContract {
         }
 
         let balance = self.balance()?;
-        self.send_to(balance, self.initialization_argument().owner);
+        self.send_to(balance, self.instantiation_argument().owner);
         self.state.status.set(Status::Cancelled);
 
         Ok(())
@@ -256,9 +256,9 @@ impl CrowdFundingContract {
         self.runtime.call_application(true, fungible_id, &transfer);
     }
 
-    pub fn initialization_argument(&self) -> &InitializationArgument {
+    pub fn instantiation_argument(&self) -> &InstantiationArgument {
         self.state
-            .initialization_argument
+            .instantiation_argument
             .get()
             .as_ref()
             .expect("Application is not running on the host chain or was not instantiated yet")
