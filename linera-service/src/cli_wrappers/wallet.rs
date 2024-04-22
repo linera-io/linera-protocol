@@ -260,13 +260,13 @@ impl ClientWrapper {
     pub async fn publish_and_create<
         A: ContractAbi,
         Parameters: Serialize,
-        InitializationArgument: Serialize,
+        InstantiationArgument: Serialize,
     >(
         &self,
         contract: PathBuf,
         service: PathBuf,
         parameters: &Parameters,
-        argument: &InitializationArgument,
+        argument: &InstantiationArgument,
         required_application_ids: &[ApplicationId],
         publisher: impl Into<Option<ChainId>>,
     ) -> Result<ApplicationId<A>> {
@@ -292,12 +292,12 @@ impl ClientWrapper {
     }
 
     /// Runs `linera publish-bytecode`.
-    pub async fn publish_bytecode<Abi, Parameters, InitializationArgument>(
+    pub async fn publish_bytecode<Abi, Parameters, InstantiationArgument>(
         &self,
         contract: PathBuf,
         service: PathBuf,
         publisher: impl Into<Option<ChainId>>,
-    ) -> Result<BytecodeId<Abi, Parameters, InitializationArgument>> {
+    ) -> Result<BytecodeId<Abi, Parameters, InstantiationArgument>> {
         let stdout = self
             .command()
             .await?
@@ -314,12 +314,12 @@ impl ClientWrapper {
     pub async fn create_application<
         Abi: ContractAbi,
         Parameters: Serialize,
-        InitializationArgument: Serialize,
+        InstantiationArgument: Serialize,
     >(
         &self,
-        bytecode_id: &BytecodeId<Abi, Parameters, InitializationArgument>,
+        bytecode_id: &BytecodeId<Abi, Parameters, InstantiationArgument>,
         parameters: &Parameters,
-        argument: &InitializationArgument,
+        argument: &InstantiationArgument,
         required_application_ids: &[ApplicationId],
         creator: impl Into<Option<ChainId>>,
     ) -> Result<ApplicationId<Abi>> {
@@ -887,12 +887,12 @@ impl NodeService {
             .collect()
     }
 
-    pub async fn publish_bytecode<Abi, Parameters, InitializationArgument>(
+    pub async fn publish_bytecode<Abi, Parameters, InstantiationArgument>(
         &self,
         chain_id: &ChainId,
         contract: PathBuf,
         service: PathBuf,
-    ) -> Result<BytecodeId<Abi, Parameters, InitializationArgument>> {
+    ) -> Result<BytecodeId<Abi, Parameters, InstantiationArgument>> {
         let contract_code = Bytecode::load_from_file(&contract).await?;
         let service_code = Bytecode::load_from_file(&service).await?;
         let query = format!(
@@ -954,13 +954,13 @@ impl NodeService {
     pub async fn create_application<
         Abi: ContractAbi,
         Parameters: Serialize,
-        InitializationArgument: Serialize,
+        InstantiationArgument: Serialize,
     >(
         &self,
         chain_id: &ChainId,
-        bytecode_id: &BytecodeId<Abi, Parameters, InitializationArgument>,
+        bytecode_id: &BytecodeId<Abi, Parameters, InstantiationArgument>,
         parameters: &Parameters,
-        argument: &InitializationArgument,
+        argument: &InstantiationArgument,
         required_application_ids: &[ApplicationId],
     ) -> Result<ApplicationId<Abi>> {
         let bytecode_id = bytecode_id.forget_abi();
