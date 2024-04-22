@@ -13,8 +13,8 @@ use linera_witty::{
 };
 use tokio::sync::Mutex;
 use wasmer::{
-    wasmparser::Operator, CompilerConfig, Cranelift, Engine, EngineBuilder, Module, Singlepass,
-    Store,
+    sys::EngineBuilder, wasmparser::Operator, CompilerConfig, Cranelift, Engine, Module,
+    Singlepass, Store,
 };
 use wasmer_middlewares::metering::{self, Metering, MeteringPoints};
 
@@ -118,7 +118,7 @@ where
 {
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare(
-        contract_engine: &Engine,
+        contract_engine: Engine,
         contract_module: &Module,
         runtime: Runtime,
     ) -> Result<Self, WasmExecutionError> {
@@ -176,7 +176,7 @@ where
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare(service_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
         let system_api_data = SystemApiData::new(runtime);
-        let mut instance_builder = InstanceBuilder::new(&SERVICE_ENGINE, system_api_data);
+        let mut instance_builder = InstanceBuilder::new(SERVICE_ENGINE.clone(), system_api_data);
 
         ServiceSystemApi::export_to(&mut instance_builder)?;
         ViewSystemApi::export_to(&mut instance_builder)?;
@@ -301,8 +301,10 @@ impl CachedContractModule {
 
     /// Creates a [`Module`] from a compiled contract using a headless [`Engine`].
     pub fn create_execution_instance(&self) -> Result<(Engine, Module), anyhow::Error> {
+        use wasmer::NativeEngineExt;
+
         let engine = Engine::headless();
-        let store = Store::new(&engine);
+        let store = Store::new(engine.clone());
         let module = unsafe { Module::deserialize(&store, &*self.compiled_bytecode) }?;
         Ok((engine, module))
     }
