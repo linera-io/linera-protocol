@@ -23,7 +23,7 @@ use super::{
 pub struct ContractEntrypoints;
 
 impl self::exports::linera::app::contract_entrypoints::Guest for ContractEntrypoints {
-    fn initialize(argument: Vec<u8>) -> Result<(), String> {
+    fn instantiate(argument: Vec<u8>) -> Result<(), String> {
         unsafe { __contract_initialize(argument) }
     }
 
