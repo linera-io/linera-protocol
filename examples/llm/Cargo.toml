@@ -1,0 +1,34 @@
+[package]
+name = "llm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-graphql.workspace = true
+async-trait.workspace = true
+bcs.workspace = true
+candle-core.workspace = true
+candle-transformers.workspace = true
+getrandom.workspace = true
+linera-sdk.workspace = true
+log.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokenizers.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+tokio = { workspace = true, features = ["rt", "sync"] }
+
+[dev-dependencies]
+webassembly-test.workspace = true
+
+[[bin]]
+name = "llm_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "llm_service"
+path = "src/service.rs"

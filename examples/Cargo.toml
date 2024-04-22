@@ -5,6 +5,7 @@ members = [
     "counter",
     "crowd-funding",
     "fungible",
+    "llm",
     "matching-engine",
     "meta-counter",
     "native-fungible",
@@ -18,18 +19,23 @@ async-graphql = { version = "7.0.2", default-features = false }
 async-trait = "0.1.58"
 base64 = "0.22.0"
 bcs = "0.1.3"
+candle-core = "0.4.1"
+candle-transformers = "0.4.1"
 futures = "0.3.24"
 futures-util = "0.3.26"
+getrandom = { version = "0.2.12", default-features = false, features = ["custom"] }
 hex = "0.4.3"
 linera-sdk = { path = "../linera-sdk" }
 linera-views = { path = "../linera-views", default-features = false }
 log = "0.4.20"
 num-bigint = "0.4.3"
 num-traits = "0.2.16"
+rand = "0.8.5"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.93"
 sha3 = "0.10.8"
 thiserror = "1.0.38"
+tokenizers = { git = "https://github.com/christos-h/tokenizers", default-features = false, features = ["unstable_wasm"] }
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 webassembly-test = "0.1.0"
 wit-bindgen = "0.16.0"
