@@ -423,7 +423,7 @@ impl Contract for TestApp {
         &mut self.state
     }
 
-    async fn initialize(
+    async fn instantiate(
         &mut self,
         _argument: Self::InitializationArgument,
     ) -> Result<(), Self::Error> {

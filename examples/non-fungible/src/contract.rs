@@ -49,7 +49,7 @@ impl Contract for NonFungibleTokenContract {
         &mut self.state
     }
 
-    async fn initialize(
+    async fn instantiate(
         &mut self,
         _state: Self::InitializationArgument,
     ) -> Result<(), Self::Error> {

@@ -50,7 +50,7 @@ impl Contract for FungibleTokenContract {
         &mut self.state
     }
 
-    async fn initialize(
+    async fn instantiate(
         &mut self,
         mut state: Self::InitializationArgument,
     ) -> Result<(), Self::Error> {

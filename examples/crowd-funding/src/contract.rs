@@ -45,7 +45,7 @@ impl Contract for CrowdFundingContract {
         &mut self.state
     }
 
-    async fn initialize(&mut self, argument: InitializationArgument) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, argument: InitializationArgument) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
 
@@ -261,7 +261,7 @@ impl CrowdFundingContract {
             .initialization_argument
             .get()
             .as_ref()
-            .expect("Application is not running on the host chain or was not initialized yet")
+            .expect("Application is not running on the host chain or was not instantiated yet")
     }
 }
 

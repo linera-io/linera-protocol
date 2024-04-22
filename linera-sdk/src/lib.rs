@@ -134,11 +134,11 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// Returns the current state of the application so that it can be persisted.
     fn state_mut(&mut self) -> &mut Self::State;
 
-    /// Initializes the application on the chain that created it.
+    /// Instantiates the application on the chain that created it.
     ///
     /// This is only called once when the application is created and only on the microchain that
     /// created the application.
-    async fn initialize(
+    async fn instantiate(
         &mut self,
         argument: Self::InitializationArgument,
     ) -> Result<(), Self::Error>;

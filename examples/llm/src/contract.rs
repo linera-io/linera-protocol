@@ -36,7 +36,7 @@ impl Contract for LlmContract {
         &mut self.state
     }
 
-    async fn initialize(&mut self, _value: ()) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, _value: ()) -> Result<(), Self::Error> {
         Ok(())
     }
 

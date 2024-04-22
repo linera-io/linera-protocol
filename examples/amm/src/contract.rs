@@ -45,7 +45,7 @@ impl Contract for AmmContract {
         &mut self.state
     }
 
-    async fn initialize(&mut self, _argument: ()) -> Result<(), AmmError> {
+    async fn instantiate(&mut self, _argument: ()) -> Result<(), AmmError> {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
         Ok(())

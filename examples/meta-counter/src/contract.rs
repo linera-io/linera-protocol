@@ -49,7 +49,7 @@ impl Contract for MetaCounterContract {
         &mut self.state
     }
 
-    async fn initialize(&mut self, _argument: ()) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, _argument: ()) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         self.counter_id();
         // Send a no-op message to ourselves. This is only for testing contracts that send messages

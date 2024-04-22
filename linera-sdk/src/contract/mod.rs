@@ -32,7 +32,7 @@ macro_rules! contract {
                 move |application| {
                     let argument = serde_json::from_slice(&argument)?;
 
-                    application.initialize(argument).blocking_wait()
+                    application.instantiate(argument).blocking_wait()
                 },
             )
         }
