@@ -3,6 +3,7 @@ members = [
     "linera-base",
     "linera-chain",
     "linera-core",
+    "linera-ethereum",
     "linera-execution",
     "linera-explorer",
     "linera-indexer/example",
@@ -62,6 +63,11 @@ derive_more = "0.99.17"
 dirs = "5.0.1"
 ed25519-dalek = { version = "2.1.1", features = ["batch", "serde"] }
 either = "1.10.0"
+ethers = { version = "2.0.14", features = ["solc"] }
+ethers-core = "2.0.14"
+ethers-providers = "2.0.14"
+ethers-middleware = "2.0.14"
+ethers-signers = "2.0.14"
 frunk = "0.4.2"
 fs-err = { version = "2.11.0", features = ["tokio"] }
 fs4 = "0.8.2"
@@ -97,6 +103,7 @@ kube = "0.88.1"
 rcgen = "0.12.1"
 reqwest = { version = "0.11.24", default-features = false, features = ["rustls-tls"] }
 rocksdb = "0.21.0"
+rustc-hex = "2.1.0"
 scylla = "0.12.0"
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }
@@ -130,6 +137,7 @@ tower = "0.4.13"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", default-features = false, features = ["env-filter"] }
 trait-variant = "0.1.1"
+url = "2.4"
 wasm-bindgen = "0.2.92"
 wasm-bindgen-test = "0.3.42"
 wasm-encoder = "0.24.1"
