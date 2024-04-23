@@ -516,7 +516,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             .build()
             .await?;
         // We check the way the test can fail. It can fail in different ways.
-        let query = format!("SELECT dummy FROM kv.{} ALLOW FILTERING", namespace);
+        let query = format!("SELECT dummy FROM kv.{} LIMIT 1 ALLOW FILTERING", namespace);
 
         // Execute the query
         let result = session.query(query, &[]).await;
