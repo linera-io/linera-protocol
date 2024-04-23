@@ -101,7 +101,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     type Error: Error + From<serde_json::Error> + From<bcs::Error>;
 
     /// The type used to store the persisted application state.
-    type State;
+    type State: State;
 
     /// The desired storage backend used to store the application's state.
     ///
@@ -194,7 +194,7 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     type Error: Error + From<serde_json::Error>;
 
     /// The type used to store the persisted application state.
-    type State;
+    type State: State;
 
     /// The desired storage backend used to store the application's state.
     ///
