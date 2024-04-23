@@ -628,19 +628,19 @@ where
         chain_id: ChainId,
         bytecode_id: BytecodeId,
         parameters: String,
-        initialization_argument: String,
+        instantiation_argument: String,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ApplicationId, Error> {
         self.apply_client_command(&chain_id, move |mut client| {
             let parameters = parameters.as_bytes().to_vec();
-            let initialization_argument = initialization_argument.as_bytes().to_vec();
+            let instantiation_argument = instantiation_argument.as_bytes().to_vec();
             let required_application_ids = required_application_ids.clone();
             async move {
                 let result = client
                     .create_application_untyped(
                         bytecode_id,
                         parameters,
-                        initialization_argument,
+                        instantiation_argument,
                         required_application_ids,
                     )
                     .await

@@ -981,7 +981,7 @@ impl NodeService {
                  chainId: \"{chain_id}\",
                  bytecodeId: \"{bytecode_id}\", \
                  parameters: {new_parameters}, \
-                 initializationArgument: {new_argument}, \
+                 instantiationArgument: {new_argument}, \
                  requiredApplicationIds: {json_required_applications_ids}) \
              }}"
         );

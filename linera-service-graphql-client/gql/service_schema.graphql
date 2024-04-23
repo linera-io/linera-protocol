@@ -595,7 +595,7 @@ type MutationRoot {
 	"""
 	Creates a new application.
 	"""
-	createApplication(chainId: ChainId!, bytecodeId: BytecodeId!, parameters: String!, initializationArgument: String!, requiredApplicationIds: [ApplicationId!]!): ApplicationId!
+	createApplication(chainId: ChainId!, bytecodeId: BytecodeId!, parameters: String!, instantiationArgument: String!, requiredApplicationIds: [ApplicationId!]!): ApplicationId!
 	"""
 	Requests a `RegisterApplications` message from another chain so the application can be used
 	on this one.
