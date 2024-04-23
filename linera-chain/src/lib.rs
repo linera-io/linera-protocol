@@ -136,6 +136,8 @@ pub enum ChainError {
     ClosedChain,
     #[error("All operations on this chain must be from one of the following applications: {0:?}")]
     AuthorizedApplications(Vec<ApplicationId>),
+    #[error("Can't use grant across different broadcast messages")]
+    GrantUseOnBroadcast,
 }
 
 #[derive(Copy, Clone, Debug)]

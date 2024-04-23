@@ -1026,6 +1026,7 @@ where
                     recipients.insert(*id);
                 }
                 Destination::Subscribers(name) => {
+                    ensure!(grant == Amount::ZERO, ChainError::GrantUseOnBroadcast);
                     channel_broadcasts.insert(name.clone());
                 }
             }
