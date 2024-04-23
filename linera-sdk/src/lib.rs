@@ -209,3 +209,19 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     /// Executes a read-only query on the state of this application.
     async fn handle_query(&self, query: Self::Query) -> Result<Self::QueryResponse, Self::Error>;
 }
+
+/// The persistent state of a Linera application.
+///
+/// This is the state that is persisted to the database, and preserved across transactions. The
+/// application's [`Contract`] is allowed to modiy the state, while the application's [`Service`]
+/// can only read it.
+///
+/// The database can be accessed using an instance of [`ViewStorageContext`].
+#[allow(async_fn_in_trait)]
+pub trait State {
+    /// Loads the state from the database.
+    async fn load() -> Self;
+
+    /// Persists the state into the database.
+    async fn store(&mut self);
+}
