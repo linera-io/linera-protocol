@@ -201,16 +201,40 @@ where
         .published_bytecodes
         .insert(bytecode_id, bytecode_location);
     let publisher_state_hash = publisher_system_state.clone().into_hash().await;
+
+    let failing_broadcast_outgoing_message = OutgoingMessage {
+        destination: broadcast_channel.clone(),
+        authenticated_signer: None,
+        grant: Amount::ONE, // Can't have grants on broadcast messages
+        refund_grant_to: None,
+        kind: MessageKind::Simple,
+        message: Message::System(broadcast_message.clone()),
+    };
+    let failing_broadcast_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
+        block: broadcast_block.clone(),
+        messages: vec![failing_broadcast_outgoing_message],
+        message_counts: vec![1],
+        state_hash: publisher_state_hash,
+    });
+    let failing_broadcast_certificate =
+        make_certificate(&committee, &worker, failing_broadcast_block_proposal);
+
+    worker
+        .fully_handle_certificate(failing_broadcast_certificate.clone(), vec![])
+        .await
+        .expect_err("Broadcast messages with grants should fail");
+
+    let broadcast_outgoing_message = OutgoingMessage {
+        destination: broadcast_channel,
+        authenticated_signer: None,
+        grant: Amount::ZERO,
+        refund_grant_to: None,
+        kind: MessageKind::Simple,
+        message: Message::System(broadcast_message.clone()),
+    };
     let broadcast_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
         block: broadcast_block,
-        messages: vec![OutgoingMessage {
-            destination: broadcast_channel,
-            authenticated_signer: None,
-            grant: Amount::ZERO,
-            refund_grant_to: None,
-            kind: MessageKind::Simple,
-            message: Message::System(broadcast_message.clone()),
-        }],
+        messages: vec![broadcast_outgoing_message],
         message_counts: vec![1],
         state_hash: publisher_state_hash,
     });
