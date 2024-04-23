@@ -65,7 +65,6 @@ pub use linera_base::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 
-use self::contract::ContractStateStorage;
 #[cfg(not(target_arch = "wasm32"))]
 pub use self::mock_system_api::MockSystemApi;
 pub use self::{
@@ -73,6 +72,10 @@ pub use self::{
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
     service::{ServiceRuntime, ServiceStateStorage},
+};
+use self::{
+    contract::ContractStateStorage,
+    views::{RootView, ViewStorageContext},
 };
 
 /// A simple state management runtime based on a single byte array.
@@ -224,4 +227,21 @@ pub trait State {
 
     /// Persists the state into the database.
     async fn store(&mut self);
+}
+
+impl<V> State for V
+where
+    V: RootView<ViewStorageContext>,
+{
+    async fn load() -> Self {
+        V::load(ViewStorageContext::default())
+            .await
+            .expect("Failed to load application state")
+    }
+
+    async fn store(&mut self) {
+        self.save()
+            .await
+            .expect("Failed to store application state")
+    }
 }
