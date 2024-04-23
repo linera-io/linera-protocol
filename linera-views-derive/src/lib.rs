@@ -155,7 +155,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     };
 
     quote! {
-        #[async_trait::async_trait]
+        #[linera_views::async_trait]
         impl #impl_generics linera_views::views::View<#context> for #struct_name #type_generics
         #where_clause
         {
@@ -227,7 +227,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
     };
 
     quote! {
-        #[async_trait::async_trait]
+        #[linera_views::async_trait]
         impl #impl_generics linera_views::views::RootView<#context> for #struct_name #type_generics
         #where_clause
         {
@@ -266,7 +266,7 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
     }
 
     quote! {
-        #[async_trait::async_trait]
+        #[linera_views::async_trait]
         impl #impl_generics linera_views::views::HashableView<#context> for #struct_name #type_generics
         #where_clause
         {
@@ -307,7 +307,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
 
     let hash_type = syn::Ident::new(&format!("{}Hash", struct_name), Span::call_site());
     quote! {
-        #[async_trait::async_trait]
+        #[linera_views::async_trait]
         impl #impl_generics linera_views::views::CryptoHashView<#context>
             for #struct_name #type_generics
         #where_clause
