@@ -139,9 +139,9 @@ impl UserContractModule for WasmContractModule {
                 Box::new(WasmtimeContractInstance::prepare(module, runtime)?)
             }
             #[cfg(with_wasmer)]
-            WasmContractModule::Wasmer { engine, module } => {
-                Box::new(WasmerContractInstance::prepare(engine, module, runtime)?)
-            }
+            WasmContractModule::Wasmer { engine, module } => Box::new(
+                WasmerContractInstance::prepare(engine.clone(), module, runtime)?,
+            ),
         };
 
         Ok(instance)

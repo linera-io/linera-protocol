@@ -103,14 +103,16 @@ where
     where
         ExportedFunctions: ExportTo<Self::Builder>,
     {
-        let engine = ::wasmer::EngineBuilder::new(::wasmer::Singlepass::default()).engine();
+        let engine = ::wasmer::sys::EngineBuilder::new(::wasmer::Singlepass::default())
+            .engine()
+            .into();
         let module = ::wasmer::Module::from_file(
             &engine,
             format!("../target/wasm32-unknown-unknown/debug/{group}-{module}.wasm"),
         )
         .expect("Failed to load module");
 
-        let mut builder = wasmer::InstanceBuilder::new(&engine, UserData::default());
+        let mut builder = wasmer::InstanceBuilder::new(engine, UserData::default());
 
         ExportedFunctions::export_to(&mut builder)
             .expect("Failed to export functions to Wasmer instance builder");
