@@ -229,6 +229,20 @@ pub trait State {
     async fn store(&mut self);
 }
 
+/// Representation of an empty persistent state.
+///
+/// This can be used by applications that don't need to store anything in the database.
+#[derive(Clone, Copy, Debug, Default, serde::Deserialize, Serialize)]
+pub struct EmptyState;
+
+impl State for EmptyState {
+    async fn load() -> Self {
+        EmptyState
+    }
+
+    async fn store(&mut self) {}
+}
+
 impl<V> State for V
 where
     V: RootView<ViewStorageContext>,
