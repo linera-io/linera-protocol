@@ -6,3 +6,4 @@ metadata:
 data:
   scylla.yaml: |
     query_tombstone_page_limit: 200000
+    max_memory_for_unlimited_query_soft_limit: 104857600
