@@ -68,6 +68,15 @@ BlockAndRound:
         TYPENAME: Block
     - round:
         TYPENAME: Round
+BlockExecutionOutcome:
+  STRUCT:
+    - messages:
+        SEQ:
+          TYPENAME: OutgoingMessage
+    - message_counts:
+        SEQ: U32
+    - state_hash:
+        TYPENAME: CryptoHash
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:
@@ -379,13 +388,8 @@ ExecutedBlock:
   STRUCT:
     - block:
         TYPENAME: Block
-    - messages:
-        SEQ:
-          TYPENAME: OutgoingMessage
-    - message_counts:
-        SEQ: U32
-    - state_hash:
-        TYPENAME: CryptoHash
+    - outcome:
+        TYPENAME: BlockExecutionOutcome
 GenericApplicationId:
   ENUM:
     0:

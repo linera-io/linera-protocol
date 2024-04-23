@@ -129,7 +129,9 @@ pub struct Transfer;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
-    use linera_chain::data_types::{ExecutedBlock, HashedValue, IncomingMessage, OutgoingMessage};
+    use linera_chain::data_types::{
+        BlockExecutionOutcome, ExecutedBlock, HashedValue, IncomingMessage, OutgoingMessage,
+    };
 
     use super::*;
 
@@ -177,9 +179,9 @@ mod from {
         }
     }
 
-    impl From<block::BlockBlockValueExecutedBlockMessages> for OutgoingMessage {
-        fn from(val: block::BlockBlockValueExecutedBlockMessages) -> Self {
-            let block::BlockBlockValueExecutedBlockMessages {
+    impl From<block::BlockBlockValueExecutedBlockOutcomeMessages> for OutgoingMessage {
+        fn from(val: block::BlockBlockValueExecutedBlockOutcomeMessages) -> Self {
+            let block::BlockBlockValueExecutedBlockOutcomeMessages {
                 destination,
                 authenticated_signer,
                 grant,
@@ -202,9 +204,12 @@ mod from {
         fn from(val: block::BlockBlockValueExecutedBlock) -> Self {
             let block::BlockBlockValueExecutedBlock {
                 block,
-                messages,
-                message_counts,
-                state_hash,
+                outcome:
+                    block::BlockBlockValueExecutedBlockOutcome {
+                        messages,
+                        message_counts,
+                        state_hash,
+                    },
             } = val;
             let messages = messages
                 .into_iter()
@@ -212,9 +217,11 @@ mod from {
                 .collect::<Vec<_>>();
             ExecutedBlock {
                 block: block.into(),
-                messages,
-                message_counts: message_counts.into_iter().map(|c| c as u32).collect(),
-                state_hash,
+                outcome: BlockExecutionOutcome {
+                    messages,
+                    message_counts: message_counts.into_iter().map(|c| c as u32).collect(),
+                    state_hash,
+                },
             }
         }
     }

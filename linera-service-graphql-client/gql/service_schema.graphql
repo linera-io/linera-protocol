@@ -70,6 +70,20 @@ type Block {
 }
 
 """
+The messages and the state hash resulting from a block's execution.
+"""
+type BlockExecutionOutcome {
+	messages: [OutgoingMessage!]!
+	"""
+	For each transaction, the cumulative number of messages created by this and all previous
+	transactions, i.e. `message_counts[i]` is the index of the first message created by
+	transaction `i + 1` or later.
+	"""
+	messageCounts: [Int!]!
+	stateHash: CryptoHash!
+}
+
+"""
 A block height to identify blocks in a chain
 """
 scalar BlockHeight
@@ -330,18 +344,11 @@ A message together with non replayable information to ensure uniqueness in a par
 scalar Event
 
 """
-A block, together with the messages and the state hash resulting from its execution.
+A block, together with the outcome from its execution.
 """
 type ExecutedBlock {
 	block: Block!
-	messages: [OutgoingMessage!]!
-	"""
-	For each transaction, the cumulative number of messages created by this and all previous
-	transactions, i.e. `message_counts[i]` is the index of the first message created by
-	transaction `i + 1` or later.
-	"""
-	messageCounts: [Int!]!
-	stateHash: CryptoHash!
+	outcome: BlockExecutionOutcome!
 }
 
 type ExecutionStateView {

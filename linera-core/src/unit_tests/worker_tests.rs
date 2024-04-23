@@ -23,9 +23,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, ChainAndHeight, ChannelFullName, Event, ExecutedBlock,
-        HashedValue, IncomingMessage, LiteVote, Medium, MessageAction, Origin, OutgoingMessage,
-        SignatureAggregator,
+        Block, BlockExecutionOutcome, BlockProposal, Certificate, ChainAndHeight, ChannelFullName,
+        Event, HashedValue, IncomingMessage, LiteVote, Medium, MessageAction, Origin,
+        OutgoingMessage, SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt, VoteTestExt},
     ChainError, ChainExecutionContext,
@@ -272,12 +272,14 @@ async fn make_transfer_certificate_for_epoch<S>(
     }
     message_counts.push(message_count);
     let state_hash = system_state.into_hash().await;
-    let value = HashedValue::new_confirmed(ExecutedBlock {
-        block,
-        messages,
-        message_counts,
-        state_hash,
-    });
+    let value = HashedValue::new_confirmed(
+        BlockExecutionOutcome {
+            messages,
+            message_counts,
+            state_hash,
+        }
+        .with(block),
+    );
     make_certificate(committee, worker, value)
 }
 
@@ -506,12 +508,14 @@ where
             ..SystemExecutionState::new(epoch, ChainDescription::Root(1), ChainId::root(0))
         };
         let state_hash = system_state.into_hash().await;
-        let value = HashedValue::new_confirmed(ExecutedBlock {
-            block,
-            messages: vec![],
-            message_counts: vec![],
-            state_hash,
-        });
+        let value = HashedValue::new_confirmed(
+            BlockExecutionOutcome {
+                messages: vec![],
+                message_counts: vec![],
+                state_hash,
+            }
+            .with(block),
+        );
         make_certificate(&committee, &worker, value)
     };
     worker
@@ -700,45 +704,53 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        HashedValue::new_confirmed(ExecutedBlock {
-            block: make_first_block(ChainId::root(1))
-                .with_simple_transfer(ChainId::root(2), Amount::ONE)
-                .with_simple_transfer(ChainId::root(2), Amount::from_tokens(2)),
-            messages: vec![
-                direct_credit_message(ChainId::root(2), Amount::ONE),
-                direct_credit_message(ChainId::root(2), Amount::from_tokens(2)),
-            ],
-            message_counts: vec![1, 2],
-            state_hash: SystemExecutionState {
-                committees: [(epoch, committee.clone())].into_iter().collect(),
-                ownership: ChainOwnership::single(sender_key_pair.public()),
-                balance: Amount::from_tokens(3),
-                ..SystemExecutionState::new(epoch, ChainDescription::Root(1), admin_id)
+        HashedValue::new_confirmed(
+            BlockExecutionOutcome {
+                messages: vec![
+                    direct_credit_message(ChainId::root(2), Amount::ONE),
+                    direct_credit_message(ChainId::root(2), Amount::from_tokens(2)),
+                ],
+                message_counts: vec![1, 2],
+                state_hash: SystemExecutionState {
+                    committees: [(epoch, committee.clone())].into_iter().collect(),
+                    ownership: ChainOwnership::single(sender_key_pair.public()),
+                    balance: Amount::from_tokens(3),
+                    ..SystemExecutionState::new(epoch, ChainDescription::Root(1), admin_id)
+                }
+                .into_hash()
+                .await,
             }
-            .into_hash()
-            .await,
-        }),
+            .with(
+                make_first_block(ChainId::root(1))
+                    .with_simple_transfer(ChainId::root(2), Amount::ONE)
+                    .with_simple_transfer(ChainId::root(2), Amount::from_tokens(2)),
+            ),
+        ),
     );
 
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        HashedValue::new_confirmed(ExecutedBlock {
-            block: make_child_block(&certificate0.value)
-                .with_simple_transfer(ChainId::root(2), Amount::from_tokens(3)),
-            messages: vec![direct_credit_message(
-                ChainId::root(2),
-                Amount::from_tokens(3),
-            )],
-            message_counts: vec![1],
-            state_hash: SystemExecutionState {
-                committees: [(epoch, committee.clone())].into_iter().collect(),
-                ownership: ChainOwnership::single(sender_key_pair.public()),
-                ..SystemExecutionState::new(epoch, ChainDescription::Root(1), admin_id)
+        HashedValue::new_confirmed(
+            BlockExecutionOutcome {
+                messages: vec![direct_credit_message(
+                    ChainId::root(2),
+                    Amount::from_tokens(3),
+                )],
+                message_counts: vec![1],
+                state_hash: SystemExecutionState {
+                    committees: [(epoch, committee.clone())].into_iter().collect(),
+                    ownership: ChainOwnership::single(sender_key_pair.public()),
+                    ..SystemExecutionState::new(epoch, ChainDescription::Root(1), admin_id)
+                }
+                .into_hash()
+                .await,
             }
-            .into_hash()
-            .await,
-        }),
+            .with(
+                make_child_block(&certificate0.value)
+                    .with_simple_transfer(ChainId::root(2), Amount::from_tokens(3)),
+            ),
+        ),
     );
     // Missing earlier blocks
     assert_matches!(
@@ -979,18 +991,20 @@ where
         let certificate = make_certificate(
             &committee,
             &worker,
-            HashedValue::new_confirmed(ExecutedBlock {
-                block: block_proposal.content.block,
-                messages: vec![direct_credit_message(ChainId::root(3), Amount::ONE)],
-                message_counts: vec![0, 1],
-                state_hash: SystemExecutionState {
-                    committees: [(epoch, committee.clone())].into_iter().collect(),
-                    ownership: ChainOwnership::single(recipient_key_pair.public()),
-                    ..SystemExecutionState::new(epoch, ChainDescription::Root(2), admin_id)
+            HashedValue::new_confirmed(
+                BlockExecutionOutcome {
+                    messages: vec![direct_credit_message(ChainId::root(3), Amount::ONE)],
+                    message_counts: vec![0, 1],
+                    state_hash: SystemExecutionState {
+                        committees: [(epoch, committee.clone())].into_iter().collect(),
+                        ownership: ChainOwnership::single(recipient_key_pair.public()),
+                        ..SystemExecutionState::new(epoch, ChainDescription::Root(2), admin_id)
+                    }
+                    .into_hash()
+                    .await,
                 }
-                .into_hash()
-                .await,
-            }),
+                .with(block_proposal.content.block),
+            ),
         );
         worker
             .handle_certificate(certificate.clone(), vec![], None)
@@ -1277,12 +1291,14 @@ where
         },
         action: MessageAction::Accept,
     };
-    let value = HashedValue::new_confirmed(ExecutedBlock {
-        block: make_first_block(chain_id).with_incoming_message(open_chain_message),
-        messages: vec![],
-        message_counts: vec![0],
-        state_hash: state.into_hash().await,
-    });
+    let value = HashedValue::new_confirmed(
+        BlockExecutionOutcome {
+            messages: vec![],
+            message_counts: vec![0],
+            state_hash: state.into_hash().await,
+        }
+        .with(make_first_block(chain_id).with_incoming_message(open_chain_message)),
+    );
     let certificate = make_certificate(&committee, &worker, value);
     let info = worker
         .fully_handle_certificate(certificate, vec![])
@@ -2277,49 +2293,51 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        HashedValue::new_confirmed(ExecutedBlock {
-            block: make_first_block(admin_id).with_operation(SystemOperation::OpenChain(
-                OpenChainConfig {
+        HashedValue::new_confirmed(
+            BlockExecutionOutcome {
+                messages: vec![
+                    direct_outgoing_message(
+                        user_id,
+                        MessageKind::Protected,
+                        SystemMessage::OpenChain(OpenChainConfig {
+                            ownership: ChainOwnership::single(key_pair.public()),
+                            epoch: Epoch::ZERO,
+                            committees: committees.clone(),
+                            admin_id,
+                            balance: Amount::ZERO,
+                            application_permissions: Default::default(),
+                        }),
+                    ),
+                    direct_outgoing_message(
+                        admin_id,
+                        MessageKind::Protected,
+                        SystemMessage::Subscribe {
+                            id: user_id,
+                            subscription: admin_channel_subscription.clone(),
+                        },
+                    ),
+                ],
+                message_counts: vec![2],
+                state_hash: SystemExecutionState {
+                    committees: committees.clone(),
+                    ownership: ChainOwnership::single(key_pair.public()),
+                    balance: Amount::from_tokens(2),
+                    ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), admin_id)
+                }
+                .into_hash()
+                .await,
+            }
+            .with(make_first_block(admin_id).with_operation(
+                SystemOperation::OpenChain(OpenChainConfig {
                     ownership: ChainOwnership::single(key_pair.public()),
                     epoch: Epoch::ZERO,
                     committees: committees.clone(),
                     admin_id,
                     balance: Amount::ZERO,
                     application_permissions: Default::default(),
-                },
+                }),
             )),
-            messages: vec![
-                direct_outgoing_message(
-                    user_id,
-                    MessageKind::Protected,
-                    SystemMessage::OpenChain(OpenChainConfig {
-                        ownership: ChainOwnership::single(key_pair.public()),
-                        epoch: Epoch::ZERO,
-                        committees: committees.clone(),
-                        admin_id,
-                        balance: Amount::ZERO,
-                        application_permissions: Default::default(),
-                    }),
-                ),
-                direct_outgoing_message(
-                    admin_id,
-                    MessageKind::Protected,
-                    SystemMessage::Subscribe {
-                        id: user_id,
-                        subscription: admin_channel_subscription.clone(),
-                    },
-                ),
-            ],
-            message_counts: vec![2],
-            state_hash: SystemExecutionState {
-                committees: committees.clone(),
-                ownership: ChainOwnership::single(key_pair.public()),
-                balance: Amount::from_tokens(2),
-                ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), admin_id)
-            }
-            .into_hash()
-            .await,
-        }),
+        ),
     );
     worker
         .fully_handle_certificate(certificate0.clone(), vec![])
@@ -2352,30 +2370,34 @@ where
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        HashedValue::new_confirmed(ExecutedBlock {
-            block: make_child_block(&certificate0.value)
-                .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
-                    epoch: Epoch::from(1),
-                    committee: committee.clone(),
-                }))
-                .with_simple_transfer(user_id, Amount::from_tokens(2)),
-            messages: vec![
-                channel_admin_message(SystemMessage::SetCommittees {
-                    epoch: Epoch::from(1),
+        HashedValue::new_confirmed(
+            BlockExecutionOutcome {
+                messages: vec![
+                    channel_admin_message(SystemMessage::SetCommittees {
+                        epoch: Epoch::from(1),
+                        committees: committees2.clone(),
+                    }),
+                    direct_credit_message(user_id, Amount::from_tokens(2)),
+                ],
+                message_counts: vec![1, 2],
+                state_hash: SystemExecutionState {
+                    // The root chain knows both committees at the end.
                     committees: committees2.clone(),
-                }),
-                direct_credit_message(user_id, Amount::from_tokens(2)),
-            ],
-            message_counts: vec![1, 2],
-            state_hash: SystemExecutionState {
-                // The root chain knows both committees at the end.
-                committees: committees2.clone(),
-                ownership: ChainOwnership::single(key_pair.public()),
-                ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
+                    ownership: ChainOwnership::single(key_pair.public()),
+                    ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
+                }
+                .into_hash()
+                .await,
             }
-            .into_hash()
-            .await,
-        }),
+            .with(
+                make_child_block(&certificate0.value)
+                    .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+                        epoch: Epoch::from(1),
+                        committee: committee.clone(),
+                    }))
+                    .with_simple_transfer(user_id, Amount::from_tokens(2)),
+            ),
+        ),
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
@@ -2385,42 +2407,46 @@ where
     let certificate2 = make_certificate(
         &committee,
         &worker,
-        HashedValue::new_confirmed(ExecutedBlock {
-            block: make_child_block(&certificate1.value)
-                .with_epoch(1)
-                .with_incoming_message(IncomingMessage {
-                    origin: Origin::chain(admin_id),
-                    event: Event {
-                        certificate_hash: certificate0.value.hash(),
-                        height: BlockHeight::ZERO,
-                        index: 1,
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Protected,
-                        timestamp: Timestamp::from(0),
-                        message: Message::System(SystemMessage::Subscribe {
-                            id: user_id,
-                            subscription: admin_channel_subscription.clone(),
-                        }),
-                    },
-                    action: MessageAction::Accept,
-                }),
-            messages: vec![direct_outgoing_message(
-                user_id,
-                MessageKind::Protected,
-                SystemMessage::Notify { id: user_id },
-            )],
-            message_counts: vec![1],
-            state_hash: SystemExecutionState {
-                // The root chain knows both committees at the end.
-                committees: committees2.clone(),
-                ownership: ChainOwnership::single(key_pair.public()),
-                ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
+        HashedValue::new_confirmed(
+            BlockExecutionOutcome {
+                messages: vec![direct_outgoing_message(
+                    user_id,
+                    MessageKind::Protected,
+                    SystemMessage::Notify { id: user_id },
+                )],
+                message_counts: vec![1],
+                state_hash: SystemExecutionState {
+                    // The root chain knows both committees at the end.
+                    committees: committees2.clone(),
+                    ownership: ChainOwnership::single(key_pair.public()),
+                    ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
+                }
+                .into_hash()
+                .await,
             }
-            .into_hash()
-            .await,
-        }),
+            .with(
+                make_child_block(&certificate1.value)
+                    .with_epoch(1)
+                    .with_incoming_message(IncomingMessage {
+                        origin: Origin::chain(admin_id),
+                        event: Event {
+                            certificate_hash: certificate0.value.hash(),
+                            height: BlockHeight::ZERO,
+                            index: 1,
+                            authenticated_signer: None,
+                            grant: Amount::ZERO,
+                            refund_grant_to: None,
+                            kind: MessageKind::Protected,
+                            timestamp: Timestamp::from(0),
+                            message: Message::System(SystemMessage::Subscribe {
+                                id: user_id,
+                                subscription: admin_channel_subscription.clone(),
+                            }),
+                        },
+                        action: MessageAction::Accept,
+                    }),
+            ),
+        ),
     );
     worker
         .fully_handle_certificate(certificate2.clone(), vec![])
@@ -2504,96 +2530,100 @@ where
     let certificate3 = make_certificate(
         &committee,
         &worker,
-        HashedValue::new_confirmed(ExecutedBlock {
-            block: make_first_block(user_id)
-                .with_incoming_message(IncomingMessage {
-                    origin: Origin::chain(admin_id),
-                    event: Event {
-                        certificate_hash: certificate0.value.hash(),
-                        height: BlockHeight::from(0),
-                        index: 0,
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Protected,
-                        timestamp: Timestamp::from(0),
-                        message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
-                            ownership: ChainOwnership::single(key_pair.public()),
-                            epoch: Epoch::from(0),
-                            committees: committees.clone(),
-                            admin_id,
-                            balance: Amount::ZERO,
-                            application_permissions: Default::default(),
-                        })),
-                    },
-                    action: MessageAction::Accept,
-                })
-                .with_incoming_message(IncomingMessage {
-                    origin: admin_channel_origin.clone(),
-                    event: Event {
-                        certificate_hash: certificate1.value.hash(),
-                        height: BlockHeight::from(1),
-                        index: 0,
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Protected,
-                        timestamp: Timestamp::from(0),
-                        message: Message::System(SystemMessage::SetCommittees {
-                            epoch: Epoch::from(1),
-                            committees: committees2.clone(),
-                        }),
-                    },
-                    action: MessageAction::Accept,
-                })
-                .with_incoming_message(IncomingMessage {
-                    origin: Origin::chain(admin_id),
-                    event: Event {
-                        certificate_hash: certificate1.value.hash(),
-                        height: BlockHeight::from(1),
-                        index: 1,
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Tracked,
-                        timestamp: Timestamp::from(0),
-                        message: system_credit_message(Amount::from_tokens(2)),
-                    },
-                    action: MessageAction::Accept,
-                })
-                .with_incoming_message(IncomingMessage {
-                    origin: Origin::chain(admin_id),
-                    event: Event {
-                        certificate_hash: certificate2.value.hash(),
-                        height: BlockHeight::from(2),
-                        index: 0,
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Protected,
-                        timestamp: Timestamp::from(0),
-                        message: Message::System(SystemMessage::Notify { id: user_id }),
-                    },
-                    action: MessageAction::Accept,
-                }),
-            messages: Vec::new(),
-            message_counts: vec![0, 0, 0, 0],
-            state_hash: SystemExecutionState {
-                subscriptions: [ChannelSubscription {
-                    chain_id: admin_id,
-                    name: SystemChannel::Admin.name(),
-                }]
-                .into_iter()
-                .collect(),
-                // Finally the child knows about both committees and has the money.
-                committees: committees2.clone(),
-                ownership: ChainOwnership::single(key_pair.public()),
-                balance: Amount::from_tokens(2),
-                ..SystemExecutionState::new(Epoch::from(1), user_description, admin_id)
+        HashedValue::new_confirmed(
+            BlockExecutionOutcome {
+                messages: Vec::new(),
+                message_counts: vec![0, 0, 0, 0],
+                state_hash: SystemExecutionState {
+                    subscriptions: [ChannelSubscription {
+                        chain_id: admin_id,
+                        name: SystemChannel::Admin.name(),
+                    }]
+                    .into_iter()
+                    .collect(),
+                    // Finally the child knows about both committees and has the money.
+                    committees: committees2.clone(),
+                    ownership: ChainOwnership::single(key_pair.public()),
+                    balance: Amount::from_tokens(2),
+                    ..SystemExecutionState::new(Epoch::from(1), user_description, admin_id)
+                }
+                .into_hash()
+                .await,
             }
-            .into_hash()
-            .await,
-        }),
+            .with(
+                make_first_block(user_id)
+                    .with_incoming_message(IncomingMessage {
+                        origin: Origin::chain(admin_id),
+                        event: Event {
+                            certificate_hash: certificate0.value.hash(),
+                            height: BlockHeight::from(0),
+                            index: 0,
+                            authenticated_signer: None,
+                            grant: Amount::ZERO,
+                            refund_grant_to: None,
+                            kind: MessageKind::Protected,
+                            timestamp: Timestamp::from(0),
+                            message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
+                                ownership: ChainOwnership::single(key_pair.public()),
+                                epoch: Epoch::from(0),
+                                committees: committees.clone(),
+                                admin_id,
+                                balance: Amount::ZERO,
+                                application_permissions: Default::default(),
+                            })),
+                        },
+                        action: MessageAction::Accept,
+                    })
+                    .with_incoming_message(IncomingMessage {
+                        origin: admin_channel_origin.clone(),
+                        event: Event {
+                            certificate_hash: certificate1.value.hash(),
+                            height: BlockHeight::from(1),
+                            index: 0,
+                            authenticated_signer: None,
+                            grant: Amount::ZERO,
+                            refund_grant_to: None,
+                            kind: MessageKind::Protected,
+                            timestamp: Timestamp::from(0),
+                            message: Message::System(SystemMessage::SetCommittees {
+                                epoch: Epoch::from(1),
+                                committees: committees2.clone(),
+                            }),
+                        },
+                        action: MessageAction::Accept,
+                    })
+                    .with_incoming_message(IncomingMessage {
+                        origin: Origin::chain(admin_id),
+                        event: Event {
+                            certificate_hash: certificate1.value.hash(),
+                            height: BlockHeight::from(1),
+                            index: 1,
+                            authenticated_signer: None,
+                            grant: Amount::ZERO,
+                            refund_grant_to: None,
+                            kind: MessageKind::Tracked,
+                            timestamp: Timestamp::from(0),
+                            message: system_credit_message(Amount::from_tokens(2)),
+                        },
+                        action: MessageAction::Accept,
+                    })
+                    .with_incoming_message(IncomingMessage {
+                        origin: Origin::chain(admin_id),
+                        event: Event {
+                            certificate_hash: certificate2.value.hash(),
+                            height: BlockHeight::from(2),
+                            index: 0,
+                            authenticated_signer: None,
+                            grant: Amount::ZERO,
+                            refund_grant_to: None,
+                            kind: MessageKind::Protected,
+                            timestamp: Timestamp::from(0),
+                            message: Message::System(SystemMessage::Notify { id: user_id }),
+                        },
+                        action: MessageAction::Accept,
+                    }),
+            ),
+        ),
     );
     worker
         .fully_handle_certificate(certificate3, vec![])
@@ -2675,19 +2705,21 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        HashedValue::new_confirmed(ExecutedBlock {
-            block: make_first_block(user_id).with_simple_transfer(admin_id, Amount::ONE),
-            messages: vec![direct_credit_message(admin_id, Amount::ONE)],
-            message_counts: vec![1],
-            state_hash: SystemExecutionState {
-                committees: committees.clone(),
-                ownership: ChainOwnership::single(key_pair1.public()),
-                balance: Amount::from_tokens(2),
-                ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(1), admin_id)
+        HashedValue::new_confirmed(
+            BlockExecutionOutcome {
+                messages: vec![direct_credit_message(admin_id, Amount::ONE)],
+                message_counts: vec![1],
+                state_hash: SystemExecutionState {
+                    committees: committees.clone(),
+                    ownership: ChainOwnership::single(key_pair1.public()),
+                    balance: Amount::from_tokens(2),
+                    ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(1), admin_id)
+                }
+                .into_hash()
+                .await,
             }
-            .into_hash()
-            .await,
-        }),
+            .with(make_first_block(user_id).with_simple_transfer(admin_id, Amount::ONE)),
+        ),
     );
     // Have the admin chain create a new epoch without retiring the old one.
     let committees2 = BTreeMap::from_iter([
@@ -2697,26 +2729,30 @@ where
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        HashedValue::new_confirmed(ExecutedBlock {
-            block: make_first_block(admin_id).with_operation(SystemOperation::Admin(
-                AdminOperation::CreateCommittee {
+        HashedValue::new_confirmed(
+            BlockExecutionOutcome {
+                messages: vec![channel_admin_message(SystemMessage::SetCommittees {
                     epoch: Epoch::from(1),
-                    committee: committee.clone(),
-                },
-            )),
-            messages: vec![channel_admin_message(SystemMessage::SetCommittees {
-                epoch: Epoch::from(1),
-                committees: committees2.clone(),
-            })],
-            message_counts: vec![1],
-            state_hash: SystemExecutionState {
-                committees: committees2.clone(),
-                ownership: ChainOwnership::single(key_pair0.public()),
-                ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
+                    committees: committees2.clone(),
+                })],
+                message_counts: vec![1],
+                state_hash: SystemExecutionState {
+                    committees: committees2.clone(),
+                    ownership: ChainOwnership::single(key_pair0.public()),
+                    ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
+                }
+                .into_hash()
+                .await,
             }
-            .into_hash()
-            .await,
-        }),
+            .with(
+                make_first_block(admin_id).with_operation(SystemOperation::Admin(
+                    AdminOperation::CreateCommittee {
+                        epoch: Epoch::from(1),
+                        committee: committee.clone(),
+                    },
+                )),
+            ),
+        ),
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
@@ -2794,19 +2830,21 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        HashedValue::new_confirmed(ExecutedBlock {
-            block: make_first_block(user_id).with_simple_transfer(admin_id, Amount::ONE),
-            messages: vec![direct_credit_message(admin_id, Amount::ONE)],
-            message_counts: vec![1],
-            state_hash: SystemExecutionState {
-                committees: committees.clone(),
-                ownership: ChainOwnership::single(key_pair1.public()),
-                balance: Amount::from_tokens(2),
-                ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(1), admin_id)
+        HashedValue::new_confirmed(
+            BlockExecutionOutcome {
+                messages: vec![direct_credit_message(admin_id, Amount::ONE)],
+                message_counts: vec![1],
+                state_hash: SystemExecutionState {
+                    committees: committees.clone(),
+                    ownership: ChainOwnership::single(key_pair1.public()),
+                    balance: Amount::from_tokens(2),
+                    ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(1), admin_id)
+                }
+                .into_hash()
+                .await,
             }
-            .into_hash()
-            .await,
-        }),
+            .with(make_first_block(user_id).with_simple_transfer(admin_id, Amount::ONE)),
+        ),
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
     let committees2 = BTreeMap::from_iter([
@@ -2817,34 +2855,38 @@ where
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        HashedValue::new_confirmed(ExecutedBlock {
-            block: make_first_block(admin_id)
-                .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
-                    epoch: Epoch::from(1),
-                    committee: committee.clone(),
-                }))
-                .with_operation(SystemOperation::Admin(AdminOperation::RemoveCommittee {
-                    epoch: Epoch::ZERO,
-                })),
-            messages: vec![
-                channel_admin_message(SystemMessage::SetCommittees {
-                    epoch: Epoch::from(1),
-                    committees: committees2.clone(),
-                }),
-                channel_admin_message(SystemMessage::SetCommittees {
-                    epoch: Epoch::from(1),
+        HashedValue::new_confirmed(
+            BlockExecutionOutcome {
+                messages: vec![
+                    channel_admin_message(SystemMessage::SetCommittees {
+                        epoch: Epoch::from(1),
+                        committees: committees2.clone(),
+                    }),
+                    channel_admin_message(SystemMessage::SetCommittees {
+                        epoch: Epoch::from(1),
+                        committees: committees3.clone(),
+                    }),
+                ],
+                message_counts: vec![1, 2],
+                state_hash: SystemExecutionState {
                     committees: committees3.clone(),
-                }),
-            ],
-            message_counts: vec![1, 2],
-            state_hash: SystemExecutionState {
-                committees: committees3.clone(),
-                ownership: ChainOwnership::single(key_pair0.public()),
-                ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
+                    ownership: ChainOwnership::single(key_pair0.public()),
+                    ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
+                }
+                .into_hash()
+                .await,
             }
-            .into_hash()
-            .await,
-        }),
+            .with(
+                make_first_block(admin_id)
+                    .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+                        epoch: Epoch::from(1),
+                        committee: committee.clone(),
+                    }))
+                    .with_operation(SystemOperation::Admin(AdminOperation::RemoveCommittee {
+                        epoch: Epoch::ZERO,
+                    })),
+            ),
+        ),
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
@@ -2880,35 +2922,39 @@ where
     let certificate2 = make_certificate(
         &committee,
         &worker,
-        HashedValue::new_confirmed(ExecutedBlock {
-            block: make_child_block(&certificate1.value)
-                .with_epoch(1)
-                .with_incoming_message(IncomingMessage {
-                    origin: Origin::chain(user_id),
-                    event: Event {
-                        certificate_hash: certificate0.value.hash(),
-                        height: BlockHeight::ZERO,
-                        index: 0,
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Tracked,
-                        timestamp: Timestamp::from(0),
-                        message: system_credit_message(Amount::ONE),
-                    },
-                    action: MessageAction::Accept,
-                }),
-            messages: Vec::new(),
-            message_counts: vec![0],
-            state_hash: SystemExecutionState {
-                committees: committees3.clone(),
-                ownership: ChainOwnership::single(key_pair0.public()),
-                balance: Amount::ONE,
-                ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
+        HashedValue::new_confirmed(
+            BlockExecutionOutcome {
+                messages: Vec::new(),
+                message_counts: vec![0],
+                state_hash: SystemExecutionState {
+                    committees: committees3.clone(),
+                    ownership: ChainOwnership::single(key_pair0.public()),
+                    balance: Amount::ONE,
+                    ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
+                }
+                .into_hash()
+                .await,
             }
-            .into_hash()
-            .await,
-        }),
+            .with(
+                make_child_block(&certificate1.value)
+                    .with_epoch(1)
+                    .with_incoming_message(IncomingMessage {
+                        origin: Origin::chain(user_id),
+                        event: Event {
+                            certificate_hash: certificate0.value.hash(),
+                            height: BlockHeight::ZERO,
+                            index: 0,
+                            authenticated_signer: None,
+                            grant: Amount::ZERO,
+                            refund_grant_to: None,
+                            kind: MessageKind::Tracked,
+                            timestamp: Timestamp::from(0),
+                            message: system_credit_message(Amount::ONE),
+                        },
+                        action: MessageAction::Accept,
+                    }),
+            ),
+        ),
     );
     worker
         .fully_handle_certificate(certificate2.clone(), vec![])

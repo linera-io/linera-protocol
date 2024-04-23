@@ -520,7 +520,7 @@ pub mod tests {
         data_types::{Amount, Round, Timestamp},
     };
     use linera_chain::{
-        data_types::{Block, BlockAndRound, ExecutedBlock, HashedValue},
+        data_types::{Block, BlockAndRound, BlockExecutionOutcome, HashedValue},
         test::make_first_block,
     };
     use linera_core::data_types::ChainInfo;
@@ -676,24 +676,28 @@ pub mod tests {
     pub fn test_certificate() {
         let key_pair = KeyPair::generate();
         let certificate = Certificate::new(
-            HashedValue::new_validated(ExecutedBlock {
-                block: get_block(),
-                messages: vec![],
-                message_counts: vec![],
-                state_hash: CryptoHash::new(&Foo("test".into())),
-            }),
+            HashedValue::new_validated(
+                BlockExecutionOutcome {
+                    messages: vec![],
+                    message_counts: vec![],
+                    state_hash: CryptoHash::new(&Foo("test".into())),
+                }
+                .with(get_block()),
+            ),
             Round::MultiLeader(3),
             vec![(
                 ValidatorName::from(key_pair.public()),
                 Signature::new(&Foo("test".into()), &key_pair),
             )],
         );
-        let blobs = vec![HashedValue::new_validated(ExecutedBlock {
-            block: get_block(),
-            messages: vec![],
-            message_counts: vec![],
-            state_hash: CryptoHash::new(&Foo("also test".into())),
-        })];
+        let blobs = vec![HashedValue::new_validated(
+            BlockExecutionOutcome {
+                messages: vec![],
+                message_counts: vec![],
+                state_hash: CryptoHash::new(&Foo("also test".into())),
+            }
+            .with(get_block()),
+        )];
         let request = HandleCertificateRequest {
             certificate,
             blobs,
@@ -736,19 +740,23 @@ pub mod tests {
             },
             owner: Owner::from(KeyPair::generate().public()),
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
-            blobs: vec![HashedValue::new_confirmed(ExecutedBlock {
-                block: get_block(),
-                messages: vec![],
-                message_counts: vec![],
-                state_hash: CryptoHash::new(&Foo("execution state".into())),
-            })],
-            validated: Some(Certificate::new(
-                HashedValue::new_validated(ExecutedBlock {
-                    block: get_block(),
+            blobs: vec![HashedValue::new_confirmed(
+                BlockExecutionOutcome {
                     messages: vec![],
                     message_counts: vec![],
-                    state_hash: CryptoHash::new(&Foo("validated".into())),
-                }),
+                    state_hash: CryptoHash::new(&Foo("execution state".into())),
+                }
+                .with(get_block()),
+            )],
+            validated: Some(Certificate::new(
+                HashedValue::new_validated(
+                    BlockExecutionOutcome {
+                        messages: vec![],
+                        message_counts: vec![],
+                        state_hash: CryptoHash::new(&Foo("validated".into())),
+                    }
+                    .with(get_block()),
+                ),
                 Round::SingleLeader(2),
                 vec![(
                     ValidatorName::from(key_pair.public()),

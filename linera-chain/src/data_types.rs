@@ -261,16 +261,11 @@ impl OutgoingMessage {
     }
 }
 
-/// A block, together with the messages and the state hash resulting from its execution.
+/// A block, together with the outcome from its execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct ExecutedBlock {
     pub block: Block,
-    pub messages: Vec<OutgoingMessage>,
-    /// For each transaction, the cumulative number of messages created by this and all previous
-    /// transactions, i.e. `message_counts[i]` is the index of the first message created by
-    /// transaction `i + 1` or later.
-    pub message_counts: Vec<u32>,
-    pub state_hash: CryptoHash,
+    pub outcome: BlockExecutionOutcome,
 }
 
 /// The messages and the state hash resulting from a block's execution.
@@ -610,7 +605,7 @@ impl CertificateValue {
         };
         self.height() == message_id.height
             && self.chain_id() == message_id.chain_id
-            && executed_block.messages.len() > index
+            && executed_block.messages().len() > index
     }
 
     pub fn is_confirmed(&self) -> bool {
@@ -627,7 +622,7 @@ impl CertificateValue {
 
     #[cfg(with_testing)]
     pub fn messages(&self) -> Option<&Vec<OutgoingMessage>> {
-        Some(&self.executed_block()?.messages)
+        Some(self.executed_block()?.messages())
     }
 
     pub fn executed_block(&self) -> Option<&ExecutedBlock> {
@@ -675,6 +670,10 @@ impl Event {
 }
 
 impl ExecutedBlock {
+    pub fn messages(&self) -> &Vec<OutgoingMessage> {
+        &self.outcome.messages
+    }
+
     /// Returns the `message_index`th outgoing message created by the `operation_index`th operation,
     /// or `None` if there is no such operation or message.
     pub fn message_id_for_operation(
@@ -686,10 +685,10 @@ impl ExecutedBlock {
         let transaction_index = block.incoming_messages.len().checked_add(operation_index)?;
         let first_message_index = match transaction_index.checked_sub(1) {
             None => 0,
-            Some(index) => *self.message_counts.get(index)?,
+            Some(index) => *self.outcome.message_counts.get(index)?,
         };
         let index = first_message_index.checked_add(message_index)?;
-        let next_transaction_index = *self.message_counts.get(transaction_index)?;
+        let next_transaction_index = *self.outcome.message_counts.get(transaction_index)?;
         if index < next_transaction_index {
             Some(self.message_id(index))
         } else {
@@ -706,7 +705,7 @@ impl ExecutedBlock {
         if self.block.chain_id != *chain_id || self.block.height != *height {
             return None;
         }
-        self.messages.get(usize::try_from(*index).ok()?)
+        self.messages().get(usize::try_from(*index).ok()?)
     }
 
     /// Returns the message ID belonging to the `index`th outgoing message in this block.
@@ -721,16 +720,9 @@ impl ExecutedBlock {
 
 impl BlockExecutionOutcome {
     pub fn with(self, block: Block) -> ExecutedBlock {
-        let BlockExecutionOutcome {
-            messages,
-            message_counts,
-            state_hash,
-        } = self;
         ExecutedBlock {
             block,
-            messages,
-            message_counts,
-            state_hash,
+            outcome: self,
         }
     }
 }
@@ -996,7 +988,7 @@ impl Certificate {
     pub fn message_bundle_for(&self, medium: &Medium, recipient: ChainId) -> Option<MessageBundle> {
         let executed_block = self.value().executed_block()?;
         let messages = (0u32..)
-            .zip(&executed_block.messages)
+            .zip(executed_block.messages())
             .filter(|(_, message)| message.has_destination(medium, recipient))
             .map(|(idx, message)| (idx, message.clone()))
             .collect();

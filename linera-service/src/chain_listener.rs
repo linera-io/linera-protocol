@@ -183,7 +183,7 @@ where
                 continue;
             };
             let new_chains = executed_block
-                .messages
+                .messages()
                 .iter()
                 .filter_map(|outgoing_message| {
                     if let OutgoingMessage {

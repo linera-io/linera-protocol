@@ -15,12 +15,12 @@ fn test_signed_values() {
 
     let block =
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(2), Amount::ONE);
-    let executed_block = ExecutedBlock {
-        block,
+    let executed_block = BlockExecutionOutcome {
         messages: Vec::new(),
         message_counts: vec![1],
         state_hash: CryptoHash::test_hash("state"),
-    };
+    }
+    .with(block);
     let value = HashedValue::new_confirmed(executed_block);
 
     let v = LiteVote::new(value.lite(), Round::Fast, &key1);
@@ -43,12 +43,12 @@ fn test_certificates() {
 
     let block =
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(1), Amount::ONE);
-    let executed_block = ExecutedBlock {
-        block,
+    let executed_block = BlockExecutionOutcome {
         messages: Vec::new(),
         message_counts: vec![1],
         state_hash: CryptoHash::test_hash("state"),
-    };
+    }
+    .with(block);
     let value = HashedValue::new_confirmed(executed_block);
 
     let v1 = LiteVote::new(value.lite(), Round::Fast, &key1);
