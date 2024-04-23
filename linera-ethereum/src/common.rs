@@ -25,7 +25,7 @@ pub enum EthereumServiceError {
     #[error(transparent)]
     ProviderError(#[from] ethers_providers::ProviderError),
 
-    /// Url Pare error
+    /// Hex parsing error
     #[error(transparent)]
     FromHexError(#[from] rustc_hex::FromHexError),
 }

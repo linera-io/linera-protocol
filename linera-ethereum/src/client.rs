@@ -19,7 +19,7 @@ pub struct EthereumEndpoint {
 }
 
 impl EthereumEndpoint {
-    /// Connects to an existing Ethereum node and creates an EthereumEndpoint
+    /// Connects to an existing Ethereum node and creates an `EthereumEndpoint`
     /// if successful.
     pub fn new(url: String) -> Result<Self, EthereumServiceError> {
         let provider = Provider::<Http>::try_from(&url)?;
@@ -38,7 +38,7 @@ impl EthereumEndpoint {
             .collect::<Vec<_>>())
     }
 
-    /// Gets the block number of the Ethereum node.
+    /// Gets the latest block number of the Ethereum node.
     pub async fn get_block_number(&self) -> Result<u64, EthereumServiceError> {
         let block_number = self.provider.get_block_number().await?;
         Ok(block_number.as_u64())
@@ -66,7 +66,7 @@ impl EthereumEndpoint {
     }
 
     /// Reads the events of the smart contract.
-    /// This is done from a specified contract_address and event_name.
+    /// This is done from a specified `contract_address` and `event_name`.
     pub async fn read_events(
         &self,
         contract_address: &str,
