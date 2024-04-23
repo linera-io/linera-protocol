@@ -3,19 +3,15 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-mod state;
-
 use linera_sdk::{
     base::{ApplicationId, WithContractAbi},
-    Contract, ContractRuntime, Resources, SimpleStateStorage,
+    Contract, ContractRuntime, EmptyState, Resources, SimpleStateStorage,
 };
 use meta_counter::{Message, MetaCounterAbi, Operation};
 use thiserror::Error;
 
-use self::state::MetaCounter;
-
 pub struct MetaCounterContract {
-    state: MetaCounter,
+    state: EmptyState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -34,12 +30,12 @@ impl WithContractAbi for MetaCounterContract {
 impl Contract for MetaCounterContract {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
-    type State = MetaCounter;
+    type State = EmptyState;
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ApplicationId<counter::CounterAbi>;
 
-    async fn new(state: MetaCounter, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
+    async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(MetaCounterContract { state, runtime })
     }
 

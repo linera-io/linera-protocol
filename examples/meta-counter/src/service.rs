@@ -3,16 +3,12 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-mod state;
-
 use async_graphql::{Request, Response};
 use linera_sdk::{
     base::{ApplicationId, WithServiceAbi},
-    Service, ServiceRuntime, SimpleStateStorage,
+    EmptyState, Service, ServiceRuntime, SimpleStateStorage,
 };
 use thiserror::Error;
-
-use self::state::MetaCounter;
 
 pub struct MetaCounterService {
     runtime: ServiceRuntime<Self>,
@@ -27,7 +23,7 @@ impl WithServiceAbi for MetaCounterService {
 impl Service for MetaCounterService {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
-    type State = MetaCounter;
+    type State = EmptyState;
     type Parameters = ApplicationId<counter::CounterAbi>;
 
     async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
