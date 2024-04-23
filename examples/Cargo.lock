@@ -751,7 +751,6 @@ dependencies = [
  "bcs",
  "futures",
  "linera-sdk",
- "serde",
  "serde_json",
  "thiserror",
  "tokio",

@@ -6,7 +6,7 @@
 mod state;
 
 use counter::CounterAbi;
-use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, SimpleStateStorage};
+use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, ViewStateStorage};
 use thiserror::Error;
 
 use self::state::Counter;
@@ -24,7 +24,7 @@ impl WithContractAbi for CounterContract {
 
 impl Contract for CounterContract {
     type Error = Error;
-    type Storage = SimpleStateStorage<Self>;
+    type Storage = ViewStateStorage<Self>;
     type State = Counter;
     type Message = ();
     type InstantiationArgument = u64;
@@ -42,14 +42,15 @@ impl Contract for CounterContract {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
 
-        self.state.value = value;
+        self.state.value.set(value);
 
         Ok(())
     }
 
     async fn execute_operation(&mut self, operation: u64) -> Result<u64, Self::Error> {
-        self.state.value += operation;
-        Ok(self.state.value)
+        let new_value = self.state.value.get() + operation;
+        self.state.value.set(new_value);
+        Ok(new_value)
     }
 
     async fn execute_message(&mut self, _message: ()) -> Result<(), Self::Error> {
@@ -78,7 +79,9 @@ mod tests {
     use assert_matches::assert_matches;
     use futures::FutureExt;
     use linera_sdk::{
-        test::{mock_application_parameters, test_contract_runtime},
+        test::{mock_application_parameters, mock_key_value_store, test_contract_runtime},
+        util::BlockingWait,
+        views::{View, ViewStorageContext},
         Contract,
     };
     use webassembly_test::webassembly_test;
@@ -98,7 +101,7 @@ mod tests {
             .expect("Execution of counter operation should not await anything");
 
         assert!(result.is_ok());
-        assert_eq!(counter.state.value, initial_value + increment);
+        assert_eq!(*counter.state.value.get(), initial_value + increment);
     }
 
     #[webassembly_test]
@@ -112,7 +115,7 @@ mod tests {
             .expect("Execution of counter operation should not await anything");
 
         assert_matches!(result, Err(Error::MessagesNotSupported));
-        assert_eq!(counter.state.value, initial_value);
+        assert_eq!(*counter.state.value.get(), initial_value);
     }
 
     #[webassembly_test]
@@ -131,17 +134,19 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), expected_value);
-        assert_eq!(counter.state.value, expected_value);
+        assert_eq!(*counter.state.value.get(), expected_value);
     }
 
     fn create_and_instantiate_counter(initial_value: u64) -> CounterContract {
-        let counter = Counter::default();
+        mock_key_value_store();
+        mock_application_parameters(&());
+
         let mut contract = CounterContract {
-            state: counter,
+            state: Counter::load(ViewStorageContext::default())
+                .blocking_wait()
+                .expect("Failed to read from mock key value store"),
             runtime: test_contract_runtime(),
         };
-
-        mock_application_parameters(&());
 
         let result = contract
             .instantiate(initial_value)
@@ -149,7 +154,7 @@ mod tests {
             .expect("Initialization of counter state should not await anything");
 
         assert!(result.is_ok());
-        assert_eq!(contract.state.value, initial_value);
+        assert_eq!(*contract.state.value.get(), initial_value);
 
         contract
     }

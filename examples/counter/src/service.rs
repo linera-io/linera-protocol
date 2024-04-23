@@ -6,7 +6,7 @@
 mod state;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, SimpleStateStorage};
+use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, ViewStateStorage};
 use thiserror::Error;
 
 use self::state::Counter;
@@ -23,7 +23,7 @@ impl WithServiceAbi for CounterService {
 
 impl Service for CounterService {
     type Error = Error;
-    type Storage = SimpleStateStorage<Self>;
+    type Storage = ViewStateStorage<Self>;
     type State = Counter;
     type Parameters = ();
 
@@ -34,7 +34,7 @@ impl Service for CounterService {
     async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
         let schema = Schema::build(
             QueryRoot {
-                value: self.state.value,
+                value: *self.state.value.get(),
             },
             MutationRoot {},
             EmptySubscription,
@@ -76,7 +76,12 @@ pub enum Error {
 mod tests {
     use async_graphql::{Request, Response, Value};
     use futures::FutureExt;
-    use linera_sdk::Service;
+    use linera_sdk::{
+        test::mock_key_value_store,
+        util::BlockingWait,
+        views::{View, ViewStorageContext},
+        Service,
+    };
     use serde_json::json;
     use webassembly_test::webassembly_test;
 
@@ -84,8 +89,14 @@ mod tests {
 
     #[webassembly_test]
     fn query() {
+        mock_key_value_store();
+
         let value = 61_098_721_u64;
-        let state = Counter { value };
+        let mut state = Counter::load(ViewStorageContext::default())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+        state.value.set(value);
+
         let service = CounterService { state };
         let request = Request::new("{ value }");
 
