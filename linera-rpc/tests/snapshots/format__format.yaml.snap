@@ -896,7 +896,7 @@ SystemOperation:
           - bytecode_id:
               TYPENAME: BytecodeId
           - parameters: BYTES
-          - initialization_argument: BYTES
+          - instantiation_argument: BYTES
           - required_application_ids:
               SEQ:
                 TYPENAME: ApplicationId
