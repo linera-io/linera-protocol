@@ -176,7 +176,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// The default implementation persists the state, so if this method is overriden, care must be
     /// taken to persist the state manually.
     async fn finalize(&mut self) -> Result<(), Self::Error> {
-        Self::Storage::store(self.state_mut()).await;
+        Self::State::store(self.state_mut()).await;
         Ok(())
     }
 }
