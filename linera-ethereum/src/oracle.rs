@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_witty::{WitLoad, WitStore, WitType};
 use num_bigint::BigUint;
 use thiserror::Error;
-use linera_witty::{WitLoad, WitStore, WitType};
 
 use crate::{
     client::EthereumEndpoint,

@@ -5,10 +5,10 @@ use std::num::ParseIntError;
 
 use ethers::types::Log;
 use ethers_core::types::{Address, H256, U64};
+use linera_witty::{WitLoad, WitStore, WitType};
 use num_bigint::{BigInt, BigUint};
 use num_traits::cast::ToPrimitive;
 use thiserror::Error;
-use linera_witty::{WitLoad, WitStore, WitType};
 
 #[derive(Debug, Error)]
 pub enum EthereumServiceError {
@@ -49,7 +49,7 @@ pub enum EthereumServiceError {
     FromHexError(#[from] rustc_hex::FromHexError),
 }
 
-#[derive(Clone, Debug,PartialEq,Eq,WitLoad,WitStore,WitType)]
+#[derive(Clone, Debug, PartialEq, Eq, WitLoad, WitStore, WitType)]
 pub enum EthereumDataType {
     Address(String),
     Uint256(BigUint),
@@ -136,7 +136,7 @@ fn parse_entry(entry: H256, ethereum_type: &str) -> Result<EthereumDataType, Eth
     Err(EthereumServiceError::UnsupportedEthereumTypeError)
 }
 
-#[derive(Clone,Debug,PartialEq,Eq,WitLoad,WitStore,WitType)]
+#[derive(Clone, Debug, PartialEq, Eq, WitLoad, WitStore, WitType)]
 pub struct EthereumEvent {
     pub values: Vec<EthereumDataType>,
     pub block_number: u64,
@@ -165,12 +165,12 @@ pub fn parse_log(
     let mut values = Vec::new();
     let mut idx_topic = 0;
     let mut idx_data = 0;
-    let mut vec = [0 as u8; 32];
+    let mut vec = [0_u8; 32];
     for ethereum_type in ethereum_types {
         values.push(match ethereum_type.strip_suffix(" indexed") {
             None => {
-                for i in 0..32 {
-                    vec[i] = log.data[idx_data * 32 + i];
+                for (i, val) in vec.iter_mut().enumerate() {
+                    *val = log.data[idx_data * 32 + i];
                 }
                 idx_data += 1;
                 let entry = vec.into();
