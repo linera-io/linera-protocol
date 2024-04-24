@@ -25,6 +25,7 @@ frunk.workspace = true
 genawaiter.workspace = true
 linera-witty-macros = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
+num-bigint.workspace = true
 thiserror.workspace = true
 wasmer = { workspace = true, optional = true }
 wasmer-vm = { workspace = true, optional = true }

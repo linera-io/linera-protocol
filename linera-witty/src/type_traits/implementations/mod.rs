@@ -7,6 +7,7 @@ mod custom_types;
 mod frunk;
 #[cfg(with_log)]
 mod log;
+mod bigint;
 mod std;
 #[cfg(test)]
 mod tests;

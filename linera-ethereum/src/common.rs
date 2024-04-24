@@ -8,6 +8,7 @@ use ethers_core::types::{Address, H256, U64};
 use num_bigint::{BigInt, BigUint};
 use num_traits::cast::ToPrimitive;
 use thiserror::Error;
+use linera_witty::{WitLoad, WitStore, WitType};
 
 #[derive(Debug, Error)]
 pub enum EthereumServiceError {
@@ -48,7 +49,7 @@ pub enum EthereumServiceError {
     FromHexError(#[from] rustc_hex::FromHexError),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug,PartialEq,Eq,WitLoad,WitStore,WitType)]
 pub enum EthereumDataType {
     Address(String),
     Uint256(BigUint),
@@ -135,7 +136,7 @@ fn parse_entry(entry: H256, ethereum_type: &str) -> Result<EthereumDataType, Eth
     Err(EthereumServiceError::UnsupportedEthereumTypeError)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone,Debug,PartialEq,Eq,WitLoad,WitStore,WitType)]
 pub struct EthereumEvent {
     pub values: Vec<EthereumDataType>,
     pub block_number: u64,

@@ -41,18 +41,22 @@ pub struct OracleEndpoints {
 
 // The Oracle answers
 
+#[derive(WitLoad, WitStore, WitType)]
 pub struct EthereumBalanceAnswer {
     pub balance: BigUint,
 }
 
+#[derive(WitLoad, WitStore, WitType)]
 pub struct EthereumBlockNumberAnswer {
     pub block_number: u64,
 }
 
+#[derive(WitLoad, WitStore, WitType)]
 pub struct EthereumEventsAnswer {
     pub events: Vec<EthereumEvent>,
 }
 
+#[derive(WitLoad, WitStore, WitType)]
 pub enum OracleAnswer {
     EthereumBalance(EthereumBalanceAnswer),
     EthereumBlockNumber(EthereumBlockNumberAnswer),
