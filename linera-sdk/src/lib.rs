@@ -197,7 +197,7 @@ pub trait State {
 /// Representation of an empty persistent state.
 ///
 /// This can be used by applications that don't need to store anything in the database.
-#[derive(Clone, Copy, Debug, Default, serde::Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct EmptyState;
 
 impl State for EmptyState {
