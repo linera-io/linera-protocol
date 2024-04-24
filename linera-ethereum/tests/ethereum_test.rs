@@ -1,21 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{path::Path, sync::Arc};
-
-use ethers::{
-    contract::abigen,
-    prelude::{ContractFactory, SignerMiddleware},
-    solc::Solc,
-    types::U256,
+use linera_ethereum::{
+    client::EthereumEndpoint,
+    common::{EthereumDataType, EthereumEvent},
+    test_utils::{get_anvil, get_test_contract_endpoints, ContractEndpoints},
 };
-use linera_ethereum::test_utils::get_anvil;
-
-abigen!(
-    SimpleContract,
-    "./contracts/SimpleToken.json",
-    event_derives(serde::Deserialize, serde::Serialize)
-);
+use num_bigint::BigUint;
 
 #[tokio::test]
 async fn test_get_accounts_balance() {
@@ -23,7 +14,7 @@ async fn test_get_accounts_balance() {
     let ethereum_endpoint = anvil_test.ethereum_endpoint;
     let addresses = ethereum_endpoint.get_accounts().await.unwrap();
     let block_nr = ethereum_endpoint.get_block_number().await.unwrap();
-    let target_balance = U256::from_dec_str("10000000000000000000000").unwrap();
+    let target_balance = "10000000000000000000000".parse::<BigUint>().unwrap();
     for address in addresses {
         let balance = ethereum_endpoint
             .get_balance(&address, Some(block_nr))
@@ -35,59 +26,60 @@ async fn test_get_accounts_balance() {
 
 #[tokio::test]
 async fn test_contract() -> anyhow::Result<()> {
-    // 1. Compile the code
-    let source = Path::new(&env!("CARGO_MANIFEST_DIR")).join("contracts/simple_token.sol");
-    let compiled = Solc::default()
-        .compile_source(source)
-        .expect("Could not compile contracts");
-
-    // 2. Access to the contract that interests us
-    let (abi, bytecode, _runtime_bytecode) = compiled
-        .find("SimpleToken")
-        .expect("could not find contract")
-        .into_parts_or_default();
-
-    // 3. Access to the wallets
-    let anvil_test = get_anvil().await.unwrap();
-    let (wallet0, addr0) = anvil_test.get_wallet(0);
-    let (_wallet1, addr1) = anvil_test.get_wallet(1);
-
-    // 4. instantiate the client with the wallet
-    let client0 = SignerMiddleware::new(anvil_test.ethereum_endpoint.provider, wallet0);
-    let client0 = Arc::new(client0);
-
-    // 5. create a factory which will be used to deploy instances of the contract
-    let factory = ContractFactory::new(abi, bytecode, client0.clone());
-
-    // 6. deploy it with the constructor arguments, note the `legacy` call
-    let initial_supply = U256::from_dec_str("1000")?;
-    let contract = factory.deploy(initial_supply)?.legacy().send().await?;
-
-    // 7. get the contract's address
-    let addr_contract = contract.address();
-
-    // 8. instantiate the contract
-    let contract = SimpleContract::new(addr_contract, client0.clone());
-
-    // 9. call the `setValue` method
-    // (first `await` returns a PendingTransaction, second wait for the mining)
-    let value = U256::from_dec_str("10")?;
-    let _receipt = contract
-        .transfer(addr1, value)
-        .legacy()
-        .send()
-        .await?
+    let contract_endpoints = get_test_contract_endpoints().await?;
+    let ContractEndpoints {
+        url,
+        addr_contract,
+        addr0,
+        addr1,
+        _instance,
+    } = contract_endpoints;
+    let ethereum_endpoint = EthereumEndpoint::new(url)?;
+    // Test the conversion of the types
+    let event_name_expanded = "Types(address indexed,address,uint256,uint64,int64,uint32,int32,uint16,int16,uint8,int8,bool)";
+    let events = ethereum_endpoint
+        .read_events(&addr_contract, event_name_expanded, 0)
         .await?;
-
-    // 11. get the new value
-    let value_read = contract.balance_of(addr1).call().await?;
-    assert_eq!(value_read, value);
-    let value_read = contract.balance_of(addr_contract).call().await?;
-    assert_eq!(value_read, U256::zero());
-    let value_read = contract.balance_of(addr0).call().await?;
-    assert_eq!(value_read, U256::from_dec_str("990")?);
-    // Add queries to the state of the chain.
-
+    let big_value = "239675476885367459284564394732743434463843674346373355625"
+        .parse::<BigUint>()
+        .expect("parsing error");
+    let target_event = EthereumEvent {
+        values: vec![
+            EthereumDataType::Address(addr0.clone()),
+            EthereumDataType::Address(addr0.clone()),
+            EthereumDataType::Uint256(big_value),
+            EthereumDataType::Uint64(4611686018427387904),
+            EthereumDataType::Int64(-1152921504606846976),
+            EthereumDataType::Uint32(1073726139),
+            EthereumDataType::Int32(-1072173379),
+            EthereumDataType::Uint16(16261),
+            EthereumDataType::Int16(-16249),
+            EthereumDataType::Uint8(135),
+            EthereumDataType::Int8(-120),
+            EthereumDataType::Bool(true),
+        ],
+        block_number: 1,
+    };
+    for event in events {
+        assert_eq!(event, target_event);
+    }
+    // Test the Transfer entries
+    let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
+    let events = ethereum_endpoint
+        .read_events(&addr_contract, event_name_expanded, 0)
+        .await?;
+    let value = "10".parse::<BigUint>().expect("parsing error");
+    let target_event = EthereumEvent {
+        values: vec![
+            EthereumDataType::Address(addr0),
+            EthereumDataType::Address(addr1),
+            EthereumDataType::Uint256(value),
+        ],
+        block_number: 2,
+    };
+    for event in events {
+        assert_eq!(event, target_event);
+    }
     // Returning nothing
     Ok(())
 }
