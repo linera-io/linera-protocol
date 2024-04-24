@@ -60,6 +60,8 @@ use serde::{de::DeserializeOwned, Serialize};
 #[cfg(not(target_arch = "wasm32"))]
 pub use self::mock_system_api::MockSystemApi;
 use self::views::{RootView, ViewStorageContext};
+#[doc(hidden)]
+pub use self::{contract::export_contract, service::export_service};
 pub use self::{
     contract::ContractRuntime,
     extensions::{FromBcsBytes, ToBcsBytes},

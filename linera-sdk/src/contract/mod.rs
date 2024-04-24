@@ -6,9 +6,12 @@
 mod conversions_from_wit;
 mod conversions_to_wit;
 mod runtime;
-pub(crate) mod wit;
+#[doc(hidden)]
+pub mod wit;
 
 pub use self::runtime::ContractRuntime;
+#[doc(hidden)]
+pub use self::wit::export_contract;
 use crate::{log::ContractLogger, util::BlockingWait, Contract, State};
 
 /// Declares an implementation of the [`Contract`][`crate::Contract`] trait, exporting it from the
@@ -18,80 +21,74 @@ use crate::{log::ContractLogger, util::BlockingWait, Contract, State};
 /// necessary resource types and functions so that the host can call the contract application.
 #[macro_export]
 macro_rules! contract {
-    ($application:ty) => {
+    ($application:ident) => {
         #[doc(hidden)]
         static mut APPLICATION: Option<$application> = None;
 
-        #[doc(hidden)]
-        #[no_mangle]
-        fn __contract_instantiate(argument: Vec<u8>) -> Result<(), String> {
-            use $crate::util::BlockingWait;
-            $crate::contract::run_async_entrypoint::<$application, _, _, _>(
-                unsafe { &mut APPLICATION },
-                move |application| {
-                    let argument = serde_json::from_slice(&argument)?;
+        /// Export the contract interface.
+        $crate::export_contract!($application with_types_in $crate::contract::wit);
 
-                    application.instantiate(argument).blocking_wait()
-                },
-            )
-        }
+        /// Mark the contract type to be exported.
+        impl $crate::contract::wit::exports::linera::app::contract_entrypoints::Guest
+            for $application
+        {
+            fn instantiate(argument: Vec<u8>) -> Result<(), String> {
+                use $crate::util::BlockingWait;
+                $crate::contract::run_async_entrypoint::<$application, _, _, _>(
+                    unsafe { &mut APPLICATION },
+                    move |application| {
+                        let argument = serde_json::from_slice(&argument)?;
 
-        #[doc(hidden)]
-        #[no_mangle]
-        fn __contract_execute_operation(operation: Vec<u8>) -> Result<Vec<u8>, String> {
-            use $crate::util::BlockingWait;
-            $crate::contract::run_async_entrypoint::<$application, _, _, _>(
-                unsafe { &mut APPLICATION },
-                move |application| {
-                    let operation: <$application as $crate::abi::ContractAbi>::Operation =
-                        bcs::from_bytes(&operation)?;
+                        application.instantiate(argument).blocking_wait()
+                    },
+                )
+            }
 
-                    application
-                        .execute_operation(operation)
-                        .blocking_wait()
-                        .map(|response| {
-                            bcs::to_bytes(&response)
-                                .expect("Failed to serialize contract's `Response`")
-                        })
-                },
-            )
-        }
+            fn execute_operation(operation: Vec<u8>) -> Result<Vec<u8>, String> {
+                use $crate::util::BlockingWait;
+                $crate::contract::run_async_entrypoint::<$application, _, _, _>(
+                    unsafe { &mut APPLICATION },
+                    move |application| {
+                        let operation: <$application as $crate::abi::ContractAbi>::Operation =
+                            bcs::from_bytes(&operation)?;
 
-        #[doc(hidden)]
-        #[no_mangle]
-        fn __contract_execute_message(message: Vec<u8>) -> Result<(), String> {
-            use $crate::util::BlockingWait;
-            $crate::contract::run_async_entrypoint::<$application, _, _, _>(
-                unsafe { &mut APPLICATION },
-                move |application| {
-                    let message: <$application as $crate::Contract>::Message =
-                        bcs::from_bytes(&message)?;
+                        application
+                            .execute_operation(operation)
+                            .blocking_wait()
+                            .map(|response| {
+                                bcs::to_bytes(&response)
+                                    .expect("Failed to serialize contract's `Response`")
+                            })
+                    },
+                )
+            }
 
-                    application.execute_message(message).blocking_wait()
-                },
-            )
-        }
+            fn execute_message(message: Vec<u8>) -> Result<(), String> {
+                use $crate::util::BlockingWait;
+                $crate::contract::run_async_entrypoint::<$application, _, _, _>(
+                    unsafe { &mut APPLICATION },
+                    move |application| {
+                        let message: <$application as $crate::Contract>::Message =
+                            bcs::from_bytes(&message)?;
 
-        #[doc(hidden)]
-        #[no_mangle]
-        fn __contract_finalize() -> Result<(), String> {
-            use $crate::util::BlockingWait;
-            $crate::contract::run_async_entrypoint::<$application, _, _, _>(
-                unsafe { &mut APPLICATION },
-                move |application| application.finalize().blocking_wait(),
-            )
+                        application.execute_message(message).blocking_wait()
+                    },
+                )
+            }
+
+            fn finalize() -> Result<(), String> {
+                use $crate::util::BlockingWait;
+                $crate::contract::run_async_entrypoint::<$application, _, _, _>(
+                    unsafe { &mut APPLICATION },
+                    move |application| application.finalize().blocking_wait(),
+                )
+            }
         }
 
         /// Stub of a `main` entrypoint so that the binary doesn't fail to compile on targets other
         /// than WebAssembly.
         #[cfg(not(target_arch = "wasm32"))]
         fn main() {}
-
-        #[doc(hidden)]
-        #[no_mangle]
-        fn __service_handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String> {
-            unreachable!("Service entrypoint should not be called in contract");
-        }
     };
 }
 
