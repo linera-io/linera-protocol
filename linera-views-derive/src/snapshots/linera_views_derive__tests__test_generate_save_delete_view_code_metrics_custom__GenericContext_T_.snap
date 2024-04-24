@@ -2,7 +2,7 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_save_delete_view_code(input))
 ---
-#[async_trait::async_trait]
+#[linera_views::async_trait]
 impl linera_views::views::RootView<custom::GenericContext<T>> for TestView {
     async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
         use linera_views::{common::Context, batch::Batch, views::View};
