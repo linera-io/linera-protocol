@@ -150,7 +150,7 @@ wasmtimer = "0.2.0"
 webassembly-test = "0.1.0"
 web-sys = "0.3.69"
 web-time = "1.1.0"
-wit-bindgen = "0.16.0"
+wit-bindgen = "0.24.0"
 
 linera-base = { version = "0.11.0", path = "./linera-base" }
 linera-chain = { version = "0.11.0", path = "./linera-chain" }

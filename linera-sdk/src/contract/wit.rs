@@ -8,9 +8,6 @@
 // Export the contract interface.
 wit_bindgen::generate!({
     world: "contract",
-    exports: {
-        "linera:app/contract-entrypoints": ContractEntrypoints,
-    },
 });
 
 pub use self::linera::app::contract_system_api;
@@ -39,3 +36,5 @@ impl self::exports::linera::app::contract_entrypoints::Guest for ContractEntrypo
         unsafe { __contract_finalize() }
     }
 }
+
+export!(ContractEntrypoints);

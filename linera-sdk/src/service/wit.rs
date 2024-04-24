@@ -8,9 +8,6 @@
 // Export the service interface.
 wit_bindgen::generate!({
     world: "service",
-    exports: {
-        "linera:app/service-entrypoints": ServiceEntrypoints,
-    },
 });
 
 pub use self::linera::app::{service_system_api, view_system_api};
@@ -24,3 +21,5 @@ impl self::exports::linera::app::service_entrypoints::Guest for ServiceEntrypoin
         unsafe { __service_handle_query(argument) }
     }
 }
+
+export!(ServiceEntrypoints);
