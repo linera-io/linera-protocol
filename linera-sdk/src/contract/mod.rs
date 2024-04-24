@@ -6,10 +6,9 @@
 mod conversions_from_wit;
 mod conversions_to_wit;
 mod runtime;
-mod storage;
 pub(crate) mod wit;
 
-pub use self::{runtime::ContractRuntime, storage::ContractStateStorage};
+pub use self::runtime::ContractRuntime;
 use crate::{log::ContractLogger, util::BlockingWait, Contract, State};
 
 /// Declares an implementation of the [`Contract`][`crate::Contract`] trait, exporting it from the
