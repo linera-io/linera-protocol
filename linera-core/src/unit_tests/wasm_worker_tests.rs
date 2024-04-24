@@ -224,7 +224,7 @@ where
         make_certificate(&committee, &worker, failing_broadcast_block_proposal);
 
     worker
-        .fully_handle_certificate(failing_broadcast_certificate.clone(), vec![])
+        .fully_handle_certificate(failing_broadcast_certificate, vec![])
         .await
         .expect_err("Broadcast messages with grants should fail");
 
