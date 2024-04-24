@@ -121,12 +121,12 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// Immutable parameters specific to this application (e.g. the name of a token).
     type Parameters: Serialize + DeserializeOwned + Send + Sync + Clone + Debug + 'static;
 
-    /// Initialization argument passed to a new application on the chain that created it
+    /// Instantiation argument passed to a new application on the chain that created it
     /// (e.g. an initial amount of tokens minted).
     ///
     /// To share configuration data on every chain, use [`Contract::Parameters`]
     /// instead.
-    type InitializationArgument: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
+    type InstantiationArgument: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
     /// Creates a in-memory instance of the contract handler from the application's `state`.
     async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error>;
@@ -134,13 +134,13 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// Returns the current state of the application so that it can be persisted.
     fn state_mut(&mut self) -> &mut Self::State;
 
-    /// Initializes the application on the chain that created it.
+    /// Instantiates the application on the chain that created it.
     ///
     /// This is only called once when the application is created and only on the microchain that
     /// created the application.
-    async fn initialize(
+    async fn instantiate(
         &mut self,
-        argument: Self::InitializationArgument,
+        argument: Self::InstantiationArgument,
     ) -> Result<(), Self::Error>;
 
     /// Applies an operation from the current block.

@@ -38,7 +38,7 @@ impl Contract for MetaCounterContract {
     type Storage = SimpleStateStorage<Self>;
     type State = MetaCounter;
     type Message = Message;
-    type InitializationArgument = ();
+    type InstantiationArgument = ();
     type Parameters = ApplicationId<counter::CounterAbi>;
 
     async fn new(state: MetaCounter, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
@@ -49,7 +49,7 @@ impl Contract for MetaCounterContract {
         &mut self.state
     }
 
-    async fn initialize(&mut self, _argument: ()) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, _argument: ()) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         self.counter_id();
         // Send a no-op message to ourselves. This is only for testing contracts that send messages

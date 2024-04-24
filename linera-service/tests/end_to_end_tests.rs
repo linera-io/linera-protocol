@@ -1024,7 +1024,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Result<()> {
-    use crowd_funding::{CrowdFundingAbi, InitializationArgument};
+    use crowd_funding::{CrowdFundingAbi, InstantiationArgument};
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1062,14 +1062,14 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     // Setting up the application crowd funding
     let deadline = Timestamp::from(std::u64::MAX);
     let target = Amount::ONE;
-    let state_crowd = InitializationArgument {
+    let state_crowd = InstantiationArgument {
         owner: account_owner1,
         deadline,
         target,
     };
     let (contract_crowd, service_crowd) = client1.build_example("crowd-funding").await?;
     let application_id_crowd = client1
-        .publish_and_create::<CrowdFundingAbi, ApplicationId<FungibleTokenAbi>, InitializationArgument>(
+        .publish_and_create::<CrowdFundingAbi, ApplicationId<FungibleTokenAbi>, InstantiationArgument>(
             contract_crowd,
             service_crowd,
             // TODO(#723): This hack will disappear soon.

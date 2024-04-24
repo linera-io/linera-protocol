@@ -142,8 +142,8 @@ pub enum ExecutionError {
 
 /// The public entry points provided by the contract part of an application.
 pub trait UserContract {
-    /// Initializes the application state on the chain that owns the application.
-    fn initialize(
+    /// Instantiate the application state on the chain that owns the application.
+    fn instantiate(
         &mut self,
         context: OperationContext,
         argument: Vec<u8>,

@@ -71,14 +71,14 @@ pub enum FungibleResponse {
     TickerSymbol(String),
 }
 
-/// The initial state to initialize fungible with
+/// The initial state to instantiate fungible with
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct InitialState {
     /// Accounts and their respective initial balances
     pub accounts: BTreeMap<AccountOwner, Amount>,
 }
 
-/// The parameters to initialize fungible with
+/// The parameters to instantiate fungible with
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Parameters {
     /// Ticker symbol for the fungible
@@ -86,7 +86,7 @@ pub struct Parameters {
 }
 
 impl Parameters {
-    /// Initialize parameters
+    /// Instantiate parameters
     pub fn new(ticker_symbol: &str) -> Self {
         let ticker_symbol = ticker_symbol.to_string();
         Self { ticker_symbol }
@@ -130,7 +130,7 @@ impl InitialStateBuilder {
     }
 
     /// Returns the serialized initial state of the application, ready to used as the
-    /// initialization argument.
+    /// initilization argument.
     pub fn build(&self) -> InitialState {
         InitialState {
             accounts: self.account_balances.clone(),

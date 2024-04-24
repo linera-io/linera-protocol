@@ -602,11 +602,11 @@ pub enum ClientCommand {
         #[arg(long)]
         json_parameters_path: Option<PathBuf>,
 
-        /// The initialization argument as a JSON string.
+        /// The instantiation argument as a JSON string.
         #[arg(long)]
         json_argument: Option<String>,
 
-        /// Path to a JSON file containing the initialization argument.
+        /// Path to a JSON file containing the instantiation argument.
         #[arg(long)]
         json_argument_path: Option<PathBuf>,
 
@@ -635,11 +635,11 @@ pub enum ClientCommand {
         #[arg(long)]
         json_parameters_path: Option<PathBuf>,
 
-        /// The initialization argument as a JSON string.
+        /// The instantiation argument as a JSON string.
         #[arg(long)]
         json_argument: Option<String>,
 
-        /// Path to a JSON file containing the initialization argument.
+        /// Path to a JSON file containing the instantiation argument.
         #[arg(long)]
         json_argument_path: Option<PathBuf>,
 
@@ -837,11 +837,11 @@ pub enum ProjectCommand {
         #[arg(long)]
         json_parameters_path: Option<PathBuf>,
 
-        /// The initialization argument as a JSON string.
+        /// The instantiation argument as a JSON string.
         #[arg(long)]
         json_argument: Option<String>,
 
-        /// Path to a JSON file containing the initialization argument.
+        /// Path to a JSON file containing the instantiation argument.
         #[arg(long)]
         json_argument_path: Option<PathBuf>,
 

@@ -8,7 +8,7 @@ use linera_witty::wit_import;
 /// WIT entrypoints for application contracts.
 #[wit_import(package = "linera:app")]
 pub trait ContractEntrypoints {
-    fn initialize(argument: Vec<u8>) -> Result<(), String>;
+    fn instantiate(argument: Vec<u8>) -> Result<(), String>;
     fn execute_operation(operation: Vec<u8>) -> Result<Vec<u8>, String>;
     fn execute_message(message: Vec<u8>) -> Result<(), String>;
     fn finalize() -> Result<(), String>;

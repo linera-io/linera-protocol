@@ -298,9 +298,9 @@ impl ServiceAbi for CrowdFundingAbi {
     type QueryResponse = Response;
 }
 
-/// The initialization data required to create a crowd-funding campaign.
+/// The instantiation data required to create a crowd-funding campaign.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, SimpleObject)]
-pub struct InitializationArgument {
+pub struct InstantiationArgument {
     /// The receiver of the pledges of a successful campaign.
     pub owner: AccountOwner,
     /// The deadline of the campaign, after which it can be cancelled if it hasn't met its target.
@@ -309,7 +309,7 @@ pub struct InitializationArgument {
     pub target: Amount,
 }
 
-impl std::fmt::Display for InitializationArgument {
+impl std::fmt::Display for InstantiationArgument {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,

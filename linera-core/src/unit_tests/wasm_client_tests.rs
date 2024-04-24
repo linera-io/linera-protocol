@@ -152,7 +152,7 @@ where
     );
 
     assert_eq!(expected, response);
-    // Creating the application used fuel because of the `initialize` call.
+    // Creating the application used fuel because of the `instantiate` call.
     let balance_after_init = creator.local_balance().await?;
     assert!(balance_after_init < balance_after_messaging);
 

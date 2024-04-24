@@ -16,15 +16,15 @@ wit_bindgen::generate!({
 pub use self::linera::app::contract_system_api;
 use super::{
     __contract_execute_message, __contract_execute_operation, __contract_finalize,
-    __contract_initialize,
+    __contract_instantiate,
 };
 
 /// Implementation of the contract WIT entrypoints.
 pub struct ContractEntrypoints;
 
 impl self::exports::linera::app::contract_entrypoints::Guest for ContractEntrypoints {
-    fn initialize(argument: Vec<u8>) -> Result<(), String> {
-        unsafe { __contract_initialize(argument) }
+    fn instantiate(argument: Vec<u8>) -> Result<(), String> {
+        unsafe { __contract_instantiate(argument) }
     }
 
     fn execute_operation(operation: Vec<u8>) -> Result<Vec<u8>, String> {

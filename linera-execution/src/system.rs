@@ -166,7 +166,7 @@ pub enum SystemOperation {
         parameters: Vec<u8>,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
-        initialization_argument: Vec<u8>,
+        instantiation_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     },
     /// Requests a message from another chain to register a user application on this chain.
@@ -632,7 +632,7 @@ where
             CreateApplication {
                 bytecode_id,
                 parameters,
-                initialization_argument,
+                instantiation_argument,
                 required_application_ids,
             } => {
                 let id = UserApplicationId {
@@ -655,7 +655,7 @@ where
                     message: SystemMessage::ApplicationCreated,
                 };
                 outcome.messages.push(message);
-                new_application = Some((id, initialization_argument.clone()));
+                new_application = Some((id, instantiation_argument.clone()));
             }
             RequestApplication {
                 chain_id,
@@ -1106,7 +1106,7 @@ mod tests {
         let operation = SystemOperation::CreateApplication {
             bytecode_id,
             parameters: vec![],
-            initialization_argument: vec![],
+            instantiation_argument: vec![],
             required_application_ids: vec![],
         };
         let (result, new_application) = view

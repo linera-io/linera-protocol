@@ -25,14 +25,14 @@ macro_rules! contract {
 
         #[doc(hidden)]
         #[no_mangle]
-        fn __contract_initialize(argument: Vec<u8>) -> Result<(), String> {
+        fn __contract_instantiate(argument: Vec<u8>) -> Result<(), String> {
             use $crate::util::BlockingWait;
             $crate::contract::run_async_entrypoint::<$application, _, _, _>(
                 unsafe { &mut APPLICATION },
                 move |application| {
                     let argument = serde_json::from_slice(&argument)?;
 
-                    application.initialize(argument).blocking_wait()
+                    application.instantiate(argument).blocking_wait()
                 },
             )
         }
@@ -125,7 +125,7 @@ where
 
 // Import entrypoint proxy functions that applications implement with the `contract!` macro.
 extern "Rust" {
-    fn __contract_initialize(argument: Vec<u8>) -> Result<(), String>;
+    fn __contract_instantiate(argument: Vec<u8>) -> Result<(), String>;
     fn __contract_execute_operation(argument: Vec<u8>) -> Result<Vec<u8>, String>;
     fn __contract_execute_message(message: Vec<u8>) -> Result<(), String>;
     fn __contract_finalize() -> Result<(), String>;

@@ -371,7 +371,7 @@ where
     let create_operation = SystemOperation::CreateApplication {
         bytecode_id,
         parameters: parameters_bytes.clone(),
-        initialization_argument: initial_value_bytes.clone(),
+        instantiation_argument: initial_value_bytes.clone(),
         required_application_ids: vec![],
     };
     let application_id = UserApplicationId {
@@ -422,7 +422,7 @@ where
     creator_system_state.timestamp = Timestamp::from(4);
     let mut creator_state = creator_system_state.into_view().await;
     creator_state
-        .simulate_initialization(
+        .simulate_instantiation(
             contract,
             application_description,
             initial_value_bytes.clone(),

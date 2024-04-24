@@ -7,7 +7,7 @@
 
 use std::iter;
 
-use crowd_funding::{CrowdFundingAbi, InitializationArgument, Operation};
+use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Operation};
 use fungible::FungibleTokenAbi;
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, Timestamp},
@@ -28,7 +28,7 @@ async fn collect_pledges() {
     let (validator, bytecode_id) = TestValidator::with_current_bytecode::<
         CrowdFundingAbi,
         ApplicationId<FungibleTokenAbi>,
-        InitializationArgument,
+        InstantiationArgument,
     >()
     .await;
 
@@ -47,7 +47,7 @@ async fn collect_pledges() {
     )
     .await;
 
-    let campaign_state = InitializationArgument {
+    let campaign_state = InstantiationArgument {
         owner: campaign_account,
         deadline: Timestamp::from(u64::MAX),
         target: target_amount,
@@ -130,7 +130,7 @@ async fn cancel_successful_campaign() {
     let (validator, bytecode_id) = TestValidator::with_current_bytecode::<
         CrowdFundingAbi,
         ApplicationId<FungibleTokenAbi>,
-        InitializationArgument,
+        InstantiationArgument,
     >()
     .await;
 
@@ -149,7 +149,7 @@ async fn cancel_successful_campaign() {
     )
     .await;
 
-    let campaign_state = InitializationArgument {
+    let campaign_state = InstantiationArgument {
         owner: campaign_account,
         deadline: Timestamp::from(10),
         target: target_amount,

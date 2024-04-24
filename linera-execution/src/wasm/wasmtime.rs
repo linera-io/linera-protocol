@@ -186,13 +186,13 @@ impl<Runtime> crate::UserContract for WasmtimeContractInstance<Runtime>
 where
     Runtime: ContractRuntime + Send + Sync + 'static,
 {
-    fn initialize(
+    fn instantiate(
         &mut self,
         _context: OperationContext,
         argument: Vec<u8>,
     ) -> Result<(), ExecutionError> {
         self.configure_initial_fuel()?;
-        let result = ContractEntrypoints::new(&mut self.instance).initialize(argument);
+        let result = ContractEntrypoints::new(&mut self.instance).instantiate(argument);
         self.persist_remaining_fuel()?;
         result
             .map_err(WasmExecutionError::from)?
