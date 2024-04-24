@@ -12,7 +12,7 @@ use fungible::{Operation, Parameters};
 use linera_sdk::{
     base::{AccountOwner, WithServiceAbi},
     graphql::GraphQLMutationRoot,
-    Service, ServiceRuntime, ViewStateStorage,
+    Service, ServiceRuntime,
 };
 use native_fungible::{AccountEntry, TICKER_SYMBOL};
 use thiserror::Error;
@@ -32,7 +32,6 @@ impl WithServiceAbi for NativeFungibleTokenService {
 
 impl Service for NativeFungibleTokenService {
     type Error = Error;
-    type Storage = ViewStateStorage<Self>;
     type State = NativeFungibleToken;
     type Parameters = Parameters;
 

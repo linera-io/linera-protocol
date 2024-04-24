@@ -72,7 +72,7 @@ pub use self::{
     contract::ContractRuntime,
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
-    service::{ServiceRuntime, ServiceStateStorage},
+    service::ServiceRuntime,
 };
 
 /// A simple state management runtime based on a single byte array.
@@ -181,13 +181,6 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
 
     /// The type used to store the persisted application state.
     type State: State;
-
-    /// The desired storage backend used to store the application's state.
-    ///
-    /// Currently, the two supported backends are [`SimpleStateStorage`] or
-    /// [`ViewStateStorage`]. Accordingly, this associated type may be defined as `type
-    /// Storage = SimpleStateStorage<Self>` or `type Storage = ViewStateStorage<Self>`.
-    type Storage: ServiceStateStorage;
 
     /// Immutable parameters specific to this application.
     type Parameters: Serialize + DeserializeOwned + Send + Sync + Clone + Debug + 'static;

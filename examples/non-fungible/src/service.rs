@@ -15,7 +15,7 @@ use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use fungible::Account;
 use linera_sdk::{
     base::{AccountOwner, WithServiceAbi},
-    Service, ServiceRuntime, ViewStateStorage,
+    Service, ServiceRuntime,
 };
 use non_fungible::{NftOutput, Operation, TokenId};
 use thiserror::Error;
@@ -34,7 +34,6 @@ impl WithServiceAbi for NonFungibleTokenService {
 
 impl Service for NonFungibleTokenService {
     type Error = Error;
-    type Storage = ViewStateStorage<Self>;
     type State = NonFungibleToken;
     type Parameters = ();
 

@@ -10,7 +10,6 @@ use std::sync::Arc;
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use linera_sdk::{
     base::WithServiceAbi, graphql::GraphQLMutationRoot, views::ViewError, Service, ServiceRuntime,
-    ViewStateStorage,
 };
 use social::Operation;
 use state::Social;
@@ -28,7 +27,6 @@ impl WithServiceAbi for SocialService {
 
 impl Service for SocialService {
     type Error = Error;
-    type Storage = ViewStateStorage<Self>;
     type State = Social;
     type Parameters = ();
 

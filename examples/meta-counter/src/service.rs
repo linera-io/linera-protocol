@@ -6,7 +6,7 @@
 use async_graphql::{Request, Response};
 use linera_sdk::{
     base::{ApplicationId, WithServiceAbi},
-    EmptyState, Service, ServiceRuntime, SimpleStateStorage,
+    EmptyState, Service, ServiceRuntime,
 };
 use thiserror::Error;
 
@@ -22,7 +22,6 @@ impl WithServiceAbi for MetaCounterService {
 
 impl Service for MetaCounterService {
     type Error = Error;
-    type Storage = SimpleStateStorage<Self>;
     type State = EmptyState;
     type Parameters = ApplicationId<counter::CounterAbi>;
 

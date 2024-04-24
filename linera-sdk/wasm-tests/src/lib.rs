@@ -15,7 +15,6 @@ use linera_sdk::{
     util::BlockingWait,
     views::ViewStorageContext,
     Contract, ContractLogger, ContractRuntime, EmptyState, Service, ServiceLogger, ServiceRuntime,
-    SimpleStateStorage,
 };
 use linera_views::{
     map_view::MapView,
@@ -441,7 +440,6 @@ impl Contract for TestApp {
 
 impl Service for TestApp {
     type Error = TestAppError;
-    type Storage = SimpleStateStorage<Self>;
     type State = EmptyState;
     type Parameters = Vec<u8>;
 

@@ -13,7 +13,7 @@ use linera_sdk::{
     base::{AccountOwner, Amount, WithServiceAbi},
     graphql::GraphQLMutationRoot,
     views::MapView,
-    Service, ServiceRuntime, ViewStateStorage,
+    Service, ServiceRuntime,
 };
 use thiserror::Error;
 
@@ -33,7 +33,6 @@ impl WithServiceAbi for FungibleTokenService {
 
 impl Service for FungibleTokenService {
     type Error = Error;
-    type Storage = ViewStateStorage<Self>;
     type State = FungibleToken;
     type Parameters = Parameters;
 

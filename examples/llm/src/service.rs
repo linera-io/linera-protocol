@@ -15,7 +15,7 @@ use candle_transformers::{
     generation::LogitsProcessor,
     models::{quantized_llama as model, quantized_llama::ModelWeights},
 };
-use linera_sdk::{base::WithServiceAbi, EmptyState, Service, ServiceRuntime, SimpleStateStorage};
+use linera_sdk::{base::WithServiceAbi, EmptyState, Service, ServiceRuntime};
 use log::{error, info};
 use thiserror::Error;
 use tokenizers::Tokenizer;
@@ -49,7 +49,6 @@ struct ModelContext {
 
 impl Service for LlmService {
     type Error = ServiceError;
-    type Storage = SimpleStateStorage<Self>;
     type State = EmptyState;
     type Parameters = ();
 
