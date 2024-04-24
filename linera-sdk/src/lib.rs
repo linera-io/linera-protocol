@@ -6,14 +6,21 @@
 //! A Linera application consists of two WebAssembly binaries: a contract and a service.
 //! In both binaries, there should be a shared application state. The state is a type that
 //! represents what the application would like to persist in storage across blocks, and
-//! must implement the [`Contract`](crate::Contract) trait in the contract binary and the
-//! [`Service`](crate::Service) trait in the service binary.
+//! must implement [`State`](crate::State) trait in order to specify how the state should be loaded
+//! from and stored to the persistent key-value storage. An alternative is to use the
+//! [`linera-views`](https://docs.rs/linera-views/latest/linera_views/index.html), a framework that
+//! allows loading selected parts of the state. This is useful if the application's state is large
+//! and doesn't need to be loaded in its entirety for every execution. By deriving
+//! [`RootView`](views::RootView) on the state type it automatically implements the [`State`]
+//! trait.
 //!
-//! The contract binary should use the [`contract!`](crate::contract!) macro to export the application's contract
-//! endpoints implemented via the [`Contract`](crate::Contract) trait implementation.
+//! The contract binary should create a type to implement the [`Contract`](crate::Contract) trait.
+//! The type can store the [`ContractRuntime`](contract::ContractRuntime) and the state, and must
+//! have its implementation exported by using the [`contract!`](crate::contract!) macro.
 //!
-//! The service binary should use the [`service!`](crate::service!) macro to export the application's service
-//! endpoints implemented via the [`Service`](crate::Service) trait implementation.
+//! The service binary should create a type to implement the [`Service`](crate::Service) trait.
+//! The type can store the [`ServiceRuntime`](service::ServiceRuntime) and the state, and must have
+//! its implementation exported by using the [`service!`](crate::service!) macro.
 //!
 //! # Examples
 //!
