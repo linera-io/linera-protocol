@@ -9,21 +9,6 @@
 //! must implement the [`Contract`](crate::Contract) trait in the contract binary and the
 //! [`Service`](crate::Service) trait in the service binary.
 //!
-//! The application can select between two storage backends to use. Selecting the storage
-//! backend is done by specifying both the [`Contract::Storage`](crate::Contract::Storage)
-//! and the [`Service::Storage`](crate::Service::Storage) associated types.
-//!
-//! The [`SimpleStateStorage`](crate::SimpleStateStorage) backend stores the application's
-//! state type by serializing it into binary blob. This allows the entire contents of the
-//! state to be persisted and made available to the application when it is executed.
-//!
-//! The [`ViewStateStorage`](crate::ViewStateStorage) backend stores the application's
-//! state using the
-//! [`linera-views`](https://docs.rs/linera-views/latest/linera_views/index.html), a
-//! framework that allows loading selected parts of the state. This is useful if the
-//! application's state is large and doesn't need to be loaded in its entirety for every
-//! execution.
-//!
 //! The contract binary should use the [`contract!`](crate::contract!) macro to export the application's contract
 //! endpoints implemented via the [`Contract`](crate::Contract) trait implementation.
 //!
@@ -74,12 +59,6 @@ pub use self::{
     log::{ContractLogger, ServiceLogger},
     service::ServiceRuntime,
 };
-
-/// A simple state management runtime based on a single byte array.
-pub struct SimpleStateStorage<A>(std::marker::PhantomData<A>);
-
-/// A state management runtime based on [`linera_views`].
-pub struct ViewStateStorage<A>(std::marker::PhantomData<A>);
 
 /// The contract interface of a Linera application.
 ///
