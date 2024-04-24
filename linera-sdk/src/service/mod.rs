@@ -20,24 +20,24 @@ use crate::{util::BlockingWait, ServiceLogger};
 /// Wasm module.
 ///
 /// Generates the necessary boilerplate for implementing the service WIT interface, exporting the
-/// necessary resource types and functions so that the host can call the service application.
+/// necessary resource types and functions so that the host can call the application service.
 #[macro_export]
 macro_rules! service {
-    ($application:ident) => {
+    ($service:ident) => {
         /// Export the service interface.
-        $crate::export_service!($application with_types_in $crate::service::wit);
+        $crate::export_service!($service with_types_in $crate::service::wit);
 
         /// Mark the service type to be exported.
-        impl $crate::service::wit::exports::linera::app::service_entrypoints::Guest for $application {
+        impl $crate::service::wit::exports::linera::app::service_entrypoints::Guest for $service {
             fn handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String> {
                 let request = serde_json::from_slice(&argument).map_err(|error| error.to_string())?;
                 let response = $crate::service::run_async_entrypoint(move |runtime| async move {
                     let state =
-                        <<$application as $crate::Service>::State as $crate::State>::load().await;
-                    let application = <$application as $crate::Service>::new(state, runtime)
+                        <<$service as $crate::Service>::State as $crate::State>::load().await;
+                    let service = <$service as $crate::Service>::new(state, runtime)
                         .await
                         .map_err(|error| error.to_string())?;
-                    application
+                    service
                         .handle_query(request)
                         .await
                         .map_err(|error| error.to_string())
