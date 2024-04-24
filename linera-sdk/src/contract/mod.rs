@@ -118,11 +118,3 @@ where
 
     Ok(output.into())
 }
-
-// Import entrypoint proxy functions that applications implement with the `contract!` macro.
-extern "Rust" {
-    fn __contract_instantiate(argument: Vec<u8>) -> Result<(), String>;
-    fn __contract_execute_operation(argument: Vec<u8>) -> Result<Vec<u8>, String>;
-    fn __contract_execute_message(message: Vec<u8>) -> Result<(), String>;
-    fn __contract_finalize() -> Result<(), String>;
-}

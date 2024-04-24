@@ -69,8 +69,3 @@ where
         .blocking_wait()
         .map_err(|error| error.to_string())
 }
-
-// Import entrypoint proxy functions that applications implement with the `service!` macro.
-extern "Rust" {
-    fn __service_handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String>;
-}
