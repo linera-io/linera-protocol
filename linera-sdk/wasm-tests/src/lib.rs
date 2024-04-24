@@ -14,7 +14,7 @@ use linera_sdk::{
     test::{self, test_contract_runtime, test_service_runtime},
     util::BlockingWait,
     views::ViewStorageContext,
-    Contract, ContractLogger, ContractRuntime, Service, ServiceLogger, ServiceRuntime,
+    Contract, ContractLogger, ContractRuntime, EmptyState, Service, ServiceLogger, ServiceRuntime,
     SimpleStateStorage,
 };
 use linera_views::{
@@ -394,7 +394,7 @@ impl ServiceAbi for Abi {
 }
 
 pub struct TestApp {
-    state: (),
+    state: EmptyState,
 }
 
 impl WithContractAbi for TestApp {
@@ -408,12 +408,12 @@ impl WithServiceAbi for TestApp {
 impl Contract for TestApp {
     type Error = TestAppError;
     type Storage = SimpleStateStorage<Self>;
-    type State = ();
+    type State = EmptyState;
     type Message = Vec<u8>;
     type Parameters = Vec<u8>;
     type InstantiationArgument = Vec<u8>;
 
-    async fn new(state: (), _runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
+    async fn new(state: Self::State, _runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(TestApp { state })
     }
 
@@ -443,10 +443,10 @@ impl Contract for TestApp {
 impl Service for TestApp {
     type Error = TestAppError;
     type Storage = SimpleStateStorage<Self>;
-    type State = ();
+    type State = EmptyState;
     type Parameters = Vec<u8>;
 
-    async fn new(state: (), _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
+    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(TestApp { state })
     }
 
