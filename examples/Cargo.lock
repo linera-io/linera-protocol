@@ -2565,6 +2565,7 @@ dependencies = [
  "genawaiter",
  "linera-witty-macros",
  "log",
+ "num-bigint",
  "thiserror",
  "wasmer",
  "wasmer-vm",
