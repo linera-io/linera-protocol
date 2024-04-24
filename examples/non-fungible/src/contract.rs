@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use fungible::Account;
 use linera_sdk::{
     base::{AccountOwner, WithContractAbi},
-    ensure, Contract, ContractRuntime, ViewStateStorage,
+    ensure, Contract, ContractRuntime,
 };
 use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
 use thiserror::Error;
@@ -30,7 +30,6 @@ impl WithContractAbi for NonFungibleTokenContract {
 
 impl Contract for NonFungibleTokenContract {
     type Error = Error;
-    type Storage = ViewStateStorage<Self>;
     type State = NonFungibleToken;
     type Message = Message;
     type InstantiationArgument = ();

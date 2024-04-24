@@ -3,7 +3,7 @@
 mod state;
 
 use self::state::Application;
-use linera_sdk::{{base::WithServiceAbi, Service, ServiceRuntime, ViewStateStorage}};
+use linera_sdk::{{base::WithServiceAbi, Service, ServiceRuntime}};
 use thiserror::Error;
 
 pub struct ApplicationService {{
@@ -19,7 +19,6 @@ impl WithServiceAbi for ApplicationService {{
 
 impl Service for ApplicationService {{
     type Error = ServiceError;
-    type Storage = ViewStateStorage<Self>;
     type State = Application;
     type Parameters = ();
 

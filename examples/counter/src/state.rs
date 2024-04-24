@@ -1,10 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use serde::{Deserialize, Serialize};
+use linera_sdk::views::{linera_views, RegisterView, RootView, ViewStorageContext};
 
 /// The application state.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[derive(RootView)]
+#[view(context = "ViewStorageContext")]
 pub struct Counter {
-    pub value: u64,
+    pub value: RegisterView<u64>,
 }

@@ -8,7 +8,7 @@ mod state;
 use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
 use linera_sdk::{
     base::{Account, AccountOwner, ChainId, Owner, WithContractAbi},
-    ensure, Contract, ContractRuntime, ViewStateStorage,
+    ensure, Contract, ContractRuntime,
 };
 use native_fungible::{Message, TICKER_SYMBOL};
 use thiserror::Error;
@@ -28,7 +28,6 @@ impl WithContractAbi for NativeFungibleTokenContract {
 
 impl Contract for NativeFungibleTokenContract {
     type Error = Error;
-    type Storage = ViewStateStorage<Self>;
     type State = NativeFungibleToken;
     type Message = Message;
     type Parameters = Parameters;

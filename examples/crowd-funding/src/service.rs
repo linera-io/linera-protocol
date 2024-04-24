@@ -12,7 +12,7 @@ use crowd_funding::Operation;
 use linera_sdk::{
     base::{ApplicationId, WithServiceAbi},
     graphql::GraphQLMutationRoot,
-    Service, ServiceRuntime, ViewStateStorage,
+    Service, ServiceRuntime,
 };
 use state::CrowdFunding;
 use thiserror::Error;
@@ -29,7 +29,6 @@ impl WithServiceAbi for CrowdFundingService {
 
 impl Service for CrowdFundingService {
     type Error = Error;
-    type Storage = ViewStateStorage<Self>;
     type State = CrowdFunding;
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 

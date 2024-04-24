@@ -9,9 +9,7 @@ use std::sync::Arc;
 
 use amm::{AmmError, Operation, Parameters};
 use async_graphql::{EmptySubscription, Request, Response, Schema};
-use linera_sdk::{
-    base::WithServiceAbi, graphql::GraphQLMutationRoot, Service, ServiceRuntime, ViewStateStorage,
-};
+use linera_sdk::{base::WithServiceAbi, graphql::GraphQLMutationRoot, Service, ServiceRuntime};
 
 use self::state::Amm;
 
@@ -27,7 +25,6 @@ impl WithServiceAbi for AmmService {
 
 impl Service for AmmService {
     type Error = AmmError;
-    type Storage = ViewStateStorage<Self>;
     type State = Amm;
     type Parameters = Parameters;
 

@@ -6,29 +6,21 @@
 //! A Linera application consists of two WebAssembly binaries: a contract and a service.
 //! In both binaries, there should be a shared application state. The state is a type that
 //! represents what the application would like to persist in storage across blocks, and
-//! must implement the [`Contract`](crate::Contract) trait in the contract binary and the
-//! [`Service`](crate::Service) trait in the service binary.
+//! must implement [`State`](crate::State) trait in order to specify how the state should be loaded
+//! from and stored to the persistent key-value storage. An alternative is to use the
+//! [`linera-views`](https://docs.rs/linera-views/latest/linera_views/index.html), a framework that
+//! allows loading selected parts of the state. This is useful if the application's state is large
+//! and doesn't need to be loaded in its entirety for every execution. By deriving
+//! [`RootView`](views::RootView) on the state type it automatically implements the [`State`]
+//! trait.
 //!
-//! The application can select between two storage backends to use. Selecting the storage
-//! backend is done by specifying both the [`Contract::Storage`](crate::Contract::Storage)
-//! and the [`Service::Storage`](crate::Service::Storage) associated types.
+//! The contract binary should create a type to implement the [`Contract`](crate::Contract) trait.
+//! The type can store the [`ContractRuntime`](contract::ContractRuntime) and the state, and must
+//! have its implementation exported by using the [`contract!`](crate::contract!) macro.
 //!
-//! The [`SimpleStateStorage`](crate::SimpleStateStorage) backend stores the application's
-//! state type by serializing it into binary blob. This allows the entire contents of the
-//! state to be persisted and made available to the application when it is executed.
-//!
-//! The [`ViewStateStorage`](crate::ViewStateStorage) backend stores the application's
-//! state using the
-//! [`linera-views`](https://docs.rs/linera-views/latest/linera_views/index.html), a
-//! framework that allows loading selected parts of the state. This is useful if the
-//! application's state is large and doesn't need to be loaded in its entirety for every
-//! execution.
-//!
-//! The contract binary should use the [`contract!`](crate::contract!) macro to export the application's contract
-//! endpoints implemented via the [`Contract`](crate::Contract) trait implementation.
-//!
-//! The service binary should use the [`service!`](crate::service!) macro to export the application's service
-//! endpoints implemented via the [`Service`](crate::Service) trait implementation.
+//! The service binary should create a type to implement the [`Service`](crate::Service) trait.
+//! The type can store the [`ServiceRuntime`](service::ServiceRuntime) and the state, and must have
+//! its implementation exported by using the [`service!`](crate::service!) macro.
 //!
 //! # Examples
 //!
@@ -65,21 +57,15 @@ pub use linera_base::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 
-use self::contract::ContractStateStorage;
 #[cfg(not(target_arch = "wasm32"))]
 pub use self::mock_system_api::MockSystemApi;
+use self::views::{RootView, ViewStorageContext};
 pub use self::{
     contract::ContractRuntime,
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
-    service::{ServiceRuntime, ServiceStateStorage},
+    service::ServiceRuntime,
 };
-
-/// A simple state management runtime based on a single byte array.
-pub struct SimpleStateStorage<A>(std::marker::PhantomData<A>);
-
-/// A state management runtime based on [`linera_views`].
-pub struct ViewStateStorage<A>(std::marker::PhantomData<A>);
 
 /// The contract interface of a Linera application.
 ///
@@ -98,18 +84,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     type Error: Error + From<serde_json::Error> + From<bcs::Error>;
 
     /// The type used to store the persisted application state.
-    type State;
-
-    /// The desired storage backend used to store the application's state.
-    ///
-    /// Currently, the two supported backends are [`SimpleStateStorage`] or
-    /// [`ViewStateStorage`]. Accordingly, this associated type may be defined as `type
-    /// Storage = SimpleStateStorage<Self>` or `type Storage = ViewStateStorage<Self>`.
-    ///
-    /// The first deployment on other chains will use the [`Default`] implementation of the application
-    /// state if [`SimpleStateStorage`] is used, or the [`Default`] value of all sub-views in the
-    /// state if the [`ViewStateStorage`] is used.
-    type Storage: ContractStateStorage<Self>;
+    type State: State;
 
     /// The type of message executed by the application.
     ///
@@ -173,7 +148,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// The default implementation persists the state, so if this method is overriden, care must be
     /// taken to persist the state manually.
     async fn finalize(&mut self) -> Result<(), Self::Error> {
-        Self::Storage::store(self.state_mut()).await;
+        Self::State::store(self.state_mut()).await;
         Ok(())
     }
 }
@@ -191,14 +166,7 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     type Error: Error + From<serde_json::Error>;
 
     /// The type used to store the persisted application state.
-    type State;
-
-    /// The desired storage backend used to store the application's state.
-    ///
-    /// Currently, the two supported backends are [`SimpleStateStorage`] or
-    /// [`ViewStateStorage`]. Accordingly, this associated type may be defined as `type
-    /// Storage = SimpleStateStorage<Self>` or `type Storage = ViewStateStorage<Self>`.
-    type Storage: ServiceStateStorage;
+    type State: State;
 
     /// Immutable parameters specific to this application.
     type Parameters: Serialize + DeserializeOwned + Send + Sync + Clone + Debug + 'static;
@@ -208,4 +176,51 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
 
     /// Executes a read-only query on the state of this application.
     async fn handle_query(&self, query: Self::Query) -> Result<Self::QueryResponse, Self::Error>;
+}
+
+/// The persistent state of a Linera application.
+///
+/// This is the state that is persisted to the database, and preserved across transactions. The
+/// application's [`Contract`] is allowed to modiy the state, while the application's [`Service`]
+/// can only read it.
+///
+/// The database can be accessed using an instance of [`ViewStorageContext`].
+#[allow(async_fn_in_trait)]
+pub trait State {
+    /// Loads the state from the database.
+    async fn load() -> Self;
+
+    /// Persists the state into the database.
+    async fn store(&mut self);
+}
+
+/// Representation of an empty persistent state.
+///
+/// This can be used by applications that don't need to store anything in the database.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct EmptyState;
+
+impl State for EmptyState {
+    async fn load() -> Self {
+        EmptyState
+    }
+
+    async fn store(&mut self) {}
+}
+
+impl<V> State for V
+where
+    V: RootView<ViewStorageContext>,
+{
+    async fn load() -> Self {
+        V::load(ViewStorageContext::default())
+            .await
+            .expect("Failed to load application state")
+    }
+
+    async fn store(&mut self) {
+        self.save()
+            .await
+            .expect("Failed to store application state")
+    }
 }

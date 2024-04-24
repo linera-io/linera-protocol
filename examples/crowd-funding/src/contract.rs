@@ -11,7 +11,7 @@ use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
     ensure,
     views::View,
-    Contract, ContractRuntime, ViewStateStorage,
+    Contract, ContractRuntime,
 };
 use state::{CrowdFunding, Status};
 use thiserror::Error;
@@ -29,7 +29,6 @@ impl WithContractAbi for CrowdFundingContract {
 
 impl Contract for CrowdFundingContract {
     type Error = Error;
-    type Storage = ViewStateStorage<Self>;
     type State = CrowdFunding;
     type Message = Message;
     type InstantiationArgument = InstantiationArgument;

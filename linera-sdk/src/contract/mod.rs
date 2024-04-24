@@ -6,11 +6,10 @@
 mod conversions_from_wit;
 mod conversions_to_wit;
 mod runtime;
-mod storage;
 pub(crate) mod wit;
 
-pub use self::{runtime::ContractRuntime, storage::ContractStateStorage};
-use crate::{log::ContractLogger, util::BlockingWait, Contract};
+pub use self::runtime::ContractRuntime;
+use crate::{log::ContractLogger, util::BlockingWait, Contract, State};
 
 /// Declares an implementation of the [`Contract`][`crate::Contract`] trait, exporting it from the
 /// Wasm module.
@@ -110,7 +109,7 @@ where
     ContractLogger::install();
 
     let application = application.get_or_insert_with(|| {
-        let state = Application::Storage::load().blocking_wait();
+        let state = Application::State::load().blocking_wait();
         Application::new(state, ContractRuntime::new())
             .blocking_wait()
             .expect("Failed to create application contract hnadler instance")
@@ -118,7 +117,7 @@ where
 
     let output = entrypoint(application).map_err(|error| error.to_string())?;
 
-    Application::Storage::store(application.state_mut()).blocking_wait();
+    Application::State::store(application.state_mut()).blocking_wait();
 
     Ok(output.into())
 }
