@@ -90,6 +90,12 @@ static TRANSACTION_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
         .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
+static NUM_BLOCKS: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
+        .expect("Counter creation should not fail")
+});
+
 /// Interface provided by each physical shard (aka "worker") of a validator or a local node.
 /// * All commands return either the current chain info or an error.
 /// * Repeating commands produces no changes and returns no error.
@@ -699,6 +705,10 @@ where
         )
         .await;
         self.cache_recent_value(Cow::Owned(certificate.value)).await;
+
+        #[cfg(with_metrics)]
+        NUM_BLOCKS.with_label_values(&[]).inc();
+
         Ok((info, actions))
     }
 
