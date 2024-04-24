@@ -6,12 +6,11 @@
 mod conversions_from_wit;
 mod conversions_to_wit;
 mod runtime;
-mod storage;
 pub(crate) mod wit;
 
 use std::future::Future;
 
-pub use self::{runtime::ServiceRuntime, storage::ServiceStateStorage};
+pub use self::runtime::ServiceRuntime;
 use crate::{util::BlockingWait, ServiceLogger};
 
 /// Declares an implementation of the [`Service`][`crate::Service`] trait, exporting it from the

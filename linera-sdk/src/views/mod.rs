@@ -17,7 +17,6 @@ pub use linera_views::{
     views::{RootView, View, ViewError},
 };
 
-pub(crate) use self::system_api::AppStateStore;
 pub use self::{
     aliases::{
         ByteCollectionView, ByteMapView, ByteSetView, CollectionView, CustomCollectionView,
