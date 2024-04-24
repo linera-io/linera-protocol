@@ -74,9 +74,7 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
     execution_outcomes: Vec<ExecutionOutcome>,
 
-    /// Track application states (simple case).
-    simple_user_states: BTreeMap<UserApplicationId, SimpleUserState>,
-    /// Track application states (view case).
+    /// Track application states based on views.
     view_user_states: BTreeMap<UserApplicationId, ViewUserState>,
 
     /// Where to send a refund for the unused part of the grant after execution, if any.
@@ -276,7 +274,6 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
             execution_outcomes: Vec::default(),
-            simple_user_states: BTreeMap::default(),
             view_user_states: BTreeMap::default(),
             refund_grant_to,
             resource_controller,
