@@ -3,6 +3,7 @@
 
 use num_bigint::BigUint;
 use thiserror::Error;
+use linera_witty::{WitLoad, WitStore, WitType};
 
 use crate::{
     client::EthereumEndpoint,
@@ -11,19 +12,23 @@ use crate::{
 
 // The Oracle requests
 
+#[derive(WitLoad, WitStore, WitType)]
 pub struct EthereumBalanceRequest {
     pub address: String,
     pub block_number: Option<u64>,
 }
 
+#[derive(WitLoad, WitStore, WitType)]
 pub struct EthereumBlockNumberRequest {}
 
+#[derive(WitLoad, WitStore, WitType)]
 pub struct EthereumEventsRequest {
     pub contract_address: String,
     pub event_name_expanded: String,
     pub starting_block: u64,
 }
 
+#[derive(WitLoad, WitStore, WitType)]
 pub enum OracleRequest {
     EthereumBalance(EthereumBalanceRequest),
     EthereumBlockNumber(EthereumBlockNumberRequest),
