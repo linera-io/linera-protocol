@@ -9,7 +9,6 @@ test = []
 
 [dependencies]
 async-graphql.workspace = true
-async-trait.workspace = true
 bcs.workspace = true
 fungible.workspace = true
 linera-sdk.workspace = true

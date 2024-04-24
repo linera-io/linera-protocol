@@ -5,7 +5,6 @@
 
 mod state;
 
-use async_trait::async_trait;
 use linera_sdk::{
     base::{ChannelName, Destination, MessageId, WithContractAbi},
     views::ViewError,
@@ -31,7 +30,6 @@ impl WithContractAbi for SocialContract {
     type Abi = SocialAbi;
 }
 
-#[async_trait]
 impl Contract for SocialContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;

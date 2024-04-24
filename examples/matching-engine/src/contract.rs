@@ -6,7 +6,6 @@
 mod state;
 use std::cmp::min;
 
-use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
@@ -51,7 +50,6 @@ pub struct Transfer {
     pub token_idx: u32,
 }
 
-#[async_trait]
 impl Contract for MatchingEngineContract {
     type Error = MatchingEngineError;
     type Storage = ViewStateStorage<Self>;

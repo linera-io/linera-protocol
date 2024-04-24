@@ -6,7 +6,6 @@
 mod state;
 
 use amm::{AmmAbi, AmmError, Message, Operation, Parameters};
-use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
@@ -28,7 +27,6 @@ impl WithContractAbi for AmmContract {
     type Abi = AmmAbi;
 }
 
-#[async_trait]
 impl Contract for AmmContract {
     type Error = AmmError;
     type Storage = ViewStateStorage<Self>;

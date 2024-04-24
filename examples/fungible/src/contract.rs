@@ -7,7 +7,6 @@ mod state;
 
 use std::str::FromStr;
 
-use async_trait::async_trait;
 use fungible::{
     Account, FungibleResponse, FungibleTokenAbi, InitialState, Message, Operation, Parameters,
 };
@@ -30,7 +29,6 @@ impl WithContractAbi for FungibleTokenContract {
     type Abi = FungibleTokenAbi;
 }
 
-#[async_trait]
 impl Contract for FungibleTokenContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
