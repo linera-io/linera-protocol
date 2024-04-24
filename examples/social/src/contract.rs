@@ -48,7 +48,7 @@ impl Contract for SocialContract {
 
     async fn instantiate(&mut self, _argument: ()) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
-        let _ = self.runtime.application_parameters();
+        self.runtime.application_parameters();
 
         Ok(())
     }

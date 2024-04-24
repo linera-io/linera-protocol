@@ -40,7 +40,7 @@ impl Contract for CounterContract {
 
     async fn instantiate(&mut self, value: u64) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
-        let _ = self.runtime.application_parameters();
+        self.runtime.application_parameters();
 
         self.state.value = value;
 
