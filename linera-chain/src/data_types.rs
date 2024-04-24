@@ -261,14 +261,14 @@ impl OutgoingMessage {
     }
 }
 
-/// A block, together with the outcome from its execution.
+/// A [`Block`], together with the outcome from its execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct ExecutedBlock {
     pub block: Block,
     pub outcome: BlockExecutionOutcome,
 }
 
-/// The messages and the state hash resulting from a block's execution.
+/// The messages and the state hash resulting from a [`Block`]'s execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct BlockExecutionOutcome {
     pub messages: Vec<OutgoingMessage>,

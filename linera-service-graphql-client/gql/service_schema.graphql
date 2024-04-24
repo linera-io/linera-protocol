@@ -70,7 +70,7 @@ type Block {
 }
 
 """
-The messages and the state hash resulting from a block's execution.
+The messages and the state hash resulting from a [`Block`]'s execution.
 """
 type BlockExecutionOutcome {
 	messages: [OutgoingMessage!]!
@@ -344,7 +344,7 @@ A message together with non replayable information to ensure uniqueness in a par
 scalar Event
 
 """
-A block, together with the outcome from its execution.
+A [`Block`], together with the outcome from its execution.
 """
 type ExecutedBlock {
 	block: Block!
