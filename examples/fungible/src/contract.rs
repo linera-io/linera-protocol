@@ -12,7 +12,7 @@ use fungible::{
 };
 use linera_sdk::{
     base::{AccountOwner, Amount, WithContractAbi},
-    ensure, Contract, ContractRuntime, ViewStateStorage,
+    ensure, Contract, ContractRuntime,
 };
 use thiserror::Error;
 
@@ -31,7 +31,6 @@ impl WithContractAbi for FungibleTokenContract {
 
 impl Contract for FungibleTokenContract {
     type Error = Error;
-    type Storage = ViewStateStorage<Self>;
     type State = FungibleToken;
     type Message = Message;
     type Parameters = Parameters;

@@ -5,7 +5,7 @@
 
 use linera_sdk::{
     base::{ApplicationId, WithContractAbi},
-    Contract, ContractRuntime, EmptyState, Resources, SimpleStateStorage,
+    Contract, ContractRuntime, EmptyState, Resources,
 };
 use meta_counter::{Message, MetaCounterAbi, Operation};
 use thiserror::Error;
@@ -29,7 +29,6 @@ impl WithContractAbi for MetaCounterContract {
 
 impl Contract for MetaCounterContract {
     type Error = Error;
-    type Storage = SimpleStateStorage<Self>;
     type State = EmptyState;
     type Message = Message;
     type InstantiationArgument = ();

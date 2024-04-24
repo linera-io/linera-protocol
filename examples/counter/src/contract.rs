@@ -6,7 +6,7 @@
 mod state;
 
 use counter::CounterAbi;
-use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, ViewStateStorage};
+use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime};
 use thiserror::Error;
 
 use self::state::Counter;
@@ -24,7 +24,6 @@ impl WithContractAbi for CounterContract {
 
 impl Contract for CounterContract {
     type Error = Error;
-    type Storage = ViewStateStorage<Self>;
     type State = Counter;
     type Message = ();
     type InstantiationArgument = u64;

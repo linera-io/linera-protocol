@@ -9,7 +9,7 @@ use std::cmp::min;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
-    ensure, Contract, ContractRuntime, ViewStateStorage,
+    ensure, Contract, ContractRuntime,
 };
 use matching_engine::{
     product_price_amount, MatchingEngineAbi, Message, Operation, Order, OrderId, OrderNature,
@@ -52,7 +52,6 @@ pub struct Transfer {
 
 impl Contract for MatchingEngineContract {
     type Error = MatchingEngineError;
-    type Storage = ViewStateStorage<Self>;
     type State = MatchingEngine;
     type Message = Message;
     type InstantiationArgument = ();

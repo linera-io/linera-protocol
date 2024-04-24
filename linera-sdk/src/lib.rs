@@ -67,15 +67,12 @@ use serde::{de::DeserializeOwned, Serialize};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use self::mock_system_api::MockSystemApi;
+use self::views::{RootView, ViewStorageContext};
 pub use self::{
     contract::ContractRuntime,
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
     service::{ServiceRuntime, ServiceStateStorage},
-};
-use self::{
-    contract::ContractStateStorage,
-    views::{RootView, ViewStorageContext},
 };
 
 /// A simple state management runtime based on a single byte array.
@@ -102,17 +99,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
 
     /// The type used to store the persisted application state.
     type State: State;
-
-    /// The desired storage backend used to store the application's state.
-    ///
-    /// Currently, the two supported backends are [`SimpleStateStorage`] or
-    /// [`ViewStateStorage`]. Accordingly, this associated type may be defined as `type
-    /// Storage = SimpleStateStorage<Self>` or `type Storage = ViewStateStorage<Self>`.
-    ///
-    /// The first deployment on other chains will use the [`Default`] implementation of the application
-    /// state if [`SimpleStateStorage`] is used, or the [`Default`] value of all sub-views in the
-    /// state if the [`ViewStateStorage`] is used.
-    type Storage: ContractStateStorage<Self>;
 
     /// The type of message executed by the application.
     ///

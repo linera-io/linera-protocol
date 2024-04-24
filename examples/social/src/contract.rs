@@ -8,7 +8,7 @@ mod state;
 use linera_sdk::{
     base::{ChannelName, Destination, MessageId, WithContractAbi},
     views::ViewError,
-    Contract, ContractRuntime, ViewStateStorage,
+    Contract, ContractRuntime,
 };
 use social::{Key, Message, Operation, OwnPost, SocialAbi};
 use state::Social;
@@ -32,7 +32,6 @@ impl WithContractAbi for SocialContract {
 
 impl Contract for SocialContract {
     type Error = Error;
-    type Storage = ViewStateStorage<Self>;
     type State = Social;
     type Message = Message;
     type InstantiationArgument = ();

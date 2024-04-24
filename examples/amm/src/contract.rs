@@ -9,7 +9,7 @@ use amm::{AmmAbi, AmmError, Message, Operation, Parameters};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
-    ensure, Contract, ContractRuntime, ViewStateStorage,
+    ensure, Contract, ContractRuntime,
 };
 use num_bigint::BigUint;
 use num_traits::{cast::FromPrimitive, ToPrimitive};
@@ -29,7 +29,6 @@ impl WithContractAbi for AmmContract {
 
 impl Contract for AmmContract {
     type Error = AmmError;
-    type Storage = ViewStateStorage<Self>;
     type State = Amm;
     type Message = Message;
     type InstantiationArgument = ();

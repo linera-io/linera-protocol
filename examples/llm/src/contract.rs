@@ -5,9 +5,7 @@
 
 mod state;
 
-use linera_sdk::{
-    base::WithContractAbi, Contract, ContractRuntime, EmptyState, SimpleStateStorage,
-};
+use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, EmptyState};
 use thiserror::Error;
 
 pub struct LlmContract {
@@ -22,7 +20,6 @@ impl WithContractAbi for LlmContract {
 
 impl Contract for LlmContract {
     type Error = ContractError;
-    type Storage = SimpleStateStorage<Self>;
     type State = EmptyState;
     type Message = ();
     type InstantiationArgument = ();

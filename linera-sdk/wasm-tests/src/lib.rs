@@ -407,7 +407,6 @@ impl WithServiceAbi for TestApp {
 
 impl Contract for TestApp {
     type Error = TestAppError;
-    type Storage = SimpleStateStorage<Self>;
     type State = EmptyState;
     type Message = Vec<u8>;
     type Parameters = Vec<u8>;
