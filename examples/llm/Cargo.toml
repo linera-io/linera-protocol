@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 async-graphql.workspace = true
-async-trait.workspace = true
 bcs.workspace = true
 candle-core.workspace = true
 candle-transformers.workspace = true

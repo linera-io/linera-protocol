@@ -5,7 +5,6 @@
 
 mod state;
 
-use async_trait::async_trait;
 use linera_sdk::{
     base::{ApplicationId, WithContractAbi},
     Contract, ContractRuntime, Resources, SimpleStateStorage,
@@ -32,7 +31,6 @@ impl WithContractAbi for MetaCounterContract {
     type Abi = MetaCounterAbi;
 }
 
-#[async_trait]
 impl Contract for MetaCounterContract {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;

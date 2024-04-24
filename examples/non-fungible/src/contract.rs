@@ -7,7 +7,6 @@ mod state;
 
 use std::collections::BTreeSet;
 
-use async_trait::async_trait;
 use fungible::Account;
 use linera_sdk::{
     base::{AccountOwner, WithContractAbi},
@@ -29,7 +28,6 @@ impl WithContractAbi for NonFungibleTokenContract {
     type Abi = NonFungibleTokenAbi;
 }
 
-#[async_trait]
 impl Contract for NonFungibleTokenContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;

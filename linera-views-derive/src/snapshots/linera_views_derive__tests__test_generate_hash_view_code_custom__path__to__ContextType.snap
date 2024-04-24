@@ -2,7 +2,7 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_hash_view_code(input))
 ---
-#[async_trait::async_trait]
+#[linera_views::async_trait]
 impl linera_views::views::HashableView<custom::path::to::ContextType> for TestView {
     type Hasher = linera_views::sha3::Sha3_256;
     async fn hash_mut(

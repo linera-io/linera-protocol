@@ -2,7 +2,7 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_crypto_hash_code(input))
 ---
-#[async_trait::async_trait]
+#[linera_views::async_trait]
 impl<C> linera_views::views::CryptoHashView<C> for TestView<C>
 where
     C: linera_views::common::Context + Send + Sync + Clone + 'static,

@@ -5,7 +5,6 @@
 
 mod state;
 
-use async_trait::async_trait;
 use counter::CounterAbi;
 use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, SimpleStateStorage};
 use thiserror::Error;
@@ -23,7 +22,6 @@ impl WithContractAbi for CounterContract {
     type Abi = CounterAbi;
 }
 
-#[async_trait]
 impl Contract for CounterContract {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
@@ -42,7 +40,7 @@ impl Contract for CounterContract {
 
     async fn instantiate(&mut self, value: u64) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
-        let _ = self.runtime.application_parameters();
+        self.runtime.application_parameters();
 
         self.state.value = value;
 

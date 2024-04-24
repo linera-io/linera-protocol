@@ -79,7 +79,6 @@ name = "amm"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "bcs",
  "fungible",
  "linera-sdk",
@@ -749,7 +748,6 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "async-graphql",
- "async-trait",
  "bcs",
  "futures",
  "linera-sdk",
@@ -1007,7 +1005,6 @@ name = "crowd-funding"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "bcs",
  "fungible",
  "linera-sdk",
@@ -1597,7 +1594,6 @@ name = "fungible"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "bcs",
  "fungible",
  "futures",
@@ -2605,7 +2601,6 @@ name = "llm"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "bcs",
  "candle-core",
  "candle-transformers",
@@ -2708,7 +2703,6 @@ name = "matching-engine"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "bcs",
  "fungible",
  "linera-sdk",
@@ -2803,7 +2797,6 @@ name = "meta-counter"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "bcs",
  "counter",
  "linera-sdk",
@@ -2902,7 +2895,6 @@ name = "native-fungible"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "bcs",
  "fungible",
  "linera-sdk",
@@ -2928,7 +2920,6 @@ name = "non-fungible"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "base64 0.22.0",
  "bcs",
  "fungible",
@@ -4083,7 +4074,6 @@ name = "social"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "bcs",
  "linera-sdk",
  "serde",

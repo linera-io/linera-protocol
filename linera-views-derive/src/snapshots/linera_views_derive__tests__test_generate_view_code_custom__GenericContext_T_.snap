@@ -2,7 +2,7 @@
 source: linera-views-derive/src/lib.rs
 expression: "pretty(generate_view_code(input, true))"
 ---
-#[async_trait::async_trait]
+#[linera_views::async_trait]
 impl linera_views::views::View<custom::GenericContext<T>> for TestView {
     fn context(&self) -> &custom::GenericContext<T> {
         use linera_views::views::View;

@@ -5,7 +5,6 @@
 
 mod state;
 
-use async_trait::async_trait;
 use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, SimpleStateStorage};
 use thiserror::Error;
 
@@ -19,7 +18,6 @@ impl WithContractAbi for LlmContract {
     type Abi = llm::LlmAbi;
 }
 
-#[async_trait]
 impl Contract for LlmContract {
     type Error = ContractError;
     type Storage = SimpleStateStorage<Self>;

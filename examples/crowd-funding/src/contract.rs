@@ -5,7 +5,6 @@
 
 mod state;
 
-use async_trait::async_trait;
 use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
 use fungible::{Account, FungibleResponse, FungibleTokenAbi};
 use linera_sdk::{
@@ -28,7 +27,6 @@ impl WithContractAbi for CrowdFundingContract {
     type Abi = CrowdFundingAbi;
 }
 
-#[async_trait]
 impl Contract for CrowdFundingContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;

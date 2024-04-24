@@ -2,7 +2,6 @@
 
 mod state;
 
-use async_trait::async_trait;
 use linera_sdk::{{base::WithContractAbi, Contract, ContractRuntime, ViewStateStorage}};
 use thiserror::Error;
 
@@ -19,7 +18,6 @@ impl WithContractAbi for ApplicationContract {{
     type Abi = {project_name}::ApplicationAbi;
 }}
 
-#[async_trait]
 impl Contract for ApplicationContract {{
     type Error = ContractError;
     type Storage = ViewStateStorage<Self>;

@@ -2,7 +2,7 @@
 source: linera-views-derive/src/lib.rs
 expression: "pretty(generate_view_code(input, true))"
 ---
-#[async_trait::async_trait]
+#[linera_views::async_trait]
 impl<C, MyParam> linera_views::views::View<C> for TestView<C, MyParam>
 where
     MyParam: Send + Sync + 'static,

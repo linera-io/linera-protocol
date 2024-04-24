@@ -5,7 +5,6 @@
 
 mod state;
 
-use async_trait::async_trait;
 use linera_sdk::{
     base::{ChannelName, Destination, MessageId, WithContractAbi},
     views::ViewError,
@@ -31,7 +30,6 @@ impl WithContractAbi for SocialContract {
     type Abi = SocialAbi;
 }
 
-#[async_trait]
 impl Contract for SocialContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
@@ -50,7 +48,7 @@ impl Contract for SocialContract {
 
     async fn instantiate(&mut self, _argument: ()) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
-        let _ = self.runtime.application_parameters();
+        self.runtime.application_parameters();
 
         Ok(())
     }

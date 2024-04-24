@@ -57,7 +57,6 @@ pub mod views;
 
 use std::{error::Error, fmt::Debug};
 
-use async_trait::async_trait;
 use linera_base::abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi};
 pub use linera_base::{
     abi,
@@ -90,16 +89,16 @@ pub struct ViewStateStorage<A>(std::marker::PhantomData<A>);
 ///
 /// Below we use the word "transaction" to refer to the current operation or message being
 /// executed.
-#[async_trait]
-pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
+#[allow(async_fn_in_trait)]
+pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// The type used to report errors to the execution environment.
     ///
     /// Errors are not recoverable and always interrupt the current transaction. To return
     /// recoverable errors in the case of application calls, you may use the response types.
-    type Error: Error + From<serde_json::Error> + From<bcs::Error> + 'static;
+    type Error: Error + From<serde_json::Error> + From<bcs::Error>;
 
     /// The type used to store the persisted application state.
-    type State: Sync;
+    type State;
 
     /// The desired storage backend used to store the application's state.
     ///
@@ -110,23 +109,23 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// The first deployment on other chains will use the [`Default`] implementation of the application
     /// state if [`SimpleStateStorage`] is used, or the [`Default`] value of all sub-views in the
     /// state if the [`ViewStateStorage`] is used.
-    type Storage: ContractStateStorage<Self> + Send + 'static;
+    type Storage: ContractStateStorage<Self>;
 
     /// The type of message executed by the application.
     ///
     /// Messages are executed when a message created by the same application is received
     /// from another chain and accepted in a block.
-    type Message: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
+    type Message: Serialize + DeserializeOwned + Debug;
 
     /// Immutable parameters specific to this application (e.g. the name of a token).
-    type Parameters: Serialize + DeserializeOwned + Send + Sync + Clone + Debug + 'static;
+    type Parameters: Serialize + DeserializeOwned + Clone + Debug;
 
     /// Instantiation argument passed to a new application on the chain that created it
     /// (e.g. an initial amount of tokens minted).
     ///
     /// To share configuration data on every chain, use [`Contract::Parameters`]
     /// instead.
-    type InstantiationArgument: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
+    type InstantiationArgument: Serialize + DeserializeOwned + Debug;
 
     /// Creates a in-memory instance of the contract handler from the application's `state`.
     async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error>;
