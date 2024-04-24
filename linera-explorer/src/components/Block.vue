@@ -56,7 +56,7 @@ defineProps<{block: HashedValue, title: string}>()
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>State Hash</strong></span>
-          <span>{{ block.value.executedBlock?.stateHash }}</span>
+          <span>{{ block.value.executedBlock?.outcome.stateHash }}</span>
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Status</strong></span>
@@ -82,17 +82,17 @@ defineProps<{block: HashedValue, title: string}>()
             </li>
           </ul>
         </div>
-        <li v-if="block.value.executedBlock?.messages.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#out-messages-collapse-'+block.hash">
-          <span><strong>Outgoing Messages</strong> ({{ block.value.executedBlock?.messages.length }})</span>
+        <li v-if="block.value.executedBlock?.outcome.messages.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#out-messages-collapse-'+block.hash">
+          <span><strong>Outgoing Messages</strong> ({{ block.value.executedBlock?.outcome.messages.length }})</span>
           <i class="bi bi-caret-down-fill"></i>
         </li>
         <li v-else class="list-group-item d-flex justify-content-between">
           <span><strong>Outgoing Messages</strong> (0)</span>
           <span></span>
         </li>
-        <div v-if="block.value.executedBlock?.messages.length!==0" class="collapse" :id="'out-messages-collapse-'+block.hash">
+        <div v-if="block.value.executedBlock?.outcome.messages.length!==0" class="collapse" :id="'out-messages-collapse-'+block.hash">
           <ul class="list-group">
-            <li v-for="(m, i) in block.value.executedBlock?.messages" class="list-group-item p-0" key="block.hash+'-outmessage-'+i">
+            <li v-for="(m, i) in block.value.executedBlock?.outcome.messages" class="list-group-item p-0" key="block.hash+'-outmessage-'+i">
               <div class="card">
                 <div class="card-header">Message {{ i+1 }}</div>
                 <div class="card-body">

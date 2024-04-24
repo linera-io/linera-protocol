@@ -171,16 +171,18 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           }
           operations
         }
-        messages {
-          destination
-          authenticatedSigner
-          grant
-          refundGrantTo
-          kind
-          message
+        outcome {
+          messages {
+            destination
+            authenticatedSigner
+            grant
+            refundGrantTo
+            kind
+            message
+          }
+          messageCounts
+          stateHash
         }
-        messageCounts
-        stateHash
       }
     }
   }
@@ -206,15 +208,18 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
           }
           operations
         }
-        messages {
-          destination
-          authenticatedSigner
-          grant
-          refundGrantTo
-          kind
-          message
+        outcome {
+          messages {
+            destination
+            authenticatedSigner
+            grant
+            refundGrantTo
+            kind
+            message
+          }
+          messageCounts
+          stateHash
         }
-        stateHash
       }
     }
   }

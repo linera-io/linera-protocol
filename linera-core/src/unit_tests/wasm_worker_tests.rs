@@ -21,8 +21,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        ChannelFullName, Event, ExecutedBlock, HashedValue, IncomingMessage, MessageAction, Origin,
-        OutgoingMessage,
+        BlockExecutionOutcome, ChannelFullName, Event, HashedValue, IncomingMessage, MessageAction,
+        Origin, OutgoingMessage,
     },
     test::{make_child_block, make_first_block, BlockTestExt},
 };
@@ -136,19 +136,21 @@ where
         ..SystemExecutionState::new(Epoch::ZERO, publisher_chain, admin_id)
     };
     let publisher_state_hash = publisher_system_state.clone().into_hash().await;
-    let publish_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
-        block: publish_block,
-        messages: vec![OutgoingMessage {
-            destination: Destination::Recipient(publisher_chain.into()),
-            authenticated_signer: None,
-            grant: Amount::ZERO,
-            refund_grant_to: None,
-            kind: MessageKind::Protected,
-            message: Message::System(publish_message.clone()),
-        }],
-        message_counts: vec![1],
-        state_hash: publisher_state_hash,
-    });
+    let publish_block_proposal = HashedValue::new_confirmed(
+        BlockExecutionOutcome {
+            messages: vec![OutgoingMessage {
+                destination: Destination::Recipient(publisher_chain.into()),
+                authenticated_signer: None,
+                grant: Amount::ZERO,
+                refund_grant_to: None,
+                kind: MessageKind::Protected,
+                message: Message::System(publish_message.clone()),
+            }],
+            message_counts: vec![1],
+            state_hash: publisher_state_hash,
+        }
+        .with(publish_block),
+    );
     let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
 
     let info = worker
@@ -210,12 +212,14 @@ where
         kind: MessageKind::Simple,
         message: Message::System(broadcast_message.clone()),
     };
-    let failing_broadcast_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
-        block: broadcast_block.clone(),
-        messages: vec![failing_broadcast_outgoing_message],
-        message_counts: vec![1],
-        state_hash: publisher_state_hash,
-    });
+    let failing_broadcast_block_proposal = HashedValue::new_confirmed(
+        BlockExecutionOutcome {
+            messages: vec![failing_broadcast_outgoing_message],
+            message_counts: vec![1],
+            state_hash: publisher_state_hash,
+        }
+        .with(broadcast_block.clone()),
+    );
     let failing_broadcast_certificate =
         make_certificate(&committee, &worker, failing_broadcast_block_proposal);
 
@@ -232,12 +236,14 @@ where
         kind: MessageKind::Simple,
         message: Message::System(broadcast_message.clone()),
     };
-    let broadcast_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
-        block: broadcast_block,
-        messages: vec![broadcast_outgoing_message],
-        message_counts: vec![1],
-        state_hash: publisher_state_hash,
-    });
+    let broadcast_block_proposal = HashedValue::new_confirmed(
+        BlockExecutionOutcome {
+            messages: vec![broadcast_outgoing_message],
+            message_counts: vec![1],
+            state_hash: publisher_state_hash,
+        }
+        .with(broadcast_block),
+    );
     let broadcast_certificate = make_certificate(&committee, &worker, broadcast_block_proposal);
 
     let info = worker
@@ -277,19 +283,21 @@ where
     };
     creator_system_state.subscriptions.insert(publisher_channel);
     let creator_state = creator_system_state.clone().into_view().await;
-    let subscribe_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
-        block: subscribe_block,
-        messages: vec![OutgoingMessage {
-            destination: Destination::Recipient(publisher_chain.into()),
-            authenticated_signer: None,
-            grant: Amount::ZERO,
-            refund_grant_to: None,
-            kind: MessageKind::Protected,
-            message: Message::System(subscribe_message.clone()),
-        }],
-        message_counts: vec![1],
-        state_hash: creator_state.crypto_hash().await?,
-    });
+    let subscribe_block_proposal = HashedValue::new_confirmed(
+        BlockExecutionOutcome {
+            messages: vec![OutgoingMessage {
+                destination: Destination::Recipient(publisher_chain.into()),
+                authenticated_signer: None,
+                grant: Amount::ZERO,
+                refund_grant_to: None,
+                kind: MessageKind::Protected,
+                message: Message::System(subscribe_message.clone()),
+            }],
+            message_counts: vec![1],
+            state_hash: creator_state.crypto_hash().await?,
+        }
+        .with(subscribe_block),
+    );
     let subscribe_certificate = make_certificate(&committee, &worker, subscribe_block_proposal);
 
     let info = worker
@@ -325,21 +333,23 @@ where
         .with_incoming_message(accept_message);
     publisher_system_state.timestamp = Timestamp::from(3);
     let publisher_state_hash = publisher_system_state.into_hash().await;
-    let accept_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
-        block: accept_block,
-        messages: vec![OutgoingMessage {
-            destination: Destination::Recipient(creator_chain.into()),
-            authenticated_signer: None,
-            grant: Amount::ZERO,
-            refund_grant_to: None,
-            kind: MessageKind::Protected,
-            message: Message::System(SystemMessage::Notify {
-                id: creator_chain.into(),
-            }),
-        }],
-        message_counts: vec![1],
-        state_hash: publisher_state_hash,
-    });
+    let accept_block_proposal = HashedValue::new_confirmed(
+        BlockExecutionOutcome {
+            messages: vec![OutgoingMessage {
+                destination: Destination::Recipient(creator_chain.into()),
+                authenticated_signer: None,
+                grant: Amount::ZERO,
+                refund_grant_to: None,
+                kind: MessageKind::Protected,
+                message: Message::System(SystemMessage::Notify {
+                    id: creator_chain.into(),
+                }),
+            }],
+            message_counts: vec![1],
+            state_hash: publisher_state_hash,
+        }
+        .with(accept_block),
+    );
     let accept_certificate = make_certificate(&committee, &worker, accept_block_proposal);
 
     let info = worker
@@ -418,19 +428,21 @@ where
             initial_value_bytes.clone(),
         )
         .await?;
-    let create_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
-        block: create_block,
-        messages: vec![OutgoingMessage {
-            destination: Destination::Recipient(creator_chain.into()),
-            authenticated_signer: None,
-            grant: Amount::ZERO,
-            refund_grant_to: None,
-            kind: MessageKind::Protected,
-            message: Message::System(SystemMessage::ApplicationCreated),
-        }],
-        message_counts: vec![0, 1],
-        state_hash: creator_state.crypto_hash().await?,
-    });
+    let create_block_proposal = HashedValue::new_confirmed(
+        BlockExecutionOutcome {
+            messages: vec![OutgoingMessage {
+                destination: Destination::Recipient(creator_chain.into()),
+                authenticated_signer: None,
+                grant: Amount::ZERO,
+                refund_grant_to: None,
+                kind: MessageKind::Protected,
+                message: Message::System(SystemMessage::ApplicationCreated),
+            }],
+            message_counts: vec![0, 1],
+            state_hash: creator_state.crypto_hash().await?,
+        }
+        .with(create_block),
+    );
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
     let info = worker
@@ -474,12 +486,14 @@ where
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(5));
-    let run_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
-        block: run_block,
-        messages: vec![],
-        message_counts: vec![0],
-        state_hash: creator_state.crypto_hash().await?,
-    });
+    let run_block_proposal = HashedValue::new_confirmed(
+        BlockExecutionOutcome {
+            messages: vec![],
+            message_counts: vec![0],
+            state_hash: creator_state.crypto_hash().await?,
+        }
+        .with(run_block),
+    );
     let run_certificate = make_certificate(&committee, &worker, run_block_proposal);
 
     let info = worker

@@ -20,9 +20,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
-        HashedValue, IncomingMessage, LiteCertificate, Medium, MessageAction, MessageBundle,
-        Origin, OutgoingMessage, Target,
+        Block, BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
+        ExecutedBlock, HashedValue, IncomingMessage, LiteCertificate, Medium, MessageAction,
+        MessageBundle, Origin, OutgoingMessage, Target,
     },
     manager, ChainError, ChainStateView,
 };
@@ -582,12 +582,12 @@ where
         let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
             panic!("Expecting a confirmation certificate");
         };
-        let ExecutedBlock {
-            block,
+        let block = &executed_block.block;
+        let BlockExecutionOutcome {
             messages,
             message_counts,
             state_hash,
-        } = executed_block;
+        } = &executed_block.outcome;
         let mut chain = self.storage.load_chain(block.chain_id).await?;
         // Check that the chain is active and ready for this confirmation.
         let tip = chain.tip_state.get().clone();

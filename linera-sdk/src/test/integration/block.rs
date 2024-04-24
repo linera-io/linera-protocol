@@ -182,7 +182,7 @@ impl BlockBuilder {
             .await
             .expect("Failed to execute block");
 
-        let message_ids = (0..executed_block.messages.len() as u32)
+        let message_ids = (0..executed_block.messages().len() as u32)
             .map(|index| MessageId {
                 chain_id: executed_block.block.chain_id,
                 height: executed_block.block.height,

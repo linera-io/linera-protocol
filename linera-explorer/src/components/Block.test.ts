@@ -36,27 +36,29 @@ test('Block mounting', () => {
               }],
               operations: []
             },
-            messages: [{
-              destination: { Subscribers: [1] },
-              authenticatedSigner: null,
-              kind: "Protected",
-              grant: 0,
-              message: {
-                System: {
-                  BytecodeLocations: {
-                    locations: [
-                      [
-                        "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65020000000000000000000000",
-                        { certificate_hash: "a4167c67ce9c94c301fd5cbbefeccf6c8e56d568a4c75ed85e93bfacee66bac5", operation_index: 0 }],
-                      [
-                        "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65050000000000000000000000",
-                        { certificate_hash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a", operation_index: 0 }]]
+            outcome: {
+              messages: [{
+                destination: { Subscribers: [1] },
+                authenticatedSigner: null,
+                kind: "Protected",
+                grant: 0,
+                message: {
+                  System: {
+                    BytecodeLocations: {
+                      locations: [
+                        [
+                          "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65020000000000000000000000",
+                          { certificate_hash: "a4167c67ce9c94c301fd5cbbefeccf6c8e56d568a4c75ed85e93bfacee66bac5", operation_index: 0 }],
+                        [
+                          "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65050000000000000000000000",
+                          { certificate_hash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a", operation_index: 0 }]]
+                    }
                   }
                 }
-              }
-            }],
-            messageCounts: [1],
-            stateHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a"
+              }],
+              messageCounts: [1],
+              stateHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a"
+            }
           }
         }
       }

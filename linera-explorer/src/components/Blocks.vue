@@ -31,7 +31,7 @@ defineProps<{blocks: HashedValue[]}>()
           <td :title="b.value.executedBlock?.block.authenticatedSigner">{{ short_hash(b.value.executedBlock?.block.authenticatedSigner) }}</td>
           <td>{{ b.value.status }}</td>
           <td>{{ b.value.executedBlock?.block.incomingMessages.length }}</td>
-          <td>{{ b.value.executedBlock?.messages.length }}</td>
+          <td>{{ b.value.executedBlock?.outcome.messages.length }}</td>
           <td>{{ b.value.executedBlock?.block.operations.length }}</td>
           <td>
             <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#'+b.hash+'-modal'" @click="json_load(b.hash+'-json', b)">
