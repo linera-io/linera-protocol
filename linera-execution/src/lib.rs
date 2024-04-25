@@ -113,9 +113,9 @@ pub enum ExecutionError {
     ReentrantCall(UserApplicationId),
     #[error(
         "Application {caller_id} attempted to perform a cross-application to {callee_id} call \
-        from `finalize`"
+        from `finish_transaction`"
     )]
-    CrossApplicationCallInFinalize {
+    CrossApplicationCallInFinishTransaction {
         caller_id: Box<UserApplicationId>,
         callee_id: Box<UserApplicationId>,
     },
@@ -164,7 +164,10 @@ pub trait UserContract {
     ) -> Result<(), ExecutionError>;
 
     /// Finishes execution of the current transaction.
-    fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError>;
+    fn finish_transaction(
+        &mut self,
+        context: FinishTransactionContext,
+    ) -> Result<(), ExecutionError>;
 }
 
 /// The public entry points provided by the service part of an application.
@@ -263,7 +266,7 @@ pub struct MessageContext {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct FinalizeContext {
+pub struct FinishTransactionContext {
     /// The current chain ID.
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.

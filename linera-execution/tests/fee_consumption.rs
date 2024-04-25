@@ -176,7 +176,7 @@ async fn test_fee_consumption(
             Ok(())
         },
     ));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_finish_transaction());
 
     let refund_grant_to = Some(Account {
         chain_id: ChainId::root(0),

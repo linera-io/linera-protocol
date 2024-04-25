@@ -136,8 +136,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         },
     ));
 
-    target_application.expect_call(ExpectedCall::default_finalize());
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    target_application.expect_call(ExpectedCall::default_finish_transaction());
+    caller_application.expect_call(ExpectedCall::default_finish_transaction());
 
     let context = OperationContext {
         authenticated_signer: Some(owner),
@@ -282,7 +282,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
         }
     }));
 
-    target_application.expect_call(ExpectedCall::finalize(|runtime, _context| {
+    target_application.expect_call(ExpectedCall::finish_transaction(|runtime, _context| {
         match runtime.read_value_bytes(state_key)? {
             Some(session_is_open) if session_is_open == vec![u8::from(false)] => Ok(()),
             Some(_) => Err(ExecutionError::UserError("Leaked session".to_owned())),
@@ -291,7 +291,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
             )),
         }
     }));
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_finish_transaction());
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
@@ -380,7 +380,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
 
     let error_message = "Session leaked";
 
-    target_application.expect_call(ExpectedCall::finalize(|runtime, _context| {
+    target_application.expect_call(ExpectedCall::finish_transaction(|runtime, _context| {
         match runtime.read_value_bytes(state_key)? {
             Some(session_is_open) if session_is_open == vec![u8::from(false)] => Ok(()),
             Some(_) => Err(ExecutionError::UserError(error_message.to_owned())),
@@ -390,7 +390,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
         }
     }));
 
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_finish_transaction());
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
@@ -409,9 +409,9 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Tests if `finalize` can cause execution to fail.
+/// Tests if `finish_transaction` can cause execution to fail.
 #[tokio::test]
-async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
+async fn test_rejecting_block_from_finish_transaction() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
@@ -425,9 +425,9 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
         move |_runtime, _context, _operation| Ok(vec![]),
     ));
 
-    let error_message = "Finalize aborted execution";
+    let error_message = "`finish_transaction` aborted execution";
 
-    application.expect_call(ExpectedCall::finalize(|_runtime, _context| {
+    application.expect_call(ExpectedCall::finish_transaction(|_runtime, _context| {
         Err(ExecutionError::UserError(error_message.to_owned()))
     }));
 
@@ -448,9 +448,9 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Tests if `finalize` from a called application can cause execution to fail.
+/// Tests if `finish_transaction` from a called application can cause execution to fail.
 #[tokio::test]
-async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Result<()> {
+async fn test_rejecting_block_from_called_applications_finish_transaction() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
@@ -493,12 +493,12 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
 
     let error_message = "Third application aborted execution";
 
-    fourth_application.expect_call(ExpectedCall::default_finalize());
-    third_application.expect_call(ExpectedCall::finalize(|_runtime, _context| {
+    fourth_application.expect_call(ExpectedCall::default_finish_transaction());
+    third_application.expect_call(ExpectedCall::finish_transaction(|_runtime, _context| {
         Err(ExecutionError::UserError(error_message.to_owned()))
     }));
-    second_application.expect_call(ExpectedCall::default_finalize());
-    first_application.expect_call(ExpectedCall::default_finalize());
+    second_application.expect_call(ExpectedCall::default_finish_transaction());
+    first_application.expect_call(ExpectedCall::default_finish_transaction());
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
@@ -517,9 +517,9 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
     Ok(())
 }
 
-/// Tests if `finalize` can send messages.
+/// Tests if `finish_transaction` can send messages.
 #[tokio::test]
-async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
+async fn test_sending_message_from_finish_transaction() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
@@ -603,14 +603,14 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     let expected_fourth_message =
         RawOutgoingMessage::from(fourth_message.clone()).into_priced(&fee_policy)?;
 
-    fourth_application.expect_call(ExpectedCall::default_finalize());
-    third_application.expect_call(ExpectedCall::finalize(|runtime, _context| {
+    fourth_application.expect_call(ExpectedCall::default_finish_transaction());
+    third_application.expect_call(ExpectedCall::finish_transaction(|runtime, _context| {
         runtime.send_message(second_message)?;
         runtime.send_message(third_message)?;
         Ok(())
     }));
-    second_application.expect_call(ExpectedCall::default_finalize());
-    first_application.expect_call(ExpectedCall::finalize(|runtime, _context| {
+    second_application.expect_call(ExpectedCall::default_finish_transaction());
+    first_application.expect_call(ExpectedCall::finish_transaction(|runtime, _context| {
         runtime.send_message(fourth_message)?;
         Ok(())
     }));
@@ -694,9 +694,9 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Tests if an application can't perform cross-application calls during `finalize`.
+/// Tests if an application can't perform cross-application calls during `finish_transaction`.
 #[tokio::test]
-async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
+async fn test_cross_application_call_from_finish_transaction() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
@@ -713,7 +713,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
         move |_runtime, _context, _operation| Ok(vec![]),
     ));
 
-    caller_application.expect_call(ExpectedCall::finalize({
+    caller_application.expect_call(ExpectedCall::finish_transaction({
         move |runtime, _context| {
             runtime.try_call_application(false, target_id, vec![])?;
             Ok(())
@@ -737,17 +737,18 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
     let expected_callee_id = target_id;
     assert_matches!(
         result,
-        Err(ExecutionError::CrossApplicationCallInFinalize { caller_id, callee_id })
+        Err(ExecutionError::CrossApplicationCallInFinishTransaction { caller_id, callee_id })
             if *caller_id == expected_caller_id && *callee_id == expected_callee_id
     );
 
     Ok(())
 }
 
-/// Tests if an application can't perform cross-application calls during `finalize`, even if they
-/// have already called the same application.
+/// Tests if an application can't perform cross-application calls during `finish_transaction`, even
+/// if they have already called the same application.
 #[tokio::test]
-async fn test_cross_application_call_from_finalize_of_called_application() -> anyhow::Result<()> {
+async fn test_cross_application_call_from_finish_transaction_of_called_application(
+) -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
@@ -770,13 +771,13 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
         |_runtime, _context, _argument| Ok(vec![]),
     ));
 
-    target_application.expect_call(ExpectedCall::finalize({
+    target_application.expect_call(ExpectedCall::finish_transaction({
         move |runtime, _context| {
             runtime.try_call_application(false, caller_id, vec![])?;
             Ok(())
         }
     }));
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_finish_transaction());
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
@@ -795,16 +796,16 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
     let expected_callee_id = caller_id;
     assert_matches!(
         result,
-        Err(ExecutionError::CrossApplicationCallInFinalize { caller_id, callee_id })
+        Err(ExecutionError::CrossApplicationCallInFinishTransaction { caller_id, callee_id })
             if *caller_id == expected_caller_id && *callee_id == expected_callee_id
     );
 
     Ok(())
 }
 
-/// Tests if a called application can't perform cross-application calls during `finalize`.
+/// Tests if a called application can't perform cross-application calls during `finish_transaction`.
 #[tokio::test]
-async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
+async fn test_calling_application_again_from_finish_transaction() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
@@ -827,8 +828,8 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
         |_runtime, _context, _argument| Ok(vec![]),
     ));
 
-    target_application.expect_call(ExpectedCall::default_finalize());
-    caller_application.expect_call(ExpectedCall::finalize({
+    target_application.expect_call(ExpectedCall::default_finish_transaction());
+    caller_application.expect_call(ExpectedCall::finish_transaction({
         move |runtime, _context| {
             runtime.try_call_application(false, target_id, vec![])?;
             Ok(())
@@ -852,7 +853,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
     let expected_callee_id = target_id;
     assert_matches!(
         result,
-        Err(ExecutionError::CrossApplicationCallInFinalize { caller_id, callee_id })
+        Err(ExecutionError::CrossApplicationCallInFinishTransaction { caller_id, callee_id })
             if *caller_id == expected_caller_id && *callee_id == expected_callee_id
     );
 
@@ -940,7 +941,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_finish_transaction());
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
@@ -1039,8 +1040,8 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         },
     ));
 
-    target_application.expect_call(ExpectedCall::default_finalize());
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    target_application.expect_call(ExpectedCall::default_finish_transaction());
+    caller_application.expect_call(ExpectedCall::default_finish_transaction());
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
@@ -1152,9 +1153,9 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
         },
     ));
 
-    target_application.expect_call(ExpectedCall::default_finalize());
-    middle_application.expect_call(ExpectedCall::default_finalize());
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    target_application.expect_call(ExpectedCall::default_finish_transaction());
+    middle_application.expect_call(ExpectedCall::default_finish_transaction());
+    caller_application.expect_call(ExpectedCall::default_finish_transaction());
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
@@ -1310,9 +1311,9 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         },
     ));
 
-    sending_target_application.expect_call(ExpectedCall::default_finalize());
-    silent_target_application.expect_call(ExpectedCall::default_finalize());
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    sending_target_application.expect_call(ExpectedCall::default_finish_transaction());
+    silent_target_application.expect_call(ExpectedCall::default_finish_transaction());
+    caller_application.expect_call(ExpectedCall::default_finish_transaction());
 
     // Execute the operation, starting the test scenario
     let context = make_operation_context();
@@ -1448,7 +1449,7 @@ async fn test_open_chain() {
             Ok(vec![])
         }
     }));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_finish_transaction());
 
     let mut controller = ResourceController::default();
     let operation = Operation::User {
@@ -1525,7 +1526,7 @@ async fn test_close_chain() {
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_finish_transaction());
 
     let mut controller = ResourceController::default();
     let operation = Operation::User {
@@ -1550,7 +1551,7 @@ async fn test_close_chain() {
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_finish_transaction());
 
     let operation = Operation::User {
         application_id,

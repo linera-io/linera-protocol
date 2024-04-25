@@ -25,7 +25,7 @@ use crate::{
     execution_state_actor::{ExecutionStateSender, Request},
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, FinalizeContext,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, FinishTransactionContext,
     MessageContext, OperationContext, RawExecutionOutcome, ServiceRuntime,
     UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
 };
@@ -58,12 +58,12 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// How to interact with the storage view of the execution state.
     execution_state_sender: ExecutionStateSender,
 
-    /// If applications are being finalized.
+    /// If applications are being notified that the transaction is finishing.
     ///
     /// If [`true`], disables cross-application calls.
-    is_finalizing: bool,
-    /// Applications that need to be finalized.
-    applications_to_finalize: Vec<UserApplicationId>,
+    transaction_is_finishing: bool,
+    /// Applications that need to be notified when the transaction is finishing.
+    applications_in_transaction: Vec<UserApplicationId>,
 
     /// Application instances loaded in this transaction.
     loaded_applications: HashMap<UserApplicationId, LoadedApplication<UserInstance>>,
@@ -268,8 +268,8 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             next_message_index,
             executing_message,
             execution_state_sender,
-            is_finalizing: false,
-            applications_to_finalize: Vec::new(),
+            transaction_is_finishing: false,
+            applications_in_transaction: Vec::new(),
             loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
@@ -361,7 +361,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
 
                 let instance = code.instantiate(SyncRuntime(this))?;
 
-                self.applications_to_finalize.push(id);
+                self.applications_in_transaction.push(id);
                 Ok(entry
                     .insert(LoadedApplication::new(instance, description))
                     .clone())
@@ -380,8 +380,8 @@ impl SyncRuntimeInternal<UserContractInstance> {
         self.check_for_reentrancy(callee_id)?;
 
         ensure!(
-            !self.is_finalizing,
-            ExecutionError::CrossApplicationCallInFinalize {
+            !self.transaction_is_finishing,
+            ExecutionError::CrossApplicationCallInFinishTransaction {
                 caller_id: Box::new(self.current_application().id),
                 callee_id: Box::new(callee_id),
             }
@@ -875,7 +875,7 @@ impl ContractSyncRuntime {
             refund_grant_to,
             resource_controller,
         ));
-        let finalize_context = FinalizeContext {
+        let finish_transaction_context = FinishTransactionContext {
             authenticated_signer: signer,
             chain_id,
             height,
@@ -888,7 +888,7 @@ impl ContractSyncRuntime {
             }
             UserAction::Message(context, message) => code.execute_message(context, message),
         })?;
-        runtime.finalize(finalize_context)?;
+        runtime.finish_transaction(finish_transaction_context)?;
         let runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
@@ -896,16 +896,19 @@ impl ContractSyncRuntime {
     }
 
     /// Notifies all loaded applications that execution is finalizing.
-    fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError> {
-        let applications = mem::take(&mut self.inner().applications_to_finalize)
+    fn finish_transaction(
+        &mut self,
+        context: FinishTransactionContext,
+    ) -> Result<(), ExecutionError> {
+        let applications = mem::take(&mut self.inner().applications_in_transaction)
             .into_iter()
             .rev();
 
-        self.inner().is_finalizing = true;
+        self.inner().transaction_is_finishing = true;
 
         for application in applications {
             self.execute(application, context.authenticated_signer, |contract| {
-                contract.finalize(context)
+                contract.finish_transaction(context)
             })?;
         }
 

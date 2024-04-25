@@ -13,9 +13,9 @@ use std::{
 };
 
 use crate::{
-    ContractSyncRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
-    QueryContext, ServiceSyncRuntime, UserContract, UserContractModule, UserService,
-    UserServiceModule,
+    ContractSyncRuntime, ExecutionError, FinishTransactionContext, MessageContext,
+    OperationContext, QueryContext, ServiceSyncRuntime, UserContract, UserContractModule,
+    UserService, UserServiceModule,
 };
 
 /// A mocked implementation of a user application.
@@ -75,8 +75,8 @@ type ExecuteMessageHandler = Box<
         + Send
         + Sync,
 >;
-type FinalizeHandler = Box<
-    dyn FnOnce(&mut ContractSyncRuntime, FinalizeContext) -> Result<(), ExecutionError>
+type FinishTransactionHandler = Box<
+    dyn FnOnce(&mut ContractSyncRuntime, FinishTransactionContext) -> Result<(), ExecutionError>
         + Send
         + Sync,
 >;
@@ -94,8 +94,8 @@ pub enum ExpectedCall {
     ExecuteOperation(ExecuteOperationHandler),
     /// An expected call to [`UserContract::execute_message`].
     ExecuteMessage(ExecuteMessageHandler),
-    /// An expected call to [`UserContract::finalize`].
-    Finalize(FinalizeHandler),
+    /// An expected call to [`UserContract::finish_transaction`].
+    FinishTransaction(FinishTransactionHandler),
     /// An expected call to [`UserService::handle_query`].
     HandleQuery(HandleQueryHandler),
 }
@@ -106,7 +106,7 @@ impl Display for ExpectedCall {
             ExpectedCall::Instantiate(_) => "instantiate",
             ExpectedCall::ExecuteOperation(_) => "execute_operation",
             ExpectedCall::ExecuteMessage(_) => "execute_message",
-            ExpectedCall::Finalize(_) => "finalize",
+            ExpectedCall::FinishTransaction(_) => "finish_transaction",
             ExpectedCall::HandleQuery(_) => "handle_query",
         };
 
@@ -158,21 +158,23 @@ impl ExpectedCall {
         ExpectedCall::ExecuteMessage(Box::new(handler))
     }
 
-    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::finalize`]
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
+    /// [`UserContract::finish_transaction`]
     /// implementation, which is handled by the provided `handler`.
-    pub fn finalize(
-        handler: impl FnOnce(&mut ContractSyncRuntime, FinalizeContext) -> Result<(), ExecutionError>
+    pub fn finish_transaction(
+        handler: impl FnOnce(&mut ContractSyncRuntime, FinishTransactionContext) -> Result<(), ExecutionError>
             + Send
             + Sync
             + 'static,
     ) -> Self {
-        ExpectedCall::Finalize(Box::new(handler))
+        ExpectedCall::FinishTransaction(Box::new(handler))
     }
 
-    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::finalize`]
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
+    /// [`UserContract::finish_transaction`]
     /// implementation, which is handled by the default implementation which does nothing.
-    pub fn default_finalize() -> Self {
-        Self::finalize(|_, _| Ok(()))
+    pub fn default_finish_transaction() -> Self {
+        Self::finish_transaction(|_, _| Ok(()))
     }
 
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
@@ -265,13 +267,16 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
         }
     }
 
-    fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError> {
+    fn finish_transaction(
+        &mut self,
+        context: FinishTransactionContext,
+    ) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
-            Some(ExpectedCall::Finalize(handler)) => handler(&mut self.runtime, context),
+            Some(ExpectedCall::FinishTransaction(handler)) => handler(&mut self.runtime, context),
             Some(unexpected_call) => {
-                panic!("Expected a call to `finalize`, got a call to `{unexpected_call}` instead.")
+                panic!("Expected a call to `finish_transaction`, got a call to `{unexpected_call}` instead.")
             }
-            None => panic!("Unexpected call to `finalize`"),
+            None => panic!("Unexpected call to `finish_transaction`"),
         }
     }
 }

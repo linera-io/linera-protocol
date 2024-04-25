@@ -25,8 +25,8 @@ use super::{
 };
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
-    Bytecode, ContractRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
-    QueryContext, ServiceRuntime,
+    Bytecode, ContractRuntime, ExecutionError, FinishTransactionContext, MessageContext,
+    OperationContext, QueryContext, ServiceRuntime,
 };
 
 /// An [`Engine`] instance configured to run application services.
@@ -230,7 +230,10 @@ where
             .map_err(ExecutionError::UserError)
     }
 
-    fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {
+    fn finish_transaction(
+        &mut self,
+        _context: FinishTransactionContext,
+    ) -> Result<(), ExecutionError> {
         self.configure_initial_fuel()?;
         let result = ContractEntrypoints::new(&mut self.instance).finish_transaction();
         self.persist_remaining_fuel()?;
