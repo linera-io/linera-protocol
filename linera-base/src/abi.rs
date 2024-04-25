@@ -91,5 +91,5 @@ pub trait OracleQuery: Send + Sync + Debug + 'static {
     fn serialize(&self) -> Result<Vec<u8>, Self::SerializationError>;
 
     /// Deserializes the response.
-    fn deserialize(response: Vec<u8>) -> Result<Self::Response, Self::DeserializationError>;
+    fn deserialize(response: &[u8]) -> Result<Self::Response, Self::DeserializationError>;
 }
