@@ -6,13 +6,13 @@
 mod state;
 
 use counter::CounterAbi;
-use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime};
+use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, StoreOnDrop};
 use thiserror::Error;
 
 use self::state::Counter;
 
 pub struct CounterContract {
-    state: Counter,
+    state: StoreOnDrop<Counter>,
     runtime: ContractRuntime<Self>,
 }
 
@@ -30,7 +30,10 @@ impl Contract for CounterContract {
     type Parameters = ();
 
     async fn new(state: Counter, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(CounterContract { state, runtime })
+        Ok(CounterContract {
+            state: StoreOnDrop(state),
+            runtime,
+        })
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
@@ -143,7 +146,8 @@ mod tests {
         let mut contract = CounterContract {
             state: Counter::load(ViewStorageContext::default())
                 .blocking_wait()
-                .expect("Failed to read from mock key value store"),
+                .expect("Failed to read from mock key value store")
+                .into(),
             runtime: test_contract_runtime(),
         };
 

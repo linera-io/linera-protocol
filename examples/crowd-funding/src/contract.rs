@@ -11,13 +11,13 @@ use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
     ensure,
     views::View,
-    Contract, ContractRuntime,
+    Contract, ContractRuntime, StoreOnDrop,
 };
 use state::{CrowdFunding, Status};
 use thiserror::Error;
 
 pub struct CrowdFundingContract {
-    state: CrowdFunding,
+    state: StoreOnDrop<CrowdFunding>,
     runtime: ContractRuntime<Self>,
 }
 
@@ -35,7 +35,10 @@ impl Contract for CrowdFundingContract {
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
     async fn new(state: CrowdFunding, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(CrowdFundingContract { state, runtime })
+        Ok(CrowdFundingContract {
+            state: StoreOnDrop(state),
+            runtime,
+        })
     }
 
     fn state_mut(&mut self) -> &mut Self::State {

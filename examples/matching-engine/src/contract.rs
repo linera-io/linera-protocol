@@ -9,7 +9,7 @@ use std::cmp::min;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
-    ensure, Contract, ContractRuntime,
+    ensure, Contract, ContractRuntime, StoreOnDrop,
 };
 use matching_engine::{
     product_price_amount, MatchingEngineAbi, Message, Operation, Order, OrderId, OrderNature,
@@ -20,7 +20,7 @@ use state::{LevelView, MatchingEngine, MatchingEngineError};
 use crate::state::{KeyBook, OrderEntry};
 
 pub struct MatchingEngineContract {
-    state: MatchingEngine,
+    state: StoreOnDrop<MatchingEngine>,
     runtime: ContractRuntime<Self>,
 }
 
@@ -61,7 +61,10 @@ impl Contract for MatchingEngineContract {
         state: MatchingEngine,
         runtime: ContractRuntime<Self>,
     ) -> Result<Self, Self::Error> {
-        Ok(MatchingEngineContract { state, runtime })
+        Ok(MatchingEngineContract {
+            state: StoreOnDrop(state),
+            runtime,
+        })
     }
 
     fn state_mut(&mut self) -> &mut Self::State {

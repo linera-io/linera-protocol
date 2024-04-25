@@ -8,7 +8,7 @@ use thiserror::Error;
 use self::state::Application;
 
 pub struct ApplicationContract {{
-    state: Application,
+    state: StoreOnDrop<Application>,
     runtime: ContractRuntime<Self>,
 }}
 
@@ -26,7 +26,10 @@ impl Contract for ApplicationContract {{
     type InstantiationArgument = ();
 
     async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {{
-        Ok(ApplicationContract {{ state, runtime }})
+        Ok(ApplicationContract {{
+            state: StoreOnDrop(state),
+            StoreOnDrop(runtime),
+        }})
     }}
 
     fn state_mut(&mut self) -> &mut Self::State {{

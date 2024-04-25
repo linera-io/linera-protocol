@@ -9,7 +9,7 @@ use amm::{AmmAbi, AmmError, Message, Operation, Parameters};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
-    ensure, Contract, ContractRuntime,
+    ensure, Contract, ContractRuntime, StoreOnDrop,
 };
 use num_bigint::BigUint;
 use num_traits::{cast::FromPrimitive, ToPrimitive};
@@ -17,7 +17,7 @@ use num_traits::{cast::FromPrimitive, ToPrimitive};
 use self::state::Amm;
 
 pub struct AmmContract {
-    state: Amm,
+    state: StoreOnDrop<Amm>,
     runtime: ContractRuntime<Self>,
 }
 
@@ -35,7 +35,10 @@ impl Contract for AmmContract {
     type Parameters = Parameters;
 
     async fn new(state: Amm, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(AmmContract { state, runtime })
+        Ok(AmmContract {
+            state: StoreOnDrop(state),
+            runtime,
+        })
     }
 
     fn state_mut(&mut self) -> &mut Self::State {

@@ -12,14 +12,14 @@ use fungible::{
 };
 use linera_sdk::{
     base::{AccountOwner, Amount, WithContractAbi},
-    ensure, Contract, ContractRuntime,
+    ensure, Contract, ContractRuntime, StoreOnDrop,
 };
 use thiserror::Error;
 
 use self::state::FungibleToken;
 
 pub struct FungibleTokenContract {
-    state: FungibleToken,
+    state: StoreOnDrop<FungibleToken>,
     runtime: ContractRuntime<Self>,
 }
 
@@ -40,7 +40,10 @@ impl Contract for FungibleTokenContract {
         state: FungibleToken,
         runtime: ContractRuntime<Self>,
     ) -> Result<Self, Self::Error> {
-        Ok(FungibleTokenContract { state, runtime })
+        Ok(FungibleTokenContract {
+            state: StoreOnDrop(state),
+            runtime,
+        })
     }
 
     fn state_mut(&mut self) -> &mut Self::State {

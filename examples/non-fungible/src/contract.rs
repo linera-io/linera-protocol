@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use fungible::Account;
 use linera_sdk::{
     base::{AccountOwner, WithContractAbi},
-    ensure, Contract, ContractRuntime,
+    ensure, Contract, ContractRuntime, StoreOnDrop,
 };
 use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
 use thiserror::Error;
@@ -18,7 +18,7 @@ use thiserror::Error;
 use self::state::NonFungibleToken;
 
 pub struct NonFungibleTokenContract {
-    state: NonFungibleToken,
+    state: StoreOnDrop<NonFungibleToken>,
     runtime: ContractRuntime<Self>,
 }
 
@@ -39,7 +39,10 @@ impl Contract for NonFungibleTokenContract {
         state: NonFungibleToken,
         runtime: ContractRuntime<Self>,
     ) -> Result<Self, Self::Error> {
-        Ok(NonFungibleTokenContract { state, runtime })
+        Ok(NonFungibleTokenContract {
+            state: StoreOnDrop(state),
+            runtime,
+        })
     }
 
     fn state_mut(&mut self) -> &mut Self::State {

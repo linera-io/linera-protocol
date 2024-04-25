@@ -8,7 +8,7 @@ mod state;
 use linera_sdk::{
     base::{ChannelName, Destination, MessageId, WithContractAbi},
     views::ViewError,
-    Contract, ContractRuntime,
+    Contract, ContractRuntime, StoreOnDrop,
 };
 use social::{Key, Message, Operation, OwnPost, SocialAbi};
 use state::Social;
@@ -20,7 +20,7 @@ const POSTS_CHANNEL_NAME: &[u8] = b"posts";
 const RECENT_POSTS: usize = 10;
 
 pub struct SocialContract {
-    state: Social,
+    state: StoreOnDrop<Social>,
     runtime: ContractRuntime<Self>,
 }
 
@@ -38,7 +38,10 @@ impl Contract for SocialContract {
     type Parameters = ();
 
     async fn new(state: Social, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(SocialContract { state, runtime })
+        Ok(SocialContract {
+            state: StoreOnDrop(state),
+            runtime,
+        })
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
