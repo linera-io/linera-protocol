@@ -177,7 +177,7 @@ where
                 let mut client_guard = client.lock().await;
                 context.lock().await.update_wallet(&mut *client_guard).await;
             }
-            let value = storage.read_value(hash).await?;
+            let value = storage.read_hashed_certificate_value(hash).await?;
             let Some(executed_block) = value.inner().executed_block() else {
                 error!("NewBlock notification about value without a block: {hash}");
                 continue;

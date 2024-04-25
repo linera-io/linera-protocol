@@ -348,14 +348,17 @@ where
     where
         A: LocalValidatorNode + Clone + 'static,
     {
-        match storage.read_value(location.certificate_hash).await {
+        match storage
+            .read_hashed_certificate_value(location.certificate_hash)
+            .await
+        {
             Ok(blob) => return Ok(Some(blob)),
             Err(ViewError::NotFound(..)) => {}
             Err(err) => Err(err)?,
         }
         match Self::download_blob(validators, chain_id, location).await {
             Some(blob) => {
-                storage.write_value(&blob).await?;
+                storage.write_hashed_certificate_value(&blob).await?;
                 Ok(Some(blob))
             }
             None => Ok(None),

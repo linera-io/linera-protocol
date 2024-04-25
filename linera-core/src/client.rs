@@ -2025,18 +2025,24 @@ where
         .await
     }
 
-    pub async fn read_value(&self, hash: CryptoHash) -> Result<HashedCertificateValue, ViewError> {
-        self.storage_client().await.read_value(hash).await
+    pub async fn read_hashed_certificate_value(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<HashedCertificateValue, ViewError> {
+        self.storage_client()
+            .await
+            .read_hashed_certificate_value(hash)
+            .await
     }
 
-    pub async fn read_values_downward(
+    pub async fn read_hashed_certificate_values_downward(
         &self,
         from: CryptoHash,
         limit: u32,
     ) -> Result<Vec<HashedCertificateValue>, ViewError> {
         self.storage_client()
             .await
-            .read_values_downward(from, limit)
+            .read_hashed_certificate_values_downward(from, limit)
             .await
     }
 

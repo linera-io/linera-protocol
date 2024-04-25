@@ -14,8 +14,8 @@ use linera_core::{
 };
 use linera_execution::system::{Recipient, UserData};
 use linera_storage::{
-    Storage, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
-    WRITE_VALUE_COUNTER,
+    Storage, READ_CERTIFICATE_COUNTER, READ_HASHED_CERTIFICATE_VALUE_COUNTER,
+    WRITE_CERTIFICATE_COUNTER, WRITE_HASHED_CERTIFICATE_VALUE_COUNTER,
 };
 use linera_views::{views::ViewError, LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
 use prometheus::core::Collector;
@@ -112,7 +112,7 @@ criterion_group!(
     config = Criterion::default()
         .measurement_time(Duration::from_secs(40))
         .with_measurement(BenchRecorderMeasurement::new(vec![
-            READ_VALUE_COUNTER.desc()[0].fq_name.as_str(), WRITE_VALUE_COUNTER.desc()[0].fq_name.as_str(),
+            READ_HASHED_CERTIFICATE_VALUE_COUNTER.desc()[0].fq_name.as_str(), WRITE_HASHED_CERTIFICATE_VALUE_COUNTER.desc()[0].fq_name.as_str(),
             READ_CERTIFICATE_COUNTER.desc()[0].fq_name.as_str(), WRITE_CERTIFICATE_COUNTER.desc()[0].fq_name.as_str(),
             LOAD_VIEW_COUNTER.desc()[0].fq_name.as_str(), SAVE_VIEW_COUNTER.desc()[0].fq_name.as_str(),
         ]));
