@@ -3,7 +3,9 @@
 
 use async_trait::async_trait;
 use linera_base::{crypto::KeyPair, data_types::Timestamp, identifiers::ChainId};
-use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
+use linera_chain::data_types::{
+    BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
+};
 use linera_core::{
     client::ChainClient,
     data_types::{ChainInfoQuery, ChainInfoResponse},
@@ -49,7 +51,7 @@ impl ValidatorNode for DummyValidatorNode {
     async fn handle_certificate(
         &mut self,
         _: Certificate,
-        _: Vec<HashedValue>,
+        _: Vec<HashedCertificateValue>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)

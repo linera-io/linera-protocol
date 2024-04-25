@@ -45,7 +45,7 @@ use super::{
 };
 use crate::{
     config::{CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig},
-    HandleCertificateRequest, HandleLiteCertificateRequest,
+    HandleCertificateRequest, HandleLiteCertRequest,
 };
 
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
@@ -468,7 +468,7 @@ where
         request: Request<LiteCertificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
-        let HandleLiteCertificateRequest {
+        let HandleLiteCertRequest {
             certificate,
             wait_for_outgoing_messages,
         } = request.into_inner().try_into()?;

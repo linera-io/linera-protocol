@@ -434,7 +434,7 @@ impl StoreConfig {
         }
     }
 
-    /// Deletes only one table of the database
+    /// Initializes the database
     pub async fn initialize(self) -> Result<(), ViewError> {
         match self {
             StoreConfig::Memory(_, _) => Err(ViewError::ContextError {

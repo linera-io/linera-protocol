@@ -8,7 +8,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::{CertificateValue, HashedValue, Medium, MessageAction},
+    data_types::{CertificateValue, HashedCertificateValue, Medium, MessageAction},
     manager::ChainManagerInfo,
 };
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
@@ -38,7 +38,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<Message>(&samples)?;
     tracer.trace_type::<MessageAction>(&samples)?;
     tracer.trace_type::<MessageKind>(&samples)?;
-    tracer.trace_type::<HashedValue>(&samples)?;
+    tracer.trace_type::<HashedCertificateValue>(&samples)?;
     tracer.trace_type::<CertificateValue>(&samples)?;
     tracer.trace_type::<Medium>(&samples)?;
     tracer.trace_type::<Destination>(&samples)?;

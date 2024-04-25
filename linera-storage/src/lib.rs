@@ -28,7 +28,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::{Certificate, ChannelFullName, HashedValue},
+    data_types::{Certificate, ChannelFullName, HashedCertificateValue},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -91,20 +91,20 @@ pub trait Storage: Sized {
     async fn contains_value(&self, hash: CryptoHash) -> Result<bool, ViewError>;
 
     /// Reads the value with the given hash.
-    async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError>;
+    async fn read_value(&self, hash: CryptoHash) -> Result<HashedCertificateValue, ViewError>;
 
     /// Reads the values in descending order from the given hash.
     async fn read_values_downward(
         &self,
         from: CryptoHash,
         limit: u32,
-    ) -> Result<Vec<HashedValue>, ViewError>;
+    ) -> Result<Vec<HashedCertificateValue>, ViewError>;
 
     /// Writes the given value.
-    async fn write_value(&self, value: &HashedValue) -> Result<(), ViewError>;
+    async fn write_value(&self, value: &HashedCertificateValue) -> Result<(), ViewError>;
 
     /// Writes several values
-    async fn write_values(&self, values: &[HashedValue]) -> Result<(), ViewError>;
+    async fn write_values(&self, values: &[HashedCertificateValue]) -> Result<(), ViewError>;
 
     /// Tests existence of the certificate with the given hash.
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;

@@ -21,7 +21,7 @@ fn test_signed_values() {
         state_hash: CryptoHash::test_hash("state"),
     }
     .with(block);
-    let value = HashedValue::new_confirmed(executed_block);
+    let value = HashedCertificateValue::new_confirmed(executed_block);
 
     let v = LiteVote::new(value.lite(), Round::Fast, &key1);
     assert!(v.check().is_ok());
@@ -49,7 +49,7 @@ fn test_certificates() {
         state_hash: CryptoHash::test_hash("state"),
     }
     .with(block);
-    let value = HashedValue::new_confirmed(executed_block);
+    let value = HashedCertificateValue::new_confirmed(executed_block);
 
     let v1 = LiteVote::new(value.lite(), Round::Fast, &key1);
     let v2 = LiteVote::new(value.lite(), Round::Fast, &key2);

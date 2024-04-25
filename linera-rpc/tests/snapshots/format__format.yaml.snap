@@ -406,7 +406,7 @@ HandleCertificateRequest:
     - blobs:
         SEQ:
           TYPENAME: CertificateValue
-HandleLiteCertificateRequest:
+HandleLiteCertRequest:
   STRUCT:
     - certificate:
         TYPENAME: LiteCertificate
@@ -702,7 +702,7 @@ RpcMessage:
     2:
       LiteCertificate:
         NEWTYPE:
-          TYPENAME: HandleLiteCertificateRequest
+          TYPENAME: HandleLiteCertRequest
     3:
       ChainInfoQuery:
         NEWTYPE:

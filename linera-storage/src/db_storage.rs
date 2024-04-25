@@ -11,7 +11,7 @@ use linera_base::{
     identifiers::ChainId,
 };
 use linera_chain::{
-    data_types::{Certificate, CertificateValue, HashedValue, LiteCertificate},
+    data_types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{
@@ -364,7 +364,7 @@ where
         Ok(test)
     }
 
-    async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
+    async fn read_value(&self, hash: CryptoHash) -> Result<HashedCertificateValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let maybe_value = self
             .client
@@ -381,7 +381,7 @@ where
         &self,
         from: CryptoHash,
         limit: u32,
-    ) -> Result<Vec<HashedValue>, ViewError> {
+    ) -> Result<Vec<HashedCertificateValue>, ViewError> {
         let mut hash = Some(from);
         let mut values = Vec::new();
         for _ in 0..limit {
@@ -398,13 +398,13 @@ where
         Ok(values)
     }
 
-    async fn write_value(&self, value: &HashedValue) -> Result<(), ViewError> {
+    async fn write_value(&self, value: &HashedCertificateValue) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         self.add_value_to_batch(value, &mut batch)?;
         self.write_batch(batch).await
     }
 
-    async fn write_values(&self, values: &[HashedValue]) -> Result<(), ViewError> {
+    async fn write_values(&self, values: &[HashedCertificateValue]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for value in values {
             self.add_value_to_batch(value, &mut batch)?;
@@ -472,7 +472,11 @@ where
     ViewError: From<<Client as KeyValueStore>::Error>,
     <Client as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
-    fn add_value_to_batch(&self, value: &HashedValue, batch: &mut Batch) -> Result<(), ViewError> {
+    fn add_value_to_batch(
+        &self,
+        value: &HashedCertificateValue,
+        batch: &mut Batch,
+    ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         WRITE_VALUE_COUNTER.with_label_values(&[]).inc();
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;

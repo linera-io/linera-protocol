@@ -21,8 +21,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, ChannelFullName, Event, HashedValue, IncomingMessage, MessageAction,
-        Origin, OutgoingMessage,
+        BlockExecutionOutcome, ChannelFullName, Event, HashedCertificateValue, IncomingMessage,
+        MessageAction, Origin, OutgoingMessage,
     },
     test::{make_child_block, make_first_block, BlockTestExt},
 };
@@ -136,7 +136,7 @@ where
         ..SystemExecutionState::new(Epoch::ZERO, publisher_chain, admin_id)
     };
     let publisher_state_hash = publisher_system_state.clone().into_hash().await;
-    let publish_block_proposal = HashedValue::new_confirmed(
+    let publish_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![OutgoingMessage {
                 destination: Destination::Recipient(publisher_chain.into()),
@@ -212,7 +212,7 @@ where
         kind: MessageKind::Simple,
         message: Message::System(broadcast_message.clone()),
     };
-    let failing_broadcast_block_proposal = HashedValue::new_confirmed(
+    let failing_broadcast_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![failing_broadcast_outgoing_message],
             message_counts: vec![1],
@@ -236,7 +236,7 @@ where
         kind: MessageKind::Simple,
         message: Message::System(broadcast_message.clone()),
     };
-    let broadcast_block_proposal = HashedValue::new_confirmed(
+    let broadcast_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![broadcast_outgoing_message],
             message_counts: vec![1],
@@ -283,7 +283,7 @@ where
     };
     creator_system_state.subscriptions.insert(publisher_channel);
     let creator_state = creator_system_state.clone().into_view().await;
-    let subscribe_block_proposal = HashedValue::new_confirmed(
+    let subscribe_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![OutgoingMessage {
                 destination: Destination::Recipient(publisher_chain.into()),
@@ -333,7 +333,7 @@ where
         .with_incoming_message(accept_message);
     publisher_system_state.timestamp = Timestamp::from(3);
     let publisher_state_hash = publisher_system_state.into_hash().await;
-    let accept_block_proposal = HashedValue::new_confirmed(
+    let accept_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![OutgoingMessage {
                 destination: Destination::Recipient(creator_chain.into()),
@@ -428,7 +428,7 @@ where
             initial_value_bytes.clone(),
         )
         .await?;
-    let create_block_proposal = HashedValue::new_confirmed(
+    let create_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![OutgoingMessage {
                 destination: Destination::Recipient(creator_chain.into()),
@@ -486,7 +486,7 @@ where
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(5));
-    let run_block_proposal = HashedValue::new_confirmed(
+    let run_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![],
             message_counts: vec![0],

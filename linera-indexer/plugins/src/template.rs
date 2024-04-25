@@ -21,8 +21,8 @@ pub struct Template<C> {
 #[plugin]
 impl Template<C> {
     // The `register` function is the only required function.
-    // It is used to register the wanted information from a HashedValue
-    async fn register(&self, value: &HashedValue) -> Result<(), IndexerError> {
+    // It is used to register the wanted information from a HashedCertificateValue
+    async fn register(&self, value: &HashedCertificateValue) -> Result<(), IndexerError> {
         // register information
     }
 

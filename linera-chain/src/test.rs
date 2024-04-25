@@ -15,12 +15,12 @@ use linera_execution::{
 };
 
 use crate::data_types::{
-    Block, BlockAndRound, BlockProposal, Certificate, Event, HashedValue, IncomingMessage,
-    MessageAction, Origin, SignatureAggregator, Vote,
+    Block, BlockAndRound, BlockProposal, Certificate, Event, HashedCertificateValue,
+    IncomingMessage, MessageAction, Origin, SignatureAggregator, Vote,
 };
 
 /// Creates a new child of the given block, with the same timestamp.
-pub fn make_child_block(parent: &HashedValue) -> Block {
+pub fn make_child_block(parent: &HashedCertificateValue) -> Block {
     let parent_value = parent.inner();
     let parent_block = parent_value.block().unwrap();
     Block {

@@ -11,7 +11,7 @@ use linera_core::{
 use linera_version::VersionInfo;
 use serde::{Deserialize, Serialize};
 
-use crate::{HandleCertificateRequest, HandleLiteCertificateRequest};
+use crate::{HandleCertificateRequest, HandleLiteCertRequest};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
@@ -19,7 +19,7 @@ pub enum RpcMessage {
     // Inbound
     BlockProposal(Box<BlockProposal>),
     Certificate(Box<HandleCertificateRequest>),
-    LiteCertificate(Box<HandleLiteCertificateRequest<'static>>),
+    LiteCertificate(Box<HandleLiteCertRequest<'static>>),
     ChainInfoQuery(Box<ChainInfoQuery>),
     VersionInfoQuery,
 
@@ -89,8 +89,8 @@ impl From<BlockProposal> for RpcMessage {
     }
 }
 
-impl From<HandleLiteCertificateRequest<'static>> for RpcMessage {
-    fn from(request: HandleLiteCertificateRequest<'static>) -> Self {
+impl From<HandleLiteCertRequest<'static>> for RpcMessage {
+    fn from(request: HandleLiteCertRequest<'static>) -> Self {
         RpcMessage::LiteCertificate(Box::new(request))
     }
 }

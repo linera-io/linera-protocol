@@ -356,7 +356,7 @@ type ExecutionStateView {
 }
 
 
-type HashedValue {
+type HashedCertificateValue {
 	hash: CryptoHash!
 	value: CertificateValue!
 }
@@ -690,8 +690,8 @@ type QueryRoot {
 	chain(chainId: ChainId!): ChainStateExtendedView!
 	applications(chainId: ChainId!): [ApplicationOverview!]!
 	chains: Chains!
-	block(hash: CryptoHash, chainId: ChainId!): HashedValue
-	blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [HashedValue!]!
+	block(hash: CryptoHash, chainId: ChainId!): HashedCertificateValue
+	blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [HashedCertificateValue!]!
 	"""
 	Returns the version information on this node service.
 	"""

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { HashedValue } from '../../gql/service'
+import { HashedCertificateValue } from '../../gql/service'
 import Json from './Json.vue'
 import Op from './Op.vue'
 
-defineProps<{block: HashedValue, title: string}>()
+defineProps<{block: HashedCertificateValue, title: string}>()
 </script>
 
 <template>

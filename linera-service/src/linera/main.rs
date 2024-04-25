@@ -54,7 +54,7 @@ mod net_up_utils;
 
 #[cfg(feature = "benchmark")]
 use {
-    linera_chain::data_types::HashedValue,
+    linera_chain::data_types::HashedCertificateValue,
     linera_core::data_types::ChainInfoResponse,
     linera_rpc::{HandleCertificateRequest, RpcMessage},
     std::collections::HashSet,
@@ -668,7 +668,9 @@ impl Runnable for Job {
                                 .stage_block_execution(proposal.content.block.clone())
                                 .await?;
                         let value =
-                            HashedValue::from(CertificateValue::ConfirmedBlock { executed_block });
+                            HashedCertificateValue::from(CertificateValue::ConfirmedBlock {
+                                executed_block,
+                            });
                         values.insert(value.hash(), value);
                     }
                 }

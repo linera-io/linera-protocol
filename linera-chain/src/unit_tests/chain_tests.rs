@@ -23,7 +23,7 @@ use linera_views::{
 };
 
 use crate::{
-    data_types::HashedValue,
+    data_types::HashedCertificateValue,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
     ChainError, ChainStateView,
 };
@@ -138,7 +138,7 @@ async fn test_application_permissions() {
         .with_incoming_message(register_app_message.clone())
         .with_operation(app_operation.clone());
     let outcome = chain.execute_block(&valid_block, time).await.unwrap();
-    let value = HashedValue::new_confirmed(outcome.with(valid_block));
+    let value = HashedCertificateValue::new_confirmed(outcome.with(valid_block));
 
     // In the second block, other operations are still not allowed.
     let invalid_block = make_child_block(&value).with_simple_transfer(chain_id, Amount::ONE);

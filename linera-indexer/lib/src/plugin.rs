@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use async_graphql::{EmptyMutation, EmptySubscription, ObjectType, Schema};
 use axum::Router;
-use linera_chain::data_types::HashedValue;
+use linera_chain::data_types::HashedCertificateValue;
 use linera_views::{
     common::{ContextFromStore, KeyValueStore},
     views::{View, ViewError},
@@ -34,7 +34,7 @@ where
         Self: Sized;
 
     /// Main function of the plugin: registers the information required for a hashed value
-    async fn register(&self, value: &HashedValue) -> Result<(), IndexerError>;
+    async fn register(&self, value: &HashedCertificateValue) -> Result<(), IndexerError>;
 
     /// Produces the GraphQL schema for the plugin
     fn sdl(&self) -> String;

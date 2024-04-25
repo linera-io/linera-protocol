@@ -25,7 +25,7 @@ pub use node_provider::NodeOptions;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct HandleLiteCertificateRequest<'a> {
+pub struct HandleLiteCertRequest<'a> {
     pub certificate: linera_chain::data_types::LiteCertificate<'a>,
     pub wait_for_outgoing_messages: bool,
 }
@@ -35,7 +35,7 @@ pub struct HandleLiteCertificateRequest<'a> {
 pub struct HandleCertificateRequest {
     pub certificate: linera_chain::data_types::Certificate,
     pub wait_for_outgoing_messages: bool,
-    pub blobs: Vec<linera_chain::data_types::HashedValue>,
+    pub blobs: Vec<linera_chain::data_types::HashedCertificateValue>,
 }
 
 pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("file_descriptor_set");

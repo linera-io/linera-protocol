@@ -220,7 +220,7 @@ pub struct BlockProposal {
     pub content: BlockAndRound,
     pub owner: Owner,
     pub signature: Signature,
-    pub blobs: Vec<HashedValue>,
+    pub blobs: Vec<HashedCertificateValue>,
     pub validated: Option<Certificate>,
 }
 
@@ -313,14 +313,14 @@ impl CertificateValue {
 
 /// A statement to be certified by the validators, with its hash.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct HashedValue {
+pub struct HashedCertificateValue {
     value: CertificateValue,
     /// Hash of the value (used as key for storage).
     hash: CryptoHash,
 }
 
 #[Object]
-impl HashedValue {
+impl HashedCertificateValue {
     #[graphql(derived(name = "hash"))]
     async fn _hash(&self) -> CryptoHash {
         self.hash
@@ -345,7 +345,7 @@ struct ValueHashAndRound(CryptoHash, Round);
 /// A vote on a statement from a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Vote {
-    pub value: HashedValue,
+    pub value: HashedCertificateValue,
     pub round: Round,
     pub validator: ValidatorName,
     pub signature: Signature,
@@ -353,7 +353,7 @@ pub struct Vote {
 
 impl Vote {
     /// Use signing key to create a signed object.
-    pub fn new(value: HashedValue, round: Round, key_pair: &KeyPair) -> Self {
+    pub fn new(value: HashedCertificateValue, round: Round, key_pair: &KeyPair) -> Self {
         let hash_and_round = ValueHashAndRound(value.hash, round);
         let signature = Signature::new(&hash_and_round, key_pair);
         Self {
@@ -392,7 +392,7 @@ pub struct LiteVote {
 
 impl LiteVote {
     /// Returns the full vote, with the value, if it matches.
-    pub fn with_value(self, value: HashedValue) -> Option<Vote> {
+    pub fn with_value(self, value: HashedCertificateValue) -> Option<Vote> {
         if self.value != value.lite() {
             return None;
         }
@@ -464,7 +464,7 @@ impl<'a> LiteCertificate<'a> {
     }
 
     /// Returns the `Certificate` with the specified value, if it matches.
-    pub fn with_value(self, value: HashedValue) -> Option<Certificate> {
+    pub fn with_value(self, value: HashedCertificateValue) -> Option<Certificate> {
         if self.value.chain_id != value.inner().chain_id() || self.value.value_hash != value.hash()
         {
             return None;
@@ -491,7 +491,7 @@ impl<'a> LiteCertificate<'a> {
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct Certificate {
     /// The certified value.
-    pub value: HashedValue,
+    pub value: HashedCertificateValue,
     /// The round in which the value was certified.
     pub round: Round,
     /// Signatures on the value.
@@ -530,7 +530,7 @@ impl Target {
     }
 }
 
-impl Serialize for HashedValue {
+impl Serialize for HashedCertificateValue {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -539,7 +539,7 @@ impl Serialize for HashedValue {
     }
 }
 
-impl<'a> Deserialize<'a> for HashedValue {
+impl<'a> Deserialize<'a> for HashedCertificateValue {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'a>,
@@ -548,15 +548,15 @@ impl<'a> Deserialize<'a> for HashedValue {
     }
 }
 
-impl From<CertificateValue> for HashedValue {
-    fn from(value: CertificateValue) -> HashedValue {
+impl From<CertificateValue> for HashedCertificateValue {
+    fn from(value: CertificateValue) -> HashedCertificateValue {
         let hash = CryptoHash::new(&value);
-        HashedValue { value, hash }
+        HashedCertificateValue { value, hash }
     }
 }
 
-impl From<HashedValue> for CertificateValue {
-    fn from(hv: HashedValue) -> CertificateValue {
+impl From<HashedCertificateValue> for CertificateValue {
+    fn from(hv: HashedCertificateValue) -> CertificateValue {
         hv.value
     }
 }
@@ -590,9 +590,9 @@ impl CertificateValue {
         }
     }
 
-    /// Creates a `HashedValue` without checking that this is the correct hash!
-    pub fn with_hash_unchecked(self, hash: CryptoHash) -> HashedValue {
-        HashedValue { value: self, hash }
+    /// Creates a `HashedCertificateValue` without checking that this is the correct hash!
+    pub fn with_hash_unchecked(self, hash: CryptoHash) -> HashedCertificateValue {
+        HashedCertificateValue { value: self, hash }
     }
 
     /// Returns whether this value contains the message with the specified ID.
@@ -727,19 +727,23 @@ impl BlockExecutionOutcome {
     }
 }
 
-impl HashedValue {
+impl HashedCertificateValue {
     /// Creates a [`ConfirmedBlock`](CertificateValue::ConfirmedBlock) value.
-    pub fn new_confirmed(executed_block: ExecutedBlock) -> HashedValue {
+    pub fn new_confirmed(executed_block: ExecutedBlock) -> HashedCertificateValue {
         CertificateValue::ConfirmedBlock { executed_block }.into()
     }
 
     /// Creates a [`ValidatedBlock`](CertificateValue::ValidatedBlock) value.
-    pub fn new_validated(executed_block: ExecutedBlock) -> HashedValue {
+    pub fn new_validated(executed_block: ExecutedBlock) -> HashedCertificateValue {
         CertificateValue::ValidatedBlock { executed_block }.into()
     }
 
     /// Creates a [`Timeout`](CertificateValue::Timeout) value.
-    pub fn new_timeout(chain_id: ChainId, height: BlockHeight, epoch: Epoch) -> HashedValue {
+    pub fn new_timeout(
+        chain_id: ChainId,
+        height: BlockHeight,
+        epoch: Epoch,
+    ) -> HashedCertificateValue {
         CertificateValue::Timeout {
             chain_id,
             height,
@@ -760,7 +764,7 @@ impl HashedValue {
     }
 
     /// Returns the corresponding `ConfirmedBlock`, if this is a `ValidatedBlock`.
-    pub fn validated_to_confirmed(&self) -> Option<HashedValue> {
+    pub fn validated_to_confirmed(&self) -> Option<HashedCertificateValue> {
         match &self.value {
             CertificateValue::ValidatedBlock { executed_block } => Some(
                 CertificateValue::ConfirmedBlock {
@@ -785,7 +789,7 @@ impl BlockProposal {
     pub fn new(
         content: BlockAndRound,
         secret: &KeyPair,
-        blobs: Vec<HashedValue>,
+        blobs: Vec<HashedCertificateValue>,
         validated: Option<Certificate>,
     ) -> Self {
         let signature = Signature::new(&content, secret);
@@ -828,7 +832,7 @@ pub struct SignatureAggregator<'a> {
 
 impl<'a> SignatureAggregator<'a> {
     /// Starts aggregating signatures for the given value into a certificate.
-    pub fn new(value: HashedValue, round: Round, committee: &'a Committee) -> Self {
+    pub fn new(value: HashedCertificateValue, round: Round, committee: &'a Committee) -> Self {
         Self {
             committee,
             weight: 0,
@@ -887,7 +891,7 @@ impl<'de> Deserialize<'de> for Certificate {
         #[derive(Debug, Deserialize)]
         #[serde(rename = "Certificate")]
         struct CertificateHelper {
-            value: HashedValue,
+            value: HashedCertificateValue,
             round: Round,
             signatures: Vec<(ValidatorName, Signature)>,
         }
@@ -907,7 +911,7 @@ impl<'de> Deserialize<'de> for Certificate {
 
 impl Certificate {
     pub fn new(
-        value: HashedValue,
+        value: HashedCertificateValue,
         round: Round,
         mut signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
@@ -943,7 +947,10 @@ impl Certificate {
     }
 
     /// Verifies the certificate.
-    pub fn check<'a>(&'a self, committee: &Committee) -> Result<&'a HashedValue, ChainError> {
+    pub fn check<'a>(
+        &'a self,
+        committee: &Committee,
+    ) -> Result<&'a HashedCertificateValue, ChainError> {
         check_signatures(&self.lite_value(), self.round, &self.signatures, committee)?;
         Ok(&self.value)
     }

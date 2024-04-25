@@ -130,7 +130,8 @@ pub struct Transfer;
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
     use linera_chain::data_types::{
-        BlockExecutionOutcome, ExecutedBlock, HashedValue, IncomingMessage, OutgoingMessage,
+        BlockExecutionOutcome, ExecutedBlock, HashedCertificateValue, IncomingMessage,
+        OutgoingMessage,
     };
 
     use super::*;
@@ -226,15 +227,15 @@ mod from {
         }
     }
 
-    impl TryFrom<block::BlockBlock> for HashedValue {
+    impl TryFrom<block::BlockBlock> for HashedCertificateValue {
         type Error = String;
         fn try_from(val: block::BlockBlock) -> Result<Self, Self::Error> {
             match (val.value.status.as_str(), val.value.executed_block) {
                 ("validated", Some(executed_block)) => {
-                    Ok(HashedValue::new_validated(executed_block.into()))
+                    Ok(HashedCertificateValue::new_validated(executed_block.into()))
                 }
                 ("confirmed", Some(executed_block)) => {
-                    Ok(HashedValue::new_confirmed(executed_block.into()))
+                    Ok(HashedCertificateValue::new_confirmed(executed_block.into()))
                 }
                 _ => Err(val.value.status),
             }

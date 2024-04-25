@@ -7,7 +7,9 @@ use std::{future::Future, time::Duration};
 use async_trait::async_trait;
 use futures::{sink::SinkExt, stream::StreamExt};
 use linera_base::identifiers::ChainId;
-use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
+use linera_chain::data_types::{
+    BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
+};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
@@ -18,7 +20,7 @@ use tokio::time;
 use super::{codec, transport::TransportProtocol};
 use crate::{
     config::ValidatorPublicNetworkPreConfig, mass_client, HandleCertificateRequest,
-    HandleLiteCertificateRequest, RpcMessage,
+    HandleLiteCertRequest, RpcMessage,
 };
 
 #[derive(Clone)]
@@ -86,7 +88,7 @@ impl ValidatorNode for SimpleClient {
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
-        let request = HandleLiteCertificateRequest {
+        let request = HandleLiteCertRequest {
             certificate: certificate.cloned(),
             wait_for_outgoing_messages,
         };
@@ -97,7 +99,7 @@ impl ValidatorNode for SimpleClient {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: Vec<HashedCertificateValue>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
