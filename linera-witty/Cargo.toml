@@ -15,7 +15,7 @@ default = ["macros"]
 log = ["dep:log"]
 macros = ["linera-witty-macros"]
 test = ["linera-witty-macros?/test"]
-wasmer = ["dep:wasmer", "linera-witty-macros?/wasmer", "wasmer-vm"]
+wasmer = ["dep:wasmer", "linera-witty-macros?/wasmer"]
 wasmtime = ["dep:wasmtime", "linera-witty-macros?/wasmtime"]
 
 [dependencies]
@@ -27,7 +27,6 @@ linera-witty-macros = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 thiserror.workspace = true
 wasmer = { workspace = true, optional = true }
-wasmer-vm = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -39,3 +38,15 @@ tracing.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
+
+# Needed to compile Witty on `wasm32-unknown-unknown`.  See
+# https://github.com/wasmerio/wasmer/pull/4546
+[patch.crates-io.wasmer]
+version = "4.2.8"
+git = "https://github.com/wasmerio/wasmer"
+rev = "5800991767bc71a38dc4fc7e287cf451982a75a2"
+
+[patch.crates-io.wasmer-middlewares]
+version = "4.2.8"
+git = "https://github.com/wasmerio/wasmer"
+rev = "5800991767bc71a38dc4fc7e287cf451982a75a2"
