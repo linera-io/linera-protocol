@@ -46,10 +46,6 @@ impl Contract for FungibleTokenContract {
         })
     }
 
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
-    }
-
     async fn instantiate(
         &mut self,
         mut state: Self::InstantiationArgument,

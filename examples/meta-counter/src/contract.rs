@@ -38,10 +38,6 @@ impl Contract for MetaCounterContract {
         Ok(MetaCounterContract { state, runtime })
     }
 
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
-    }
-
     async fn instantiate(&mut self, _argument: ()) -> Result<(), Self::Error> {
         // Validate that the application parameters were configured correctly.
         self.counter_id();

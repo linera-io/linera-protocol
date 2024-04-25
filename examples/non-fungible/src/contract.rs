@@ -45,10 +45,6 @@ impl Contract for NonFungibleTokenContract {
         })
     }
 
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
-    }
-
     async fn instantiate(
         &mut self,
         _state: Self::InstantiationArgument,

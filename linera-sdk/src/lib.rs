@@ -108,9 +108,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// Creates a in-memory instance of the contract handler from the application's `state`.
     async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error>;
 
-    /// Returns the current state of the application so that it can be persisted.
-    fn state_mut(&mut self) -> &mut Self::State;
-
     /// Instantiates the application on the chain that created it.
     ///
     /// This is only called once when the application is created and only on the microchain that
