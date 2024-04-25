@@ -11,7 +11,7 @@ pub trait ContractEntrypoints {
     fn instantiate(argument: Vec<u8>) -> Result<(), String>;
     fn execute_operation(operation: Vec<u8>) -> Result<Vec<u8>, String>;
     fn execute_message(message: Vec<u8>) -> Result<(), String>;
-    fn finalize() -> Result<(), String>;
+    fn finish_transaction() -> Result<(), String>;
 }
 
 /// WIT entrypoints for application services.

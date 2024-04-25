@@ -76,7 +76,7 @@ macro_rules! contract {
                 )
             }
 
-            fn finalize() -> Result<(), String> {
+            fn finish_transaction() -> Result<(), String> {
                 unsafe { CONTRACT.take(); }
                 Ok(())
             }
