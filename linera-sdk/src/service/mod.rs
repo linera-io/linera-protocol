@@ -6,67 +6,50 @@
 mod conversions_from_wit;
 mod conversions_to_wit;
 mod runtime;
-pub(crate) mod wit;
+#[doc(hidden)]
+pub mod wit;
 
 use std::future::Future;
 
 pub use self::runtime::ServiceRuntime;
+#[doc(hidden)]
+pub use self::wit::export_service;
 use crate::{util::BlockingWait, ServiceLogger};
 
 /// Declares an implementation of the [`Service`][`crate::Service`] trait, exporting it from the
 /// Wasm module.
 ///
 /// Generates the necessary boilerplate for implementing the service WIT interface, exporting the
-/// necessary resource types and functions so that the host can call the service application.
+/// necessary resource types and functions so that the host can call the application service.
 #[macro_export]
 macro_rules! service {
-    ($application:ty) => {
-        #[doc(hidden)]
-        #[no_mangle]
-        fn __service_handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String> {
-            let request = serde_json::from_slice(&argument).map_err(|error| error.to_string())?;
-            let response = $crate::service::run_async_entrypoint(move |runtime| async move {
-                let state =
-                    <<$application as $crate::Service>::State as $crate::State>::load().await;
-                let application = <$application as $crate::Service>::new(state, runtime)
-                    .await
-                    .map_err(|error| error.to_string())?;
-                application
-                    .handle_query(request)
-                    .await
-                    .map_err(|error| error.to_string())
-            })?;
-            serde_json::to_vec(&response).map_err(|error| error.to_string())
+    ($service:ident) => {
+        /// Export the service interface.
+        $crate::export_service!($service with_types_in $crate::service::wit);
+
+        /// Mark the service type to be exported.
+        impl $crate::service::wit::exports::linera::app::service_entrypoints::Guest for $service {
+            fn handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String> {
+                let request = serde_json::from_slice(&argument).map_err(|error| error.to_string())?;
+                let response = $crate::service::run_async_entrypoint(move |runtime| async move {
+                    let state =
+                        <<$service as $crate::Service>::State as $crate::State>::load().await;
+                    let service = <$service as $crate::Service>::new(state, runtime)
+                        .await
+                        .map_err(|error| error.to_string())?;
+                    service
+                        .handle_query(request)
+                        .await
+                        .map_err(|error| error.to_string())
+                })?;
+                serde_json::to_vec(&response).map_err(|error| error.to_string())
+            }
         }
 
         /// Stub of a `main` entrypoint so that the binary doesn't fail to compile on targets other
         /// than WebAssembly.
         #[cfg(not(target_arch = "wasm32"))]
         fn main() {}
-
-        #[doc(hidden)]
-        #[no_mangle]
-        fn __contract_instantiate(_: Vec<u8>) -> Result<(), String> {
-            unreachable!("Contract entrypoint should not be called in service");
-        }
-
-        #[doc(hidden)]
-        #[no_mangle]
-        fn __contract_execute_operation(_: Vec<u8>) -> Result<Vec<u8>, String> {
-            unreachable!("Contract entrypoint should not be called in service");
-        }
-
-        #[doc(hidden)]
-        #[no_mangle]
-        fn __contract_execute_message(message: Vec<u8>) -> Result<(), String> {
-            unreachable!("Contract entrypoint should not be called in service");
-        }
-
-        #[doc(hidden)]
-        #[no_mangle]
-        fn __contract_finalize() -> Result<(), String> {
-            unreachable!("Contract entrypoint should not be called in service");
-        }
     };
 }
 
@@ -85,9 +68,4 @@ where
     entrypoint(ServiceRuntime::new())
         .blocking_wait()
         .map_err(|error| error.to_string())
-}
-
-// Import entrypoint proxy functions that applications implement with the `service!` macro.
-extern "Rust" {
-    fn __service_handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String>;
 }

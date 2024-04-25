@@ -5,14 +5,12 @@
 
 #![allow(missing_docs)]
 
-wit_bindgen::generate!({
-    world: "unit-tests",
-    exports: {
-        "linera:app/mock-system-api": super::MockSystemApi,
-    },
-});
+wit_bindgen::generate!("unit-tests");
 
 pub(super) use self::exports::linera::app::mock_system_api::{
     Amount, ApplicationId, BlockHeight, BytecodeId, ChainId, CryptoHash, Guest, LogLevel,
     MessageId, Timestamp, WriteOperation,
 };
+use super::MockSystemApi;
+
+export!(MockSystemApi);
