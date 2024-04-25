@@ -77,12 +77,6 @@ macro_rules! contract {
             }
 
             fn finalize() -> Result<(), String> {
-                use $crate::util::BlockingWait;
-                $crate::contract::run_async_entrypoint::<$contract, _, _, _>(
-                    unsafe { &mut CONTRACT },
-                    move |contract| contract.finalize().blocking_wait(),
-                )?;
-
                 unsafe { CONTRACT.take(); }
                 Ok(())
             }

@@ -141,19 +141,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// For a message to be executed, a user must mark it to be received in a block of the receiver
     /// chain.
     async fn execute_message(&mut self, message: Self::Message) -> Result<(), Self::Error>;
-
-    /// Finishes the execution of the current transaction.
-    ///
-    /// This is called once before a transaction ends, to allow all applications that participated
-    /// in the transaction to perform any final operations, and optionally it may also cancel the
-    /// transaction if there are any pendencies.
-    ///
-    /// The default implementation persists the state, so if this method is overriden, care must be
-    /// taken to persist the state manually.
-    async fn finalize(&mut self) -> Result<(), Self::Error> {
-        Self::State::store(self.state_mut()).await;
-        Ok(())
-    }
 }
 
 /// The service interface of a Linera application.
