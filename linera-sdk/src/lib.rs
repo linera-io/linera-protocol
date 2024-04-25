@@ -41,6 +41,7 @@ mod log;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod mock_system_api;
 pub mod service;
+mod state;
 #[cfg(feature = "test")]
 #[cfg_attr(not(target_arch = "wasm32"), path = "./test/integration/mod.rs")]
 #[cfg_attr(target_arch = "wasm32", path = "./test/unit/mod.rs")]
@@ -59,7 +60,6 @@ use serde::{de::DeserializeOwned, Serialize};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use self::mock_system_api::MockSystemApi;
-use self::views::{RootView, ViewStorageContext};
 #[doc(hidden)]
 pub use self::{contract::export_contract, service::export_service};
 pub use self::{
@@ -67,6 +67,7 @@ pub use self::{
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
     service::ServiceRuntime,
+    state::EmptyState,
 };
 
 /// The contract interface of a Linera application.
@@ -186,7 +187,8 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
 /// application's [`Contract`] is allowed to modiy the state, while the application's [`Service`]
 /// can only read it.
 ///
-/// The database can be accessed using an instance of [`ViewStorageContext`].
+/// The database can be accessed using an instance of
+/// [`ViewStorageContext`](views::ViewStorageContext).
 #[allow(async_fn_in_trait)]
 pub trait State {
     /// Loads the state from the database.
@@ -194,35 +196,4 @@ pub trait State {
 
     /// Persists the state into the database.
     async fn store(&mut self);
-}
-
-/// Representation of an empty persistent state.
-///
-/// This can be used by applications that don't need to store anything in the database.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct EmptyState;
-
-impl State for EmptyState {
-    async fn load() -> Self {
-        EmptyState
-    }
-
-    async fn store(&mut self) {}
-}
-
-impl<V> State for V
-where
-    V: RootView<ViewStorageContext>,
-{
-    async fn load() -> Self {
-        V::load(ViewStorageContext::default())
-            .await
-            .expect("Failed to load application state")
-    }
-
-    async fn store(&mut self) {
-        self.save()
-            .await
-            .expect("Failed to store application state")
-    }
 }
