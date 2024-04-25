@@ -8,15 +8,13 @@ mod state;
 use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
 use linera_sdk::{
     base::{Account, AccountOwner, ChainId, Owner, WithContractAbi},
-    ensure, Contract, ContractRuntime,
+    ensure, Contract, ContractRuntime, EmptyState,
 };
 use native_fungible::{Message, TICKER_SYMBOL};
 use thiserror::Error;
 
-use self::state::NativeFungibleToken;
-
 pub struct NativeFungibleTokenContract {
-    state: NativeFungibleToken,
+    state: EmptyState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -28,15 +26,12 @@ impl WithContractAbi for NativeFungibleTokenContract {
 
 impl Contract for NativeFungibleTokenContract {
     type Error = Error;
-    type State = NativeFungibleToken;
+    type State = EmptyState;
     type Message = Message;
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
 
-    async fn new(
-        state: NativeFungibleToken,
-        runtime: ContractRuntime<Self>,
-    ) -> Result<Self, Self::Error> {
+    async fn new(state: EmptyState, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(NativeFungibleTokenContract { state, runtime })
     }
 
@@ -178,10 +173,6 @@ impl NativeFungibleTokenContract {
         }
     }
 }
-
-// Dummy ComplexObject implementation, required by the graphql(complex) attribute in state.rs.
-#[async_graphql::ComplexObject]
-impl NativeFungibleToken {}
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
