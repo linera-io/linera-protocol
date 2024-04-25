@@ -112,9 +112,7 @@ where
             .expect("Failed to create application contract hnadler instance")
     });
 
-    let output = entrypoint(contract).map_err(|error| error.to_string())?;
-
-    Contract::State::store(contract.state_mut()).blocking_wait();
-
-    Ok(output.into())
+    entrypoint(contract)
+        .map_err(|error| error.to_string())
+        .map(Output::into)
 }
