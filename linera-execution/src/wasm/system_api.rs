@@ -307,6 +307,18 @@ where
         }
         Ok(())
     }
+
+    /// Consume some fuel.
+    ///
+    /// This is intended for the metering instrumentation, but if the user wants to donate
+    /// some extra fuel, more power to them!
+    fn consume_fuel(caller: &mut Caller, fuel: u64) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime_mut()
+            .consume_fuel(fuel)
+            .map_err(|e| RuntimeError::Custom(e.into()))
+    }
 }
 
 /// An implementation of the system API made available to services.

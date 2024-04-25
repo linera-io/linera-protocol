@@ -9,7 +9,7 @@ use bytes::Bytes;
 use linera_base::sync::Lazy;
 use linera_witty::{
     wasmer::{EntrypointInstance, InstanceBuilder},
-    ExportTo, Instance,
+    ExportTo,
 };
 use tokio::sync::Mutex;
 use wasm_instrument::{gas_metering, parity_wasm};
@@ -38,72 +38,10 @@ static CONTRACT_CACHE: Lazy<Mutex<ModuleCache<CachedContractModule>>> = Lazy::ne
 /// A cache of compiled service modules.
 static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::default);
 
-static GAS_GLOBAL_NAME: &str = "LINERA_GAS";
-
 /// Type representing a running [Wasmer](https://wasmer.io/) contract.
 pub(crate) struct WasmerContractInstance<Runtime> {
     /// The Wasmer instance.
     instance: EntrypointInstance<SystemApiData<Runtime>>,
-
-    /// The starting amount of fuel.
-    initial_fuel: u64,
-}
-
-impl<Runtime> WasmerContractInstance<Runtime>
-where
-    Runtime: ContractRuntime + Send + Unpin,
-{
-    fn configure_initial_fuel(&mut self) -> Result<(), ExecutionError> {
-        self.initial_fuel = self
-            .instance
-            .user_data_mut()
-            .runtime_mut()
-            .remaining_fuel()?;
-
-        let (store, mut instance_guard) = self.instance.as_store_and_instance_mut();
-        let instance = instance_guard
-            .as_mut()
-            .expect("Uninitialized `wasmer::Instance` inside an `EntrypointInstance`");
-
-        instance
-            .exports
-            .get_global(GAS_GLOBAL_NAME)
-            .expect("Gas global should have been injected into the module")
-            .set(store, self.initial_fuel.into())?;
-
-        Ok(())
-    }
-
-    fn persist_remaining_fuel(&mut self) -> Result<(), ExecutionError> {
-        let remaining_fuel = {
-            let (store, mut instance_guard) = self.instance.as_store_and_instance_mut();
-            let instance = instance_guard
-                .as_mut()
-                .expect("Uninitialized `wasmer::Instance` inside an `EntrypointInstance`");
-
-            let gas_global_value = instance
-                .exports
-                .get_global(GAS_GLOBAL_NAME)
-                .expect("Gas global should have been injected into the module")
-                .get(store);
-
-            let gas_global_value: u64 = gas_global_value
-                .try_into()
-                .expect("Gas global should be a u64");
-
-            match gas_global_value {
-                u64::MAX => 0,
-                n => n,
-            }
-        };
-
-        assert!(self.initial_fuel >= remaining_fuel);
-
-        self.instance
-            .user_data_mut()
-            .runtime_mut()
-            .consume_fuel(self.initial_fuel - remaining_fuel)
-    }
 }
 
 /// Type representing a running [Wasmer](https://wasmer.io/) service.
@@ -143,10 +81,7 @@ where
 
         let instance = instance_builder.instantiate(contract_module)?;
 
-        Ok(Self {
-            instance,
-            initial_fuel: 0,
-        })
+        Ok(Self { instance })
     }
 }
 
@@ -190,10 +125,8 @@ where
         _context: OperationContext,
         argument: Vec<u8>,
     ) -> Result<(), ExecutionError> {
-        self.configure_initial_fuel()?;
-        let result = ContractEntrypoints::new(&mut self.instance).instantiate(argument);
-        self.persist_remaining_fuel()?;
-        result
+        ContractEntrypoints::new(&mut self.instance)
+            .instantiate(argument)
             .map_err(WasmExecutionError::from)?
             .map_err(ExecutionError::UserError)
     }
@@ -203,10 +136,8 @@ where
         _context: OperationContext,
         operation: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        self.configure_initial_fuel()?;
-        let result = ContractEntrypoints::new(&mut self.instance).execute_operation(operation);
-        self.persist_remaining_fuel()?;
-        result
+        ContractEntrypoints::new(&mut self.instance)
+            .execute_operation(operation)
             .map_err(WasmExecutionError::from)?
             .map_err(ExecutionError::UserError)
     }
@@ -216,19 +147,15 @@ where
         _context: MessageContext,
         message: Vec<u8>,
     ) -> Result<(), ExecutionError> {
-        self.configure_initial_fuel()?;
-        let result = ContractEntrypoints::new(&mut self.instance).execute_message(message);
-        self.persist_remaining_fuel()?;
-        result
+        ContractEntrypoints::new(&mut self.instance)
+            .execute_message(message)
             .map_err(WasmExecutionError::from)?
             .map_err(ExecutionError::UserError)
     }
 
     fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {
-        self.configure_initial_fuel()?;
-        let result = ContractEntrypoints::new(&mut self.instance).finalize();
-        self.persist_remaining_fuel()?;
-        result
+        ContractEntrypoints::new(&mut self.instance)
+            .finalize()
             .map_err(WasmExecutionError::from)?
             .map_err(ExecutionError::UserError)
     }
@@ -302,7 +229,10 @@ pub fn add_metering(bytecode: Bytecode) -> anyhow::Result<Bytecode> {
 
     let instrumented_module = gas_metering::inject(
         parity_wasm::deserialize_buffer(&bytecode.bytes)?,
-        gas_metering::mutable_global::Injector::new(GAS_GLOBAL_NAME),
+        gas_metering::host_function::Injector::new(
+            "linera:app/contract-system-api",
+            "consume-fuel",
+        ),
         &WasmtimeRules,
     )
     .map_err(|_| anyhow::anyhow!("failed to instrument module"))?;
