@@ -4079,7 +4079,6 @@ dependencies = [
  "ethers-providers",
  "ethers-signers",
  "linera-storage-service",
- "linera-witty",
  "num-bigint",
  "num-traits",
  "rustc-hex",
