@@ -109,7 +109,7 @@ where
         let state = Contract::State::load().blocking_wait();
         Contract::new(state, ContractRuntime::new())
             .blocking_wait()
-            .expect("Failed to create application contract hnadler instance")
+            .expect("Failed to create application contract handler instance")
     });
 
     entrypoint(contract)
