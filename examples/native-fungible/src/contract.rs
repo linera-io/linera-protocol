@@ -3,8 +3,6 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-mod state;
-
 use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
 use linera_sdk::{
     base::{Account, AccountOwner, ChainId, Owner, WithContractAbi},
@@ -177,10 +175,6 @@ impl NativeFungibleTokenContract {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Insufficient balance in source account.
-    #[error("Source account does not have sufficient balance for transfer")]
-    InsufficientBalance(#[from] state::InsufficientBalanceError),
-
     /// Requested transfer does not have permission on this account.
     #[error("The requested transfer is not correctly authenticated.")]
     IncorrectAuthentication,
