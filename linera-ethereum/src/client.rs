@@ -5,12 +5,12 @@ use std::time::Duration;
 
 use ethers::{
     prelude::{Http, Provider},
-    types::{Log, U256},
+    types::U256,
 };
 use ethers_core::types::{Address, BlockId, BlockNumber, Filter, U64};
 use ethers_middleware::Middleware;
 
-use crate::common::EthereumServiceError;
+use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
 
 /// The Ethereum endpoint and its provider used for accessing the ethereum node.
 pub struct EthereumEndpoint {
@@ -66,18 +66,26 @@ impl EthereumEndpoint {
     }
 
     /// Reads the events of the smart contract.
-    /// This is done from a specified `contract_address` and `event_name`.
+    /// This is done from a specified `contract_address` and `event_name_expanded`.
+    /// That is one should have "MyEvent(type1 indexed,type2)" instead
+    /// of the usual "MyEvent(type1,type2)"
     pub async fn read_events(
         &self,
         contract_address: &str,
-        event_name: &str,
+        event_name_expanded: &str,
         starting_block: u64,
-    ) -> Result<Vec<Log>, EthereumServiceError> {
-        let address = contract_address.parse::<Address>()?;
+    ) -> Result<Vec<EthereumEvent>, EthereumServiceError> {
+        let contract_address = contract_address.parse::<Address>()?;
+        let event_name = event_name_from_expanded(event_name_expanded);
         let filter = Filter::new()
-            .address(address)
-            .event(event_name)
+            .address(contract_address)
+            .event(&event_name)
             .from_block(starting_block);
-        Ok(self.provider.get_logs(&filter).await?)
+        let events = self.provider.get_logs(&filter).await?;
+        let events = events
+            .into_iter()
+            .map(|x| parse_log(event_name_expanded, x))
+            .collect::<Result<_, _>>()?;
+        Ok(events)
     }
 }
