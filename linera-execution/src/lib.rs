@@ -144,6 +144,8 @@ pub enum ExecutionError {
     MissingOracleResponse,
     #[error("No oracle found with ID {}", 0.0)]
     InvalidOracle(OracleId),
+    #[error("Oracle {} failed to respond", 0.0)]
+    OracleMalfunction(OracleId),
 }
 
 /// The public entry points provided by the contract part of an application.

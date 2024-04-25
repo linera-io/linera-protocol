@@ -5,6 +5,8 @@
 
 #![cfg(with_tokio_multi_thread)]
 
+use std::sync::Arc;
+
 use futures::{channel::mpsc, StreamExt};
 use linera_base::{
     data_types::BlockHeight,
@@ -12,7 +14,7 @@ use linera_base::{
 };
 use linera_views::batch::Batch;
 
-use super::{ApplicationStatus, SyncRuntime, SyncRuntimeInternal};
+use super::{ApplicationStatus, OracleSenders, SyncRuntime, SyncRuntimeInternal};
 use crate::{
     execution_state_actor::Request, runtime::ResourceController, ContractRuntime,
     RawExecutionOutcome, UserContractInstance,
@@ -97,6 +99,7 @@ fn create_contract_runtime() -> (
         0,
         None,
         execution_state_sender,
+        Arc::new(OracleSenders::default()),
         None,
         resource_controller,
         super::OracleResponses::Record(Vec::new()),
