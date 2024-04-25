@@ -81,7 +81,10 @@ macro_rules! contract {
                 $crate::contract::run_async_entrypoint::<$contract, _, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| contract.finalize().blocking_wait(),
-                )
+                )?;
+
+                unsafe { CONTRACT.take(); }
+                Ok(())
             }
         }
 
