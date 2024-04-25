@@ -67,7 +67,7 @@ pub use self::{
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
     service::ServiceRuntime,
-    state::EmptyState,
+    state::{EmptyState, StoreOnDrop},
 };
 
 /// The contract interface of a Linera application.

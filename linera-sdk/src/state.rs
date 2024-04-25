@@ -3,7 +3,13 @@
 
 //! Helper types for application states.
 
-use crate::views::{RootView, ViewStorageContext};
+use std::ops::{Deref, DerefMut};
+
+use crate::{
+    util::BlockingWait,
+    views::{RootView, ViewStorageContext},
+    State,
+};
 
 /// Representation of an empty persistent state.
 ///
@@ -33,5 +39,51 @@ where
         self.save()
             .await
             .expect("Failed to store application state")
+    }
+}
+
+/// Helper type to persist a [`State`] when it is dropped.
+///
+/// If this type is stored in the application contract type, it is dropped when the transaction
+/// finishes. Therefore, this ensures that the state is saved at the end of the transaction.
+pub struct StoreOnDrop<S>(pub S)
+where
+    S: State;
+
+impl<S> From<S> for StoreOnDrop<S>
+where
+    S: State,
+{
+    fn from(state: S) -> Self {
+        StoreOnDrop(state)
+    }
+}
+
+impl<S> Deref for StoreOnDrop<S>
+where
+    S: State,
+{
+    type Target = S;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<S> DerefMut for StoreOnDrop<S>
+where
+    S: State,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<S> Drop for StoreOnDrop<S>
+where
+    S: State,
+{
+    fn drop(&mut self) {
+        self.0.store().blocking_wait();
     }
 }
