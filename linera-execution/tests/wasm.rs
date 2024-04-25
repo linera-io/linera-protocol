@@ -89,10 +89,11 @@ async fn test_fuel_for_counter_wasm_application(
             chain_id: ChainId::root(0),
             owner: None,
         };
-        let outcomes = view
+        let (outcomes, _) = view
             .execute_operation(
                 context,
                 Operation::user(app_id, increment).unwrap(),
+                Some(Vec::new()),
                 &mut controller,
             )
             .await?;

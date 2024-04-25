@@ -269,7 +269,7 @@ pub struct ExecutedBlock {
 }
 
 /// The messages and the state hash resulting from a [`Block`]'s execution.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Default, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct BlockExecutionOutcome {
     pub messages: Vec<OutgoingMessage>,
     /// For each transaction, the cumulative number of messages created by this and all previous
@@ -277,6 +277,14 @@ pub struct BlockExecutionOutcome {
     /// transaction `i + 1` or later.
     pub message_counts: Vec<u32>,
     pub state_hash: CryptoHash,
+    /// The record of oracle responses for each transaction.
+    pub oracle_records: Vec<OracleRecord>,
+}
+
+/// A record of oracle responses from the execution of a transaction.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct OracleRecord {
+    pub responses: Vec<Vec<u8>>,
 }
 
 /// A statement to be certified by the validators.

@@ -4,7 +4,7 @@
 //! Runtime types to interface with the host executing the contract.
 
 use linera_base::{
-    abi::ContractAbi,
+    abi::{ContractAbi, OracleQuery},
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
     ownership::{ChainOwnership, CloseChainError},
@@ -12,7 +12,7 @@ use linera_base::{
 use serde::Serialize;
 
 use super::wit::contract_system_api as wit;
-use crate::{Contract, KeyValueStore};
+use crate::{Contract, KeyValueStore, OracleError};
 
 /// The common runtime to interface with the host executing the contract.
 ///
@@ -205,6 +205,16 @@ where
 
         bcs::from_bytes(&response_bytes)
             .expect("Failed to deserialize `Response` type from cross-application call")
+    }
+
+    /// Queries an oracle and returns the response.
+    pub fn query_oracle<O: OracleQuery>(
+        &mut self,
+        query: O,
+    ) -> Result<O::Response, OracleError<O>> {
+        let query = query.serialize().map_err(OracleError::Serialization)?;
+        let response = wit::query_oracle(O::ID.into(), &query);
+        O::deserialize(response).map_err(OracleError::Deserialization)
     }
 }
 

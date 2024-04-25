@@ -5,7 +5,7 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use linera_base::{
     data_types::{Amount, BlockHeight, SendMessageRequest, Timestamp},
-    identifiers::{Account, ApplicationId, ChainId, ChannelName, MessageId, Owner},
+    identifiers::{Account, ApplicationId, ChainId, ChannelName, MessageId, OracleId, Owner},
     ownership::{ChainOwnership, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -299,6 +299,19 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Queries an oracle and returns the response. Returns `None` if the oracle isn't registered.
+    fn query_oracle(
+        caller: &mut Caller,
+        oracle_id: OracleId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .query_oracle(oracle_id, query)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Logs a `message` with the provided information `level`.
     fn log(_caller: &mut Caller, message: String, level: log::Level) -> Result<(), RuntimeError> {
         match level {
@@ -434,6 +447,19 @@ where
             .user_data_mut()
             .runtime
             .fetch_url(&url)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Queries an oracle and returns the response. Returns `None` if the oracle isn't registered.
+    fn query_oracle(
+        caller: &mut Caller,
+        oracle_id: OracleId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .query_oracle(oracle_id, query)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

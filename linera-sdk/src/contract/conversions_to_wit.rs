@@ -7,7 +7,8 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest},
     identifiers::{
-        Account, ApplicationId, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner,
+        Account, ApplicationId, BytecodeId, ChainId, ChannelName, Destination, MessageId, OracleId,
+        Owner,
     },
 };
 
@@ -29,6 +30,14 @@ impl From<CryptoHash> for wit_system_api::CryptoHash {
 impl From<ChainId> for wit_system_api::CryptoHash {
     fn from(chain_id: ChainId) -> Self {
         chain_id.0.into()
+    }
+}
+
+impl From<OracleId> for wit_system_api::OracleId {
+    fn from(oracle_id: OracleId) -> Self {
+        Self {
+            inner0: oracle_id.0,
+        }
     }
 }
 

@@ -91,6 +91,7 @@ where
             action,
             context.refund_grant_to(),
             None,
+            None,
             &mut resource_controller,
         )
         .await?;
@@ -138,6 +139,7 @@ where
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
+    #[allow(clippy::too_many_arguments)]
     async fn run_user_action(
         &mut self,
         application_id: UserApplicationId,
@@ -145,25 +147,31 @@ where
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
+        oracle_responses: Option<Vec<Vec<u8>>>,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
-        let execution_outcomes = match self.context().extra().execution_runtime_config() {
-            ExecutionRuntimeConfig::Synchronous => {
-                self.run_user_action_with_synchronous_runtime(
-                    application_id,
-                    chain_id,
-                    action,
-                    refund_grant_to,
-                    grant,
-                    resource_controller,
-                )
-                .await?
-            }
-        };
-        self.update_execution_outcomes_with_app_registrations(execution_outcomes)
-            .await
+    ) -> Result<(Vec<ExecutionOutcome>, Vec<Vec<u8>>), ExecutionError> {
+        let (execution_outcomes, oracle_responses) =
+            match self.context().extra().execution_runtime_config() {
+                ExecutionRuntimeConfig::Synchronous => {
+                    self.run_user_action_with_synchronous_runtime(
+                        application_id,
+                        chain_id,
+                        action,
+                        refund_grant_to,
+                        grant,
+                        oracle_responses,
+                        resource_controller,
+                    )
+                    .await?
+                }
+            };
+        let execution_outcomes = self
+            .update_execution_outcomes_with_app_registrations(execution_outcomes)
+            .await?;
+        Ok((execution_outcomes, oracle_responses))
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn run_user_action_with_synchronous_runtime(
         &mut self,
         application_id: UserApplicationId,
@@ -171,8 +179,9 @@ where
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
+        oracle_responses: Option<Vec<Vec<u8>>>,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
+    ) -> Result<(Vec<ExecutionOutcome>, Vec<Vec<u8>>), ExecutionError> {
         let mut cloned_grant = grant.as_ref().map(|x| **x);
         let initial_balance = resource_controller
             .with_state_and_grant(self, cloned_grant.as_mut())
@@ -193,18 +202,20 @@ where
                 refund_grant_to,
                 controller,
                 action,
+                oracle_responses,
             )
         });
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
         }
-        let (execution_outcomes, controller) = execution_outcomes_future.await??;
+        let (execution_outcomes, oracle_responses, controller) =
+            execution_outcomes_future.await??;
         resource_controller
             .with_state_and_grant(self, grant)
             .await?
             .merge_balance(initial_balance, controller.balance()?)?;
         resource_controller.tracker = controller.tracker;
-        Ok(execution_outcomes)
+        Ok((execution_outcomes, oracle_responses))
     }
 
     /// Schedules application registration messages when needed.
@@ -273,8 +284,9 @@ where
         &mut self,
         context: OperationContext,
         operation: Operation,
+        oracle_responses: Option<Vec<Vec<u8>>>,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
+    ) -> Result<(Vec<ExecutionOutcome>, Vec<Vec<u8>>), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
             Operation::System(op) => {
@@ -285,19 +297,21 @@ where
                 let mut outcomes = vec![ExecutionOutcome::System(result)];
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Instantiate(context, argument);
-                    outcomes.extend(
-                        self.run_user_action(
+                    let (user_outcomes, oracle_responses) = self
+                        .run_user_action(
                             application_id,
                             context.chain_id,
                             user_action,
                             context.refund_grant_to(),
                             None,
+                            oracle_responses,
                             resource_controller,
                         )
-                        .await?,
-                    );
+                        .await?;
+                    outcomes.extend(user_outcomes);
+                    return Ok((outcomes, oracle_responses));
                 }
-                Ok(outcomes)
+                Ok((outcomes, Vec::new()))
             }
             Operation::User {
                 application_id,
@@ -309,6 +323,7 @@ where
                     UserAction::Operation(context, bytes),
                     context.refund_grant_to(),
                     None,
+                    oracle_responses,
                     resource_controller,
                 )
                 .await
@@ -321,13 +336,14 @@ where
         context: MessageContext,
         message: Message,
         grant: Option<&mut Amount>,
+        oracle_responses: Option<Vec<Vec<u8>>>,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
+    ) -> Result<(Vec<ExecutionOutcome>, Vec<Vec<u8>>), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
             Message::System(message) => {
                 let outcome = self.system.execute_message(context, message).await?;
-                Ok(vec![ExecutionOutcome::System(outcome)])
+                Ok((vec![ExecutionOutcome::System(outcome)], Vec::new()))
             }
             Message::User {
                 application_id,
@@ -339,6 +355,7 @@ where
                     UserAction::Message(context, bytes),
                     context.refund_grant_to,
                     grant,
+                    oracle_responses,
                     resource_controller,
                 )
                 .await

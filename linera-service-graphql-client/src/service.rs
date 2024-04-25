@@ -222,6 +222,7 @@ mod from {
                     messages,
                     message_counts: message_counts.into_iter().map(|c| c as u32).collect(),
                     state_hash,
+                    ..BlockExecutionOutcome::default()
                 },
             }
         }

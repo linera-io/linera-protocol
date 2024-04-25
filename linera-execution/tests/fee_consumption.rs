@@ -193,7 +193,7 @@ async fn test_fee_consumption(
         next_message_index: 0,
     };
     let mut grant = initial_grant.unwrap_or_default();
-    let outcomes = view
+    let (outcomes, _) = view
         .execute_message(
             context,
             Message::User {
@@ -205,6 +205,7 @@ async fn test_fee_consumption(
             } else {
                 None
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await

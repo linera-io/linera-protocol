@@ -8,7 +8,7 @@ use std::fmt::{self, Debug, Formatter};
 use futures::channel::mpsc;
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, Timestamp},
-    identifiers::{Account, MessageId, Owner},
+    identifiers::{Account, MessageId, OracleId, Owner},
     ownership::ChainOwnership,
 };
 #[cfg(with_metrics)]
@@ -266,6 +266,15 @@ where
                 let bytes = reqwest::get(url).await?.bytes().await?.to_vec();
                 callback.respond(bytes);
             }
+
+            QueryOracle {
+                callback: _,
+                oracle_id,
+                query: _,
+            } => {
+                // TODO(#1875): Call oracles here.
+                return Err(ExecutionError::InvalidOracle(oracle_id));
+            }
         }
 
         Ok(())
@@ -378,6 +387,12 @@ pub enum Request {
     FetchUrl {
         url: String,
         callback: Sender<Vec<u8>>,
+    },
+
+    QueryOracle {
+        callback: oneshot::Sender<Vec<u8>>,
+        oracle_id: OracleId,
+        query: Vec<u8>,
     },
 }
 
@@ -492,10 +507,19 @@ impl Debug for Request {
                 .debug_struct("Request::CloseChain")
                 .field("application_id", application_id)
                 .finish_non_exhaustive(),
+
             #[cfg(not(target_arch = "wasm32"))]
             Request::FetchUrl { url, .. } => formatter
                 .debug_struct("Request::FetchUrl")
                 .field("url", url)
+                .finish_non_exhaustive(),
+
+            Request::QueryOracle {
+                oracle_id, query, ..
+            } => formatter
+                .debug_struct("Request::QueryOracle")
+                .field("oracle_id", oracle_id)
+                .field("query", query)
                 .finish_non_exhaustive(),
         }
     }

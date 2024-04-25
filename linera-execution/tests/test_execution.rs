@@ -57,6 +57,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
                 application_id: *app_id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await;
@@ -144,13 +145,14 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         ..make_operation_context()
     };
     let mut controller = ResourceController::default();
-    let outcomes = view
+    let (outcomes, _) = view
         .execute_operation(
             context,
             Operation::User {
                 application_id: caller_id,
                 bytes: dummy_operation.clone(),
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await
@@ -295,13 +297,14 @@ async fn test_simulated_session() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let outcomes = view
+    let (outcomes, _) = view
         .execute_operation(
             context,
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await?;
@@ -401,6 +404,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await;
@@ -440,6 +444,7 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
                 application_id: id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await;
@@ -509,6 +514,7 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
                 application_id: first_id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await;
@@ -617,13 +623,14 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let outcomes = view
+    let (outcomes, _) = view
         .execute_operation(
             context,
             Operation::User {
                 application_id: first_id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await?;
@@ -729,6 +736,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await;
@@ -787,6 +795,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
                 application_id: caller_id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await;
@@ -844,6 +853,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await;
@@ -899,6 +909,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await,
@@ -944,13 +955,14 @@ async fn test_simple_message() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let outcomes = view
+    let (outcomes, _) = view
         .execute_operation(
             context,
             Operation::User {
                 application_id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await?;
@@ -1044,13 +1056,14 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let outcomes = view
+    let (outcomes, _) = view
         .execute_operation(
             context,
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await?;
@@ -1158,13 +1171,14 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let outcomes = view
+    let (outcomes, _) = view
         .execute_operation(
             context,
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await?;
@@ -1317,13 +1331,14 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     // Execute the operation, starting the test scenario
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let outcomes = view
+    let (outcomes, _) = view
         .execute_operation(
             context,
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
+            Some(Vec::new()),
             &mut controller,
         )
         .await?;
@@ -1455,8 +1470,8 @@ async fn test_open_chain() {
         application_id,
         bytes: vec![],
     };
-    let outcomes = view
-        .execute_operation(context, operation, &mut controller)
+    let (outcomes, _) = view
+        .execute_operation(context, operation, Some(Vec::new()), &mut controller)
         .await
         .unwrap();
 
@@ -1532,7 +1547,7 @@ async fn test_close_chain() {
         application_id,
         bytes: vec![],
     };
-    view.execute_operation(context, operation, &mut controller)
+    view.execute_operation(context, operation, Some(Vec::new()), &mut controller)
         .await
         .unwrap();
     assert!(!view.system.closed.get());
@@ -1540,7 +1555,7 @@ async fn test_close_chain() {
     // Now we authorize the application and it can close the chain.
     let permissions = ApplicationPermissions::new_single(application_id);
     let operation = SystemOperation::ChangeApplicationPermissions(permissions);
-    view.execute_operation(context, operation.into(), &mut controller)
+    view.execute_operation(context, operation.into(), Some(Vec::new()), &mut controller)
         .await
         .unwrap();
 
@@ -1556,7 +1571,7 @@ async fn test_close_chain() {
         application_id,
         bytes: vec![],
     };
-    view.execute_operation(context, operation, &mut controller)
+    view.execute_operation(context, operation, Some(Vec::new()), &mut controller)
         .await
         .unwrap();
     assert!(view.system.closed.get());

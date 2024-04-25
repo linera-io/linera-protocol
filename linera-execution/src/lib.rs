@@ -31,7 +31,7 @@ use linera_base::{
     doc_scalar, hex_debug,
     identifiers::{
         Account, BytecodeId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId,
-        Owner,
+        OracleId, Owner,
     },
     ownership::ChainOwnership,
 };
@@ -140,6 +140,10 @@ pub enum ExecutionError {
     ReqwestError(#[from] reqwest::Error),
     #[error("Encountered IO error")]
     IoError(#[from] std::io::Error),
+    #[error("No recorded response for oracle query")]
+    MissingOracleResponse,
+    #[error("No oracle found with ID {}", 0.0)]
+    InvalidOracle(OracleId),
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -411,6 +415,13 @@ pub trait BaseRuntime {
         &mut self,
         promise: &Self::FindKeyValuesByPrefix,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>;
+
+    /// Queries an oracle.
+    fn query_oracle(
+        &mut self,
+        oracle_id: OracleId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {

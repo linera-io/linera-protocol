@@ -428,7 +428,10 @@ where
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         let local_time = self.storage.clock().current_time();
         let signer = block.authenticated_signer;
-        let executed_block = chain.execute_block(&block, local_time).await?.with(block);
+        let executed_block = chain
+            .execute_block(&block, local_time, None)
+            .await?
+            .with(block);
         let mut response = ChainInfoResponse::new(&chain, None);
         if let Some(signer) = signer {
             response.info.requested_owner_balance =
@@ -596,6 +599,7 @@ where
             messages,
             message_counts,
             state_hash,
+            oracle_records,
         } = &executed_block.outcome;
         let mut chain = self.storage.load_chain(block.chain_id).await?;
         // Check that the chain is active and ready for this confirmation.
@@ -663,7 +667,9 @@ where
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
         let local_time = self.storage.clock().current_time();
-        let verified_outcome = chain.execute_block(block, local_time).await?;
+        let verified_outcome = chain
+            .execute_block(block, local_time, Some(oracle_records.clone()))
+            .await?;
         // We should always agree on the messages and state hash.
         ensure!(
             *messages == verified_outcome.messages,
@@ -1115,7 +1121,7 @@ where
         );
         self.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.storage.clock().current_time();
-        let outcome = chain.execute_block(block, local_time).await?;
+        let outcome = chain.execute_block(block, local_time, None).await?;
         // Check if the counters of tip_state would be valid.
         chain.tip_state.get().verify_counters(block, &outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.

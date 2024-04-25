@@ -99,6 +99,7 @@ fn create_contract_runtime() -> (
         execution_state_sender,
         None,
         resource_controller,
+        super::OracleResponses::Record(Vec::new()),
     );
 
     runtime.push_application(create_dummy_application());

@@ -19,6 +19,7 @@ fn test_signed_values() {
         messages: Vec::new(),
         message_counts: vec![1],
         state_hash: CryptoHash::test_hash("state"),
+        ..BlockExecutionOutcome::default()
     }
     .with(block);
     let value = HashedCertificateValue::new_confirmed(executed_block);
@@ -47,6 +48,7 @@ fn test_certificates() {
         messages: Vec::new(),
         message_counts: vec![1],
         state_hash: CryptoHash::test_hash("state"),
+        ..BlockExecutionOutcome::default()
     }
     .with(block);
     let value = HashedCertificateValue::new_confirmed(executed_block);

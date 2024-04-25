@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     data_types::{
         Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, IncomingMessage,
-        MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
+        MessageAction, MessageBundle, OracleRecord, Origin, OutgoingMessage, Target,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -681,7 +681,7 @@ where
         Ok(())
     }
 
-    /// Executes a new block: first the incoming messages, then the main operation.
+    /// Executes a block: first the incoming messages, then the main operation.
     /// * Modifies the state of inboxes, outboxes, and channels, if needed.
     /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown
     ///   away.
@@ -690,6 +690,7 @@ where
         &mut self,
         block: &Block,
         local_time: Timestamp,
+        oracle_records: Option<Vec<OracleRecord>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
@@ -744,6 +745,8 @@ where
                 ChainError::InactiveChain(self.chain_id())
             );
         }
+        let mut oracle_records = oracle_records.map(Vec::into_iter);
+        let mut new_oracle_records = Vec::new();
         for (index, message) in block.incoming_messages.iter().enumerate() {
             #[cfg(with_metrics)]
             let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
@@ -769,16 +772,26 @@ where
             let outcomes = match message.action {
                 MessageAction::Accept => {
                     let mut grant = message.event.grant;
-                    let mut outcomes = self
+                    let (mut outcomes, responses) = self
                         .execution_state
                         .execute_message(
                             context,
                             message.event.message.clone(),
                             (grant > Amount::ZERO).then_some(&mut grant),
+                            match &mut oracle_records {
+                                Some(records) => Some(
+                                    records
+                                        .next()
+                                        .ok_or_else(|| ChainError::MissingOracleRecord)?
+                                        .responses,
+                                ),
+                                None => None,
+                            },
                             &mut resource_controller,
                         )
                         .await
                         .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+                    new_oracle_records.push(OracleRecord { responses });
                     if grant > Amount::ZERO {
                         if let Some(refund_grant_to) = message.event.refund_grant_to {
                             let outcome = self
@@ -881,11 +894,25 @@ where
                 authenticated_caller_id: None,
                 next_message_index,
             };
-            let outcomes = self
+            let (outcomes, responses) = self
                 .execution_state
-                .execute_operation(context, operation.clone(), &mut resource_controller)
+                .execute_operation(
+                    context,
+                    operation.clone(),
+                    match &mut oracle_records {
+                        Some(records) => Some(
+                            records
+                                .next()
+                                .ok_or_else(|| ChainError::MissingOracleRecord)?
+                                .responses,
+                        ),
+                        None => None,
+                    },
+                    &mut resource_controller,
+                )
                 .await
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+            new_oracle_records.push(OracleRecord { responses });
             let mut messages_out = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
@@ -958,6 +985,7 @@ where
             messages,
             message_counts,
             state_hash,
+            oracle_records: new_oracle_records,
         })
     }
 
