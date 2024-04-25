@@ -11,7 +11,6 @@ use meta_counter::{Message, MetaCounterAbi, Operation};
 use thiserror::Error;
 
 pub struct MetaCounterContract {
-    state: EmptyState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -34,8 +33,8 @@ impl Contract for MetaCounterContract {
     type InstantiationArgument = ();
     type Parameters = ApplicationId<counter::CounterAbi>;
 
-    async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(MetaCounterContract { state, runtime })
+    async fn new(_: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
+        Ok(MetaCounterContract { runtime })
     }
 
     async fn instantiate(&mut self, _argument: ()) -> Result<(), Self::Error> {

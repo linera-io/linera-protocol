@@ -12,7 +12,6 @@ use native_fungible::{Message, TICKER_SYMBOL};
 use thiserror::Error;
 
 pub struct NativeFungibleTokenContract {
-    state: EmptyState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -29,8 +28,8 @@ impl Contract for NativeFungibleTokenContract {
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
 
-    async fn new(state: EmptyState, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(NativeFungibleTokenContract { state, runtime })
+    async fn new(_: EmptyState, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
+        Ok(NativeFungibleTokenContract { runtime })
     }
 
     async fn instantiate(&mut self, state: Self::InstantiationArgument) -> Result<(), Self::Error> {
