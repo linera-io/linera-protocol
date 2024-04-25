@@ -224,7 +224,12 @@ impl ChainManager {
         );
         if let Some(validated) = validated {
             ensure!(
-                validated.value().is_validated(),
+                validated.value().is_validated()
+                    && validated
+                        .value()
+                        .executed_block()
+                        .map(|executed_block| &executed_block.block)
+                        == Some(new_block),
                 ChainError::InvalidBlockProposal
             );
         }

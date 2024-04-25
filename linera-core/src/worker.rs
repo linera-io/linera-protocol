@@ -246,6 +246,8 @@ pub enum WorkerError {
     UnneededValue { value_hash: CryptoHash },
     #[error("The following values containing application bytecode are missing: {0:?}.")]
     ApplicationBytecodesNotFound(Vec<BytecodeLocation>),
+    #[error("The certificate in the block proposal is not a ValidatedBlock")]
+    MissingExecutedBlockInProposal,
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -1121,7 +1123,16 @@ where
         );
         self.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.storage.clock().current_time();
-        let outcome = chain.execute_block(block, local_time, None).await?;
+        let outcome = if let Some(validated) = validated {
+            validated
+                .value()
+                .executed_block()
+                .ok_or_else(|| WorkerError::MissingExecutedBlockInProposal)?
+                .outcome
+                .clone()
+        } else {
+            chain.execute_block(block, local_time, None).await?
+        };
         // Check if the counters of tip_state would be valid.
         chain.tip_state.get().verify_counters(block, &outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.

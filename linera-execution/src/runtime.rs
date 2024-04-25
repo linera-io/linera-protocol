@@ -842,25 +842,19 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     fn query_oracle(
         &mut self,
         oracle_id: OracleId,
-        query: Vec<u8>,
+        _query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
             return responses
                 .next()
                 .ok_or_else(|| ExecutionError::MissingOracleResponse);
         }
-        let response = self
-            .execution_state_sender
-            .send_request(|callback| Request::QueryOracle {
-                callback,
-                oracle_id,
-                query,
-            })?
-            .recv_response()?;
-        if let OracleResponses::Record(responses) = &mut self.oracle_responses {
-            responses.push(response.clone());
-        }
-        Ok(response)
+        // TODO(#1875): Query the oracle here.
+        Err(ExecutionError::InvalidOracle(oracle_id))
+        // if let OracleResponses::Record(responses) = &mut self.oracle_responses {
+        //     responses.push(response.clone());
+        // }
+        // Ok(response)
     }
 }
 
