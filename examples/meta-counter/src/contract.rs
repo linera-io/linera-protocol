@@ -5,7 +5,7 @@
 
 use linera_sdk::{
     base::{ApplicationId, WithContractAbi},
-    Contract, ContractRuntime, EmptyState, Resources,
+    Contract, ContractRuntime, EmptyState, Resources, StoreOnDrop,
 };
 use meta_counter::{Message, MetaCounterAbi, Operation};
 use thiserror::Error;
@@ -33,7 +33,10 @@ impl Contract for MetaCounterContract {
     type InstantiationArgument = ();
     type Parameters = ApplicationId<counter::CounterAbi>;
 
-    async fn new(_: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
+    async fn new(
+        _: StoreOnDrop<Self::State>,
+        runtime: ContractRuntime<Self>,
+    ) -> Result<Self, Self::Error> {
         Ok(MetaCounterContract { runtime })
     }
 

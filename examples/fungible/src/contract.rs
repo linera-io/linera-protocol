@@ -37,13 +37,10 @@ impl Contract for FungibleTokenContract {
     type InstantiationArgument = InitialState;
 
     async fn new(
-        state: FungibleToken,
+        state: StoreOnDrop<FungibleToken>,
         runtime: ContractRuntime<Self>,
     ) -> Result<Self, Self::Error> {
-        Ok(FungibleTokenContract {
-            state: StoreOnDrop(state),
-            runtime,
-        })
+        Ok(FungibleTokenContract { state, runtime })
     }
 
     async fn instantiate(

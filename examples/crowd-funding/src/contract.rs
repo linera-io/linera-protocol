@@ -34,11 +34,11 @@ impl Contract for CrowdFundingContract {
     type InstantiationArgument = InstantiationArgument;
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
-    async fn new(state: CrowdFunding, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(CrowdFundingContract {
-            state: StoreOnDrop(state),
-            runtime,
-        })
+    async fn new(
+        state: StoreOnDrop<CrowdFunding>,
+        runtime: ContractRuntime<Self>,
+    ) -> Result<Self, Self::Error> {
+        Ok(CrowdFundingContract { state, runtime })
     }
 
     async fn instantiate(&mut self, argument: InstantiationArgument) -> Result<(), Self::Error> {

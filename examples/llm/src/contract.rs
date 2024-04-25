@@ -5,7 +5,7 @@
 
 mod state;
 
-use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, EmptyState};
+use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, EmptyState, StoreOnDrop};
 use thiserror::Error;
 
 pub struct LlmContract;
@@ -23,7 +23,10 @@ impl Contract for LlmContract {
     type InstantiationArgument = ();
     type Parameters = ();
 
-    async fn new(_: Self::State, _runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
+    async fn new(
+        _: StoreOnDrop<Self::State>,
+        _runtime: ContractRuntime<Self>,
+    ) -> Result<Self, Self::Error> {
         Ok(LlmContract)
     }
 

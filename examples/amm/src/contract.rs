@@ -34,11 +34,11 @@ impl Contract for AmmContract {
     type InstantiationArgument = ();
     type Parameters = Parameters;
 
-    async fn new(state: Amm, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(AmmContract {
-            state: StoreOnDrop(state),
-            runtime,
-        })
+    async fn new(
+        state: StoreOnDrop<Amm>,
+        runtime: ContractRuntime<Self>,
+    ) -> Result<Self, Self::Error> {
+        Ok(AmmContract { state, runtime })
     }
 
     async fn instantiate(&mut self, _argument: ()) -> Result<(), AmmError> {

@@ -29,11 +29,11 @@ impl Contract for CounterContract {
     type InstantiationArgument = u64;
     type Parameters = ();
 
-    async fn new(state: Counter, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(CounterContract {
-            state: StoreOnDrop(state),
-            runtime,
-        })
+    async fn new(
+        state: StoreOnDrop<Counter>,
+        runtime: ContractRuntime<Self>,
+    ) -> Result<Self, Self::Error> {
+        Ok(CounterContract { state, runtime })
     }
 
     async fn instantiate(&mut self, value: u64) -> Result<(), Self::Error> {

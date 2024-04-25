@@ -36,13 +36,10 @@ impl Contract for NonFungibleTokenContract {
     type Parameters = ();
 
     async fn new(
-        state: NonFungibleToken,
+        state: StoreOnDrop<NonFungibleToken>,
         runtime: ContractRuntime<Self>,
     ) -> Result<Self, Self::Error> {
-        Ok(NonFungibleTokenContract {
-            state: StoreOnDrop(state),
-            runtime,
-        })
+        Ok(NonFungibleTokenContract { state, runtime })
     }
 
     async fn instantiate(

@@ -37,11 +37,11 @@ impl Contract for SocialContract {
     type InstantiationArgument = ();
     type Parameters = ();
 
-    async fn new(state: Social, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(SocialContract {
-            state: StoreOnDrop(state),
-            runtime,
-        })
+    async fn new(
+        state: StoreOnDrop<Social>,
+        runtime: ContractRuntime<Self>,
+    ) -> Result<Self, Self::Error> {
+        Ok(SocialContract { state, runtime })
     }
 
     async fn instantiate(&mut self, _argument: ()) -> Result<(), Self::Error> {

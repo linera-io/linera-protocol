@@ -58,13 +58,10 @@ impl Contract for MatchingEngineContract {
     type Parameters = Parameters;
 
     async fn new(
-        state: MatchingEngine,
+        state: StoreOnDrop<MatchingEngine>,
         runtime: ContractRuntime<Self>,
     ) -> Result<Self, Self::Error> {
-        Ok(MatchingEngineContract {
-            state: StoreOnDrop(state),
-            runtime,
-        })
+        Ok(MatchingEngineContract { state, runtime })
     }
 
     async fn instantiate(&mut self, _argument: ()) -> Result<(), Self::Error> {

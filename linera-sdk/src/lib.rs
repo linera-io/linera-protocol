@@ -106,7 +106,10 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     type InstantiationArgument: Serialize + DeserializeOwned + Debug;
 
     /// Creates a in-memory instance of the contract handler from the application's `state`.
-    async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error>;
+    async fn new(
+        state: StoreOnDrop<Self::State>,
+        runtime: ContractRuntime<Self>,
+    ) -> Result<Self, Self::Error>;
 
     /// Instantiates the application on the chain that created it.
     ///

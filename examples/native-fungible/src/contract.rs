@@ -6,7 +6,7 @@
 use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
 use linera_sdk::{
     base::{Account, AccountOwner, ChainId, Owner, WithContractAbi},
-    ensure, Contract, ContractRuntime, EmptyState,
+    ensure, Contract, ContractRuntime, EmptyState, StoreOnDrop,
 };
 use native_fungible::{Message, TICKER_SYMBOL};
 use thiserror::Error;
@@ -28,7 +28,10 @@ impl Contract for NativeFungibleTokenContract {
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
 
-    async fn new(_: EmptyState, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
+    async fn new(
+        _: StoreOnDrop<EmptyState>,
+        runtime: ContractRuntime<Self>,
+    ) -> Result<Self, Self::Error> {
         Ok(NativeFungibleTokenContract { runtime })
     }
 

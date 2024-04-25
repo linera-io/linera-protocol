@@ -12,7 +12,7 @@ pub mod wit;
 pub use self::runtime::ContractRuntime;
 #[doc(hidden)]
 pub use self::wit::export_contract;
-use crate::{log::ContractLogger, util::BlockingWait, State};
+use crate::{log::ContractLogger, util::BlockingWait, State, StoreOnDrop};
 
 /// Declares an implementation of the [`Contract`][`crate::Contract`] trait, exporting it from the
 /// Wasm module.
@@ -104,7 +104,7 @@ where
 
     let contract = contract.get_or_insert_with(|| {
         let state = Contract::State::load().blocking_wait();
-        Contract::new(state, ContractRuntime::new())
+        Contract::new(StoreOnDrop(state), ContractRuntime::new())
             .blocking_wait()
             .expect("Failed to create application contract handler instance")
     });
