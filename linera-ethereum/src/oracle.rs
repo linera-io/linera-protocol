@@ -1,8 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_witty::{WitLoad, WitStore, WitType};
-use num_bigint::BigUint;
+use ethers::types::U256;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -12,23 +12,23 @@ use crate::{
 
 // The Oracle requests
 
-#[derive(WitLoad, WitStore, WitType)]
+#[derive(Serialize, Deserialize)]
 pub struct EthereumBalanceRequest {
     pub address: String,
     pub block_number: Option<u64>,
 }
 
-#[derive(WitLoad, WitStore, WitType)]
+#[derive(Serialize, Deserialize)]
 pub struct EthereumBlockNumberRequest {}
 
-#[derive(WitLoad, WitStore, WitType)]
+#[derive(Serialize, Deserialize)]
 pub struct EthereumEventsRequest {
     pub contract_address: String,
     pub event_name_expanded: String,
     pub starting_block: u64,
 }
 
-#[derive(WitLoad, WitStore, WitType)]
+#[derive(Serialize, Deserialize)]
 pub enum OracleRequest {
     EthereumBalance(EthereumBalanceRequest),
     EthereumBlockNumber(EthereumBlockNumberRequest),
@@ -41,22 +41,22 @@ pub struct OracleEndpoints {
 
 // The Oracle answers
 
-#[derive(WitLoad, WitStore, WitType)]
+#[derive(Serialize, Deserialize)]
 pub struct EthereumBalanceAnswer {
-    pub balance: BigUint,
+    pub balance: U256,
 }
 
-#[derive(WitLoad, WitStore, WitType)]
+#[derive(Serialize, Deserialize)]
 pub struct EthereumBlockNumberAnswer {
     pub block_number: u64,
 }
 
-#[derive(WitLoad, WitStore, WitType)]
+#[derive(Serialize, Deserialize)]
 pub struct EthereumEventsAnswer {
     pub events: Vec<EthereumEvent>,
 }
 
-#[derive(WitLoad, WitStore, WitType)]
+#[derive(Serialize, Deserialize)]
 pub enum OracleAnswer {
     EthereumBalance(EthereumBalanceAnswer),
     EthereumBlockNumber(EthereumBlockNumberAnswer),

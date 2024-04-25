@@ -4578,7 +4578,6 @@ dependencies = [
  "linera-witty",
  "linera-witty-macros",
  "log",
- "num-bigint",
  "test-case",
  "thiserror",
  "tracing",

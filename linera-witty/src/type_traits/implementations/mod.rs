@@ -3,7 +3,6 @@
 
 //! Implementations of the custom traits for existing types.
 
-mod bigint;
 mod custom_types;
 mod frunk;
 #[cfg(with_log)]

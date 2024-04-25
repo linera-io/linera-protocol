@@ -1,12 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use ethers::types::U256;
 use linera_ethereum::{
     client::EthereumEndpoint,
     common::{EthereumDataType, EthereumEvent},
     test_utils::{get_anvil, get_test_contract_endpoints, ContractEndpoints},
 };
-use num_bigint::BigUint;
 
 #[tokio::test]
 async fn test_get_accounts_balance() {
@@ -14,7 +14,7 @@ async fn test_get_accounts_balance() {
     let ethereum_endpoint = anvil_test.ethereum_endpoint;
     let addresses = ethereum_endpoint.get_accounts().await.unwrap();
     let block_nr = ethereum_endpoint.get_block_number().await.unwrap();
-    let target_balance = "10000000000000000000000".parse::<BigUint>().unwrap();
+    let target_balance = U256::from_dec_str("10000000000000000000000").unwrap();
     for address in addresses {
         let balance = ethereum_endpoint
             .get_balance(&address, Some(block_nr))
@@ -40,9 +40,8 @@ async fn test_contract() -> anyhow::Result<()> {
     let events = ethereum_endpoint
         .read_events(&addr_contract, event_name_expanded, 0)
         .await?;
-    let big_value = "239675476885367459284564394732743434463843674346373355625"
-        .parse::<BigUint>()
-        .expect("parsing error");
+    let big_value =
+        U256::from_dec_str("239675476885367459284564394732743434463843674346373355625").unwrap();
     let target_event = EthereumEvent {
         values: vec![
             EthereumDataType::Address(addr0.clone()),
@@ -68,7 +67,7 @@ async fn test_contract() -> anyhow::Result<()> {
     let events = ethereum_endpoint
         .read_events(&addr_contract, event_name_expanded, 0)
         .await?;
-    let value = "10".parse::<BigUint>().expect("parsing error");
+    let value = U256::from_dec_str("10").unwrap();
     let target_event = EthereumEvent {
         values: vec![
             EthereumDataType::Address(addr0),

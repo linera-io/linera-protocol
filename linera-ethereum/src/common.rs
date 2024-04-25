@@ -3,11 +3,11 @@
 
 use std::num::ParseIntError;
 
-use ethers::types::Log;
+use ethers::types::{Log, U256};
 use ethers_core::types::{Address, H256, U64};
-use linera_witty::{WitLoad, WitStore, WitType};
 use num_bigint::{BigInt, BigUint};
 use num_traits::cast::ToPrimitive;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -49,10 +49,10 @@ pub enum EthereumServiceError {
     FromHexError(#[from] rustc_hex::FromHexError),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, WitLoad, WitStore, WitType)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EthereumDataType {
     Address(String),
-    Uint256(BigUint),
+    Uint256(U256),
     Uint64(u64),
     Int64(i64),
     Uint32(u32),
@@ -78,7 +78,7 @@ fn parse_entry(entry: H256, ethereum_type: &str) -> Result<EthereumDataType, Eth
         return Ok(EthereumDataType::Address(address));
     }
     if ethereum_type == "uint256" {
-        let entry = BigUint::from_bytes_be(&entry.0);
+        let entry = U256::from_big_endian(&entry.0);
         return Ok(EthereumDataType::Uint256(entry));
     }
     if ethereum_type == "uint64" {
@@ -136,7 +136,7 @@ fn parse_entry(entry: H256, ethereum_type: &str) -> Result<EthereumDataType, Eth
     Err(EthereumServiceError::UnsupportedEthereumTypeError)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, WitLoad, WitStore, WitType)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EthereumEvent {
     pub values: Vec<EthereumDataType>,
     pub block_number: u64,

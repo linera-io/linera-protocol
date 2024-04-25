@@ -3,10 +3,12 @@
 
 use std::time::Duration;
 
-use ethers::prelude::{Http, Provider};
+use ethers::{
+    prelude::{Http, Provider},
+    types::U256,
+};
 use ethers_core::types::{Address, BlockId, BlockNumber, Filter, U64};
 use ethers_middleware::Middleware;
-use num_bigint::BigUint;
 
 use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
 
@@ -49,7 +51,7 @@ impl EthereumEndpoint {
         &self,
         address: &str,
         block_nr: Option<u64>,
-    ) -> Result<BigUint, EthereumServiceError> {
+    ) -> Result<U256, EthereumServiceError> {
         let address = address.parse::<Address>()?;
         let block_nr = match block_nr {
             None => None,
@@ -60,8 +62,6 @@ impl EthereumEndpoint {
             }
         };
         let balance = self.provider.get_balance(address, block_nr).await?;
-        let balance = balance.to_string();
-        let balance = balance.parse::<BigUint>().unwrap();
         Ok(balance)
     }
 
