@@ -12,7 +12,7 @@ use fungible::{
 };
 use linera_sdk::{
     base::{AccountOwner, Amount, WithContractAbi},
-    ensure, Contract, ContractRuntime,
+    Contract, ContractRuntime,
 };
 use thiserror::Error;
 
@@ -88,8 +88,8 @@ impl Contract for FungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(owner)?;
-                self.state.debit(owner, amount).await?;
+                self.check_account_authentication(owner);
+                self.state.debit(owner, amount).await;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
                 Ok(FungibleResponse::Ok)
@@ -100,8 +100,8 @@ impl Contract for FungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(source_account.owner)?;
-                self.claim(source_account, amount, target_account).await?;
+                self.check_account_authentication(source_account.owner);
+                self.claim(source_account, amount, target_account).await;
                 Ok(FungibleResponse::Ok)
             }
         }
@@ -126,8 +126,8 @@ impl Contract for FungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(owner)?;
-                self.state.debit(owner, amount).await?;
+                self.check_account_authentication(owner);
+                self.state.debit(owner, amount).await;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
             }
@@ -139,33 +139,28 @@ impl Contract for FungibleTokenContract {
 
 impl FungibleTokenContract {
     /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(&mut self, owner: AccountOwner) -> Result<(), Error> {
+    fn check_account_authentication(&mut self, owner: AccountOwner) {
         match owner {
             AccountOwner::User(address) => {
-                ensure!(
-                    self.runtime.authenticated_signer() == Some(address),
-                    Error::IncorrectAuthentication
+                assert_eq!(
+                    self.runtime.authenticated_signer(),
+                    Some(address),
+                    "The requested transfer is not correctly authenticated."
                 )
             }
             AccountOwner::Application(id) => {
-                ensure!(
-                    self.runtime.authenticated_caller_id() == Some(id),
-                    Error::IncorrectAuthentication
+                assert_eq!(
+                    self.runtime.authenticated_caller_id(),
+                    Some(id),
+                    "The requested transfer is not correctly authenticated."
                 )
             }
         }
-
-        Ok(())
     }
 
-    async fn claim(
-        &mut self,
-        source_account: Account,
-        amount: Amount,
-        target_account: Account,
-    ) -> Result<(), Error> {
+    async fn claim(&mut self, source_account: Account, amount: Amount, target_account: Account) {
         if source_account.chain_id == self.runtime.chain_id() {
-            self.state.debit(source_account.owner, amount).await?;
+            self.state.debit(source_account.owner, amount).await;
             self.finish_transfer_to_account(amount, target_account, source_account.owner)
                 .await;
         } else {
@@ -179,8 +174,6 @@ impl FungibleTokenContract {
                 .with_authentication()
                 .send_to(source_account.chain_id);
         }
-
-        Ok(())
     }
 
     /// Executes the final step of a transfer where the tokens are sent to the destination.
@@ -213,12 +206,4 @@ impl FungibleToken {}
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum Error {
-    /// Insufficient balance in source account.
-    #[error("Source account does not have sufficient balance for transfer")]
-    InsufficientBalance(#[from] state::InsufficientBalanceError),
-
-    /// Requested transfer does not have permission on this account.
-    #[error("The requested transfer is not correctly authenticated.")]
-    IncorrectAuthentication,
-}
+pub enum Error {}
