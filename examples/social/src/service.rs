@@ -8,9 +8,7 @@ mod state;
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Request, Response, Schema};
-use linera_sdk::{
-    base::WithServiceAbi, graphql::GraphQLMutationRoot, views::ViewError, Service, ServiceRuntime,
-};
+use linera_sdk::{base::WithServiceAbi, graphql::GraphQLMutationRoot, Service, ServiceRuntime};
 use social::Operation;
 use state::Social;
 use thiserror::Error;
@@ -50,8 +48,4 @@ impl Service for SocialService {
 
 /// An error that can occur during the service execution.
 #[derive(Debug, Error)]
-pub enum Error {
-    /// View error.
-    #[error(transparent)]
-    View(#[from] ViewError),
-}
+pub enum Error {}

@@ -7,7 +7,6 @@ mod state;
 
 use linera_sdk::{
     base::{ChannelName, Destination, MessageId, WithContractAbi},
-    views::ViewError,
     Contract, ContractRuntime,
 };
 use social::{Key, Message, Operation, OwnPost, SocialAbi};
@@ -56,7 +55,7 @@ impl Contract for SocialContract {
         let (destination, message) = match operation {
             Operation::Subscribe { chain_id } => (chain_id.into(), Message::Subscribe),
             Operation::Unsubscribe { chain_id } => (chain_id.into(), Message::Unsubscribe),
-            Operation::Post { text } => self.execute_post_operation(text).await?,
+            Operation::Post { text } => self.execute_post_operation(text).await,
         };
 
         self.runtime.send_message(destination, message);
@@ -77,58 +76,51 @@ impl Contract for SocialContract {
                 message_id.chain_id,
                 ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
             ),
-            Message::Posts { count, posts } => {
-                self.execute_posts_message(message_id, count, posts)?
-            }
+            Message::Posts { count, posts } => self.execute_posts_message(message_id, count, posts),
         }
         Ok(())
     }
 }
 
 impl SocialContract {
-    async fn execute_post_operation(
-        &mut self,
-        text: String,
-    ) -> Result<(Destination, Message), Error> {
+    async fn execute_post_operation(&mut self, text: String) -> (Destination, Message) {
         let timestamp = self.runtime.system_time();
         self.state.own_posts.push(OwnPost { timestamp, text });
         let count = self.state.own_posts.count();
         let mut posts = vec![];
         for index in (0..count).rev().take(RECENT_POSTS) {
-            let maybe_post = self.state.own_posts.get(index).await?;
+            let maybe_post = self
+                .state
+                .own_posts
+                .get(index)
+                .await
+                .expect("Failed to retrieve post from storage");
             let own_post = maybe_post
                 .expect("post with valid index missing; this is a bug in the social application!");
             posts.push(own_post);
         }
         let count = count as u64;
-        Ok((
+        (
             ChannelName::from(POSTS_CHANNEL_NAME.to_vec()).into(),
             Message::Posts { count, posts },
-        ))
+        )
     }
 
-    fn execute_posts_message(
-        &mut self,
-        message_id: MessageId,
-        count: u64,
-        posts: Vec<OwnPost>,
-    ) -> Result<(), Error> {
+    fn execute_posts_message(&mut self, message_id: MessageId, count: u64, posts: Vec<OwnPost>) {
         for (index, post) in (0..count).rev().zip(posts) {
             let key = Key {
                 timestamp: post.timestamp,
                 author: message_id.chain_id,
                 index,
             };
-            self.state.received_posts.insert(&key, post.text)?;
+            self.state
+                .received_posts
+                .insert(&key, post.text)
+                .expect("Failed to insert received post");
         }
-        Ok(())
     }
 }
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum Error {
-    /// View error.
-    #[error(transparent)]
-    View(#[from] ViewError),
-}
+pub enum Error {}
