@@ -55,7 +55,7 @@ impl Accounts {
     async fn entry(&self, key: AccountOwner) -> Result<AccountEntry, Error> {
         let owner = match key {
             AccountOwner::User(owner) => owner,
-            AccountOwner::Application(_) => return Err(Error::ApplicationsNotSupported),
+            AccountOwner::Application(_) => panic!("Applications not supported yet"),
         };
         let runtime = self
             .runtime
@@ -112,7 +112,4 @@ impl NativeFungibleTokenService {
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum Error {
-    #[error("Applications not supported yet")]
-    ApplicationsNotSupported,
-}
+pub enum Error {}

@@ -6,7 +6,7 @@
 use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
 use linera_sdk::{
     base::{Account, AccountOwner, ChainId, Owner, WithContractAbi},
-    ensure, Contract, ContractRuntime, EmptyState,
+    Contract, ContractRuntime, EmptyState,
 };
 use native_fungible::{Message, TICKER_SYMBOL};
 use thiserror::Error;
@@ -75,7 +75,7 @@ impl Contract for NativeFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(owner)?;
+                self.check_account_authentication(owner);
                 let owner = self.normalize_owner(owner);
 
                 let fungible_target_account = target_account;
@@ -92,7 +92,7 @@ impl Contract for NativeFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(source_account.owner)?;
+                self.check_account_authentication(source_account.owner);
 
                 let fungible_source_account = source_account;
                 let fungible_target_account = target_account;
@@ -158,27 +158,20 @@ impl NativeFungibleTokenContract {
     }
 
     /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(&mut self, owner: AccountOwner) -> Result<(), Error> {
+    fn check_account_authentication(&mut self, owner: AccountOwner) {
         match owner {
             AccountOwner::User(address) => {
-                ensure!(
-                    self.runtime.authenticated_signer() == Some(address),
-                    Error::IncorrectAuthentication
+                assert_eq!(
+                    self.runtime.authenticated_signer(),
+                    Some(address),
+                    "The requested transfer is not correctly authenticated."
                 );
-                Ok(())
             }
-            AccountOwner::Application(_) => Err(Error::ApplicationsNotSupported),
+            AccountOwner::Application(_) => panic!("Applications not supported yet"),
         }
     }
 }
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum Error {
-    /// Requested transfer does not have permission on this account.
-    #[error("The requested transfer is not correctly authenticated.")]
-    IncorrectAuthentication,
-
-    #[error("Applications not supported yet")]
-    ApplicationsNotSupported,
-}
+pub enum Error {}
