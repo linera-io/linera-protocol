@@ -53,17 +53,13 @@ impl Contract for CounterContract {
     }
 
     async fn execute_message(&mut self, _message: ()) -> Result<(), Self::Error> {
-        Err(Error::MessagesNotSupported)
+        panic!("Counter application doesn't support any cross-chain messages");
     }
 }
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum Error {
-    /// Counter application doesn't support any cross-chain messages.
-    #[error("Counter application doesn't support any cross-chain messages")]
-    MessagesNotSupported,
-}
+pub enum Error {}
 
 #[cfg(test)]
 mod tests {
