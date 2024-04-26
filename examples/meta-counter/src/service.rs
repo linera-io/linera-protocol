@@ -40,10 +40,6 @@ impl Service for MetaCounterService {
 pub enum Error {
     #[error("Internal query failed: {0}")]
     InternalQuery(String),
-
-    /// Invalid query argument in meta-counter app: could not deserialize GraphQL request.
-    #[error("Invalid query argument in meta-counter app: could not deserialize GraphQL request.")]
-    InvalidQuery(#[from] serde_json::Error),
 }
 
 impl From<String> for Error {

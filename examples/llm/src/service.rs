@@ -200,10 +200,6 @@ impl ModelContext {
 #[derive(Debug, Error)]
 pub enum ServiceError {
     /// Invalid query argument; could not deserialize request.
-    #[error("Invalid query argument; could not deserialize request")]
-    InvalidQuery(#[from] serde_json::Error),
-
-    /// Invalid query argument; could not deserialize request.
     #[error("Candle error")]
     Candle(#[from] candle_core::Error),
 

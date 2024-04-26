@@ -452,13 +452,6 @@ pub enum AmmError {
     #[error("Untracked liquidity was found")]
     UntrackedLiquidity,
 
-    /// Invalid query.
-    #[error("Invalid query")]
-    InvalidQuery(#[from] serde_json::Error),
-
-    #[error(transparent)]
-    BcsError(#[from] bcs::Error),
-
     #[error(transparent)]
     ViewError(#[from] ViewError),
 

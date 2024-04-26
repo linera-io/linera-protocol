@@ -109,12 +109,4 @@ pub enum Error {
 
     #[error("Message failed intentionally")]
     MessageFailed,
-
-    /// Failed to deserialize BCS bytes
-    #[error("Failed to deserialize BCS bytes")]
-    BcsError(#[from] bcs::Error),
-
-    /// Failed to deserialize JSON string
-    #[error("Failed to deserialize JSON string")]
-    JsonError(#[from] serde_json::Error),
 }

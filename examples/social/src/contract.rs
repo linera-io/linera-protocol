@@ -131,12 +131,4 @@ pub enum Error {
     /// View error.
     #[error(transparent)]
     View(#[from] ViewError),
-
-    /// Failed to deserialize BCS bytes
-    #[error("Failed to deserialize BCS bytes")]
-    BcsError(#[from] bcs::Error),
-
-    /// Failed to deserialize JSON string
-    #[error("Failed to deserialize JSON string")]
-    JsonError(#[from] serde_json::Error),
 }

@@ -20,10 +20,6 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 #[allow(dead_code)]
 pub enum MatchingEngineError {
-    /// Invalid query.
-    #[error("Invalid query")]
-    InvalidQuery(#[from] serde_json::Error),
-
     /// Failed authentication
     #[error("failed authentication")]
     IncorrectAuthentication,
@@ -49,9 +45,6 @@ pub enum MatchingEngineError {
 
     #[error(transparent)]
     ViewError(#[from] ViewError),
-
-    #[error(transparent)]
-    BcsError(#[from] bcs::Error),
 
     #[error("The application does not have permissions to close the chain.")]
     CloseChainError,

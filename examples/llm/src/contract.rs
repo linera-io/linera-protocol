@@ -49,14 +49,6 @@ impl Contract for LlmContract {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum ContractError {
-    /// Failed to deserialize BCS bytes
-    #[error("Failed to deserialize BCS bytes")]
-    BcsError(#[from] bcs::Error),
-
-    /// Failed to deserialize JSON string
-    #[error("Failed to deserialize JSON string")]
-    JsonError(#[from] serde_json::Error),
-
     /// Llm application doesn't support any cross-chain messages.
     #[error("Llm application doesn't support any cross-chain messages")]
     MessagesNotSupported,

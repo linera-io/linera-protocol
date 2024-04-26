@@ -52,8 +52,4 @@ impl Service for CrowdFundingService {
 
 /// An error that can occur during the service execution.
 #[derive(Debug, Error)]
-pub enum Error {
-    /// Invalid query argument in crowd-funding app: could not deserialize GraphQL request.
-    #[error("Invalid query argument in crowd-funding app: could not deserialize GraphQL request.")]
-    InvalidQuery(#[from] serde_json::Error),
-}
+pub enum Error {}

@@ -63,14 +63,6 @@ pub enum Error {
     /// Counter application doesn't support any cross-chain messages.
     #[error("Counter application doesn't support any cross-chain messages")]
     MessagesNotSupported,
-
-    /// Failed to deserialize BCS bytes
-    #[error("Failed to deserialize BCS bytes")]
-    BcsError(#[from] bcs::Error),
-
-    /// Failed to deserialize JSON string
-    #[error("Failed to deserialize JSON string")]
-    JsonError(#[from] serde_json::Error),
 }
 
 #[cfg(test)]

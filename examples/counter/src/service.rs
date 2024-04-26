@@ -65,11 +65,7 @@ impl QueryRoot {
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum Error {
-    /// Invalid query argument; could not deserialize GraphQL request.
-    #[error("Invalid query argument; could not deserialize GraphQL request")]
-    InvalidQuery(#[from] serde_json::Error),
-}
+pub enum Error {}
 
 #[cfg(test)]
 mod tests {

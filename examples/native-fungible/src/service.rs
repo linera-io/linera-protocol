@@ -113,12 +113,6 @@ impl NativeFungibleTokenService {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Invalid query argument; could not deserialize GraphQL request.
-    #[error(
-        "Invalid query argument; Native Fungible application only supports JSON encoded GraphQL queries"
-    )]
-    InvalidQuery(#[from] serde_json::Error),
-
     #[error("Applications not supported yet")]
     ApplicationsNotSupported,
 }

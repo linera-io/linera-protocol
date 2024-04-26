@@ -199,10 +199,4 @@ impl MutationRoot {
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum Error {
-    /// Invalid query argument; could not deserialize GraphQL request.
-    #[error(
-        "Invalid query argument; Fungible application only supports JSON encoded GraphQL queries"
-    )]
-    InvalidQuery(#[from] serde_json::Error),
-}
+pub enum Error {}

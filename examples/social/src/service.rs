@@ -51,14 +51,6 @@ impl Service for SocialService {
 /// An error that can occur during the service execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Invalid query.
-    #[error("Invalid query")]
-    InvalidQuery(#[from] serde_json::Error),
-
-    /// Serialization error.
-    #[error(transparent)]
-    Serialization(#[from] bcs::Error),
-
     /// View error.
     #[error(transparent)]
     View(#[from] ViewError),

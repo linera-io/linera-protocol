@@ -301,14 +301,6 @@ pub enum Error {
     #[error("Crowd-funding campaign has been cancelled")]
     Cancelled,
 
-    /// Failed to deserialize BCS bytes
-    #[error("Failed to deserialize BCS bytes")]
-    BcsError(#[from] bcs::Error),
-
-    /// Failed to deserialize JSON string
-    #[error("Failed to deserialize JSON string")]
-    JsonError(#[from] serde_json::Error),
-
     /// Unexpected response from fungible token application.
     #[error("Unexpected response from fungible token application: {0:?}")]
     UnexpectedFungibleResponse(FungibleResponse),
