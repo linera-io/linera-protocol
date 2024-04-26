@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use fungible::Account;
 use linera_sdk::{
     base::{AccountOwner, WithContractAbi},
-    ensure, Contract, ContractRuntime,
+    Contract, ContractRuntime,
 };
 use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
 use thiserror::Error;
@@ -63,8 +63,8 @@ impl Contract for NonFungibleTokenContract {
                 name,
                 payload,
             } => {
-                self.check_account_authentication(minter)?;
-                self.mint(minter, name, payload).await?;
+                self.check_account_authentication(minter);
+                self.mint(minter, name, payload).await;
             }
 
             Operation::Transfer {
@@ -72,10 +72,10 @@ impl Contract for NonFungibleTokenContract {
                 token_id,
                 target_account,
             } => {
-                self.check_account_authentication(source_owner)?;
+                self.check_account_authentication(source_owner);
 
-                let nft = self.get_nft(&token_id).await?;
-                self.check_account_authentication(nft.owner)?;
+                let nft = self.get_nft(&token_id).await;
+                self.check_account_authentication(nft.owner);
 
                 self.transfer(nft, target_account).await;
             }
@@ -85,11 +85,11 @@ impl Contract for NonFungibleTokenContract {
                 token_id,
                 target_account,
             } => {
-                self.check_account_authentication(source_account.owner)?;
+                self.check_account_authentication(source_account.owner);
 
                 if source_account.chain_id == self.runtime.chain_id() {
-                    let nft = self.get_nft(&token_id).await?;
-                    self.check_account_authentication(nft.owner)?;
+                    let nft = self.get_nft(&token_id).await;
+                    self.check_account_authentication(nft.owner);
 
                     self.transfer(nft, target_account).await;
                 } else {
@@ -123,10 +123,10 @@ impl Contract for NonFungibleTokenContract {
                 token_id,
                 target_account,
             } => {
-                self.check_account_authentication(source_account.owner)?;
+                self.check_account_authentication(source_account.owner);
 
-                let nft = self.get_nft(&token_id).await?;
-                self.check_account_authentication(nft.owner)?;
+                let nft = self.get_nft(&token_id).await;
+                self.check_account_authentication(nft.owner);
 
                 self.transfer(nft, target_account).await;
             }
@@ -138,23 +138,23 @@ impl Contract for NonFungibleTokenContract {
 
 impl NonFungibleTokenContract {
     /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(&mut self, owner: AccountOwner) -> Result<(), Error> {
+    fn check_account_authentication(&mut self, owner: AccountOwner) {
         match owner {
             AccountOwner::User(address) => {
-                ensure!(
-                    self.runtime.authenticated_signer() == Some(address),
-                    Error::IncorrectAuthentication
+                assert_eq!(
+                    self.runtime.authenticated_signer(),
+                    Some(address),
+                    "The requested transfer is not correctly authenticated."
                 )
             }
             AccountOwner::Application(id) => {
-                ensure!(
-                    self.runtime.authenticated_caller_id() == Some(id),
-                    Error::IncorrectAuthentication
+                assert_eq!(
+                    self.runtime.authenticated_caller_id(),
+                    Some(id),
+                    "The requested transfer is not correctly authenticated."
                 )
             }
         }
-
-        Ok(())
     }
 
     /// Transfers the specified NFT to another account.
@@ -177,23 +177,16 @@ impl NonFungibleTokenContract {
         }
     }
 
-    async fn get_nft(&self, token_id: &TokenId) -> Result<Nft, Error> {
+    async fn get_nft(&self, token_id: &TokenId) -> Nft {
         self.state
             .nfts
             .get(token_id)
             .await
             .expect("Failure in retrieving NFT")
-            .ok_or_else(|| Error::NftNotFound {
-                token_id: token_id.clone(),
-            })
+            .expect("NFT {token_id} not found")
     }
 
-    async fn mint(
-        &mut self,
-        owner: AccountOwner,
-        name: String,
-        payload: Vec<u8>,
-    ) -> Result<(), Error> {
+    async fn mint(&mut self, owner: AccountOwner, name: String, payload: Vec<u8>) {
         let token_id = Nft::create_token_id(
             &self.runtime.chain_id(),
             &self.runtime.application_id().forget_abi(),
@@ -215,8 +208,6 @@ impl NonFungibleTokenContract {
 
         let num_minted_nfts = self.state.num_minted_nfts.get_mut();
         *num_minted_nfts += 1;
-
-        Ok(())
     }
 
     fn remote_claim(
@@ -281,11 +272,4 @@ impl NonFungibleTokenContract {
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum Error {
-    /// Requested transfer does not have permission on this account.
-    #[error("The requested transfer is not correctly authenticated.")]
-    IncorrectAuthentication,
-
-    #[error("NFT {token_id} not found")]
-    NftNotFound { token_id: TokenId },
-}
+pub enum Error {}
