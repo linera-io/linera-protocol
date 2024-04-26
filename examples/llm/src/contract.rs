@@ -42,14 +42,10 @@ impl Contract for LlmContract {
     }
 
     async fn execute_message(&mut self, _message: ()) -> Result<(), Self::Error> {
-        Err(ContractError::MessagesNotSupported)
+        panic!("Llm application doesn't support any cross-chain messages");
     }
 }
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum ContractError {
-    /// Llm application doesn't support any cross-chain messages.
-    #[error("Llm application doesn't support any cross-chain messages")]
-    MessagesNotSupported,
-}
+pub enum ContractError {}

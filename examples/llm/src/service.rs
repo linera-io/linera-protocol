@@ -16,7 +16,7 @@ use candle_transformers::{
     models::{quantized_llama as model, quantized_llama::ModelWeights},
 };
 use linera_sdk::{base::WithServiceAbi, EmptyState, Service, ServiceRuntime};
-use log::{error, info};
+use log::info;
 use thiserror::Error;
 use tokenizers::Tokenizer;
 
@@ -36,9 +36,13 @@ struct QueryRoot {}
 
 #[Object]
 impl QueryRoot {
-    async fn prompt(&self, ctx: &Context<'_>, prompt: String) -> Result<String, ServiceError> {
-        let model_context = ctx.data::<ModelContext>()?;
-        model_context.run_model(&prompt)
+    async fn prompt(&self, ctx: &Context<'_>, prompt: String) -> String {
+        let model_context = ctx
+            .data::<ModelContext>()
+            .unwrap_or_else(|error| panic!("{error:?}"));
+        model_context
+            .run_model(&prompt)
+            .unwrap_or_else(|error| panic!("{error}"))
     }
 }
 
@@ -81,7 +85,7 @@ const SYSTEM_MESSAGE: &str =
     "You are LineraGPT, a helpful chatbot for a blockchain protocol called Linera.";
 
 impl ModelContext {
-    fn load_model(&self, model_weights: Vec<u8>) -> Result<ModelWeights, ServiceError> {
+    fn load_model(&self, model_weights: Vec<u8>) -> ModelWeights {
         let cursor = &mut Cursor::new(model_weights);
         let model_contents = gguf_file::Content::read(cursor).unwrap();
         let mut total_size_in_bytes = 0;
@@ -97,15 +101,12 @@ impl ModelContext {
             total_size_in_bytes,
         );
 
-        Ok(ModelWeights::from_gguf(
-            model_contents,
-            cursor,
-            &Device::Cpu,
-        )?)
+        ModelWeights::from_gguf(model_contents, cursor, &Device::Cpu)
+            .expect("Failed to load model weights")
     }
 
     // Copied mostly from https://github.com/huggingface/candle/blob/57267cd53612ede04090853680125b17956804f3/candle-examples/examples/quantized/main.rs
-    fn run_model(&self, prompt_string: &str) -> Result<String, ServiceError> {
+    fn run_model(&self, prompt_string: &str) -> Result<String, candle_core::Error> {
         let raw_weights = &self.model;
         let tokenizer_bytes = &self.tokenizer;
         let prompt_string = format!(
@@ -119,16 +120,16 @@ impl ModelContext {
         );
 
         let mut output = String::new();
-        let mut model = self.load_model(raw_weights.clone())?;
+        let mut model = self.load_model(raw_weights.clone());
 
-        let tokenizer = Tokenizer::from_bytes(tokenizer_bytes)
-            .map_err(|e| ServiceError::Tokenizer(format!("{}", e)))?;
+        let tokenizer =
+            Tokenizer::from_bytes(tokenizer_bytes).unwrap_or_else(|error| panic!("{error}"));
         info!("tokenizer: {:?}", tokenizer);
         let mut token_output_stream = TokenOutputStream::new(tokenizer);
         let tokens = token_output_stream
             .tokenizer()
             .encode(prompt_string, true)
-            .map_err(|e| ServiceError::Tokenizer(format!("{}", e)))?;
+            .unwrap_or_else(|error| panic!("{error}"));
 
         let prompt_tokens = tokens.get_ids().to_vec();
         info!("prompt tokens: {:?}", prompt_tokens);
@@ -188,7 +189,7 @@ impl ModelContext {
         }
         if let Some(rest) = token_output_stream
             .decode_rest()
-            .map_err(ServiceError::Candle)?
+            .expect("Failed to decode remaining tokens")
         {
             output.push_str(&rest)
         }
@@ -198,20 +199,4 @@ impl ModelContext {
 
 /// An error that can occur while querying the service.
 #[derive(Debug, Error)]
-pub enum ServiceError {
-    /// Invalid query argument; could not deserialize request.
-    #[error("Candle error")]
-    Candle(#[from] candle_core::Error),
-
-    #[error("Tokenizer error")]
-    Tokenizer(String),
-
-    #[error("GraphQL error")]
-    GraphQL(String),
-}
-
-impl From<async_graphql::Error> for ServiceError {
-    fn from(value: async_graphql::Error) -> Self {
-        Self::GraphQL(value.message)
-    }
-}
+pub enum ServiceError {}
