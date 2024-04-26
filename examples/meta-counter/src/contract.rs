@@ -88,8 +88,7 @@ impl Contract for MetaCounterContract {
         }
         match message {
             Message::Fail => {
-                log::trace!("failing message {message:?} on purpose");
-                Err(Error::MessageFailed)
+                panic!("Message failed intentionally");
             }
             Message::Increment(value) => {
                 let counter_id = self.counter_id();
@@ -103,10 +102,4 @@ impl Contract for MetaCounterContract {
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum Error {
-    #[error("MetaCounter application doesn't support any cross-chain messages")]
-    MessagesNotSupported,
-
-    #[error("Message failed intentionally")]
-    MessageFailed,
-}
+pub enum Error {}

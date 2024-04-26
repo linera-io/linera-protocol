@@ -37,13 +37,4 @@ impl Service for MetaCounterService {
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum Error {
-    #[error("Internal query failed: {0}")]
-    InternalQuery(String),
-}
-
-impl From<String> for Error {
-    fn from(s: String) -> Self {
-        Self::InternalQuery(s)
-    }
-}
+pub enum Error {}
