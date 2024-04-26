@@ -145,7 +145,6 @@ wasm-bindgen-test = "0.3.42"
 wasm-encoder = "0.24.1"
 wasmer = { version = "4.2.8", features = ["singlepass"] }
 wasmer-middlewares = "4.2.8"
-wasmer-vm = { version = "4.2.8" }
 wasmparser = "0.101.1"
 wasmtime = "1.0"
 wasmtimer = "0.2.0"
@@ -213,3 +212,15 @@ opt-level = 3
 version = "0.4.1"
 git = "https://github.com/Twey/rust-indexed-db"
 branch = "no-uuid-wasm-bindgen"
+
+# Needed to compile Witty on `wasm32-unknown-unknown`.  See
+# https://github.com/wasmerio/wasmer/pull/4546
+[patch.crates-io.wasmer]
+version = "4.2.8"
+git = "https://github.com/wasmerio/wasmer"
+rev = "5800991767bc71a38dc4fc7e287cf451982a75a2"
+
+[patch.crates-io.wasmer-middlewares]
+version = "4.2.8"
+git = "https://github.com/wasmerio/wasmer"
+rev = "5800991767bc71a38dc4fc7e287cf451982a75a2"
