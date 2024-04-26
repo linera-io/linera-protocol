@@ -44,7 +44,7 @@ where
         InstanceBuilder {
             store: Store::new(engine),
             imports: Imports::default(),
-            environment: InstanceSlot::new(None, user_data),
+            environment: InstanceSlot::new(Default::default(), user_data),
         }
     }
 
@@ -71,17 +71,12 @@ where
         mut self,
         module: &Module,
     ) -> Result<EntrypointInstance<UserData>, InstantiationError> {
-        let instance = wasmer::Instance::new(&mut self.store, module, &self.imports)?;
-
-        *self
-            .environment
-            .instance
-            .try_lock()
-            .expect("Unexpected usage of instance before it was initialized") = Some(instance);
-
+        let instance = wasmer::Instance::new(&mut self.store, module, &mut self.imports)?;
+        self.environment.exports = instance.exports.clone();
         Ok(EntrypointInstance {
             store: self.store,
-            instance: self.environment,
+            instance,
+            instance_slot: self.environment,
         })
     }
 }
@@ -105,7 +100,8 @@ impl<UserData> AsStoreMut for InstanceBuilder<UserData> {
 /// Necessary data for implementing an entrypoint [`Instance`].
 pub struct EntrypointInstance<UserData> {
     store: Store,
-    instance: InstanceSlot<UserData>,
+    instance: wasmer::Instance,
+    instance_slot: InstanceSlot<UserData>,
 }
 
 impl<UserData> AsStoreRef for EntrypointInstance<UserData> {
@@ -127,13 +123,8 @@ impl<UserData> AsStoreMut for EntrypointInstance<UserData> {
 impl<UserData> EntrypointInstance<UserData> {
     /// Returns mutable references to the [`Store`] and the [`wasmer::Instance`] stored inside this
     /// [`EntrypointInstance`].
-    ///
-    /// The [`wasmer::Instance`] is wrapped inside an [`Option`] which might be [`None`] if this
-    /// [`EntrypointInstance`] was not initialized by [`InstanceBuilder::instantiate`].
-    pub fn as_store_and_instance_mut(
-        &mut self,
-    ) -> (&mut Store, MutexGuard<Option<wasmer::Instance>>) {
-        (&mut self.store, self.instance.instance())
+    pub fn as_store_and_instance_mut(&mut self) -> (StoreMut, &mut wasmer::Instance) {
+        (self.store.as_store_mut(), &mut self.instance)
     }
 }
 
@@ -150,15 +141,15 @@ impl<UserData> Instance for EntrypointInstance<UserData> {
         Self: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {
-        self.instance.load_export(name)
+        self.instance_slot.load_export(name)
     }
 
     fn user_data(&self) -> Self::UserDataReference<'_> {
-        self.instance.user_data()
+        self.instance_slot.user_data()
     }
 
     fn user_data_mut(&mut self) -> Self::UserDataMutReference<'_> {
-        self.instance.user_data()
+        self.instance_slot.user_data()
     }
 }
 
@@ -196,15 +187,15 @@ where
 
 /// A slot to store a [`wasmer::Instance`] in a way that can be shared with reentrant calls.
 pub struct InstanceSlot<UserData> {
-    instance: Arc<Mutex<Option<wasmer::Instance>>>,
+    exports: wasmer::Exports,
     user_data: Arc<Mutex<UserData>>,
 }
 
 impl<UserData> InstanceSlot<UserData> {
     /// Creates a new [`InstanceSlot`] using the optionally provided `instance`.
-    fn new(instance: impl Into<Option<wasmer::Instance>>, user_data: UserData) -> Self {
+    fn new(exports: wasmer::Exports, user_data: UserData) -> Self {
         InstanceSlot {
-            instance: Arc::new(Mutex::new(instance.into())),
+            exports,
             user_data: Arc::new(Mutex::new(user_data)),
         }
     }
@@ -215,25 +206,7 @@ impl<UserData> InstanceSlot<UserData> {
     ///
     /// If the underlying instance is accessed concurrently or if the slot is empty.
     fn load_export(&mut self, name: &str) -> Option<Extern> {
-        self.instance
-            .try_lock()
-            .expect("Unexpected reentrant access to data")
-            .as_mut()
-            .expect("Unexpected attempt to load an export before instance is created")
-            .exports
-            .get_extern(name)
-            .cloned()
-    }
-
-    /// Returns a reference to the [`wasmer::Instance`] stored in this [`InstanceSlot`].
-    ///
-    /// # Panics
-    ///
-    /// If the underlying instance is accessed concurrently.
-    fn instance(&mut self) -> MutexGuard<Option<wasmer::Instance>> {
-        self.instance
-            .try_lock()
-            .expect("Unexpected reentrant access to data")
+        self.exports.get_extern(name).cloned()
     }
 
     /// Returns a reference to the `UserData` stored in this [`InstanceSlot`].
@@ -247,7 +220,7 @@ impl<UserData> InstanceSlot<UserData> {
 impl<UserData> Clone for InstanceSlot<UserData> {
     fn clone(&self) -> Self {
         InstanceSlot {
-            instance: self.instance.clone(),
+            exports: self.exports.clone(),
             user_data: self.user_data.clone(),
         }
     }
