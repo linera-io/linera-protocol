@@ -30,7 +30,8 @@ macro_rules! service {
         /// Mark the service type to be exported.
         impl $crate::service::wit::exports::linera::app::service_entrypoints::Guest for $service {
             fn handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String> {
-                let request = serde_json::from_slice(&argument).map_err(|error| error.to_string())?;
+                let request = serde_json::from_slice(&argument)
+                    .expect("Query is invalid and could not be deserialized");
                 let response = $crate::service::run_async_entrypoint(move |runtime| async move {
                     let state =
                         <<$service as $crate::Service>::State as $crate::State>::load().await;
@@ -42,7 +43,8 @@ macro_rules! service {
                         .await
                         .map_err(|error| error.to_string())
                 })?;
-                serde_json::to_vec(&response).map_err(|error| error.to_string())
+                Ok(serde_json::to_vec(&response)
+                    .expect("Failed to deserialize query response"))
             }
         }
 
