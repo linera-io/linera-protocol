@@ -3,20 +3,17 @@
 
 //! Code specific to the usage of the [Wasmer](https://wasmer.io/) runtime.
 
-use std::{marker::Unpin, sync::Arc};
+use std::marker::Unpin;
 
 use bytes::Bytes;
 use linera_base::sync::Lazy;
 use linera_witty::{
     wasmer::{EntrypointInstance, InstanceBuilder},
-    ExportTo, Instance,
+    ExportTo,
 };
 use tokio::sync::Mutex;
-use wasmer::{
-    sys::EngineBuilder, wasmparser::Operator, CompilerConfig, Cranelift, Engine, Module,
-    Singlepass, Store,
-};
-use wasmer_middlewares::metering::{self, Metering, MeteringPoints};
+use wasm_instrument::{gas_metering, parity_wasm};
+use wasmer::{sys::EngineBuilder, Cranelift, Engine, Module, Singlepass, Store};
 
 use super::{
     module_cache::ModuleCache,
@@ -45,52 +42,6 @@ static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::defaul
 pub(crate) struct WasmerContractInstance<Runtime> {
     /// The Wasmer instance.
     instance: EntrypointInstance<SystemApiData<Runtime>>,
-
-    /// The starting amount of fuel.
-    initial_fuel: u64,
-}
-
-impl<Runtime> WasmerContractInstance<Runtime>
-where
-    Runtime: ContractRuntime + Send + Unpin,
-{
-    fn configure_initial_fuel(&mut self) -> Result<(), ExecutionError> {
-        self.initial_fuel = self
-            .instance
-            .user_data_mut()
-            .runtime_mut()
-            .remaining_fuel()?;
-
-        let (store, mut instance_guard) = self.instance.as_store_and_instance_mut();
-        let instance = instance_guard
-            .as_mut()
-            .expect("Uninitialized `wasmer::Instance` inside an `EntrypointInstance`");
-
-        metering::set_remaining_points(store, instance, self.initial_fuel);
-
-        Ok(())
-    }
-
-    fn persist_remaining_fuel(&mut self) -> Result<(), ExecutionError> {
-        let remaining_fuel = {
-            let (store, mut instance_guard) = self.instance.as_store_and_instance_mut();
-            let instance = instance_guard
-                .as_mut()
-                .expect("Uninitialized `wasmer::Instance` inside an `EntrypointInstance`");
-
-            match metering::get_remaining_points(store, instance) {
-                MeteringPoints::Exhausted => 0,
-                MeteringPoints::Remaining(fuel) => fuel,
-            }
-        };
-
-        assert!(self.initial_fuel >= remaining_fuel);
-
-        self.instance
-            .user_data_mut()
-            .runtime_mut()
-            .consume_fuel(self.initial_fuel - remaining_fuel)
-    }
 }
 
 /// Type representing a running [Wasmer](https://wasmer.io/) service.
@@ -130,29 +81,7 @@ where
 
         let instance = instance_builder.instantiate(contract_module)?;
 
-        Ok(Self {
-            instance,
-            initial_fuel: 0,
-        })
-    }
-}
-
-impl WasmContractModule {
-    /// Calculates the fuel cost of a WebAssembly [`Operator`].
-    ///
-    /// The rules try to follow the hardcoded [rules in the Wasmtime runtime
-    /// engine](https://docs.rs/wasmtime/5.0.0/wasmtime/struct.Store.html#method.add_fuel).
-    fn operation_cost(operator: &Operator) -> u64 {
-        match operator {
-            Operator::Nop
-            | Operator::Drop
-            | Operator::Block { .. }
-            | Operator::Loop { .. }
-            | Operator::Unreachable
-            | Operator::Else
-            | Operator::End => 0,
-            _ => 1,
-        }
+        Ok(Self { instance })
     }
 }
 
@@ -196,10 +125,8 @@ where
         _context: OperationContext,
         argument: Vec<u8>,
     ) -> Result<(), ExecutionError> {
-        self.configure_initial_fuel()?;
-        let result = ContractEntrypoints::new(&mut self.instance).instantiate(argument);
-        self.persist_remaining_fuel()?;
-        result
+        ContractEntrypoints::new(&mut self.instance)
+            .instantiate(argument)
             .map_err(WasmExecutionError::from)?
             .map_err(ExecutionError::UserError)
     }
@@ -209,10 +136,8 @@ where
         _context: OperationContext,
         operation: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        self.configure_initial_fuel()?;
-        let result = ContractEntrypoints::new(&mut self.instance).execute_operation(operation);
-        self.persist_remaining_fuel()?;
-        result
+        ContractEntrypoints::new(&mut self.instance)
+            .execute_operation(operation)
             .map_err(WasmExecutionError::from)?
             .map_err(ExecutionError::UserError)
     }
@@ -222,19 +147,15 @@ where
         _context: MessageContext,
         message: Vec<u8>,
     ) -> Result<(), ExecutionError> {
-        self.configure_initial_fuel()?;
-        let result = ContractEntrypoints::new(&mut self.instance).execute_message(message);
-        self.persist_remaining_fuel()?;
-        result
+        ContractEntrypoints::new(&mut self.instance)
+            .execute_message(message)
             .map_err(WasmExecutionError::from)?
             .map_err(ExecutionError::UserError)
     }
 
     fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {
-        self.configure_initial_fuel()?;
-        let result = ContractEntrypoints::new(&mut self.instance).finalize();
-        self.persist_remaining_fuel()?;
-        result
+        ContractEntrypoints::new(&mut self.instance)
+            .finalize()
             .map_err(WasmExecutionError::from)?
             .map_err(ExecutionError::UserError)
     }
@@ -273,27 +194,68 @@ impl From<wasmer::RuntimeError> for ExecutionError {
 }
 
 /// Serialized bytes of a compiled contract bytecode.
-///
-/// Each [`Module`] needs to be compiled with a separate [`Engine`] instance, otherwise Wasmer
-/// [panics](https://docs.rs/wasmer-middlewares/3.3.0/wasmer_middlewares/metering/struct.Metering.html#panic)
-/// because fuel metering is configured and used across different modules.
 pub struct CachedContractModule {
     compiled_bytecode: Bytes,
+}
+
+pub fn add_metering(bytecode: Bytecode) -> anyhow::Result<Bytecode> {
+    struct WasmtimeRules;
+
+    impl gas_metering::Rules for WasmtimeRules {
+        /// Calculates the fuel cost of a WebAssembly [`Operator`].
+        ///
+        /// The rules try to follow the hardcoded [rules in the Wasmtime runtime
+        /// engine](https://docs.rs/wasmtime/5.0.0/wasmtime/struct.Store.html#method.add_fuel).
+        fn instruction_cost(
+            &self,
+            instruction: &parity_wasm::elements::Instruction,
+        ) -> Option<u32> {
+            use parity_wasm::elements::Instruction::*;
+
+            Some(match instruction {
+                Nop | Drop | Block(_) | Loop(_) | Unreachable | Else | End => 0,
+                _ => 1,
+            })
+        }
+
+        fn memory_grow_cost(&self) -> gas_metering::MemoryGrowCost {
+            gas_metering::MemoryGrowCost::Free
+        }
+
+        fn call_per_local_cost(&self) -> u32 {
+            0
+        }
+    }
+
+    let instrumented_module = gas_metering::inject(
+        parity_wasm::deserialize_buffer(&bytecode.bytes)?,
+        gas_metering::host_function::Injector::new(
+            "linera:app/contract-system-api",
+            "consume-fuel",
+        ),
+        &WasmtimeRules,
+    )
+    .map_err(|_| anyhow::anyhow!("failed to instrument module"))?;
+
+    Ok(Bytecode {
+        bytes: instrumented_module.into_bytes()?,
+    })
 }
 
 impl CachedContractModule {
     /// Creates a new [`CachedContractModule`] by compiling a `contract_bytecode`.
     pub fn new(contract_bytecode: Bytecode) -> Result<Self, anyhow::Error> {
-        let module = Module::new(&Self::create_compilation_engine(), contract_bytecode)?;
+        let module = Module::new(
+            &Self::create_compilation_engine(),
+            add_metering(contract_bytecode)?,
+        )?;
         let compiled_bytecode = module.serialize()?;
         Ok(CachedContractModule { compiled_bytecode })
     }
 
     /// Creates a new [`Engine`] to compile a contract bytecode.
     fn create_compilation_engine() -> Engine {
-        let metering = Arc::new(Metering::new(0, WasmContractModule::operation_cost));
         let mut compiler_config = Singlepass::default();
-        compiler_config.push_middleware(metering);
         compiler_config.canonicalize_nans(true);
 
         EngineBuilder::new(compiler_config).into()

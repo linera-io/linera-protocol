@@ -2405,8 +2405,8 @@ dependencies = [
  "tokio",
  "tracing",
  "wasm-encoder 0.24.1",
+ "wasm-instrument",
  "wasmer",
- "wasmer-middlewares",
  "wasmparser 0.101.1",
 ]
 
@@ -3036,6 +3036,12 @@ name = "overload"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
+
+[[package]]
+name = "parity-wasm"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1ad0aff30c1da14b1254fcb2af73e1fa9a28670e584a626f53a369d0e157304"
 
 [[package]]
 name = "parking"
@@ -4946,6 +4952,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-instrument"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a47ecb37b9734d1085eaa5ae1a81e60801fd8c28d4cabdd8aedb982021918bc"
+dependencies = [
+ "parity-wasm",
+]
+
+[[package]]
 name = "wasm-metadata"
 version = "0.202.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5061,16 +5076,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "wasmer-middlewares"
-version = "4.2.8"
-source = "git+https://github.com/wasmerio/wasmer?rev=5800991767bc71a38dc4fc7e287cf451982a75a2#5800991767bc71a38dc4fc7e287cf451982a75a2"
-dependencies = [
- "wasmer",
- "wasmer-types",
- "wasmer-vm",
 ]
 
 [[package]]
@@ -5968,3 +5973,8 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "wasmer-middlewares"
+version = "4.2.8"
+source = "git+https://github.com/wasmerio/wasmer?rev=5800991767bc71a38dc4fc7e287cf451982a75a2#5800991767bc71a38dc4fc7e287cf451982a75a2"
