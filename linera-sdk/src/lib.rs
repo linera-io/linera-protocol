@@ -83,7 +83,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     ///
     /// Errors are not recoverable and always interrupt the current transaction. To return
     /// recoverable errors in the case of application calls, you may use the response types.
-    type Error: Error + From<serde_json::Error> + From<bcs::Error>;
+    type Error: Error;
 
     /// The type used to store the persisted application state.
     type State: State;
@@ -165,7 +165,7 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     /// Type used to report errors to the execution environment.
     ///
     /// Errors are not recoverable and always interrupt the current query.
-    type Error: Error + From<serde_json::Error>;
+    type Error: Error;
 
     /// The type used to store the persisted application state.
     type State: State;
