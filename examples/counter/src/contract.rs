@@ -67,7 +67,6 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
-    use assert_matches::assert_matches;
     use futures::FutureExt;
     use linera_sdk::{
         test::{mock_application_parameters, mock_key_value_store, test_contract_runtime},
@@ -77,7 +76,7 @@ mod tests {
     };
     use webassembly_test::webassembly_test;
 
-    use super::{Counter, CounterContract, Error};
+    use super::{Counter, CounterContract};
 
     #[webassembly_test]
     fn operation() {
@@ -95,19 +94,20 @@ mod tests {
         assert_eq!(*counter.state.value.get(), initial_value + increment);
     }
 
-    #[webassembly_test]
-    fn message() {
-        let initial_value = 72_u64;
-        let mut counter = create_and_instantiate_counter(initial_value);
+    // TODO(#1372): Rewrite this tests once it's possible to test for panics
+    // #[webassembly_test]
+    // fn message() {
+    // let initial_value = 72_u64;
+    // let mut counter = create_and_instantiate_counter(initial_value);
 
-        let result = counter
-            .execute_message(())
-            .now_or_never()
-            .expect("Execution of counter operation should not await anything");
+    // let result = counter
+    // .execute_message(())
+    // .now_or_never()
+    // .expect("Execution of counter operation should not await anything");
 
-        assert_matches!(result, Err(Error::MessagesNotSupported));
-        assert_eq!(*counter.state.value.get(), initial_value);
-    }
+    // assert_matches!(result, Err(Error::MessagesNotSupported));
+    // assert_eq!(*counter.state.value.get(), initial_value);
+    // }
 
     #[webassembly_test]
     fn cross_application_call() {
