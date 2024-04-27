@@ -37,6 +37,7 @@ where
     send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Application::Message>>>>,
     subscribe_requests: Vec<(ChainId, ChannelName)>,
     unsubscribe_requests: Vec<(ChainId, ChannelName)>,
+    outgoing_transfers: HashMap<Account, Amount>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -69,6 +70,7 @@ where
             send_message_requests: Arc::default(),
             subscribe_requests: Vec::new(),
             unsubscribe_requests: Vec::new(),
+            outgoing_transfers: HashMap::new(),
         }
     }
 
@@ -410,8 +412,48 @@ where
 
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
     /// balance) to `destination`.
-    pub fn transfer(&mut self, _source: Option<Owner>, _destination: Account, _amount: Amount) {
-        todo!();
+    pub fn transfer(&mut self, source: Option<Owner>, destination: Account, amount: Amount) {
+        self.debit(source, amount);
+
+        if Some(destination.chain_id) == self.chain_id {
+            self.credit(destination.owner, amount);
+        } else {
+            let destination_entry = self.outgoing_transfers.entry(destination).or_default();
+            *destination_entry = destination_entry
+                .try_add(amount)
+                .expect("Outgoing transfer value overflow");
+        }
+    }
+
+    /// Debits an `amount` of native tokens from a `source` owner account (or the current
+    /// chain's balance).
+    fn debit(&mut self, source: Option<Owner>, amount: Amount) {
+        let source_balance = match source {
+            Some(owner) => self.owner_balance_mut(owner),
+            None => self.chain_balance_mut(),
+        };
+
+        *source_balance = source_balance
+            .try_sub(amount)
+            .expect("Insufficient funds in source account");
+    }
+
+    /// Credits an `amount` of native tokens into a `destination` owner account (or the
+    /// current chain's balance).
+    fn credit(&mut self, destination: Option<Owner>, amount: Amount) {
+        let destination_balance = match destination {
+            Some(owner) => self.owner_balance_mut(owner),
+            None => self.chain_balance_mut(),
+        };
+
+        *destination_balance = destination_balance
+            .try_add(amount)
+            .expect("Account balance overflow");
+    }
+
+    /// Returns the outgoing transfers scheduled during the test so far.
+    pub fn outgoing_transfers(&self) -> &HashMap<Account, Amount> {
+        &self.outgoing_transfers
     }
 
     /// Claims an `amount` of native tokens from a `source` account to a `destination` account.
