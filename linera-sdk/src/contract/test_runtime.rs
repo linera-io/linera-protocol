@@ -36,6 +36,7 @@ where
     owner_balances: Option<HashMap<Owner, Amount>>,
     chain_ownership: Option<ChainOwnership>,
     can_close_chain: Option<bool>,
+    call_application_handler: Option<CallApplicationHandler>,
     send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Application::Message>>>>,
     subscribe_requests: Vec<(ChainId, ChannelName)>,
     unsubscribe_requests: Vec<(ChainId, ChannelName)>,
@@ -72,6 +73,7 @@ where
             owner_balances: None,
             chain_ownership: None,
             can_close_chain: None,
+            call_application_handler: None,
             send_message_requests: Arc::default(),
             subscribe_requests: Vec::new(),
             unsubscribe_requests: Vec::new(),
@@ -531,16 +533,47 @@ where
         }
     }
 
+    /// Configures the handler for cross-application calls made during the test.
+    pub fn with_call_application_handler(
+        mut self,
+        handler: impl FnMut(bool, ApplicationId, Vec<u8>) -> Vec<u8> + 'static,
+    ) -> Self {
+        self.call_application_handler = Some(Box::new(handler));
+        self
+    }
+
+    /// Configures the handler for cross-application calls made during the test.
+    pub fn set_call_application_handler(
+        &mut self,
+        handler: impl FnMut(bool, ApplicationId, Vec<u8>) -> Vec<u8> + 'static,
+    ) -> &mut Self {
+        self.call_application_handler = Some(Box::new(handler));
+        self
+    }
+
     /// Calls another application.
     pub fn call_application<A: ContractAbi + Send>(
         &mut self,
-        _authenticated: bool,
-        _application: ApplicationId<A>,
-        _call: &A::Operation,
+        authenticated: bool,
+        application: ApplicationId<A>,
+        call: &A::Operation,
     ) -> A::Response {
-        todo!();
+        let call_bytes = bcs::to_bytes(call)
+            .expect("Failed to serialize `Operation` type for a cross-application call");
+
+        let handler = self.call_application_handler.as_mut().expect(
+            "Handler for `call_application` has not been mocked, \
+            please call `MockContractRuntime::set_call_application_handler` first",
+        );
+        let response_bytes = handler(authenticated, application.forget_abi(), call_bytes);
+
+        bcs::from_bytes(&response_bytes)
+            .expect("Failed to deserialize `Response` type from cross-application call")
     }
 }
+
+/// A type alias for the handler for cross-application calls.
+pub type CallApplicationHandler = Box<dyn FnMut(bool, ApplicationId, Vec<u8>) -> Vec<u8>>;
 
 /// A helper type that uses the builder pattern to configure how a message is sent, and then
 /// sends the message once it is dropped.
