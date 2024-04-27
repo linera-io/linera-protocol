@@ -57,16 +57,14 @@ impl Contract for CounterContract {
 mod tests {
     use futures::FutureExt;
     use linera_sdk::{
-        test::{mock_application_parameters, mock_key_value_store, test_contract_runtime},
         util::BlockingWait,
         views::{View, ViewStorageContext},
-        Contract,
+        Contract, ContractRuntime,
     };
-    use webassembly_test::webassembly_test;
 
     use super::{Counter, CounterContract};
 
-    #[webassembly_test]
+    #[test]
     fn operation() {
         let initial_value = 72_u64;
         let mut counter = create_and_instantiate_counter(initial_value);
@@ -98,7 +96,7 @@ mod tests {
     // assert_eq!(*counter.state.value.get(), initial_value);
     // }
 
-    #[webassembly_test]
+    #[test]
     fn cross_application_call() {
         let initial_value = 2_845_u64;
         let mut counter = create_and_instantiate_counter(initial_value);
@@ -117,14 +115,11 @@ mod tests {
     }
 
     fn create_and_instantiate_counter(initial_value: u64) -> CounterContract {
-        mock_key_value_store();
-        mock_application_parameters(&());
-
         let mut contract = CounterContract {
             state: Counter::load(ViewStorageContext::default())
                 .blocking_wait()
                 .expect("Failed to read from mock key value store"),
-            runtime: test_contract_runtime(),
+            runtime: ContractRuntime::new().with_application_parameters(()),
         };
 
         contract
