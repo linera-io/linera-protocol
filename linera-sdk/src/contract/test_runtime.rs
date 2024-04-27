@@ -27,6 +27,7 @@ where
     message_is_bouncing: Option<Option<bool>>,
     authenticated_caller_id: Option<Option<ApplicationId>>,
     timestamp: Option<Timestamp>,
+    chain_balance: Option<Amount>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -54,6 +55,7 @@ where
             message_is_bouncing: None,
             authenticated_caller_id: None,
             timestamp: None,
+            chain_balance: None,
         }
     }
 
@@ -267,9 +269,29 @@ where
         )
     }
 
+    /// Configures the chain balance to return during the test.
+    pub fn with_chain_balance(mut self, chain_balance: Amount) -> Self {
+        self.chain_balance = Some(chain_balance);
+        self
+    }
+
+    /// Configures the chain balance to return during the test.
+    pub fn set_chain_balance(&mut self, chain_balance: Amount) -> &mut Self {
+        self.chain_balance = Some(chain_balance);
+        self
+    }
+
     /// Returns the current chain balance.
     pub fn chain_balance(&mut self) -> Amount {
-        todo!();
+        *self.chain_balance_mut()
+    }
+
+    /// Returns a mutable reference to the current chain balance.
+    fn chain_balance_mut(&mut self) -> &mut Amount {
+        self.chain_balance.as_mut().expect(
+            "Chain balance has not been mocked, \
+            please call `MockContractRuntime::set_chain_balance` first",
+        )
     }
 
     /// Returns the balance of one of the accounts on this chain.
