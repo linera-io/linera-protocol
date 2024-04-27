@@ -5,14 +5,24 @@
 
 mod conversions_from_wit;
 mod conversions_to_wit;
+#[cfg(not(with_testing))]
 mod runtime;
+#[cfg(with_testing)]
+mod test_runtime;
 #[doc(hidden)]
 pub mod wit;
 
+#[cfg(not(with_testing))]
 pub use self::runtime::ContractRuntime;
+#[cfg(with_testing)]
+pub use self::test_runtime::MockContractRuntime;
 #[doc(hidden)]
 pub use self::wit::export_contract;
 use crate::{log::ContractLogger, util::BlockingWait, State};
+
+/// Inside tests, use the [`MockContractRuntime`] instead of the real [`ContractRuntime`].
+#[cfg(with_testing)]
+pub type ContractRuntime<Application> = MockContractRuntime<Application>;
 
 /// Declares an implementation of the [`Contract`][`crate::Contract`] trait, exporting it from the
 /// Wasm module.
