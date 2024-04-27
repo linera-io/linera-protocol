@@ -19,6 +19,7 @@ where
     Application: Service,
 {
     application_parameters: Cell<Option<Application::Parameters>>,
+    application_id: Cell<Option<ApplicationId<Application::Abi>>>,
 }
 
 impl<Application> MockServiceRuntime<Application>
@@ -29,6 +30,7 @@ where
     pub(crate) fn new() -> Self {
         MockServiceRuntime {
             application_parameters: Cell::new(None),
+            application_id: Cell::new(None),
         }
     }
 
@@ -61,9 +63,25 @@ where
         )
     }
 
+    /// Configures the application ID to return during the test.
+    pub fn with_application_id(self, application_id: ApplicationId<Application::Abi>) -> Self {
+        self.application_id.set(Some(application_id));
+        self
+    }
+
+    /// Configures the application ID to return during the test.
+    pub fn set_application_id(&self, application_id: ApplicationId<Application::Abi>) -> &Self {
+        self.application_id.set(Some(application_id));
+        self
+    }
+
     /// Returns the ID of the current application.
     pub fn application_id(&self) -> ApplicationId<Application::Abi> {
-        todo!();
+        Self::fetch_mocked_value(
+            &self.application_id,
+            "Application ID has not been mocked, \
+            please call `MockServiceRuntime::set_application_id` first",
+        )
     }
 
     /// Returns the ID of the current chain.
