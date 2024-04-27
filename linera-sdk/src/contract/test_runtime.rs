@@ -36,6 +36,7 @@ where
     owner_balances: Option<HashMap<Owner, Amount>>,
     send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Application::Message>>>>,
     subscribe_requests: Vec<(ChainId, ChannelName)>,
+    unsubscribe_requests: Vec<(ChainId, ChannelName)>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -67,6 +68,7 @@ where
             owner_balances: None,
             send_message_requests: Arc::default(),
             subscribe_requests: Vec::new(),
+            unsubscribe_requests: Vec::new(),
         }
     }
 
@@ -397,8 +399,13 @@ where
     }
 
     /// Unsubscribes to a message channel from another chain.
-    pub fn unsubscribe(&mut self, _chain: ChainId, _channel: ChannelName) {
-        todo!();
+    pub fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) {
+        self.unsubscribe_requests.push((chain, channel));
+    }
+
+    /// Returns the list of requests to unsubscribe to channels made in the test so far.
+    pub fn unsubscribe_requests(&self) -> &[(ChainId, ChannelName)] {
+        &self.unsubscribe_requests
     }
 
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
