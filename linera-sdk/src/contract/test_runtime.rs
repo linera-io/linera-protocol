@@ -21,6 +21,7 @@ where
     application_parameters: Option<Application::Parameters>,
     application_id: Option<ApplicationId<Application::Abi>>,
     chain_id: Option<ChainId>,
+    authenticated_signer: Option<Option<Owner>>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -42,6 +43,7 @@ where
             application_parameters: None,
             application_id: None,
             chain_id: None,
+            authenticated_signer: None,
         }
     }
 
@@ -114,9 +116,30 @@ where
         )
     }
 
+    /// Configures the authenticated signer to return during the test.
+    pub fn with_authenticated_signer(
+        mut self,
+        authenticated_signer: impl Into<Option<Owner>>,
+    ) -> Self {
+        self.authenticated_signer = Some(authenticated_signer.into());
+        self
+    }
+
+    /// Configures the authenticated signer to return during the test.
+    pub fn set_authenticated_signer(
+        &mut self,
+        authenticated_signer: impl Into<Option<Owner>>,
+    ) -> &mut Self {
+        self.authenticated_signer = Some(authenticated_signer.into());
+        self
+    }
+
     /// Returns the authenticated signer for this execution, if there is one.
     pub fn authenticated_signer(&mut self) -> Option<Owner> {
-        todo!();
+        self.authenticated_signer.expect(
+            "Authenticated signer has not been mocked, \
+            please call `MockContractRuntime::set_authenticated_signer` first",
+        )
     }
 
     /// Returns the height of the current block that is executing.
