@@ -23,6 +23,7 @@ where
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
     block_height: Option<BlockHeight>,
+    message_id: Option<Option<MessageId>>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -46,6 +47,7 @@ where
             chain_id: None,
             authenticated_signer: None,
             block_height: None,
+            message_id: None,
         }
     }
 
@@ -164,10 +166,25 @@ where
         )
     }
 
+    /// Configures the message ID to return during the test.
+    pub fn with_message_id(mut self, message_id: impl Into<Option<MessageId>>) -> Self {
+        self.message_id = Some(message_id.into());
+        self
+    }
+
+    /// Configures the message ID to return during the test.
+    pub fn set_message_id(&mut self, message_id: impl Into<Option<MessageId>>) -> &mut Self {
+        self.message_id = Some(message_id.into());
+        self
+    }
+
     /// Returns the ID of the incoming message that is being handled, or [`None`] if not executing
     /// an incoming message.
     pub fn message_id(&mut self) -> Option<MessageId> {
-        todo!();
+        self.message_id.expect(
+            "Message ID has not been mocked, \
+            please call `MockContractRuntime::set_message_id` first",
+        )
     }
 
     /// Returns [`true`] if the incoming message was rejected from the original destination and is
