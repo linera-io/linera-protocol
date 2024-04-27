@@ -66,7 +66,7 @@ bytecode:
 (cd examples/fungible && cargo build --release)
 
 BYTECODE_ID=$(linera publish-bytecode \
-    examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm)
+    ~/linera-protocol/examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm)
 ```
 
 Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused it later.
