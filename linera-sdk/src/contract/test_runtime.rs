@@ -22,6 +22,7 @@ where
     application_id: Option<ApplicationId<Application::Abi>>,
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
+    block_height: Option<BlockHeight>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -44,6 +45,7 @@ where
             application_id: None,
             chain_id: None,
             authenticated_signer: None,
+            block_height: None,
         }
     }
 
@@ -142,9 +144,24 @@ where
         )
     }
 
+    /// Configures the block height to return during the test.
+    pub fn with_block_height(mut self, block_height: BlockHeight) -> Self {
+        self.block_height = Some(block_height);
+        self
+    }
+
+    /// Configures the block height to return during the test.
+    pub fn set_block_height(&mut self, block_height: BlockHeight) -> &mut Self {
+        self.block_height = Some(block_height);
+        self
+    }
+
     /// Returns the height of the current block that is executing.
     pub fn block_height(&mut self) -> BlockHeight {
-        todo!();
+        self.block_height.expect(
+            "Block height has not been mocked, \
+            please call `MockContractRuntime::set_block_height` first",
+        )
     }
 
     /// Returns the ID of the incoming message that is being handled, or [`None`] if not executing
