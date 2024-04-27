@@ -25,6 +25,7 @@ where
     block_height: Option<BlockHeight>,
     message_id: Option<Option<MessageId>>,
     message_is_bouncing: Option<Option<bool>>,
+    authenticated_caller_id: Option<Option<ApplicationId>>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -50,6 +51,7 @@ where
             block_height: None,
             message_id: None,
             message_is_bouncing: None,
+            authenticated_caller_id: None,
         }
     }
 
@@ -216,10 +218,31 @@ where
         )
     }
 
+    /// Configures the authenticated caller ID to return during the test.
+    pub fn with_authenticated_caller_id(
+        mut self,
+        authenticated_caller_id: impl Into<Option<ApplicationId>>,
+    ) -> Self {
+        self.authenticated_caller_id = Some(authenticated_caller_id.into());
+        self
+    }
+
+    /// Configures the authenticated caller ID to return during the test.
+    pub fn set_authenticated_caller_id(
+        &mut self,
+        authenticated_caller_id: impl Into<Option<ApplicationId>>,
+    ) -> &mut Self {
+        self.authenticated_caller_id = Some(authenticated_caller_id.into());
+        self
+    }
+
     /// Returns the authenticated caller ID, if the caller configured it and if the current context
     /// is executing a cross-application call.
     pub fn authenticated_caller_id(&mut self) -> Option<ApplicationId> {
-        todo!();
+        self.authenticated_caller_id.expect(
+            "Authenticated caller ID has not been mocked, \
+            please call `MockContractRuntime::set_authenticated_caller_id` first",
+        )
     }
 
     /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.
