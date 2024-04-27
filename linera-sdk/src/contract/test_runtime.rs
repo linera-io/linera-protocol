@@ -3,6 +3,8 @@
 
 //! Runtime types to simulate interfacing with the host executing the contract.
 
+use std::collections::HashMap;
+
 use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, BlockHeight, Resources, Timestamp},
@@ -28,6 +30,7 @@ where
     authenticated_caller_id: Option<Option<ApplicationId>>,
     timestamp: Option<Timestamp>,
     chain_balance: Option<Amount>,
+    owner_balances: Option<HashMap<Owner, Amount>>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -56,6 +59,7 @@ where
             authenticated_caller_id: None,
             timestamp: None,
             chain_balance: None,
+            owner_balances: None,
         }
     }
 
@@ -294,9 +298,59 @@ where
         )
     }
 
+    /// Configures the balances on the chain to use during the test.
+    pub fn with_owner_balances(
+        mut self,
+        owner_balances: impl IntoIterator<Item = (Owner, Amount)>,
+    ) -> Self {
+        self.owner_balances = Some(owner_balances.into_iter().collect());
+        self
+    }
+
+    /// Configures the balances on the chain to use during the test.
+    pub fn set_owner_balances(
+        &mut self,
+        owner_balances: impl IntoIterator<Item = (Owner, Amount)>,
+    ) -> &mut Self {
+        self.owner_balances = Some(owner_balances.into_iter().collect());
+        self
+    }
+
+    /// Configures the balance of one account on the chain to use during the test.
+    pub fn with_owner_balance(mut self, owner: Owner, balance: Amount) -> Self {
+        self.set_owner_balance(owner, balance);
+        self
+    }
+
+    /// Configures the balance of one account on the chain to use during the test.
+    pub fn set_owner_balance(&mut self, owner: Owner, balance: Amount) -> &mut Self {
+        self.owner_balances
+            .get_or_insert_with(HashMap::new)
+            .insert(owner, balance);
+        self
+    }
+
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&mut self, _owner: Owner) -> Amount {
-        todo!();
+    pub fn owner_balance(&mut self, owner: Owner) -> Amount {
+        *self.owner_balance_mut(owner)
+    }
+
+    /// Returns a mutable reference to the balance of one of the accounts on this chain.
+    fn owner_balance_mut(&mut self, owner: Owner) -> &mut Amount {
+        self.owner_balances
+            .as_mut()
+            .expect(
+                "Owner balances have not been mocked, \
+                please call `MockContractRuntime::set_owner_balances` first",
+            )
+            .get_mut(&owner)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Balance for owner {owner} was not mocked, \
+                    please include a balance for them in the call to \
+                    `MockContractRuntime::set_owner_balances`"
+                )
+            })
     }
 
     /// Schedules a message to be sent to this application on another chain.
