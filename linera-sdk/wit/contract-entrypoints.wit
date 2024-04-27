@@ -1,8 +1,8 @@
 package linera:app;
 
 interface contract-entrypoints {
-    instantiate: func(argument: list<u8>) -> result<tuple<>, string>;
-    execute-operation: func(operation: list<u8>) -> result<list<u8>, string>;
-    execute-message: func(message: list<u8>) -> result<tuple<>, string>;
-    finalize: func() -> result<tuple<>, string>;
+    instantiate: func(argument: list<u8>);
+    execute-operation: func(operation: list<u8>) -> list<u8>;
+    execute-message: func(message: list<u8>);
+    finalize: func();
 }

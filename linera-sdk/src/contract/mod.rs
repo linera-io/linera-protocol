@@ -32,7 +32,7 @@ macro_rules! contract {
         impl $crate::contract::wit::exports::linera::app::contract_entrypoints::Guest
             for $contract
         {
-            fn instantiate(argument: Vec<u8>) -> Result<(), String> {
+            fn instantiate(argument: Vec<u8>) {
                 use $crate::util::BlockingWait;
                 $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
@@ -45,7 +45,7 @@ macro_rules! contract {
                 )
             }
 
-            fn execute_operation(operation: Vec<u8>) -> Result<Vec<u8>, String> {
+            fn execute_operation(operation: Vec<u8>) -> Vec<u8> {
                 use $crate::util::BlockingWait;
                 $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
@@ -61,7 +61,7 @@ macro_rules! contract {
                 )
             }
 
-            fn execute_message(message: Vec<u8>) -> Result<(), String> {
+            fn execute_message(message: Vec<u8>) {
                 use $crate::util::BlockingWait;
                 $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
@@ -74,7 +74,7 @@ macro_rules! contract {
                 )
             }
 
-            fn finalize() -> Result<(), String> {
+            fn finalize() {
                 use $crate::util::BlockingWait;
                 $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
@@ -95,7 +95,7 @@ macro_rules! contract {
 pub fn run_async_entrypoint<Contract, Output, RawOutput>(
     contract: &mut Option<Contract>,
     entrypoint: impl FnOnce(&mut Contract) -> Output + Send,
-) -> Result<RawOutput, String>
+) -> RawOutput
 where
     Contract: crate::Contract,
     Output: Into<RawOutput> + Send + 'static,
@@ -107,5 +107,5 @@ where
         Contract::new(state, ContractRuntime::new()).blocking_wait()
     });
 
-    Ok(entrypoint(contract).into())
+    entrypoint(contract).into()
 }

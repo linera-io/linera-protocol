@@ -194,9 +194,8 @@ where
         self.configure_initial_fuel()?;
         let result = ContractEntrypoints::new(&mut self.instance).instantiate(argument);
         self.persist_remaining_fuel()?;
-        result
-            .map_err(WasmExecutionError::from)?
-            .map_err(ExecutionError::UserError)
+        result.map_err(WasmExecutionError::from)?;
+        Ok(())
     }
 
     fn execute_operation(
@@ -207,9 +206,7 @@ where
         self.configure_initial_fuel()?;
         let result = ContractEntrypoints::new(&mut self.instance).execute_operation(operation);
         self.persist_remaining_fuel()?;
-        result
-            .map_err(WasmExecutionError::from)?
-            .map_err(ExecutionError::UserError)
+        Ok(result.map_err(WasmExecutionError::from)?)
     }
 
     fn execute_message(
@@ -220,18 +217,16 @@ where
         self.configure_initial_fuel()?;
         let result = ContractEntrypoints::new(&mut self.instance).execute_message(message);
         self.persist_remaining_fuel()?;
-        result
-            .map_err(WasmExecutionError::from)?
-            .map_err(ExecutionError::UserError)
+        result.map_err(WasmExecutionError::from)?;
+        Ok(())
     }
 
     fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {
         self.configure_initial_fuel()?;
         let result = ContractEntrypoints::new(&mut self.instance).finalize();
         self.persist_remaining_fuel()?;
-        result
-            .map_err(WasmExecutionError::from)?
-            .map_err(ExecutionError::UserError)
+        result.map_err(WasmExecutionError::from)?;
+        Ok(())
     }
 }
 
@@ -244,31 +239,21 @@ where
         _context: QueryContext,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        ServiceEntrypoints::new(&mut self.instance)
+        Ok(ServiceEntrypoints::new(&mut self.instance)
             .handle_query(argument)
-            .map_err(WasmExecutionError::from)?
-            .map_err(ExecutionError::UserError)
+            .map_err(WasmExecutionError::from)?)
     }
 }
 
 impl From<ExecutionError> for wasmtime::Trap {
     fn from(error: ExecutionError) -> Self {
-        match error {
-            ExecutionError::UserError(message) => wasmtime::Trap::new(message),
-            _ => {
-                let boxed_error: Box<dyn Error + Send + Sync + 'static> = Box::new(error);
-                wasmtime::Trap::from(boxed_error)
-            }
-        }
+        let boxed_error: Box<dyn Error + Send + Sync + 'static> = Box::new(error);
+        wasmtime::Trap::from(boxed_error)
     }
 }
 
 impl From<wasmtime::Trap> for ExecutionError {
     fn from(trap: wasmtime::Trap) -> Self {
-        if trap.trap_code().is_none() {
-            ExecutionError::UserError(trap.display_reason().to_string())
-        } else {
-            ExecutionError::WasmError(WasmExecutionError::ExecuteModuleInWasmtime(trap))
-        }
+        ExecutionError::WasmError(WasmExecutionError::ExecuteModuleInWasmtime(trap))
     }
 }
