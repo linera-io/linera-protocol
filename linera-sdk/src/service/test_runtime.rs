@@ -20,6 +20,7 @@ where
 {
     application_parameters: Cell<Option<Application::Parameters>>,
     application_id: Cell<Option<ApplicationId<Application::Abi>>>,
+    chain_id: Cell<Option<ChainId>>,
 }
 
 impl<Application> MockServiceRuntime<Application>
@@ -31,6 +32,7 @@ where
         MockServiceRuntime {
             application_parameters: Cell::new(None),
             application_id: Cell::new(None),
+            chain_id: Cell::new(None),
         }
     }
 
@@ -84,9 +86,25 @@ where
         )
     }
 
+    /// Configures the chain ID to return during the test.
+    pub fn with_chain_id(self, chain_id: ChainId) -> Self {
+        self.chain_id.set(Some(chain_id));
+        self
+    }
+
+    /// Configures the chain ID to return during the test.
+    pub fn set_chain_id(&self, chain_id: ChainId) -> &Self {
+        self.chain_id.set(Some(chain_id));
+        self
+    }
+
     /// Returns the ID of the current chain.
     pub fn chain_id(&self) -> ChainId {
-        todo!();
+        Self::fetch_mocked_value(
+            &self.chain_id,
+            "Chain ID has not been mocked, \
+            please call `MockServiceRuntime::set_chain_id` first",
+        )
     }
 
     /// Returns the height of the next block that can be added to the current chain.
