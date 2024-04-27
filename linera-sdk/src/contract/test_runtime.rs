@@ -19,6 +19,7 @@ where
     Application: Contract,
 {
     application_parameters: Option<Application::Parameters>,
+    application_id: Option<ApplicationId<Application::Abi>>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -38,6 +39,7 @@ where
     pub fn new() -> Self {
         MockContractRuntime {
             application_parameters: None,
+            application_id: None,
         }
     }
 
@@ -67,9 +69,27 @@ where
         )
     }
 
+    /// Configures the application ID to return during the test.
+    pub fn with_application_id(mut self, application_id: ApplicationId<Application::Abi>) -> Self {
+        self.application_id = Some(application_id);
+        self
+    }
+
+    /// Configures the application ID to return during the test.
+    pub fn set_application_id(
+        &mut self,
+        application_id: ApplicationId<Application::Abi>,
+    ) -> &mut Self {
+        self.application_id = Some(application_id);
+        self
+    }
+
     /// Returns the ID of the current application.
     pub fn application_id(&mut self) -> ApplicationId<Application::Abi> {
-        todo!();
+        self.application_id.expect(
+            "Application ID has not been mocked, \
+            please call `MockContractRuntime::set_application_id` first",
+        )
     }
 
     /// Returns the ID of the current chain.
