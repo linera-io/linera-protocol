@@ -3,11 +3,14 @@
 
 //! Runtime types to simulate interfacing with the host executing the contract.
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, MutexGuard},
+};
 
 use linera_base::{
     abi::ContractAbi,
-    data_types::{Amount, BlockHeight, Resources, Timestamp},
+    data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
     ownership::{ChainOwnership, CloseChainError},
 };
@@ -31,6 +34,7 @@ where
     timestamp: Option<Timestamp>,
     chain_balance: Option<Amount>,
     owner_balances: Option<HashMap<Owner, Amount>>,
+    send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Application::Message>>>>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -60,6 +64,7 @@ where
             timestamp: None,
             chain_balance: None,
             owner_balances: None,
+            send_message_requests: Arc::default(),
         }
     }
 
@@ -367,7 +372,16 @@ where
         &mut self,
         message: Application::Message,
     ) -> MessageBuilder<Application::Message> {
-        MessageBuilder::new(message)
+        MessageBuilder::new(message, self.send_message_requests.clone())
+    }
+
+    /// Returns the list of [`SendMessageRequest`]s created so far during the test.
+    pub fn created_send_message_requests(
+        &self,
+    ) -> MutexGuard<'_, Vec<SendMessageRequest<Application::Message>>> {
+        self.send_message_requests
+            .try_lock()
+            .expect("Unit test should be single-threaded")
     }
 
     /// Subscribes to a message channel from another chain.
@@ -424,6 +438,7 @@ where
     is_tracked: bool,
     grant: Resources,
     message: Message,
+    send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Message>>>>,
 }
 
 impl<Message> MessageBuilder<Message>
@@ -431,12 +446,16 @@ where
     Message: Serialize,
 {
     /// Creates a new [`MessageBuilder`] instance to send the `message` to the `destination`.
-    pub(crate) fn new(message: Message) -> Self {
+    pub(crate) fn new(
+        message: Message,
+        send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Message>>>>,
+    ) -> Self {
         MessageBuilder {
             authenticated: false,
             is_tracked: false,
             grant: Resources::default(),
             message,
+            send_message_requests,
         }
     }
 
@@ -460,7 +479,18 @@ where
     }
 
     /// Schedules this `Message` to be sent to the `destination`.
-    pub fn send_to(self, _destination: impl Into<Destination>) {
-        todo!();
+    pub fn send_to(self, destination: impl Into<Destination>) {
+        let request = SendMessageRequest {
+            destination: destination.into(),
+            authenticated: self.authenticated,
+            is_tracked: self.is_tracked,
+            grant: self.grant,
+            message: self.message,
+        };
+
+        self.send_message_requests
+            .try_lock()
+            .expect("Unit test should be single-threaded")
+            .push(request);
     }
 }
