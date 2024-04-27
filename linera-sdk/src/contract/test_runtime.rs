@@ -38,6 +38,7 @@ where
     subscribe_requests: Vec<(ChainId, ChannelName)>,
     unsubscribe_requests: Vec<(ChainId, ChannelName)>,
     outgoing_transfers: HashMap<Account, Amount>,
+    claim_requests: Vec<ClaimRequest>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -71,6 +72,7 @@ where
             subscribe_requests: Vec::new(),
             unsubscribe_requests: Vec::new(),
             outgoing_transfers: HashMap::new(),
+            claim_requests: Vec::new(),
         }
     }
 
@@ -457,8 +459,25 @@ where
     }
 
     /// Claims an `amount` of native tokens from a `source` account to a `destination` account.
-    pub fn claim(&mut self, _source: Account, _destination: Account, _amount: Amount) {
-        todo!();
+    pub fn claim(&mut self, source: Account, destination: Account, amount: Amount) {
+        if Some(source.chain_id) == self.chain_id {
+            self.debit(source.owner, amount);
+
+            if Some(destination.chain_id) == self.chain_id {
+                self.credit(destination.owner, amount);
+            }
+        }
+
+        self.claim_requests.push(ClaimRequest {
+            source,
+            amount,
+            destination,
+        });
+    }
+
+    /// Returns the list of claims made during the test so far.
+    pub fn claim_requests(&self) -> &[ClaimRequest] {
+        &self.claim_requests
     }
 
     /// Retrieves the owner configuration for the current chain.
@@ -549,4 +568,12 @@ where
             .expect("Unit test should be single-threaded")
             .push(request);
     }
+}
+
+/// A claim request that was scheduled to be sent during this test.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ClaimRequest {
+    source: Account,
+    destination: Account,
+    amount: Amount,
 }
