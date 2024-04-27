@@ -24,6 +24,7 @@ where
     authenticated_signer: Option<Option<Owner>>,
     block_height: Option<BlockHeight>,
     message_id: Option<Option<MessageId>>,
+    message_is_bouncing: Option<Option<bool>>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -48,6 +49,7 @@ where
             authenticated_signer: None,
             block_height: None,
             message_id: None,
+            message_is_bouncing: None,
         }
     }
 
@@ -187,10 +189,31 @@ where
         )
     }
 
+    /// Configures the `message_is_bouncing` flag to return during the test.
+    pub fn with_message_is_bouncing(
+        mut self,
+        message_is_bouncing: impl Into<Option<bool>>,
+    ) -> Self {
+        self.message_is_bouncing = Some(message_is_bouncing.into());
+        self
+    }
+
+    /// Configures the `message_is_bouncing` flag to return during the test.
+    pub fn set_message_is_bouncing(
+        &mut self,
+        message_is_bouncing: impl Into<Option<bool>>,
+    ) -> &mut Self {
+        self.message_is_bouncing = Some(message_is_bouncing.into());
+        self
+    }
+
     /// Returns [`true`] if the incoming message was rejected from the original destination and is
     /// now bouncing back, or [`None`] if not executing an incoming message.
     pub fn message_is_bouncing(&mut self) -> Option<bool> {
-        todo!();
+        self.message_is_bouncing.expect(
+            "`message_is_bouncing` flag has not been mocked, \
+            please call `MockContractRuntime::set_message_is_bouncing` first",
+        )
     }
 
     /// Returns the authenticated caller ID, if the caller configured it and if the current context
