@@ -35,6 +35,7 @@ where
     chain_balance: Option<Amount>,
     owner_balances: Option<HashMap<Owner, Amount>>,
     chain_ownership: Option<ChainOwnership>,
+    can_close_chain: Option<bool>,
     send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Application::Message>>>>,
     subscribe_requests: Vec<(ChainId, ChannelName)>,
     unsubscribe_requests: Vec<(ChainId, ChannelName)>,
@@ -70,6 +71,7 @@ where
             chain_balance: None,
             owner_balances: None,
             chain_ownership: None,
+            can_close_chain: None,
             send_message_requests: Arc::default(),
             subscribe_requests: Vec::new(),
             unsubscribe_requests: Vec::new(),
@@ -502,10 +504,31 @@ where
         )
     }
 
+    /// Configures if the application being tested is allowed to close the chain its in.
+    pub fn with_can_close_chain(mut self, can_close_chain: bool) -> Self {
+        self.can_close_chain = Some(can_close_chain);
+        self
+    }
+
+    /// Configures if the application being tested is allowed to close the chain its in.
+    pub fn set_can_close_chain(&mut self, can_close_chain: bool) -> &mut Self {
+        self.can_close_chain = Some(can_close_chain);
+        self
+    }
+
     /// Closes the current chain. Returns an error if the application doesn't have
     /// permission to do so.
     pub fn close_chain(&mut self) -> Result<(), CloseChainError> {
-        todo!();
+        let authorized = self.can_close_chain.expect(
+            "Authorization to close the chain has not been mocked, \
+            please call `MockContractRuntime::set_can_close_chain` first",
+        );
+
+        if authorized {
+            Ok(())
+        } else {
+            Err(CloseChainError::NotPermitted)
+        }
     }
 
     /// Calls another application.
