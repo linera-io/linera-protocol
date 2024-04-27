@@ -3,7 +3,7 @@
 
 //! Runtime types to simulate interfacing with the host executing the service.
 
-use std::marker::PhantomData;
+use std::cell::Cell;
 
 use linera_base::{
     abi::ServiceAbi,
@@ -18,7 +18,7 @@ pub struct MockServiceRuntime<Application>
 where
     Application: Service,
 {
-    _application: PhantomData<Application>,
+    application_parameters: Cell<Option<Application::Parameters>>,
 }
 
 impl<Application> MockServiceRuntime<Application>
@@ -28,13 +28,37 @@ where
     /// Creates a new [`MockServiceRuntime`] instance for a service.
     pub(crate) fn new() -> Self {
         MockServiceRuntime {
-            _application: PhantomData,
+            application_parameters: Cell::new(None),
         }
+    }
+
+    /// Configures the application parameters to return during the test.
+    pub fn with_application_parameters(
+        self,
+        application_parameters: Application::Parameters,
+    ) -> Self {
+        self.application_parameters
+            .set(Some(application_parameters));
+        self
+    }
+
+    /// Configures the application parameters to return during the test.
+    pub fn set_application_parameters(
+        &self,
+        application_parameters: Application::Parameters,
+    ) -> &Self {
+        self.application_parameters
+            .set(Some(application_parameters));
+        self
     }
 
     /// Returns the application parameters provided when the application was created.
     pub fn application_parameters(&self) -> Application::Parameters {
-        todo!();
+        Self::fetch_mocked_value(
+            &self.application_parameters,
+            "Application parameters have not been mocked, \
+            please call `MockServiceRuntime::set_application_parameters` first",
+        )
     }
 
     /// Returns the ID of the current application.
@@ -89,5 +113,15 @@ where
     /// Fetches a blob of bytes from a given URL.
     pub fn fetch_url(&self, _url: &str) -> Vec<u8> {
         todo!();
+    }
+
+    /// Loads a mocked value from the `cell` cache or panics with a provided `message`.
+    fn fetch_mocked_value<T>(cell: &Cell<Option<T>>, message: &str) -> T
+    where
+        T: Clone,
+    {
+        let value = cell.take().expect(message);
+        cell.set(Some(value.clone()));
+        value
     }
 }
