@@ -20,6 +20,7 @@ where
 {
     application_parameters: Option<Application::Parameters>,
     application_id: Option<ApplicationId<Application::Abi>>,
+    chain_id: Option<ChainId>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -40,6 +41,7 @@ where
         MockContractRuntime {
             application_parameters: None,
             application_id: None,
+            chain_id: None,
         }
     }
 
@@ -92,9 +94,24 @@ where
         )
     }
 
+    /// Configures the chain ID to return during the test.
+    pub fn with_chain_id(mut self, chain_id: ChainId) -> Self {
+        self.chain_id = Some(chain_id);
+        self
+    }
+
+    /// Configures the chain ID to return during the test.
+    pub fn set_chain_id(&mut self, chain_id: ChainId) -> &mut Self {
+        self.chain_id = Some(chain_id);
+        self
+    }
+
     /// Returns the ID of the current chain.
     pub fn chain_id(&mut self) -> ChainId {
-        todo!();
+        self.chain_id.expect(
+            "Chain ID has not been mocked, \
+            please call `MockContractRuntime::set_chain_id` first",
+        )
     }
 
     /// Returns the authenticated signer for this execution, if there is one.
