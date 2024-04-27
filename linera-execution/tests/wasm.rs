@@ -24,10 +24,10 @@ use test_case::test_case;
 /// called correctly and consume the expected amount of fuel.
 ///
 /// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.
-#[cfg_attr(with_wasmer, test_case(WasmRuntime::Wasmer, 39_669, ExecutionRuntimeConfig::Synchronous; "wasmer"))]
-#[cfg_attr(with_wasmer, test_case(WasmRuntime::WasmerWithSanitizer, 40_021, ExecutionRuntimeConfig::Synchronous; "wasmer_with_sanitizer"))]
-#[cfg_attr(with_wasmtime, test_case(WasmRuntime::Wasmtime, 40_021, ExecutionRuntimeConfig::Synchronous; "wasmtime"))]
-#[cfg_attr(with_wasmtime, test_case(WasmRuntime::WasmtimeWithSanitizer, 40_021, ExecutionRuntimeConfig::Synchronous; "wasmtime_with_sanitizer"))]
+#[cfg_attr(with_wasmer, test_case(WasmRuntime::Wasmer, 55_549, ExecutionRuntimeConfig::Synchronous; "wasmer"))]
+#[cfg_attr(with_wasmer, test_case(WasmRuntime::WasmerWithSanitizer, 55_957, ExecutionRuntimeConfig::Synchronous; "wasmer_with_sanitizer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmRuntime::Wasmtime, 55_957, ExecutionRuntimeConfig::Synchronous; "wasmtime"))]
+#[cfg_attr(with_wasmtime, test_case(WasmRuntime::WasmtimeWithSanitizer, 55_957, ExecutionRuntimeConfig::Synchronous; "wasmtime_with_sanitizer"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_fuel_for_counter_wasm_application(
     wasm_runtime: WasmRuntime,
