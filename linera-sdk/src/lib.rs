@@ -79,12 +79,6 @@ pub use self::{
 /// executed.
 #[allow(async_fn_in_trait)]
 pub trait Contract: WithContractAbi + ContractAbi + Sized {
-    /// The type used to report errors to the execution environment.
-    ///
-    /// Errors are not recoverable and always interrupt the current transaction. To return
-    /// recoverable errors in the case of application calls, you may use the response types.
-    type Error: Error;
-
     /// The type used to store the persisted application state.
     type State: State;
 
@@ -105,7 +99,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     type InstantiationArgument: Serialize + DeserializeOwned + Debug;
 
     /// Creates a in-memory instance of the contract handler from the application's `state`.
-    async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error>;
+    async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Self;
 
     /// Returns the current state of the application so that it can be persisted.
     fn state_mut(&mut self) -> &mut Self::State;
@@ -114,19 +108,13 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     ///
     /// This is only called once when the application is created and only on the microchain that
     /// created the application.
-    async fn instantiate(
-        &mut self,
-        argument: Self::InstantiationArgument,
-    ) -> Result<(), Self::Error>;
+    async fn instantiate(&mut self, argument: Self::InstantiationArgument);
 
     /// Applies an operation from the current block.
     ///
     /// Operations are created by users and added to blocks, serving as the starting point for an
     /// application's execution.
-    async fn execute_operation(
-        &mut self,
-        operation: Self::Operation,
-    ) -> Result<Self::Response, Self::Error>;
+    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response;
 
     /// Applies a message originating from a cross-chain message.
     ///
@@ -139,7 +127,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     ///
     /// For a message to be executed, a user must mark it to be received in a block of the receiver
     /// chain.
-    async fn execute_message(&mut self, message: Self::Message) -> Result<(), Self::Error>;
+    async fn execute_message(&mut self, message: Self::Message);
 
     /// Finishes the execution of the current transaction.
     ///
@@ -149,9 +137,8 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     ///
     /// The default implementation persists the state, so if this method is overriden, care must be
     /// taken to persist the state manually.
-    async fn finalize(&mut self) -> Result<(), Self::Error> {
+    async fn finalize(&mut self) {
         Self::State::store(self.state_mut()).await;
-        Ok(())
     }
 }
 

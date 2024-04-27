@@ -34,7 +34,7 @@ macro_rules! contract {
         {
             fn instantiate(argument: Vec<u8>) -> Result<(), String> {
                 use $crate::util::BlockingWait;
-                $crate::contract::run_async_entrypoint::<$contract, _, _, _>(
+                $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
                         let argument = serde_json::from_slice(&argument)
@@ -47,26 +47,23 @@ macro_rules! contract {
 
             fn execute_operation(operation: Vec<u8>) -> Result<Vec<u8>, String> {
                 use $crate::util::BlockingWait;
-                $crate::contract::run_async_entrypoint::<$contract, _, _, _>(
+                $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
                         let operation: <$contract as $crate::abi::ContractAbi>::Operation =
                             bcs::from_bytes(&operation).expect("Failed to deserialize operation");
 
-                        contract
-                            .execute_operation(operation)
-                            .blocking_wait()
-                            .map(|response| {
-                                bcs::to_bytes(&response)
-                                    .expect("Failed to serialize contract's `Response`")
-                            })
+                        let response = contract.execute_operation(operation).blocking_wait();
+
+                        bcs::to_bytes(&response)
+                            .expect("Failed to serialize contract's `Response`")
                     },
                 )
             }
 
             fn execute_message(message: Vec<u8>) -> Result<(), String> {
                 use $crate::util::BlockingWait;
-                $crate::contract::run_async_entrypoint::<$contract, _, _, _>(
+                $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
                         let message: <$contract as $crate::Contract>::Message =
@@ -79,7 +76,7 @@ macro_rules! contract {
 
             fn finalize() -> Result<(), String> {
                 use $crate::util::BlockingWait;
-                $crate::contract::run_async_entrypoint::<$contract, _, _, _>(
+                $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| contract.finalize().blocking_wait(),
                 )
@@ -95,25 +92,20 @@ macro_rules! contract {
 
 /// Runs an asynchronous entrypoint in a blocking manner, by repeatedly polling the entrypoint
 /// future.
-pub fn run_async_entrypoint<Contract, Output, Error, RawOutput>(
+pub fn run_async_entrypoint<Contract, Output, RawOutput>(
     contract: &mut Option<Contract>,
-    entrypoint: impl FnOnce(&mut Contract) -> Result<Output, Error> + Send,
+    entrypoint: impl FnOnce(&mut Contract) -> Output + Send,
 ) -> Result<RawOutput, String>
 where
     Contract: crate::Contract,
     Output: Into<RawOutput> + Send + 'static,
-    Error: ToString + 'static,
 {
     ContractLogger::install();
 
     let contract = contract.get_or_insert_with(|| {
         let state = Contract::State::load().blocking_wait();
-        Contract::new(state, ContractRuntime::new())
-            .blocking_wait()
-            .expect("Failed to create application contract handler instance")
+        Contract::new(state, ContractRuntime::new()).blocking_wait()
     });
 
-    entrypoint(contract)
-        .map_err(|error| error.to_string())
-        .map(Output::into)
+    Ok(entrypoint(contract).into())
 }

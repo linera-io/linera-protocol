@@ -13,7 +13,6 @@ use linera_sdk::{
     Contract, ContractRuntime,
 };
 use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
-use thiserror::Error;
 
 use self::state::NonFungibleToken;
 
@@ -29,34 +28,26 @@ impl WithContractAbi for NonFungibleTokenContract {
 }
 
 impl Contract for NonFungibleTokenContract {
-    type Error = Error;
     type State = NonFungibleToken;
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ();
 
-    async fn new(
-        state: NonFungibleToken,
-        runtime: ContractRuntime<Self>,
-    ) -> Result<Self, Self::Error> {
-        Ok(NonFungibleTokenContract { state, runtime })
+    async fn new(state: NonFungibleToken, runtime: ContractRuntime<Self>) -> Self {
+        NonFungibleTokenContract { state, runtime }
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
         &mut self.state
     }
 
-    async fn instantiate(
-        &mut self,
-        _state: Self::InstantiationArgument,
-    ) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, _state: Self::InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
         self.state.num_minted_nfts.set(0);
-        Ok(())
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Result<(), Self::Error> {
+    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             Operation::Mint {
                 minter,
@@ -97,11 +88,9 @@ impl Contract for NonFungibleTokenContract {
                 }
             }
         }
-
-        Ok(())
     }
 
-    async fn execute_message(&mut self, message: Message) -> Result<(), Self::Error> {
+    async fn execute_message(&mut self, message: Message) {
         match message {
             Message::Transfer {
                 mut nft,
@@ -131,8 +120,6 @@ impl Contract for NonFungibleTokenContract {
                 self.transfer(nft, target_account).await;
             }
         }
-
-        Ok(())
     }
 }
 
@@ -269,7 +256,3 @@ impl NonFungibleTokenContract {
         owned_token_ids.remove(&nft.token_id);
     }
 }
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum Error {}

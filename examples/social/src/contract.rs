@@ -11,7 +11,6 @@ use linera_sdk::{
 };
 use social::{Key, Message, Operation, OwnPost, SocialAbi};
 use state::Social;
-use thiserror::Error;
 
 /// The channel name the application uses for cross-chain messages about new posts.
 const POSTS_CHANNEL_NAME: &[u8] = b"posts";
@@ -30,28 +29,25 @@ impl WithContractAbi for SocialContract {
 }
 
 impl Contract for SocialContract {
-    type Error = Error;
     type State = Social;
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ();
 
-    async fn new(state: Social, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(SocialContract { state, runtime })
+    async fn new(state: Social, runtime: ContractRuntime<Self>) -> Self {
+        SocialContract { state, runtime }
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
         &mut self.state
     }
 
-    async fn instantiate(&mut self, _argument: ()) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, _argument: ()) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
-
-        Ok(())
     }
 
-    async fn execute_operation(&mut self, operation: Operation) -> Result<(), Self::Error> {
+    async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
         let (destination, message) = match operation {
             Operation::Subscribe { chain_id } => (chain_id.into(), Message::Subscribe),
             Operation::Unsubscribe { chain_id } => (chain_id.into(), Message::Unsubscribe),
@@ -59,10 +55,9 @@ impl Contract for SocialContract {
         };
 
         self.runtime.send_message(destination, message);
-        Ok(())
     }
 
-    async fn execute_message(&mut self, message: Message) -> Result<(), Self::Error> {
+    async fn execute_message(&mut self, message: Message) {
         let message_id = self
             .runtime
             .message_id()
@@ -78,7 +73,6 @@ impl Contract for SocialContract {
             ),
             Message::Posts { count, posts } => self.execute_posts_message(message_id, count, posts),
         }
-        Ok(())
     }
 }
 
@@ -120,7 +114,3 @@ impl SocialContract {
         }
     }
 }
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum Error {}

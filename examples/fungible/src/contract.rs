@@ -14,7 +14,6 @@ use linera_sdk::{
     base::{AccountOwner, Amount, WithContractAbi},
     Contract, ContractRuntime,
 };
-use thiserror::Error;
 
 use self::state::FungibleToken;
 
@@ -30,27 +29,20 @@ impl WithContractAbi for FungibleTokenContract {
 }
 
 impl Contract for FungibleTokenContract {
-    type Error = Error;
     type State = FungibleToken;
     type Message = Message;
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
 
-    async fn new(
-        state: FungibleToken,
-        runtime: ContractRuntime<Self>,
-    ) -> Result<Self, Self::Error> {
-        Ok(FungibleTokenContract { state, runtime })
+    async fn new(state: FungibleToken, runtime: ContractRuntime<Self>) -> Self {
+        FungibleTokenContract { state, runtime }
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
         &mut self.state
     }
 
-    async fn instantiate(
-        &mut self,
-        mut state: Self::InstantiationArgument,
-    ) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, mut state: Self::InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
 
@@ -64,23 +56,18 @@ impl Contract for FungibleTokenContract {
             }
         }
         self.state.initialize_accounts(state).await;
-
-        Ok(())
     }
 
-    async fn execute_operation(
-        &mut self,
-        operation: Self::Operation,
-    ) -> Result<Self::Response, Self::Error> {
+    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             Operation::Balance { owner } => {
                 let balance = self.state.balance_or_default(&owner).await;
-                Ok(FungibleResponse::Balance(balance))
+                FungibleResponse::Balance(balance)
             }
 
             Operation::TickerSymbol => {
                 let params = self.runtime.application_parameters();
-                Ok(FungibleResponse::TickerSymbol(params.ticker_symbol))
+                FungibleResponse::TickerSymbol(params.ticker_symbol)
             }
 
             Operation::Transfer {
@@ -92,7 +79,7 @@ impl Contract for FungibleTokenContract {
                 self.state.debit(owner, amount).await;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
-                Ok(FungibleResponse::Ok)
+                FungibleResponse::Ok
             }
 
             Operation::Claim {
@@ -102,12 +89,12 @@ impl Contract for FungibleTokenContract {
             } => {
                 self.check_account_authentication(source_account.owner);
                 self.claim(source_account, amount, target_account).await;
-                Ok(FungibleResponse::Ok)
+                FungibleResponse::Ok
             }
         }
     }
 
-    async fn execute_message(&mut self, message: Message) -> Result<(), Self::Error> {
+    async fn execute_message(&mut self, message: Message) {
         match message {
             Message::Credit {
                 amount,
@@ -132,8 +119,6 @@ impl Contract for FungibleTokenContract {
                     .await;
             }
         }
-
-        Ok(())
     }
 }
 
@@ -203,7 +188,3 @@ impl FungibleTokenContract {
 // Dummy ComplexObject implementation, required by the graphql(complex) attribute in state.rs.
 #[async_graphql::ComplexObject]
 impl FungibleToken {}
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum Error {}

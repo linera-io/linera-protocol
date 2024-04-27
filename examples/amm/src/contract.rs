@@ -5,7 +5,7 @@
 
 mod state;
 
-use amm::{AmmAbi, AmmError, Message, Operation, Parameters};
+use amm::{AmmAbi, Message, Operation, Parameters};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
@@ -28,37 +28,33 @@ impl WithContractAbi for AmmContract {
 }
 
 impl Contract for AmmContract {
-    type Error = AmmError;
     type State = Amm;
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = Parameters;
 
-    async fn new(state: Amm, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(AmmContract { state, runtime })
+    async fn new(state: Amm, runtime: ContractRuntime<Self>) -> Self {
+        AmmContract { state, runtime }
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
         &mut self.state
     }
 
-    async fn instantiate(&mut self, _argument: ()) -> Result<(), AmmError> {
+    async fn instantiate(&mut self, _argument: ()) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
-        Ok(())
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Result<(), AmmError> {
+    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
             self.execute_order_local(operation).await;
         } else {
             self.execute_order_remote(operation).await;
         }
-
-        Ok(())
     }
 
-    async fn execute_message(&mut self, message: Self::Message) -> Result<(), AmmError> {
+    async fn execute_message(&mut self, message: Self::Message) {
         assert_eq!(
             self.runtime.chain_id(),
             self.runtime.application_id().creation.chain_id,
@@ -306,8 +302,6 @@ impl Contract for AmmContract {
                 );
             }
         }
-
-        Ok(())
     }
 }
 

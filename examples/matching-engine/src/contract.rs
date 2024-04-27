@@ -15,7 +15,7 @@ use matching_engine::{
     product_price_amount, MatchingEngineAbi, Message, Operation, Order, OrderId, OrderNature,
     Parameters, Price,
 };
-use state::{LevelView, MatchingEngine, MatchingEngineError};
+use state::{LevelView, MatchingEngine};
 
 use crate::state::{KeyBook, OrderEntry};
 
@@ -51,35 +51,29 @@ pub struct Transfer {
 }
 
 impl Contract for MatchingEngineContract {
-    type Error = MatchingEngineError;
     type State = MatchingEngine;
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = Parameters;
 
-    async fn new(
-        state: MatchingEngine,
-        runtime: ContractRuntime<Self>,
-    ) -> Result<Self, Self::Error> {
-        Ok(MatchingEngineContract { state, runtime })
+    async fn new(state: MatchingEngine, runtime: ContractRuntime<Self>) -> Self {
+        MatchingEngineContract { state, runtime }
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
         &mut self.state
     }
 
-    async fn instantiate(&mut self, _argument: ()) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, _argument: ()) {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
-
-        Ok(())
     }
 
     /// Executes an order operation, or closes the chain.
     ///
     /// If the chain is the one of the matching engine then the order is processed
     /// locally. Otherwise, it gets transmitted as a message to the chain of the engine.
-    async fn execute_operation(&mut self, operation: Operation) -> Result<(), Self::Error> {
+    async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
         match operation {
             Operation::ExecuteOrder { order } => {
                 let owner = Self::get_owner(&order);
@@ -110,11 +104,10 @@ impl Contract for MatchingEngineContract {
                     .expect("The application does not have permissions to close the chain.");
             }
         }
-        Ok(())
     }
 
     /// Execution of the order on the creation chain
-    async fn execute_message(&mut self, message: Message) -> Result<(), Self::Error> {
+    async fn execute_message(&mut self, message: Message) {
         assert_eq!(
             self.runtime.chain_id(),
             self.runtime.application_id().creation.chain_id,
@@ -131,7 +124,6 @@ impl Contract for MatchingEngineContract {
                 self.execute_order_local(order, message_id.chain_id).await;
             }
         }
-        Ok(())
     }
 }
 

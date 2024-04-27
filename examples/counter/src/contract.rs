@@ -7,7 +7,6 @@ mod state;
 
 use counter::CounterAbi;
 use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime};
-use thiserror::Error;
 
 use self::state::Counter;
 
@@ -23,43 +22,36 @@ impl WithContractAbi for CounterContract {
 }
 
 impl Contract for CounterContract {
-    type Error = Error;
     type State = Counter;
     type Message = ();
     type InstantiationArgument = u64;
     type Parameters = ();
 
-    async fn new(state: Counter, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(CounterContract { state, runtime })
+    async fn new(state: Counter, runtime: ContractRuntime<Self>) -> Self {
+        CounterContract { state, runtime }
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
         &mut self.state
     }
 
-    async fn instantiate(&mut self, value: u64) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, value: u64) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
 
         self.state.value.set(value);
-
-        Ok(())
     }
 
-    async fn execute_operation(&mut self, operation: u64) -> Result<u64, Self::Error> {
+    async fn execute_operation(&mut self, operation: u64) -> u64 {
         let new_value = self.state.value.get() + operation;
         self.state.value.set(new_value);
-        Ok(new_value)
+        new_value
     }
 
-    async fn execute_message(&mut self, _message: ()) -> Result<(), Self::Error> {
+    async fn execute_message(&mut self, _message: ()) {
         panic!("Counter application doesn't support any cross-chain messages");
     }
 }
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum Error {}
 
 #[cfg(test)]
 mod tests {
@@ -81,12 +73,14 @@ mod tests {
 
         let increment = 42_308_u64;
 
-        let result = counter
+        let response = counter
             .execute_operation(increment)
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
-        assert!(result.is_ok());
+        let expected_value = initial_value + increment;
+
+        assert_eq!(response, expected_value);
         assert_eq!(*counter.state.value.get(), initial_value + increment);
     }
 
@@ -96,12 +90,11 @@ mod tests {
     // let initial_value = 72_u64;
     // let mut counter = create_and_instantiate_counter(initial_value);
 
-    // let result = counter
+    // counter
     // .execute_message(())
     // .now_or_never()
     // .expect("Execution of counter operation should not await anything");
 
-    // assert_matches!(result, Err(Error::MessagesNotSupported));
     // assert_eq!(*counter.state.value.get(), initial_value);
     // }
 
@@ -112,15 +105,14 @@ mod tests {
 
         let increment = 8_u64;
 
-        let result = counter
+        let response = counter
             .execute_operation(increment)
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
         let expected_value = initial_value + increment;
 
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), expected_value);
+        assert_eq!(response, expected_value);
         assert_eq!(*counter.state.value.get(), expected_value);
     }
 
@@ -135,12 +127,11 @@ mod tests {
             runtime: test_contract_runtime(),
         };
 
-        let result = contract
+        contract
             .instantiate(initial_value)
             .now_or_never()
             .expect("Initialization of counter state should not await anything");
 
-        assert!(result.is_ok());
         assert_eq!(*contract.state.value.get(), initial_value);
 
         contract

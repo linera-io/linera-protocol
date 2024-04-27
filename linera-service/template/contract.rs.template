@@ -3,7 +3,6 @@
 mod state;
 
 use linera_sdk::{{base::WithContractAbi, Contract, ContractRuntime}};
-use thiserror::Error;
 
 use self::state::Application;
 
@@ -19,41 +18,22 @@ impl WithContractAbi for ApplicationContract {{
 }}
 
 impl Contract for ApplicationContract {{
-    type Error = ContractError;
     type State = Application;
     type Message = ();
     type Parameters = ();
     type InstantiationArgument = ();
 
-    async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {{
-        Ok(ApplicationContract {{ state, runtime }})
+    async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Self {{
+        ApplicationContract {{ state, runtime }}
     }}
 
     fn state_mut(&mut self) -> &mut Self::State {{
         &mut self.state
     }}
 
-    async fn instantiate(
-        &mut self,
-        _argument: Self::InstantiationArgument,
-    ) -> Result<(), Self::Error> {{
-        Ok(())
-    }}
+    async fn instantiate(&mut self, _argument: Self::InstantiationArgument) {{}}
 
-    async fn execute_operation(
-        &mut self,
-        _operation: Self::Operation,
-    ) -> Result<Self::Response, Self::Error> {{
-        Ok(())
-    }}
+    async fn execute_operation(&mut self, _operation: Self::Operation) -> Self::Response {{}}
 
-    async fn execute_message(&mut self, _message: Self::Message) -> Result<(), Self::Error> {{
-        Ok(())
-    }}
-}}
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum ContractError {{
-    // Add error variants here.
+    async fn execute_message(&mut self, _message: Self::Message) {{}}
 }}

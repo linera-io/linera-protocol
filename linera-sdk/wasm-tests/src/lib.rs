@@ -405,37 +405,26 @@ impl WithServiceAbi for TestApp {
 }
 
 impl Contract for TestApp {
-    type Error = TestAppError;
     type State = EmptyState;
     type Message = Vec<u8>;
     type Parameters = Vec<u8>;
     type InstantiationArgument = Vec<u8>;
 
-    async fn new(state: Self::State, _runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(TestApp { state })
+    async fn new(state: Self::State, _runtime: ContractRuntime<Self>) -> Self {
+        TestApp { state }
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
         &mut self.state
     }
 
-    async fn instantiate(
-        &mut self,
-        _argument: Self::InstantiationArgument,
-    ) -> Result<(), Self::Error> {
-        Ok(())
+    async fn instantiate(&mut self, _argument: Self::InstantiationArgument) {}
+
+    async fn execute_operation(&mut self, _operation: Self::Operation) -> Self::Response {
+        vec![]
     }
 
-    async fn execute_operation(
-        &mut self,
-        _operation: Self::Operation,
-    ) -> Result<Self::Response, Self::Error> {
-        Ok(vec![])
-    }
-
-    async fn execute_message(&mut self, _message: Self::Message) -> Result<(), Self::Error> {
-        Ok(())
-    }
+    async fn execute_message(&mut self, _message: Self::Message) {}
 }
 
 impl Service for TestApp {

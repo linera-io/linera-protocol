@@ -13,7 +13,6 @@ use linera_sdk::{
     Contract, ContractRuntime,
 };
 use state::{CrowdFunding, Status};
-use thiserror::Error;
 
 pub struct CrowdFundingContract {
     state: CrowdFunding,
@@ -27,21 +26,20 @@ impl WithContractAbi for CrowdFundingContract {
 }
 
 impl Contract for CrowdFundingContract {
-    type Error = Error;
     type State = CrowdFunding;
     type Message = Message;
     type InstantiationArgument = InstantiationArgument;
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
-    async fn new(state: CrowdFunding, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(CrowdFundingContract { state, runtime })
+    async fn new(state: CrowdFunding, runtime: ContractRuntime<Self>) -> Self {
+        CrowdFundingContract { state, runtime }
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
         &mut self.state
     }
 
-    async fn instantiate(&mut self, argument: InstantiationArgument) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, argument: InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
 
@@ -52,11 +50,9 @@ impl Contract for CrowdFundingContract {
             deadline > self.runtime.system_time(),
             "Crowd-funding campaign cannot start after its deadline"
         );
-
-        Ok(())
     }
 
-    async fn execute_operation(&mut self, operation: Operation) -> Result<(), Self::Error> {
+    async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
         match operation {
             Operation::Pledge { owner, amount } => {
                 if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
@@ -68,11 +64,9 @@ impl Contract for CrowdFundingContract {
             Operation::Collect => self.collect_pledges(),
             Operation::Cancel => self.cancel_campaign().await,
         }
-
-        Ok(())
     }
 
-    async fn execute_message(&mut self, message: Message) -> Result<(), Self::Error> {
+    async fn execute_message(&mut self, message: Message) {
         match message {
             Message::PledgeWithAccount { owner, amount } => {
                 assert_eq!(
@@ -84,7 +78,6 @@ impl Contract for CrowdFundingContract {
                 self.execute_pledge_with_account(owner, amount).await;
             }
         }
-        Ok(())
     }
 }
 
@@ -247,7 +240,3 @@ impl CrowdFundingContract {
             .expect("Application is not running on the host chain or was not instantiated yet")
     }
 }
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum Error {}

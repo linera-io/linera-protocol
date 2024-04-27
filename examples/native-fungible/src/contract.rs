@@ -9,7 +9,6 @@ use linera_sdk::{
     Contract, ContractRuntime, EmptyState,
 };
 use native_fungible::{Message, TICKER_SYMBOL};
-use thiserror::Error;
 
 pub struct NativeFungibleTokenContract {
     state: EmptyState,
@@ -23,21 +22,20 @@ impl WithContractAbi for NativeFungibleTokenContract {
 }
 
 impl Contract for NativeFungibleTokenContract {
-    type Error = Error;
     type State = EmptyState;
     type Message = Message;
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
 
-    async fn new(state: EmptyState, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(NativeFungibleTokenContract { state, runtime })
+    async fn new(state: EmptyState, runtime: ContractRuntime<Self>) -> Self {
+        NativeFungibleTokenContract { state, runtime }
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
         &mut self.state
     }
 
-    async fn instantiate(&mut self, state: Self::InstantiationArgument) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, state: Self::InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         assert!(
             self.runtime.application_parameters().ticker_symbol == "NAT",
@@ -51,24 +49,18 @@ impl Contract for NativeFungibleTokenContract {
             };
             self.runtime.transfer(None, account, amount);
         }
-        Ok(())
     }
 
-    async fn execute_operation(
-        &mut self,
-        operation: Self::Operation,
-    ) -> Result<Self::Response, Self::Error> {
+    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             Operation::Balance { owner } => {
                 let owner = self.normalize_owner(owner);
 
                 let balance = self.runtime.owner_balance(owner);
-                Ok(FungibleResponse::Balance(balance))
+                FungibleResponse::Balance(balance)
             }
 
-            Operation::TickerSymbol => {
-                Ok(FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL)))
-            }
+            Operation::TickerSymbol => FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL)),
 
             Operation::Transfer {
                 owner,
@@ -84,7 +76,7 @@ impl Contract for NativeFungibleTokenContract {
                 self.runtime.transfer(Some(owner), target_account, amount);
 
                 self.transfer(fungible_target_account.chain_id);
-                Ok(FungibleResponse::Ok)
+                FungibleResponse::Ok
             }
 
             Operation::Claim {
@@ -105,15 +97,15 @@ impl Contract for NativeFungibleTokenContract {
                     fungible_source_account.chain_id,
                     fungible_target_account.chain_id,
                 );
-                Ok(FungibleResponse::Ok)
+                FungibleResponse::Ok
             }
         }
     }
 
-    async fn execute_message(&mut self, message: Self::Message) -> Result<(), Self::Error> {
+    async fn execute_message(&mut self, message: Self::Message) {
         // Messages for now don't do anything, just pass messages around
         match message {
-            Message::Notify => Ok(()),
+            Message::Notify => (),
         }
     }
 }
@@ -171,7 +163,3 @@ impl NativeFungibleTokenContract {
         }
     }
 }
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum Error {}

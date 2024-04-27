@@ -6,7 +6,6 @@
 mod state;
 
 use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, EmptyState};
-use thiserror::Error;
 
 pub struct LlmContract {
     state: EmptyState,
@@ -19,33 +18,24 @@ impl WithContractAbi for LlmContract {
 }
 
 impl Contract for LlmContract {
-    type Error = ContractError;
     type State = EmptyState;
     type Message = ();
     type InstantiationArgument = ();
     type Parameters = ();
 
-    async fn new(state: Self::State, _runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(LlmContract { state })
+    async fn new(state: Self::State, _runtime: ContractRuntime<Self>) -> Self {
+        LlmContract { state }
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
         &mut self.state
     }
 
-    async fn instantiate(&mut self, _value: ()) -> Result<(), Self::Error> {
-        Ok(())
-    }
+    async fn instantiate(&mut self, _value: ()) {}
 
-    async fn execute_operation(&mut self, _operation: ()) -> Result<(), Self::Error> {
-        Ok(())
-    }
+    async fn execute_operation(&mut self, _operation: ()) -> Self::Response {}
 
-    async fn execute_message(&mut self, _message: ()) -> Result<(), Self::Error> {
+    async fn execute_message(&mut self, _message: ()) {
         panic!("Llm application doesn't support any cross-chain messages");
     }
 }
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum ContractError {}
