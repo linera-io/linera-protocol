@@ -34,6 +34,7 @@ where
     timestamp: Option<Timestamp>,
     chain_balance: Option<Amount>,
     owner_balances: Option<HashMap<Owner, Amount>>,
+    chain_ownership: Option<ChainOwnership>,
     send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Application::Message>>>>,
     subscribe_requests: Vec<(ChainId, ChannelName)>,
     unsubscribe_requests: Vec<(ChainId, ChannelName)>,
@@ -68,6 +69,7 @@ where
             timestamp: None,
             chain_balance: None,
             owner_balances: None,
+            chain_ownership: None,
             send_message_requests: Arc::default(),
             subscribe_requests: Vec::new(),
             unsubscribe_requests: Vec::new(),
@@ -480,9 +482,24 @@ where
         &self.claim_requests
     }
 
+    /// Configures the chain ownership configuration to return during the test.
+    pub fn with_chain_ownership(mut self, chain_ownership: ChainOwnership) -> Self {
+        self.chain_ownership = Some(chain_ownership);
+        self
+    }
+
+    /// Configures the chain ownership configuration to return during the test.
+    pub fn set_chain_ownership(&mut self, chain_ownership: ChainOwnership) -> &mut Self {
+        self.chain_ownership = Some(chain_ownership);
+        self
+    }
+
     /// Retrieves the owner configuration for the current chain.
     pub fn chain_ownership(&mut self) -> ChainOwnership {
-        todo!();
+        self.chain_ownership.clone().expect(
+            "Chain ownership has not been mocked, \
+            please call `MockContractRuntime::set_chain_ownership` first",
+        )
     }
 
     /// Closes the current chain. Returns an error if the application doesn't have
