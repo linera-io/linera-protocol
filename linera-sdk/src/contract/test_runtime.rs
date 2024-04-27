@@ -3,8 +3,6 @@
 
 //! Runtime types to simulate interfacing with the host executing the contract.
 
-use std::marker::PhantomData;
-
 use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, BlockHeight, Resources, Timestamp},
@@ -20,7 +18,7 @@ pub struct MockContractRuntime<Application>
 where
     Application: Contract,
 {
-    _application: PhantomData<Application>,
+    application_parameters: Option<Application::Parameters>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -39,13 +37,34 @@ where
     /// Creates a new [`MockContractRuntime`] instance for a contract.
     pub fn new() -> Self {
         MockContractRuntime {
-            _application: PhantomData,
+            application_parameters: None,
         }
+    }
+
+    /// Configures the application parameters to return during the test.
+    pub fn with_application_parameters(
+        mut self,
+        application_parameters: Application::Parameters,
+    ) -> Self {
+        self.application_parameters = Some(application_parameters);
+        self
+    }
+
+    /// Configures the application parameters to return during the test.
+    pub fn set_application_parameters(
+        &mut self,
+        application_parameters: Application::Parameters,
+    ) -> &mut Self {
+        self.application_parameters = Some(application_parameters);
+        self
     }
 
     /// Returns the application parameters provided when the application was created.
     pub fn application_parameters(&mut self) -> Application::Parameters {
-        todo!();
+        self.application_parameters.clone().expect(
+            "Application parameters have not been mocked, \
+            please call `MockContractRuntime::set_application_parameters` first",
+        )
     }
 
     /// Returns the ID of the current application.
