@@ -19,6 +19,10 @@ serde_json.workspace = true
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 tokio = { workspace = true, features = ["rt", "sync"] }
 
+# TODO(#1970): Remove once macros don't depend on them
+[package.metadata.cargo-machete]
+ignored = ["bcs", "serde_json"]
+
 [[bin]]
 name = "amm_contract"
 path = "src/contract.rs"

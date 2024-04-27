@@ -20,6 +20,10 @@ fungible = { workspace = true, features = ["test"] }
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 tokio.workspace = true
 
+# TODO(#1970): Remove once macros don't depend on them
+[package.metadata.cargo-machete]
+ignored = ["bcs", "serde_json"]
+
 [[bin]]
 name = "fungible_contract"
 path = "src/contract.rs"
