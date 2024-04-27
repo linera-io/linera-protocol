@@ -30,10 +30,11 @@ wasmtime = [
     "linera-storage/wasmtime",
     "linera-witty/wasmtime",
 ]
-test = ["linera-base/test"]
+test = ["async-trait", "linera-base/test"]
 
 [dependencies]
 async-graphql.workspace = true
+async-trait = { workspace = true, optional = true }
 bcs.workspace = true
 futures.workspace = true
 linera-base.workspace = true
