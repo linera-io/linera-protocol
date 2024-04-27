@@ -14,7 +14,6 @@ log.workspace = true
 rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
 tokenizers.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]

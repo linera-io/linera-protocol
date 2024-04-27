@@ -16,7 +16,6 @@ linera-sdk.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha3.workspace = true
-thiserror.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 fungible = { workspace = true, features = ["test"] }

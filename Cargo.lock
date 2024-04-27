@@ -110,7 +110,6 @@ dependencies = [
  "num-traits",
  "serde",
  "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -1475,7 +1474,6 @@ dependencies = [
  "futures",
  "linera-sdk",
  "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -1796,7 +1794,6 @@ dependencies = [
  "linera-sdk",
  "serde",
  "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -2848,7 +2845,6 @@ dependencies = [
  "linera-sdk",
  "serde",
  "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -4747,7 +4743,6 @@ dependencies = [
  "linera-sdk",
  "serde",
  "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -4840,7 +4835,6 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -4915,7 +4909,6 @@ dependencies = [
  "linera-sdk",
  "serde",
  "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -4946,7 +4939,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
- "thiserror",
 ]
 
 [[package]]
@@ -6843,7 +6835,6 @@ dependencies = [
  "linera-sdk",
  "serde",
  "serde_json",
- "thiserror",
 ]
 
 [[package]]

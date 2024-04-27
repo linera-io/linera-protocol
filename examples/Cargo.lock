@@ -87,7 +87,6 @@ dependencies = [
  "num-traits",
  "serde",
  "serde_json",
- "thiserror",
  "tokio",
 ]
 
@@ -752,7 +751,6 @@ dependencies = [
  "futures",
  "linera-sdk",
  "serde_json",
- "thiserror",
  "tokio",
  "webassembly-test",
 ]
@@ -1009,7 +1007,6 @@ dependencies = [
  "linera-sdk",
  "serde",
  "serde_json",
- "thiserror",
  "tokio",
 ]
 
@@ -1599,7 +1596,6 @@ dependencies = [
  "linera-sdk",
  "serde",
  "serde_json",
- "thiserror",
  "tokio",
 ]
 
@@ -2607,7 +2603,6 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "thiserror",
  "tokenizers",
  "tokio",
  "webassembly-test",
@@ -2705,7 +2700,6 @@ dependencies = [
  "linera-sdk",
  "serde",
  "serde_json",
- "thiserror",
  "tokio",
  "webassembly-test",
 ]
@@ -2800,7 +2794,6 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "thiserror",
  "webassembly-test",
 ]
 
@@ -2898,7 +2891,6 @@ dependencies = [
  "native-fungible",
  "serde",
  "serde_json",
- "thiserror",
  "tokio",
 ]
 
@@ -2925,7 +2917,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
- "thiserror",
  "tokio",
 ]
 
@@ -4081,7 +4072,6 @@ dependencies = [
  "linera-sdk",
  "serde",
  "serde_json",
- "thiserror",
  "tokio",
  "webassembly-test",
 ]
