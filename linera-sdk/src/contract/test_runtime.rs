@@ -26,6 +26,7 @@ where
     message_id: Option<Option<MessageId>>,
     message_is_bouncing: Option<Option<bool>>,
     authenticated_caller_id: Option<Option<ApplicationId>>,
+    timestamp: Option<Timestamp>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -52,6 +53,7 @@ where
             message_id: None,
             message_is_bouncing: None,
             authenticated_caller_id: None,
+            timestamp: None,
         }
     }
 
@@ -245,9 +247,24 @@ where
         )
     }
 
+    /// Configures the system time to return during the test.
+    pub fn with_system_time(mut self, timestamp: Timestamp) -> Self {
+        self.timestamp = Some(timestamp);
+        self
+    }
+
+    /// Configures the system time to return during the test.
+    pub fn set_system_time(&mut self, timestamp: Timestamp) -> &mut Self {
+        self.timestamp = Some(timestamp);
+        self
+    }
+
     /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.
     pub fn system_time(&mut self) -> Timestamp {
-        todo!();
+        self.timestamp.expect(
+            "System time has not been mocked, \
+            please call `MockContractRuntime::set_system_time` first",
+        )
     }
 
     /// Returns the current chain balance.
