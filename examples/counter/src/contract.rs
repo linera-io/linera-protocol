@@ -82,19 +82,17 @@ mod tests {
         assert_eq!(*counter.state.value.get(), initial_value + increment);
     }
 
-    // TODO(#1372): Rewrite this tests once it's possible to test for panics
-    // #[webassembly_test]
-    // fn message() {
-    // let initial_value = 72_u64;
-    // let mut counter = create_and_instantiate_counter(initial_value);
+    #[test]
+    #[should_panic(expected = "Counter application doesn't support any cross-chain messages")]
+    fn message() {
+        let initial_value = 72_u64;
+        let mut counter = create_and_instantiate_counter(initial_value);
 
-    // counter
-    // .execute_message(())
-    // .now_or_never()
-    // .expect("Execution of counter operation should not await anything");
-
-    // assert_eq!(*counter.state.value.get(), initial_value);
-    // }
+        counter
+            .execute_message(())
+            .now_or_never()
+            .expect("Execution of counter operation should not await anything");
+    }
 
     #[test]
     fn cross_application_call() {
