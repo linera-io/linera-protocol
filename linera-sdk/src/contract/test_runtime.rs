@@ -35,6 +35,7 @@ where
     chain_balance: Option<Amount>,
     owner_balances: Option<HashMap<Owner, Amount>>,
     send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Application::Message>>>>,
+    subscribe_requests: Vec<(ChainId, ChannelName)>,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -65,6 +66,7 @@ where
             chain_balance: None,
             owner_balances: None,
             send_message_requests: Arc::default(),
+            subscribe_requests: Vec::new(),
         }
     }
 
@@ -385,8 +387,13 @@ where
     }
 
     /// Subscribes to a message channel from another chain.
-    pub fn subscribe(&mut self, _chain: ChainId, _channel: ChannelName) {
-        todo!();
+    pub fn subscribe(&mut self, chain: ChainId, channel: ChannelName) {
+        self.subscribe_requests.push((chain, channel));
+    }
+
+    /// Returns the list of requests to subscribe to channels made in the test so far.
+    pub fn subscribe_requests(&self) -> &[(ChainId, ChannelName)] {
+        &self.subscribe_requests
     }
 
     /// Unsubscribes to a message channel from another chain.
