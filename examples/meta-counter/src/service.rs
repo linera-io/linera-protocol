@@ -8,7 +8,6 @@ use linera_sdk::{
     base::{ApplicationId, WithServiceAbi},
     EmptyState, Service, ServiceRuntime,
 };
-use thiserror::Error;
 
 pub struct MetaCounterService {
     runtime: ServiceRuntime<Self>,
@@ -21,20 +20,15 @@ impl WithServiceAbi for MetaCounterService {
 }
 
 impl Service for MetaCounterService {
-    type Error = Error;
     type State = EmptyState;
     type Parameters = ApplicationId<counter::CounterAbi>;
 
-    async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(MetaCounterService { runtime })
+    async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Self {
+        MetaCounterService { runtime }
     }
 
-    async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
+    async fn handle_query(&self, request: Request) -> Response {
         let counter_id = self.runtime.application_parameters();
-        Ok(self.runtime.query_application(counter_id, &request))
+        self.runtime.query_application(counter_id, &request)
     }
 }
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum Error {}

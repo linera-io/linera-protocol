@@ -4,7 +4,6 @@ mod state;
 
 use self::state::Application;
 use linera_sdk::{{base::WithServiceAbi, Service, ServiceRuntime}};
-use thiserror::Error;
 
 pub struct ApplicationService {{
     state: Application,
@@ -18,25 +17,14 @@ impl WithServiceAbi for ApplicationService {{
 }}
 
 impl Service for ApplicationService {{
-    type Error = ServiceError;
     type State = Application;
     type Parameters = ();
 
-    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {{
-        Ok(ApplicationService {{ state, runtime }})
+    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Self {{
+        ApplicationService {{ state, runtime }}
     }}
 
-    async fn handle_query(&self, _query: Self::Query) -> Result<(), Self::Error> {{
-        Err(ServiceError::QueriesNotSupported)
+    async fn handle_query(&self, _query: Self::Query) -> Self::QueryResponse {{
+        panic!("Queries not supported by application");
     }}
-}}
-
-/// An error that can occur while querying the service.
-#[derive(Debug, Error)]
-pub enum ServiceError {{
-    /// Query not supported by the application.
-    #[error("Queries not supported by application")]
-    QueriesNotSupported,
-
-    // Add error variants here.
 }}

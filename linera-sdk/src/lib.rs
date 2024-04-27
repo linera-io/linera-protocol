@@ -47,7 +47,7 @@ pub mod service;
 pub mod test;
 pub mod views;
 
-use std::{error::Error, fmt::Debug};
+use std::fmt::Debug;
 
 use linera_base::abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi};
 pub use linera_base::{
@@ -149,11 +149,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
 /// storage and is not gas-metered.
 #[allow(async_fn_in_trait)]
 pub trait Service: WithServiceAbi + ServiceAbi + Sized {
-    /// Type used to report errors to the execution environment.
-    ///
-    /// Errors are not recoverable and always interrupt the current query.
-    type Error: Error;
-
     /// The type used to store the persisted application state.
     type State: State;
 
@@ -161,10 +156,10 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     type Parameters: Serialize + DeserializeOwned + Send + Sync + Clone + Debug + 'static;
 
     /// Creates a in-memory instance of the service handler from the application's `state`.
-    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error>;
+    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Self;
 
     /// Executes a read-only query on the state of this application.
-    async fn handle_query(&self, query: Self::Query) -> Result<Self::QueryResponse, Self::Error>;
+    async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse;
 }
 
 /// The persistent state of a Linera application.

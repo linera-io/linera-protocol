@@ -7,7 +7,6 @@ mod state;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime};
-use thiserror::Error;
 
 use self::state::Counter;
 
@@ -22,15 +21,14 @@ impl WithServiceAbi for CounterService {
 }
 
 impl Service for CounterService {
-    type Error = Error;
     type State = Counter;
     type Parameters = ();
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(CounterService { state })
+    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Self {
+        CounterService { state }
     }
 
-    async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
+    async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             QueryRoot {
                 value: *self.state.value.get(),
@@ -39,7 +37,7 @@ impl Service for CounterService {
             EmptySubscription,
         )
         .finish();
-        Ok(schema.execute(request).await)
+        schema.execute(request).await
     }
 }
 
@@ -62,10 +60,6 @@ impl QueryRoot {
         &self.value
     }
 }
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum Error {}
 
 #[cfg(test)]
 mod tests {
@@ -95,13 +89,13 @@ mod tests {
         let service = CounterService { state };
         let request = Request::new("{ value }");
 
-        let result = service
+        let response = service
             .handle_query(request)
             .now_or_never()
             .expect("Query should not await anything");
 
         let expected = Response::new(Value::from_json(json!({"value" : 61_098_721})).unwrap());
 
-        assert_eq!(result.unwrap(), expected)
+        assert_eq!(response, expected)
     }
 }

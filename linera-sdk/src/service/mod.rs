@@ -35,14 +35,9 @@ macro_rules! service {
                 let response = $crate::service::run_async_entrypoint(move |runtime| async move {
                     let state =
                         <<$service as $crate::Service>::State as $crate::State>::load().await;
-                    let service = <$service as $crate::Service>::new(state, runtime)
-                        .await
-                        .map_err(|error| error.to_string())?;
-                    service
-                        .handle_query(request)
-                        .await
-                        .map_err(|error| error.to_string())
-                })?;
+                    let service = <$service as $crate::Service>::new(state, runtime).await;
+                    service.handle_query(request).await
+                });
                 Ok(serde_json::to_vec(&response)
                     .expect("Failed to deserialize query response"))
             }
@@ -57,17 +52,14 @@ macro_rules! service {
 
 /// Runs an asynchronous entrypoint in a blocking manner, by repeatedly polling the entrypoint
 /// future.
-pub fn run_async_entrypoint<Service, Entrypoint, Output, Error>(
+pub fn run_async_entrypoint<Service, Entrypoint, Output>(
     entrypoint: impl FnOnce(ServiceRuntime<Service>) -> Entrypoint,
-) -> Result<Output, String>
+) -> Output
 where
     Service: crate::Service,
-    Entrypoint: Future<Output = Result<Output, Error>>,
-    Error: ToString + 'static,
+    Entrypoint: Future<Output = Output>,
 {
     ServiceLogger::install();
 
-    entrypoint(ServiceRuntime::new())
-        .blocking_wait()
-        .map_err(|error| error.to_string())
+    entrypoint(ServiceRuntime::new()).blocking_wait()
 }

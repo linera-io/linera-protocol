@@ -17,7 +17,6 @@ use candle_transformers::{
 };
 use linera_sdk::{base::WithServiceAbi, EmptyState, Service, ServiceRuntime};
 use log::info;
-use thiserror::Error;
 use tokenizers::Tokenizer;
 
 use crate::token::TokenOutputStream;
@@ -52,15 +51,14 @@ struct ModelContext {
 }
 
 impl Service for LlmService {
-    type Error = ServiceError;
     type State = EmptyState;
     type Parameters = ();
 
-    async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(LlmService { runtime })
+    async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Self {
+        LlmService { runtime }
     }
 
-    async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
+    async fn handle_query(&self, request: Request) -> Response {
         let query_string = &request.query;
         info!("query: {}", query_string);
         // TODO: the URL should be provided by the request.
@@ -76,8 +74,7 @@ impl Service for LlmService {
         let schema = Schema::build(QueryRoot {}, EmptyMutation, EmptySubscription)
             .data(model_context)
             .finish();
-        let response = schema.execute(request).await;
-        Ok(response)
+        schema.execute(request).await
     }
 }
 
@@ -196,7 +193,3 @@ impl ModelContext {
         Ok(output)
     }
 }
-
-/// An error that can occur while querying the service.
-#[derive(Debug, Error)]
-pub enum ServiceError {}

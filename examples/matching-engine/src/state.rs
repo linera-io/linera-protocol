@@ -14,12 +14,6 @@ use linera_sdk::{
 };
 use matching_engine::{OrderId, OrderNature, Price, PriceAsk, PriceBid};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-#[allow(dead_code)]
-pub enum MatchingEngineError {}
 
 /// The order entry in the order book
 #[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]

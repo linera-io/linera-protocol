@@ -318,7 +318,6 @@ use linera_sdk::{
 };
 pub use matching_engine::Parameters;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 pub struct AmmAbi;
 
@@ -404,7 +403,3 @@ pub enum Message {
         owner: AccountOwner,
     },
 }
-
-#[derive(Debug, Error)]
-#[allow(dead_code)]
-pub enum AmmError {}

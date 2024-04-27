@@ -15,7 +15,6 @@ use linera_sdk::{
     views::MapView,
     Service, ServiceRuntime,
 };
-use thiserror::Error;
 
 use self::state::FungibleToken;
 
@@ -32,22 +31,20 @@ impl WithServiceAbi for FungibleTokenService {
 }
 
 impl Service for FungibleTokenService {
-    type Error = Error;
     type State = FungibleToken;
     type Parameters = Parameters;
 
-    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(FungibleTokenService {
+    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Self {
+        FungibleTokenService {
             state: Arc::new(state),
             runtime: Arc::new(Mutex::new(runtime)),
-        })
+        }
     }
 
-    async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
+    async fn handle_query(&self, request: Request) -> Response {
         let schema =
             Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
-        let response = schema.execute(request).await;
-        Ok(response)
+        schema.execute(request).await
     }
 }
 
@@ -65,7 +62,3 @@ impl FungibleTokenService {
         Ok(runtime.application_parameters().ticker_symbol)
     }
 }
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum Error {}

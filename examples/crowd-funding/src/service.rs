@@ -15,7 +15,6 @@ use linera_sdk::{
     Service, ServiceRuntime,
 };
 use state::CrowdFunding;
-use thiserror::Error;
 
 pub struct CrowdFundingService {
     state: Arc<CrowdFunding>,
@@ -28,28 +27,22 @@ impl WithServiceAbi for CrowdFundingService {
 }
 
 impl Service for CrowdFundingService {
-    type Error = Error;
     type State = CrowdFunding;
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(CrowdFundingService {
+    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Self {
+        CrowdFundingService {
             state: Arc::new(state),
-        })
+        }
     }
 
-    async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
+    async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.state.clone(),
             Operation::mutation_root(),
             EmptySubscription,
         )
         .finish();
-        let response = schema.execute(request).await;
-        Ok(response)
+        schema.execute(request).await
     }
 }
-
-/// An error that can occur during the service execution.
-#[derive(Debug, Error)]
-pub enum Error {}

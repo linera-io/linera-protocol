@@ -11,7 +11,7 @@ use async_graphql::{EmptySubscription, Request, Response, Schema};
 use linera_sdk::{base::WithServiceAbi, graphql::GraphQLMutationRoot, Service, ServiceRuntime};
 use matching_engine::{Operation, Parameters};
 
-use crate::state::{MatchingEngine, MatchingEngineError};
+use crate::state::MatchingEngine;
 
 pub struct MatchingEngineService {
     state: Arc<MatchingEngine>,
@@ -24,24 +24,22 @@ impl WithServiceAbi for MatchingEngineService {
 }
 
 impl Service for MatchingEngineService {
-    type Error = MatchingEngineError;
     type State = MatchingEngine;
     type Parameters = Parameters;
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(MatchingEngineService {
+    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Self {
+        MatchingEngineService {
             state: Arc::new(state),
-        })
+        }
     }
 
-    async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
+    async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.state.clone(),
             Operation::mutation_root(),
             EmptySubscription,
         )
         .finish();
-        let response = schema.execute(request).await;
-        Ok(response)
+        schema.execute(request).await
     }
 }

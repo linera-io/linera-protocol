@@ -4333,7 +4333,6 @@ dependencies = [
  "linera-views",
  "log",
  "serde_json",
- "thiserror",
  "webassembly-test",
 ]
 

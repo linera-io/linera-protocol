@@ -13,7 +13,6 @@ use linera_sdk::{
     EmptyState, Service, ServiceRuntime,
 };
 use native_fungible::{AccountEntry, TICKER_SYMBOL};
-use thiserror::Error;
 
 #[derive(Clone)]
 pub struct NativeFungibleTokenService {
@@ -27,21 +26,19 @@ impl WithServiceAbi for NativeFungibleTokenService {
 }
 
 impl Service for NativeFungibleTokenService {
-    type Error = Error;
     type State = EmptyState;
     type Parameters = Parameters;
 
-    async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(NativeFungibleTokenService {
+    async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Self {
+        NativeFungibleTokenService {
             runtime: Arc::new(Mutex::new(runtime)),
-        })
+        }
     }
 
-    async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
+    async fn handle_query(&self, request: Request) -> Response {
         let schema =
             Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
-        let response = schema.execute(request).await;
-        Ok(response)
+        schema.execute(request).await
     }
 }
 
@@ -52,7 +49,7 @@ struct Accounts {
 #[Object]
 impl Accounts {
     // Define a field that lets you query by key
-    async fn entry(&self, key: AccountOwner) -> Result<AccountEntry, Error> {
+    async fn entry(&self, key: AccountOwner) -> AccountEntry {
         let owner = match key {
             AccountOwner::User(owner) => owner,
             AccountOwner::Application(_) => panic!("Applications not supported yet"),
@@ -62,37 +59,37 @@ impl Accounts {
             .try_lock()
             .expect("Services only run in a single thread");
 
-        Ok(AccountEntry {
+        AccountEntry {
             key,
             value: runtime.owner_balance(owner),
-        })
+        }
     }
 
-    async fn entries(&self) -> Result<Vec<AccountEntry>, Error> {
+    async fn entries(&self) -> Vec<AccountEntry> {
         let runtime = self
             .runtime
             .try_lock()
             .expect("Services only run in a single thread");
-        Ok(runtime
+        runtime
             .owner_balances()
             .into_iter()
             .map(|(owner, amount)| AccountEntry {
                 key: AccountOwner::User(owner),
                 value: amount,
             })
-            .collect())
+            .collect()
     }
 
-    async fn keys(&self) -> Result<Vec<AccountOwner>, Error> {
+    async fn keys(&self) -> Vec<AccountOwner> {
         let runtime = self
             .runtime
             .try_lock()
             .expect("Services only run in a single thread");
-        Ok(runtime
+        runtime
             .balance_owners()
             .into_iter()
             .map(AccountOwner::User)
-            .collect())
+            .collect()
     }
 }
 
@@ -109,7 +106,3 @@ impl NativeFungibleTokenService {
         })
     }
 }
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum Error {}
