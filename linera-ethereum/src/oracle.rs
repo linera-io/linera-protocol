@@ -3,6 +3,7 @@
 
 use ethers::types::U256;
 use serde::{Deserialize, Serialize};
+use ethers::core::types::Bytes;
 use thiserror::Error;
 
 use crate::{
@@ -29,10 +30,21 @@ pub struct EthereumEventsRequest {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct EthereumCallRequest {
+    pub contract_address: String,
+    pub data: Bytes,
+    pub from: String,
+}
+
+
+
+
+#[derive(Serialize, Deserialize)]
 pub enum OracleRequest {
     EthereumBalance(EthereumBalanceRequest),
     EthereumBlockNumber(EthereumBlockNumberRequest),
     EthereumEvents(EthereumEventsRequest),
+    EthereumCall(EthereumCallRequest),
 }
 
 pub struct OracleEndpoints {
@@ -57,10 +69,16 @@ pub struct EthereumEventsAnswer {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct EthereumCallAnswer {
+    pub answer: Bytes,
+}
+
+#[derive(Serialize, Deserialize)]
 pub enum OracleAnswer {
     EthereumBalance(EthereumBalanceAnswer),
     EthereumBlockNumber(EthereumBlockNumberAnswer),
     EthereumEvents(EthereumEventsAnswer),
+    EthereumCall(EthereumCallAnswer),
 }
 
 #[derive(Debug, Error)]
@@ -76,9 +94,9 @@ pub async fn evaluate_oracle(
     oracle_endpoint: OracleEndpoints,
 ) -> Result<OracleAnswer, OracleError> {
     let url = oracle_endpoint.ethereum_endpoint;
+    let ethereum_endpoint = EthereumEndpoint::new(url)?;
     match request {
         OracleRequest::EthereumBalance(request) => {
-            let ethereum_endpoint = EthereumEndpoint::new(url)?;
             let EthereumBalanceRequest {
                 address,
                 block_number,
@@ -90,14 +108,12 @@ pub async fn evaluate_oracle(
             Ok(OracleAnswer::EthereumBalance(answer))
         }
         OracleRequest::EthereumBlockNumber(request) => {
-            let ethereum_endpoint = EthereumEndpoint::new(url)?;
             let EthereumBlockNumberRequest {} = request;
             let block_number = ethereum_endpoint.get_block_number().await?;
             let answer = EthereumBlockNumberAnswer { block_number };
             Ok(OracleAnswer::EthereumBlockNumber(answer))
         }
         OracleRequest::EthereumEvents(request) => {
-            let ethereum_endpoint = EthereumEndpoint::new(url)?;
             let EthereumEventsRequest {
                 contract_address,
                 event_name_expanded,
@@ -108,6 +124,12 @@ pub async fn evaluate_oracle(
                 .await?;
             let answer = EthereumEventsAnswer { events };
             Ok(OracleAnswer::EthereumEvents(answer))
+        }
+        OracleRequest::EthereumCall(request) => {
+            let EthereumCallRequest { contract_address, data, from } = request;
+            let answer = ethereum_endpoint.non_executive_call(&contract_address, data, &from).await?;
+            let answer = EthereumCallAnswer { answer };
+            Ok(OracleAnswer::EthereumCall(answer))
         }
     }
 }
