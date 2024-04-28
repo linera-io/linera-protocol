@@ -7,6 +7,14 @@ use linera_ethereum::{
     common::{EthereumDataType, EthereumEvent},
     test_utils::{get_anvil, get_test_contract_endpoints, ContractEndpoints},
 };
+use std::ops::Deref;
+use ethers_core::types::Address;
+use ethers::core::abi::ParamType;
+use ethers::core::abi::ethabi::Param;
+use ethers::core::abi::StateMutability;
+use ethers::core::utils::rlp::RlpStream;
+use ethers::core::abi::Function;
+use ethers::core::types::Bytes;
 
 #[tokio::test]
 async fn test_get_accounts_balance() {
@@ -80,5 +88,42 @@ async fn test_contract() -> anyhow::Result<()> {
         assert_eq!(event, target_event);
     }
     // Returning nothing
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_contract_queries() -> anyhow::Result<()> {
+    let contract_endpoints = get_test_contract_endpoints().await?;
+    let ContractEndpoints {
+        url,
+        addr_contract,
+        addr0,
+        addr1,
+        _instance,
+    } = contract_endpoints;
+    let ethereum_endpoint = EthereumEndpoint::new(url)?;
+    let addr0 = addr0.parse::<Address>()?;
+
+    let paramtype = ParamType::Address;
+    let param = Param { name: "account".to_string(), kind: paramtype, internal_type: None };
+    let inputs = vec![param];
+    let paramtype = ParamType::Uint(256);
+    let param = Param { name: "output".to_string(), kind: paramtype, internal_type: None };
+    let outputs = vec![param];
+    let state_mutability = StateMutability::View;
+    let function = Function { name: "balanceOf".to_string(), inputs, outputs, constant: None, state_mutability };
+    let short_signature = function.short_signature();
+    println!("short_signature={:?}", short_signature);
+
+    let mut stream = RlpStream::new();
+    stream.append_raw(&short_signature, 4);
+    stream.append(&addr0);
+    let out = stream.out();
+    println!("out={:?} |out|={}", out.deref(), out.deref().len());
+    let data = out.freeze();
+    let data = Bytes(data);
+    println!("data={}", data);
+    let answer = ethereum_endpoint.non_executive_call(&addr_contract, data, &addr1).await?;
+
     Ok(())
 }
