@@ -21,6 +21,7 @@ where
     application_parameters: Cell<Option<Application::Parameters>>,
     application_id: Cell<Option<ApplicationId<Application::Abi>>>,
     chain_id: Cell<Option<ChainId>>,
+    next_block_height: Cell<Option<BlockHeight>>,
 }
 
 impl<Application> MockServiceRuntime<Application>
@@ -33,6 +34,7 @@ where
             application_parameters: Cell::new(None),
             application_id: Cell::new(None),
             chain_id: Cell::new(None),
+            next_block_height: Cell::new(None),
         }
     }
 
@@ -107,9 +109,25 @@ where
         )
     }
 
+    /// Configures the next block height to return during the test.
+    pub fn with_next_block_height(self, next_block_height: BlockHeight) -> Self {
+        self.next_block_height.set(Some(next_block_height));
+        self
+    }
+
+    /// Configures the block height to return during the test.
+    pub fn set_next_block_height(&self, next_block_height: BlockHeight) -> &Self {
+        self.next_block_height.set(Some(next_block_height));
+        self
+    }
+
     /// Returns the height of the next block that can be added to the current chain.
     pub fn next_block_height(&self) -> BlockHeight {
-        todo!();
+        Self::fetch_mocked_value(
+            &self.next_block_height,
+            "Next block height has not been mocked, \
+            please call `MockServiceRuntime::set_next_block_height` first",
+        )
     }
 
     /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.
