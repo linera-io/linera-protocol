@@ -23,6 +23,7 @@ where
     chain_id: Cell<Option<ChainId>>,
     next_block_height: Cell<Option<BlockHeight>>,
     timestamp: Cell<Option<Timestamp>>,
+    chain_balance: Cell<Option<Amount>>,
 }
 
 impl<Application> MockServiceRuntime<Application>
@@ -37,6 +38,7 @@ where
             chain_id: Cell::new(None),
             next_block_height: Cell::new(None),
             timestamp: Cell::new(None),
+            chain_balance: Cell::new(None),
         }
     }
 
@@ -153,9 +155,25 @@ where
         )
     }
 
+    /// Configures the chain balance to return during the test.
+    pub fn with_chain_balance(self, chain_balance: Amount) -> Self {
+        self.chain_balance.set(Some(chain_balance));
+        self
+    }
+
+    /// Configures the chain balance to return during the test.
+    pub fn set_chain_balance(&self, chain_balance: Amount) -> &Self {
+        self.chain_balance.set(Some(chain_balance));
+        self
+    }
+
     /// Returns the current chain balance.
     pub fn chain_balance(&self) -> Amount {
-        todo!();
+        Self::fetch_mocked_value(
+            &self.chain_balance,
+            "Chain balance has not been mocked, \
+            please call `MockServiceRuntime::set_chain_balance` first",
+        )
     }
 
     /// Returns the balance of one of the accounts on this chain.
