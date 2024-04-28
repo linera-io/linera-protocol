@@ -15,7 +15,6 @@ use linera_execution::{
     ContractEntrypoints, ContractSyncRuntime, ContractSystemApi, ServiceEntrypoints,
     ServiceSyncRuntime, ServiceSystemApi, SystemApiData, ViewSystemApi,
 };
-use linera_sdk::MockSystemApi;
 use linera_witty::{
     wit_generation::{WitInterfaceWriter, WitWorldWriter},
     MockInstance,
@@ -50,7 +49,6 @@ fn main() -> Result<()> {
 fn run_operation(options: WitGeneratorOptions, mut operation: impl Operation) -> Result<()> {
     let contract_entrypoints = WitInterfaceWriter::new::<ContractEntrypoints<MockInstance<()>>>();
     let service_entrypoints = WitInterfaceWriter::new::<ServiceEntrypoints<MockInstance<()>>>();
-    let mock_system_api = WitInterfaceWriter::new::<MockSystemApi<MockInstance<()>>>();
 
     let contract_system_api = WitInterfaceWriter::new::<
         ContractSystemApi<MockInstance<SystemApiData<ContractSyncRuntime>>>,
@@ -70,11 +68,6 @@ fn run_operation(options: WitGeneratorOptions, mut operation: impl Operation) ->
         .export::<ServiceEntrypoints<MockInstance<()>>>()
         .import::<ServiceSystemApi<MockInstance<SystemApiData<ServiceSyncRuntime>>>>()
         .import::<ViewSystemApi<MockInstance<SystemApiData<ContractSyncRuntime>>>>();
-    let unit_tests_world = WitWorldWriter::new("linera:app", "unit-tests")
-        .export::<MockSystemApi<MockInstance<()>>>()
-        .import::<ContractSystemApi<MockInstance<SystemApiData<ContractSyncRuntime>>>>()
-        .import::<ServiceSystemApi<MockInstance<SystemApiData<ServiceSyncRuntime>>>>()
-        .import::<ViewSystemApi<MockInstance<SystemApiData<ContractSyncRuntime>>>>();
 
     operation.run_for_file(
         &options.base_directory.join("contract-entrypoints.wit"),
@@ -83,10 +76,6 @@ fn run_operation(options: WitGeneratorOptions, mut operation: impl Operation) ->
     operation.run_for_file(
         &options.base_directory.join("service-entrypoints.wit"),
         service_entrypoints.generate_file_contents(),
-    )?;
-    operation.run_for_file(
-        &options.base_directory.join("mock-system-api.wit"),
-        mock_system_api.generate_file_contents(),
     )?;
 
     operation.run_for_file(
@@ -109,10 +98,6 @@ fn run_operation(options: WitGeneratorOptions, mut operation: impl Operation) ->
     operation.run_for_file(
         &options.base_directory.join("service.wit"),
         service_world.generate_file_contents(),
-    )?;
-    operation.run_for_file(
-        &options.base_directory.join("unit-tests.wit"),
-        unit_tests_world.generate_file_contents(),
     )?;
 
     Ok(())
