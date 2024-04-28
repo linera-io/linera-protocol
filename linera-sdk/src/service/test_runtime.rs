@@ -3,7 +3,10 @@
 
 //! Runtime types to simulate interfacing with the host executing the service.
 
-use std::{cell::Cell, collections::HashMap};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+};
 
 use linera_base::{
     abi::ServiceAbi,
@@ -25,6 +28,7 @@ where
     timestamp: Cell<Option<Timestamp>>,
     chain_balance: Cell<Option<Amount>>,
     owner_balances: RefCell<Option<HashMap<Owner, Amount>>>,
+    query_application_handler: RefCell<Option<QueryApplicationHandler>>,
 }
 
 impl<Application> MockServiceRuntime<Application>
@@ -41,6 +45,7 @@ where
             timestamp: Cell::new(None),
             chain_balance: Cell::new(None),
             owner_balances: RefCell::new(None),
+            query_application_handler: RefCell::new(None),
         }
     }
 
@@ -254,13 +259,43 @@ where
             .collect()
     }
 
+    /// Configures the handler for application queries made during the test.
+    pub fn with_query_application_handler(
+        self,
+        handler: impl FnMut(ApplicationId, Vec<u8>) -> Vec<u8> + Send + 'static,
+    ) -> Self {
+        *self.query_application_handler.borrow_mut() = Some(Box::new(handler));
+        self
+    }
+
+    /// Configures the handler for application queries made during the test.
+    pub fn set_query_application_handler(
+        &self,
+        handler: impl FnMut(ApplicationId, Vec<u8>) -> Vec<u8> + Send + 'static,
+    ) -> &Self {
+        *self.query_application_handler.borrow_mut() = Some(Box::new(handler));
+        self
+    }
+
     /// Queries another application.
     pub fn query_application<A: ServiceAbi>(
         &self,
-        _application: ApplicationId<A>,
-        _query: &A::Query,
+        application: ApplicationId<A>,
+        query: &A::Query,
     ) -> A::QueryResponse {
-        todo!();
+        let query_bytes =
+            serde_json::to_vec(&query).expect("Failed to serialize query to another application");
+
+        let mut handler_guard = self.query_application_handler.borrow_mut();
+        let handler = handler_guard.as_mut().expect(
+            "Handler for `query_application` has not been mocked, \
+            please call `MockServiceRuntime::set_query_application_handler` first",
+        );
+
+        let response_bytes = handler(application.forget_abi(), query_bytes);
+
+        serde_json::from_slice(&response_bytes)
+            .expect("Failed to deserialize query response from application")
     }
 
     /// Fetches a blob of bytes from a given URL.
@@ -278,3 +313,6 @@ where
         value
     }
 }
+
+/// A type alias for the handler for application queries.
+pub type QueryApplicationHandler = Box<dyn FnMut(ApplicationId, Vec<u8>) -> Vec<u8> + Send>;
