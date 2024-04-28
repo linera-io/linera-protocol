@@ -228,7 +228,16 @@ where
 
     /// Returns the balances of all accounts on the chain.
     pub fn owner_balances(&self) -> Vec<(Owner, Amount)> {
-        todo!();
+        self.owner_balances
+            .borrow_mut()
+            .as_ref()
+            .expect(
+                "Owner balances have not been mocked, \
+                please call `MockServiceRuntime::set_owner_balances` first",
+            )
+            .iter()
+            .map(|(owner, amount)| (*owner, *amount))
+            .collect()
     }
 
     /// Returns the owners of accounts on this chain.
