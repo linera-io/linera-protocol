@@ -22,6 +22,7 @@ where
     application_id: Cell<Option<ApplicationId<Application::Abi>>>,
     chain_id: Cell<Option<ChainId>>,
     next_block_height: Cell<Option<BlockHeight>>,
+    timestamp: Cell<Option<Timestamp>>,
 }
 
 impl<Application> MockServiceRuntime<Application>
@@ -35,6 +36,7 @@ where
             application_id: Cell::new(None),
             chain_id: Cell::new(None),
             next_block_height: Cell::new(None),
+            timestamp: Cell::new(None),
         }
     }
 
@@ -130,9 +132,25 @@ where
         )
     }
 
+    /// Configures the system time to return during the test.
+    pub fn with_system_time(self, timestamp: Timestamp) -> Self {
+        self.timestamp.set(Some(timestamp));
+        self
+    }
+
+    /// Configures the system time to return during the test.
+    pub fn set_system_time(&self, timestamp: Timestamp) -> &Self {
+        self.timestamp.set(Some(timestamp));
+        self
+    }
+
     /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.
     pub fn system_time(&self) -> Timestamp {
-        todo!();
+        Self::fetch_mocked_value(
+            &self.timestamp,
+            "System time has not been mocked, \
+            please call `MockServiceRuntime::set_system_time` first",
+        )
     }
 
     /// Returns the current chain balance.
