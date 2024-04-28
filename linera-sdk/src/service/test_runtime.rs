@@ -29,6 +29,7 @@ where
     chain_balance: Cell<Option<Amount>>,
     owner_balances: RefCell<Option<HashMap<Owner, Amount>>>,
     query_application_handler: RefCell<Option<QueryApplicationHandler>>,
+    url_blobs: RefCell<Option<HashMap<String, Vec<u8>>>>,
 }
 
 impl<Application> MockServiceRuntime<Application>
@@ -46,6 +47,7 @@ where
             chain_balance: Cell::new(None),
             owner_balances: RefCell::new(None),
             query_application_handler: RefCell::new(None),
+            url_blobs: RefCell::new(None),
         }
     }
 
@@ -298,9 +300,45 @@ where
             .expect("Failed to deserialize query response from application")
     }
 
+    /// Configures the blobs returned when fetching from URLs during the test.
+    pub fn with_url_blobs(self, url_blobs: impl IntoIterator<Item = (String, Vec<u8>)>) -> Self {
+        *self.url_blobs.borrow_mut() = Some(url_blobs.into_iter().collect());
+        self
+    }
+
+    /// Configures the blobs returned when fetching from URLs during the test.
+    pub fn set_url_blobs(&self, url_blobs: impl IntoIterator<Item = (String, Vec<u8>)>) -> &Self {
+        *self.url_blobs.borrow_mut() = Some(url_blobs.into_iter().collect());
+        self
+    }
+
+    /// Configures the `blob` returned when fetching from the `url` during the test.
+    pub fn with_url_blob(self, url: impl Into<String>, blob: Vec<u8>) -> Self {
+        self.set_url_blob(url, blob);
+        self
+    }
+
+    /// Configures the `blob` returned when fetching from the `url` during the test.
+    pub fn set_url_blob(&self, url: impl Into<String>, blob: Vec<u8>) -> &Self {
+        self.url_blobs
+            .borrow_mut()
+            .get_or_insert_with(HashMap::new)
+            .insert(url.into(), blob);
+        self
+    }
+
     /// Fetches a blob of bytes from a given URL.
-    pub fn fetch_url(&self, _url: &str) -> Vec<u8> {
-        todo!();
+    pub fn fetch_url(&self, url: &str) -> Vec<u8> {
+        self.url_blobs
+            .borrow_mut()
+            .as_mut()
+            .and_then(|url_blobs| url_blobs.get(url).cloned())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Blob for URL {url:?} has not been mocked, \
+                    please call `MockServiceRuntime::set_url_blob` first"
+                )
+            })
     }
 
     /// Loads a mocked value from the `cell` cache or panics with a provided `message`.
