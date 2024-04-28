@@ -8,6 +8,9 @@ use ethers::{
     types::U256,
 };
 use ethers_core::types::{Address, BlockId, BlockNumber, Filter, U64};
+use ethers::types::TransactionRequest;
+use ethers::types::NameOrAddress;
+use ethers::core::types::Bytes;
 use ethers_middleware::Middleware;
 
 use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
@@ -87,5 +90,25 @@ impl EthereumEndpoint {
             .map(|x| parse_log(event_name_expanded, x))
             .collect::<Result<_, _>>()?;
         Ok(events)
+    }
+
+    /// The operation done with `eth_call` on the Ethereum returns
+    /// a result but are not executed. This can be useful for example
+    /// for executing function that are const and allow to inspect
+    /// the contract without modifying it.
+    pub async fn non_executive_call(
+        &self,
+        contract_address: &str,
+        data: Bytes,
+        from: &str,
+    ) -> Result<Bytes, EthereumServiceError> {
+        let contract_address = contract_address.parse::<Address>()?;
+        let mut tx = TransactionRequest::new();
+        let from = from.parse::<Address>()?;
+        tx.data = Some(data);
+        tx.to = Some(NameOrAddress::Address(contract_address));
+        tx.from = Some(from);
+        let tx = tx.into();
+        Ok(self.provider.call_raw(&tx).await?)
     }
 }
