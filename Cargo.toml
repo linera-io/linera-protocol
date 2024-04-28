@@ -13,7 +13,6 @@ members = [
     "linera-rpc",
     "linera-sdk",
     "linera-sdk-derive",
-    "linera-sdk/wasm-tests",
     "linera-service",
     "linera-service-graphql-client",
     "linera-storage",

@@ -42,8 +42,6 @@ mod log;
 pub mod mock_system_api;
 pub mod service;
 #[cfg(with_testing)]
-#[cfg_attr(not(target_arch = "wasm32"), path = "./test/integration/mod.rs")]
-#[cfg_attr(target_arch = "wasm32", path = "./test/unit/mod.rs")]
 pub mod test;
 pub mod views;
 
