@@ -752,7 +752,6 @@ dependencies = [
  "linera-sdk",
  "serde_json",
  "tokio",
- "webassembly-test",
 ]
 
 [[package]]
@@ -2606,7 +2605,6 @@ dependencies = [
  "serde_json",
  "tokenizers",
  "tokio",
- "webassembly-test",
 ]
 
 [[package]]
@@ -2702,7 +2700,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "webassembly-test",
 ]
 
 [[package]]
@@ -2795,7 +2792,6 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "webassembly-test",
 ]
 
 [[package]]
@@ -4074,7 +4070,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "webassembly-test",
 ]
 
 [[package]]
@@ -5369,16 +5364,6 @@ checksum = "77afa9a11836342370f4817622a2f0f418b134426d91a82dfb48f532d2ec13ef"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "webassembly-test"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45e64391864794db026d27b15cbe6edd3c25864222bd90229dfa1a26ebf30705"
-dependencies = [
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]

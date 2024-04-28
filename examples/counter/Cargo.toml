@@ -18,7 +18,6 @@ tokio = { workspace = true, features = ["rt", "sync"] }
 [dev-dependencies]
 assert_matches.workspace = true
 linera-sdk = { workspace = true, features = ["test"] }
-webassembly-test.workspace = true
 
 [[bin]]
 name = "counter_contract"

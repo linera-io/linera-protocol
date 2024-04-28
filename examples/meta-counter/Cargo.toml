@@ -15,7 +15,6 @@ serde_json.workspace = true
 
 [dev-dependencies]
 linera-sdk = { workspace = true, features = ["test"] }
-webassembly-test.workspace = true
 
 # TODO(#1970): Remove once macros don't depend on them
 [package.metadata.cargo-machete]
