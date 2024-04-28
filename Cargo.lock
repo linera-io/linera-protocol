@@ -4298,7 +4298,6 @@ dependencies = [
  "linera-execution",
  "linera-sdk-derive",
  "linera-storage",
- "linera-version",
  "linera-views",
  "linera-witty",
  "log",
