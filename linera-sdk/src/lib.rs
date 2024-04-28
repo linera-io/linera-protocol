@@ -38,8 +38,6 @@ pub mod contract;
 mod extensions;
 pub mod graphql;
 mod log;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod mock_system_api;
 pub mod service;
 #[cfg(with_testing)]
 pub mod test;
@@ -55,8 +53,6 @@ pub use linera_base::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 
-#[cfg(not(target_arch = "wasm32"))]
-pub use self::mock_system_api::MockSystemApi;
 use self::views::{RootView, ViewStorageContext};
 #[doc(hidden)]
 pub use self::{contract::export_contract, service::export_service};
