@@ -3,7 +3,7 @@
 
 //! Runtime types to simulate interfacing with the host executing the service.
 
-use std::cell::Cell;
+use std::{cell::Cell, collections::HashMap};
 
 use linera_base::{
     abi::ServiceAbi,
@@ -24,6 +24,7 @@ where
     next_block_height: Cell<Option<BlockHeight>>,
     timestamp: Cell<Option<Timestamp>>,
     chain_balance: Cell<Option<Amount>>,
+    owner_balances: RefCell<Option<HashMap<Owner, Amount>>>,
 }
 
 impl<Application> MockServiceRuntime<Application>
@@ -39,6 +40,7 @@ where
             next_block_height: Cell::new(None),
             timestamp: Cell::new(None),
             chain_balance: Cell::new(None),
+            owner_balances: RefCell::new(None),
         }
     }
 
@@ -176,9 +178,52 @@ where
         )
     }
 
+    /// Configures the balances on the chain to use during the test.
+    pub fn with_owner_balances(
+        self,
+        owner_balances: impl IntoIterator<Item = (Owner, Amount)>,
+    ) -> Self {
+        *self.owner_balances.borrow_mut() = Some(owner_balances.into_iter().collect());
+        self
+    }
+
+    /// Configures the balances on the chain to use during the test.
+    pub fn set_owner_balances(
+        &self,
+        owner_balances: impl IntoIterator<Item = (Owner, Amount)>,
+    ) -> &Self {
+        *self.owner_balances.borrow_mut() = Some(owner_balances.into_iter().collect());
+        self
+    }
+
+    /// Configures the balance of one account on the chain to use during the test.
+    pub fn with_owner_balance(self, owner: Owner, balance: Amount) -> Self {
+        self.set_owner_balance(owner, balance);
+        self
+    }
+
+    /// Configures the balance of one account on the chain to use during the test.
+    pub fn set_owner_balance(&self, owner: Owner, balance: Amount) -> &Self {
+        self.owner_balances
+            .borrow_mut()
+            .get_or_insert_with(HashMap::new)
+            .insert(owner, balance);
+        self
+    }
+
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&self, _owner: Owner) -> Amount {
-        todo!();
+    pub fn owner_balance(&self, owner: Owner) -> Amount {
+        self.owner_balances
+            .borrow_mut()
+            .as_mut()
+            .and_then(|owner_balances| owner_balances.get(&owner).copied())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Balance for owner {owner} was not mocked, \
+                    please include a balance for them with a call to \
+                    `MockServiceRuntime::set_owner_balance`"
+                )
+            })
     }
 
     /// Returns the balances of all accounts on the chain.
