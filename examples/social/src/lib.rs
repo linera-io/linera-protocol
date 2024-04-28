@@ -273,11 +273,10 @@ mod tests {
         base::{ChainId, Timestamp},
         views::CustomSerialize,
     };
-    use webassembly_test::webassembly_test;
 
     use super::Key;
 
-    #[webassembly_test]
+    #[test]
     fn test_key_custom_serialize() {
         let key = Key {
             timestamp: Timestamp::from(0x123456789ABCDEF),
