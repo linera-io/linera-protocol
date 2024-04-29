@@ -78,7 +78,6 @@ impl EthereumEndpoint {
     ) -> Result<Vec<EthereumEvent>, EthereumServiceError> {
         let contract_address = contract_address.parse::<Address>()?;
         let event_name = event_name_from_expanded(event_name_expanded);
-        println!("event_name={}", event_name);
         let filter = Filter::new()
             .address(contract_address)
             .event(&event_name)
@@ -91,7 +90,7 @@ impl EthereumEndpoint {
         Ok(events)
     }
 
-    /// The operation done with `eth_call` on the Ethereum returns
+    /// The operation done with `eth_call` on Ethereum returns
     /// a result but are not executed. This can be useful for example
     /// for executing function that are const and allow to inspect
     /// the contract without modifying it.

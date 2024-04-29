@@ -1,4 +1,4 @@
-/// SPDX-License-Identifier: UNLICENSED
+/// SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 contract SimpleToken {
     mapping(address => uint256) public balances;

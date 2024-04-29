@@ -57,10 +57,7 @@ async fn test_event_numerics() -> anyhow::Result<()> {
         ],
         block_number: 1,
     };
-    assert_eq!(events.len(), 1);
-    for event in events {
-        assert_eq!(event, target_event);
-    }
+    assert_eq!(*events, [target_event]);
     Ok(())
 }
 
@@ -103,10 +100,7 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
         ],
         block_number: 2,
     };
-    assert_eq!(events.len(), 1);
-    for event in events {
-        assert_eq!(event, target_event);
-    }
+    assert_eq!(*events, [target_event]);
     Ok(())
 }
 
