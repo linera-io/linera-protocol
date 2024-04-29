@@ -92,8 +92,7 @@ impl Service for LlmService {
         let schema = Schema::build(QueryRoot {}, EmptyMutation, EmptySubscription)
             .data(model_context)
             .finish();
-        let response = schema.execute(request).await;
-        response
+        schema.execute(request).await
     }
 }
 
@@ -114,11 +113,7 @@ impl ModelContext {
             total_size_in_bytes,
         );
 
-        Ok(ModelWeights::from_gguf(
-            model_contents,
-            cursor,
-            &Device::Cpu,
-        )?)
+        ModelWeights::from_gguf(model_contents, cursor, &Device::Cpu)
     }
 
     fn try_load_ggml(cursor: &mut Cursor<Vec<u8>>) -> Result<ModelWeights, candle_core::Error> {
@@ -137,7 +132,7 @@ impl ModelContext {
             total_size_in_bytes,
         );
 
-        Ok(ModelWeights::from_ggml(model_contents, 1)?)
+        ModelWeights::from_ggml(model_contents, 1)
     }
 
     fn try_load_non_quantized(cursor: &mut Cursor<Vec<u8>>) -> Result<Model, candle_core::Error> {
