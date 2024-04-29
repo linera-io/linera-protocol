@@ -3,23 +3,10 @@
 
 use ethers::types::U256;
 use linera_ethereum::{
-    client::EthereumEndpoint,
     common::{EthereumDataType, EthereumEvent},
-    test_utils::{get_anvil, get_test_contract_endpoints, ContractEndpoints},
+    test_utils::{get_anvil, SimpleTokenContractFunction},
 };
 use ethers_core::types::Address;
-use ethers::core::types::Bytes;
-use ethers::contract::abigen;
-use ethers_middleware::SignerMiddleware;
-use std::sync::Arc;
-use ethers::types::transaction::eip2718::TypedTransaction;
-
-abigen!(
-    SimpleContract,
-    "./contracts/SimpleToken.json",
-    event_derives(serde::Deserialize, serde::Serialize)
-);
-
 
 #[tokio::test]
 async fn test_get_accounts_balance() {
@@ -38,21 +25,18 @@ async fn test_get_accounts_balance() {
 }
 
 #[tokio::test]
-async fn test_contract() -> anyhow::Result<()> {
-    let contract_endpoints = get_test_contract_endpoints().await?;
-    let ContractEndpoints {
-        url,
-        addr_contract,
-        addr0,
-        addr1,
-        instance: _,
-    } = contract_endpoints;
-    let ethereum_endpoint = EthereumEndpoint::new(url)?;
+async fn test_simple_token_events() -> anyhow::Result<()> {
+    let anvil_test = get_anvil().await?;
+    let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
+    let contract_address = simple_token.contract_address;
+
     // Test the conversion of the types
     let event_name_expanded = "Types(address indexed,address,uint256,uint64,int64,uint32,int32,uint16,int16,uint8,int8,bool)";
-    let events = ethereum_endpoint
-        .read_events(&addr_contract, event_name_expanded, 0)
+    let events = simple_token.anvil_test.ethereum_endpoint
+        .read_events(&contract_address, event_name_expanded, 0)
         .await?;
+    let addr0 = simple_token.anvil_test.get_address(0);
+    let addr1 = simple_token.anvil_test.get_address(1);
     let big_value =
         U256::from_dec_str("239675476885367459284564394732743434463843674346373355625").unwrap();
     let target_event = EthereumEvent {
@@ -77,8 +61,8 @@ async fn test_contract() -> anyhow::Result<()> {
     }
     // Test the Transfer entries
     let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
-    let events = ethereum_endpoint
-        .read_events(&addr_contract, event_name_expanded, 0)
+    let events = simple_token.anvil_test.ethereum_endpoint
+        .read_events(&contract_address, event_name_expanded, 0)
         .await?;
     let value = U256::from_dec_str("10").unwrap();
     let target_event = EthereumEvent {
@@ -97,34 +81,35 @@ async fn test_contract() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn test_contract_queries() -> anyhow::Result<()> {
-    let contract_endpoints = get_test_contract_endpoints().await?;
-    let ContractEndpoints {
-        url,
-        addr_contract,
-        addr0,
-        addr1,
-        instance,
-    } = contract_endpoints;
-    let ethereum_endpoint = EthereumEndpoint::new(url)?;
-    let addr0_type = addr0.parse::<Address>()?;
+async fn test_simple_token_queries() -> anyhow::Result<()> {
+    let anvil_test = get_anvil().await?;
+    let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
+    let contract_address = simple_token.contract_address.clone();
 
-    let (wallet0, _) = instance.get_wallet(0);
+    let addr0 = simple_token.anvil_test.get_address(0);
+    let addr1 = simple_token.anvil_test.get_address(1);
 
-    let client0 = SignerMiddleware::new(instance.ethereum_endpoint.provider, wallet0);
-    let client0 = Arc::new(client0);
-    let addr_contract_type = addr_contract.parse::<Address>()?;
-    let contract = SimpleContract::new(addr_contract_type, client0.clone());
+    // Doing the transfer
+    // We have to use a direct call since only non-executive operation
+    // are done in the client. So, we use a direct call.
+    // First await returns a PendingTransaction and the second does the
+    // mining.
+    let value = U256::from_dec_str("10")?;
+    let addr1_address = addr1.parse::<Address>()?;
+    let _receipt = simple_token.simple_token
+        .transfer(addr1_address, value)
+        .legacy()
+        .send()
+        .await?
+        .await?;
 
-    let typed_transact = contract
-	.balance_of(addr0_type)
-        .legacy();
-    let TypedTransaction::Legacy(transact) = typed_transact.tx else {
-        unreachable!();
-    };
-    let data = transact.data.unwrap();
-    let answer = ethereum_endpoint.non_executive_call(&addr_contract, data, &addr1).await?;
-
+    // Checking the balances
+    let balance0 = simple_token.balance_of(&addr0).await?;
+    assert_eq!(balance0, U256::from_dec_str("990")?);
+    let balance1 = simple_token.balance_of(&addr1).await?;
+    assert_eq!(balance1, U256::from_dec_str("10")?);
+    let balance_contract = simple_token.balance_of(&contract_address).await?;
+    assert_eq!(balance_contract, U256::zero());
 
     Ok(())
 }
