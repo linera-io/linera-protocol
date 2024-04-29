@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use ethers::types::U256;
+use ethers_core::types::Address;
 use linera_ethereum::{
     common::{EthereumDataType, EthereumEvent},
     test_utils::{get_anvil, SimpleTokenContractFunction},
 };
-use ethers_core::types::Address;
 
 #[tokio::test]
 async fn test_get_accounts_balance() {
@@ -32,7 +32,9 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
 
     // Test the conversion of the types
     let event_name_expanded = "Types(address indexed,address,uint256,uint64,int64,uint32,int32,uint16,int16,uint8,int8,bool)";
-    let events = simple_token.anvil_test.ethereum_endpoint
+    let events = simple_token
+        .anvil_test
+        .ethereum_endpoint
         .read_events(&contract_address, event_name_expanded, 0)
         .await?;
     let addr0 = simple_token.anvil_test.get_address(0);
@@ -61,7 +63,9 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
     }
     // Test the Transfer entries
     let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
-    let events = simple_token.anvil_test.ethereum_endpoint
+    let events = simple_token
+        .anvil_test
+        .ethereum_endpoint
         .read_events(&contract_address, event_name_expanded, 0)
         .await?;
     let value = U256::from_dec_str("10").unwrap();
@@ -96,7 +100,8 @@ async fn test_simple_token_queries() -> anyhow::Result<()> {
     // mining.
     let value = U256::from_dec_str("10")?;
     let addr1_address = addr1.parse::<Address>()?;
-    let _receipt = simple_token.simple_token
+    let _receipt = simple_token
+        .simple_token
         .transfer(addr1_address, value)
         .legacy()
         .send()

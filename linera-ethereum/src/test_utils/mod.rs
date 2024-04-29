@@ -2,23 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{path::Path, sync::Arc};
-use ethers_signers::Wallet;
-use ethers::core::k256::ecdsa::SigningKey;
+
 use anyhow::Result;
 use ethers::{
+    abi::Abi,
     contract::abigen,
+    core::{k256::ecdsa::SigningKey, types::Bytes},
     prelude::{ContractFactory, SignerMiddleware},
     providers::{Http, Provider},
     signers::LocalWallet,
     solc::Solc,
-    types::{Address, U256},
+    types::{transaction::eip2718::TypedTransaction, Address, U256},
 };
-use ethers::core::types::Bytes;
-use ethers::abi::Abi;
 use ethers_core::utils::{Anvil, AnvilInstance};
-use ethers_signers::Signer;
+use ethers_signers::{Signer, Wallet};
 use linera_storage_service::child::get_free_port;
-use ethers::types::transaction::eip2718::TypedTransaction;
+
 use crate::client::EthereumEndpoint;
 
 abigen!(
@@ -69,7 +68,7 @@ impl AnvilTest {
 
 pub fn get_abi_bytecode(contract_file: &str, contract_name: &str) -> (Abi, Bytes) {
     let full_contract_file = format!("contracts/{}", contract_file);
-    let source = Path::new(&env!("CARGO_MANIFEST_DIR")).join(&full_contract_file);
+    let source = Path::new(&env!("CARGO_MANIFEST_DIR")).join(full_contract_file);
     let compiled = Solc::default()
         .compile_source(source)
         .expect("Could not compile contracts");
@@ -96,7 +95,10 @@ impl SimpleTokenContractFunction {
 
         // 2. Reading the client
         let wallet_info = anvil_test.get_wallet(0);
-        let client0 = SignerMiddleware::new(anvil_test.ethereum_endpoint.provider.clone(), wallet_info.0.clone());
+        let client0 = SignerMiddleware::new(
+            anvil_test.ethereum_endpoint.provider.clone(),
+            wallet_info.0.clone(),
+        );
         let client0 = Arc::new(client0);
 
         // 3. Factory
@@ -113,20 +115,27 @@ impl SimpleTokenContractFunction {
         let simple_token = SimpleTokenContract::new(contract_address, client0.clone());
         let contract_address = format!("{:?}", contract_address);
 
-        Ok(Self { simple_token, contract_address, wallet_info, anvil_test })
+        Ok(Self {
+            simple_token,
+            contract_address,
+            wallet_info,
+            anvil_test,
+        })
     }
 
     // Only the balanceOf operation is of interest for this contract
     pub async fn balance_of(&self, to: &str) -> Result<U256> {
         let to_address = to.parse::<Address>()?;
-        let function_call = self.simple_token
-            .balance_of(to_address)
-            .legacy();
+        let function_call = self.simple_token.balance_of(to_address).legacy();
         let TypedTransaction::Legacy(transact) = function_call.tx else {
             unreachable!();
         };
         let data = transact.data.unwrap();
-        let answer = self.anvil_test.ethereum_endpoint.non_executive_call(&self.contract_address, data, to).await?;
+        let answer = self
+            .anvil_test
+            .ethereum_endpoint
+            .non_executive_call(&self.contract_address, data, to)
+            .await?;
         let balance = U256::from_big_endian(&answer.0);
         Ok(balance)
     }

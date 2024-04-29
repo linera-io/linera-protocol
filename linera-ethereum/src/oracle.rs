@@ -1,9 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use ethers::types::U256;
+use ethers::{core::types::Bytes, types::U256};
 use serde::{Deserialize, Serialize};
-use ethers::core::types::Bytes;
 use thiserror::Error;
 
 use crate::{
@@ -35,9 +34,6 @@ pub struct EthereumCallRequest {
     pub data: Bytes,
     pub from: String,
 }
-
-
-
 
 #[derive(Serialize, Deserialize)]
 pub enum OracleRequest {
@@ -126,8 +122,14 @@ pub async fn evaluate_oracle(
             Ok(OracleAnswer::EthereumEvents(answer))
         }
         OracleRequest::EthereumCall(request) => {
-            let EthereumCallRequest { contract_address, data, from } = request;
-            let answer = ethereum_endpoint.non_executive_call(&contract_address, data, &from).await?;
+            let EthereumCallRequest {
+                contract_address,
+                data,
+                from,
+            } = request;
+            let answer = ethereum_endpoint
+                .non_executive_call(&contract_address, data, &from)
+                .await?;
             let answer = EthereumCallAnswer { answer };
             Ok(OracleAnswer::EthereumCall(answer))
         }

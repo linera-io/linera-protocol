@@ -4,13 +4,11 @@
 use std::time::Duration;
 
 use ethers::{
+    core::types::Bytes,
     prelude::{Http, Provider},
-    types::U256,
+    types::{NameOrAddress, TransactionRequest, U256},
 };
 use ethers_core::types::{Address, BlockId, BlockNumber, Filter, U64};
-use ethers::types::TransactionRequest;
-use ethers::types::NameOrAddress;
-use ethers::core::types::Bytes;
 use ethers_middleware::Middleware;
 
 use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
