@@ -97,7 +97,7 @@ where
 {
     type Builder = wasmer::InstanceBuilder<UserData>;
     type Instance = wasmer::EntrypointInstance<UserData>;
-    type Caller<'caller> = ::wasmer::FunctionEnvMut<'caller, wasmer::InstanceSlot<UserData>>;
+    type Caller<'caller> = ::wasmer::FunctionEnvMut<'caller, wasmer::Environment<UserData>>;
 
     fn load_test_module<ExportedFunctions>(&mut self, group: &str, module: &str) -> Self::Instance
     where

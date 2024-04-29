@@ -97,7 +97,7 @@ impl<'input> WitExportGenerator<'input> {
             let target_caller_type: Type = parse_quote! {
                 linera_witty::wasmer::FunctionEnvMut<
                     '_,
-                    linera_witty::wasmer::InstanceSlot<#user_data_type>,
+                    linera_witty::wasmer::Environment<#user_data_type>,
                 >
             };
             let exported_functions = self.functions.iter().map(|function| {

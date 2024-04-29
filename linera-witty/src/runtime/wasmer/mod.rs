@@ -32,7 +32,7 @@ impl Runtime for Wasmer {
 pub struct InstanceBuilder<UserData> {
     store: Store,
     imports: Imports,
-    environment: InstanceSlot<UserData>,
+    environment: Environment<UserData>,
 }
 
 impl<UserData> InstanceBuilder<UserData>
@@ -44,7 +44,7 @@ where
         InstanceBuilder {
             store: Store::new(engine),
             imports: Imports::default(),
-            environment: InstanceSlot::new(user_data),
+            environment: Environment::new(user_data),
         }
     }
 
@@ -56,7 +56,7 @@ where
     /// Creates a [`FunctionEnv`] representing the instance of this [`InstanceBuilder`].
     ///
     /// This can be used when exporting host functions that may perform reentrant calls.
-    pub fn environment(&mut self) -> FunctionEnv<InstanceSlot<UserData>> {
+    pub fn environment(&mut self) -> FunctionEnv<Environment<UserData>> {
         FunctionEnv::new(&mut self.store, self.environment.clone())
     }
 
@@ -71,8 +71,10 @@ where
         mut self,
         module: &Module,
     ) -> Result<EntrypointInstance<UserData>, InstantiationError> {
-        let instance = wasmer::Instance::new(&mut self.store, module, &mut self.imports)?;
-        self.environment.exports.set(instance.exports.clone())
+        let instance = wasmer::Instance::new(&mut self.store, module, &self.imports)?;
+        self.environment
+            .exports
+            .set(instance.exports.clone())
             .expect("Environment already initialized");
         Ok(EntrypointInstance {
             store: self.store,
@@ -102,7 +104,7 @@ impl<UserData> AsStoreMut for InstanceBuilder<UserData> {
 pub struct EntrypointInstance<UserData> {
     store: Store,
     instance: wasmer::Instance,
-    instance_slot: InstanceSlot<UserData>,
+    instance_slot: Environment<UserData>,
 }
 
 impl<UserData> AsStoreRef for EntrypointInstance<UserData> {
@@ -156,7 +158,7 @@ impl<UserData> Instance for EntrypointInstance<UserData> {
 
 /// Alias for the [`Instance`] implementation made available inside host functions called by the
 /// guest.
-pub type ReentrantInstance<'a, UserData> = FunctionEnvMut<'a, InstanceSlot<UserData>>;
+pub type ReentrantInstance<'a, UserData> = FunctionEnvMut<'a, Environment<UserData>>;
 
 impl<UserData> Instance for ReentrantInstance<'_, UserData>
 where
@@ -187,15 +189,15 @@ where
 }
 
 /// A slot to store a [`wasmer::Instance`] in a way that can be shared with reentrant calls.
-pub struct InstanceSlot<UserData> {
+pub struct Environment<UserData> {
     exports: Arc<OnceLock<wasmer::Exports>>,
     user_data: Arc<Mutex<UserData>>,
 }
 
-impl<UserData> InstanceSlot<UserData> {
-    /// Creates a new [`InstanceSlot`] with no associated instance.
+impl<UserData> Environment<UserData> {
+    /// Creates a new [`Environment`] with no associated instance.
     fn new(user_data: UserData) -> Self {
-        InstanceSlot {
+        Environment {
             exports: Arc::new(OnceLock::new()),
             user_data: Arc::new(Mutex::new(user_data)),
         }
@@ -207,12 +209,14 @@ impl<UserData> InstanceSlot<UserData> {
     ///
     /// If the slot is empty.
     fn load_export(&mut self, name: &str) -> Option<Extern> {
-        self.exports.get()
+        self.exports
+            .get()
             .expect("Attempted to get export before instance is loaded")
-            .get_extern(name).cloned()
+            .get_extern(name)
+            .cloned()
     }
 
-    /// Returns a reference to the `UserData` stored in this [`InstanceSlot`].
+    /// Returns a reference to the `UserData` stored in this [`Environment`].
     fn user_data(&self) -> MutexGuard<'_, UserData> {
         self.user_data
             .try_lock()
@@ -220,9 +224,9 @@ impl<UserData> InstanceSlot<UserData> {
     }
 }
 
-impl<UserData> Clone for InstanceSlot<UserData> {
+impl<UserData> Clone for Environment<UserData> {
     fn clone(&self) -> Self {
-        InstanceSlot {
+        Environment {
             exports: self.exports.clone(),
             user_data: self.user_data.clone(),
         }
