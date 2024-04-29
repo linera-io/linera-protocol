@@ -46,7 +46,7 @@ pub mod views;
 use std::fmt::Debug;
 
 pub use bcs;
-use linera_base::abi::{ContractAbi, OracleQuery, ServiceAbi, WithContractAbi, WithServiceAbi};
+use linera_base::abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi};
 pub use linera_base::{
     abi,
     data_types::{Resources, SendMessageRequest},
@@ -54,7 +54,6 @@ pub use linera_base::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 pub use serde_json;
-use thiserror::Error;
 
 use self::views::{RootView, ViewStorageContext};
 #[doc(hidden)]
@@ -209,15 +208,4 @@ where
             .await
             .expect("Failed to store application state")
     }
-}
-
-/// An error trying to query an oracle.
-#[derive(Debug, Error)]
-pub enum OracleError<O: OracleQuery> {
-    /// The oracle query could not be serialized.
-    #[error("Failed to serialize the oracle query: {}", 0)]
-    Serialization(O::SerializationError),
-    /// The oracle's response could not be deserialized.
-    #[error("Failed to deserialize the oracle response: {}", 0)]
-    Deserialization(O::DeserializationError),
 }

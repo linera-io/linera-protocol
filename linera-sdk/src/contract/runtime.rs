@@ -4,7 +4,7 @@
 //! Runtime types to interface with the host executing the contract.
 
 use linera_base::{
-    abi::{ContractAbi, OracleQuery},
+    abi::{ContractAbi, ServiceAbi},
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
     ownership::{ChainOwnership, CloseChainError},
@@ -12,7 +12,7 @@ use linera_base::{
 use serde::Serialize;
 
 use super::wit::contract_system_api as wit;
-use crate::{Contract, KeyValueStore, OracleError};
+use crate::{Contract, KeyValueStore};
 
 /// The common runtime to interface with the host executing the contract.
 ///
@@ -207,14 +207,11 @@ where
             .expect("Failed to deserialize `Response` type from cross-application call")
     }
 
-    /// Queries an oracle and returns the response.
-    pub fn query_oracle<O: OracleQuery>(
-        &mut self,
-        query: O,
-    ) -> Result<O::Response, OracleError<O>> {
-        let query = query.serialize().map_err(OracleError::Serialization)?;
-        let response = wit::query_oracle(O::ID.into(), &query);
-        O::deserialize(response).map_err(OracleError::Deserialization)
+    /// Queries our application service as an oracle and returns the response.
+    pub fn query_oracle<A: ServiceAbi + Send>(&mut self, query: A::Query) -> A::QueryResponse {
+        let query = serde_json::to_vec(&query).expect("Failed to serialize service query");
+        let response = wit::query_oracle(&query);
+        serde_json::from_slice(&response).expect("Failed to deserialize service response")
     }
 }
 

@@ -12,7 +12,6 @@ interface service-system-api {
     read-balance-owners: func() -> list<owner>;
     try-query-application: func(application: application-id, argument: list<u8>) -> list<u8>;
     fetch-url: func(url: string) -> list<u8>;
-    query-oracle: func(oracle-id: oracle-id, query: list<u8>) -> list<u8>;
     log: func(message: string, level: log-level);
 
     record amount {
@@ -55,10 +54,6 @@ interface service-system-api {
         chain-id: chain-id,
         height: block-height,
         index: u32,
-    }
-
-    record oracle-id {
-        inner0: u32,
     }
 
     record owner {

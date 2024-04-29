@@ -6,13 +6,13 @@
 use std::cell::Cell;
 
 use linera_base::{
-    abi::{OracleQuery, ServiceAbi},
+    abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{ApplicationId, ChainId, Owner},
 };
 
 use super::wit::service_system_api as wit;
-use crate::{KeyValueStore, OracleError, Service};
+use crate::{KeyValueStore, Service};
 
 /// The runtime available during execution of a query.
 pub struct ServiceRuntime<Application>
@@ -143,15 +143,5 @@ where
         let value = cell.take().unwrap_or_else(fetch);
         cell.set(Some(value.clone()));
         value
-    }
-
-    /// Queries an oracle and returns the response.
-    pub fn query_oracle<O: OracleQuery>(
-        &mut self,
-        query: O,
-    ) -> Result<O::Response, OracleError<O>> {
-        let query = query.serialize().map_err(OracleError::Serialization)?;
-        let response = wit::query_oracle(O::ID.into(), &query);
-        O::deserialize(response).map_err(OracleError::Deserialization)
     }
 }

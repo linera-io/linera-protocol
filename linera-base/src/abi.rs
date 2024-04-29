@@ -4,11 +4,9 @@
 //! This module defines the notion of Application Binary Interface (ABI) for Linera
 //! applications across Wasm and native architectures.
 
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 
 use serde::{de::DeserializeOwned, Serialize};
-
-use crate::identifiers::OracleId;
 
 // ANCHOR: abi
 /// A trait that includes all the types exported by a Linera application (both contract
@@ -71,25 +69,4 @@ where
 {
     type Query = <<A as WithServiceAbi>::Abi as ServiceAbi>::Query;
     type QueryResponse = <<A as WithServiceAbi>::Abi as ServiceAbi>::QueryResponse;
-}
-
-/// The type of a query for an oracle.
-pub trait OracleQuery: Send + Sync + Debug + 'static {
-    /// The oracle's ID.
-    const ID: OracleId;
-
-    /// The response type of the oracle.
-    type Response: Send + Sync + Debug + 'static;
-
-    /// Error serializing the query.
-    type SerializationError: Debug + Display + 'static;
-
-    /// Error deserializing the response.
-    type DeserializationError: Debug + Display + 'static;
-
-    /// Serializes the query.
-    fn serialize(&self) -> Result<Vec<u8>, Self::SerializationError>;
-
-    /// Deserializes the response.
-    fn deserialize(response: Vec<u8>) -> Result<Self::Response, Self::DeserializationError>;
 }

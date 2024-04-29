@@ -4,7 +4,7 @@
 use std::{
     collections::{hash_map, BTreeMap, HashMap, HashSet},
     mem,
-    sync::{mpsc, Arc, Mutex},
+    sync::{Arc, Mutex},
     vec,
 };
 
@@ -15,7 +15,7 @@ use linera_base::{
         SendMessageRequest, Timestamp,
     },
     ensure,
-    identifiers::{Account, ChainId, ChannelName, MessageId, OracleId, Owner},
+    identifiers::{Account, ChainId, ChannelName, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::batch::Batch;
@@ -40,8 +40,6 @@ pub struct SyncRuntime<UserInstance>(Arc<Mutex<SyncRuntimeInternal<UserInstance>
 
 pub type ContractSyncRuntime = SyncRuntime<UserContractInstance>;
 pub type ServiceSyncRuntime = SyncRuntime<UserServiceInstance>;
-
-pub type OracleSenders = HashMap<OracleId, mpsc::Sender<(Vec<u8>, mpsc::Sender<Vec<u8>>)>>;
 
 /// Responses to oracle queries that are being recorded or replayed.
 #[derive(Debug)]
@@ -71,8 +69,6 @@ pub struct SyncRuntimeInternal<UserInstance> {
 
     /// How to interact with the storage view of the execution state.
     execution_state_sender: ExecutionStateSender,
-    /// How to query different oracles.
-    oracle_senders: Arc<OracleSenders>,
 
     /// If applications are being finalized.
     ///
@@ -276,7 +272,6 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         next_message_index: u32,
         executing_message: Option<ExecutingMessage>,
         execution_state_sender: ExecutionStateSender,
-        oracle_senders: Arc<OracleSenders>,
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         oracle_responses: OracleResponses,
@@ -288,7 +283,6 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             next_message_index,
             executing_message,
             execution_state_sender,
-            oracle_senders,
             is_finalizing: false,
             applications_to_finalize: Vec::new(),
             loaded_applications: HashMap::new(),
@@ -637,12 +631,8 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().find_key_values_by_prefix_wait(promise)
     }
 
-    fn query_oracle(
-        &mut self,
-        oracle_id: OracleId,
-        query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        self.inner().query_oracle(oracle_id, query)
+    fn query_oracle(&mut self, query: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+        self.inner().query_oracle(query)
     }
 }
 
@@ -845,25 +835,14 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(key_values)
     }
 
-    fn query_oracle(
-        &mut self,
-        oracle_id: OracleId,
-        query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    fn query_oracle(&mut self, _query: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
             return responses
                 .next()
                 .ok_or_else(|| ExecutionError::MissingOracleResponse);
         }
-        let (tx, rx) = mpsc::channel();
-        self.oracle_senders
-            .get(&oracle_id)
-            .ok_or_else(|| ExecutionError::InvalidOracle(oracle_id))?
-            .send((query, tx))
-            .map_err(|_| ExecutionError::InvalidOracle(oracle_id))?;
-        let response = rx
-            .recv()
-            .map_err(|_| ExecutionError::OracleMalfunction(oracle_id))?;
+        // TODO(#1875): Query the application service.
+        let response = Vec::new();
         if let OracleResponses::Record(responses) = &mut self.oracle_responses {
             responses.push(response.clone());
         }
@@ -882,7 +861,6 @@ impl ContractSyncRuntime {
     #[allow(clippy::type_complexity)]
     pub(crate) fn run_action(
         execution_state_sender: ExecutionStateSender,
-        // oracle_senders: Arc<OracleSenders>,
         application_id: UserApplicationId,
         chain_id: ChainId,
         refund_grant_to: Option<Account>,
@@ -908,7 +886,6 @@ impl ContractSyncRuntime {
             next_message_index,
             executing_message,
             execution_state_sender,
-            Arc::new(OracleSenders::default()),
             refund_grant_to,
             resource_controller,
             oracle_responses,
@@ -1232,7 +1209,6 @@ impl ContractRuntime for ContractSyncRuntime {
 impl ServiceSyncRuntime {
     pub(crate) fn run_query(
         execution_state_sender: ExecutionStateSender,
-        // oracle_senders: Arc<OracleSenders>,
         application_id: UserApplicationId,
         context: crate::QueryContext,
         query: Vec<u8>,
@@ -1244,7 +1220,6 @@ impl ServiceSyncRuntime {
             0,
             None,
             execution_state_sender,
-            Arc::new(OracleSenders::default()),
             None,
             ResourceController::default(),
             OracleResponses::Forget,

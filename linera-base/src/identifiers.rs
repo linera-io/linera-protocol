@@ -214,12 +214,6 @@ pub struct BytecodeId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     _phantom: std::marker::PhantomData<(Abi, Parameters, InstantiationArgument)>,
 }
 
-/// A unique identifier for an oracle.
-#[derive(
-    Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize, Deserialize, WitLoad, WitStore, WitType,
-)]
-pub struct OracleId(pub u32);
-
 /// The name of a subscription channel.
 #[derive(
     Clone,
