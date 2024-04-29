@@ -835,14 +835,23 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(key_values)
     }
 
-    fn query_oracle(&mut self, _query: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+    fn query_oracle(&mut self, query: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
             return responses
                 .next()
                 .ok_or_else(|| ExecutionError::MissingOracleResponse);
         }
-        // TODO(#1875): Query the application service.
-        let response = Vec::new();
+        let context = crate::QueryContext {
+            chain_id: self.chain_id,
+            next_block_height: self.height,
+        };
+        // TODO(#1875): Make sure the service can never write to the state.
+        let response = ServiceSyncRuntime::run_query(
+            self.execution_state_sender.clone(),
+            self.application_id()?,
+            context,
+            query,
+        )?;
         if let OracleResponses::Record(responses) = &mut self.oracle_responses {
             responses.push(response.clone());
         }
