@@ -15,6 +15,17 @@ use ethers::core::abi::StateMutability;
 use ethers::core::utils::rlp::RlpStream;
 use ethers::core::abi::Function;
 use ethers::core::types::Bytes;
+use ethers::contract::abigen;
+use ethers_middleware::SignerMiddleware;
+use std::sync::Arc;
+use ethers::types::transaction::eip2718::TypedTransaction;
+
+abigen!(
+    SimpleContract,
+    "./contracts/SimpleToken.json",
+    event_derives(serde::Deserialize, serde::Serialize)
+);
+
 
 #[tokio::test]
 async fn test_get_accounts_balance() {
@@ -40,7 +51,7 @@ async fn test_contract() -> anyhow::Result<()> {
         addr_contract,
         addr0,
         addr1,
-        _instance,
+        instance: _,
     } = contract_endpoints;
     let ethereum_endpoint = EthereumEndpoint::new(url)?;
     // Test the conversion of the types
@@ -99,31 +110,27 @@ async fn test_contract_queries() -> anyhow::Result<()> {
         addr_contract,
         addr0,
         addr1,
-        _instance,
+        instance,
     } = contract_endpoints;
     let ethereum_endpoint = EthereumEndpoint::new(url)?;
-    let addr0 = addr0.parse::<Address>()?;
+    let addr0_type = addr0.parse::<Address>()?;
 
-    let paramtype = ParamType::Address;
-    let param = Param { name: "account".to_string(), kind: paramtype, internal_type: None };
-    let inputs = vec![param];
-    let paramtype = ParamType::Uint(256);
-    let param = Param { name: "output".to_string(), kind: paramtype, internal_type: None };
-    let outputs = vec![param];
-    let state_mutability = StateMutability::View;
-    let function = Function { name: "balanceOf".to_string(), inputs, outputs, constant: None, state_mutability };
-    let short_signature = function.short_signature();
-    println!("short_signature={:?}", short_signature);
+    let (wallet0, _) = instance.get_wallet(0);
 
-    let mut stream = RlpStream::new();
-    stream.append_raw(&short_signature, 4);
-    stream.append(&addr0);
-    let out = stream.out();
-    println!("out={:?} |out|={}", out.deref(), out.deref().len());
-    let data = out.freeze();
-    let data = Bytes(data);
-    println!("data={}", data);
+    let client0 = SignerMiddleware::new(instance.ethereum_endpoint.provider, wallet0);
+    let client0 = Arc::new(client0);
+    let addr_contract_type = addr_contract.parse::<Address>()?;
+    let contract = SimpleContract::new(addr_contract_type, client0.clone());
+
+    let typed_transact = contract
+	.balance_of(addr0_type)
+        .legacy();
+    let TypedTransaction::Legacy(transact) = typed_transact.tx else {
+        unreachable!();
+    };
+    let data = transact.data.unwrap();
     let answer = ethereum_endpoint.non_executive_call(&addr_contract, data, &addr1).await?;
+
 
     Ok(())
 }

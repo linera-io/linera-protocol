@@ -63,7 +63,7 @@ pub struct ContractEndpoints {
     pub addr_contract: String,
     pub addr0: String,
     pub addr1: String,
-    pub _instance: AnvilInstance,
+    pub instance: AnvilTest,
 }
 
 pub async fn get_test_contract_endpoints() -> anyhow::Result<ContractEndpoints> {
@@ -86,7 +86,7 @@ pub async fn get_test_contract_endpoints() -> anyhow::Result<ContractEndpoints> 
     let (_wallet1, addr1) = anvil_test.get_wallet(1);
 
     // 4. instantiate the client with the wallet
-    let client0 = SignerMiddleware::new(anvil_test.ethereum_endpoint.provider, wallet0);
+    let client0 = SignerMiddleware::new(anvil_test.ethereum_endpoint.provider.clone(), wallet0);
     let client0 = Arc::new(client0);
 
     // 5. create a factory which will be used to deploy instances of the contract
@@ -128,6 +128,6 @@ pub async fn get_test_contract_endpoints() -> anyhow::Result<ContractEndpoints> 
         addr_contract,
         addr0,
         addr1,
-        _instance: anvil_test.anvil_instance,
+        instance: anvil_test,
     })
 }
