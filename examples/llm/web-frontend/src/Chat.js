@@ -33,7 +33,7 @@ function handleSend(message, messages, setMessages, setTypingIndicator, doPrompt
             }
         }
     }]);
-    setTypingIndicator(<TypingIndicator content="LineraGPT is thinking..."/>)
+    setTypingIndicator(<TypingIndicator content="Linera Stories is thinking..."/>)
     doPrompt({variables: {prompt: message}});
 }
 
@@ -42,8 +42,8 @@ function Chat({chainId}) {
         [{
             props: {
                 model: {
-                    message: "Hey! I'm LineraGPT. Start a story and I'll finish it for you.",
-                    sender: "LineraGPT",
+                    message: "Hey! I'm Linera Stories. Start a story and I'll finish it for you.",
+                    sender: "Linera Stories",
                     direction: "incoming",
                     position: "single"
                 }
@@ -62,7 +62,7 @@ function Chat({chainId}) {
                     props: {
                         model: {
                             message: s,
-                            sender: "LineraGPT",
+                            sender: "Linera Stories",
                             direction: "incoming",
                             position: "single"
                         }
@@ -83,7 +83,7 @@ function Chat({chainId}) {
                     <ConversationHeader>
                         <ConversationHeader.Content
                             info="Online"
-                            userName="LineraGPT"
+                            userName="Linera Stories"
                         />
                     </ConversationHeader>
                     <MessageList typingIndicator={typingIndicator}>
