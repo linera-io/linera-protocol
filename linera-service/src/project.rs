@@ -11,15 +11,11 @@ use anyhow::{ensure, Context, Result};
 use cargo_toml::Manifest;
 use current_platform::CURRENT_PLATFORM;
 use fs_err::File;
-use linera_base::command::resolve_binary;
 use tracing::debug;
 
 pub struct Project {
     root: PathBuf,
 }
-
-const RUNNER_BIN_NAME: &str = "linera-wasm-test-runner";
-const RUNNER_BIN_CRATE: &str = "linera-sdk";
 
 impl Project {
     pub fn create_new(name: &str, linera_root: Option<&Path>) -> Result<Self> {
@@ -79,26 +75,15 @@ impl Project {
         Ok(Self { root })
     }
 
+    /// Runs the unit and integration tests of an application.
     pub async fn test(&self) -> Result<()> {
-        let runner_path = resolve_binary(RUNNER_BIN_NAME, RUNNER_BIN_CRATE).await?;
-        let unit_tests = Command::new("cargo")
-            .env(
-                "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER",
-                runner_path.display().to_string().as_str(),
-            )
-            .arg("test")
-            .args(["--target", "wasm32-unknown-unknown"])
-            .current_dir(&self.root)
-            .spawn()?
-            .wait()?;
-        ensure!(unit_tests.success(), "unit tests failed");
-        let integration_tests = Command::new("cargo")
+        let tests = Command::new("cargo")
             .arg("test")
             .args(["--target", CURRENT_PLATFORM])
             .current_dir(&self.root)
             .spawn()?
             .wait()?;
-        ensure!(integration_tests.success(), "integration tests failed");
+        ensure!(tests.success(), "tests failed");
         Ok(())
     }
 
