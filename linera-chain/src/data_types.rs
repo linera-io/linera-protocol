@@ -269,7 +269,8 @@ pub struct ExecutedBlock {
 }
 
 /// The messages and the state hash resulting from a [`Block`]'s execution.
-#[derive(Default, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[cfg_attr(with_testing, derive(Default))]
 pub struct BlockExecutionOutcome {
     pub messages: Vec<OutgoingMessage>,
     /// For each transaction, the cumulative number of messages created by this and all previous

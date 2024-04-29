@@ -148,7 +148,7 @@ where
             }],
             message_counts: vec![1],
             state_hash: publisher_state_hash,
-            ..BlockExecutionOutcome::default()
+            oracle_records: vec![OracleRecord::default()],
         }
         .with(publish_block),
     );
@@ -218,7 +218,7 @@ where
             messages: vec![failing_broadcast_outgoing_message],
             message_counts: vec![1],
             state_hash: publisher_state_hash,
-            ..BlockExecutionOutcome::default()
+            oracle_records: vec![OracleRecord::default()],
         }
         .with(broadcast_block.clone()),
     );
@@ -243,7 +243,7 @@ where
             messages: vec![broadcast_outgoing_message],
             message_counts: vec![1],
             state_hash: publisher_state_hash,
-            ..BlockExecutionOutcome::default()
+            oracle_records: vec![OracleRecord::default()],
         }
         .with(broadcast_block),
     );
@@ -298,7 +298,7 @@ where
             }],
             message_counts: vec![1],
             state_hash: creator_state.crypto_hash().await?,
-            ..BlockExecutionOutcome::default()
+            oracle_records: vec![OracleRecord::default()],
         }
         .with(subscribe_block),
     );
@@ -351,7 +351,7 @@ where
             }],
             message_counts: vec![1],
             state_hash: publisher_state_hash,
-            ..BlockExecutionOutcome::default()
+            oracle_records: vec![OracleRecord::default()],
         }
         .with(accept_block),
     );
@@ -445,7 +445,7 @@ where
             }],
             message_counts: vec![0, 1],
             state_hash: creator_state.crypto_hash().await?,
-            ..BlockExecutionOutcome::default()
+            oracle_records: vec![OracleRecord::default(); 2],
         }
         .with(create_block),
     );
@@ -495,9 +495,10 @@ where
     creator_state.system.timestamp.set(Timestamp::from(5));
     let run_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
+            messages: Vec::new(),
             message_counts: vec![0],
             state_hash: creator_state.crypto_hash().await?,
-            ..BlockExecutionOutcome::default()
+            oracle_records: vec![OracleRecord::default()],
         }
         .with(run_block),
     );
