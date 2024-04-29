@@ -300,11 +300,11 @@ where
     }
 
     /// Queries an oracle and returns the response. Returns `None` if the oracle isn't registered.
-    fn query_oracle(caller: &mut Caller, query: Vec<u8>) -> Result<Vec<u8>, RuntimeError> {
+    fn query_service(caller: &mut Caller, query: Vec<u8>) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .query_oracle(query)
+            .query_service(query)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

@@ -631,8 +631,8 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().find_key_values_by_prefix_wait(promise)
     }
 
-    fn query_oracle(&mut self, query: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
-        self.inner().query_oracle(query)
+    fn query_service(&mut self, query: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+        self.inner().query_service(query)
     }
 }
 
@@ -835,7 +835,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(key_values)
     }
 
-    fn query_oracle(&mut self, query: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+    fn query_service(&mut self, query: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
             return responses
                 .next()

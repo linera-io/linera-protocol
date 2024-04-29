@@ -415,7 +415,7 @@ pub trait BaseRuntime {
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>;
 
     /// Queries an oracle.
-    fn query_oracle(&mut self, query: Vec<u8>) -> Result<Vec<u8>, ExecutionError>;
+    fn query_service(&mut self, query: Vec<u8>) -> Result<Vec<u8>, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
