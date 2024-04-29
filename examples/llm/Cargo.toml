@@ -14,7 +14,6 @@ log.workspace = true
 rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
 tokenizers.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
@@ -23,6 +22,10 @@ tokio = { workspace = true, features = ["rt", "sync"] }
 
 [dev-dependencies]
 webassembly-test.workspace = true
+
+# TODO(#1970): Remove once macros don't depend on them
+[package.metadata.cargo-machete]
+ignored = ["bcs", "serde_json"]
 
 [[bin]]
 name = "llm_contract"

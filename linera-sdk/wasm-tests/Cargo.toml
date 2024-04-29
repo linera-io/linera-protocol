@@ -12,5 +12,4 @@ linera-sdk = { workspace = true, features = ["test"] }
 linera-views.workspace = true
 log.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
 webassembly-test.workspace = true

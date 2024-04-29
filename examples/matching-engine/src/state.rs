@@ -6,56 +6,14 @@ use std::collections::BTreeSet;
 use async_graphql::SimpleObject;
 use fungible::Account;
 use linera_sdk::{
-    base::{AccountOwner, Amount, ArithmeticError},
+    base::{AccountOwner, Amount},
     views::{
         linera_views, CustomCollectionView, MapView, QueueView, RegisterView, RootView, View,
-        ViewError, ViewStorageContext,
+        ViewStorageContext,
     },
 };
 use matching_engine::{OrderId, OrderNature, Price, PriceAsk, PriceBid};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-#[allow(dead_code)]
-pub enum MatchingEngineError {
-    /// Invalid query.
-    #[error("Invalid query")]
-    InvalidQuery(#[from] serde_json::Error),
-
-    /// Failed authentication
-    #[error("failed authentication")]
-    IncorrectAuthentication,
-
-    /// Action can only be executed on the chain that created the matching engine.
-    #[error("Action can only be executed on the chain that created the matching engine")]
-    MatchingEngineChainOnly,
-
-    /// Too large modify order
-    #[error("Too large modify order")]
-    TooLargeModifyOrder,
-
-    /// Order is not present therefore cannot be cancelled
-    #[error("Order is not present therefore cannot be cancelled")]
-    OrderNotPresent,
-
-    /// Owner of order is incorrect
-    #[error("The owner of the order is not matching with the owner put")]
-    WrongOwnerOfOrder,
-
-    #[error(transparent)]
-    ArithmeticError(#[from] ArithmeticError),
-
-    #[error(transparent)]
-    ViewError(#[from] ViewError),
-
-    #[error(transparent)]
-    BcsError(#[from] bcs::Error),
-
-    #[error("The application does not have permissions to close the chain.")]
-    CloseChainError,
-}
 
 /// The order entry in the order book
 #[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]
@@ -120,4 +78,22 @@ pub struct MatchingEngine {
     /// The map giving for each account owner the set of order_id
     /// owned by that owner.
     pub account_info: MapView<AccountOwner, AccountInfo>,
+}
+
+impl MatchingEngine {
+    /// Returns the [`LevelView`] for a specified ask `price`.
+    pub async fn ask_level(&mut self, price: &PriceAsk) -> &mut LevelView {
+        self.asks
+            .load_entry_mut(price)
+            .await
+            .expect("Failed to load `LevelView` for an ask price")
+    }
+
+    /// Returns the [`LevelView`] for a specified bid `price`.
+    pub async fn bid_level(&mut self, price: &PriceBid) -> &mut LevelView {
+        self.bids
+            .load_entry_mut(price)
+            .await
+            .expect("Failed to load `LevelView` for a bid price")
+    }
 }

@@ -127,8 +127,8 @@ where
     ) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .instantiate(argument)
-            .map_err(WasmExecutionError::from)?
-            .map_err(ExecutionError::UserError)
+            .map_err(WasmExecutionError::from)?;
+        Ok(())
     }
 
     fn execute_operation(
@@ -136,10 +136,9 @@ where
         _context: OperationContext,
         operation: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        ContractEntrypoints::new(&mut self.instance)
+        Ok(ContractEntrypoints::new(&mut self.instance)
             .execute_operation(operation)
-            .map_err(WasmExecutionError::from)?
-            .map_err(ExecutionError::UserError)
+            .map_err(WasmExecutionError::from)?)
     }
 
     fn execute_message(
@@ -149,15 +148,15 @@ where
     ) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .execute_message(message)
-            .map_err(WasmExecutionError::from)?
-            .map_err(ExecutionError::UserError)
+            .map_err(WasmExecutionError::from)?;
+        Ok(())
     }
 
     fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .finalize()
-            .map_err(WasmExecutionError::from)?
-            .map_err(ExecutionError::UserError)
+            .map_err(WasmExecutionError::from)?;
+        Ok(())
     }
 }
 
@@ -170,10 +169,9 @@ where
         _context: QueryContext,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        ServiceEntrypoints::new(&mut self.instance)
+        Ok(ServiceEntrypoints::new(&mut self.instance)
             .handle_query(argument)
-            .map_err(WasmExecutionError::from)?
-            .map_err(ExecutionError::UserError)
+            .map_err(WasmExecutionError::from)?)
     }
 }
 

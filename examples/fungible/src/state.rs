@@ -6,7 +6,6 @@ use linera_sdk::{
     base::{AccountOwner, Amount},
     views::{linera_views, MapView, RootView, ViewStorageContext},
 };
-use thiserror::Error;
 
 /// The application state.
 #[derive(RootView)]
@@ -54,18 +53,14 @@ impl FungibleToken {
     }
 
     /// Tries to debit the requested `amount` from an `account`.
-    pub(crate) async fn debit(
-        &mut self,
-        account: AccountOwner,
-        amount: Amount,
-    ) -> Result<(), InsufficientBalanceError> {
+    pub(crate) async fn debit(&mut self, account: AccountOwner, amount: Amount) {
         if amount == Amount::ZERO {
-            return Ok(());
+            return;
         }
         let mut balance = self.balance_or_default(&account).await;
         balance
             .try_sub_assign(amount)
-            .map_err(|_| InsufficientBalanceError)?;
+            .expect("Source account does not have sufficient balance for transfer");
         if balance == Amount::ZERO {
             self.accounts
                 .remove(&account)
@@ -75,11 +70,5 @@ impl FungibleToken {
                 .insert(&account, balance)
                 .expect("Failed insertion operation");
         }
-        Ok(())
     }
 }
-
-/// Attempts to debit from an account with insufficient funds.
-#[derive(Clone, Copy, Debug, Error)]
-#[error("Insufficient balance for transfer")]
-pub struct InsufficientBalanceError;

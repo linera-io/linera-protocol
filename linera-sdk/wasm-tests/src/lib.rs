@@ -21,7 +21,6 @@ use linera_views::{
     register_view::RegisterView,
     views::{HashableView, RootView, View},
 };
-use thiserror::Error;
 use webassembly_test::webassembly_test;
 
 /// Test if the chain ID getter API is mocked successfully.
@@ -405,57 +404,37 @@ impl WithServiceAbi for TestApp {
 }
 
 impl Contract for TestApp {
-    type Error = TestAppError;
     type State = EmptyState;
     type Message = Vec<u8>;
     type Parameters = Vec<u8>;
     type InstantiationArgument = Vec<u8>;
 
-    async fn new(state: Self::State, _runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(TestApp { state })
+    async fn new(state: Self::State, _runtime: ContractRuntime<Self>) -> Self {
+        TestApp { state }
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
         &mut self.state
     }
 
-    async fn instantiate(
-        &mut self,
-        _argument: Self::InstantiationArgument,
-    ) -> Result<(), Self::Error> {
-        Ok(())
+    async fn instantiate(&mut self, _argument: Self::InstantiationArgument) {}
+
+    async fn execute_operation(&mut self, _operation: Self::Operation) -> Self::Response {
+        vec![]
     }
 
-    async fn execute_operation(
-        &mut self,
-        _operation: Self::Operation,
-    ) -> Result<Self::Response, Self::Error> {
-        Ok(vec![])
-    }
-
-    async fn execute_message(&mut self, _message: Self::Message) -> Result<(), Self::Error> {
-        Ok(())
-    }
+    async fn execute_message(&mut self, _message: Self::Message) {}
 }
 
 impl Service for TestApp {
-    type Error = TestAppError;
     type State = EmptyState;
     type Parameters = Vec<u8>;
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(TestApp { state })
+    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Self {
+        TestApp { state }
     }
 
-    async fn handle_query(&self, _query: Self::Query) -> Result<Self::QueryResponse, Self::Error> {
-        Ok(vec![])
+    async fn handle_query(&self, _query: Self::Query) -> Self::QueryResponse {
+        vec![]
     }
-}
-
-#[derive(Debug, Error)]
-pub enum TestAppError {
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
-    #[error(transparent)]
-    Bcs(#[from] bcs::Error),
 }

@@ -6,10 +6,9 @@
 use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
 use linera_sdk::{
     base::{Account, AccountOwner, ChainId, Owner, WithContractAbi},
-    ensure, Contract, ContractRuntime, EmptyState,
+    Contract, ContractRuntime, EmptyState,
 };
 use native_fungible::{Message, TICKER_SYMBOL};
-use thiserror::Error;
 
 pub struct NativeFungibleTokenContract {
     state: EmptyState,
@@ -23,21 +22,20 @@ impl WithContractAbi for NativeFungibleTokenContract {
 }
 
 impl Contract for NativeFungibleTokenContract {
-    type Error = Error;
     type State = EmptyState;
     type Message = Message;
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
 
-    async fn new(state: EmptyState, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(NativeFungibleTokenContract { state, runtime })
+    async fn new(state: EmptyState, runtime: ContractRuntime<Self>) -> Self {
+        NativeFungibleTokenContract { state, runtime }
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
         &mut self.state
     }
 
-    async fn instantiate(&mut self, state: Self::InstantiationArgument) -> Result<(), Self::Error> {
+    async fn instantiate(&mut self, state: Self::InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         assert!(
             self.runtime.application_parameters().ticker_symbol == "NAT",
@@ -51,31 +49,25 @@ impl Contract for NativeFungibleTokenContract {
             };
             self.runtime.transfer(None, account, amount);
         }
-        Ok(())
     }
 
-    async fn execute_operation(
-        &mut self,
-        operation: Self::Operation,
-    ) -> Result<Self::Response, Self::Error> {
+    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             Operation::Balance { owner } => {
                 let owner = self.normalize_owner(owner);
 
                 let balance = self.runtime.owner_balance(owner);
-                Ok(FungibleResponse::Balance(balance))
+                FungibleResponse::Balance(balance)
             }
 
-            Operation::TickerSymbol => {
-                Ok(FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL)))
-            }
+            Operation::TickerSymbol => FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL)),
 
             Operation::Transfer {
                 owner,
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(owner)?;
+                self.check_account_authentication(owner);
                 let owner = self.normalize_owner(owner);
 
                 let fungible_target_account = target_account;
@@ -84,7 +76,7 @@ impl Contract for NativeFungibleTokenContract {
                 self.runtime.transfer(Some(owner), target_account, amount);
 
                 self.transfer(fungible_target_account.chain_id);
-                Ok(FungibleResponse::Ok)
+                FungibleResponse::Ok
             }
 
             Operation::Claim {
@@ -92,7 +84,7 @@ impl Contract for NativeFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(source_account.owner)?;
+                self.check_account_authentication(source_account.owner);
 
                 let fungible_source_account = source_account;
                 let fungible_target_account = target_account;
@@ -105,15 +97,15 @@ impl Contract for NativeFungibleTokenContract {
                     fungible_source_account.chain_id,
                     fungible_target_account.chain_id,
                 );
-                Ok(FungibleResponse::Ok)
+                FungibleResponse::Ok
             }
         }
     }
 
-    async fn execute_message(&mut self, message: Self::Message) -> Result<(), Self::Error> {
+    async fn execute_message(&mut self, message: Self::Message) {
         // Messages for now don't do anything, just pass messages around
         match message {
-            Message::Notify => Ok(()),
+            Message::Notify => (),
         }
     }
 }
@@ -158,35 +150,16 @@ impl NativeFungibleTokenContract {
     }
 
     /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(&mut self, owner: AccountOwner) -> Result<(), Error> {
+    fn check_account_authentication(&mut self, owner: AccountOwner) {
         match owner {
             AccountOwner::User(address) => {
-                ensure!(
-                    self.runtime.authenticated_signer() == Some(address),
-                    Error::IncorrectAuthentication
+                assert_eq!(
+                    self.runtime.authenticated_signer(),
+                    Some(address),
+                    "The requested transfer is not correctly authenticated."
                 );
-                Ok(())
             }
-            AccountOwner::Application(_) => Err(Error::ApplicationsNotSupported),
+            AccountOwner::Application(_) => panic!("Applications not supported yet"),
         }
     }
-}
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum Error {
-    /// Requested transfer does not have permission on this account.
-    #[error("The requested transfer is not correctly authenticated.")]
-    IncorrectAuthentication,
-
-    /// Failed to deserialize BCS bytes
-    #[error("Failed to deserialize BCS bytes")]
-    BcsError(#[from] bcs::Error),
-
-    /// Failed to deserialize JSON string
-    #[error("Failed to deserialize JSON string")]
-    JsonError(#[from] serde_json::Error),
-
-    #[error("Applications not supported yet")]
-    ApplicationsNotSupported,
 }

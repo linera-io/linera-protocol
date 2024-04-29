@@ -311,18 +311,13 @@ query {
 ```
 */
 
-use std::convert::Infallible;
-
 use async_graphql::{scalar, Request, Response};
-use fungible::FungibleResponse;
 use linera_sdk::{
-    base::{AccountOwner, Amount, ArithmeticError, ContractAbi, ServiceAbi},
+    base::{AccountOwner, Amount, ContractAbi, ServiceAbi},
     graphql::GraphQLMutationRoot,
-    views::ViewError,
 };
 pub use matching_engine::Parameters;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 pub struct AmmAbi;
 
@@ -407,71 +402,4 @@ pub enum Message {
     RemoveAllAddedLiquidity {
         owner: AccountOwner,
     },
-}
-
-#[derive(Debug, Error)]
-#[allow(dead_code)]
-pub enum AmmError {
-    #[error("Invalid pool balance")]
-    InvalidPoolBalanceError,
-
-    /// Failed authentication
-    #[error("failed authentication")]
-    IncorrectAuthentication,
-
-    #[error("Token not found in the pool")]
-    TokenNotFoundInPoolError,
-
-    #[error("AMM application doesn't support any cross-chain messages")]
-    MessagesNotSupported,
-
-    #[error("Action can only be executed on the chain that created the AMM")]
-    AmmChainOnly,
-
-    #[error("You can't add liquidity with zero tokens")]
-    NoZeroAmounts,
-
-    #[error("Invalid token index")]
-    InvalidTokenIdx,
-
-    #[error("Can't remove liquidity locally")]
-    RemovingLiquidityLocally,
-
-    #[error("Can't add liquidity locally")]
-    AddingLiquidityLocally,
-
-    #[error("Can't swap locally")]
-    SwappingLocally,
-
-    #[error("Can't close the chain remotely")]
-    ClosingChainRemotely,
-
-    #[error("Can't remove more liquidity than you added")]
-    RemovingMoreLiquidityThanAdded,
-
-    #[error("Untracked liquidity was found")]
-    UntrackedLiquidity,
-
-    /// Invalid query.
-    #[error("Invalid query")]
-    InvalidQuery(#[from] serde_json::Error),
-
-    #[error(transparent)]
-    BcsError(#[from] bcs::Error),
-
-    #[error(transparent)]
-    ViewError(#[from] ViewError),
-
-    #[error(transparent)]
-    ArithmeticError(#[from] ArithmeticError),
-
-    #[error(transparent)]
-    Infallible(#[from] Infallible),
-
-    #[error("The application does not have permissions to close the chain.")]
-    CloseChainError,
-
-    /// Unexpected response from fungible token application.
-    #[error("Unexpected response from fungible token application: {0:?}")]
-    UnexpectedFungibleResponse(FungibleResponse),
 }

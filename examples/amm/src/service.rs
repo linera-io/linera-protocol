@@ -7,7 +7,7 @@ mod state;
 
 use std::sync::Arc;
 
-use amm::{AmmError, Operation, Parameters};
+use amm::{Operation, Parameters};
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use linera_sdk::{base::WithServiceAbi, graphql::GraphQLMutationRoot, Service, ServiceRuntime};
 
@@ -24,24 +24,22 @@ impl WithServiceAbi for AmmService {
 }
 
 impl Service for AmmService {
-    type Error = AmmError;
     type State = Amm;
     type Parameters = Parameters;
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(AmmService {
+    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Self {
+        AmmService {
             state: Arc::new(state),
-        })
+        }
     }
 
-    async fn handle_query(&self, request: Request) -> Result<Response, AmmError> {
+    async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.state.clone(),
             Operation::mutation_root(),
             EmptySubscription,
         )
         .finish();
-        let response = schema.execute(request).await;
-        Ok(response)
+        schema.execute(request).await
     }
 }

@@ -18,7 +18,6 @@ use linera_sdk::{
     Service, ServiceRuntime,
 };
 use non_fungible::{NftOutput, Operation, TokenId};
-use thiserror::Error;
 
 use self::state::NonFungibleToken;
 
@@ -33,17 +32,16 @@ impl WithServiceAbi for NonFungibleTokenService {
 }
 
 impl Service for NonFungibleTokenService {
-    type Error = Error;
     type State = NonFungibleToken;
     type Parameters = ();
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(NonFungibleTokenService {
+    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Self {
+        NonFungibleTokenService {
             state: Arc::new(state),
-        })
+        }
     }
 
-    async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
+    async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             QueryRoot {
                 non_fungible_token: self.state.clone(),
@@ -52,8 +50,7 @@ impl Service for NonFungibleTokenService {
             EmptySubscription,
         )
         .finish();
-        let response = schema.execute(request).await;
-        Ok(response)
+        schema.execute(request).await
     }
 }
 
@@ -195,14 +192,4 @@ impl MutationRoot {
         })
         .unwrap()
     }
-}
-
-/// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
-pub enum Error {
-    /// Invalid query argument; could not deserialize GraphQL request.
-    #[error(
-        "Invalid query argument; Fungible application only supports JSON encoded GraphQL queries"
-    )]
-    InvalidQuery(#[from] serde_json::Error),
 }

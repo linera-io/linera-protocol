@@ -11,7 +11,6 @@ fungible.workspace = true
 linera-sdk.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 fungible = { workspace = true, features = ["test"] }
@@ -20,6 +19,10 @@ tokio.workspace = true
 
 [dev-dependencies]
 webassembly-test.workspace = true
+
+# TODO(#1970): Remove once macros don't depend on them
+[package.metadata.cargo-machete]
+ignored = ["serde_json"]
 
 [[bin]]
 name = "matching_engine_contract"
