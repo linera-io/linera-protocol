@@ -9,7 +9,7 @@ mod memory;
 mod parameters;
 mod results;
 
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 pub use wasmer::FunctionEnvMut;
 use wasmer::{
@@ -44,7 +44,7 @@ where
         InstanceBuilder {
             store: Store::new(engine),
             imports: Imports::default(),
-            environment: InstanceSlot::new(Default::default(), user_data),
+            environment: InstanceSlot::new(user_data),
         }
     }
 
@@ -72,7 +72,8 @@ where
         module: &Module,
     ) -> Result<EntrypointInstance<UserData>, InstantiationError> {
         let instance = wasmer::Instance::new(&mut self.store, module, &mut self.imports)?;
-        self.environment.exports = instance.exports.clone();
+        self.environment.exports.set(instance.exports.clone())
+            .expect("Environment already initialized");
         Ok(EntrypointInstance {
             store: self.store,
             instance,
@@ -187,15 +188,15 @@ where
 
 /// A slot to store a [`wasmer::Instance`] in a way that can be shared with reentrant calls.
 pub struct InstanceSlot<UserData> {
-    exports: wasmer::Exports,
+    exports: Arc<OnceLock<wasmer::Exports>>,
     user_data: Arc<Mutex<UserData>>,
 }
 
 impl<UserData> InstanceSlot<UserData> {
-    /// Creates a new [`InstanceSlot`] using the optionally provided `instance`.
-    fn new(exports: wasmer::Exports, user_data: UserData) -> Self {
+    /// Creates a new [`InstanceSlot`] with no associated instance.
+    fn new(user_data: UserData) -> Self {
         InstanceSlot {
-            exports,
+            exports: Arc::new(OnceLock::new()),
             user_data: Arc::new(Mutex::new(user_data)),
         }
     }
@@ -204,9 +205,11 @@ impl<UserData> InstanceSlot<UserData> {
     ///
     /// # Panics
     ///
-    /// If the underlying instance is accessed concurrently or if the slot is empty.
+    /// If the slot is empty.
     fn load_export(&mut self, name: &str) -> Option<Extern> {
-        self.exports.get_extern(name).cloned()
+        self.exports.get()
+            .expect("Attempted to get export before instance is loaded")
+            .get_extern(name).cloned()
     }
 
     /// Returns a reference to the `UserData` stored in this [`InstanceSlot`].
