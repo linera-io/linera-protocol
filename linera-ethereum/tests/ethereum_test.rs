@@ -7,13 +7,7 @@ use linera_ethereum::{
     common::{EthereumDataType, EthereumEvent},
     test_utils::{get_anvil, get_test_contract_endpoints, ContractEndpoints},
 };
-use std::ops::Deref;
 use ethers_core::types::Address;
-use ethers::core::abi::ParamType;
-use ethers::core::abi::ethabi::Param;
-use ethers::core::abi::StateMutability;
-use ethers::core::utils::rlp::RlpStream;
-use ethers::core::abi::Function;
 use ethers::core::types::Bytes;
 use ethers::contract::abigen;
 use ethers_middleware::SignerMiddleware;

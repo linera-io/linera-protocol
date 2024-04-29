@@ -12,6 +12,8 @@ use ethers::{
     solc::Solc,
     types::{Address, U256},
 };
+use ethers::core::types::Bytes;
+use ethers::abi::Abi;
 use ethers_core::utils::{Anvil, AnvilInstance};
 use ethers_signers::Signer;
 use linera_storage_service::child::get_free_port;
@@ -66,18 +68,26 @@ pub struct ContractEndpoints {
     pub instance: AnvilTest,
 }
 
-pub async fn get_test_contract_endpoints() -> anyhow::Result<ContractEndpoints> {
-    // 1. Compile the code
-    let source = Path::new(&env!("CARGO_MANIFEST_DIR")).join("contracts/simple_token.sol");
+pub fn get_abi_bytecode(contract_file: &str, contract_name: &str) -> (Abi, Bytes) {
+    let full_contract_file = format!("contracts/{}", contract_file);
+    let source = Path::new(&env!("CARGO_MANIFEST_DIR")).join(&full_contract_file);
     let compiled = Solc::default()
         .compile_source(source)
         .expect("Could not compile contracts");
 
     // 2. Access to the contract that interests us
     let (abi, bytecode, _runtime_bytecode) = compiled
-        .find("SimpleToken")
+        .find(contract_name)
         .expect("could not find contract")
         .into_parts_or_default();
+    (abi, bytecode)
+}
+
+
+
+pub async fn get_test_contract_endpoints() -> anyhow::Result<ContractEndpoints> {
+    // 1. Compile the code
+    let (abi, bytecode) = get_abi_bytecode("simple_token.sol", "SimpleToken");
 
     // 3. Access to the wallets
     let anvil_test = get_anvil().await.unwrap();
