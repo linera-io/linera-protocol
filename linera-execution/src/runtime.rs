@@ -15,7 +15,7 @@ use linera_base::{
         SendMessageRequest, Timestamp,
     },
     ensure,
-    identifiers::{Account, ChainId, ChannelName, MessageId, Owner},
+    identifiers::{Account, ApplicationId, ChainId, ChannelName, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::batch::Batch;
@@ -631,8 +631,12 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().find_key_values_by_prefix_wait(promise)
     }
 
-    fn query_service(&mut self, query: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
-        self.inner().query_service(query)
+    fn query_service(
+        &mut self,
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        self.inner().query_service(application_id, query)
     }
 }
 
@@ -835,7 +839,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(key_values)
     }
 
-    fn query_service(&mut self, query: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+    fn query_service(
+        &mut self,
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
         if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
             return responses
                 .next()
@@ -845,13 +853,9 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             chain_id: self.chain_id,
             next_block_height: self.height,
         };
+        let sender = self.execution_state_sender.clone();
         // TODO(#1875): Make sure the service can never write to the state.
-        let response = ServiceSyncRuntime::run_query(
-            self.execution_state_sender.clone(),
-            self.application_id()?,
-            context,
-            query,
-        )?;
+        let response = ServiceSyncRuntime::run_query(sender, application_id, context, query)?;
         if let OracleResponses::Record(responses) = &mut self.oracle_responses {
             responses.push(response.clone());
         }

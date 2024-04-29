@@ -30,8 +30,8 @@ use linera_base::{
     data_types::{Amount, ArithmeticError, BlockHeight, Resources, SendMessageRequest, Timestamp},
     doc_scalar, hex_debug,
     identifiers::{
-        Account, BytecodeId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId,
-        Owner,
+        Account, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
+        GenericApplicationId, MessageId, Owner,
     },
     ownership::ChainOwnership,
 };
@@ -415,7 +415,11 @@ pub trait BaseRuntime {
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>;
 
     /// Queries an oracle.
-    fn query_service(&mut self, query: Vec<u8>) -> Result<Vec<u8>, ExecutionError>;
+    fn query_service(
+        &mut self,
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {

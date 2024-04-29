@@ -208,9 +208,13 @@ where
     }
 
     /// Queries our application service as an oracle and returns the response.
-    pub fn query_service<A: ServiceAbi + Send>(&mut self, query: A::Query) -> A::QueryResponse {
+    pub fn query_service<A: ServiceAbi + Send>(
+        &mut self,
+        application_id: ApplicationId<A>,
+        query: A::Query,
+    ) -> A::QueryResponse {
         let query = serde_json::to_vec(&query).expect("Failed to serialize service query");
-        let response = wit::query_service(&query);
+        let response = wit::query_service(application_id.forget_abi().into(), &query);
         serde_json::from_slice(&response).expect("Failed to deserialize service response")
     }
 }
