@@ -26,6 +26,12 @@ abigen!(
     event_derives(serde::Deserialize, serde::Serialize)
 );
 
+abigen!(
+    EventNumericsContract,
+    "./contracts/EventNumerics.json",
+    event_derives(serde::Deserialize, serde::Serialize)
+);
+
 pub async fn get_provider(url: &str) -> Provider<Http> {
     Provider::try_from(url).unwrap()
 }
@@ -138,5 +144,46 @@ impl SimpleTokenContractFunction {
             .await?;
         let balance = U256::from_big_endian(&answer.0);
         Ok(balance)
+    }
+}
+
+pub struct EventNumericsContractFunction {
+    pub event_numerics: EventNumericsContract<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>,
+    pub contract_address: String,
+    pub anvil_test: AnvilTest,
+}
+
+impl EventNumericsContractFunction {
+    pub async fn new(anvil_test: AnvilTest) -> Result<Self> {
+        // 1. Getting the code
+        let (abi, bytecode) = get_abi_bytecode("event_numerics.sol", "EventNumerics");
+
+        // 2. Reading the client
+        let wallet_info = anvil_test.get_wallet(0);
+        let client0 = SignerMiddleware::new(
+            anvil_test.ethereum_endpoint.provider.clone(),
+            wallet_info.0.clone(),
+        );
+        let client0 = Arc::new(client0);
+
+        // 3. Factory
+        let factory = ContractFactory::new(abi, bytecode, client0.clone());
+
+        // 6. deploy it with the constructor arguments, note the `legacy` call
+        let initial_supply = U256::zero();
+        let contract = factory.deploy(initial_supply)?.legacy().send().await?;
+
+        // 7. get the contract's address
+        let contract_address = contract.address();
+
+        // 8. instantiate the contract
+        let event_numerics = EventNumericsContract::new(contract_address, client0.clone());
+        let contract_address = format!("{:?}", contract_address);
+
+        Ok(Self {
+            event_numerics,
+            contract_address,
+            anvil_test,
+        })
     }
 }

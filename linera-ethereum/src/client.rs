@@ -78,6 +78,7 @@ impl EthereumEndpoint {
     ) -> Result<Vec<EthereumEvent>, EthereumServiceError> {
         let contract_address = contract_address.parse::<Address>()?;
         let event_name = event_name_from_expanded(event_name_expanded);
+        println!("event_name={}", event_name);
         let filter = Filter::new()
             .address(contract_address)
             .event(&event_name)
