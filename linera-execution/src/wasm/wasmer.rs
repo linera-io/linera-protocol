@@ -17,7 +17,7 @@ use wasmer::{sys::EngineBuilder, Cranelift, Engine, Module, Singlepass, Store};
 
 use super::{
     module_cache::ModuleCache,
-    system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi},
+    system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi, WriteBatch},
     ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
 };
 use crate::{
@@ -65,7 +65,7 @@ impl WasmContractModule {
 
 impl<Runtime> WasmerContractInstance<Runtime>
 where
-    Runtime: ContractRuntime + Clone + Send + Sync + Unpin + 'static,
+    Runtime: ContractRuntime + WriteBatch + Clone + Send + Sync + Unpin + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare(
@@ -100,7 +100,7 @@ impl WasmServiceModule {
 
 impl<Runtime> WasmerServiceInstance<Runtime>
 where
-    Runtime: ServiceRuntime + Clone + Send + Sync + Unpin + 'static,
+    Runtime: ServiceRuntime + WriteBatch + Clone + Send + Sync + Unpin + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare(service_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {

@@ -12,10 +12,10 @@ use linera_base::{
 };
 use linera_views::batch::Batch;
 
-use super::{ApplicationStatus, SyncRuntimeInternal};
+use super::{ApplicationStatus, SyncRuntime, SyncRuntimeInternal};
 use crate::{
-    execution_state_actor::Request, runtime::ResourceController, BaseRuntime, RawExecutionOutcome,
-    UserContractInstance,
+    execution_state_actor::Request, runtime::ResourceController, ContractRuntime,
+    RawExecutionOutcome, UserContractInstance,
 };
 
 /// Test writing a batch of changes.
@@ -23,7 +23,8 @@ use crate::{
 /// Ensure that resource consumption counts are updated correctly.
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_write_batch() {
-    let (mut runtime, mut execution_state_receiver) = create_contract_runtime();
+    let (runtime, mut execution_state_receiver) = create_contract_runtime();
+    let mut runtime = SyncRuntime::new(runtime);
     let mut batch = Batch::new();
 
     let write_key = vec![1, 2, 3, 4, 5];
@@ -39,7 +40,7 @@ async fn test_write_batch() {
     batch.delete_key_prefix(delete_key_prefix);
 
     let expected_write_count = batch.operations.len();
-    let expected_application_id = runtime.current_application().id;
+    let expected_application_id = runtime.inner().current_application().id;
     let expected_batch = batch.clone();
 
     tokio::spawn(async move {
@@ -70,11 +71,11 @@ async fn test_write_batch() {
         .expect("Failed to write test batch");
 
     assert_eq!(
-        runtime.resource_controller.tracker.write_operations,
+        runtime.inner().resource_controller.tracker.write_operations,
         expected_write_count as u32
     );
     assert_eq!(
-        runtime.resource_controller.tracker.bytes_written,
+        runtime.inner().resource_controller.tracker.bytes_written,
         expected_bytes_count as u64
     );
 }

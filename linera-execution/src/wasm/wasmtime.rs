@@ -12,7 +12,7 @@ use wasmtime::{AsContextMut, Config, Engine, Linker, Module, Store};
 
 use super::{
     module_cache::ModuleCache,
-    system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi},
+    system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi, WriteBatch},
     ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
 };
 use crate::{
@@ -124,7 +124,7 @@ impl WasmContractModule {
 
 impl<Runtime> WasmtimeContractInstance<Runtime>
 where
-    Runtime: ContractRuntime + Send + Sync + 'static,
+    Runtime: ContractRuntime + WriteBatch + Send + Sync + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare(contract_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
@@ -161,7 +161,7 @@ impl WasmServiceModule {
 
 impl<Runtime> WasmtimeServiceInstance<Runtime>
 where
-    Runtime: ServiceRuntime + Send + Sync + 'static,
+    Runtime: ServiceRuntime + WriteBatch + Send + Sync + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare(service_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
