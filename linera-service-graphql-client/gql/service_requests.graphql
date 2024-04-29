@@ -182,6 +182,9 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           }
           messageCounts
           stateHash
+          oracleRecords {
+            responses
+          }
         }
       }
     }
@@ -219,6 +222,9 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
           }
           messageCounts
           stateHash
+          oracleRecords {
+            responses
+          }
         }
       }
     }
