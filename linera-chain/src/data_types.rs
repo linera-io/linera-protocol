@@ -10,7 +10,7 @@ use std::{
 use async_graphql::{Object, SimpleObject};
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
-    data_types::{Amount, BlockHeight, Round, Timestamp},
+    data_types::{Amount, BlockHeight, OracleRecord, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{
         Account, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
@@ -279,12 +279,6 @@ pub struct BlockExecutionOutcome {
     pub state_hash: CryptoHash,
     /// The record of oracle responses for each transaction.
     pub oracle_records: Vec<OracleRecord>,
-}
-
-/// A record of oracle responses from the execution of a transaction.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct OracleRecord {
-    pub responses: Vec<Vec<u8>>,
 }
 
 /// A statement to be certified by the validators.

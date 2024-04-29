@@ -6,6 +6,7 @@
 
 use std::fmt;
 
+use async_graphql::SimpleObject;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -681,6 +682,13 @@ impl ApplicationPermissions {
     pub fn can_close_chain(&self, app_id: &ApplicationId) -> bool {
         self.close_chain.contains(app_id)
     }
+}
+
+/// A record of oracle responses from the execution of a transaction.
+#[derive(Debug, Default, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct OracleRecord {
+    /// The list of responses to all the oracle queries made by a transaction.
+    pub responses: Vec<Vec<u8>>,
 }
 
 doc_scalar!(Amount, "A non-negative amount of tokens.");

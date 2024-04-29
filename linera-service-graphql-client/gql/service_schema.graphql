@@ -628,6 +628,9 @@ scalar Operation
 A record of oracle responses from the execution of a transaction.
 """
 type OracleRecord {
+	"""
+	The list of responses to all the oracle queries made by a transaction.
+	"""
 	responses: [[Int!]!]!
 }
 

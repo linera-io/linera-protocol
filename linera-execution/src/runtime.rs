@@ -11,7 +11,7 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Resources,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleRecord, Resources,
         SendMessageRequest, Timestamp,
     },
     ensure,
@@ -866,8 +866,8 @@ impl ContractSyncRuntime {
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: UserAction,
-        oracle_responses: Option<Vec<Vec<u8>>>,
-    ) -> Result<(Vec<ExecutionOutcome>, Vec<Vec<u8>>, ResourceController), ExecutionError> {
+        oracle_record: Option<OracleRecord>,
+    ) -> Result<(Vec<ExecutionOutcome>, OracleRecord, ResourceController), ExecutionError> {
         let executing_message = match &action {
             UserAction::Message(context, _) => Some(context.into()),
             _ => None,
@@ -875,9 +875,9 @@ impl ContractSyncRuntime {
         let signer = action.signer();
         let height = action.height();
         let next_message_index = action.next_message_index();
-        let oracle_responses = oracle_responses.map_or_else(
+        let oracle_record = oracle_record.map_or_else(
             || OracleResponses::Record(Vec::new()),
-            |responses| OracleResponses::Replay(responses.into_iter()),
+            |responses| OracleResponses::Replay(responses.responses.into_iter()),
         );
         let mut runtime = ContractSyncRuntime::new(SyncRuntimeInternal::new(
             chain_id,
@@ -888,7 +888,7 @@ impl ContractSyncRuntime {
             execution_state_sender,
             refund_grant_to,
             resource_controller,
-            oracle_responses,
+            oracle_record,
         ));
         let finalize_context = FinalizeContext {
             authenticated_signer: signer,
@@ -907,15 +907,14 @@ impl ContractSyncRuntime {
         let runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        let oracle_responses = if let OracleResponses::Record(responses) = runtime.oracle_responses
-        {
-            responses
+        let oracle_record = if let OracleResponses::Record(responses) = runtime.oracle_responses {
+            OracleRecord { responses }
         } else {
-            Vec::new()
+            OracleRecord::default()
         };
         Ok((
             runtime.execution_outcomes,
-            oracle_responses,
+            oracle_record,
             runtime.resource_controller,
         ))
     }

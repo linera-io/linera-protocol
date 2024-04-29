@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use linera_base::{
     crypto::KeyPair,
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, OracleRecord, Timestamp},
     identifiers::{
         BytecodeId, ChainDescription, ChainId, Destination, GenericApplicationId, MessageId,
     },
@@ -488,7 +488,7 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            Some(Vec::new()),
+            Some(OracleRecord::default()),
             &mut controller,
         )
         .await?;
