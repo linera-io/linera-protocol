@@ -47,7 +47,7 @@ macro_rules! contract {
                 $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
-                        let argument = serde_json::from_slice(&argument)
+                        let argument = $crate::serde_json::from_slice(&argument)
                             .expect("Failed to deserialize instantiation argument");
 
                         contract.instantiate(argument).blocking_wait()
@@ -61,11 +61,12 @@ macro_rules! contract {
                     unsafe { &mut CONTRACT },
                     move |contract| {
                         let operation: <$contract as $crate::abi::ContractAbi>::Operation =
-                            bcs::from_bytes(&operation).expect("Failed to deserialize operation");
+                            $crate::bcs::from_bytes(&operation)
+                                .expect("Failed to deserialize operation");
 
                         let response = contract.execute_operation(operation).blocking_wait();
 
-                        bcs::to_bytes(&response)
+                        $crate::bcs::to_bytes(&response)
                             .expect("Failed to serialize contract's `Response`")
                     },
                 )
@@ -77,7 +78,8 @@ macro_rules! contract {
                     unsafe { &mut CONTRACT },
                     move |contract| {
                         let message: <$contract as $crate::Contract>::Message =
-                            bcs::from_bytes(&message).expect("Failed to deserialize message");
+                            $crate::bcs::from_bytes(&message)
+                                .expect("Failed to deserialize message");
 
                         contract.execute_message(message).blocking_wait()
                     },

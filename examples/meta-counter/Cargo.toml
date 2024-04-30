@@ -6,19 +6,13 @@ edition = "2021"
 
 [dependencies]
 async-graphql.workspace = true
-bcs.workspace = true
 counter.workspace = true
 linera-sdk.workspace = true
 log.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 
 [dev-dependencies]
 linera-sdk = { workspace = true, features = ["test"] }
-
-# TODO(#1970): Remove once macros don't depend on them
-[package.metadata.cargo-machete]
-ignored = ["bcs", "serde_json"]
 
 [[bin]]
 name = "meta_counter_contract"

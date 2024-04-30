@@ -102,14 +102,12 @@ name = "amm"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "bcs",
  "fungible",
  "linera-sdk",
  "matching-engine",
  "num-bigint",
  "num-traits",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1789,7 +1787,6 @@ name = "crowd-funding"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "bcs",
  "fungible",
  "linera-sdk",
  "serde",
@@ -2840,11 +2837,9 @@ name = "fungible"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "bcs",
  "futures",
  "linera-sdk",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -4728,7 +4723,6 @@ dependencies = [
  "fungible",
  "linera-sdk",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -4815,12 +4809,10 @@ name = "meta-counter"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "bcs",
  "counter",
  "linera-sdk",
  "log",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -4890,11 +4882,9 @@ name = "native-fungible"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "bcs",
  "fungible",
  "linera-sdk",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -4923,7 +4913,6 @@ dependencies = [
  "fungible",
  "linera-sdk",
  "serde",
- "serde_json",
  "sha3",
 ]
 
@@ -6820,7 +6809,6 @@ dependencies = [
  "bcs",
  "linera-sdk",
  "serde",
- "serde_json",
 ]
 
 [[package]]

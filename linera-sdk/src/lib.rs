@@ -45,6 +45,7 @@ pub mod views;
 
 use std::fmt::Debug;
 
+pub use bcs;
 use linera_base::abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi};
 pub use linera_base::{
     abi,
@@ -52,6 +53,7 @@ pub use linera_base::{
     ensure,
 };
 use serde::{de::DeserializeOwned, Serialize};
+pub use serde_json;
 
 use self::views::{RootView, ViewStorageContext};
 #[doc(hidden)]
