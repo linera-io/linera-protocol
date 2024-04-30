@@ -426,6 +426,7 @@ pub trait BaseRuntime {
     ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Makes a GET request to the given URL and returns the JSON part, if any.
+    #[cfg(not(target_arch = "wasm32"))]
     fn fetch_json(&mut self, url: &str) -> Result<String, ExecutionError>;
 }
 
@@ -437,8 +438,8 @@ pub trait ServiceRuntime: BaseRuntime {
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
-    #[cfg(not(target_arch = "wasm32"))]
     /// Fetches blob of bytes from an arbitrary URL.
+    #[cfg(not(target_arch = "wasm32"))]
     fn fetch_url(&mut self, url: &str) -> Result<Vec<u8>, ExecutionError>;
 }
 

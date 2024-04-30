@@ -268,6 +268,7 @@ where
                 callback.respond(bytes);
             }
 
+            #[cfg(not(target_arch = "wasm32"))]
             FetchJson { url, callback } => {
                 let json: serde_json::Value = reqwest::get(url).await?.json().await?;
                 let string = serde_json::to_string_pretty(&json)?;
@@ -387,6 +388,7 @@ pub enum Request {
         callback: Sender<Vec<u8>>,
     },
 
+    #[cfg(not(target_arch = "wasm32"))]
     FetchJson {
         url: String,
         callback: oneshot::Sender<String>,
@@ -511,6 +513,7 @@ impl Debug for Request {
                 .field("url", url)
                 .finish_non_exhaustive(),
 
+            #[cfg(not(target_arch = "wasm32"))]
             Request::FetchJson { url, .. } => formatter
                 .debug_struct("Request::FetchJson")
                 .field("url", url)

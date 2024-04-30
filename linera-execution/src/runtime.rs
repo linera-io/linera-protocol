@@ -639,6 +639,7 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().query_service(application_id, query)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn fetch_json(&mut self, url: &str) -> Result<String, ExecutionError> {
         self.inner().fetch_json(url)
     }
@@ -867,6 +868,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(response)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn fetch_json(&mut self, url: &str) -> Result<String, ExecutionError> {
         if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
             return match responses.next() {
