@@ -24,20 +24,6 @@ const MAX_KEY_SIZE: usize = 900;
 #[derive(Default, Clone)]
 pub struct KeyValueStore;
 
-impl KeyValueStore {
-    async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
-        let promise = wit::find_keys_new(key_prefix);
-        yield_once().await;
-        wit::find_keys_wait(promise)
-    }
-
-    async fn find_key_values_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
-        let promise = wit::find_key_values_new(key_prefix);
-        yield_once().await;
-        wit::find_key_values_wait(promise)
-    }
-}
-
 impl ReadableKeyValueStore<ViewError> for KeyValueStore {
     // The KeyValueStore of the system_api does not have limits
     // on the size of its values.
@@ -80,8 +66,9 @@ impl ReadableKeyValueStore<ViewError> for KeyValueStore {
             key_prefix.len() <= Self::MAX_KEY_SIZE,
             ViewError::KeyTooLong
         );
-        let keys = self.find_keys_by_prefix_load(key_prefix).await;
-        Ok(keys)
+        let promise = wit::find_keys_new(key_prefix);
+        yield_once().await;
+        Ok(wit::find_keys_wait(promise))
     }
 
     async fn find_key_values_by_prefix(
@@ -92,8 +79,9 @@ impl ReadableKeyValueStore<ViewError> for KeyValueStore {
             key_prefix.len() <= Self::MAX_KEY_SIZE,
             ViewError::KeyTooLong
         );
-        let key_values = self.find_key_values_by_prefix_load(key_prefix).await;
-        Ok(key_values)
+        let promise = wit::find_key_values_new(key_prefix);
+        yield_once().await;
+        Ok(wit::find_key_values_wait(promise))
     }
 }
 
