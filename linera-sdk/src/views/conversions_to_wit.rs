@@ -5,7 +5,7 @@
 
 use linera_views::batch::WriteOperation;
 
-use crate::service::wit::view_system_api as wit_system_api;
+use crate::contract::wit::view_system_api as wit_system_api;
 
 impl From<WriteOperation> for wit_system_api::WriteOperation {
     fn from(write_operation: WriteOperation) -> Self {
