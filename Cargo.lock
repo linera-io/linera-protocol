@@ -4286,6 +4286,7 @@ dependencies = [
  "cfg_aliases",
  "clap",
  "dashmap",
+ "ethers",
  "futures",
  "linera-base",
  "linera-chain",

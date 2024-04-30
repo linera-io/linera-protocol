@@ -343,7 +343,7 @@ where
     let OracleResponse::Service(json) = &responses[0] else {
         panic!("Unexpected oracle response: {:?}", responses[0]);
     };
-    let response_json = serde_json::from_slice::<serde_json::Value>(&json).unwrap();
+    let response_json = serde_json::from_slice::<serde_json::Value>(json).unwrap();
     assert_eq!(response_json["data"], json!({"value": 0}));
 
     let query = Request::new("{ value }");

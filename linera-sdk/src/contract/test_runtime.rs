@@ -9,7 +9,7 @@ use std::{
 };
 
 use linera_base::{
-    abi::ContractAbi,
+    abi::{ContractAbi, ServiceAbi},
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
     ownership::{ChainOwnership, CloseChainError},
@@ -576,6 +576,32 @@ where
 
         bcs::from_bytes(&response_bytes)
             .expect("Failed to deserialize `Response` type from cross-application call")
+    }
+
+    /// Queries our application service as an oracle and returns the response.
+    ///
+    /// Should only be used with queries where it is very likely that all validators will compute
+    /// the same result, otherwise most block proposals will fail.
+    ///
+    /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
+    /// owner, not a super owner.
+    pub fn query_service<A: ServiceAbi + Send>(
+        &mut self,
+        _application_id: ApplicationId<A>,
+        _query: A::Query,
+    ) -> A::QueryResponse {
+        todo!()
+    }
+
+    /// Makes a GET request to the given URL as an oracle and returns the JSON part, if any.
+    ///
+    /// Should only be used with queries where it is very likely that all validators will receive
+    /// the same response, otherwise most block proposals will fail.
+    ///
+    /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
+    /// owner, not a super owner.
+    pub fn fetch_json(&self, _url: &str) -> String {
+        todo!()
     }
 }
 
