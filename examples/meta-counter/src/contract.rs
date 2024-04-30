@@ -87,6 +87,10 @@ impl Contract for MetaCounterContract {
             }
             Message::Increment(value) => {
                 let counter_id = self.counter_id();
+                // Make a service query: The result will be logged in the executed block.
+                let _ = self
+                    .runtime
+                    .query_service(counter_id, "query { value }".into());
                 log::trace!("executing {} via {:?}", value, counter_id);
                 self.runtime.call_application(true, counter_id, &value);
             }

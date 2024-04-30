@@ -18,8 +18,9 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::Amount,
+    data_types::{Amount, OracleRecord, OracleResponse},
     identifiers::{AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner},
+    ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::data_types::{CertificateValue, MessageAction, OutgoingMessage};
 use linera_execution::{
@@ -246,6 +247,27 @@ where
         .await?;
     let receiver_id = ChainId::root(2);
 
+    // Handling the message causes an oracle request to the counter service, so no fast blocks
+    // are allowed.
+    let receiver_key = receiver.public_key().await.unwrap();
+    receiver
+        .change_ownership(ChainOwnership::multiple(
+            [(receiver_key, 100)],
+            100,
+            TimeoutConfig::default(),
+        ))
+        .await
+        .unwrap();
+    let creator_key = creator.public_key().await.unwrap();
+    creator
+        .change_ownership(ChainOwnership::multiple(
+            [(creator_key, 100)],
+            100,
+            TimeoutConfig::default(),
+        ))
+        .await
+        .unwrap();
+
     let cert = creator
         .subscribe_to_published_bytecodes(publisher.chain_id)
         .await
@@ -315,7 +337,14 @@ where
         .unwrap();
 
     receiver.receive_certificate(cert).await.unwrap();
-    receiver.process_inbox().await.unwrap();
+    let (cert, _) = receiver.process_inbox().await.unwrap();
+    let executed_block = cert[0].value().executed_block().unwrap();
+    let OracleRecord { responses } = &executed_block.outcome.oracle_records[1];
+    let OracleResponse::Service(json) = &responses[0] else {
+        panic!("Unexpected oracle response: {:?}", responses[0]);
+    };
+    let response_json = serde_json::from_slice::<serde_json::Value>(&json).unwrap();
+    assert_eq!(response_json["data"], json!({"value": 0}));
 
     let query = Request::new("{ value }");
     let response = receiver
