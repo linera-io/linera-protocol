@@ -248,6 +248,8 @@ pub enum WorkerError {
     ApplicationBytecodesNotFound(Vec<BytecodeLocation>),
     #[error("The certificate in the block proposal is not a ValidatedBlock")]
     MissingExecutedBlockInProposal,
+    #[error("Fast blocks cannot query oracles")]
+    FastBlockUsingOracles,
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -1070,7 +1072,7 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, proposal);
         let BlockProposal {
-            content: BlockAndRound { block, .. },
+            content: BlockAndRound { block, round },
             owner,
             signature,
             blobs,
@@ -1133,6 +1135,13 @@ where
         } else {
             chain.execute_block(block, local_time, None).await?
         };
+        if round.is_fast() {
+            let mut records = outcome.oracle_records.iter();
+            ensure!(
+                records.all(|record| record.responses.is_empty()),
+                WorkerError::FastBlockUsingOracles
+            );
+        }
         // Check if the counters of tip_state would be valid.
         chain.tip_state.get().verify_counters(block, &outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
