@@ -12,6 +12,8 @@ interface service-system-api {
     read-balance-owners: func() -> list<owner>;
     try-query-application: func(application: application-id, argument: list<u8>) -> list<u8>;
     fetch-url: func(url: string) -> list<u8>;
+    query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
+    fetch-json: func(query: string) -> string;
     log: func(message: string, level: log-level);
 
     record amount {

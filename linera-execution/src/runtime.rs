@@ -638,6 +638,10 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
     ) -> Result<Vec<u8>, ExecutionError> {
         self.inner().query_service(application_id, query)
     }
+
+    fn fetch_json(&mut self, url: &str) -> Result<String, ExecutionError> {
+        self.inner().fetch_json(url)
+    }
 }
 
 impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
@@ -854,10 +858,29 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             next_block_height: self.height,
         };
         let sender = self.execution_state_sender.clone();
-        // TODO(#1875): Make sure the service can never write to the state.
         let response = ServiceSyncRuntime::run_query(sender, application_id, context, query)?;
         if let OracleResponses::Record(responses) = &mut self.oracle_responses {
             responses.push(response.clone());
+        }
+        Ok(response)
+    }
+
+    fn fetch_json(&mut self, url: &str) -> Result<String, ExecutionError> {
+        if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
+            return String::from_utf8(
+                responses
+                    .next()
+                    .ok_or_else(|| ExecutionError::MissingOracleResponse)?,
+            )
+            .map_err(|_| ExecutionError::OracleResponseMismatch);
+        }
+        let url = url.to_string();
+        let response = self
+            .execution_state_sender
+            .send_request(|callback| Request::FetchJson { url, callback })?
+            .recv_response()?;
+        if let OracleResponses::Record(responses) = &mut self.oracle_responses {
+            responses.push(response.as_bytes().to_vec());
         }
         Ok(response)
     }

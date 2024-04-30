@@ -50,7 +50,7 @@ lru.workspace = true
 once_cell.workspace = true
 oneshot.workspace = true
 prometheus = { workspace = true, optional = true }
-reqwest = { workspace = true, features = ["blocking"] }
+reqwest = { workspace = true, features = ["blocking", "json"] }
 serde.workspace = true
 serde_bytes.workspace = true
 serde_json.workspace = true

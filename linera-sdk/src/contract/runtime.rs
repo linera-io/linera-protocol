@@ -217,6 +217,11 @@ where
         let response = wit::query_service(application_id.forget_abi().into(), &query);
         serde_json::from_slice(&response).expect("Failed to deserialize service response")
     }
+
+    /// Makes a GET request to the given URL and returns the JSON part, if any.
+    pub fn fetch_json(&self, url: &str) -> String {
+        wit::fetch_json(url)
+    }
 }
 
 /// A helper type that uses the builder pattern to configure how a message is sent, and then

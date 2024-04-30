@@ -1325,7 +1325,7 @@ impl<A> ApplicationWrapper<A> {
         self.raw_query(&format!("query {{ {query} }}")).await
     }
 
-    pub async fn query_json<T: DeserializeOwned>(&self, query: impl AsRef<str>) -> Result<T> {
+    pub async fn fetch_json<T: DeserializeOwned>(&self, query: impl AsRef<str>) -> Result<T> {
         let query = query.as_ref().trim();
         let name = query
             .split_once(|ch: char| !ch.is_alphanumeric())
