@@ -5,16 +5,26 @@
 
 mod conversions_from_wit;
 mod conversions_to_wit;
+#[cfg(not(with_testing))]
 mod runtime;
+#[cfg(with_testing)]
+mod test_runtime;
 #[doc(hidden)]
 pub mod wit;
 
 use std::future::Future;
 
+#[cfg(not(with_testing))]
 pub use self::runtime::ServiceRuntime;
+#[cfg(with_testing)]
+pub use self::test_runtime::MockServiceRuntime;
 #[doc(hidden)]
 pub use self::wit::export_service;
 use crate::{util::BlockingWait, ServiceLogger};
+
+/// Inside tests, use the [`MockServiceRuntime`] instead of the real [`ServiceRuntime`].
+#[cfg(with_testing)]
+pub type ServiceRuntime<Application> = MockServiceRuntime<Application>;
 
 /// Declares an implementation of the [`Service`][`crate::Service`] trait, exporting it from the
 /// Wasm module.

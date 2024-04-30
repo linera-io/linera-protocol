@@ -4285,6 +4285,7 @@ version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-graphql",
+ "async-trait",
  "bcs",
  "cargo_toml",
  "cfg_aliases",
@@ -4297,7 +4298,6 @@ dependencies = [
  "linera-execution",
  "linera-sdk-derive",
  "linera-storage",
- "linera-version",
  "linera-views",
  "linera-witty",
  "log",
@@ -4316,20 +4316,6 @@ dependencies = [
  "convert_case 0.6.0",
  "proc-macro2",
  "syn 2.0.52",
-]
-
-[[package]]
-name = "linera-sdk-wasm-tests"
-version = "0.11.0"
-dependencies = [
- "async-trait",
- "bcs",
- "futures",
- "linera-sdk",
- "linera-views",
- "log",
- "serde_json",
- "webassembly-test",
 ]
 
 [[package]]
@@ -8673,16 +8659,6 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "webassembly-test"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45e64391864794db026d27b15cbe6edd3c25864222bd90229dfa1a26ebf30705"
-dependencies = [
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]

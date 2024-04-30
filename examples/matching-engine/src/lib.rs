@@ -458,11 +458,10 @@ pub enum Message {
 #[cfg(test)]
 mod tests {
     use linera_sdk::views::CustomSerialize;
-    use webassembly_test::webassembly_test;
 
     use super::{PriceAsk, PriceBid};
 
-    #[webassembly_test]
+    #[test]
     fn test_ordering_serialization() {
         let n = 20;
         let mut vec = Vec::new();

@@ -30,15 +30,15 @@ wasmtime = [
     "linera-storage/wasmtime",
     "linera-witty/wasmtime",
 ]
-test = ["linera-base/test"]
+test = ["async-trait", "linera-base/test"]
 
 [dependencies]
 async-graphql.workspace = true
+async-trait = { workspace = true, optional = true }
 bcs.workspace = true
 futures.workspace = true
 linera-base.workspace = true
 linera-sdk-derive.workspace = true
-linera-version.workspace = true
 linera-views.workspace = true
 log.workspace = true
 serde.workspace = true
@@ -70,8 +70,3 @@ tokio-test.workspace = true
 [[bin]]
 name = "wit-generator"
 path = "src/bin/wit_generator.rs"
-
-[[bin]]
-name = "linera-wasm-test-runner"
-path = "src/bin/linera-wasm-test-runner.rs"
-required-features = ["wasmtime"]

@@ -35,7 +35,6 @@ serde_json = "1.0.93"
 sha3 = "0.10.8"
 tokenizers = { git = "https://github.com/christos-h/tokenizers", default-features = false, features = ["unstable_wasm"] }
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
-webassembly-test = "0.1.0"
 
 counter = { path = "./counter" }
 crowd-funding = { path = "./crowd-funding" }

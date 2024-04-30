@@ -20,9 +20,6 @@ tokenizers.workspace = true
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 tokio = { workspace = true, features = ["rt", "sync"] }
 
-[dev-dependencies]
-webassembly-test.workspace = true
-
 # TODO(#1970): Remove once macros don't depend on them
 [package.metadata.cargo-machete]
 ignored = ["bcs", "serde_json"]

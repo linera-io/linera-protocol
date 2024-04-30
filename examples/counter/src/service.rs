@@ -66,20 +66,16 @@ mod tests {
     use async_graphql::{Request, Response, Value};
     use futures::FutureExt;
     use linera_sdk::{
-        test::mock_key_value_store,
         util::BlockingWait,
         views::{View, ViewStorageContext},
         Service,
     };
     use serde_json::json;
-    use webassembly_test::webassembly_test;
 
     use super::{Counter, CounterService};
 
-    #[webassembly_test]
+    #[test]
     fn query() {
-        mock_key_value_store();
-
         let value = 61_098_721_u64;
         let mut state = Counter::load(ViewStorageContext::default())
             .blocking_wait()
