@@ -27,6 +27,7 @@ pub fn derive_mutation_root_in_crate(input: TokenStream) -> TokenStream {
 }
 
 fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream2 {
+    let crate_root = Ident::new(crate_root, Span::call_site());
     let enum_name = input.ident;
     let mutation_root_name = concat(&enum_name, "MutationRoot");
     let mut methods = vec![];
@@ -46,7 +47,8 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
                 }
                 methods.push(quote! {
                     async fn #function_name(&self, #(#fields,)*) -> Vec<u8> {
-                        bcs::to_bytes(&#enum_name::#variant_name { #(#field_names,)* }).unwrap()
+                        #crate_root::bcs::to_bytes(&#enum_name::#variant_name { #(#field_names,)* })
+                            .unwrap()
                     }
                 });
             }
@@ -61,21 +63,21 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
                 }
                 methods.push(quote! {
                     async fn #function_name(&self, #(#fields,)*) -> Vec<u8> {
-                        bcs::to_bytes(&#enum_name::#variant_name ( #(#field_names,)* )).unwrap()
+                        #crate_root::bcs::to_bytes(&#enum_name::#variant_name ( #(#field_names,)* ))
+                            .unwrap()
                     }
                 });
             }
             Fields::Unit => {
                 methods.push(quote! {
                     async fn #function_name(&self) -> Vec<u8> {
-                        bcs::to_bytes(&#enum_name::#variant_name).unwrap()
+                        #crate_root::bcs::to_bytes(&#enum_name::#variant_name).unwrap()
                     }
                 });
             }
         };
     }
 
-    let crate_root = Ident::new(crate_root, Span::call_site());
     quote! {
         /// Mutation root
         pub struct #mutation_root_name;
@@ -137,13 +139,13 @@ pub mod tests {
             #[async_graphql::Object]
             impl SomeOperationMutationRoot {
                 async fn tuple_variant(&self, field0: String,) -> Vec<u8> {
-                    bcs::to_bytes(&SomeOperation::TupleVariant(field0,)).unwrap()
+                    linera_sdk::bcs::to_bytes(&SomeOperation::TupleVariant(field0,)).unwrap()
                 }
                 async fn struct_variant(&self, a: u32, b: u64,) -> Vec<u8> {
-                    bcs::to_bytes(&SomeOperation::StructVariant { a, b, }).unwrap()
+                    linera_sdk::bcs::to_bytes(&SomeOperation::StructVariant { a, b, }).unwrap()
                 }
                 async fn empty_variant(&self) -> Vec<u8> {
-                    bcs::to_bytes(&SomeOperation::EmptyVariant).unwrap()
+                    linera_sdk::bcs::to_bytes(&SomeOperation::EmptyVariant).unwrap()
                 }
             }
 
