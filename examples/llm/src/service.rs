@@ -166,7 +166,6 @@ impl ModelContext {
         panic!("model failed to be loaded")
     }
 
-    // Copied mostly from https://github.com/huggingface/candle/blob/57267cd53612ede04090853680125b17956804f3/candle-examples/examples/quantized/main.rs
     fn run_model(&self, prompt_string: &str) -> Result<String, candle_core::Error> {
         let raw_weights = &self.model;
         let tokenizer_bytes = &self.tokenizer;
