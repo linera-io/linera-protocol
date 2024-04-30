@@ -4,7 +4,7 @@
 use graphql_client::GraphQLQuery;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
     identifiers::{Account, ChainDescription, ChainId, ChannelName, Destination, Owner},
 };
 
@@ -233,12 +233,7 @@ mod from {
     impl From<block::BlockBlockValueExecutedBlockOutcomeOracleRecords> for OracleRecord {
         fn from(val: block::BlockBlockValueExecutedBlockOutcomeOracleRecords) -> Self {
             let block::BlockBlockValueExecutedBlockOutcomeOracleRecords { responses } = val;
-            OracleRecord {
-                responses: responses
-                    .into_iter()
-                    .map(|response| response.into_iter().map(|byte| byte as u8).collect())
-                    .collect(),
-            }
+            OracleRecord { responses }
         }
     }
 

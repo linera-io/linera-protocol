@@ -11,8 +11,8 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleRecord, Resources,
-        SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleRecord, OracleResponse,
+        Resources, SendMessageRequest, Timestamp,
     },
     ensure,
     identifiers::{Account, ApplicationId, ChainId, ChannelName, MessageId, Owner},
@@ -45,9 +45,9 @@ pub type ServiceSyncRuntime = SyncRuntime<UserServiceInstance>;
 #[derive(Debug)]
 enum OracleResponses {
     /// When executing a block _proposal_, oracles can be used and their responses are recorded.
-    Record(Vec<Vec<u8>>),
+    Record(Vec<OracleResponse>),
     /// When re-executing a validated or confirmed block, recorded responses are used.
-    Replay(vec::IntoIter<Vec<u8>>),
+    Replay(vec::IntoIter<OracleResponse>),
     /// In service queries, oracle responses are not recorded.
     Forget,
 }
@@ -849,9 +849,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
-            return responses
-                .next()
-                .ok_or_else(|| ExecutionError::MissingOracleResponse);
+            return match responses.next() {
+                Some(OracleResponse::Service(bytes)) => Ok(bytes),
+                Some(_) => Err(ExecutionError::OracleResponseMismatch),
+                None => Err(ExecutionError::MissingOracleResponse),
+            };
         }
         let context = crate::QueryContext {
             chain_id: self.chain_id,
@@ -860,29 +862,28 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let sender = self.execution_state_sender.clone();
         let response = ServiceSyncRuntime::run_query(sender, application_id, context, query)?;
         if let OracleResponses::Record(responses) = &mut self.oracle_responses {
-            responses.push(response.clone());
+            responses.push(OracleResponse::Service(response.clone()));
         }
         Ok(response)
     }
 
     fn fetch_json(&mut self, url: &str) -> Result<String, ExecutionError> {
         if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
-            return String::from_utf8(
-                responses
-                    .next()
-                    .ok_or_else(|| ExecutionError::MissingOracleResponse)?,
-            )
-            .map_err(|_| ExecutionError::OracleResponseMismatch);
+            return match responses.next() {
+                Some(OracleResponse::Json(json)) => Ok(json),
+                Some(_) => Err(ExecutionError::OracleResponseMismatch),
+                None => Err(ExecutionError::MissingOracleResponse),
+            };
         }
         let url = url.to_string();
-        let response = self
+        let json = self
             .execution_state_sender
             .send_request(|callback| Request::FetchJson { url, callback })?
             .recv_response()?;
         if let OracleResponses::Record(responses) = &mut self.oracle_responses {
-            responses.push(response.as_bytes().to_vec());
+            responses.push(OracleResponse::Json(json.clone()));
         }
-        Ok(response)
+        Ok(json)
     }
 }
 

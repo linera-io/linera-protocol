@@ -619,7 +619,16 @@ OracleRecord:
   STRUCT:
     - responses:
         SEQ:
+          TYPENAME: OracleResponse
+OracleResponse:
+  ENUM:
+    0:
+      Service:
+        NEWTYPE:
           SEQ: U8
+    1:
+      Json:
+        NEWTYPE: STR
 Origin:
   STRUCT:
     - sender:

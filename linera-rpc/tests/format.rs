@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    data_types::Round,
+    data_types::{OracleResponse, Round},
     identifiers::{ChainDescription, Destination, GenericApplicationId},
     ownership::ChainOwnership,
 };
@@ -29,6 +29,7 @@ fn get_registry() -> Result<Registry> {
     // 1. Record samples for types with custom deserializers.
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<Round>(&samples)?;
+    tracer.trace_type::<OracleResponse>(&samples)?;
     tracer.trace_type::<Recipient>(&samples)?;
     tracer.trace_type::<SystemChannel>(&samples)?;
     tracer.trace_type::<SystemOperation>(&samples)?;
