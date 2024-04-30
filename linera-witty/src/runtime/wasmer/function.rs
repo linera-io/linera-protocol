@@ -4,7 +4,7 @@
 //! Implementations of [`InstanceWithFunction`] for Wasmer instances.
 
 use frunk::{hlist_pat, HList};
-use wasmer::{AsStoreRef, Extern, FromToNativeWasmType, TypedFunction};
+use wasmer::{AsStoreRef, Extern, FromToNativeWasmType, NativeWasmTypeInto, TypedFunction};
 
 use super::{
     parameters::WasmerParameters, results::WasmerResults, EntrypointInstance, ReentrantInstance,
@@ -30,7 +30,7 @@ macro_rules! impl_instance_with_function_for {
         impl<$( $types, )* Results, UserData> InstanceWithFunction<HList![$( $types ),*], Results>
             for $instance
         where
-            $( $types: FlatType + FromToNativeWasmType, )*
+            $( $types: FlatType + FromToNativeWasmType + NativeWasmTypeInto, )*
             Results: FlatLayout + WasmerResults,
             UserData: Send + 'static,
         {
