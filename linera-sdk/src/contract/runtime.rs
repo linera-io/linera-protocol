@@ -208,6 +208,12 @@ where
     }
 
     /// Queries our application service as an oracle and returns the response.
+    ///
+    /// Should only be used with queries where it is very likely that all validators will compute
+    /// the same result, otherwise most block proposals will fail.
+    ///
+    /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
+    /// owner, not a super owner.
     pub fn query_service<A: ServiceAbi + Send>(
         &mut self,
         application_id: ApplicationId<A>,
@@ -218,7 +224,13 @@ where
         serde_json::from_slice(&response).expect("Failed to deserialize service response")
     }
 
-    /// Makes a GET request to the given URL and returns the JSON part, if any.
+    /// Makes a GET request to the given URL as an oracle and returns the JSON part, if any.
+    ///
+    /// Should only be used with queries where it is very likely that all validators will receive
+    /// the same response, otherwise most block proposals will fail.
+    ///
+    /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
+    /// owner, not a super owner.
     pub fn fetch_json(&self, url: &str) -> String {
         wit::fetch_json(url)
     }
