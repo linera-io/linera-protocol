@@ -33,7 +33,7 @@ function handleSend(message, messages, setMessages, setTypingIndicator, doPrompt
             }
         }
     }]);
-    setTypingIndicator(<TypingIndicator content="LineraGPT is thinking..."/>)
+    setTypingIndicator(<TypingIndicator content="Linera Stories is thinking..."/>)
     doPrompt({variables: {prompt: message}});
 }
 
@@ -42,8 +42,8 @@ function Chat({chainId}) {
         [{
             props: {
                 model: {
-                    message: "Hey! I'm LineraGPT. How can I assist you?",
-                    sender: "LineraGPT",
+                    message: "Hey! I'm Linera Stories. Start a story and I'll finish it for you.",
+                    sender: "Linera Stories",
                     direction: "incoming",
                     position: "single"
                 }
@@ -57,16 +57,18 @@ function Chat({chainId}) {
     ] = useLazyQuery(PROMPT, {
         fetchPolicy: "network-only",
         onCompleted: (data) => {
-            setMessages([...messages, {
-                props: {
-                    model: {
-                        message: data.prompt.replace(/\n/g, ''),
-                        sender: "LineraGPT",
-                        direction: "incoming",
-                        position: "single"
+            data.prompt.split("\n").forEach((s) => {
+                setMessages(prevMessages => [...prevMessages, {
+                    props: {
+                        model: {
+                            message: s,
+                            sender: "Linera Stories",
+                            direction: "incoming",
+                            position: "single"
+                        }
                     }
-                }
-            }]);
+                }]);
+            });
             setTypingIndicator(null)
         },
         onError: (error) => {
@@ -79,14 +81,9 @@ function Chat({chainId}) {
             <MainContainer style={{height: '100vh', response: true}}>
                 <ChatContainer>
                     <ConversationHeader>
-                        {/*<TODO: put Linera logo here*/}
-                        {/*<Avatar*/}
-                        {/*    name="LineraGPT"*/}
-                        {/*    src="localhost:3000/public/favicon.ico"*/}
-                        {/*/>*/}
                         <ConversationHeader.Content
                             info="Online"
-                            userName="LineraGPT"
+                            userName="Linera Stories"
                         />
                     </ConversationHeader>
                     <MessageList typingIndicator={typingIndicator}>

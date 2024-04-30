@@ -6,6 +6,8 @@
 
 This example application runs a large language model in an application's service.
 
+The model used by Linera Stories is a 40M parameter TinyLlama by A. Karpathy. Find out more here: https://github.com/karpathy/llama2.c.
+
 NOTE: Due to [lack of hardware acceleration](https://github.com/linera-io/linera-protocol/issues/1931) performance is wanting.
 
 # How It Works
@@ -27,7 +29,7 @@ to the GGUF format where it can be used for inference.
 First ensure you have the model and tokenizer locally by running:
 
 ```bash
-wget -O model.bin -c https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/tree/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+wget -O model.bin -c https://huggingface.co/karpathy/tinyllamas/resolve/main/stories42M.bin
 wget -c https://huggingface.co/spaces/lmz/candle-llama2/resolve/main/tokenizer.json
 ```
 
