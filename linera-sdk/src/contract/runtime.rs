@@ -231,7 +231,7 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn fetch_json(&self, url: &str) -> String {
+    pub fn fetch_json(&mut self, url: &str) -> String {
         wit::fetch_json(url)
     }
 }
