@@ -6,7 +6,7 @@
 use linera_base::ensure;
 use linera_views::{
     batch::{Batch, WriteOperation},
-    common::{ContextFromStore, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
+    common::{ContextFromStore, ReadableKeyValueStore, WritableKeyValueStore},
     views::ViewError,
 };
 
@@ -22,9 +22,9 @@ const MAX_KEY_SIZE: usize = 900;
 
 /// A type to interface with the key value storage provided to applications.
 #[derive(Default, Clone)]
-pub struct AppStateStore;
+pub struct KeyValueStore;
 
-impl AppStateStore {
+impl KeyValueStore {
     async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
         let promise = wit::find_keys_new(key_prefix);
         yield_once().await;
@@ -38,8 +38,8 @@ impl AppStateStore {
     }
 }
 
-impl ReadableKeyValueStore<ViewError> for AppStateStore {
-    // The AppStateStore of the system_api does not have limits
+impl ReadableKeyValueStore<ViewError> for KeyValueStore {
+    // The KeyValueStore of the system_api does not have limits
     // on the size of its values.
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
@@ -97,7 +97,7 @@ impl ReadableKeyValueStore<ViewError> for AppStateStore {
     }
 }
 
-impl WritableKeyValueStore<ViewError> for AppStateStore {
+impl WritableKeyValueStore<ViewError> for KeyValueStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
@@ -117,10 +117,10 @@ impl WritableKeyValueStore<ViewError> for AppStateStore {
     }
 }
 
-impl KeyValueStore for AppStateStore {
+impl linera_views::common::KeyValueStore for KeyValueStore {
     type Error = ViewError;
 }
 
 /// Implementation of [`linera_views::common::Context`] to be used for data storage
 /// by Linera applications.
-pub type ViewStorageContext = ContextFromStore<(), AppStateStore>;
+pub type ViewStorageContext = ContextFromStore<(), KeyValueStore>;
