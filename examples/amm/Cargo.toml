@@ -6,22 +6,16 @@ edition = "2021"
 
 [dependencies]
 async-graphql.workspace = true
-bcs.workspace = true
 fungible.workspace = true
 linera-sdk.workspace = true
 matching-engine.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 tokio = { workspace = true, features = ["rt", "sync"] }
-
-# TODO(#1970): Remove once macros don't depend on them
-[package.metadata.cargo-machete]
-ignored = ["bcs", "serde_json"]
 
 [[bin]]
 name = "amm_contract"
