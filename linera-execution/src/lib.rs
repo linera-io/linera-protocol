@@ -119,6 +119,8 @@ pub enum ExecutionError {
         caller_id: Box<UserApplicationId>,
         callee_id: Box<UserApplicationId>,
     },
+    #[error("Attempt to write to storage from a contract")]
+    ServiceWriteAttempt,
     #[error("Failed to load bytecode from storage {0:?}")]
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
 
@@ -355,11 +357,6 @@ pub trait BaseRuntime {
         promise: &Self::ReadMultiValuesBytes,
     ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError>;
 
-    /// Writes a batch of changes.
-    ///
-    /// Hack: This fails for services.
-    fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
-
     /// Reads the key from the key-value store
     #[cfg(feature = "test")]
     fn read_value_bytes(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
@@ -493,6 +490,9 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// Closes the current chain.
     fn close_chain(&mut self) -> Result<(), ExecutionError>;
+
+    /// Writes a batch of changes.
+    fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
 }
 
 /// An operation to be executed in a block.

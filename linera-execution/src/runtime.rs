@@ -551,10 +551,6 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().chain_ownership()
     }
 
-    fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
-        self.inner().write_batch(batch)
-    }
-
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
         self.inner().contains_key_new(key)
     }
@@ -678,28 +674,6 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         self.execution_state_sender
             .send_request(|callback| Request::ChainOwnership { callback })?
             .recv_response()
-    }
-
-    fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
-        let id = self.application_id()?;
-        let state = self.view_user_states.entry(id).or_default();
-        state.force_all_pending_queries()?;
-        self.resource_controller.track_write_operations(
-            batch
-                .num_operations()
-                .try_into()
-                .map_err(|_| ExecutionError::from(ArithmeticError::Overflow))?,
-        )?;
-        self.resource_controller
-            .track_bytes_written(batch.size() as u64)?;
-        self.execution_state_sender
-            .send_request(|callback| Request::WriteBatch {
-                id,
-                batch,
-                callback,
-            })?
-            .recv_response()?;
-        Ok(())
     }
 
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
@@ -1155,6 +1129,29 @@ impl ContractRuntime for ContractSyncRuntime {
                 callback,
             })?
             .recv_response()?
+    }
+
+    fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
+        let mut this = self.inner();
+        let id = this.application_id()?;
+        let state = this.view_user_states.entry(id).or_default();
+        state.force_all_pending_queries()?;
+        this.resource_controller.track_write_operations(
+            batch
+                .num_operations()
+                .try_into()
+                .map_err(|_| ExecutionError::from(ArithmeticError::Overflow))?,
+        )?;
+        this.resource_controller
+            .track_bytes_written(batch.size() as u64)?;
+        this.execution_state_sender
+            .send_request(|callback| Request::WriteBatch {
+                id,
+                batch,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
     }
 }
 
