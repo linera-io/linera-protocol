@@ -5,22 +5,30 @@ use std::{path::Path, sync::Arc};
 
 use anyhow::Result;
 use ethers::{
+    abi::Abi,
     contract::abigen,
+    core::{k256::ecdsa::SigningKey, types::Bytes},
     prelude::{ContractFactory, SignerMiddleware},
     providers::{Http, Provider},
     signers::LocalWallet,
     solc::Solc,
-    types::{Address, U256},
+    types::{transaction::eip2718::TypedTransaction, Address, U256},
 };
 use ethers_core::utils::{Anvil, AnvilInstance};
-use ethers_signers::Signer;
+use ethers_signers::{Signer, Wallet};
 use linera_storage_service::child::get_free_port;
 
 use crate::client::EthereumEndpoint;
 
 abigen!(
-    SimpleContract,
+    SimpleTokenContract,
     "./contracts/SimpleToken.json",
+    event_derives(serde::Deserialize, serde::Serialize)
+);
+
+abigen!(
+    EventNumericsContract,
+    "./contracts/EventNumerics.json",
     event_derives(serde::Deserialize, serde::Serialize)
 );
 
@@ -50,84 +58,132 @@ pub async fn get_anvil() -> Result<AnvilTest> {
 }
 
 impl AnvilTest {
-    pub fn get_wallet(&self, index: usize) -> (LocalWallet, Address) {
+    pub fn get_wallet(&self, index: usize) -> (LocalWallet, String) {
         let address = self.anvil_instance.addresses()[index];
+        let address = format!("{:?}", address);
         let wallet: LocalWallet = self.anvil_instance.keys()[index].clone().into();
         let wallet = wallet.with_chain_id(self.anvil_instance.chain_id());
         (wallet, address)
     }
+
+    pub fn get_address(&self, index: usize) -> String {
+        let address = self.anvil_instance.addresses()[index];
+        format!("{:?}", address)
+    }
 }
 
-pub struct ContractEndpoints {
-    pub url: String,
-    pub addr_contract: String,
-    pub addr0: String,
-    pub addr1: String,
-    pub _instance: AnvilInstance,
-}
-
-pub async fn get_test_contract_endpoints() -> anyhow::Result<ContractEndpoints> {
-    // 1. Compile the code
-    let source = Path::new(&env!("CARGO_MANIFEST_DIR")).join("contracts/simple_token.sol");
+pub fn get_abi_bytecode(contract_file: &str, contract_name: &str) -> (Abi, Bytes) {
+    let full_contract_file = format!("contracts/{}", contract_file);
+    let source = Path::new(&env!("CARGO_MANIFEST_DIR")).join(full_contract_file);
     let compiled = Solc::default()
         .compile_source(source)
         .expect("Could not compile contracts");
 
     // 2. Access to the contract that interests us
     let (abi, bytecode, _runtime_bytecode) = compiled
-        .find("SimpleToken")
+        .find(contract_name)
         .expect("could not find contract")
         .into_parts_or_default();
+    (abi, bytecode)
+}
 
-    // 3. Access to the wallets
-    let anvil_test = get_anvil().await.unwrap();
-    let url = anvil_test.endpoint.clone();
-    let (wallet0, addr0) = anvil_test.get_wallet(0);
-    let (_wallet1, addr1) = anvil_test.get_wallet(1);
+pub struct SimpleTokenContractFunction {
+    pub simple_token: SimpleTokenContract<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>,
+    pub contract_address: String,
+    pub wallet_info: (LocalWallet, String),
+    pub anvil_test: AnvilTest,
+}
 
-    // 4. instantiate the client with the wallet
-    let client0 = SignerMiddleware::new(anvil_test.ethereum_endpoint.provider, wallet0);
-    let client0 = Arc::new(client0);
+impl SimpleTokenContractFunction {
+    pub async fn new(anvil_test: AnvilTest) -> Result<Self> {
+        // 1. Getting the code
+        let (abi, bytecode) = get_abi_bytecode("simple_token.sol", "SimpleToken");
 
-    // 5. create a factory which will be used to deploy instances of the contract
-    let factory = ContractFactory::new(abi, bytecode, client0.clone());
+        // 2. Reading the client
+        let wallet_info = anvil_test.get_wallet(0);
+        let client0 = SignerMiddleware::new(
+            anvil_test.ethereum_endpoint.provider.clone(),
+            wallet_info.0.clone(),
+        );
+        let client0 = Arc::new(client0);
 
-    // 6. deploy it with the constructor arguments, note the `legacy` call
-    let initial_supply = U256::from_dec_str("1000")?;
-    let contract = factory.deploy(initial_supply)?.legacy().send().await?;
+        // 3. Factory
+        let factory = ContractFactory::new(abi, bytecode, client0.clone());
 
-    // 7. get the contract's address
-    let addr_contract = contract.address();
+        // 6. deploy it with the constructor arguments, note the `legacy` call
+        let initial_supply = U256::from_dec_str("1000")?;
+        let contract = factory.deploy(initial_supply)?.legacy().send().await?;
 
-    // 8. instantiate the contract
-    let contract = SimpleContract::new(addr_contract, client0.clone());
+        // 7. get the contract's address
+        let contract_address = contract.address();
 
-    // 9. call the `setValue` method
-    // (first `await` returns a PendingTransaction, second wait for the mining)
-    let value = U256::from_dec_str("10")?;
-    let _receipt = contract
-        .transfer(addr1, value)
-        .legacy()
-        .send()
-        .await?
-        .await?;
-    // Testing of balances
-    let value_read = contract.balance_of(addr1).call().await?;
-    assert_eq!(value_read, value);
-    let value_read = contract.balance_of(addr_contract).call().await?;
-    assert_eq!(value_read, U256::from_dec_str("0")?);
-    let value_read = contract.balance_of(addr0).call().await?;
-    assert_eq!(value_read, U256::from_dec_str("990")?);
-    // Returning of output
-    let addr_contract = format!("{:?}", addr_contract);
-    let addr0 = format!("{:?}", addr0);
-    let addr1 = format!("{:?}", addr1);
+        // 8. instantiate the contract
+        let simple_token = SimpleTokenContract::new(contract_address, client0.clone());
+        let contract_address = format!("{:?}", contract_address);
 
-    Ok(ContractEndpoints {
-        url,
-        addr_contract,
-        addr0,
-        addr1,
-        _instance: anvil_test.anvil_instance,
-    })
+        Ok(Self {
+            simple_token,
+            contract_address,
+            wallet_info,
+            anvil_test,
+        })
+    }
+
+    // Only the balanceOf operation is of interest for this contract
+    pub async fn balance_of(&self, to: &str) -> Result<U256> {
+        let to_address = to.parse::<Address>()?;
+        let function_call = self.simple_token.balance_of(to_address).legacy();
+        let TypedTransaction::Legacy(transact) = function_call.tx else {
+            unreachable!();
+        };
+        let data = transact.data.unwrap();
+        let answer = self
+            .anvil_test
+            .ethereum_endpoint
+            .non_executive_call(&self.contract_address, data, to)
+            .await?;
+        let balance = U256::from_big_endian(&answer.0);
+        Ok(balance)
+    }
+}
+
+pub struct EventNumericsContractFunction {
+    pub event_numerics: EventNumericsContract<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>,
+    pub contract_address: String,
+    pub anvil_test: AnvilTest,
+}
+
+impl EventNumericsContractFunction {
+    pub async fn new(anvil_test: AnvilTest) -> Result<Self> {
+        // 1. Getting the code
+        let (abi, bytecode) = get_abi_bytecode("event_numerics.sol", "EventNumerics");
+
+        // 2. Reading the client
+        let wallet_info = anvil_test.get_wallet(0);
+        let client0 = SignerMiddleware::new(
+            anvil_test.ethereum_endpoint.provider.clone(),
+            wallet_info.0.clone(),
+        );
+        let client0 = Arc::new(client0);
+
+        // 3. Factory
+        let factory = ContractFactory::new(abi, bytecode, client0.clone());
+
+        // 6. deploy it with the constructor arguments, note the `legacy` call
+        let initial_supply = U256::zero();
+        let contract = factory.deploy(initial_supply)?.legacy().send().await?;
+
+        // 7. get the contract's address
+        let contract_address = contract.address();
+
+        // 8. instantiate the contract
+        let event_numerics = EventNumericsContract::new(contract_address, client0.clone());
+        let contract_address = format!("{:?}", contract_address);
+
+        Ok(Self {
+            event_numerics,
+            contract_address,
+            anvil_test,
+        })
+    }
 }
