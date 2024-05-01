@@ -37,7 +37,7 @@ where
     Application: Service,
 {
     /// Creates a new [`MockServiceRuntime`] instance for a service.
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         MockServiceRuntime {
             application_parameters: Cell::new(None),
             application_id: Cell::new(None),
