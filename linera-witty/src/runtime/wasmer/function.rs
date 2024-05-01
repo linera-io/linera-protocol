@@ -32,7 +32,7 @@ macro_rules! impl_instance_with_function_for {
         where
             $( $types: FlatType + FromToNativeWasmType + NativeWasmTypeInto, )*
             Results: FlatLayout + WasmerResults,
-            UserData: Send + 'static,
+            UserData: 'static,
         {
             type Function = TypedFunction<
                 <HList![$( $types ),*] as WasmerParameters>::ImportParameters,

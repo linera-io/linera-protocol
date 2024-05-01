@@ -20,7 +20,7 @@ macro_rules! export_function {
         where
             $( $types: FromToNativeWasmType, )*
             FlatResult: MaybeFlatType + WasmTypeList,
-            UserData: Send + 'static,
+            UserData: 'static,
             HandlerError: Error + Send + Sync + 'static,
             Handler:
                 Fn(

@@ -35,10 +35,7 @@ pub struct InstanceBuilder<UserData> {
     environment: Environment<UserData>,
 }
 
-impl<UserData> InstanceBuilder<UserData>
-where
-    UserData: Send + 'static,
-{
+impl<UserData: 'static> InstanceBuilder<UserData> {
     /// Creates a new [`InstanceBuilder`].
     pub fn new(engine: Engine, user_data: UserData) -> Self {
         InstanceBuilder {
@@ -160,10 +157,7 @@ impl<UserData> Instance for EntrypointInstance<UserData> {
 /// guest.
 pub type ReentrantInstance<'a, UserData> = FunctionEnvMut<'a, Environment<UserData>>;
 
-impl<UserData> Instance for ReentrantInstance<'_, UserData>
-where
-    UserData: Send + 'static,
-{
+impl<UserData: 'static> Instance for ReentrantInstance<'_, UserData> {
     type Runtime = Wasmer;
     type UserData = UserData;
     type UserDataReference<'a> = MutexGuard<'a, UserData>

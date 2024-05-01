@@ -88,3 +88,8 @@ cfg_aliases.workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["serde_bytes"]
+
+[patch.crates-io.wasmer]
+version = "4.3.0-alpha.1"
+git = "https://github.com/Twey/wasmer"
+branch = "non-send-environments"

@@ -195,7 +195,7 @@ impl UserContractModule for MockApplication {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntime,
-    ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
+    ) -> Result<Box<dyn UserContract + 'static>, ExecutionError> {
         Ok(Box::new(self.create_mock_instance(runtime)))
     }
 }
@@ -204,7 +204,7 @@ impl UserServiceModule for MockApplication {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntime,
-    ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError> {
+    ) -> Result<Box<dyn UserService + 'static>, ExecutionError> {
         Ok(Box::new(self.create_mock_instance(runtime)))
     }
 }

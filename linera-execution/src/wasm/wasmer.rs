@@ -26,13 +26,6 @@ use crate::{
     QueryContext, ServiceRuntime,
 };
 
-#[cfg(not(web))]
-use {
-    wasmer::sys::EngineBuilder,
-    wasmer::Cranelift,
-    wasmer::Singlepass,
-};
-
 /// An [`Engine`] instance configured to run application services.
 static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(|| {
     #[cfg(web)]
@@ -79,7 +72,7 @@ impl WasmContractModule {
 
 impl<Runtime> WasmerContractInstance<Runtime>
 where
-    Runtime: ContractRuntime + WriteBatch + Clone + Send + Sync + Unpin + 'static,
+    Runtime: ContractRuntime + WriteBatch + Clone + Unpin + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare(
@@ -114,7 +107,7 @@ impl WasmServiceModule {
 
 impl<Runtime> WasmerServiceInstance<Runtime>
 where
-    Runtime: ServiceRuntime + WriteBatch + Clone + Send + Sync + Unpin + 'static,
+    Runtime: ServiceRuntime + WriteBatch + Clone + Unpin + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare(service_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
@@ -132,7 +125,7 @@ where
 
 impl<Runtime> crate::UserContract for WasmerContractInstance<Runtime>
 where
-    Runtime: ContractRuntime + Send + Unpin + 'static,
+    Runtime: ContractRuntime + Unpin + 'static,
 {
     fn instantiate(
         &mut self,
@@ -174,10 +167,7 @@ where
     }
 }
 
-impl<Runtime> crate::UserService for WasmerServiceInstance<Runtime>
-where
-    Runtime: Send + 'static,
-{
+impl<Runtime: 'static> crate::UserService for WasmerServiceInstance<Runtime> {
     fn handle_query(
         &mut self,
         _context: QueryContext,

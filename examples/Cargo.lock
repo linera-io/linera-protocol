@@ -6205,8 +6205,7 @@ dependencies = [
 [[package]]
 name = "wasmer"
 version = "4.3.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "063315805273d66057de5e7145919e745134374ee9a2acfeb354814a2240649e"
+source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#22d085d25f1b1141d22b22938163541efe34cbe7"
 dependencies = [
  "bytes",
  "cfg-if",
@@ -6235,8 +6234,7 @@ dependencies = [
 [[package]]
 name = "wasmer-compiler"
 version = "4.3.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f809637584d1ba52e43291703c255107f87858b7fc70d78b4bebc175f462f5d9"
+source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#22d085d25f1b1141d22b22938163541efe34cbe7"
 dependencies = [
  "backtrace",
  "bytes",
@@ -6262,8 +6260,7 @@ dependencies = [
 [[package]]
 name = "wasmer-compiler-cranelift"
 version = "4.3.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17b092fd256db30f3ffe069173c7799bde50283a0969827e034004ae755d4fe8"
+source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#22d085d25f1b1141d22b22938163541efe34cbe7"
 dependencies = [
  "cranelift-codegen 0.91.1",
  "cranelift-entity 0.91.1",
@@ -6281,8 +6278,7 @@ dependencies = [
 [[package]]
 name = "wasmer-compiler-singlepass"
 version = "4.3.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6852aef78618c839d02874283cdc331beb91e01727789c29007920ff3803c915"
+source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#22d085d25f1b1141d22b22938163541efe34cbe7"
 dependencies = [
  "byteorder",
  "dynasm",
@@ -6300,8 +6296,7 @@ dependencies = [
 [[package]]
 name = "wasmer-derive"
 version = "4.3.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7f14f05a6665e0a4fcdfced554b1b9bc649b8a411414a2c99802c6daa3faed3"
+source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#22d085d25f1b1141d22b22938163541efe34cbe7"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -6312,8 +6307,7 @@ dependencies = [
 [[package]]
 name = "wasmer-types"
 version = "4.3.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60b718632586b3e2959435adabb1b449a8632ee50ff086058df2708878eb774b"
+source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#22d085d25f1b1141d22b22938163541efe34cbe7"
 dependencies = [
  "bytecheck",
  "enum-iterator",
@@ -6328,8 +6322,7 @@ dependencies = [
 [[package]]
 name = "wasmer-vm"
 version = "4.3.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6e3747c71e2dd938cdf90c735f37dc72cbb8538109b4a134d719a64826ae5c2"
+source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#22d085d25f1b1141d22b22938163541efe34cbe7"
 dependencies = [
  "backtrace",
  "cc",
