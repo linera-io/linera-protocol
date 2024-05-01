@@ -86,7 +86,7 @@ use tracing::error;
 use crate::{
     data_types::{
         BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
-        HashedValue, LiteVote, Vote,
+        HashedCertificateValue, LiteVote, Vote,
     },
     ChainError,
 };
@@ -313,7 +313,7 @@ impl ChainManager {
                 return false; // We already signed this timeout.
             }
         }
-        let value = HashedValue::new_timeout(chain_id, height, epoch);
+        let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
         self.timeout_vote = Some(Vote::new(value, current_round, key_pair));
         true
     }
@@ -335,7 +335,7 @@ impl ChainManager {
         if self.fallback_vote.is_some() || self.current_round >= Round::Validator(0) {
             return false; // We already signed this or are already in fallback mode.
         }
-        let value = HashedValue::new_timeout(chain_id, height, epoch);
+        let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
         let last_regular_round = Round::SingleLeader(u32::MAX);
         self.fallback_vote = Some(Vote::new(value, last_regular_round, key_pair));
         true
@@ -404,9 +404,9 @@ impl ChainManager {
             let executed_block = outcome.with(block);
             // If this is a fast block, vote to confirm. Otherwise vote to validate.
             let value = if round.is_fast() {
-                HashedValue::new_confirmed(executed_block)
+                HashedCertificateValue::new_confirmed(executed_block)
             } else {
-                HashedValue::new_validated(executed_block)
+                HashedCertificateValue::new_validated(executed_block)
             };
             self.pending = Some(Vote::new(value, round, key_pair));
         }
@@ -570,7 +570,7 @@ pub struct ChainManagerInfo {
     /// Fallback vote we cast.
     pub fallback_vote: Option<LiteVote>,
     /// The value we voted for, if requested.
-    pub requested_pending_value: Option<Box<HashedValue>>,
+    pub requested_pending_value: Option<Box<HashedCertificateValue>>,
     /// The current round, i.e. the lowest round where we can still vote to validate a block.
     pub current_round: Round,
     /// The current leader, who is allowed to propose the next block.

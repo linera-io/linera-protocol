@@ -21,8 +21,8 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
-        ExecutedBlock, HashedValue, IncomingMessage, LiteCertificate, Medium, MessageAction,
-        MessageBundle, Origin, OutgoingMessage, Target,
+        ExecutedBlock, HashedCertificateValue, IncomingMessage, LiteCertificate, Medium,
+        MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
     },
     manager, ChainError, ChainStateView,
 };
@@ -121,7 +121,7 @@ pub trait ValidatorWorker {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: Vec<HashedCertificateValue>,
         notify_message_delivery: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
@@ -274,7 +274,7 @@ pub struct WorkerState<StorageClient> {
     /// will wait until that timestamp before voting.
     grace_period: Duration,
     /// Cached values by hash.
-    recent_values: Arc<Mutex<LruCache<CryptoHash, HashedValue>>>,
+    recent_values: Arc<Mutex<LruCache<CryptoHash, HashedCertificateValue>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
@@ -303,7 +303,7 @@ impl<StorageClient> WorkerState<StorageClient> {
     pub fn new_for_client(
         nickname: String,
         storage: StorageClient,
-        recent_values: Arc<Mutex<LruCache<CryptoHash, HashedValue>>>,
+        recent_values: Arc<Mutex<LruCache<CryptoHash, HashedCertificateValue>>>,
         delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     ) -> Self {
         WorkerState {
@@ -374,7 +374,10 @@ impl<StorageClient> WorkerState<StorageClient> {
             .ok_or(WorkerError::InvalidLiteCertificate)
     }
 
-    pub(crate) async fn recent_value(&mut self, hash: &CryptoHash) -> Option<HashedValue> {
+    pub(crate) async fn recent_value(
+        &mut self,
+        hash: &CryptoHash,
+    ) -> Option<HashedCertificateValue> {
         self.recent_values.lock().await.get(hash).cloned()
     }
 }
@@ -389,7 +392,7 @@ where
     pub async fn fully_handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: Vec<HashedCertificateValue>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.fully_handle_certificate_with_notifications(certificate, blobs, None)
             .await
@@ -399,7 +402,7 @@ where
     pub(crate) async fn fully_handle_certificate_with_notifications(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: Vec<HashedCertificateValue>,
         mut notifications: Option<&mut Vec<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (response, actions) = self.handle_certificate(certificate, blobs, None).await?;
@@ -582,7 +585,7 @@ where
     async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
-        blobs: &[HashedValue],
+        blobs: &[HashedCertificateValue],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
@@ -717,7 +720,7 @@ where
     async fn check_no_missing_bytecode(
         &self,
         block: &Block,
-        blobs: &[HashedValue],
+        blobs: &[HashedCertificateValue],
     ) -> Result<(), WorkerError> {
         let required_locations = block.bytecode_locations();
         // Find all certificates containing bytecode used when executing this block.
@@ -918,7 +921,7 @@ where
         Ok(Some(last_updated_height))
     }
 
-    pub async fn cache_recent_value<'a>(&mut self, value: Cow<'a, HashedValue>) -> bool {
+    pub async fn cache_recent_value<'a>(&mut self, value: Cow<'a, HashedCertificateValue>) -> bool {
         let hash = value.hash();
         let mut recent_values = self.recent_values.lock().await;
         if recent_values.contains(&hash) {
@@ -930,7 +933,7 @@ where
     }
 
     /// Caches the validated block and the corresponding confirmed block.
-    async fn cache_validated(&mut self, value: &HashedValue) {
+    async fn cache_validated(&mut self, value: &HashedCertificateValue) {
         if self.cache_recent_value(Cow::Borrowed(value)).await {
             if let Some(value) = value.validated_to_confirmed() {
                 self.cache_recent_value(Cow::Owned(value)).await;
@@ -1161,7 +1164,7 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: Vec<HashedCertificateValue>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);

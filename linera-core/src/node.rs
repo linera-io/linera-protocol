@@ -9,7 +9,7 @@ use linera_base::{
     identifiers::ChainId,
 };
 use linera_chain::{
-    data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate, Origin},
+    data_types::{BlockProposal, Certificate, HashedCertificateValue, LiteCertificate, Origin},
     ChainError,
 };
 use linera_execution::{
@@ -61,7 +61,7 @@ pub trait LocalValidatorNode {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: Vec<HashedCertificateValue>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 

@@ -14,7 +14,9 @@ use linera_base::{
     data_types::*,
     identifiers::{ChainDescription, ChainId},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
+use linera_chain::data_types::{
+    BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
+};
 use linera_execution::{
     committee::{Committee, ValidatorName},
     ResourceControlPolicy, WasmRuntime,
@@ -123,7 +125,7 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: Vec<HashedCertificateValue>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
@@ -254,7 +256,7 @@ where
     async fn do_handle_certificate(
         self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: Vec<HashedCertificateValue>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;

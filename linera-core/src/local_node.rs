@@ -10,7 +10,7 @@ use linera_base::{
     identifiers::{ChainId, MessageId},
 };
 use linera_chain::data_types::{
-    Block, BlockProposal, Certificate, ExecutedBlock, HashedValue, LiteCertificate,
+    Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, LiteCertificate,
 };
 use linera_execution::{
     committee::ValidatorName, BytecodeLocation, Query, Response, UserApplicationDescription,
@@ -106,7 +106,7 @@ where
     pub async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: Vec<HashedCertificateValue>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let mut node = self.node.lock().await;
         let mut notifications = Vec::new();
@@ -306,7 +306,7 @@ where
         &mut self,
         validators: Vec<(ValidatorName, A)>,
         blob_locations: impl IntoIterator<Item = (BytecodeLocation, ChainId)>,
-    ) -> Result<Vec<HashedValue>, LocalNodeError>
+    ) -> Result<Vec<HashedCertificateValue>, LocalNodeError>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
@@ -344,7 +344,7 @@ where
         validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
         location: BytecodeLocation,
-    ) -> Result<Option<HashedValue>, LocalNodeError>
+    ) -> Result<Option<HashedCertificateValue>, LocalNodeError>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
@@ -506,7 +506,7 @@ where
         mut validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
         location: BytecodeLocation,
-    ) -> Option<HashedValue>
+    ) -> Option<HashedCertificateValue>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
@@ -527,7 +527,7 @@ where
         node: &mut A,
         chain_id: ChainId,
         location: BytecodeLocation,
-    ) -> Option<HashedValue>
+    ) -> Option<HashedCertificateValue>
     where
         A: LocalValidatorNode + Clone + 'static,
     {

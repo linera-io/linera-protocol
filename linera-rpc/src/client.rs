@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::identifiers::ChainId;
-use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
+use linera_chain::data_types::{
+    BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
+};
 #[cfg(web)]
 use linera_core::node::{
     LocalNotificationStream as NotificationStream, LocalValidatorNode as ValidatorNode,
@@ -77,7 +79,7 @@ impl ValidatorNode for Client {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: Vec<HashedCertificateValue>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {

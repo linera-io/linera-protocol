@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { HashedValue } from '../../gql/service'
+import { HashedCertificateValue } from '../../gql/service'
 
-defineProps<{blocks: HashedValue[]}>()
+defineProps<{blocks: HashedCertificateValue[]}>()
 </script>
 
 <template>

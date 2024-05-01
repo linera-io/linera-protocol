@@ -23,7 +23,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
 };
-use linera_chain::{data_types::HashedValue, ChainStateView};
+use linera_chain::{data_types::HashedCertificateValue, ChainStateView};
 use linera_core::{
     client::{ArcChainClient, ChainClient, ChainClientError},
     data_types::{ClientOutcome, RoundTimeout},
@@ -718,7 +718,7 @@ where
         &self,
         hash: Option<CryptoHash>,
         chain_id: ChainId,
-    ) -> Result<Option<HashedValue>, Error> {
+    ) -> Result<Option<HashedCertificateValue>, Error> {
         let client = self.clients.try_client_lock(&chain_id).await?;
         let hash = match hash {
             Some(hash) => Some(hash),
@@ -740,7 +740,7 @@ where
         from: Option<CryptoHash>,
         chain_id: ChainId,
         limit: Option<u32>,
-    ) -> Result<Vec<HashedValue>, Error> {
+    ) -> Result<Vec<HashedCertificateValue>, Error> {
         let client = self.clients.try_client_lock(&chain_id).await?;
         let limit = limit.unwrap_or(10);
         let from = match from {

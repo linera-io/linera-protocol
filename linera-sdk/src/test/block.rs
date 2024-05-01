@@ -12,7 +12,8 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, MessageId, Owner},
 };
 use linera_chain::data_types::{
-    Block, Certificate, HashedValue, IncomingMessage, LiteVote, MessageAction, SignatureAggregator,
+    Block, Certificate, HashedCertificateValue, IncomingMessage, LiteVote, MessageAction,
+    SignatureAggregator,
 };
 use linera_execution::{system::SystemOperation, Operation};
 
@@ -190,7 +191,7 @@ impl BlockBuilder {
             })
             .collect();
 
-        let value = HashedValue::new_confirmed(executed_block);
+        let value = HashedCertificateValue::new_confirmed(executed_block);
         let vote = LiteVote::new(value.lite(), Round::Fast, self.validator.key_pair());
         let mut builder = SignatureAggregator::new(value, Round::Fast, self.validator.committee());
         let certificate = builder

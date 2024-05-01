@@ -27,7 +27,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
-        HashedValue, IncomingMessage, LiteCertificate, LiteVote, MessageAction,
+        HashedCertificateValue, IncomingMessage, LiteCertificate, LiteVote, MessageAction,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -78,7 +78,7 @@ pub struct ChainClientBuilder<ValidatorNodeProvider> {
     /// Whether to block on cross-chain message delivery.
     cross_chain_message_delivery: CrossChainMessageDelivery,
     /// Cached values by hash.
-    recent_values: Arc<tokio::sync::Mutex<LruCache<CryptoHash, HashedValue>>>,
+    recent_values: Arc<tokio::sync::Mutex<LruCache<CryptoHash, HashedCertificateValue>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<tokio::sync::Mutex<DeliveryNotifiers>>,
@@ -601,7 +601,7 @@ where
         &mut self,
         committee: &Committee,
         proposal: BlockProposal,
-        value: HashedValue,
+        value: HashedCertificateValue,
     ) -> Result<Certificate, ChainClientError> {
         let submit_action = CommunicateAction::SubmitBlock { proposal };
         let certificate = self
@@ -656,7 +656,7 @@ where
         &mut self,
         committee: &Committee,
         action: CommunicateAction,
-        value: HashedValue,
+        value: HashedCertificateValue,
     ) -> Result<Certificate, ChainClientError> {
         let storage_client = self.storage_client().await;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
@@ -973,7 +973,7 @@ where
     async fn process_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: Vec<HashedCertificateValue>,
     ) -> Result<(), LocalNodeError> {
         let info = self
             .node_client
@@ -1012,7 +1012,7 @@ where
             round,
             chain_id,
         };
-        let value = HashedValue::new_timeout(chain_id, height, epoch);
+        let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
         let certificate = self
             .communicate_chain_action(&committee, action, value)
             .await?;
@@ -1119,9 +1119,9 @@ where
             .await?;
         let block = executed_block.block.clone();
         let hashed_value = if round.is_fast() {
-            HashedValue::new_confirmed(executed_block)
+            HashedCertificateValue::new_confirmed(executed_block)
         } else {
-            HashedValue::new_validated(executed_block)
+            HashedCertificateValue::new_validated(executed_block)
         };
         // Collect the blobs required for execution.
         let committee = self.local_committee().await?;
@@ -1260,7 +1260,7 @@ where
         &mut self,
         incoming_messages: Vec<IncomingMessage>,
         operations: Vec<Operation>,
-    ) -> Result<HashedValue, ChainClientError> {
+    ) -> Result<HashedCertificateValue, ChainClientError> {
         let timestamp = self.next_timestamp(&incoming_messages).await;
         let block = Block {
             epoch: self.epoch().await?,
@@ -1278,7 +1278,7 @@ where
             .stage_block_execution_and_discard_failing_messages(block)
             .await?;
         self.pending_block = Some(executed_block.block.clone());
-        Ok(HashedValue::new_confirmed(executed_block))
+        Ok(HashedCertificateValue::new_confirmed(executed_block))
     }
 
     /// Returns a suitable timestamp for the next block.
@@ -2025,7 +2025,7 @@ where
         .await
     }
 
-    pub async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
+    pub async fn read_value(&self, hash: CryptoHash) -> Result<HashedCertificateValue, ViewError> {
         self.storage_client().await.read_value(hash).await
     }
 
@@ -2033,7 +2033,7 @@ where
         &self,
         from: CryptoHash,
         limit: u32,
-    ) -> Result<Vec<HashedValue>, ViewError> {
+    ) -> Result<Vec<HashedCertificateValue>, ViewError> {
         self.storage_client()
             .await
             .read_values_downward(from, limit)

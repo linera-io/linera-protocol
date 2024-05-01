@@ -11,7 +11,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Certificate, ChainAndHeight, HashedValue, IncomingMessage, Medium, MessageBundle,
+        Certificate, ChainAndHeight, HashedCertificateValue, IncomingMessage, Medium, MessageBundle,
     },
     manager::ChainManagerInfo,
     ChainStateView,
@@ -174,7 +174,7 @@ pub struct ChainInfo {
     /// The response to `request_received_certificates_excluding_first_nth`
     pub requested_received_log: Vec<ChainAndHeight>,
     /// The requested blob, if any.
-    pub requested_blob: Option<HashedValue>,
+    pub requested_blob: Option<HashedCertificateValue>,
 }
 
 /// The response to an `ChainInfoQuery`

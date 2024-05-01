@@ -9,7 +9,7 @@ use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, SimpleObje
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{extract::Extension, routing::get, Router};
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
-use linera_chain::data_types::HashedValue;
+use linera_chain::data_types::HashedCertificateValue;
 use linera_views::{
     common::{Context, ContextFromStore, KeyValueStore},
     map_view::MapView,
@@ -84,7 +84,7 @@ where
     pub async fn process_value(
         &self,
         state: &mut StateView<ContextFromStore<(), S>>,
-        value: &HashedValue,
+        value: &HashedCertificateValue,
     ) -> Result<(), IndexerError> {
         for plugin in self.plugins.values() {
             plugin.register(value).await?
@@ -104,7 +104,7 @@ where
     pub async fn process(
         &self,
         listener: &Listener,
-        value: &HashedValue,
+        value: &HashedCertificateValue,
     ) -> Result<(), IndexerError> {
         let chain_id = value.inner().chain_id();
         let hash = value.hash();
