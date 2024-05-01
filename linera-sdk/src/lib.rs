@@ -135,7 +135,11 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// The default implementation persists the state, so if this method is overriden, care must be
     /// taken to persist the state manually.
     async fn finalize(&mut self) {
-        Self::State::store(self.state_mut()).await;
+        Self::State::store(
+            self.state_mut(),
+            ContractRuntime::<Self>::new().key_value_store(),
+        )
+        .await;
     }
 }
 
@@ -169,10 +173,10 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
 #[allow(async_fn_in_trait)]
 pub trait State {
     /// Loads the state from the database.
-    async fn load() -> Self;
+    async fn load(store: KeyValueStore) -> Self;
 
     /// Persists the state into the database.
-    async fn store(&mut self);
+    async fn store(&mut self, store: KeyValueStore);
 }
 
 /// Representation of an empty persistent state.
@@ -182,24 +186,24 @@ pub trait State {
 pub struct EmptyState;
 
 impl State for EmptyState {
-    async fn load() -> Self {
+    async fn load(_: KeyValueStore) -> Self {
         EmptyState
     }
 
-    async fn store(&mut self) {}
+    async fn store(&mut self, _: KeyValueStore) {}
 }
 
 impl<V> State for V
 where
     V: RootView<ViewStorageContext>,
 {
-    async fn load() -> Self {
-        V::load(ViewStorageContext::default())
+    async fn load(store: KeyValueStore) -> Self {
+        V::load(ViewStorageContext::from(store))
             .await
             .expect("Failed to load application state")
     }
 
-    async fn store(&mut self) {
+    async fn store(&mut self, _: KeyValueStore) {
         self.save()
             .await
             .expect("Failed to store application state")

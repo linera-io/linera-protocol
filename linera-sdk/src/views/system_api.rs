@@ -154,13 +154,12 @@ impl WritableKeyValueStore<ViewError> for KeyValueStore {
 }
 
 /// Which system API should be used to interface with the storage.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 #[cfg_attr(with_testing, allow(dead_code))]
 enum WitInterface {
     /// The contract system API.
     Contract,
     /// The service system API.
-    #[default]
     Service,
     #[cfg(with_testing)]
     /// A mock system API.
@@ -308,3 +307,13 @@ impl linera_views::common::KeyValueStore for KeyValueStore {
 /// Implementation of [`linera_views::common::Context`] to be used for data storage
 /// by Linera applications.
 pub type ViewStorageContext = ContextFromStore<(), KeyValueStore>;
+
+impl From<KeyValueStore> for ViewStorageContext {
+    fn from(store: KeyValueStore) -> Self {
+        ContextFromStore {
+            store,
+            base_key: vec![],
+            extra: (),
+        }
+    }
+}
