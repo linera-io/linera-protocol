@@ -41,6 +41,17 @@ type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
 #[cfg_attr(with_testing, derive(Default))]
 pub struct CryptoHash(HasherOutput);
 
+/// A blob id.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Debug, Serialize, Deserialize)]
+#[cfg_attr(with_testing, derive(Default))]
+pub struct BlobId(pub CryptoHash);
+
+/// A blob
+#[derive(Serialize, Deserialize)]
+pub struct Blob(#[serde(with = "serde_bytes")] Vec<u8>);
+
+impl BcsSignable for Blob {}
+
 /// A signature value.
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Signature(pub dalek::Signature);
@@ -687,6 +698,7 @@ impl Arbitrary for CryptoHash {
 
 impl BcsHashable for PublicKey {}
 
+doc_scalar!(BlobId, "A blob id");
 doc_scalar!(CryptoHash, "A Sha3-256 value");
 doc_scalar!(PublicKey, "A signature public key");
 doc_scalar!(Signature, "A signature value");

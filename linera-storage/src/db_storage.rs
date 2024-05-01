@@ -6,7 +6,7 @@ use std::{fmt::Debug, sync::Arc};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{Blob, BlobId, CryptoHash},
     data_types::{TimeDelta, Timestamp},
     identifiers::ChainId,
 };
@@ -51,6 +51,17 @@ static CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::ne
     .expect("Counter creation should not fail")
 });
 
+/// The metric counting how often a blob is read from storage.
+#[cfg(with_metrics)]
+static CONTAINS_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "contains_blob",
+        "The metric counting how often a blob is tested for existence from storage",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
+
 /// The metric counting how often a value is read from storage.
 #[cfg(with_metrics)]
 static CONTAINS_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
@@ -74,6 +85,18 @@ pub static READ_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::ne
     .expect("Counter creation should not fail")
 });
 
+/// The metric counting how often a blob is read from storage.
+#[cfg(with_metrics)]
+#[doc(hidden)]
+pub static READ_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "read_blob",
+        "The metric counting how often a blob is read from storage",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
+
 /// The metric counting how often a hashed certificate value is written to storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
@@ -81,6 +104,18 @@ pub static WRITE_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::n
     prometheus_util::register_int_counter_vec(
         "write_hashed_certificate_value",
         "The metric counting how often a hashed certificate value is written to storage",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
+
+/// The metric counting how often a blob is written to storage.
+#[cfg(with_metrics)]
+#[doc(hidden)]
+pub static WRITE_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "write_blob",
+        "The metric counting how often a blob is written to storage",
         &[],
     )
     .expect("Counter creation should not fail")
@@ -201,6 +236,7 @@ enum BaseKey {
     ChainState(ChainId),
     Certificate(CryptoHash),
     Value(CryptoHash),
+    BlobId(BlobId),
 }
 
 /// A clock that can be used to get the current `Timestamp`.
@@ -366,6 +402,14 @@ where
         Ok(test)
     }
 
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
+        let blob_key = bcs::to_bytes(&BaseKey::BlobId(blob_id))?;
+        let test = self.client.client.contains_key(&blob_key).await?;
+        #[cfg(with_metrics)]
+        CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
+        Ok(test)
+    }
+
     async fn read_hashed_certificate_value(
         &self,
         hash: CryptoHash,
@@ -382,6 +426,14 @@ where
             .inc();
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(value.with_hash_unchecked(hash))
+    }
+
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
+        let blob_key = bcs::to_bytes(&BaseKey::BlobId(blob_id))?;
+        let maybe_value = self.client.client.read_value::<Blob>(&blob_key).await?;
+        #[cfg(with_metrics)]
+        READ_BLOB_COUNTER.with_label_values(&[]).inc();
+        Ok(maybe_value.ok_or_else(|| ViewError::not_found("value for blob id", blob_id))?)
     }
 
     async fn read_hashed_certificate_values_downward(
@@ -414,6 +466,12 @@ where
         self.write_batch(batch).await
     }
 
+    async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        self.add_blob_to_batch(blob, &mut batch)?;
+        self.write_batch(batch).await
+    }
+
     async fn write_hashed_certificate_values(
         &self,
         values: &[HashedCertificateValue],
@@ -421,6 +479,14 @@ where
         let mut batch = Batch::new();
         for value in values {
             self.add_hashed_cert_value_to_batch(value, &mut batch)?;
+        }
+        self.write_batch(batch).await
+    }
+
+    async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        for blob in blobs {
+            self.add_blob_to_batch(blob, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -496,6 +562,14 @@ where
             .inc();
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         batch.put_key_value(value_key.to_vec(), value)?;
+        Ok(())
+    }
+
+    fn add_blob_to_batch(&self, blob: &Blob, batch: &mut Batch) -> Result<(), ViewError> {
+        #[cfg(with_metrics)]
+        WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
+        let blob_key = bcs::to_bytes(&BaseKey::BlobId(BlobId(CryptoHash::new(blob))))?;
+        batch.put_key_value(blob_key.to_vec(), blob)?;
         Ok(())
     }
 

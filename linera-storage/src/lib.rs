@@ -22,7 +22,7 @@ use chain_guards::ChainGuard;
 use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
-    crypto::{CryptoHash, PublicKey},
+    crypto::{Blob, BlobId, CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{ChainDescription, ChainId, GenericApplicationId},
     ownership::ChainOwnership,
@@ -91,11 +91,17 @@ pub trait Storage: Sized {
     /// Tests existence of a hashed certificate value with the given hash.
     async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError>;
 
+    /// Tests existence of a blob with the given hash.
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
+
     /// Reads the hashed certificate value with the given hash.
     async fn read_hashed_certificate_value(
         &self,
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, ViewError>;
+
+    /// Reads the blob with the given blob id.
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
 
     /// Reads the hashed certificate values in descending order from the given hash.
     async fn read_hashed_certificate_values_downward(
@@ -110,11 +116,17 @@ pub trait Storage: Sized {
         value: &HashedCertificateValue,
     ) -> Result<(), ViewError>;
 
+    /// Writes the given blob.
+    async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError>;
+
     /// Writes several hashed certificate values
     async fn write_hashed_certificate_values(
         &self,
         values: &[HashedCertificateValue],
     ) -> Result<(), ViewError>;
+
+    /// Writes several blobs
+    async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError>;
 
     /// Tests existence of the certificate with the given hash.
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
