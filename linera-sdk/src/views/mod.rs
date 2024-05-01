@@ -5,6 +5,8 @@
 
 mod aliases;
 mod conversions_to_wit;
+#[cfg(with_testing)]
+mod mock_key_value_store;
 #[cfg(not(with_testing))]
 mod system_api;
 #[cfg(with_testing)]
