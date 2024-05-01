@@ -51,7 +51,8 @@ use {
 pub use crate::db_storage::TestClock;
 #[cfg(with_metrics)]
 pub use crate::db_storage::{
-    READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
+    READ_CERTIFICATE_COUNTER, READ_HASHED_CERTIFICATE_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
+    WRITE_HASHED_CERTIFICATE_VALUE_COUNTER,
 };
 #[cfg(with_dynamodb)]
 pub use crate::dynamo_db::DynamoDbStorage;
@@ -87,24 +88,33 @@ pub trait Storage: Sized {
     where
         ViewError: From<Self::ContextError>;
 
-    /// Tests existence of a value with the given hash.
-    async fn contains_value(&self, hash: CryptoHash) -> Result<bool, ViewError>;
+    /// Tests existence of a hashed certificate value with the given hash.
+    async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError>;
 
-    /// Reads the value with the given hash.
-    async fn read_value(&self, hash: CryptoHash) -> Result<HashedCertificateValue, ViewError>;
+    /// Reads the hashed certificate value with the given hash.
+    async fn read_hashed_certificate_value(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<HashedCertificateValue, ViewError>;
 
-    /// Reads the values in descending order from the given hash.
-    async fn read_values_downward(
+    /// Reads the hashed certificate values in descending order from the given hash.
+    async fn read_hashed_certificate_values_downward(
         &self,
         from: CryptoHash,
         limit: u32,
     ) -> Result<Vec<HashedCertificateValue>, ViewError>;
 
-    /// Writes the given value.
-    async fn write_value(&self, value: &HashedCertificateValue) -> Result<(), ViewError>;
+    /// Writes the given hashed certificate value.
+    async fn write_hashed_certificate_value(
+        &self,
+        value: &HashedCertificateValue,
+    ) -> Result<(), ViewError>;
 
-    /// Writes several values
-    async fn write_values(&self, values: &[HashedCertificateValue]) -> Result<(), ViewError>;
+    /// Writes several hashed certificate values
+    async fn write_hashed_certificate_values(
+        &self,
+        values: &[HashedCertificateValue],
+    ) -> Result<(), ViewError>;
 
     /// Tests existence of the certificate with the given hash.
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
@@ -298,7 +308,7 @@ async fn read_publish_bytecode_operation(
         ..
     } = application_description;
     let value = storage
-        .read_value(bytecode_location.certificate_hash)
+        .read_hashed_certificate_value(bytecode_location.certificate_hash)
         .await
         .map_err(|error| match error {
             ViewError::NotFound(_) => ExecutionError::ApplicationBytecodeNotFound(Box::new(

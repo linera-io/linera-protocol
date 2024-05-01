@@ -40,12 +40,12 @@ use {
 
 use crate::{chain_guards::ChainGuards, ChainRuntimeContext, Storage};
 
-/// The metric counting how often a value is read from storage.
+/// The metric counting how often a hashed certificate value is read from storage.
 #[cfg(with_metrics)]
-static CONTAINS_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+static CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
-        "contains_value",
-        "The metric counting how often a value is tested for existence from storage",
+        "contains_hashed_certificate_value",
+        "The metric counting how often a hashed certificate value is tested for existence from storage",
         &[],
     )
     .expect("Counter creation should not fail")
@@ -62,25 +62,25 @@ static CONTAINS_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-/// The metric counting how often a value is read from storage.
+/// The metric counting how often a hashed certificate value is read from storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static READ_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+pub static READ_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
-        "read_value",
-        "The metric counting how often a value is read from storage",
+        "read_hashed_certificate_value",
+        "The metric counting how often a hashed certificate value is read from storage",
         &[],
     )
     .expect("Counter creation should not fail")
 });
 
-/// The metric counting how often a value is written to storage.
+/// The metric counting how often a hashed certificate value is written to storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static WRITE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+pub static WRITE_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
-        "write_value",
-        "The metric counting how often a value is written to storage",
+        "write_hashed_certificate_value",
+        "The metric counting how often a hashed certificate value is written to storage",
         &[],
     )
     .expect("Counter creation should not fail")
@@ -356,15 +356,20 @@ where
         ChainStateView::load(context).await
     }
 
-    async fn contains_value(&self, hash: CryptoHash) -> Result<bool, ViewError> {
+    async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let test = self.client.client.contains_key(&value_key).await?;
         #[cfg(with_metrics)]
-        CONTAINS_VALUE_COUNTER.with_label_values(&[]).inc();
+        CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER
+            .with_label_values(&[])
+            .inc();
         Ok(test)
     }
 
-    async fn read_value(&self, hash: CryptoHash) -> Result<HashedCertificateValue, ViewError> {
+    async fn read_hashed_certificate_value(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<HashedCertificateValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let maybe_value = self
             .client
@@ -372,12 +377,14 @@ where
             .read_value::<CertificateValue>(&value_key)
             .await?;
         #[cfg(with_metrics)]
-        READ_VALUE_COUNTER.with_label_values(&[]).inc();
+        READ_HASHED_CERTIFICATE_VALUE_COUNTER
+            .with_label_values(&[])
+            .inc();
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(value.with_hash_unchecked(hash))
     }
 
-    async fn read_values_downward(
+    async fn read_hashed_certificate_values_downward(
         &self,
         from: CryptoHash,
         limit: u32,
@@ -388,7 +395,7 @@ where
             let Some(next_hash) = hash else {
                 break;
             };
-            let value = self.read_value(next_hash).await?;
+            let value = self.read_hashed_certificate_value(next_hash).await?;
             let Some(executed_block) = value.inner().executed_block() else {
                 break;
             };
@@ -398,16 +405,22 @@ where
         Ok(values)
     }
 
-    async fn write_value(&self, value: &HashedCertificateValue) -> Result<(), ViewError> {
+    async fn write_hashed_certificate_value(
+        &self,
+        value: &HashedCertificateValue,
+    ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.add_value_to_batch(value, &mut batch)?;
+        self.add_hashed_cert_value_to_batch(value, &mut batch)?;
         self.write_batch(batch).await
     }
 
-    async fn write_values(&self, values: &[HashedCertificateValue]) -> Result<(), ViewError> {
+    async fn write_hashed_certificate_values(
+        &self,
+        values: &[HashedCertificateValue],
+    ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for value in values {
-            self.add_value_to_batch(value, &mut batch)?;
+            self.add_hashed_cert_value_to_batch(value, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -472,13 +485,15 @@ where
     ViewError: From<<Client as KeyValueStore>::Error>,
     <Client as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
-    fn add_value_to_batch(
+    fn add_hashed_cert_value_to_batch(
         &self,
         value: &HashedCertificateValue,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
-        WRITE_VALUE_COUNTER.with_label_values(&[]).inc();
+        WRITE_HASHED_CERTIFICATE_VALUE_COUNTER
+            .with_label_values(&[])
+            .inc();
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         batch.put_key_value(value_key.to_vec(), value)?;
         Ok(())

@@ -232,11 +232,10 @@ where
                 warn!("locations requested by validator contain duplicates");
                 return Err(NodeError::InvalidChainInfoResponse);
             }
-            let blobs = future::join_all(
-                unique_locations
-                    .into_iter()
-                    .map(|location| self.storage.read_value(location.certificate_hash)),
-            )
+            let blobs = future::join_all(unique_locations.into_iter().map(|location| {
+                self.storage
+                    .read_hashed_certificate_value(location.certificate_hash)
+            }))
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;

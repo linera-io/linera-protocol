@@ -655,7 +655,7 @@ where
             self.cache_recent_value(Cow::Borrowed(value)).await;
         }
         let (result_blob, result_certificate) = tokio::join!(
-            self.storage.write_values(blobs),
+            self.storage.write_hashed_certificate_values(blobs),
             self.storage.write_certificate(&certificate)
         );
         result_blob?;
@@ -745,7 +745,7 @@ where
             })
             .map(|location| {
                 self.storage
-                    .contains_value(location.certificate_hash)
+                    .contains_hashed_certificate_value(location.certificate_hash)
                     .map(move |result| (location, result))
             })
             .collect::<Vec<_>>();
@@ -1107,7 +1107,7 @@ where
         // Verify that all required bytecode blobs are available, and no unrelated ones provided.
         self.check_no_missing_bytecode(block, blobs).await?;
         // Write the values so that the bytecode is available during execution.
-        self.storage.write_values(blobs).await?;
+        self.storage.write_hashed_certificate_values(blobs).await?;
         let local_time = self.storage.clock().current_time();
         ensure!(
             block.timestamp.duration_since(local_time) <= self.grace_period,
@@ -1326,7 +1326,7 @@ where
             info.requested_received_log = chain.received_log.read(start..).await?;
         }
         if let Some(hash) = query.request_blob {
-            info.requested_blob = Some(self.storage.read_value(hash).await?);
+            info.requested_blob = Some(self.storage.read_hashed_certificate_value(hash).await?);
         }
         if query.request_manager_values {
             info.manager.add_values(chain.manager.get());
