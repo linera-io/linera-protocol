@@ -63,6 +63,7 @@ pub use self::{
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
     service::ServiceRuntime,
+    views::KeyValueStore,
 };
 
 /// The contract interface of a Linera application.

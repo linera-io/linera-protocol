@@ -35,6 +35,50 @@ pub struct KeyValueStore {
     wit_api: WitInterface,
 }
 
+#[cfg_attr(with_testing, allow(dead_code))]
+impl KeyValueStore {
+    /// Returns a [`KeyValueStore`] that uses the contract WIT interface.
+    pub(crate) fn for_contracts() -> Self {
+        KeyValueStore {
+            wit_api: WitInterface::Contract,
+        }
+    }
+
+    /// Returns a [`KeyValueStore`] that uses the service WIT interface.
+    pub(crate) fn for_services() -> Self {
+        KeyValueStore {
+            wit_api: WitInterface::Service,
+        }
+    }
+
+    /// Returns a new [`KeyValueStore`] that just keeps the storage contents in memory.
+    #[cfg(with_testing)]
+    pub fn mock() -> Self {
+        KeyValueStore {
+            wit_api: WitInterface::Mock {
+                store: Arc::new(MockKeyValueStore::default()),
+                read_only: true,
+            },
+        }
+    }
+
+    /// Returns a mocked [`KeyValueStore`] that shares the memory storage with this instance but
+    /// allows write operations.
+    #[cfg(with_testing)]
+    pub fn to_mut(&self) -> Self {
+        let WitInterface::Mock { store, .. } = &self.wit_api else {
+            panic!("Real `KeyValueStore` should not be used in unit tests");
+        };
+
+        KeyValueStore {
+            wit_api: WitInterface::Mock {
+                store: store.clone(),
+                read_only: false,
+            },
+        }
+    }
+}
+
 impl ReadableKeyValueStore<ViewError> for KeyValueStore {
     // The KeyValueStore of the system_api does not have limits
     // on the size of its values.

@@ -12,7 +12,7 @@ use linera_base::{
 use serde::Serialize;
 
 use super::wit::contract_system_api as wit;
-use crate::Contract;
+use crate::{Contract, KeyValueStore};
 
 /// The common runtime to interface with the host executing the contract.
 ///
@@ -50,6 +50,11 @@ where
             authenticated_caller_id: None,
             timestamp: None,
         }
+    }
+
+    /// Returns the key-value store to interface with storage.
+    pub fn key_value_store(&self) -> KeyValueStore {
+        KeyValueStore::for_contracts()
     }
 
     /// Returns the application parameters provided when the application was created.

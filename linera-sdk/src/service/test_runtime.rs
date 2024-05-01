@@ -14,7 +14,7 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, Owner},
 };
 
-use crate::Service;
+use crate::{KeyValueStore, Service};
 
 /// The runtime available during execution of a query.
 pub struct MockServiceRuntime<Application>
@@ -30,6 +30,16 @@ where
     owner_balances: RefCell<Option<HashMap<Owner, Amount>>>,
     query_application_handler: RefCell<Option<QueryApplicationHandler>>,
     url_blobs: RefCell<Option<HashMap<String, Vec<u8>>>>,
+    key_value_store: KeyValueStore,
+}
+
+impl<Application> Default for MockServiceRuntime<Application>
+where
+    Application: Service,
+{
+    fn default() -> Self {
+        MockServiceRuntime::new()
+    }
 }
 
 impl<Application> MockServiceRuntime<Application>
@@ -48,7 +58,13 @@ where
             owner_balances: RefCell::new(None),
             query_application_handler: RefCell::new(None),
             url_blobs: RefCell::new(None),
+            key_value_store: KeyValueStore::mock(),
         }
+    }
+
+    /// Returns the key-value store to interface with storage.
+    pub fn key_value_store(&self) -> KeyValueStore {
+        self.key_value_store.clone()
     }
 
     /// Configures the application parameters to return during the test.
