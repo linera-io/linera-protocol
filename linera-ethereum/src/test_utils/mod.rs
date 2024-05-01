@@ -39,7 +39,7 @@ pub async fn get_provider(url: &str) -> Provider<Http> {
 pub struct AnvilTest {
     pub anvil_instance: AnvilInstance,
     pub endpoint: String,
-    pub ethereum_endpoint: EthereumEndpoint,
+    pub ethereum_endpoint: EthereumEndpoint<Http>,
 }
 
 pub async fn get_anvil() -> Result<AnvilTest> {
@@ -49,7 +49,7 @@ pub async fn get_anvil() -> Result<AnvilTest> {
         .mnemonic("abstract vacuum mammal awkward pudding scene penalty purchase dinner depart evoke puzzle")
         .spawn();
     let endpoint = anvil_instance.endpoint();
-    let ethereum_endpoint = EthereumEndpoint::new(endpoint.clone())?;
+    let ethereum_endpoint = EthereumEndpoint::<Http>::new(endpoint.clone())?;
     Ok(AnvilTest {
         anvil_instance,
         endpoint,
