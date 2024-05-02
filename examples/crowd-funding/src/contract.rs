@@ -35,10 +35,6 @@ impl Contract for CrowdFundingContract {
         CrowdFundingContract { state, runtime }
     }
 
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
-    }
-
     async fn instantiate(&mut self, argument: InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();

@@ -38,10 +38,6 @@ impl Contract for NonFungibleTokenContract {
         NonFungibleTokenContract { state, runtime }
     }
 
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
-    }
-
     async fn instantiate(&mut self, _state: Self::InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();

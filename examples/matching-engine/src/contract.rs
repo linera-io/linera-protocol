@@ -61,10 +61,6 @@ impl Contract for MatchingEngineContract {
         MatchingEngineContract { state, runtime }
     }
 
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
-    }
-
     async fn instantiate(&mut self, _argument: ()) {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();

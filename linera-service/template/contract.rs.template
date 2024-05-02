@@ -27,10 +27,6 @@ impl Contract for ApplicationContract {{
         ApplicationContract {{ state, runtime }}
     }}
 
-    fn state_mut(&mut self) -> &mut Self::State {{
-        &mut self.state
-    }}
-
     async fn instantiate(&mut self, _argument: Self::InstantiationArgument) {{}}
 
     async fn execute_operation(&mut self, _operation: Self::Operation) -> Self::Response {{}}

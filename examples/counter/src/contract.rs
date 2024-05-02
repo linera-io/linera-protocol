@@ -31,10 +31,6 @@ impl Contract for CounterContract {
         CounterContract { state, runtime }
     }
 
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
-    }
-
     async fn instantiate(&mut self, value: u64) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();

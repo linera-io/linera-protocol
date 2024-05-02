@@ -11,7 +11,6 @@ use linera_sdk::{
 use native_fungible::{Message, TICKER_SYMBOL};
 
 pub struct NativeFungibleTokenContract {
-    state: EmptyState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -27,12 +26,8 @@ impl Contract for NativeFungibleTokenContract {
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
 
-    async fn new(state: EmptyState, runtime: ContractRuntime<Self>) -> Self {
-        NativeFungibleTokenContract { state, runtime }
-    }
-
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
+    async fn new(_: EmptyState, runtime: ContractRuntime<Self>) -> Self {
+        NativeFungibleTokenContract { runtime }
     }
 
     async fn instantiate(&mut self, state: Self::InstantiationArgument) {

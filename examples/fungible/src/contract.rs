@@ -39,10 +39,6 @@ impl Contract for FungibleTokenContract {
         FungibleTokenContract { state, runtime }
     }
 
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
-    }
-
     async fn instantiate(&mut self, mut state: Self::InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
