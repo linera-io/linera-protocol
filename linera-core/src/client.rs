@@ -18,7 +18,7 @@ use futures::{
 };
 use linera_base::{
     abi::Abi,
-    crypto::{CryptoHash, KeyPair, PublicKey},
+    crypto::{Blob, BlobId, CryptoHash, KeyPair, PublicKey},
     data_types::{Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Round, Timestamp},
     ensure,
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
@@ -1805,6 +1805,18 @@ where
                 .ok_or_else(|| ChainClientError::InternalError("Failed to publish bytecode"))?;
             Ok((BytecodeId::new(message_id), certificate))
         })
+    }
+
+    /// Publishes some blob.
+    pub async fn publish_blob(
+        &mut self,
+        blob: Blob,
+    ) -> Result<ClientOutcome<(BlobId, Certificate)>, ChainClientError> {
+        self.execute_operation(Operation::System(SystemOperation::PublishBlob {
+            blob: blob.clone(),
+        }))
+        .await?
+        .try_map(|certificate| Ok((BytecodeId::new(message_id), certificate)))
     }
 
     /// Creates an application by instantiating some bytecode.

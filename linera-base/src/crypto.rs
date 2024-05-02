@@ -47,10 +47,19 @@ pub struct CryptoHash(HasherOutput);
 pub struct BlobId(pub CryptoHash);
 
 /// A blob
-#[derive(Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize)]
 pub struct Blob(#[serde(with = "serde_bytes")] Vec<u8>);
 
 impl BcsSignable for Blob {}
+
+impl Blob {
+    #[cfg(with_fs)]
+    /// Load blob from a file.
+    pub async fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
+        let bytes = tokio::fs::read(path).await?;
+        Ok(Blob(bytes))
+    }
+}
 
 /// A signature value.
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -349,6 +358,12 @@ impl std::fmt::Display for CryptoHash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let prec = f.precision().unwrap_or(self.0.len() * 2);
         hex::encode(&self.0[..((prec + 1) / 2)]).fmt(f)
+    }
+}
+
+impl std::fmt::Display for BlobId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 

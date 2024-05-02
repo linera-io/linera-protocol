@@ -802,6 +802,22 @@ impl Runnable for Job {
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
             }
 
+            PublishBlob {
+                blob_path,
+                publisher
+            } => {
+                let start_time = Instant::now();
+                let publisher = publisher.unwrap_or_else(|| context.default_chain());
+                info!("Publishing bytecode on chain {}", publisher);
+                let chain_client = context.make_chain_client(storage, publisher).into_arc();
+                let blob_id = context
+                    .publish_blob(&chain_client, blob_path)
+                    .await?;
+                println!("{}", blob_id);
+                info!("{}", "Blob published successfully!".green().bold());
+                info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
+            }
+
             CreateApplication {
                 bytecode_id,
                 creator,

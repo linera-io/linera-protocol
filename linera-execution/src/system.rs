@@ -11,7 +11,7 @@ use std::{
 use async_graphql::Enum;
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{CryptoHash, PublicKey},
+    crypto::{Blob, CryptoHash, PublicKey},
     data_types::{Amount, ApplicationPermissions, ArithmeticError, Timestamp},
     ensure, hex_debug,
     identifiers::{Account, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
@@ -157,6 +157,10 @@ pub enum SystemOperation {
     PublishBytecode {
         contract: Bytecode,
         service: Bytecode,
+    },
+    /// Publishes a new blob
+    PublishBlob {
+        blob: Blob,
     },
     /// Creates a new application.
     CreateApplication {
@@ -628,6 +632,8 @@ where
                     },
                 };
                 outcome.messages.push(message);
+            }
+            PublishBlob { blob } => {
             }
             CreateApplication {
                 bytecode_id,

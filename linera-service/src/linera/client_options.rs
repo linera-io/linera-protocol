@@ -585,6 +585,15 @@ pub enum ClientCommand {
         publisher: Option<ChainId>,
     },
 
+    /// Publish blob.
+    PublishBlob {
+        /// Path to blob file to be published.
+        blob_path: PathBuf,
+        /// An optional chain ID to publish the bytecode. The default chain of the wallet
+        /// is used otherwise.
+        publisher: Option<ChainId>,
+    },
+
     /// Create an application.
     CreateApplication {
         /// The bytecode ID of the application to create.

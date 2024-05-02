@@ -24,6 +24,7 @@ use linera_core::{
 };
 use linera_execution::Bytecode;
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
+use linera_sdk::base::{Blob, BlobId};
 use linera_service::{
     chain_listener,
     config::{GenesisConfig, WalletState},
@@ -381,6 +382,45 @@ impl ClientContext {
             .apply_client_command(chain_client, |mut chain_client| {
                 let contract_bytecode = contract_bytecode.clone();
                 let service_bytecode = service_bytecode.clone();
+                async move {
+                    chain_client
+                        .publish_bytecode(contract_bytecode, service_bytecode)
+                        .await
+                        .context("Failed to publish bytecode")
+                }
+            })
+            .await?;
+
+        info!("{}", "Bytecode published successfully!".green().bold());
+
+        info!("Synchronizing client and processing inbox");
+        chain_client
+            .lock()
+            .await
+            .synchronize_from_validators()
+            .await?;
+        self.process_inbox(chain_client).await?;
+        Ok(bytecode_id)
+    }
+
+    pub async fn publish_blob<S>(
+        &mut self,
+        chain_client: &ArcChainClient<NodeProvider, S>,
+        blob_path: PathBuf,
+    ) -> anyhow::Result<BlobId>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        info!("Loading blob file");
+        let blob = Blob::load_from_file(&blob_path)
+            .await
+            .context(format!("failed to load blob from {:?}", &blob_path))?;
+
+        info!("Publishing blob");
+        let (blob_id, _) = self
+            .apply_client_command(chain_client, |mut chain_client| {
+                let blob = blob.clone();
                 async move {
                     chain_client
                         .publish_bytecode(contract_bytecode, service_bytecode)
