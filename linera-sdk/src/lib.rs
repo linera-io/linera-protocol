@@ -4,15 +4,12 @@
 //! This module provides an SDK for developing Linera applications using Rust.
 //!
 //! A Linera application consists of two WebAssembly binaries: a contract and a service.
-//! In both binaries, there should be a shared application state. The state is a type that
-//! represents what the application would like to persist in storage across blocks, and
-//! must implement [`State`](crate::State) trait in order to specify how the state should be loaded
-//! from and stored to the persistent key-value storage. An alternative is to use the
-//! [`linera-views`](https://docs.rs/linera-views/latest/linera_views/index.html), a framework that
-//! allows loading selected parts of the state. This is useful if the application's state is large
-//! and doesn't need to be loaded in its entirety for every execution. By deriving
-//! [`RootView`](views::RootView) on the state type it automatically implements the [`State`]
-//! trait.
+//! Both binaries have access to the same application and chain specific storage. The service only
+//! has read-only access, while the contract can write to it. The storage should be used to store
+//! the application state, which is persisted across blocks. The state can be a custom type that
+//! uses [`linera-views`](https://docs.rs/linera-views/latest/linera_views/index.html), a framework
+//! that allows lazily loading selected parts of the state. This is useful if the application's
+//! state is large and doesn't need to be loaded in its entirety for every execution.
 //!
 //! The contract binary should create a type to implement the [`Contract`](crate::Contract) trait.
 //! The type can store the [`ContractRuntime`](contract::ContractRuntime) and the state, and must
