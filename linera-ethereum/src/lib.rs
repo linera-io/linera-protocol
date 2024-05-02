@@ -5,7 +5,6 @@
 
 pub mod client;
 pub mod common;
-pub mod oracle;
 
 /// Helper types for tests and similar purposes.
 pub mod test_utils;

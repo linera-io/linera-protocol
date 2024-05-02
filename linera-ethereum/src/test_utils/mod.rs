@@ -39,7 +39,7 @@ pub async fn get_provider(url: &str) -> Provider<Http> {
 pub struct AnvilTest {
     pub anvil_instance: AnvilInstance,
     pub endpoint: String,
-    pub ethereum_endpoint: EthereumEndpoint,
+    pub ethereum_endpoint: EthereumEndpoint<Http>,
 }
 
 pub async fn get_anvil() -> Result<AnvilTest> {

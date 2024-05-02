@@ -6,28 +6,23 @@ use std::time::Duration;
 use ethers::{
     core::types::Bytes,
     prelude::{Http, Provider},
+    providers::JsonRpcClient,
     types::{NameOrAddress, TransactionRequest, U256},
 };
-use ethers_core::types::{Address, BlockId, BlockNumber, Filter, U64};
+use ethers_core::types::{Address, BlockId, BlockNumber, Filter};
 use ethers_middleware::Middleware;
 
 use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
 
 /// The Ethereum endpoint and its provider used for accessing the ethereum node.
-pub struct EthereumEndpoint {
-    pub url: String,
-    pub provider: Provider<Http>,
+pub struct EthereumEndpoint<M> {
+    pub provider: Provider<M>,
 }
 
-impl EthereumEndpoint {
-    /// Connects to an existing Ethereum node and creates an `EthereumEndpoint`
-    /// if successful.
-    pub fn new(url: String) -> Result<Self, EthereumServiceError> {
-        let provider = Provider::<Http>::try_from(&url)?;
-        let provider = provider.interval(Duration::from_millis(10u64));
-        Ok(Self { url, provider })
-    }
-
+impl<M> EthereumEndpoint<M>
+where
+    M: JsonRpcClient,
+{
     /// Lists all the accounts of the Ethereum node.
     pub async fn get_accounts(&self) -> Result<Vec<String>, EthereumServiceError> {
         Ok(self
@@ -57,8 +52,8 @@ impl EthereumEndpoint {
         let block_nr = match block_nr {
             None => None,
             Some(val) => {
-                let val: U64 = val.into();
-                let val: BlockNumber = BlockNumber::Number(val);
+                let val = val.into();
+                let val = BlockNumber::Number(val);
                 Some(BlockId::Number(val))
             }
         };
@@ -108,5 +103,15 @@ impl EthereumEndpoint {
         tx.from = Some(from);
         let tx = tx.into();
         Ok(self.provider.call_raw(&tx).await?)
+    }
+}
+
+impl EthereumEndpoint<Http> {
+    /// Connects to an existing Ethereum node and creates an `EthereumEndpoint`
+    /// if successful.
+    pub fn new(url: String) -> Result<Self, EthereumServiceError> {
+        let provider = Provider::try_from(&url)?;
+        let provider = provider.interval(Duration::from_millis(10u64));
+        Ok(Self { provider })
     }
 }
