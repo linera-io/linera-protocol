@@ -49,7 +49,7 @@ pub async fn get_anvil() -> Result<AnvilTest> {
         .mnemonic("abstract vacuum mammal awkward pudding scene penalty purchase dinner depart evoke puzzle")
         .spawn();
     let endpoint = anvil_instance.endpoint();
-    let ethereum_endpoint = EthereumEndpoint::<Http>::new(endpoint.clone())?;
+    let ethereum_endpoint = EthereumEndpoint::new(endpoint.clone())?;
     Ok(AnvilTest {
         anvil_instance,
         endpoint,

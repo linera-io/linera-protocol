@@ -9,14 +9,13 @@ use ethers::{
     providers::JsonRpcClient,
     types::{NameOrAddress, TransactionRequest, U256},
 };
-use ethers_core::types::{Address, BlockId, BlockNumber, Filter, U64};
+use ethers_core::types::{Address, BlockId, BlockNumber, Filter};
 use ethers_middleware::Middleware;
 
 use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
 
 /// The Ethereum endpoint and its provider used for accessing the ethereum node.
 pub struct EthereumEndpoint<M> {
-    pub url: String,
     pub provider: Provider<M>,
 }
 
@@ -53,8 +52,8 @@ where
         let block_nr = match block_nr {
             None => None,
             Some(val) => {
-                let val: U64 = val.into();
-                let val: BlockNumber = BlockNumber::Number(val);
+                let val = val.into();
+                let val = BlockNumber::Number(val);
                 Some(BlockId::Number(val))
             }
         };
@@ -111,8 +110,8 @@ impl EthereumEndpoint<Http> {
     /// Connects to an existing Ethereum node and creates an `EthereumEndpoint`
     /// if successful.
     pub fn new(url: String) -> Result<Self, EthereumServiceError> {
-        let provider = Provider::<Http>::try_from(&url)?;
+        let provider = Provider::try_from(&url)?;
         let provider = provider.interval(Duration::from_millis(10u64));
-        Ok(Self { url, provider })
+        Ok(Self { provider })
     }
 }

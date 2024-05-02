@@ -4,7 +4,7 @@
 use std::num::ParseIntError;
 
 use ethers::types::{Log, U256};
-use ethers_core::types::{Address, H256, U64};
+use ethers_core::types::{Address, H256};
 use num_bigint::{BigInt, BigUint};
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -182,8 +182,8 @@ pub fn parse_log(
             }
         });
     }
-    let block_number: U64 = log.block_number.unwrap();
-    let block_number: u64 = block_number.0[0];
+    let block_number = log.block_number.unwrap();
+    let block_number = block_number.0[0];
     Ok(EthereumEvent {
         values,
         block_number,
