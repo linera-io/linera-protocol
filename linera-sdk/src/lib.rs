@@ -57,7 +57,6 @@ pub use linera_base::{
 use serde::{de::DeserializeOwned, Serialize};
 pub use serde_json;
 
-use self::views::{RootView, ViewStorageContext};
 #[doc(hidden)]
 pub use self::{contract::export_contract, service::export_service};
 pub use self::{
@@ -147,51 +146,4 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
 
     /// Executes a read-only query on the state of this application.
     async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse;
-}
-
-/// The persistent state of a Linera application.
-///
-/// This is the state that is persisted to the database, and preserved across transactions. The
-/// application's [`Contract`] is allowed to modiy the state, while the application's [`Service`]
-/// can only read it.
-///
-/// The database can be accessed using an instance of [`ViewStorageContext`].
-#[allow(async_fn_in_trait)]
-pub trait State {
-    /// Loads the state from the database.
-    async fn load(store: KeyValueStore) -> Self;
-
-    /// Persists the state into the database.
-    async fn store(&mut self, store: KeyValueStore);
-}
-
-/// Representation of an empty persistent state.
-///
-/// This can be used by applications that don't need to store anything in the database.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct EmptyState;
-
-impl State for EmptyState {
-    async fn load(_: KeyValueStore) -> Self {
-        EmptyState
-    }
-
-    async fn store(&mut self, _: KeyValueStore) {}
-}
-
-impl<V> State for V
-where
-    V: RootView<ViewStorageContext>,
-{
-    async fn load(store: KeyValueStore) -> Self {
-        V::load(ViewStorageContext::from(store))
-            .await
-            .expect("Failed to load application state")
-    }
-
-    async fn store(&mut self, _: KeyValueStore) {
-        self.save()
-            .await
-            .expect("Failed to store application state")
-    }
 }
