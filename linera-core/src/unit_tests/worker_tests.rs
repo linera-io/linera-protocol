@@ -6,6 +6,7 @@
 mod wasm;
 
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, BTreeSet},
     iter,
     time::Duration,
@@ -25,7 +26,7 @@ use linera_chain::{
     data_types::{
         Block, BlockExecutionOutcome, BlockProposal, Certificate, ChainAndHeight, ChannelFullName,
         Event, HashedCertificateValue, IncomingMessage, LiteVote, Medium, MessageAction, Origin,
-        OutgoingMessage, SignatureAggregator,
+        OutgoingMessage, ProposalPayload, SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt, VoteTestExt},
     ChainError, ChainExecutionContext,
@@ -392,8 +393,13 @@ where
         .into_fast_proposal(&sender_key_pair);
     let unknown_key_pair = KeyPair::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
-    bad_signature_block_proposal.signature =
-        Signature::new(&block_proposal.content, &unknown_key_pair);
+    bad_signature_block_proposal.signature = Signature::new(
+        &ProposalPayload {
+            content: Cow::Borrowed(&block_proposal.content),
+            outcome: None,
+        },
+        &unknown_key_pair,
+    );
     assert_matches!(
         worker
             .handle_block_proposal(bad_signature_block_proposal)
@@ -3337,11 +3343,11 @@ where
     );
 
     // But with the validated block certificate for block2, it is allowed.
-    let mut proposal = block2.into_proposal_with_round(&key_pairs[1], Round::SingleLeader(5));
-    let lite_value2 = value2.lite();
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(4));
-    proposal.validated = Some(certificate2.clone());
+    let proposal =
+        block2.into_justified_proposal(&key_pairs[1], Round::SingleLeader(5), certificate2.clone());
+    let lite_value2 = value2.lite();
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
@@ -3533,6 +3539,7 @@ where
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value.value_hash, value1.hash());
+    println!("DDD");
 
     // Set the clock to the end of the round.
     clock.set(response.info.manager.round_timeout.unwrap());
@@ -3547,6 +3554,7 @@ where
         .await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
     assert_eq!(response.info.manager.leader, None);
+    println!("CCC");
 
     // Now any owner can propose a block. But block1 is locked.
     let block2 = make_child_block(&value0).with_simple_transfer(ChainId::root(1), Amount::ONE);
@@ -3561,17 +3569,19 @@ where
         .clone()
         .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
     assert!(worker.handle_block_proposal(proposal3).await.is_ok());
+    println!("BBB");
 
     // A validated block certificate from a later round can override the locked fast block.
     let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await?;
     let value2 = HashedCertificateValue::new_validated(executed_block2.clone());
-    let mut proposal = block2
-        .clone()
-        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
-    let lite_value2 = value2.lite();
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
-    proposal.validated = Some(certificate2.clone());
+    let proposal = block2.clone().into_justified_proposal(
+        &key_pairs[1],
+        Round::MultiLeader(1),
+        certificate2.clone(),
+    );
+    let lite_value2 = value2.lite();
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
@@ -3582,6 +3592,7 @@ where
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
     assert_eq!(vote.round, Round::MultiLeader(1));
+    println!("AAA");
 
     // Re-proposing the locked block also works.
     let proposal = block2.into_proposal_with_round(&key_pairs[1], Round::MultiLeader(2));

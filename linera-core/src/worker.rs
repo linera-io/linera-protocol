@@ -1074,9 +1074,9 @@ where
         let BlockProposal {
             content: BlockAndRound { block, round },
             owner,
-            signature,
             blobs,
             validated,
+            signature: _,
         } = &proposal;
         let chain_id = block.chain_id;
         let mut chain = self.storage.load_active_chain(chain_id).await?;
@@ -1096,7 +1096,7 @@ where
             .get()
             .verify_owner(&proposal)
             .ok_or(WorkerError::InvalidOwner)?;
-        signature.check(&proposal.content, public_key)?;
+        proposal.check_signature(public_key)?;
         // Check the authentication of the operations in the block.
         if let Some(signer) = block.authenticated_signer {
             ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
