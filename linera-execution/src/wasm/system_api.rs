@@ -299,6 +299,28 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Queries a service and returns the response.
+    fn query_service(
+        caller: &mut Caller,
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .query_service(application_id, query)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Makes a GET request to the given URL and returns the JSON part, if any.
+    fn fetch_json(caller: &mut Caller, query: String) -> Result<String, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .fetch_json(&query)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Logs a `message` with the provided information `level`.
     fn log(_caller: &mut Caller, message: String, level: log::Level) -> Result<(), RuntimeError> {
         match level {
@@ -434,6 +456,28 @@ where
             .user_data_mut()
             .runtime
             .fetch_url(&url)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Queries a service and returns the response.
+    fn query_service(
+        caller: &mut Caller,
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .query_service(application_id, query)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Makes a GET request to the given URL and returns the JSON part, if any.
+    fn fetch_json(caller: &mut Caller, query: String) -> Result<String, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .fetch_json(&query)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

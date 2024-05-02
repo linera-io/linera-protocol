@@ -76,6 +76,14 @@ pub trait BlockTestExt: Sized {
 
     /// Returns a block proposal without any blobs or validated block.
     fn into_proposal_with_round(self, key_pair: &KeyPair, round: Round) -> BlockProposal;
+
+    /// Returns a block proposal including a validated block as justification.
+    fn into_justified_proposal(
+        self,
+        key_pair: &KeyPair,
+        round: Round,
+        validated: Certificate,
+    ) -> BlockProposal;
 }
 
 impl BlockTestExt for Block {
@@ -115,6 +123,16 @@ impl BlockTestExt for Block {
     fn into_proposal_with_round(self, key_pair: &KeyPair, round: Round) -> BlockProposal {
         let content = BlockAndRound { block: self, round };
         BlockProposal::new(content, key_pair, vec![], None)
+    }
+
+    fn into_justified_proposal(
+        self,
+        key_pair: &KeyPair,
+        round: Round,
+        validated: Certificate,
+    ) -> BlockProposal {
+        let content = BlockAndRound { block: self, round };
+        BlockProposal::new(content, key_pair, vec![], Some(validated))
     }
 }
 

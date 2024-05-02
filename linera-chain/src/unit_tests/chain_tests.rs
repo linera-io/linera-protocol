@@ -121,7 +121,7 @@ async fn test_application_permissions() {
         .with_incoming_message(open_chain_message.clone())
         .with_incoming_message(register_app_message.clone())
         .with_simple_transfer(chain_id, Amount::ONE);
-    let result = chain.execute_block(&invalid_block, time).await;
+    let result = chain.execute_block(&invalid_block, time, None).await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
         if app_ids == vec![application_id]
     );
@@ -137,12 +137,12 @@ async fn test_application_permissions() {
         .with_incoming_message(open_chain_message)
         .with_incoming_message(register_app_message.clone())
         .with_operation(app_operation.clone());
-    let outcome = chain.execute_block(&valid_block, time).await.unwrap();
+    let outcome = chain.execute_block(&valid_block, time, None).await.unwrap();
     let value = HashedCertificateValue::new_confirmed(outcome.with(valid_block));
 
     // In the second block, other operations are still not allowed.
     let invalid_block = make_child_block(&value).with_simple_transfer(chain_id, Amount::ONE);
-    let result = chain.execute_block(&invalid_block, time).await;
+    let result = chain.execute_block(&invalid_block, time, None).await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
         if app_ids == vec![application_id]
     );
@@ -151,5 +151,5 @@ async fn test_application_permissions() {
     application.expect_call(ExpectedCall::execute_operation(|_, _, _| Ok(vec![])));
     application.expect_call(ExpectedCall::default_finalize());
     let valid_block = make_child_block(&value).with_operation(app_operation);
-    chain.execute_block(&valid_block, time).await.unwrap();
+    chain.execute_block(&valid_block, time, None).await.unwrap();
 }

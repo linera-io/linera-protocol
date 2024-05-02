@@ -35,6 +35,8 @@ pub mod util;
 pub mod abis;
 pub mod base;
 pub mod contract;
+#[cfg(feature = "ethereum")]
+pub mod ethereum;
 mod extensions;
 pub mod graphql;
 mod log;

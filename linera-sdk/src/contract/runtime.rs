@@ -4,7 +4,7 @@
 //! Runtime types to interface with the host executing the contract.
 
 use linera_base::{
-    abi::ContractAbi,
+    abi::{ContractAbi, ServiceAbi},
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
     ownership::{ChainOwnership, CloseChainError},
@@ -205,6 +205,34 @@ where
 
         bcs::from_bytes(&response_bytes)
             .expect("Failed to deserialize `Response` type from cross-application call")
+    }
+
+    /// Queries our application service as an oracle and returns the response.
+    ///
+    /// Should only be used with queries where it is very likely that all validators will compute
+    /// the same result, otherwise most block proposals will fail.
+    ///
+    /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
+    /// owner, not a super owner.
+    pub fn query_service<A: ServiceAbi + Send>(
+        &mut self,
+        application_id: ApplicationId<A>,
+        query: A::Query,
+    ) -> A::QueryResponse {
+        let query = serde_json::to_vec(&query).expect("Failed to serialize service query");
+        let response = wit::query_service(application_id.forget_abi().into(), &query);
+        serde_json::from_slice(&response).expect("Failed to deserialize service response")
+    }
+
+    /// Makes a GET request to the given URL as an oracle and returns the JSON part, if any.
+    ///
+    /// Should only be used with queries where it is very likely that all validators will receive
+    /// the same response, otherwise most block proposals will fail.
+    ///
+    /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
+    /// owner, not a super owner.
+    pub fn fetch_json(&mut self, url: &str) -> String {
+        wit::fetch_json(url)
     }
 }
 

@@ -4,7 +4,7 @@
 use graphql_client::GraphQLQuery;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
     identifiers::{Account, ChainDescription, ChainId, ChannelName, Destination, Owner},
 };
 
@@ -129,6 +129,7 @@ pub struct Transfer;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
+    use linera_base::data_types::OracleRecord;
     use linera_chain::data_types::{
         BlockExecutionOutcome, ExecutedBlock, HashedCertificateValue, IncomingMessage,
         OutgoingMessage,
@@ -210,6 +211,7 @@ mod from {
                         messages,
                         message_counts,
                         state_hash,
+                        oracle_records,
                     },
             } = val;
             let messages = messages
@@ -222,8 +224,16 @@ mod from {
                     messages,
                     message_counts: message_counts.into_iter().map(|c| c as u32).collect(),
                     state_hash,
+                    oracle_records: oracle_records.into_iter().map(Into::into).collect(),
                 },
             }
+        }
+    }
+
+    impl From<block::BlockBlockValueExecutedBlockOutcomeOracleRecords> for OracleRecord {
+        fn from(val: block::BlockBlockValueExecutedBlockOutcomeOracleRecords) -> Self {
+            let block::BlockBlockValueExecutedBlockOutcomeOracleRecords { responses } = val;
+            OracleRecord { responses }
         }
     }
 

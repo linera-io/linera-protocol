@@ -6,6 +6,9 @@
 
 use std::fmt;
 
+use anyhow::Context as _;
+use async_graphql::SimpleObject;
+use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -683,6 +686,51 @@ impl ApplicationPermissions {
     }
 }
 
+/// A record of oracle responses from the execution of a transaction.
+#[derive(Debug, Default, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct OracleRecord {
+    /// The list of responses to all the oracle queries made by a transaction.
+    pub responses: Vec<OracleResponse>,
+}
+
+/// A record of a single oracle response.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum OracleResponse {
+    /// The response from a service query.
+    Service(Vec<u8>),
+    /// The JSON response from an HTTP GET request.
+    Json(String),
+}
+
+impl fmt::Display for OracleResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OracleResponse::Service(bytes) => {
+                write!(f, "Service:{}", STANDARD_NO_PAD.encode(bytes))?
+            }
+            OracleResponse::Json(json) => write!(f, "Json:\"{}\"", json)?,
+        };
+
+        Ok(())
+    }
+}
+
+impl std::str::FromStr for OracleResponse {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Some(string) = s.strip_prefix("Service:") {
+            return Ok(OracleResponse::Service(
+                STANDARD_NO_PAD.decode(string).context("Invalid base64")?,
+            ));
+        }
+        if let Some(json) = s.strip_prefix("Json:\"").and_then(|s| s.strip_suffix('"')) {
+            return Ok(OracleResponse::Json(json.to_string()));
+        }
+        Err(anyhow::anyhow!("Invalid enum! Enum: {}", s))
+    }
+}
+
 doc_scalar!(Amount, "A non-negative amount of tokens.");
 doc_scalar!(BlockHeight, "A block height to identify blocks in a chain");
 doc_scalar!(
@@ -693,6 +741,7 @@ doc_scalar!(
     Round,
     "A number to identify successive attempts to decide a value in a consensus protocol."
 );
+doc_scalar!(OracleResponse, "A record of a single oracle response.");
 
 #[cfg(test)]
 mod tests {

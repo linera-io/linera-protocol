@@ -678,9 +678,8 @@ pub mod tests {
         let certificate = Certificate::new(
             HashedCertificateValue::new_validated(
                 BlockExecutionOutcome {
-                    messages: vec![],
-                    message_counts: vec![],
                     state_hash: CryptoHash::new(&Foo("test".into())),
+                    ..BlockExecutionOutcome::default()
                 }
                 .with(get_block()),
             ),
@@ -692,9 +691,8 @@ pub mod tests {
         );
         let blobs = vec![HashedCertificateValue::new_validated(
             BlockExecutionOutcome {
-                messages: vec![],
-                message_counts: vec![],
                 state_hash: CryptoHash::new(&Foo("also test".into())),
+                ..BlockExecutionOutcome::default()
             }
             .with(get_block()),
         )];
@@ -742,18 +740,16 @@ pub mod tests {
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
             blobs: vec![HashedCertificateValue::new_confirmed(
                 BlockExecutionOutcome {
-                    messages: vec![],
-                    message_counts: vec![],
                     state_hash: CryptoHash::new(&Foo("execution state".into())),
+                    ..BlockExecutionOutcome::default()
                 }
                 .with(get_block()),
             )],
             validated: Some(Certificate::new(
                 HashedCertificateValue::new_validated(
                     BlockExecutionOutcome {
-                        messages: vec![],
-                        message_counts: vec![],
                         state_hash: CryptoHash::new(&Foo("validated".into())),
+                        ..BlockExecutionOutcome::default()
                     }
                     .with(get_block()),
                 ),

@@ -9,8 +9,8 @@ use std::{
 
 use async_graphql::{Object, SimpleObject};
 use linera_base::{
-    crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
-    data_types::{Amount, BlockHeight, Round, Timestamp},
+    crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
+    data_types::{Amount, BlockHeight, OracleRecord, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{
         Account, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
@@ -270,6 +270,7 @@ pub struct ExecutedBlock {
 
 /// The messages and the state hash resulting from a [`Block`]'s execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[cfg_attr(with_testing, derive(Default))]
 pub struct BlockExecutionOutcome {
     pub messages: Vec<OutgoingMessage>,
     /// For each transaction, the cumulative number of messages created by this and all previous
@@ -277,6 +278,8 @@ pub struct BlockExecutionOutcome {
     /// transaction `i + 1` or later.
     pub message_counts: Vec<u32>,
     pub state_hash: CryptoHash,
+    /// The record of oracle responses for each transaction.
+    pub oracle_records: Vec<OracleRecord>,
 }
 
 /// A statement to be certified by the validators.
@@ -785,6 +788,13 @@ impl HashedCertificateValue {
     }
 }
 
+// TODO(#1987): Consider refactoring BlockProposal to make this unnecessary.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProposalPayload<'a> {
+    pub content: Cow<'a, BlockAndRound>,
+    pub outcome: Option<Cow<'a, BlockExecutionOutcome>>,
+}
+
 impl BlockProposal {
     pub fn new(
         content: BlockAndRound,
@@ -792,7 +802,17 @@ impl BlockProposal {
         blobs: Vec<HashedCertificateValue>,
         validated: Option<Certificate>,
     ) -> Self {
-        let signature = Signature::new(&content, secret);
+        let outcome = validated
+            .as_ref()
+            .and_then(|certificate| certificate.value().executed_block())
+            .map(|executed_block| Cow::Borrowed(&executed_block.outcome));
+        let signature = Signature::new(
+            &ProposalPayload {
+                content: Cow::Borrowed(&content),
+                outcome,
+            },
+            secret,
+        );
         Self {
             content,
             owner: secret.public().into(),
@@ -800,6 +820,21 @@ impl BlockProposal {
             blobs,
             validated,
         }
+    }
+
+    pub fn check_signature(&self, public_key: PublicKey) -> Result<(), CryptoError> {
+        let outcome = self
+            .validated
+            .as_ref()
+            .and_then(|certificate| certificate.value().executed_block())
+            .map(|executed_block| Cow::Borrowed(&executed_block.outcome));
+        self.signature.check(
+            &ProposalPayload {
+                content: Cow::Borrowed(&self.content),
+                outcome,
+            },
+            public_key,
+        )
     }
 }
 
@@ -1041,7 +1076,7 @@ fn check_signatures(
     Ok(())
 }
 
-impl BcsSignable for BlockAndRound {}
+impl<'a> BcsSignable for ProposalPayload<'a> {}
 
 impl BcsSignable for ValueHashAndRound {}
 

@@ -5,16 +5,17 @@ use std::{
     collections::{hash_map, BTreeMap, HashMap, HashSet},
     mem,
     sync::{Arc, Mutex},
+    vec,
 };
 
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Resources,
-        SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleRecord, OracleResponse,
+        Resources, SendMessageRequest, Timestamp,
     },
     ensure,
-    identifiers::{Account, ChainId, ChannelName, MessageId, Owner},
+    identifiers::{Account, ApplicationId, ChainId, ChannelName, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::batch::Batch;
@@ -39,6 +40,17 @@ pub struct SyncRuntime<UserInstance>(Arc<Mutex<SyncRuntimeInternal<UserInstance>
 
 pub type ContractSyncRuntime = SyncRuntime<UserContractInstance>;
 pub type ServiceSyncRuntime = SyncRuntime<UserServiceInstance>;
+
+/// Responses to oracle queries that are being recorded or replayed.
+#[derive(Debug)]
+enum OracleResponses {
+    /// When executing a block _proposal_, oracles can be used and their responses are recorded.
+    Record(Vec<OracleResponse>),
+    /// When re-executing a validated or confirmed block, recorded responses are used.
+    Replay(vec::IntoIter<OracleResponse>),
+    /// In service queries, oracle responses are not recorded.
+    Forget,
+}
 
 /// Runtime data tracked during the execution of a transaction on the synchronous thread.
 #[derive(Debug)]
@@ -73,6 +85,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     active_applications: HashSet<UserApplicationId>,
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
     execution_outcomes: Vec<ExecutionOutcome>,
+    /// Responses to oracle queries that are being recorded or replayed.
+    oracle_responses: OracleResponses,
 
     /// Track application states based on views.
     view_user_states: BTreeMap<UserApplicationId, ViewUserState>,
@@ -260,6 +274,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         execution_state_sender: ExecutionStateSender,
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
+        oracle_responses: OracleResponses,
     ) -> Self {
         Self {
             chain_id,
@@ -277,6 +292,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             view_user_states: BTreeMap::default(),
             refund_grant_to,
             resource_controller,
+            oracle_responses,
         }
     }
 
@@ -614,6 +630,19 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
         self.inner().find_key_values_by_prefix_wait(promise)
     }
+
+    fn query_service(
+        &mut self,
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        self.inner().query_service(application_id, query)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn fetch_json(&mut self, url: &str) -> Result<String, ExecutionError> {
+        self.inner().fetch_json(url)
+    }
 }
 
 impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
@@ -814,6 +843,50 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             .track_bytes_read(read_size as u64)?;
         Ok(key_values)
     }
+
+    fn query_service(
+        &mut self,
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
+            return match responses.next() {
+                Some(OracleResponse::Service(bytes)) => Ok(bytes),
+                Some(_) => Err(ExecutionError::OracleResponseMismatch),
+                None => Err(ExecutionError::MissingOracleResponse),
+            };
+        }
+        let context = crate::QueryContext {
+            chain_id: self.chain_id,
+            next_block_height: self.height,
+        };
+        let sender = self.execution_state_sender.clone();
+        let response = ServiceSyncRuntime::run_query(sender, application_id, context, query)?;
+        if let OracleResponses::Record(responses) = &mut self.oracle_responses {
+            responses.push(OracleResponse::Service(response.clone()));
+        }
+        Ok(response)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn fetch_json(&mut self, url: &str) -> Result<String, ExecutionError> {
+        if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
+            return match responses.next() {
+                Some(OracleResponse::Json(json)) => Ok(json),
+                Some(_) => Err(ExecutionError::OracleResponseMismatch),
+                None => Err(ExecutionError::MissingOracleResponse),
+            };
+        }
+        let url = url.to_string();
+        let json = self
+            .execution_state_sender
+            .send_request(|callback| Request::FetchJson { url, callback })?
+            .recv_response()?;
+        if let OracleResponses::Record(responses) = &mut self.oracle_responses {
+            responses.push(OracleResponse::Json(json.clone()));
+        }
+        Ok(json)
+    }
 }
 
 impl<UserInstance> Clone for SyncRuntime<UserInstance> {
@@ -824,6 +897,7 @@ impl<UserInstance> Clone for SyncRuntime<UserInstance> {
 
 impl ContractSyncRuntime {
     /// Main entry point to start executing a user action.
+    #[allow(clippy::type_complexity)]
     pub(crate) fn run_action(
         execution_state_sender: ExecutionStateSender,
         application_id: UserApplicationId,
@@ -831,7 +905,8 @@ impl ContractSyncRuntime {
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: UserAction,
-    ) -> Result<(Vec<ExecutionOutcome>, ResourceController), ExecutionError> {
+        oracle_record: Option<OracleRecord>,
+    ) -> Result<(Vec<ExecutionOutcome>, OracleRecord, ResourceController), ExecutionError> {
         let executing_message = match &action {
             UserAction::Message(context, _) => Some(context.into()),
             _ => None,
@@ -839,6 +914,11 @@ impl ContractSyncRuntime {
         let signer = action.signer();
         let height = action.height();
         let next_message_index = action.next_message_index();
+        let oracle_record = if let Some(responses) = oracle_record {
+            OracleResponses::Replay(responses.responses.into_iter())
+        } else {
+            OracleResponses::Record(Vec::new())
+        };
         let mut runtime = ContractSyncRuntime::new(SyncRuntimeInternal::new(
             chain_id,
             height,
@@ -848,6 +928,7 @@ impl ContractSyncRuntime {
             execution_state_sender,
             refund_grant_to,
             resource_controller,
+            oracle_record,
         ));
         let finalize_context = FinalizeContext {
             authenticated_signer: signer,
@@ -866,7 +947,16 @@ impl ContractSyncRuntime {
         let runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        Ok((runtime.execution_outcomes, runtime.resource_controller))
+        let oracle_record = if let OracleResponses::Record(responses) = runtime.oracle_responses {
+            OracleRecord { responses }
+        } else {
+            OracleRecord::default()
+        };
+        Ok((
+            runtime.execution_outcomes,
+            oracle_record,
+            runtime.resource_controller,
+        ))
     }
 
     /// Notifies all loaded applications that execution is finalizing.
@@ -1171,6 +1261,7 @@ impl ServiceSyncRuntime {
             execution_state_sender,
             None,
             ResourceController::default(),
+            OracleResponses::Forget,
         );
         let mut runtime = ServiceSyncRuntime::new(runtime_internal);
 

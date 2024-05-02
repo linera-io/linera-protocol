@@ -4,12 +4,12 @@
 //! Runtime types to simulate interfacing with the host executing the contract.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     sync::{Arc, Mutex, MutexGuard},
 };
 
 use linera_base::{
-    abi::ContractAbi,
+    abi::{ContractAbi, ServiceAbi},
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
     ownership::{ChainOwnership, CloseChainError},
@@ -42,6 +42,8 @@ where
     unsubscribe_requests: Vec<(ChainId, ChannelName)>,
     outgoing_transfers: HashMap<Account, Amount>,
     claim_requests: Vec<ClaimRequest>,
+    expected_service_queries: VecDeque<(ApplicationId, String, String)>,
+    expected_json_requests: VecDeque<(String, String)>,
     key_value_store: KeyValueStore,
 }
 
@@ -80,6 +82,8 @@ where
             unsubscribe_requests: Vec::new(),
             outgoing_transfers: HashMap::new(),
             claim_requests: Vec::new(),
+            expected_service_queries: VecDeque::new(),
+            expected_json_requests: VecDeque::new(),
             key_value_store: KeyValueStore::mock().to_mut(),
         }
     }
@@ -576,6 +580,59 @@ where
 
         bcs::from_bytes(&response_bytes)
             .expect("Failed to deserialize `Response` type from cross-application call")
+    }
+
+    /// Adds an expected `query_service` call`, and the response it should return in the test.
+    pub fn add_expected_service_query<A: ServiceAbi + Send>(
+        &mut self,
+        application_id: ApplicationId<A>,
+        query: A::Query,
+        response: A::QueryResponse,
+    ) {
+        let query = serde_json::to_string(&query).expect("Failed to serialize query");
+        let response = serde_json::to_string(&response).expect("Failed to serialize response");
+        self.expected_service_queries
+            .push_back((application_id.forget_abi(), query, response));
+    }
+
+    /// Adds an expected `fetch_json` call, and the response it should return in the test.
+    pub fn add_expected_json_request(&mut self, url: String, response: String) {
+        self.expected_json_requests.push_back((url, response));
+    }
+
+    /// Queries our application service as an oracle and returns the response.
+    ///
+    /// Should only be used with queries where it is very likely that all validators will compute
+    /// the same result, otherwise most block proposals will fail.
+    ///
+    /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
+    /// owner, not a super owner.
+    pub fn query_service<A: ServiceAbi + Send>(
+        &mut self,
+        application_id: ApplicationId<A>,
+        query: A::Query,
+    ) -> A::QueryResponse {
+        let maybe_query = self.expected_service_queries.pop_front();
+        let (expected_id, expected_query, response) =
+            maybe_query.expect("Unexpected service query");
+        assert_eq!(application_id.forget_abi(), expected_id);
+        let query = serde_json::to_string(&query).expect("Failed to serialize query");
+        assert_eq!(query, expected_query);
+        serde_json::from_str(&response).expect("Failed to deserialize response")
+    }
+
+    /// Makes a GET request to the given URL as an oracle and returns the JSON part, if any.
+    ///
+    /// Should only be used with queries where it is very likely that all validators will receive
+    /// the same response, otherwise most block proposals will fail.
+    ///
+    /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
+    /// owner, not a super owner.
+    pub fn fetch_json(&mut self, url: &str) -> String {
+        let maybe_request = self.expected_json_requests.pop_front();
+        let (expected_url, response) = maybe_request.expect("Unexpected JSON request");
+        assert_eq!(*url, expected_url);
+        response
     }
 }
 

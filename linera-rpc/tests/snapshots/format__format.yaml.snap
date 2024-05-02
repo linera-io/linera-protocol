@@ -77,6 +77,9 @@ BlockExecutionOutcome:
         SEQ: U32
     - state_hash:
         TYPENAME: CryptoHash
+    - oracle_records:
+        SEQ:
+          TYPENAME: OracleRecord
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:
@@ -612,6 +615,20 @@ Operation:
           - application_id:
               TYPENAME: ApplicationId
           - bytes: BYTES
+OracleRecord:
+  STRUCT:
+    - responses:
+        SEQ:
+          TYPENAME: OracleResponse
+OracleResponse:
+  ENUM:
+    0:
+      Service:
+        NEWTYPE:
+          SEQ: U8
+    1:
+      Json:
+        NEWTYPE: STR
 Origin:
   STRUCT:
     - sender:

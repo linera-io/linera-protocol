@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, BlockHeight},
+    data_types::{Amount, BlockHeight, OracleRecord},
     identifiers::{Account, ChainDescription, ChainId},
 };
 use linera_execution::{
@@ -89,10 +89,11 @@ async fn test_fuel_for_counter_wasm_application(
             chain_id: ChainId::root(0),
             owner: None,
         };
-        let outcomes = view
+        let (outcomes, _) = view
             .execute_operation(
                 context,
                 Operation::user(app_id, increment).unwrap(),
+                Some(OracleRecord::default()),
                 &mut controller,
             )
             .await?;

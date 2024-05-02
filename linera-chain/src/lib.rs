@@ -138,6 +138,8 @@ pub enum ChainError {
     AuthorizedApplications(Vec<ApplicationId>),
     #[error("Can't use grant across different broadcast messages")]
     GrantUseOnBroadcast,
+    #[error("ExecutedBlock contains fewer oracle responses than requests")]
+    MissingOracleRecord,
 }
 
 #[derive(Copy, Clone, Debug)]

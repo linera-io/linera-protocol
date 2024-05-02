@@ -246,6 +246,10 @@ pub enum WorkerError {
     UnneededValue { value_hash: CryptoHash },
     #[error("The following values containing application bytecode are missing: {0:?}.")]
     ApplicationBytecodesNotFound(Vec<BytecodeLocation>),
+    #[error("The certificate in the block proposal is not a ValidatedBlock")]
+    MissingExecutedBlockInProposal,
+    #[error("Fast blocks cannot query oracles")]
+    FastBlockUsingOracles,
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -428,7 +432,10 @@ where
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         let local_time = self.storage.clock().current_time();
         let signer = block.authenticated_signer;
-        let executed_block = chain.execute_block(&block, local_time).await?.with(block);
+        let executed_block = chain
+            .execute_block(&block, local_time, None)
+            .await?
+            .with(block);
         let mut response = ChainInfoResponse::new(&chain, None);
         if let Some(signer) = signer {
             response.info.requested_owner_balance =
@@ -596,6 +603,7 @@ where
             messages,
             message_counts,
             state_hash,
+            oracle_records,
         } = &executed_block.outcome;
         let mut chain = self.storage.load_chain(block.chain_id).await?;
         // Check that the chain is active and ready for this confirmation.
@@ -663,7 +671,9 @@ where
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
         let local_time = self.storage.clock().current_time();
-        let verified_outcome = chain.execute_block(block, local_time).await?;
+        let verified_outcome = chain
+            .execute_block(block, local_time, Some(oracle_records.clone()))
+            .await?;
         // We should always agree on the messages and state hash.
         ensure!(
             *messages == verified_outcome.messages,
@@ -1062,11 +1072,11 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, proposal);
         let BlockProposal {
-            content: BlockAndRound { block, .. },
+            content: BlockAndRound { block, round },
             owner,
-            signature,
             blobs,
             validated,
+            signature: _,
         } = &proposal;
         let chain_id = block.chain_id;
         let mut chain = self.storage.load_active_chain(chain_id).await?;
@@ -1086,7 +1096,7 @@ where
             .get()
             .verify_owner(&proposal)
             .ok_or(WorkerError::InvalidOwner)?;
-        signature.check(&proposal.content, public_key)?;
+        proposal.check_signature(public_key)?;
         // Check the authentication of the operations in the block.
         if let Some(signer) = block.authenticated_signer {
             ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
@@ -1115,7 +1125,23 @@ where
         );
         self.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.storage.clock().current_time();
-        let outcome = chain.execute_block(block, local_time).await?;
+        let outcome = if let Some(validated) = validated {
+            validated
+                .value()
+                .executed_block()
+                .ok_or_else(|| WorkerError::MissingExecutedBlockInProposal)?
+                .outcome
+                .clone()
+        } else {
+            chain.execute_block(block, local_time, None).await?
+        };
+        if round.is_fast() {
+            let mut records = outcome.oracle_records.iter();
+            ensure!(
+                records.all(|record| record.responses.is_empty()),
+                WorkerError::FastBlockUsingOracles
+            );
+        }
         // Check if the counters of tip_state would be valid.
         chain.tip_state.get().verify_counters(block, &outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.

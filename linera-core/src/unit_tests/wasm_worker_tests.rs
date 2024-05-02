@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use linera_base::{
     crypto::KeyPair,
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, OracleRecord, Timestamp},
     identifiers::{
         BytecodeId, ChainDescription, ChainId, Destination, GenericApplicationId, MessageId,
     },
@@ -148,6 +148,7 @@ where
             }],
             message_counts: vec![1],
             state_hash: publisher_state_hash,
+            oracle_records: vec![OracleRecord::default()],
         }
         .with(publish_block),
     );
@@ -217,6 +218,7 @@ where
             messages: vec![failing_broadcast_outgoing_message],
             message_counts: vec![1],
             state_hash: publisher_state_hash,
+            oracle_records: vec![OracleRecord::default()],
         }
         .with(broadcast_block.clone()),
     );
@@ -241,6 +243,7 @@ where
             messages: vec![broadcast_outgoing_message],
             message_counts: vec![1],
             state_hash: publisher_state_hash,
+            oracle_records: vec![OracleRecord::default()],
         }
         .with(broadcast_block),
     );
@@ -295,6 +298,7 @@ where
             }],
             message_counts: vec![1],
             state_hash: creator_state.crypto_hash().await?,
+            oracle_records: vec![OracleRecord::default()],
         }
         .with(subscribe_block),
     );
@@ -347,6 +351,7 @@ where
             }],
             message_counts: vec![1],
             state_hash: publisher_state_hash,
+            oracle_records: vec![OracleRecord::default()],
         }
         .with(accept_block),
     );
@@ -440,6 +445,7 @@ where
             }],
             message_counts: vec![0, 1],
             state_hash: creator_state.crypto_hash().await?,
+            oracle_records: vec![OracleRecord::default(); 2],
         }
         .with(create_block),
     );
@@ -482,15 +488,17 @@ where
                 application_id,
                 bytes: user_operation,
             },
+            Some(OracleRecord::default()),
             &mut controller,
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(5));
     let run_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![],
+            messages: Vec::new(),
             message_counts: vec![0],
             state_hash: creator_state.crypto_hash().await?,
+            oracle_records: vec![OracleRecord::default()],
         }
         .with(run_block),
     );

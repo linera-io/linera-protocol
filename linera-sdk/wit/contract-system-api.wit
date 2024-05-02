@@ -21,6 +21,8 @@ interface contract-system-api {
     open-chain: func(chain-ownership: chain-ownership, balance: amount) -> chain-id;
     close-chain: func() -> result<tuple<>, close-chain-error>;
     try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
+    query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
+    fetch-json: func(query: string) -> string;
     log: func(message: string, level: log-level);
     consume-fuel: func(fuel: u64);
 

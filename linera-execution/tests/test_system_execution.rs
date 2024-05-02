@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, BlockHeight},
+    data_types::{Amount, BlockHeight, OracleRecord},
     identifiers::{Account, ChainDescription, ChainId, MessageId},
 };
 use linera_execution::{
@@ -37,8 +37,13 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         next_message_index: 0,
     };
     let mut controller = ResourceController::default();
-    let outcomes = view
-        .execute_operation(context, Operation::System(operation), &mut controller)
+    let (outcomes, _) = view
+        .execute_operation(
+            context,
+            Operation::System(operation),
+            Some(OracleRecord::default()),
+            &mut controller,
+        )
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::ZERO);
@@ -80,8 +85,14 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         next_message_index: 0,
     };
     let mut controller = ResourceController::default();
-    let outcomes = view
-        .execute_message(context, Message::System(message), None, &mut controller)
+    let (outcomes, _) = view
+        .execute_message(
+            context,
+            Message::System(message),
+            None,
+            Some(OracleRecord::default()),
+            &mut controller,
+        )
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::from_tokens(4));

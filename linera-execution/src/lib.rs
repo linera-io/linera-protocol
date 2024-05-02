@@ -30,8 +30,8 @@ use linera_base::{
     data_types::{Amount, ArithmeticError, BlockHeight, Resources, SendMessageRequest, Timestamp},
     doc_scalar, hex_debug,
     identifiers::{
-        Account, BytecodeId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId,
-        Owner,
+        Account, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
+        GenericApplicationId, MessageId, Owner,
     },
     ownership::ChainOwnership,
 };
@@ -140,6 +140,12 @@ pub enum ExecutionError {
     ReqwestError(#[from] reqwest::Error),
     #[error("Encountered IO error")]
     IoError(#[from] std::io::Error),
+    #[error("No recorded response for oracle query")]
+    MissingOracleResponse,
+    #[error("Invalid JSON: {}", .0)]
+    Json(#[from] serde_json::Error),
+    #[error("Recorded response for oracle query has the wrong type")]
+    OracleResponseMismatch,
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -411,6 +417,17 @@ pub trait BaseRuntime {
         &mut self,
         promise: &Self::FindKeyValuesByPrefix,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>;
+
+    /// Queries a service.
+    fn query_service(
+        &mut self,
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError>;
+
+    /// Makes a GET request to the given URL and returns the JSON part, if any.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn fetch_json(&mut self, url: &str) -> Result<String, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
@@ -421,8 +438,8 @@ pub trait ServiceRuntime: BaseRuntime {
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
-    #[cfg(not(target_arch = "wasm32"))]
     /// Fetches blob of bytes from an arbitrary URL.
+    #[cfg(not(target_arch = "wasm32"))]
     fn fetch_url(&mut self, url: &str) -> Result<Vec<u8>, ExecutionError>;
 }
 

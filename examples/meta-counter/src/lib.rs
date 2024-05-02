@@ -4,7 +4,7 @@
 /*!
 # Meta-Counter Example Application
 
-This application is only used for testing cross-application calls.
+This application is only used for testing cross-application calls and oracles.
 */
 
 use async_graphql::{Request, Response};

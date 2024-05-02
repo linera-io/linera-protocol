@@ -122,12 +122,12 @@ fn forge_response(output: &Value) -> String {
 pub async fn query(app: JsValue, query: JsValue, kind: String) {
     let link =
         from_value::<String>(getf(&app, "link")).expect("cannot parse application vue argument");
-    let query_json = js_to_json(&query);
-    let name = query_json["name"].as_str().unwrap();
-    let args = query_json["args"].as_array().unwrap().to_vec();
+    let fetch_json = js_to_json(&query);
+    let name = fetch_json["name"].as_str().unwrap();
+    let args = fetch_json["args"].as_array().unwrap().to_vec();
     let args = forge_args(args);
     let input = format!("{}{}", name, args);
-    let response = forge_response(&query_json["type"]);
+    let response = forge_response(&fetch_json["type"]);
     let body =
         serde_json::json!({ "query": format!("{} {{{} {}}}", kind, input, response) }).to_string();
     let client = reqwest_client();
