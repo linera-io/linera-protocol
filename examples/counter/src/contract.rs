@@ -113,11 +113,12 @@ mod tests {
     }
 
     fn create_and_instantiate_counter(initial_value: u64) -> CounterContract {
+        let runtime = ContractRuntime::new().with_application_parameters(());
         let mut contract = CounterContract {
-            state: Counter::load(ViewStorageContext::default())
+            state: Counter::load(ViewStorageContext::from(runtime.key_value_store()))
                 .blocking_wait()
                 .expect("Failed to read from mock key value store"),
-            runtime: ContractRuntime::new().with_application_parameters(()),
+            runtime,
         };
 
         contract

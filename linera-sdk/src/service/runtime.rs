@@ -12,7 +12,7 @@ use linera_base::{
 };
 
 use super::wit::service_system_api as wit;
-use crate::Service;
+use crate::{KeyValueStore, Service};
 
 /// The runtime available during execution of a query.
 pub struct ServiceRuntime<Application>
@@ -45,6 +45,11 @@ where
             owner_balances: Cell::new(None),
             balance_owners: Cell::new(None),
         }
+    }
+
+    /// Returns the key-value store to interface with storage.
+    pub fn key_value_store(&self) -> KeyValueStore {
+        KeyValueStore::for_services()
     }
 
     /// Returns the application parameters provided when the application was created.

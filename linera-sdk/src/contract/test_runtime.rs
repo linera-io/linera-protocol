@@ -16,7 +16,7 @@ use linera_base::{
 };
 use serde::Serialize;
 
-use crate::Contract;
+use crate::{Contract, KeyValueStore};
 
 /// A mock of the common runtime to interface with the host executing the contract.
 pub struct MockContractRuntime<Application>
@@ -42,6 +42,7 @@ where
     unsubscribe_requests: Vec<(ChainId, ChannelName)>,
     outgoing_transfers: HashMap<Account, Amount>,
     claim_requests: Vec<ClaimRequest>,
+    key_value_store: KeyValueStore,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -79,7 +80,13 @@ where
             unsubscribe_requests: Vec::new(),
             outgoing_transfers: HashMap::new(),
             claim_requests: Vec::new(),
+            key_value_store: KeyValueStore::mock().to_mut(),
         }
+    }
+
+    /// Returns the key-value store to interface with storage.
+    pub fn key_value_store(&self) -> KeyValueStore {
+        self.key_value_store.clone()
     }
 
     /// Configures the application parameters to return during the test.

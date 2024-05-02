@@ -115,8 +115,9 @@ where
     ContractLogger::install();
 
     let contract = contract.get_or_insert_with(|| {
-        let state = Contract::State::load().blocking_wait();
-        Contract::new(state, ContractRuntime::new()).blocking_wait()
+        let runtime = ContractRuntime::new();
+        let state = Contract::State::load(runtime.key_value_store()).blocking_wait();
+        Contract::new(state, runtime).blocking_wait()
     });
 
     entrypoint(contract).into()

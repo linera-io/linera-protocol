@@ -68,7 +68,7 @@ mod tests {
     use linera_sdk::{
         util::BlockingWait,
         views::{View, ViewStorageContext},
-        Service,
+        Service, ServiceRuntime,
     };
     use serde_json::json;
 
@@ -77,7 +77,8 @@ mod tests {
     #[test]
     fn query() {
         let value = 61_098_721_u64;
-        let mut state = Counter::load(ViewStorageContext::default())
+        let runtime = ServiceRuntime::<CounterService>::new();
+        let mut state = Counter::load(ViewStorageContext::from(runtime.key_value_store()))
             .blocking_wait()
             .expect("Failed to read from mock key value store");
         state.value.set(value);
