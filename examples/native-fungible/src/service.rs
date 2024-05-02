@@ -10,7 +10,7 @@ use fungible::{Operation, Parameters};
 use linera_sdk::{
     base::{AccountOwner, WithServiceAbi},
     graphql::GraphQLMutationRoot,
-    EmptyState, Service, ServiceRuntime,
+    Service, ServiceRuntime,
 };
 use native_fungible::{AccountEntry, TICKER_SYMBOL};
 
@@ -26,7 +26,6 @@ impl WithServiceAbi for NativeFungibleTokenService {
 }
 
 impl Service for NativeFungibleTokenService {
-    type State = EmptyState;
     type Parameters = Parameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {

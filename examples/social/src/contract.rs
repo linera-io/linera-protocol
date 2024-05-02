@@ -30,7 +30,6 @@ impl WithContractAbi for SocialContract {
 }
 
 impl Contract for SocialContract {
-    type State = Social;
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ();

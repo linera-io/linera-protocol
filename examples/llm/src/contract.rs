@@ -5,7 +5,7 @@
 
 mod state;
 
-use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, EmptyState};
+use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime};
 
 pub struct LlmContract;
 
@@ -16,7 +16,6 @@ impl WithContractAbi for LlmContract {
 }
 
 impl Contract for LlmContract {
-    type State = EmptyState;
     type Message = ();
     type InstantiationArgument = ();
     type Parameters = ();

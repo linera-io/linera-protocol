@@ -6,7 +6,7 @@
 use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
 use linera_sdk::{
     base::{Account, AccountOwner, ChainId, Owner, WithContractAbi},
-    Contract, ContractRuntime, EmptyState,
+    Contract, ContractRuntime,
 };
 use native_fungible::{Message, TICKER_SYMBOL};
 
@@ -21,7 +21,6 @@ impl WithContractAbi for NativeFungibleTokenContract {
 }
 
 impl Contract for NativeFungibleTokenContract {
-    type State = EmptyState;
     type Message = Message;
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;

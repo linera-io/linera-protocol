@@ -78,9 +78,6 @@ pub use self::{
 /// executed.
 #[allow(async_fn_in_trait)]
 pub trait Contract: WithContractAbi + ContractAbi + Sized {
-    /// The type used to store the persisted application state.
-    type State: State;
-
     /// The type of message executed by the application.
     ///
     /// Messages are executed when a message created by the same application is received
@@ -142,9 +139,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
 /// storage and is not gas-metered.
 #[allow(async_fn_in_trait)]
 pub trait Service: WithServiceAbi + ServiceAbi + Sized {
-    /// The type used to store the persisted application state.
-    type State: State;
-
     /// Immutable parameters specific to this application.
     type Parameters: Serialize + DeserializeOwned + Send + Sync + Clone + Debug + 'static;
 

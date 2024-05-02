@@ -25,7 +25,6 @@ impl WithServiceAbi for CounterService {
 }
 
 impl Service for CounterService {
-    type State = Counter;
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {

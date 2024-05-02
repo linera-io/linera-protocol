@@ -29,7 +29,6 @@ impl WithContractAbi for NonFungibleTokenContract {
 }
 
 impl Contract for NonFungibleTokenContract {
-    type State = NonFungibleToken;
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ();

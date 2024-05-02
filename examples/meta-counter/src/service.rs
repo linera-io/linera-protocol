@@ -6,7 +6,7 @@
 use async_graphql::{Request, Response};
 use linera_sdk::{
     base::{ApplicationId, WithServiceAbi},
-    EmptyState, Service, ServiceRuntime,
+    Service, ServiceRuntime,
 };
 
 pub struct MetaCounterService {
@@ -20,7 +20,6 @@ impl WithServiceAbi for MetaCounterService {
 }
 
 impl Service for MetaCounterService {
-    type State = EmptyState;
     type Parameters = ApplicationId<counter::CounterAbi>;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {

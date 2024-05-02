@@ -18,7 +18,7 @@ use candle_transformers::{
     generation::LogitsProcessor,
     models::{llama2_c, llama2_c::Llama, llama2_c_weights, quantized_llama::ModelWeights},
 };
-use linera_sdk::{base::WithServiceAbi, EmptyState, Service, ServiceRuntime};
+use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime};
 use log::info;
 use tokenizers::Tokenizer;
 
@@ -70,7 +70,6 @@ struct ModelContext {
 }
 
 impl Service for LlmService {
-    type State = EmptyState;
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {

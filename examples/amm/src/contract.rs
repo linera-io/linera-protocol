@@ -29,7 +29,6 @@ impl WithContractAbi for AmmContract {
 }
 
 impl Contract for AmmContract {
-    type State = Amm;
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = Parameters;

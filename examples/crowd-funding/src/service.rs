@@ -28,7 +28,6 @@ impl WithServiceAbi for CrowdFundingService {
 }
 
 impl Service for CrowdFundingService {
-    type State = CrowdFunding;
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {

@@ -31,7 +31,6 @@ impl WithServiceAbi for FungibleTokenService {
 }
 
 impl Service for FungibleTokenService {
-    type State = FungibleToken;
     type Parameters = Parameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {

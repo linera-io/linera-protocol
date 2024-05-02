@@ -33,7 +33,6 @@ impl WithServiceAbi for NonFungibleTokenService {
 }
 
 impl Service for NonFungibleTokenService {
-    type State = NonFungibleToken;
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {

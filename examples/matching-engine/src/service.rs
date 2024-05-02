@@ -29,7 +29,6 @@ impl WithServiceAbi for MatchingEngineService {
 }
 
 impl Service for MatchingEngineService {
-    type State = MatchingEngine;
     type Parameters = Parameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {

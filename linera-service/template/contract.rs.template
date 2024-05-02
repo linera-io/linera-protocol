@@ -22,7 +22,6 @@ impl WithContractAbi for ApplicationContract {{
 }}
 
 impl Contract for ApplicationContract {{
-    type State = Application;
     type Message = ();
     type Parameters = ();
     type InstantiationArgument = ();

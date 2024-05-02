@@ -30,7 +30,6 @@ impl WithContractAbi for FungibleTokenContract {
 }
 
 impl Contract for FungibleTokenContract {
-    type State = FungibleToken;
     type Message = Message;
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;

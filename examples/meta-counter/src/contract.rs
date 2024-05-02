@@ -5,7 +5,7 @@
 
 use linera_sdk::{
     base::{ApplicationId, WithContractAbi},
-    Contract, ContractRuntime, EmptyState, Resources,
+    Contract, ContractRuntime, Resources,
 };
 use meta_counter::{Message, MetaCounterAbi, Operation};
 
@@ -26,7 +26,6 @@ impl WithContractAbi for MetaCounterContract {
 }
 
 impl Contract for MetaCounterContract {
-    type State = EmptyState;
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ApplicationId<counter::CounterAbi>;

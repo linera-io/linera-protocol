@@ -28,7 +28,6 @@ impl WithServiceAbi for SocialService {
 }
 
 impl Service for SocialService {
-    type State = Social;
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {

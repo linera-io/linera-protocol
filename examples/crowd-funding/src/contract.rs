@@ -26,7 +26,6 @@ impl WithContractAbi for CrowdFundingContract {
 }
 
 impl Contract for CrowdFundingContract {
-    type State = CrowdFunding;
     type Message = Message;
     type InstantiationArgument = InstantiationArgument;
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;

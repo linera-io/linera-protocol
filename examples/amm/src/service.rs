@@ -29,7 +29,6 @@ impl WithServiceAbi for AmmService {
 }
 
 impl Service for AmmService {
-    type State = Amm;
     type Parameters = Parameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {

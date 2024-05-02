@@ -52,7 +52,6 @@ pub struct Transfer {
 }
 
 impl Contract for MatchingEngineContract {
-    type State = MatchingEngine;
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = Parameters;

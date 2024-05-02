@@ -26,7 +26,6 @@ impl WithContractAbi for CounterContract {
 }
 
 impl Contract for CounterContract {
-    type State = Counter;
     type Message = ();
     type InstantiationArgument = u64;
     type Parameters = ();
