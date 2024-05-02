@@ -29,7 +29,7 @@ impl Service for NativeFungibleTokenService {
     type State = EmptyState;
     type Parameters = Parameters;
 
-    async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Self {
+    async fn new(runtime: ServiceRuntime<Self>) -> Self {
         NativeFungibleTokenService {
             runtime: Arc::new(Mutex::new(runtime)),
         }

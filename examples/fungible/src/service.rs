@@ -12,7 +12,7 @@ use fungible::{Operation, Parameters};
 use linera_sdk::{
     base::{AccountOwner, Amount, WithServiceAbi},
     graphql::GraphQLMutationRoot,
-    views::MapView,
+    views::{MapView, View, ViewStorageContext},
     Service, ServiceRuntime,
 };
 
@@ -34,7 +34,10 @@ impl Service for FungibleTokenService {
     type State = FungibleToken;
     type Parameters = Parameters;
 
-    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Self {
+    async fn new(runtime: ServiceRuntime<Self>) -> Self {
+        let state = FungibleToken::load(ViewStorageContext::from(runtime.key_value_store()))
+            .await
+            .expect("Failed to load state");
         FungibleTokenService {
             state: Arc::new(state),
             runtime: Arc::new(Mutex::new(runtime)),

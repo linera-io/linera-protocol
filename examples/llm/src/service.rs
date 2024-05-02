@@ -73,7 +73,7 @@ impl Service for LlmService {
     type State = EmptyState;
     type Parameters = ();
 
-    async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Self {
+    async fn new(runtime: ServiceRuntime<Self>) -> Self {
         LlmService { runtime }
     }
 

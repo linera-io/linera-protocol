@@ -23,7 +23,7 @@ impl Service for MetaCounterService {
     type State = EmptyState;
     type Parameters = ApplicationId<counter::CounterAbi>;
 
-    async fn new(_state: Self::State, runtime: ServiceRuntime<Self>) -> Self {
+    async fn new(runtime: ServiceRuntime<Self>) -> Self {
         MetaCounterService { runtime }
     }
 

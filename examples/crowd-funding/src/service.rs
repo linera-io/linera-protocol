@@ -12,6 +12,7 @@ use crowd_funding::Operation;
 use linera_sdk::{
     base::{ApplicationId, WithServiceAbi},
     graphql::GraphQLMutationRoot,
+    views::{View, ViewStorageContext},
     Service, ServiceRuntime,
 };
 use state::CrowdFunding;
@@ -30,7 +31,10 @@ impl Service for CrowdFundingService {
     type State = CrowdFunding;
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Self {
+    async fn new(runtime: ServiceRuntime<Self>) -> Self {
+        let state = CrowdFunding::load(ViewStorageContext::from(runtime.key_value_store()))
+            .await
+            .expect("Failed to load state");
         CrowdFundingService {
             state: Arc::new(state),
         }
