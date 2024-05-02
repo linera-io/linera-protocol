@@ -2627,11 +2627,15 @@ dependencies = [
  "async-graphql",
  "base64 0.22.0",
  "bcs",
+ "candle-core",
+ "candle-transformers",
  "fungible",
+ "getrandom",
  "linera-sdk",
  "non-fungible",
  "serde",
  "sha3",
+ "tokenizers",
  "tokio",
 ]
 
