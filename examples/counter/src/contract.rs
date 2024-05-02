@@ -6,7 +6,11 @@
 mod state;
 
 use counter::CounterAbi;
-use linera_sdk::{base::WithContractAbi, views::RootView, Contract, ContractRuntime};
+use linera_sdk::{
+    base::WithContractAbi,
+    views::{RootView, View, ViewStorageContext},
+    Contract, ContractRuntime,
+};
 
 use self::state::Counter;
 
@@ -27,7 +31,10 @@ impl Contract for CounterContract {
     type InstantiationArgument = u64;
     type Parameters = ();
 
-    async fn new(state: Counter, runtime: ContractRuntime<Self>) -> Self {
+    async fn new(runtime: ContractRuntime<Self>) -> Self {
+        let state = Counter::load(ViewStorageContext::from(runtime.key_value_store()))
+            .await
+            .expect("Failed to load state");
         CounterContract { state, runtime }
     }
 

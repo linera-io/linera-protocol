@@ -26,7 +26,7 @@ impl Contract for NativeFungibleTokenContract {
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
 
-    async fn new(_: EmptyState, runtime: ContractRuntime<Self>) -> Self {
+    async fn new(runtime: ContractRuntime<Self>) -> Self {
         NativeFungibleTokenContract { runtime }
     }
 

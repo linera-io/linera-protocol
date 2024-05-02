@@ -2,7 +2,11 @@
 
 mod state;
 
-use linera_sdk::{{base::WithContractAbi, Contract, ContractRuntime, views::RootView}};
+use linera_sdk::{{
+    base::WithContractAbi,
+    views::{{RootView, View, ViewStorageContext}},
+    Contract, ContractRuntime,
+}};
 
 use self::state::Application;
 
@@ -23,7 +27,10 @@ impl Contract for ApplicationContract {{
     type Parameters = ();
     type InstantiationArgument = ();
 
-    async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Self {{
+    async fn new(runtime: ContractRuntime<Self>) -> Self {{
+        let state = Application::load(ViewStorageContext::from(runtime.key_value_store()))
+            .await
+            .expect("Failed to load state");
         ApplicationContract {{ state, runtime }}
     }}
 

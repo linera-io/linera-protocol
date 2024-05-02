@@ -21,7 +21,7 @@ impl Contract for LlmContract {
     type InstantiationArgument = ();
     type Parameters = ();
 
-    async fn new(_: Self::State, _runtime: ContractRuntime<Self>) -> Self {
+    async fn new(_runtime: ContractRuntime<Self>) -> Self {
         LlmContract
     }
 

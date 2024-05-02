@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use fungible::Account;
 use linera_sdk::{
     base::{AccountOwner, WithContractAbi},
-    views::RootView,
+    views::{RootView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
 use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
@@ -34,7 +34,10 @@ impl Contract for NonFungibleTokenContract {
     type InstantiationArgument = ();
     type Parameters = ();
 
-    async fn new(state: NonFungibleToken, runtime: ContractRuntime<Self>) -> Self {
+    async fn new(runtime: ContractRuntime<Self>) -> Self {
+        let state = NonFungibleToken::load(ViewStorageContext::from(runtime.key_value_store()))
+            .await
+            .expect("Failed to load state");
         NonFungibleTokenContract { state, runtime }
     }
 

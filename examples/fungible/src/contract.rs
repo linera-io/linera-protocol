@@ -12,7 +12,7 @@ use fungible::{
 };
 use linera_sdk::{
     base::{AccountOwner, Amount, WithContractAbi},
-    views::RootView,
+    views::{RootView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
 
@@ -35,7 +35,10 @@ impl Contract for FungibleTokenContract {
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
 
-    async fn new(state: FungibleToken, runtime: ContractRuntime<Self>) -> Self {
+    async fn new(runtime: ContractRuntime<Self>) -> Self {
+        let state = FungibleToken::load(ViewStorageContext::from(runtime.key_value_store()))
+            .await
+            .expect("Failed to load state");
         FungibleTokenContract { state, runtime }
     }
 

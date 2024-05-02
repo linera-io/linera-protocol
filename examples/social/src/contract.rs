@@ -7,7 +7,7 @@ mod state;
 
 use linera_sdk::{
     base::{ChannelName, Destination, MessageId, WithContractAbi},
-    views::RootView,
+    views::{RootView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
 use social::{Key, Message, Operation, OwnPost, SocialAbi};
@@ -35,7 +35,10 @@ impl Contract for SocialContract {
     type InstantiationArgument = ();
     type Parameters = ();
 
-    async fn new(state: Social, runtime: ContractRuntime<Self>) -> Self {
+    async fn new(runtime: ContractRuntime<Self>) -> Self {
+        let state = Social::load(ViewStorageContext::from(runtime.key_value_store()))
+            .await
+            .expect("Failed to load state");
         SocialContract { state, runtime }
     }
 
