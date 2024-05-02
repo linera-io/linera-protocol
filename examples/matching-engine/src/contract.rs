@@ -14,7 +14,7 @@ use linera_sdk::{
 };
 use matching_engine::{
     product_price_amount, MatchingEngineAbi, Message, Operation, Order, OrderId, OrderNature,
-    Parameters, Price,
+    Parameters, Price, PriceAsk, PriceBid,
 };
 use state::{LevelView, MatchingEngine};
 
@@ -400,7 +400,7 @@ impl MatchingEngineContract {
             .expect("Failed to load order")?;
         let transfer = match key_book.nature {
             OrderNature::Bid => {
-                let view = self.state.bid_level(&key_book.price.to_bid()).await;
+                let view = self.bid_level(&key_book.price.to_bid()).await;
                 let (cancel_amount, remove_order_id) =
                     Self::modify_order_level(view, order_id, cancel_amount).await?;
                 if remove_order_id {
@@ -415,7 +415,7 @@ impl MatchingEngineContract {
                 }
             }
             OrderNature::Ask => {
-                let view = self.state.ask_level(&key_book.price.to_ask()).await;
+                let view = self.ask_level(&key_book.price.to_ask()).await;
                 let (cancel_count, remove_order_id) =
                     Self::modify_order_level(view, order_id, cancel_amount).await?;
                 if remove_order_id {
@@ -664,7 +664,7 @@ impl MatchingEngineContract {
                     .await
                     .expect("Failed to iterate over ask prices");
                 for price_ask in matching_price_asks {
-                    let view = self.state.ask_level(&price_ask).await;
+                    let view = self.ask_level(&price_ask).await;
                     let remove_entry = Self::level_clearing(
                         view,
                         account,
@@ -687,7 +687,7 @@ impl MatchingEngineContract {
                     }
                 }
                 if final_amount != Amount::ZERO {
-                    let view = self.state.bid_level(&price.to_bid()).await;
+                    let view = self.bid_level(&price.to_bid()).await;
                     let order = OrderEntry {
                         amount: final_amount,
                         account: *account,
@@ -712,7 +712,7 @@ impl MatchingEngineContract {
                     .await
                     .expect("Failed to iterate over bid prices");
                 for price_bid in matching_price_bids {
-                    let view = self.state.bid_level(&price_bid).await;
+                    let view = self.bid_level(&price_bid).await;
                     let remove_entry = Self::level_clearing(
                         view,
                         account,
@@ -735,7 +735,7 @@ impl MatchingEngineContract {
                     }
                 }
                 if final_amount != Amount::ZERO {
-                    let view = self.state.ask_level(&price.to_ask()).await;
+                    let view = self.ask_level(&price.to_ask()).await;
                     let order = OrderEntry {
                         amount: final_amount,
                         account: *account,
@@ -748,5 +748,23 @@ impl MatchingEngineContract {
             }
         }
         transfers
+    }
+
+    /// Returns the [`LevelView`] for a specified ask `price`.
+    pub async fn ask_level(&mut self, price: &PriceAsk) -> &mut LevelView {
+        self.state
+            .asks
+            .load_entry_mut(price)
+            .await
+            .expect("Failed to load `LevelView` for an ask price")
+    }
+
+    /// Returns the [`LevelView`] for a specified bid `price`.
+    pub async fn bid_level(&mut self, price: &PriceBid) -> &mut LevelView {
+        self.state
+            .bids
+            .load_entry_mut(price)
+            .await
+            .expect("Failed to load `LevelView` for a bid price")
     }
 }
