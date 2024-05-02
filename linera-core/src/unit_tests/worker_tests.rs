@@ -2939,7 +2939,7 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: vec![],
+                messages: Vec::new(),
                 message_counts: vec![0],
                 state_hash: SystemExecutionState {
                     committees: committees3.clone(),

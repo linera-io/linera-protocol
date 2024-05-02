@@ -914,10 +914,11 @@ impl ContractSyncRuntime {
         let signer = action.signer();
         let height = action.height();
         let next_message_index = action.next_message_index();
-        let oracle_record = oracle_record.map_or_else(
-            || OracleResponses::Record(Vec::new()),
-            |responses| OracleResponses::Replay(responses.responses.into_iter()),
-        );
+        let oracle_record = if let Some(responses) = oracle_record {
+            OracleResponses::Replay(responses.responses.into_iter())
+        } else {
+            OracleResponses::Record(Vec::new())
+        };
         let mut runtime = ContractSyncRuntime::new(SyncRuntimeInternal::new(
             chain_id,
             height,

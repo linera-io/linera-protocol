@@ -339,9 +339,12 @@ where
     receiver.receive_certificate(cert).await.unwrap();
     let (cert, _) = receiver.process_inbox().await.unwrap();
     let executed_block = cert[0].value().executed_block().unwrap();
-    let OracleRecord { responses } = &executed_block.outcome.oracle_records[1];
-    let OracleResponse::Service(json) = &responses[0] else {
-        panic!("Unexpected oracle response: {:?}", responses[0]);
+    let records = &executed_block.outcome.oracle_records;
+    let [_, OracleRecord { responses }] = &records[..] else {
+        panic!("Unexpected oracle records: {:?}", records);
+    };
+    let [OracleResponse::Service(json)] = &responses[..] else {
+        panic!("Unexpected oracle responses: {:?}", responses);
     };
     let response_json = serde_json::from_slice::<serde_json::Value>(json).unwrap();
     assert_eq!(response_json["data"], json!({"value": 0}));

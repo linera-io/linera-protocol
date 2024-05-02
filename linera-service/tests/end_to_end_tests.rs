@@ -338,13 +338,13 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
         .make_application(&chain, &application_id)
         .await?;
 
-    let counter_value: u64 = application.fetch_json("value").await?;
+    let counter_value: u64 = application.query_json("value").await?;
     assert_eq!(counter_value, original_counter_value);
 
     let mutation = format!("increment(value: {increment})");
     application.mutate(mutation).await?;
 
-    let counter_value: u64 = application.fetch_json("value").await?;
+    let counter_value: u64 = application.query_json("value").await?;
     assert_eq!(counter_value, original_counter_value + increment);
 
     node_service.ensure_is_running()?;
@@ -386,13 +386,13 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
         .make_application(&chain, &application_id)
         .await?;
 
-    let counter_value: u64 = application.fetch_json("value").await?;
+    let counter_value: u64 = application.query_json("value").await?;
     assert_eq!(counter_value, original_counter_value);
 
     let mutation = format!("increment(value: {increment})");
     application.mutate(mutation).await?;
 
-    let counter_value: u64 = application.fetch_json("value").await?;
+    let counter_value: u64 = application.query_json("value").await?;
     assert_eq!(counter_value, original_counter_value + increment);
 
     node_service.ensure_is_running()?;
