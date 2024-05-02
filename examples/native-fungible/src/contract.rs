@@ -108,6 +108,8 @@ impl Contract for NativeFungibleTokenContract {
             Message::Notify => (),
         }
     }
+
+    async fn finalize(&mut self) {}
 }
 
 impl NativeFungibleTokenContract {

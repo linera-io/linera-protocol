@@ -9,6 +9,7 @@ use amm::{AmmAbi, Message, Operation, Parameters};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
+    views::RootView,
     Contract, ContractRuntime,
 };
 use num_bigint::BigUint;
@@ -302,6 +303,10 @@ impl Contract for AmmContract {
                 );
             }
         }
+    }
+
+    async fn finalize(&mut self) {
+        self.state.save().await.expect("Failed to save state");
     }
 }
 

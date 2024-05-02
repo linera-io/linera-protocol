@@ -6,7 +6,7 @@
 mod state;
 
 use counter::CounterAbi;
-use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime};
+use linera_sdk::{base::WithContractAbi, views::RootView, Contract, ContractRuntime};
 
 use self::state::Counter;
 
@@ -50,6 +50,10 @@ impl Contract for CounterContract {
 
     async fn execute_message(&mut self, _message: ()) {
         panic!("Counter application doesn't support any cross-chain messages");
+    }
+
+    async fn finalize(&mut self) {
+        self.state.save().await.expect("Failed to save state");
     }
 }
 

@@ -9,6 +9,7 @@ use std::cmp::min;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
+    views::RootView,
     Contract, ContractRuntime,
 };
 use matching_engine::{
@@ -124,6 +125,10 @@ impl Contract for MatchingEngineContract {
                 self.execute_order_local(order, message_id.chain_id).await;
             }
         }
+    }
+
+    async fn finalize(&mut self) {
+        self.state.save().await.expect("Failed to save state");
     }
 }
 

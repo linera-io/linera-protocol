@@ -96,4 +96,6 @@ impl Contract for MetaCounterContract {
             }
         }
     }
+
+    async fn finalize(&mut self) {}
 }

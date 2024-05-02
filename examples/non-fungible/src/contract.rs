@@ -10,6 +10,7 @@ use std::collections::BTreeSet;
 use fungible::Account;
 use linera_sdk::{
     base::{AccountOwner, WithContractAbi},
+    views::RootView,
     Contract, ContractRuntime,
 };
 use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
@@ -120,6 +121,10 @@ impl Contract for NonFungibleTokenContract {
                 self.transfer(nft, target_account).await;
             }
         }
+    }
+
+    async fn finalize(&mut self) {
+        self.state.save().await.expect("Failed to save state");
     }
 }
 

@@ -12,6 +12,7 @@ use fungible::{
 };
 use linera_sdk::{
     base::{AccountOwner, Amount, WithContractAbi},
+    views::RootView,
     Contract, ContractRuntime,
 };
 
@@ -119,6 +120,10 @@ impl Contract for FungibleTokenContract {
                     .await;
             }
         }
+    }
+
+    async fn finalize(&mut self) {
+        self.state.save().await.expect("Failed to save state");
     }
 }
 

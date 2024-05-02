@@ -130,19 +130,12 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
 
     /// Finishes the execution of the current transaction.
     ///
-    /// This is called once before a transaction ends, to allow all applications that participated
-    /// in the transaction to perform any final operations, and optionally it may also cancel the
-    /// transaction if there are any pendencies.
+    /// This is called once at the end of the transaction, to allow all applications that
+    /// participated in the transaction to perform any final operations, such as persisting their
+    /// state.
     ///
-    /// The default implementation persists the state, so if this method is overriden, care must be
-    /// taken to persist the state manually.
-    async fn finalize(&mut self) {
-        Self::State::store(
-            self.state_mut(),
-            ContractRuntime::<Self>::new().key_value_store(),
-        )
-        .await;
-    }
+    /// The application may also cancel the transaction by panicking if there are any pendencies.
+    async fn finalize(&mut self);
 }
 
 /// The service interface of a Linera application.

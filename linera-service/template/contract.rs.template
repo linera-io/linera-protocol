@@ -2,7 +2,7 @@
 
 mod state;
 
-use linera_sdk::{{base::WithContractAbi, Contract, ContractRuntime}};
+use linera_sdk::{{base::WithContractAbi, Contract, ContractRuntime, views::RootView}};
 
 use self::state::Application;
 
@@ -36,4 +36,8 @@ impl Contract for ApplicationContract {{
     async fn execute_operation(&mut self, _operation: Self::Operation) -> Self::Response {{}}
 
     async fn execute_message(&mut self, _message: Self::Message) {{}}
+
+    async fn finalize(&mut self) {{
+        self.state.save().await.expect("Failed to save state");
+    }}
 }}

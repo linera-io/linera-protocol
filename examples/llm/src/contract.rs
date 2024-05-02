@@ -38,4 +38,6 @@ impl Contract for LlmContract {
     async fn execute_message(&mut self, _message: ()) {
         panic!("Llm application doesn't support any cross-chain messages");
     }
+
+    async fn finalize(&mut self) {}
 }

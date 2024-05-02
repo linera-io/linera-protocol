@@ -7,6 +7,7 @@ mod state;
 
 use linera_sdk::{
     base::{ChannelName, Destination, MessageId, WithContractAbi},
+    views::RootView,
     Contract, ContractRuntime,
 };
 use social::{Key, Message, Operation, OwnPost, SocialAbi};
@@ -73,6 +74,10 @@ impl Contract for SocialContract {
             ),
             Message::Posts { count, posts } => self.execute_posts_message(message_id, count, posts),
         }
+    }
+
+    async fn finalize(&mut self) {
+        self.state.save().await.expect("Failed to save state");
     }
 }
 

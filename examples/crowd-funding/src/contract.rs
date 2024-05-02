@@ -9,7 +9,7 @@ use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
-    views::View,
+    views::{RootView, View},
     Contract, ContractRuntime,
 };
 use state::{CrowdFunding, Status};
@@ -78,6 +78,10 @@ impl Contract for CrowdFundingContract {
                 self.execute_pledge_with_account(owner, amount).await;
             }
         }
+    }
+
+    async fn finalize(&mut self) {
+        self.state.save().await.expect("Failed to save state");
     }
 }
 
