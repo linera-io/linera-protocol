@@ -125,7 +125,7 @@ impl Contract for MatchingEngineContract {
         }
     }
 
-    async fn finalize(&mut self) {
+    async fn finalize(mut self) {
         self.state.save().await.expect("Failed to save state");
     }
 }

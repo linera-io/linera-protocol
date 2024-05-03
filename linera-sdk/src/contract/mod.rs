@@ -88,10 +88,11 @@ macro_rules! contract {
 
             fn finalize() {
                 use $crate::util::BlockingWait;
-                $crate::contract::run_async_entrypoint::<$contract, _, _>(
-                    unsafe { &mut CONTRACT },
-                    move |contract| contract.finalize().blocking_wait(),
-                )
+
+                let contract = unsafe { CONTRACT.take() }
+                    .expect("Calling `finalize` on a `Contract` instance that wasn't initialized");
+
+                contract.finalize().blocking_wait();
             }
         }
 

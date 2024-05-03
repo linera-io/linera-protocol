@@ -78,7 +78,7 @@ impl Contract for CrowdFundingContract {
         }
     }
 
-    async fn finalize(&mut self) {
+    async fn finalize(mut self) {
         self.state.save().await.expect("Failed to save state");
     }
 }
