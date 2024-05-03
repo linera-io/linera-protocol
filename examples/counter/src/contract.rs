@@ -30,7 +30,7 @@ impl Contract for CounterContract {
     type InstantiationArgument = u64;
     type Parameters = ();
 
-    async fn new(runtime: ContractRuntime<Self>) -> Self {
+    async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = Counter::load(ViewStorageContext::from(runtime.key_value_store()))
             .await
             .expect("Failed to load state");

@@ -33,7 +33,7 @@ impl Contract for AmmContract {
     type InstantiationArgument = ();
     type Parameters = Parameters;
 
-    async fn new(runtime: ContractRuntime<Self>) -> Self {
+    async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = Amm::load(ViewStorageContext::from(runtime.key_value_store()))
             .await
             .expect("Failed to load state");

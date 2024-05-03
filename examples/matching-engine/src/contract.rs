@@ -56,7 +56,7 @@ impl Contract for MatchingEngineContract {
     type InstantiationArgument = ();
     type Parameters = Parameters;
 
-    async fn new(runtime: ContractRuntime<Self>) -> Self {
+    async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = MatchingEngine::load(ViewStorageContext::from(runtime.key_value_store()))
             .await
             .expect("Failed to load state");

@@ -33,7 +33,7 @@ impl Contract for NonFungibleTokenContract {
     type InstantiationArgument = ();
     type Parameters = ();
 
-    async fn new(runtime: ContractRuntime<Self>) -> Self {
+    async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = NonFungibleToken::load(ViewStorageContext::from(runtime.key_value_store()))
             .await
             .expect("Failed to load state");

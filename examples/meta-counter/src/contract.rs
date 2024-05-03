@@ -30,7 +30,7 @@ impl Contract for MetaCounterContract {
     type InstantiationArgument = ();
     type Parameters = ApplicationId<counter::CounterAbi>;
 
-    async fn new(runtime: ContractRuntime<Self>) -> Self {
+    async fn load(runtime: ContractRuntime<Self>) -> Self {
         MetaCounterContract { runtime }
     }
 
