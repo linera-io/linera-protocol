@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     bcs_scalar,
-    crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
+    crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, PublicKey},
     data_types::BlockHeight,
     doc_scalar,
 };
@@ -141,6 +141,20 @@ impl ChainDescription {
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct ChainId(pub CryptoHash);
+
+/// A blob ID.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Debug, Serialize, Deserialize)]
+#[cfg_attr(with_testing, derive(Default))]
+pub struct BlobId(pub CryptoHash);
+
+/// A blob.
+#[derive(Serialize, Deserialize)]
+pub struct Blob {
+    #[serde(with = "serde_bytes")]
+    bytes: Vec<u8>,
+}
+
+impl BcsSignable for Blob {}
 
 /// The index of a message in a chain.
 #[derive(
@@ -788,6 +802,7 @@ doc_scalar!(
 );
 doc_scalar!(AccountOwner, "An owner of an account.");
 doc_scalar!(Account, "An account");
+doc_scalar!(BlobId, "A blob id");
 
 #[cfg(test)]
 mod tests {
