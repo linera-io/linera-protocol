@@ -103,7 +103,7 @@ impl Contract for NativeFungibleTokenContract {
         }
     }
 
-    async fn finalize(self) {}
+    async fn store(self) {}
 }
 
 impl NativeFungibleTokenContract {

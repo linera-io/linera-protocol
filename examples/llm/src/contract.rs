@@ -32,5 +32,5 @@ impl Contract for LlmContract {
         panic!("Llm application doesn't support any cross-chain messages");
     }
 
-    async fn finalize(self) {}
+    async fn store(self) {}
 }

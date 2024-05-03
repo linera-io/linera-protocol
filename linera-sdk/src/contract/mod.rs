@@ -90,9 +90,9 @@ macro_rules! contract {
                 use $crate::util::BlockingWait;
 
                 let contract = unsafe { CONTRACT.take() }
-                    .expect("Calling `finalize` on a `Contract` instance that wasn't initialized");
+                    .expect("Calling `store` on a `Contract` instance that wasn't loaded");
 
-                contract.finalize().blocking_wait();
+                contract.store().blocking_wait();
             }
         }
 

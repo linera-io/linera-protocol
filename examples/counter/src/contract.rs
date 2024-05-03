@@ -54,7 +54,7 @@ impl Contract for CounterContract {
         panic!("Counter application doesn't support any cross-chain messages");
     }
 
-    async fn finalize(mut self) {
+    async fn store(mut self) {
         self.state.save().await.expect("Failed to save state");
     }
 }

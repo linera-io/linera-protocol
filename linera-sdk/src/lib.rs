@@ -125,7 +125,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// state.
     ///
     /// The application may also cancel the transaction by panicking if there are any pendencies.
-    async fn finalize(self);
+    async fn store(self);
 }
 
 /// The service interface of a Linera application.

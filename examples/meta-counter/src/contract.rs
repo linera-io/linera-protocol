@@ -91,5 +91,5 @@ impl Contract for MetaCounterContract {
         }
     }
 
-    async fn finalize(self) {}
+    async fn store(self) {}
 }
