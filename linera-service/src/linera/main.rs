@@ -737,7 +737,8 @@ impl Runnable for Job {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(storage, chain_id).into_arc();
                 info!("Watching for notifications for chain {:?}", chain_id);
-                let (_listen_handle, mut notifications) = chain_client.listen().await?;
+                let (listener, _listen_handle, mut notifications) = chain_client.listen().await?;
+                tokio::spawn(listener);
                 while let Some(notification) = notifications.next().await {
                     if let Reason::NewBlock { .. } = notification.reason {
                         let mut guard = chain_client.lock().await;

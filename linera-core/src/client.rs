@@ -12,9 +12,9 @@ use std::{
 };
 
 use futures::{
-    future,
+    future::{self, FusedFuture, Future},
     lock::Mutex,
-    stream::{self, AbortHandle, FuturesUnordered, StreamExt},
+    stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
 use linera_base::{
     abi::Abi,
@@ -2208,42 +2208,85 @@ where
 
     /// Spawns a task that listens to notifications about the current chain from all validators,
     /// and synchronizes the local state accordingly.
-    pub async fn listen(&self) -> Result<(AbortOnDrop, NotificationStream), ChainClientError>
+    pub async fn listen(
+        &self,
+    ) -> Result<(impl Future<Output = ()>, AbortOnDrop, NotificationStream), ChainClientError>
     where
         P: Send + 'static,
     {
+        use future::FutureExt as _;
+
+        async fn await_while_polling<F: FusedFuture>(
+            future: F,
+            background_work: impl FusedStream<Item = ()>,
+        ) -> F::Output {
+            tokio::pin!(future);
+            tokio::pin!(background_work);
+            loop {
+                futures::select! {
+                    _ = background_work.next() => (),
+                    result = future => return result,
+                }
+            }
+        }
+
         let mut senders = HashMap::new(); // Senders to cancel notification streams.
         let mut guard = self.lock().await;
         let notifications = guard.subscribe().await?;
-        let notifications2 = guard.subscribe().await?;
+        let (abortable_notifications, abort) = stream::abortable(guard.subscribe().await?);
         if let Err(error) = guard.synchronize_from_validators().await {
             error!("Failed to synchronize from validators: {}", error);
         }
         drop(guard);
-        let (mut notifications, abort) = stream::abortable(notifications);
-        if let Err(error) = self.update_streams(&mut senders).await {
-            error!("Failed to update committee: {}", error);
-        }
+
+        // Beware: if this future ceases to make progress, notification processing will
+        // deadlock, because of the issue described in
+        // https://github.com/linera-io/linera-protocol/pull/1173.
+
+        // TODO(#2013): replace this lock with an asychronous communication channel
+
+        let mut process_notifications = FuturesUnordered::new();
+
+        match self.update_streams(&mut senders).await {
+            Ok(handler) => process_notifications.push(handler),
+            Err(error) => error!("Failed to update committee: {error}"),
+        };
+
         let this = self.clone();
-        tokio::spawn(async move {
-            while let Some(notification) = notifications.next().await {
-                if matches!(notification.reason, Reason::NewBlock { .. }) {
-                    if let Err(error) = this.update_streams(&mut senders).await {
-                        error!("Failed to update committee: {}", error);
+        let update_streams = async move {
+            let mut abortable_notifications = abortable_notifications.fuse();
+
+            while let Some(notification) =
+                await_while_polling(abortable_notifications.next(), &mut process_notifications)
+                    .await
+            {
+                if let Reason::NewBlock { .. } = notification.reason {
+                    match await_while_polling(
+                        this.update_streams(&mut senders).fuse(),
+                        &mut process_notifications,
+                    )
+                    .await
+                    {
+                        Ok(handler) => process_notifications.push(handler),
+                        Err(error) => error!("Failed to update comittee: {error}"),
                     }
                 }
             }
+
             for abort in senders.into_values() {
                 abort.abort();
             }
-        });
-        Ok((AbortOnDrop(abort), notifications2))
+
+            let () = process_notifications.collect().await;
+        };
+
+        Ok((update_streams, AbortOnDrop(abort), notifications))
     }
 
     async fn update_streams(
         &self,
         senders: &mut HashMap<ValidatorName, AbortHandle>,
-    ) -> Result<(), ChainClientError>
+    ) -> Result<impl Future<Output = ()>, ChainClientError>
     where
         P: Send + 'static,
     {
@@ -2261,6 +2304,7 @@ where
             !abort.is_aborted()
         });
         // Add tasks for new validators.
+        let validator_tasks = FuturesUnordered::new();
         for (name, mut node) in nodes {
             let hash_map::Entry::Vacant(entry) = senders.entry(name) else {
                 continue;
@@ -2274,7 +2318,7 @@ where
             };
             let this = self.clone();
             let local_node = local_node.clone();
-            tokio::spawn(async move {
+            validator_tasks.push(async move {
                 while let Some(notification) = stream.next().await {
                     this.process_notification(name, node.clone(), local_node.clone(), notification)
                         .await;
@@ -2282,7 +2326,7 @@ where
             });
             entry.insert(abort);
         }
-        Ok(())
+        Ok(validator_tasks.collect())
     }
 
     /// Attempts to download new received certificates from a particular validator.

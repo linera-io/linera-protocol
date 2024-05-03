@@ -69,7 +69,8 @@ where
     let sender = ArcChainClient::new(sender);
     // Listen to the notifications on the sender chain.
     let mut notifications = sender.lock().await.subscribe().await?;
-    let (_listen_handle, _) = sender.listen().await?;
+    let (listener, _listen_handle, _) = sender.listen().await?;
+    tokio::spawn(listener);
     {
         let mut sender = sender.lock().await;
         let certificate = sender
