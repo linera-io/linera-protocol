@@ -91,7 +91,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     type InstantiationArgument: Serialize + DeserializeOwned + Debug;
 
     /// Creates a in-memory instance of the contract handler.
-    async fn new(runtime: ContractRuntime<Self>) -> Self;
+    async fn load(runtime: ContractRuntime<Self>) -> Self;
 
     /// Instantiates the application on the chain that created it.
     ///
@@ -125,7 +125,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// state.
     ///
     /// The application may also cancel the transaction by panicking if there are any pendencies.
-    async fn finalize(&mut self);
+    async fn store(self);
 }
 
 /// The service interface of a Linera application.

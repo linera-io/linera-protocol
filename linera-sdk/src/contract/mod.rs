@@ -88,10 +88,11 @@ macro_rules! contract {
 
             fn finalize() {
                 use $crate::util::BlockingWait;
-                $crate::contract::run_async_entrypoint::<$contract, _, _>(
-                    unsafe { &mut CONTRACT },
-                    move |contract| contract.finalize().blocking_wait(),
-                )
+
+                let contract = unsafe { CONTRACT.take() }
+                    .expect("Calling `store` on a `Contract` instance that wasn't loaded");
+
+                contract.store().blocking_wait();
             }
         }
 
@@ -115,7 +116,7 @@ where
     ContractLogger::install();
 
     let contract =
-        contract.get_or_insert_with(|| Contract::new(ContractRuntime::new()).blocking_wait());
+        contract.get_or_insert_with(|| Contract::load(ContractRuntime::new()).blocking_wait());
 
     entrypoint(contract).into()
 }

@@ -20,7 +20,7 @@ impl Contract for LlmContract {
     type InstantiationArgument = ();
     type Parameters = ();
 
-    async fn new(_runtime: ContractRuntime<Self>) -> Self {
+    async fn load(_runtime: ContractRuntime<Self>) -> Self {
         LlmContract
     }
 
@@ -32,5 +32,5 @@ impl Contract for LlmContract {
         panic!("Llm application doesn't support any cross-chain messages");
     }
 
-    async fn finalize(&mut self) {}
+    async fn store(self) {}
 }

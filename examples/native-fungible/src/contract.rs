@@ -25,7 +25,7 @@ impl Contract for NativeFungibleTokenContract {
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
 
-    async fn new(runtime: ContractRuntime<Self>) -> Self {
+    async fn load(runtime: ContractRuntime<Self>) -> Self {
         NativeFungibleTokenContract { runtime }
     }
 
@@ -103,7 +103,7 @@ impl Contract for NativeFungibleTokenContract {
         }
     }
 
-    async fn finalize(&mut self) {}
+    async fn store(self) {}
 }
 
 impl NativeFungibleTokenContract {

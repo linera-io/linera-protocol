@@ -34,7 +34,7 @@ impl Contract for FungibleTokenContract {
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
 
-    async fn new(runtime: ContractRuntime<Self>) -> Self {
+    async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = FungibleToken::load(ViewStorageContext::from(runtime.key_value_store()))
             .await
             .expect("Failed to load state");
@@ -120,7 +120,7 @@ impl Contract for FungibleTokenContract {
         }
     }
 
-    async fn finalize(&mut self) {
+    async fn store(mut self) {
         self.state.save().await.expect("Failed to save state");
     }
 }
