@@ -4,15 +4,12 @@
 //! This module provides an SDK for developing Linera applications using Rust.
 //!
 //! A Linera application consists of two WebAssembly binaries: a contract and a service.
-//! In both binaries, there should be a shared application state. The state is a type that
-//! represents what the application would like to persist in storage across blocks, and
-//! must implement [`State`](crate::State) trait in order to specify how the state should be loaded
-//! from and stored to the persistent key-value storage. An alternative is to use the
-//! [`linera-views`](https://docs.rs/linera-views/latest/linera_views/index.html), a framework that
-//! allows loading selected parts of the state. This is useful if the application's state is large
-//! and doesn't need to be loaded in its entirety for every execution. By deriving
-//! [`RootView`](views::RootView) on the state type it automatically implements the [`State`]
-//! trait.
+//! Both binaries have access to the same application and chain specific storage. The service only
+//! has read-only access, while the contract can write to it. The storage should be used to store
+//! the application state, which is persisted across blocks. The state can be a custom type that
+//! uses [`linera-views`](https://docs.rs/linera-views/latest/linera_views/index.html), a framework
+//! that allows lazily loading selected parts of the state. This is useful if the application's
+//! state is large and doesn't need to be loaded in its entirety for every execution.
 //!
 //! The contract binary should create a type to implement the [`Contract`](crate::Contract) trait.
 //! The type can store the [`ContractRuntime`](contract::ContractRuntime) and the state, and must
@@ -57,7 +54,6 @@ pub use linera_base::{
 use serde::{de::DeserializeOwned, Serialize};
 pub use serde_json;
 
-use self::views::{RootView, ViewStorageContext};
 #[doc(hidden)]
 pub use self::{contract::export_contract, service::export_service};
 pub use self::{
@@ -78,9 +74,6 @@ pub use self::{
 /// executed.
 #[allow(async_fn_in_trait)]
 pub trait Contract: WithContractAbi + ContractAbi + Sized {
-    /// The type used to store the persisted application state.
-    type State: State;
-
     /// The type of message executed by the application.
     ///
     /// Messages are executed when a message created by the same application is received
@@ -97,11 +90,8 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// instead.
     type InstantiationArgument: Serialize + DeserializeOwned + Debug;
 
-    /// Creates a in-memory instance of the contract handler from the application's `state`.
-    async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Self;
-
-    /// Returns the current state of the application so that it can be persisted.
-    fn state_mut(&mut self) -> &mut Self::State;
+    /// Creates a in-memory instance of the contract handler.
+    async fn new(runtime: ContractRuntime<Self>) -> Self;
 
     /// Instantiates the application on the chain that created it.
     ///
@@ -130,19 +120,12 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
 
     /// Finishes the execution of the current transaction.
     ///
-    /// This is called once before a transaction ends, to allow all applications that participated
-    /// in the transaction to perform any final operations, and optionally it may also cancel the
-    /// transaction if there are any pendencies.
+    /// This is called once at the end of the transaction, to allow all applications that
+    /// participated in the transaction to perform any final operations, such as persisting their
+    /// state.
     ///
-    /// The default implementation persists the state, so if this method is overriden, care must be
-    /// taken to persist the state manually.
-    async fn finalize(&mut self) {
-        Self::State::store(
-            self.state_mut(),
-            ContractRuntime::<Self>::new().key_value_store(),
-        )
-        .await;
-    }
+    /// The application may also cancel the transaction by panicking if there are any pendencies.
+    async fn finalize(&mut self);
 }
 
 /// The service interface of a Linera application.
@@ -152,62 +135,12 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
 /// storage and is not gas-metered.
 #[allow(async_fn_in_trait)]
 pub trait Service: WithServiceAbi + ServiceAbi + Sized {
-    /// The type used to store the persisted application state.
-    type State: State;
-
     /// Immutable parameters specific to this application.
     type Parameters: Serialize + DeserializeOwned + Send + Sync + Clone + Debug + 'static;
 
-    /// Creates a in-memory instance of the service handler from the application's `state`.
-    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Self;
+    /// Creates a in-memory instance of the service handler.
+    async fn new(runtime: ServiceRuntime<Self>) -> Self;
 
     /// Executes a read-only query on the state of this application.
     async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse;
-}
-
-/// The persistent state of a Linera application.
-///
-/// This is the state that is persisted to the database, and preserved across transactions. The
-/// application's [`Contract`] is allowed to modiy the state, while the application's [`Service`]
-/// can only read it.
-///
-/// The database can be accessed using an instance of [`ViewStorageContext`].
-#[allow(async_fn_in_trait)]
-pub trait State {
-    /// Loads the state from the database.
-    async fn load(store: KeyValueStore) -> Self;
-
-    /// Persists the state into the database.
-    async fn store(&mut self, store: KeyValueStore);
-}
-
-/// Representation of an empty persistent state.
-///
-/// This can be used by applications that don't need to store anything in the database.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct EmptyState;
-
-impl State for EmptyState {
-    async fn load(_: KeyValueStore) -> Self {
-        EmptyState
-    }
-
-    async fn store(&mut self, _: KeyValueStore) {}
-}
-
-impl<V> State for V
-where
-    V: RootView<ViewStorageContext>,
-{
-    async fn load(store: KeyValueStore) -> Self {
-        V::load(ViewStorageContext::from(store))
-            .await
-            .expect("Failed to load application state")
-    }
-
-    async fn store(&mut self, _: KeyValueStore) {
-        self.save()
-            .await
-            .expect("Failed to store application state")
-    }
 }

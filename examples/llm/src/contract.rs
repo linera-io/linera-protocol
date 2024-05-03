@@ -5,11 +5,9 @@
 
 mod state;
 
-use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime, EmptyState};
+use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime};
 
-pub struct LlmContract {
-    state: EmptyState,
-}
+pub struct LlmContract;
 
 linera_sdk::contract!(LlmContract);
 
@@ -18,17 +16,12 @@ impl WithContractAbi for LlmContract {
 }
 
 impl Contract for LlmContract {
-    type State = EmptyState;
     type Message = ();
     type InstantiationArgument = ();
     type Parameters = ();
 
-    async fn new(state: Self::State, _runtime: ContractRuntime<Self>) -> Self {
-        LlmContract { state }
-    }
-
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
+    async fn new(_runtime: ContractRuntime<Self>) -> Self {
+        LlmContract
     }
 
     async fn instantiate(&mut self, _value: ()) {}
@@ -38,4 +31,6 @@ impl Contract for LlmContract {
     async fn execute_message(&mut self, _message: ()) {
         panic!("Llm application doesn't support any cross-chain messages");
     }
+
+    async fn finalize(&mut self) {}
 }

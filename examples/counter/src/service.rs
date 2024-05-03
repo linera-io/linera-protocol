@@ -6,7 +6,11 @@
 mod state;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime};
+use linera_sdk::{
+    base::WithServiceAbi,
+    views::{View, ViewStorageContext},
+    Service, ServiceRuntime,
+};
 
 use self::state::Counter;
 
@@ -21,10 +25,12 @@ impl WithServiceAbi for CounterService {
 }
 
 impl Service for CounterService {
-    type State = Counter;
     type Parameters = ();
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Self {
+    async fn new(runtime: ServiceRuntime<Self>) -> Self {
+        let state = Counter::load(ViewStorageContext::from(runtime.key_value_store()))
+            .await
+            .expect("Failed to load state");
         CounterService { state }
     }
 

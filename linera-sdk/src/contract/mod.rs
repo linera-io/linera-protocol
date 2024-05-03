@@ -18,7 +18,7 @@ pub use self::runtime::ContractRuntime;
 pub use self::test_runtime::MockContractRuntime;
 #[doc(hidden)]
 pub use self::wit::export_contract;
-use crate::{log::ContractLogger, util::BlockingWait, State};
+use crate::{log::ContractLogger, util::BlockingWait};
 
 /// Inside tests, use the [`MockContractRuntime`] instead of the real [`ContractRuntime`].
 #[cfg(with_testing)]
@@ -114,11 +114,8 @@ where
 {
     ContractLogger::install();
 
-    let contract = contract.get_or_insert_with(|| {
-        let runtime = ContractRuntime::new();
-        let state = Contract::State::load(runtime.key_value_store()).blocking_wait();
-        Contract::new(state, runtime).blocking_wait()
-    });
+    let contract =
+        contract.get_or_insert_with(|| Contract::new(ContractRuntime::new()).blocking_wait());
 
     entrypoint(contract).into()
 }

@@ -79,21 +79,3 @@ pub struct MatchingEngine {
     /// owned by that owner.
     pub account_info: MapView<AccountOwner, AccountInfo>,
 }
-
-impl MatchingEngine {
-    /// Returns the [`LevelView`] for a specified ask `price`.
-    pub async fn ask_level(&mut self, price: &PriceAsk) -> &mut LevelView {
-        self.asks
-            .load_entry_mut(price)
-            .await
-            .expect("Failed to load `LevelView` for an ask price")
-    }
-
-    /// Returns the [`LevelView`] for a specified bid `price`.
-    pub async fn bid_level(&mut self, price: &PriceBid) -> &mut LevelView {
-        self.bids
-            .load_entry_mut(price)
-            .await
-            .expect("Failed to load `LevelView` for a bid price")
-    }
-}

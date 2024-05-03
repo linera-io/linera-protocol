@@ -43,10 +43,7 @@ macro_rules! service {
                 let request = $crate::serde_json::from_slice(&argument)
                     .expect("Query is invalid and could not be deserialized");
                 let response = $crate::service::run_async_entrypoint(move |runtime| async move {
-                    let state = <<$service as $crate::Service>::State as $crate::State>::load(
-                        runtime.key_value_store(),
-                    ).await;
-                    let service = <$service as $crate::Service>::new(state, runtime).await;
+                    let service = <$service as $crate::Service>::new(runtime).await;
                     service.handle_query(request).await
                 });
                 $crate::serde_json::to_vec(&response)

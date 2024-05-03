@@ -7,6 +7,7 @@ mod state;
 
 use linera_sdk::{
     base::{ChannelName, Destination, MessageId, WithContractAbi},
+    views::{RootView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
 use social::{Key, Message, Operation, OwnPost, SocialAbi};
@@ -29,17 +30,15 @@ impl WithContractAbi for SocialContract {
 }
 
 impl Contract for SocialContract {
-    type State = Social;
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ();
 
-    async fn new(state: Social, runtime: ContractRuntime<Self>) -> Self {
+    async fn new(runtime: ContractRuntime<Self>) -> Self {
+        let state = Social::load(ViewStorageContext::from(runtime.key_value_store()))
+            .await
+            .expect("Failed to load state");
         SocialContract { state, runtime }
-    }
-
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
     }
 
     async fn instantiate(&mut self, _argument: ()) {
@@ -73,6 +72,10 @@ impl Contract for SocialContract {
             ),
             Message::Posts { count, posts } => self.execute_posts_message(message_id, count, posts),
         }
+    }
+
+    async fn finalize(&mut self) {
+        self.state.save().await.expect("Failed to save state");
     }
 }
 

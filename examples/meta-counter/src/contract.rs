@@ -5,12 +5,11 @@
 
 use linera_sdk::{
     base::{ApplicationId, WithContractAbi},
-    Contract, ContractRuntime, EmptyState, Resources,
+    Contract, ContractRuntime, Resources,
 };
 use meta_counter::{Message, MetaCounterAbi, Operation};
 
 pub struct MetaCounterContract {
-    state: EmptyState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -27,17 +26,12 @@ impl WithContractAbi for MetaCounterContract {
 }
 
 impl Contract for MetaCounterContract {
-    type State = EmptyState;
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ApplicationId<counter::CounterAbi>;
 
-    async fn new(state: Self::State, runtime: ContractRuntime<Self>) -> Self {
-        MetaCounterContract { state, runtime }
-    }
-
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
+    async fn new(runtime: ContractRuntime<Self>) -> Self {
+        MetaCounterContract { runtime }
     }
 
     async fn instantiate(&mut self, _argument: ()) {
@@ -96,4 +90,6 @@ impl Contract for MetaCounterContract {
             }
         }
     }
+
+    async fn finalize(&mut self) {}
 }

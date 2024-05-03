@@ -6,12 +6,11 @@
 use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
 use linera_sdk::{
     base::{Account, AccountOwner, ChainId, Owner, WithContractAbi},
-    Contract, ContractRuntime, EmptyState,
+    Contract, ContractRuntime,
 };
 use native_fungible::{Message, TICKER_SYMBOL};
 
 pub struct NativeFungibleTokenContract {
-    state: EmptyState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -22,17 +21,12 @@ impl WithContractAbi for NativeFungibleTokenContract {
 }
 
 impl Contract for NativeFungibleTokenContract {
-    type State = EmptyState;
     type Message = Message;
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
 
-    async fn new(state: EmptyState, runtime: ContractRuntime<Self>) -> Self {
-        NativeFungibleTokenContract { state, runtime }
-    }
-
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
+    async fn new(runtime: ContractRuntime<Self>) -> Self {
+        NativeFungibleTokenContract { runtime }
     }
 
     async fn instantiate(&mut self, state: Self::InstantiationArgument) {
@@ -108,6 +102,8 @@ impl Contract for NativeFungibleTokenContract {
             Message::Notify => (),
         }
     }
+
+    async fn finalize(&mut self) {}
 }
 
 impl NativeFungibleTokenContract {
