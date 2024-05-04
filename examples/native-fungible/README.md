@@ -26,7 +26,7 @@ Compile the `native-fungible` application WebAssembly binaries, and publish them
 bytecode:
 
 ```bash
-(cd examples/native-fungible && cargo build --release)
+(cd examples/native-fungible && cargo build --release --target wasm32-unknown-unknown)
 
 BYTECODE_ID="$(linera publish-bytecode \
     examples/target/wasm32-unknown-unknown/release/native_fungible_{contract,service}.wasm)"

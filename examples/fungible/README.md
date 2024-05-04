@@ -63,7 +63,7 @@ Now, compile the `fungible` application WebAssembly binaries, and publish them a
 bytecode:
 
 ```bash
-(cd examples/fungible && cargo build --release)
+(cd examples/fungible && cargo build --release --target wasm32-unknown-unknown)
 
 BYTECODE_ID=$(linera publish-bytecode \
     examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm)
