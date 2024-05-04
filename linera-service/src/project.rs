@@ -60,9 +60,6 @@ impl Project {
         debug!("writing service.rs");
         Self::create_service_file(&source_directory, name)?;
 
-        debug!("creating cargo config");
-        Self::create_cargo_config(&root)?;
-
         Ok(Self { root })
     }
 
@@ -190,16 +187,6 @@ impl Project {
             project_name = project_name
         );
         Self::write_string_to_file(&service_path, &service_contents)
-    }
-
-    fn create_cargo_config(project_root: &Path) -> Result<()> {
-        let config_dir_path = project_root.join(".cargo");
-        let config_file_path = config_dir_path.join("config.toml");
-        fs_err::create_dir(&config_dir_path)?;
-        Self::write_string_to_file(
-            &config_file_path,
-            include_str!("../template/config.toml.template"),
-        )
     }
 
     fn write_string_to_file(path: &Path, content: &str) -> Result<()> {
