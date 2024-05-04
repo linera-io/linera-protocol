@@ -13,6 +13,8 @@ NOTE: Due to [lack of hardware acceleration](https://github.com/linera-io/linera
 Models and tokenizers are served locally using a local Python server. They are expected
 at `model.bin` and `tokenizer.json`.
 
+NOTE: In the future, model data will be stored on-chain (#1981) or in decentralized storage.
+
 The application's service exposes a single GraphQL field called `prompt` which takes a prompt
 as input and returns a response.
 
@@ -39,7 +41,7 @@ python3 -m http.server 10001
 Finally, deploy the application:
 
 ```bash
-cd ../ && linera project publish-and-create llm
+cd .. && linera project publish-and-create llm
 ```
 
 ## Using the LLM Application
