@@ -40,10 +40,8 @@ fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     AccountOwner::User(owner)
 }
 
-#[cfg(feature = "ethereum")]
 struct EthereumTrackerApp(ApplicationWrapper<ethereum_tracker::EthereumTrackerAbi>);
 
-#[cfg(feature = "ethereum")]
 impl EthereumTrackerApp {
     async fn get_amount(&self, account_owner: &str) -> ethers_core::types::U256 {
         use ethereum_tracker::U256Cont;
@@ -341,7 +339,6 @@ async fn test_wallet_lock() -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "ethereum")]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_eth(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_eth(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]

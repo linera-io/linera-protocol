@@ -176,7 +176,7 @@ linera-service-graphql-client = { version = "0.11.0", path = "./linera-service-g
 
 counter = { path = "./examples/counter" }
 meta-counter = { path = "./examples/meta-counter" }
-ethereum-tracker = { path = "./examples/ethereum-tracker", features = [ "ethereum" ] }
+ethereum-tracker = { path = "./examples/ethereum-tracker" }
 fungible = { path = "./examples/fungible" }
 native-fungible = { path = "./examples/native-fungible" }
 non-fungible = { path = "./examples/non-fungible" }

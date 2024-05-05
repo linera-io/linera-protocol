@@ -2346,6 +2346,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethereum-tracker"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "bcs",
+ "futures",
+ "linera-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ethereum-types"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4342,6 +4354,8 @@ dependencies = [
  "crowd-funding",
  "current_platform",
  "dirs",
+ "ethereum-tracker",
+ "ethers-core",
  "fs-err",
  "fs4",
  "fs_extra",
@@ -4354,6 +4368,7 @@ dependencies = [
  "linera-base",
  "linera-chain",
  "linera-core",
+ "linera-ethereum",
  "linera-execution",
  "linera-rpc",
  "linera-sdk",

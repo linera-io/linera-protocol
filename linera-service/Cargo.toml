@@ -48,6 +48,7 @@ colored.workspace = true
 comfy-table.workspace = true
 current_platform = "0.2.0"
 dirs.workspace = true
+ethers-core.workspace = true
 fs-err.workspace = true
 fs4.workspace = true
 fs_extra = { workspace = true, optional = true }
@@ -59,6 +60,7 @@ kube = { workspace = true, optional = true }
 linera-base = { workspace = true, features = ["metrics"] }
 linera-chain = { workspace = true, features = ["metrics"] }
 linera-core = { workspace = true, features = ["metrics", "rocksdb", "wasmer"] }
+linera-ethereum.workspace = true
 linera-execution = { workspace = true, features = ["fs", "metrics", "wasmer"] }
 linera-rpc = { workspace = true, features = ["server", "simple-network"] }
 linera-sdk = { workspace = true, optional = true }
@@ -96,6 +98,7 @@ amm.workspace = true
 base64.workspace = true
 counter.workspace = true
 crowd-funding.workspace = true
+ethereum-tracker.workspace = true
 fungible.workspace = true
 linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
