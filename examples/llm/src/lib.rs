@@ -8,14 +8,22 @@ This example application runs a large language model in an application's service
 
 The model used by Linera Stories is a 40M parameter TinyLlama by A. Karpathy. Find out more here: https://github.com/karpathy/llama2.c.
 
-NOTE: Due to [lack of hardware acceleration](https://github.com/linera-io/linera-protocol/issues/1931) performance is wanting.
+CAVEAT:
+
+* We currently use a local HTTP service to provide model data to the wallet
+  implementation (aka "node service"). In the future, model data will be stored on-chain
+  ([#1981](https://github.com/linera-io/linera-protocol/issues/1981)) or in an external
+  decentralized storage.
+
+* We should also not download the model at every query ([#1999](https://github.com/linera-io/linera-protocol/issues/1999)).
+
+* Running larger LLMs with acceptable performance will likely require hardware acceleration ([#1931](https://github.com/linera-io/linera-protocol/issues/1931)).
+
 
 # How It Works
 
 Models and tokenizers are served locally using a local Python server. They are expected
 at `model.bin` and `tokenizer.json`.
-
-NOTE: In the future, model data will be stored on-chain (#1981) or in decentralized storage.
 
 The application's service exposes a single GraphQL field called `prompt` which takes a prompt
 as input and returns a response.
