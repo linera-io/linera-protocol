@@ -17,14 +17,19 @@ ethers-core.workspace = true
 ethers-middleware.workspace = true
 ethers-providers.workspace = true
 ethers-signers.workspace = true
-linera-storage-service.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true
 rustc-hex.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["full"] }
 url.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { workspace = true, features = ["js"] }
+
+[dev-dependencies]
+linera-storage-service.workspace = true
+tokio = { workspace = true, features = ["full"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true

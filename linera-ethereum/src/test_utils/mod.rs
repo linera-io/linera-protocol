@@ -16,7 +16,6 @@ use ethers::{
 };
 use ethers_core::utils::{Anvil, AnvilInstance};
 use ethers_signers::{Signer, Wallet};
-use linera_storage_service::child::get_free_port;
 
 use crate::client::EthereumEndpoint;
 
@@ -42,19 +41,20 @@ pub struct AnvilTest {
     pub ethereum_endpoint: EthereumEndpoint<Http>,
 }
 
-pub async fn get_anvil() -> Result<AnvilTest> {
-    let port = get_free_port().await?;
-    let anvil_instance = Anvil::new()
-        .port(port)
-        .mnemonic("abstract vacuum mammal awkward pudding scene penalty purchase dinner depart evoke puzzle")
-        .spawn();
-    let endpoint = anvil_instance.endpoint();
-    let ethereum_endpoint = EthereumEndpoint::new(endpoint.clone())?;
-    Ok(AnvilTest {
-        anvil_instance,
-        endpoint,
-        ethereum_endpoint,
-    })
+impl AnvilTest {
+    pub fn new(port: u16) -> Result<AnvilTest> {
+        let anvil_instance = Anvil::new()
+            .port(port)
+            .mnemonic("abstract vacuum mammal awkward pudding scene penalty purchase dinner depart evoke puzzle")
+            .spawn();
+        let endpoint = anvil_instance.endpoint();
+        let ethereum_endpoint = EthereumEndpoint::<Http>::new(endpoint.clone())?;
+        Ok(AnvilTest {
+            anvil_instance,
+            endpoint,
+            ethereum_endpoint,
+        })
+    }
 }
 
 impl AnvilTest {

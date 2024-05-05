@@ -7,4 +7,5 @@ pub mod client;
 pub mod common;
 
 /// Helper types for tests and similar purposes.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod test_utils;

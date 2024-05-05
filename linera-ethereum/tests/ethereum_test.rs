@@ -1,12 +1,21 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Result;
 use ethers::types::U256;
 use ethers_core::types::Address;
 use linera_ethereum::{
     common::{EthereumDataType, EthereumEvent},
-    test_utils::{get_anvil, EventNumericsContractFunction, SimpleTokenContractFunction},
+    test_utils::{EventNumericsContractFunction, SimpleTokenContractFunction},
 };
+use linera_storage_service::child::get_free_port;
+use linera_ethereum::test_utils::AnvilTest;
+
+#[cfg(test)]
+async fn get_anvil() -> Result<AnvilTest> {
+    let port = get_free_port().await?;
+    AnvilTest::new(port)
+}
 
 #[tokio::test]
 async fn test_get_accounts_balance() {
