@@ -48,7 +48,7 @@ OWNER_1=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f
 Now, compile the `counter` application WebAssembly binaries, publish and create an application instance.
 
 ```bash
-(cd examples/counter && cargo build --release)
+(cd examples/counter && cargo build --release --target wasm32-unknown-unknown)
 
 APPLICATION_ID=$(linera publish-and-create \
   examples/target/wasm32-unknown-unknown/release/counter_{contract,service}.wasm \

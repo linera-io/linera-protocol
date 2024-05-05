@@ -40,7 +40,7 @@ linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37
 Compile the `non-fungible` application WebAssembly binaries, and publish them as an application bytecode:
 
 ```bash
-(cd examples/non-fungible && cargo build --release)
+(cd examples/non-fungible && cargo build --release --target wasm32-unknown-unknown)
 
 BYTECODE_ID=$(linera publish-bytecode \
     examples/target/wasm32-unknown-unknown/release/non_fungible_{contract,service}.wasm)
