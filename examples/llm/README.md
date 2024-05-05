@@ -33,7 +33,15 @@ to the GGUF format where it can be used for inference.
 # Usage
 
 We're assuming that a local wallet is set up and connected to running a test network
-(local or otherwise). See the file `linera-protocol/examples/fungible/README.md` for instructions.
+(local or otherwise).
+
+If you use `linera net up`, the value of the default chain ID is:
+```bash
+CHAIN=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
+```
+
+See the file `linera-protocol/examples/fungible/README.md` or the [online developer
+manual](https://linera.dev) for instructions.
 
 ## Setting Up
 
