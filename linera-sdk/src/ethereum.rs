@@ -6,16 +6,33 @@
 use std::fmt::Debug;
 
 use ethers::providers::{JsonRpcClient, ProviderError};
-use serde::{de::DeserializeOwned, Serialize};
+use async_graphql::scalar;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::contract::wit::contract_system_api;
 
 /// A wrapper for a URL that implements `JsonRpcClient` and uses the JSON oracle to make requests.
-#[derive(Debug)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct EthereumClient {
     /// The URL of the JSON-RPC server, without the method or parameters.
     pub url: String,
 }
+scalar!(EthereumClient);
+
+/// The Ethereum client used in the smart contracts.
+pub type EthereumEndpoint = linera_ethereum::client::EthereumEndpoint<EthereumClient>;
+
+/// The Ethereum type for a single event
+pub type EthereumDataType = linera_ethereum::common::EthereumDataType;
+
+/// The Ethereum type for an event
+pub type EthereumEvent = linera_ethereum::common::EthereumEvent;
+
+/// The U256 type from Ethereum
+pub type U256 = ethers::types::U256;
+
+/// The Provider used for the service.
+pub type Provider = ethers::prelude::Provider<EthereumClient>;
 
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]

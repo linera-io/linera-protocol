@@ -44,6 +44,7 @@ log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 wit-bindgen.workspace = true
+linera-ethereum.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-graphql.workspace = true
