@@ -4,6 +4,7 @@ members = [
     "amm",
     "counter",
     "crowd-funding",
+    "ethereum-tracker",
     "fungible",
     "llm",
     "matching-engine",
@@ -12,6 +13,7 @@ members = [
     "non-fungible",
     "social",
 ]
+exclude = [ "ethereum-tracker/ethereum" ]
 
 [workspace.dependencies]
 assert_matches = "1.5.0"
@@ -38,6 +40,7 @@ tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 
 counter = { path = "./counter" }
 crowd-funding = { path = "./crowd-funding" }
+ethereum-tracker = { path = "./ethereum-tracker", features = ["ethereum"] }
 fungible = { path = "./fungible" }
 native-fungible = { path = "./native-fungible" }
 non-fungible = { path = "./non-fungible" }

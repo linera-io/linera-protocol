@@ -35,7 +35,9 @@ test = ["linera-base/test"]
 
 [dependencies]
 async-graphql.workspace = true
+async-trait.workspace = true
 bcs.workspace = true
+ethers.workspace = true
 futures.workspace = true
 linera-base.workspace = true
 linera-sdk-derive.workspace = true
