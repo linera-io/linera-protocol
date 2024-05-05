@@ -6,7 +6,17 @@ This example application runs a large language model in an application's service
 
 The model used by Linera Stories is a 40M parameter TinyLlama by A. Karpathy. Find out more here: https://github.com/karpathy/llama2.c.
 
-NOTE: Due to [lack of hardware acceleration](https://github.com/linera-io/linera-protocol/issues/1931) performance is wanting.
+CAVEAT:
+
+* We currently use a local HTTP service to provide model data to the wallet
+  implementation (aka "node service"). In the future, model data will be stored on-chain
+  ([#1981](https://github.com/linera-io/linera-protocol/issues/1981)) or in an external
+  decentralized storage.
+
+* We should also not download the model at every query ([#1999](https://github.com/linera-io/linera-protocol/issues/1999)).
+
+* Running larger LLMs with acceptable performance will likely require hardware acceleration ([#1931](https://github.com/linera-io/linera-protocol/issues/1931)).
+
 
 # How It Works
 
@@ -22,24 +32,35 @@ to the GGUF format where it can be used for inference.
 
 # Usage
 
+We're assuming that a local wallet is set up and connected to running a test network
+(local or otherwise).
+
+If you use `linera net up`, the value of the default chain ID is:
+```bash
+CHAIN=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
+```
+
+See the file `linera-protocol/examples/fungible/README.md` or the [online developer
+manual](https://linera.dev) for instructions.
+
 ## Setting Up
 
-First ensure you have the model and tokenizer locally by running:
+First, ensure you have the model and tokenizer locally by running:
 
 ```bash
 wget -O model.bin -c https://huggingface.co/karpathy/tinyllamas/resolve/main/stories42M.bin
 wget -c https://huggingface.co/spaces/lmz/candle-llama2/resolve/main/tokenizer.json
 ```
 
-Then in a separate terminal window, run the Python server to serve models locally:
+Then, in a separate terminal window, run the Python server to serve models locally:
 ```bash
 python3 -m http.server 10001
 ```
 
 Finally, deploy the application:
-
 ```bash
-cd ../ && linera project publish-and-create llm
+cd ..
+APP_ID=$(linera project publish-and-create llm)
 ```
 
 ## Using the LLM Application
@@ -56,11 +77,14 @@ dependencies:
 
 ```bash
 cd llm/web-frontend
-npm install
-npm start
+npm install --no-save
+BROWSER=none npm start
 ```
 
 Finally, navigate to `localhost:3000` to interact with the Linera ChatBot.
+```bash
+echo "http://localhost:3000/$CHAIN?app=$APP_ID&port=$PORT"
+```
  
 
 <!-- cargo-rdme end -->
