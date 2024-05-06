@@ -1,13 +1,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use ethers::types::U256;
-use ethers_core::types::Address;
-use linera_ethereum::{
-    common::{EthereumDataType, EthereumEvent},
-    test_utils::{get_anvil, EventNumericsContractFunction, SimpleTokenContractFunction},
+#[cfg(feature = "ethereum")]
+use {
+    ethers::types::U256,
+    ethers_core::types::Address,
+    linera_ethereum::{
+        common::{EthereumDataType, EthereumEvent},
+        test_utils::{get_anvil, EventNumericsContractFunction, SimpleTokenContractFunction},
+    },
 };
 
+#[cfg(feature = "ethereum")]
 #[tokio::test]
 async fn test_get_accounts_balance() {
     let anvil_test = get_anvil().await.unwrap();
@@ -24,6 +28,7 @@ async fn test_get_accounts_balance() {
     }
 }
 
+#[cfg(feature = "ethereum")]
 #[tokio::test]
 async fn test_event_numerics() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
@@ -61,6 +66,7 @@ async fn test_event_numerics() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "ethereum")]
 #[tokio::test]
 async fn test_simple_token_events() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
@@ -104,6 +110,7 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "ethereum")]
 #[tokio::test]
 async fn test_simple_token_queries() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;

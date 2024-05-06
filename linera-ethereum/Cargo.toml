@@ -10,6 +10,12 @@ documentation = "https://docs.rs/linera-ethereum/latest/linera_ethereum/"
 license = "Apache-2.0"
 edition = "2021"
 
+[package.metadata.docs.rs]
+features = ["features"]
+
+[features]
+ethereum = []
+
 [dependencies]
 anyhow.workspace = true
 ethers.workspace = true
