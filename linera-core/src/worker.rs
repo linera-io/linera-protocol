@@ -52,7 +52,7 @@ use {
 };
 
 use crate::{
-    chain_worker::{ChainWorkerConfig, ChainWorkerState},
+    chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, ChainWorkerState},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
 };
 
@@ -423,14 +423,21 @@ where
         &mut self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
-        ChainWorkerState::new(
+        let chain_actor = ChainWorkerActor::spawn(
             self.chain_worker_config.clone(),
             self.storage.clone(),
             block.chain_id,
         )
-        .await?
-        .stage_block_execution(block)
-        .await
+        .await?;
+        let (callback, response) = oneshot::channel();
+
+        chain_actor
+            .send(ChainWorkerRequest::StageBlockExecution { block, callback })
+            .expect("`ChainWorkerActor` stopped executing unexpectedly");
+
+        response
+            .await
+            .expect("`ChainWorkerActor` stopped executing without responding")
     }
 
     // Schedule a notification when cross-chain messages are delivered up to the given height.
