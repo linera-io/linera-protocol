@@ -31,7 +31,10 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{oneshot, Mutex, OwnedRwLockReadGuard};
+use tokio::{
+    sync::{oneshot, Mutex, OwnedRwLockReadGuard},
+    task::JoinSet,
+};
 use tracing::{error, instrument, trace, warn};
 #[cfg(with_testing)]
 use {
@@ -48,7 +51,7 @@ use {
 };
 
 use crate::{
-    chain_worker::{ChainWorkerConfig, ChainWorkerState},
+    chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, ChainWorkerState},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
 };
@@ -281,6 +284,8 @@ pub struct WorkerState<StorageClient> {
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
+    /// The set of spawned [`ChainWorkerActor`] tasks.
+    chain_worker_tasks: Arc<Mutex<JoinSet<()>>>,
 }
 
 pub(crate) type DeliveryNotifiers =
@@ -295,6 +300,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             recent_hashed_certificate_values: Arc::new(ValueCache::default()),
             recent_hashed_blobs: Arc::new(ValueCache::default()),
             delivery_notifiers: Arc::default(),
+            chain_worker_tasks: Arc::default(),
         }
     }
 
@@ -312,6 +318,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             recent_hashed_certificate_values,
             recent_hashed_blobs,
             delivery_notifiers,
+            chain_worker_tasks: Arc::default(),
         }
     }
 
@@ -435,10 +442,24 @@ where
         &mut self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
-        self.create_chain_worker(block.chain_id)
-            .await?
-            .stage_block_execution(block)
+        let chain_actor = ChainWorkerActor::spawn(
+            self.chain_worker_config.clone(),
+            self.storage.clone(),
+            self.recent_hashed_certificate_values.clone(),
+            self.recent_hashed_blobs.clone(),
+            block.chain_id,
+            &mut *self.chain_worker_tasks.lock().await,
+        )
+        .await?;
+        let (callback, response) = oneshot::channel();
+
+        chain_actor
+            .send(ChainWorkerRequest::StageBlockExecution { block, callback })
+            .expect("`ChainWorkerActor` stopped executing unexpectedly");
+
+        response
             .await
+            .expect("`ChainWorkerActor` stopped executing without responding")
     }
 
     // Schedule a notification when cross-chain messages are delivered up to the given height.
