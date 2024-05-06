@@ -452,20 +452,10 @@ where
         &mut self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
-        let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        let local_time = self.storage.clock().current_time();
-        let signer = block.authenticated_signer;
-        let executed_block = chain
-            .execute_block(&block, local_time, None)
+        self.create_chain_worker(block.chain_id)
             .await?
-            .with(block);
-        let mut response = ChainInfoResponse::new(&chain, None);
-        if let Some(signer) = signer {
-            response.info.requested_owner_balance =
-                chain.execution_state.system.balances.get(&signer).await?;
-        }
-        // Do not save the new state.
-        Ok((executed_block, response))
+            .stage_block_execution(block)
+            .await
     }
 
     // Schedule a notification when cross-chain messages are delivered up to the given height.
