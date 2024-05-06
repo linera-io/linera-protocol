@@ -4,11 +4,14 @@
 //! The state and functionality of a chain worker.
 
 use linera_base::identifiers::ChainId;
-use linera_chain::ChainStateView;
+use linera_chain::{
+    data_types::{Block, ExecutedBlock},
+    ChainStateView,
+};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::views::{View, ViewError};
 
-use crate::worker::WorkerError;
+use crate::{data_types::ChainInfoResponse, worker::WorkerError};
 
 /// The state of the chain worker.
 pub struct ChainWorkerState<StorageClient>
@@ -40,6 +43,38 @@ where
     /// Returns the [`ChainId`] of the chain handled by this worker.
     pub fn chain_id(&self) -> ChainId {
         self.chain.chain_id()
+    }
+
+    /// Executes a block without persisting any changes to the state.
+    pub async fn stage_block_execution(
+        &mut self,
+        block: Block,
+    ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
+        self.ensure_is_active()?;
+
+        let local_time = self.storage.clock().current_time();
+        let signer = block.authenticated_signer;
+
+        let executed_block = self
+            .chain
+            .execute_block(&block, local_time, None)
+            .await?
+            .with(block);
+
+        let mut response = ChainInfoResponse::new(&self.chain, None);
+        if let Some(signer) = signer {
+            response.info.requested_owner_balance = self
+                .chain
+                .execution_state
+                .system
+                .balances
+                .get(&signer)
+                .await?;
+        }
+
+        self.chain.rollback();
+
+        Ok((executed_block, response))
     }
 
     /// Ensures that the current chain is active, returning an error otherwise.
