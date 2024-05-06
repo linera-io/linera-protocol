@@ -3,9 +3,14 @@
 
 //! A worker to handle a single chain.
 
+mod actor;
 mod config;
 mod state;
 
 #[cfg(test)]
 pub(crate) use self::state::CrossChainUpdateHelper;
-pub use self::{config::ChainWorkerConfig, state::ChainWorkerState};
+pub use self::{
+    actor::{ChainWorkerActor, ChainWorkerRequest},
+    config::ChainWorkerConfig,
+    state::ChainWorkerState,
+};
