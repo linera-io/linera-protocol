@@ -3,14 +3,15 @@
 
 use std::num::ParseIntError;
 
+use alloy::{
+    primitives::{Address, U256},
+    rpc::{json_rpc, types::eth::Log},
+};
+use alloy_primitives::B256;
 use num_bigint::{BigInt, BigUint};
-use alloy::primitives::{U256, Address};
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use alloy_primitives::B256;
-use alloy::rpc::json_rpc;
-use alloy::rpc::types::eth::Log;
 
 #[derive(Debug, Error)]
 pub enum EthereumServiceError {

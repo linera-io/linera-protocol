@@ -6,11 +6,13 @@
 use alloy::{
     primitives::{Address, U256},
     providers::{Provider, ProviderBuilder},
-    rpc::types::eth::{Filter, BlockId, BlockNumberOrTag},
+    rpc::types::eth::{
+        request::{TransactionInput, TransactionRequest},
+        BlockId, BlockNumberOrTag, Filter,
+    },
 };
-//use alloy_primitives::B256;
+use alloy_primitives::Bytes;
 //use alloy_primitives::BlockNumber;
-
 use eyre::Result;
 
 use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
@@ -53,9 +55,7 @@ impl EthereumEndpoint {
         let address = address.parse::<Address>()?;
         let number = match block_nr {
             None => BlockNumberOrTag::Latest,
-            Some(val) => {
-                BlockNumberOrTag::Number(val)
-            }
+            Some(val) => BlockNumberOrTag::Number(val),
         };
         let block_id = BlockId::Number(number);
         let balance = provider.get_balance(address, block_id).await?;
@@ -80,7 +80,7 @@ impl EthereumEndpoint {
             .address(contract_address)
             .event(&event_name)
             .from_block(starting_block);
-        let events  = provider.get_logs(&filter).await?;
+        let events = provider.get_logs(&filter).await?;
         let events = events
             .into_iter()
             .map(|x| parse_log(event_name_expanded, x))
@@ -88,7 +88,6 @@ impl EthereumEndpoint {
         Ok(events)
     }
 
-    /*
     /// The operation done with `eth_call` on Ethereum returns
     /// a result but are not executed. This can be useful for example
     /// for executing function that are const and allow to inspect
@@ -99,16 +98,18 @@ impl EthereumEndpoint {
         data: Bytes,
         from: &str,
     ) -> Result<Bytes, EthereumServiceError> {
+        let url = reqwest::Url::parse(&self.url)?;
+        let provider = ProviderBuilder::new().on_http(url);
         let contract_address = contract_address.parse::<Address>()?;
-        let mut tx = TransactionRequest::new();
         let from = from.parse::<Address>()?;
-        tx.data = Some(data);
-        tx.to = Some(NameOrAddress::Address(contract_address));
-        tx.from = Some(from);
-        let tx = tx.into();
-        Ok(self.provider.call_raw(&tx).await?)
+        let input = TransactionInput::new(data);
+        let tx = TransactionRequest::default()
+            .from(from)
+            .to(contract_address)
+            .input(input);
+        let eth_call = provider.call(&tx).await?;
+        Ok(eth_call)
     }
-    */
 }
 
 /*
