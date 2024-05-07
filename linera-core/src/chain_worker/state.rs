@@ -6,8 +6,6 @@
 use std::collections::BTreeMap;
 
 use linera_base::{data_types::BlockHeight, ensure, identifiers::ChainId};
-#[cfg(with_testing)]
-use linera_chain::data_types::Certificate;
 use linera_chain::{
     data_types::{Block, ExecutedBlock, MessageBundle, Origin, Target},
     ChainStateView,
@@ -22,6 +20,11 @@ use linera_views::{
     views::{RootView, View, ViewError},
 };
 use tracing::{debug, warn};
+#[cfg(with_testing)]
+use {
+    linera_base::identifiers::BytecodeId, linera_chain::data_types::Certificate,
+    linera_execution::BytecodeLocation,
+};
 
 use super::ChainWorkerConfig;
 use crate::{data_types::ChainInfoResponse, worker::WorkerError};
@@ -83,6 +86,18 @@ where
     pub async fn query_application(&mut self, query: Query) -> Result<Response, WorkerError> {
         self.ensure_is_active()?;
         let response = self.chain.query_application(query).await?;
+        Ok(response)
+    }
+
+    /// Returns the [`BytecodeLocation`] for the requested [`BytecodeId`], if it is known by the
+    /// chain.
+    #[cfg(with_testing)]
+    pub async fn read_bytecode_location(
+        &mut self,
+        bytecode_id: BytecodeId,
+    ) -> Result<Option<BytecodeLocation>, WorkerError> {
+        self.ensure_is_active()?;
+        let response = self.chain.read_bytecode_location(bytecode_id).await?;
         Ok(response)
     }
 
