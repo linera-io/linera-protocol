@@ -494,13 +494,12 @@ where
         chain_id: ChainId,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, WorkerError> {
-        ChainWorkerState::new(
-            self.chain_worker_config.clone(),
-            self.storage.clone(),
-            chain_id,
-        )
-        .await?
-        .describe_application(application_id)
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::DescribeApplication {
+                application_id,
+                callback,
+            }
+        })
         .await
     }
 
