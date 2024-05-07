@@ -11,7 +11,7 @@ license = "Apache-2.0"
 edition = "2021"
 
 [package.metadata.docs.rs]
-features = ["features"]
+features = ["ethereum"]
 
 [features]
 ethereum = []
