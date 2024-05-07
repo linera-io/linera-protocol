@@ -954,9 +954,12 @@ where
                     .map(|(medium, height)| (Target { recipient, medium }, height))
                     .collect();
                 let height_with_fully_delivered_messages = self
-                    .create_chain_worker(sender)
-                    .await?
-                    .confirm_updated_recipient(latest_heights)
+                    .query_chain_worker(sender, move |callback| {
+                        ChainWorkerRequest::ConfirmUpdatedRecipient {
+                            latest_heights,
+                            callback,
+                        }
+                    })
                     .await?;
                 // Handle delivery notifiers for this chain, if any.
                 if let hash_map::Entry::Occupied(mut map) =
