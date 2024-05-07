@@ -5,6 +5,7 @@
 
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{Block, ExecutedBlock};
+use linera_execution::{Query, Response};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use tokio::sync::{mpsc, oneshot};
@@ -15,6 +16,12 @@ use crate::{data_types::ChainInfoResponse, worker::WorkerError};
 
 /// A request for the [`ChainWorkerActor`].
 pub enum ChainWorkerRequest {
+    /// Query an application's state.
+    QueryApplication {
+        query: Query,
+        callback: oneshot::Sender<Result<Response, WorkerError>>,
+    },
+
     /// Execute a block but discard any changes to the chain state.
     StageBlockExecution {
         block: Block,
@@ -64,6 +71,9 @@ where
 
         while let Some(request) = self.incoming_requests.recv().await {
             match request {
+                ChainWorkerRequest::QueryApplication { query, callback } => {
+                    let _ = callback.send(self.worker.query_application(query).await);
+                }
                 ChainWorkerRequest::StageBlockExecution { block, callback } => {
                     let _ = callback.send(self.worker.stage_block_execution(block).await);
                 }
