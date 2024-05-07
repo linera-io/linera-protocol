@@ -52,7 +52,7 @@ use {
 };
 
 use crate::{
-    chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, ChainWorkerState},
+    chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
 };
 
