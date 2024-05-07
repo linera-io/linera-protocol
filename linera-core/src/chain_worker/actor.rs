@@ -10,17 +10,28 @@ use linera_base::{
     data_types::HashedBlob,
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types::HashedCertificateValue;
+use linera_chain::data_types::{Block, ExecutedBlock, HashedCertificateValue};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use tokio::{sync::mpsc, task::JoinSet};
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinSet,
+};
 use tracing::{instrument, trace};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState};
-use crate::{value_cache::ValueCache, worker::WorkerError, JoinSetExt as _};
+use crate::{
+    data_types::ChainInfoResponse, value_cache::ValueCache, worker::WorkerError, JoinSetExt as _,
+};
 
 /// A request for the [`ChainWorkerActor`].
-pub enum ChainWorkerRequest {}
+pub enum ChainWorkerRequest {
+    /// Execute a block but discard any changes to the chain state.
+    StageBlockExecution {
+        block: Block,
+        callback: oneshot::Sender<Result<(ExecutedBlock, ChainInfoResponse), WorkerError>>,
+    },
+}
 
 /// The actor worker type.
 pub struct ChainWorkerActor<StorageClient>
@@ -73,7 +84,11 @@ where
         trace!("Starting `ChainWorkerActor`");
 
         while let Some(request) = self.incoming_requests.recv().await {
-            match request {}
+            match request {
+                ChainWorkerRequest::StageBlockExecution { block, callback } => {
+                    let _ = callback.send(self.worker.stage_block_execution(block).await);
+                }
+            }
         }
 
         trace!("`ChainWorkerActor` finished");
