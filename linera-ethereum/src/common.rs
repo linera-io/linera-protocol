@@ -3,12 +3,15 @@
 
 use std::num::ParseIntError;
 
-use ethers::types::{Log, U256};
-use ethers_core::types::{Address, H256};
+//use ethers::types::{Log, U256};
+//use ethers_core::types::{Address, H256};
 use num_bigint::{BigInt, BigUint};
+use alloy::primitives::{U256, Address, Log};
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use alloy_primitives::B256;
+use alloy::rpc::json_rpc;
 
 #[derive(Debug, Error)]
 pub enum EthereumServiceError {
@@ -40,13 +43,13 @@ pub enum EthereumServiceError {
     #[error("Parse bool error")]
     ParseBoolError,
 
-    /// Provider error
-    #[error(transparent)]
-    ProviderError(#[from] ethers_providers::ProviderError),
-
     /// Hex parsing error
     #[error(transparent)]
-    FromHexError(#[from] rustc_hex::FromHexError),
+    FromHexError(#[from] alloy_primitives::hex::FromHexError),
+
+    /// RpcError
+    #[error(transparent)]
+    RpcError(#[from] json_rpc::RpcError<alloy::transports::TransportErrorKind>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,7 +74,7 @@ pub fn event_name_from_expanded(event_name_expanded: &str) -> String {
     event_name_expanded.replace(" indexed", "").to_string()
 }
 
-fn parse_entry(entry: H256, ethereum_type: &str) -> Result<EthereumDataType, EthereumServiceError> {
+fn parse_entry(entry: B256, ethereum_type: &str) -> Result<EthereumDataType, EthereumServiceError> {
     if ethereum_type == "address" {
         let address = Address::from(entry);
         let address = format!("{:?}", address);

@@ -28,6 +28,8 @@ resolver = "2"
 
 [workspace.dependencies]
 heck = "0.4.1"
+alloy = { git = "https://github.com/alloy-rs/alloy", rev = "0bb7604f186a78cdee911fa7fbc0ca36465a6902", default-features = false, features = [ "providers", "rpc-types-eth", "reqwest", "rpc-client", "provider-http", "json-rpc" ] }
+alloy-primitives = "0.7.2"
 anyhow = "1.0.80"
 assert_matches = "1.5.0"
 async-graphql = "=7.0.2"
@@ -63,11 +65,14 @@ derive_more = "0.99.17"
 dirs = "5.0.1"
 ed25519-dalek = { version = "2.1.1", features = ["batch", "serde"] }
 either = "1.10.0"
+
+
 ethers = { version = "2.0.14", features = ["solc"] }
 ethers-core = "2.0.14"
 ethers-providers = "2.0.14"
 ethers-middleware = "2.0.14"
 ethers-signers = "2.0.14"
+eyre = "0.6.12"
 frunk = "0.4.2"
 fs-err = { version = "2.11.0", features = ["tokio"] }
 fs4 = "0.8.2"

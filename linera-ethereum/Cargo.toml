@@ -18,17 +18,16 @@ ethereum = []
 
 [dependencies]
 anyhow.workspace = true
-ethers.workspace = true
-ethers-core.workspace = true
-ethers-middleware.workspace = true
-ethers-providers.workspace = true
-ethers-signers.workspace = true
+alloy.workspace = true
+alloy-primitives.workspace = true
+eyre.workspace = true
 linera-storage-service.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true
 rustc-hex.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+reqwest.workspace = true
 tokio = { workspace = true, features = ["full"] }
 url.workspace = true
 
