@@ -7,10 +7,10 @@ use std::sync::Arc;
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::HashedBlob,
+    data_types::{BlockHeight, HashedBlob},
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types::{Block, ExecutedBlock, HashedCertificateValue};
+use linera_chain::data_types::{Block, ExecutedBlock, HashedCertificateValue, Target};
 use linera_execution::{Query, Response, UserApplicationDescription, UserApplicationId};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -43,6 +43,12 @@ pub enum ChainWorkerRequest {
     StageBlockExecution {
         block: Block,
         callback: oneshot::Sender<Result<(ExecutedBlock, ChainInfoResponse), WorkerError>>,
+    },
+
+    /// Handle cross-chain request to confirm that the recipient was updated.
+    ConfirmUpdatedRecipient {
+        latest_heights: Vec<(Target, BlockHeight)>,
+        callback: oneshot::Sender<Result<BlockHeight, WorkerError>>,
     },
 }
 
@@ -109,6 +115,13 @@ where
                 }
                 ChainWorkerRequest::StageBlockExecution { block, callback } => {
                     let _ = callback.send(self.worker.stage_block_execution(block).await);
+                }
+                ChainWorkerRequest::ConfirmUpdatedRecipient {
+                    latest_heights,
+                    callback,
+                } => {
+                    let _ =
+                        callback.send(self.worker.confirm_updated_recipient(latest_heights).await);
                 }
             }
         }
