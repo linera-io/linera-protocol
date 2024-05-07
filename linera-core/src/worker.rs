@@ -51,7 +51,7 @@ use {
 };
 
 use crate::{
-    chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, ChainWorkerState},
+    chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
 };
@@ -707,21 +707,6 @@ where
         self.query_chain_worker(chain_id, |callback| ChainWorkerRequest::GetChainStateView {
             callback,
         })
-        .await
-    }
-
-    /// Creates a [`ChainWorkerState`] instance for a specific chain.
-    async fn create_chain_worker(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<ChainWorkerState<StorageClient>, WorkerError> {
-        ChainWorkerState::load(
-            self.chain_worker_config.clone(),
-            self.storage.clone(),
-            self.recent_hashed_certificate_values.clone(),
-            self.recent_hashed_blobs.clone(),
-            chain_id,
-        )
         .await
     }
 
