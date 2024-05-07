@@ -273,9 +273,6 @@ impl From<linera_chain::ChainError> for WorkerError {
 pub struct WorkerState<StorageClient> {
     /// A name used for logging
     nickname: String,
-    /// The signature key pair of the validator. The key may be missing for replicas
-    /// without voting rights (possibly with a partial view of chains).
-    key_pair: Option<Arc<KeyPair>>,
     /// Access to local persistent storage.
     storage: StorageClient,
     /// Configuration options for the [`ChainWorker`]s.
@@ -299,9 +296,8 @@ impl<StorageClient> WorkerState<StorageClient> {
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
         WorkerState {
             nickname,
-            key_pair: key_pair.map(Arc::new),
             storage,
-            chain_worker_config: ChainWorkerConfig::default(),
+            chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
             grace_period: Duration::ZERO,
             recent_hashed_certificate_values: Arc::new(ValueCache::default()),
             recent_hashed_blobs: Arc::new(ValueCache::default()),
@@ -318,7 +314,6 @@ impl<StorageClient> WorkerState<StorageClient> {
     ) -> Self {
         WorkerState {
             nickname,
-            key_pair: None,
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
             grace_period: Duration::ZERO,
@@ -371,7 +366,7 @@ impl<StorageClient> WorkerState<StorageClient> {
 
     #[cfg(test)]
     pub(crate) fn with_key_pair(mut self, key_pair: Option<Arc<KeyPair>>) -> Self {
-        self.key_pair = key_pair;
+        self.chain_worker_config.key_pair = key_pair;
         self
     }
 
@@ -1113,7 +1108,7 @@ where
 impl<StorageClient> WorkerState<StorageClient> {
     /// Gets a reference to the [`KeyPair`], if available.
     fn key_pair(&self) -> Option<&KeyPair> {
-        self.key_pair.as_ref().map(Arc::as_ref)
+        self.chain_worker_config.key_pair()
     }
 }
 
