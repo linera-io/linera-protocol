@@ -478,14 +478,21 @@ where
         chain_id: ChainId,
         query: Query,
     ) -> Result<Response, WorkerError> {
-        ChainWorkerState::new(
+        let chain_actor = ChainWorkerActor::spawn(
             self.chain_worker_config.clone(),
             self.storage.clone(),
             chain_id,
         )
-        .await?
-        .query_application(query)
-        .await
+        .await?;
+        let (callback, response) = oneshot::channel();
+
+        chain_actor
+            .send(ChainWorkerRequest::QueryApplication { query, callback })
+            .expect("`ChainWorkerActor` stopped executing unexpectedly");
+
+        response
+            .await
+            .expect("`ChainWorkerActor` stopped executing without responding")
     }
 
     #[cfg(with_testing)]
