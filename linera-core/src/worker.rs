@@ -476,9 +476,10 @@ where
         chain_id: ChainId,
         query: Query,
     ) -> Result<Response, WorkerError> {
-        let mut chain = self.storage.load_active_chain(chain_id).await?;
-        let response = chain.query_application(query).await?;
-        Ok(response)
+        ChainWorkerState::new(self.storage.clone(), chain_id)
+            .await?
+            .query_application(query)
+            .await
     }
 
     pub(crate) async fn describe_application(
