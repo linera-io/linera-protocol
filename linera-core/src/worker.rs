@@ -20,8 +20,8 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
-        ExecutedBlock, HashedCertificateValue, IncomingMessage, LiteCertificate, Medium,
-        MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
+        ExecutedBlock, HashedCertificateValue, LiteCertificate, Medium, MessageBundle, Origin,
+        OutgoingMessage, Target,
     },
     manager::{self},
     ChainError, ChainStateView,
@@ -42,7 +42,7 @@ use tracing::{error, instrument, trace, warn};
 #[cfg(with_testing)]
 use {
     linera_base::identifiers::{BytecodeId, Destination, MessageId},
-    linera_chain::data_types::ChannelFullName,
+    linera_chain::data_types::{ChannelFullName, IncomingMessage, MessageAction},
 };
 #[cfg(with_metrics)]
 use {
@@ -52,7 +52,7 @@ use {
 
 use crate::{
     chain_worker::{ChainWorkerConfig, ChainWorkerState},
-    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
 };
 
@@ -1342,106 +1342,15 @@ where
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, query);
-        let chain_id = query.chain_id;
-        let mut chain = self.storage.load_chain(chain_id).await?;
-        if query.request_leader_timeout {
-            if let Some(epoch) = chain.execution_state.system.epoch.get() {
-                let height = chain.tip_state.get().next_block_height;
-                let key_pair = self.key_pair();
-                let local_time = self.storage.clock().current_time();
-                let manager = chain.manager.get_mut();
-                if manager.vote_timeout(chain_id, height, *epoch, key_pair, local_time) {
-                    chain.save().await?;
-                }
-            }
+        let result = async move {
+            self.create_chain_worker(query.chain_id)
+                .await?
+                .handle_chain_info_query(query)
+                .await
         }
-        if query.request_fallback {
-            if let (Some(epoch), Some(entry)) = (
-                chain.execution_state.system.epoch.get(),
-                chain.unskippable.front().await?,
-            ) {
-                let ownership = chain.execution_state.system.ownership.get();
-                let elapsed = self.storage.clock().current_time().delta_since(entry.seen);
-                if elapsed >= ownership.timeout_config.fallback_duration {
-                    let height = chain.tip_state.get().next_block_height;
-                    let key_pair = self.key_pair();
-                    let manager = chain.manager.get_mut();
-                    if manager.vote_fallback(chain_id, height, *epoch, key_pair) {
-                        chain.save().await?;
-                    }
-                }
-            }
-        }
-        let mut info = ChainInfo::from(&chain);
-        if query.request_committees {
-            info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
-        }
-        if let Some(owner) = query.request_owner_balance {
-            info.requested_owner_balance =
-                chain.execution_state.system.balances.get(&owner).await?;
-        }
-        if let Some(next_block_height) = query.test_next_block_height {
-            ensure!(
-                chain.tip_state.get().next_block_height == next_block_height,
-                WorkerError::UnexpectedBlockHeight {
-                    expected_block_height: next_block_height,
-                    found_block_height: chain.tip_state.get().next_block_height
-                }
-            );
-        }
-        if query.request_pending_messages {
-            let mut messages = Vec::new();
-            let origins = chain.inboxes.indices().await?;
-            let inboxes = chain.inboxes.try_load_entries(&origins).await?;
-            let action = if *chain.execution_state.system.closed.get() {
-                MessageAction::Reject
-            } else {
-                MessageAction::Accept
-            };
-            for (origin, inbox) in origins.into_iter().zip(inboxes) {
-                for event in inbox.added_events.elements().await? {
-                    messages.push(IncomingMessage {
-                        origin: origin.clone(),
-                        event: event.clone(),
-                        action,
-                    });
-                }
-            }
-
-            info.requested_pending_messages = messages;
-        }
-        if let Some(range) = query.request_sent_certificates_in_range {
-            let start: usize = range.start.try_into()?;
-            let end = match range.limit {
-                None => chain.confirmed_log.count(),
-                Some(limit) => start
-                    .checked_add(usize::try_from(limit).map_err(|_| ArithmeticError::Overflow)?)
-                    .ok_or(ArithmeticError::Overflow)?
-                    .min(chain.confirmed_log.count()),
-            };
-            let keys = chain.confirmed_log.read(start..end).await?;
-            let certs = self.storage.read_certificates(keys).await?;
-            info.requested_sent_certificates = certs;
-        }
-        if let Some(start) = query.request_received_log_excluding_first_nth {
-            let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
-            info.requested_received_log = chain.received_log.read(start..).await?;
-        }
-        if let Some(hash) = query.request_hashed_certificate_value {
-            info.requested_hashed_certificate_value =
-                Some(self.storage.read_hashed_certificate_value(hash).await?);
-        }
-        if let Some(blob_id) = query.request_blob {
-            info.requested_blob = Some(self.storage.read_hashed_blob(blob_id).await?);
-        }
-        if query.request_manager_values {
-            info.manager.add_values(chain.manager.get());
-        }
-        let response = ChainInfoResponse::new(info, self.key_pair());
-        trace!("{} --> {:?}", self.nickname, response);
-        // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
-        let actions = self.create_network_actions(&chain).await?;
-        Ok((response, actions))
+        .await;
+        trace!("{} --> {:?}", self.nickname, result);
+        result
     }
 
     #[instrument(skip_all, fields(

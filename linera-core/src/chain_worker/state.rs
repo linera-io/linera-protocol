@@ -3,12 +3,18 @@
 
 //! The state and functionality of a chain worker.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use linera_base::{data_types::BlockHeight, ensure, identifiers::ChainId};
+use linera_base::{
+    data_types::{ArithmeticError, BlockHeight},
+    ensure,
+    identifiers::ChainId,
+};
 use linera_chain::{
-    data_types::{Block, ExecutedBlock, MessageBundle, Origin, Target},
-    ChainStateView,
+    data_types::{
+        Block, ExecutedBlock, IncomingMessage, Medium, MessageAction, MessageBundle, Origin, Target,
+    },
+    ChainError, ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -28,12 +34,15 @@ use {
 };
 
 use super::ChainWorkerConfig;
-use crate::{data_types::ChainInfoResponse, worker::WorkerError};
+use crate::{
+    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    worker::{NetworkActions, WorkerError},
+};
 
 /// The state of the chain worker.
 pub struct ChainWorkerState<StorageClient>
 where
-    StorageClient: Storage + Send + Sync + 'static,
+    StorageClient: Storage + Clone + Send + Sync + 'static,
     ViewError: From<StorageClient::ContextError>,
 {
     config: ChainWorkerConfig,
@@ -44,7 +53,7 @@ where
 
 impl<StorageClient> ChainWorkerState<StorageClient>
 where
-    StorageClient: Storage + Send + Sync + 'static,
+    StorageClient: Storage + Clone + Send + Sync + 'static,
     ViewError: From<StorageClient::ContextError>,
 {
     /// Creates a new [`ChainWorkerState`] using the provided `storage` client.
@@ -236,6 +245,117 @@ where
         Ok(height_with_fully_delivered_messages)
     }
 
+    /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
+    pub async fn handle_chain_info_query(
+        &mut self,
+        query: ChainInfoQuery,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        let chain_id = self.chain.chain_id();
+        if query.request_leader_timeout {
+            if let Some(epoch) = self.chain.execution_state.system.epoch.get() {
+                let height = self.chain.tip_state.get().next_block_height;
+                let key_pair = self.config.key_pair();
+                let local_time = self.storage.clock().current_time();
+                let manager = self.chain.manager.get_mut();
+                if manager.vote_timeout(chain_id, height, *epoch, key_pair, local_time) {
+                    self.chain.save().await?;
+                }
+            }
+        }
+        if query.request_fallback {
+            if let (Some(epoch), Some(entry)) = (
+                self.chain.execution_state.system.epoch.get(),
+                self.chain.unskippable.front().await?,
+            ) {
+                let ownership = self.chain.execution_state.system.ownership.get();
+                let elapsed = self.storage.clock().current_time().delta_since(entry.seen);
+                if elapsed >= ownership.timeout_config.fallback_duration {
+                    let height = self.chain.tip_state.get().next_block_height;
+                    let key_pair = self.config.key_pair();
+                    let manager = self.chain.manager.get_mut();
+                    if manager.vote_fallback(chain_id, height, *epoch, key_pair) {
+                        self.chain.save().await?;
+                    }
+                }
+            }
+        }
+        let mut info = ChainInfo::from(&self.chain);
+        if query.request_committees {
+            info.requested_committees =
+                Some(self.chain.execution_state.system.committees.get().clone());
+        }
+        if let Some(owner) = query.request_owner_balance {
+            info.requested_owner_balance = self
+                .chain
+                .execution_state
+                .system
+                .balances
+                .get(&owner)
+                .await?;
+        }
+        if let Some(next_block_height) = query.test_next_block_height {
+            ensure!(
+                self.chain.tip_state.get().next_block_height == next_block_height,
+                WorkerError::UnexpectedBlockHeight {
+                    expected_block_height: next_block_height,
+                    found_block_height: self.chain.tip_state.get().next_block_height
+                }
+            );
+        }
+        if query.request_pending_messages {
+            let mut messages = Vec::new();
+            let origins = self.chain.inboxes.indices().await?;
+            let inboxes = self.chain.inboxes.try_load_entries(&origins).await?;
+            let action = if *self.chain.execution_state.system.closed.get() {
+                MessageAction::Reject
+            } else {
+                MessageAction::Accept
+            };
+            for (origin, inbox) in origins.into_iter().zip(inboxes) {
+                for event in inbox.added_events.elements().await? {
+                    messages.push(IncomingMessage {
+                        origin: origin.clone(),
+                        event: event.clone(),
+                        action,
+                    });
+                }
+            }
+
+            info.requested_pending_messages = messages;
+        }
+        if let Some(range) = query.request_sent_certificates_in_range {
+            let start: usize = range.start.try_into()?;
+            let end = match range.limit {
+                None => self.chain.confirmed_log.count(),
+                Some(limit) => start
+                    .checked_add(usize::try_from(limit).map_err(|_| ArithmeticError::Overflow)?)
+                    .ok_or(ArithmeticError::Overflow)?
+                    .min(self.chain.confirmed_log.count()),
+            };
+            let keys = self.chain.confirmed_log.read(start..end).await?;
+            let certs = self.storage.read_certificates(keys).await?;
+            info.requested_sent_certificates = certs;
+        }
+        if let Some(start) = query.request_received_log_excluding_first_nth {
+            let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
+            info.requested_received_log = self.chain.received_log.read(start..).await?;
+        }
+        if let Some(hash) = query.request_hashed_certificate_value {
+            info.requested_hashed_certificate_value =
+                Some(self.storage.read_hashed_certificate_value(hash).await?);
+        }
+        if let Some(blob_id) = query.request_blob {
+            info.requested_blob = Some(self.storage.read_hashed_blob(blob_id).await?);
+        }
+        if query.request_manager_values {
+            info.manager.add_values(self.chain.manager.get());
+        }
+        let response = ChainInfoResponse::new(info, self.config.key_pair());
+        // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
+        let actions = self.create_network_actions().await?;
+        Ok((response, actions))
+    }
+
     /// Ensures that the current chain is active, returning an error otherwise.
     fn ensure_is_active(&mut self) -> Result<(), WorkerError> {
         if !self.knows_chain_is_active {
@@ -243,6 +363,82 @@ where
             self.knows_chain_is_active = true;
         }
         Ok(())
+    }
+
+    /// Loads pending cross-chain requests.
+    async fn create_network_actions(&self) -> Result<NetworkActions, WorkerError> {
+        let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
+        let targets = self.chain.outboxes.indices().await?;
+        let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
+        for (target, outbox) in targets.into_iter().zip(outboxes) {
+            let heights = outbox.queue.elements().await?;
+            heights_by_recipient
+                .entry(target.recipient)
+                .or_default()
+                .insert(target.medium, heights);
+        }
+        let mut actions = NetworkActions::default();
+        for (recipient, height_map) in heights_by_recipient {
+            let request = self
+                .create_cross_chain_request(height_map.into_iter().collect(), recipient)
+                .await?;
+            actions.cross_chain_requests.push(request);
+        }
+        Ok(actions)
+    }
+
+    /// Creates an `UpdateRecipient` request that informs the `recipient` about new
+    /// cross-chain messages from this chain.
+    async fn create_cross_chain_request(
+        &self,
+        height_map: Vec<(Medium, Vec<BlockHeight>)>,
+        recipient: ChainId,
+    ) -> Result<CrossChainRequest, WorkerError> {
+        // Load all the certificates we will need, regardless of the medium.
+        let heights =
+            BTreeSet::from_iter(height_map.iter().flat_map(|(_, heights)| heights).copied());
+        let heights_usize = heights
+            .iter()
+            .copied()
+            .map(usize::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        let hashes = self
+            .chain
+            .confirmed_log
+            .multi_get(heights_usize.clone())
+            .await?
+            .into_iter()
+            .zip(heights_usize)
+            .map(|(maybe_hash, height)| {
+                maybe_hash.ok_or_else(|| ViewError::not_found("confirmed log entry", height))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let certificates = self.storage.read_certificates(hashes).await?;
+        let certificates = heights
+            .into_iter()
+            .zip(certificates)
+            .collect::<HashMap<_, _>>();
+        // For each medium, select the relevant messages.
+        let bundle_vecs = height_map
+            .into_iter()
+            .map(|(medium, heights)| {
+                let bundles = heights
+                    .into_iter()
+                    .map(|height| {
+                        certificates
+                            .get(&height)?
+                            .message_bundle_for(&medium, recipient)
+                    })
+                    .collect::<Option<_>>()?;
+                Some((medium, bundles))
+            })
+            .collect::<Option<_>>()
+            .ok_or_else(|| ChainError::InternalError("missing certificates".to_string()))?;
+        Ok(CrossChainRequest::UpdateRecipient {
+            sender: self.chain.chain_id(),
+            recipient,
+            bundle_vecs,
+        })
     }
 }
 
