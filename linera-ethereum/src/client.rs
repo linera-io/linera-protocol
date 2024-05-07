@@ -80,7 +80,7 @@ impl EthereumEndpoint {
             .address(contract_address)
             .event(&event_name)
             .from_block(starting_block);
-        let events = provider.get_logs(&filter).await?;
+        let events  = provider.get_logs(&filter).await?;
         let events = events
             .into_iter()
             .map(|x| parse_log(event_name_expanded, x))

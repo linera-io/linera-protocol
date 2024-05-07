@@ -3,15 +3,14 @@
 
 use std::num::ParseIntError;
 
-//use ethers::types::{Log, U256};
-//use ethers_core::types::{Address, H256};
 use num_bigint::{BigInt, BigUint};
-use alloy::primitives::{U256, Address, Log};
+use alloy::primitives::{U256, Address};
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use alloy_primitives::B256;
 use alloy::rpc::json_rpc;
+use alloy::rpc::types::eth::Log;
 
 #[derive(Debug, Error)]
 pub enum EthereumServiceError {
@@ -76,12 +75,12 @@ pub fn event_name_from_expanded(event_name_expanded: &str) -> String {
 
 fn parse_entry(entry: B256, ethereum_type: &str) -> Result<EthereumDataType, EthereumServiceError> {
     if ethereum_type == "address" {
-        let address = Address::from(entry);
+        let address = Address::from_word(entry);
         let address = format!("{:?}", address);
         return Ok(EthereumDataType::Address(address));
     }
     if ethereum_type == "uint256" {
-        let entry = U256::from_big_endian(&entry.0);
+        let entry = U256::from_be_bytes(entry.0);
         return Ok(EthereumDataType::Uint256(entry));
     }
     if ethereum_type == "uint64" {
@@ -169,11 +168,13 @@ pub fn parse_log(
     let mut idx_topic = 0;
     let mut idx_data = 0;
     let mut vec = [0_u8; 32];
+    let log_data = log.data();
+    let topics = log_data.topics();
     for ethereum_type in ethereum_types {
         values.push(match ethereum_type.strip_suffix(" indexed") {
             None => {
                 for (i, val) in vec.iter_mut().enumerate() {
-                    *val = log.data[idx_data * 32 + i];
+                    *val = log_data.data[idx_data * 32 + i];
                 }
                 idx_data += 1;
                 let entry = vec.into();
@@ -181,12 +182,11 @@ pub fn parse_log(
             }
             Some(ethereum_type) => {
                 idx_topic += 1;
-                parse_entry(log.topics[idx_topic], ethereum_type)?
+                parse_entry(topics[idx_topic], ethereum_type)?
             }
         });
     }
     let block_number = log.block_number.unwrap();
-    let block_number = block_number.0[0];
     Ok(EthereumEvent {
         values,
         block_number,
