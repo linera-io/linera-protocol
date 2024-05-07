@@ -72,8 +72,7 @@ jobs:
         cargo test --locked --no-run
     - name: Compile `linera-core` for the browser
       run: |
-        cargo test -p linera-core \
-          --no-run \
+        cargo build -p linera-core \
           --locked \
           --target wasm32-unknown-unknown \
           --no-default-features \
