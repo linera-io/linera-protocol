@@ -479,13 +479,12 @@ where
         chain_id: ChainId,
         bytecode_id: BytecodeId,
     ) -> Result<Option<BytecodeLocation>, WorkerError> {
-        ChainWorkerState::new(
-            self.chain_worker_config.clone(),
-            self.storage.clone(),
-            chain_id,
-        )
-        .await?
-        .read_bytecode_location(bytecode_id)
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::ReadBytecodeLocation {
+                bytecode_id,
+                callback,
+            }
+        })
         .await
     }
 
