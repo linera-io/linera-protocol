@@ -924,13 +924,9 @@ where
         chain_id: ChainId,
         height: BlockHeight,
     ) -> Result<Option<Certificate>, WorkerError> {
-        ChainWorkerState::new(
-            self.chain_worker_config.clone(),
-            self.storage.clone(),
-            chain_id,
-        )
-        .await?
-        .read_certificate(height)
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::ReadCertificate { height, callback }
+        })
         .await
     }
 
