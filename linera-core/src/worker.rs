@@ -509,10 +509,13 @@ where
         chain_id: ChainId,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, WorkerError> {
-        self.create_chain_worker(chain_id)
-            .await?
-            .describe_application(application_id)
-            .await
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::DescribeApplication {
+                application_id,
+                callback,
+            }
+        })
+        .await
     }
 
     /// Processes a confirmed block (aka a commit).
