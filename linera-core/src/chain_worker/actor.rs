@@ -4,16 +4,23 @@
 //! An actor that runs a chain worker.
 
 use linera_base::identifiers::ChainId;
+use linera_chain::data_types::{Block, ExecutedBlock};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tracing::{instrument, trace};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState};
-use crate::worker::WorkerError;
+use crate::{data_types::ChainInfoResponse, worker::WorkerError};
 
 /// A request for the [`ChainWorkerActor`].
-pub enum ChainWorkerRequest {}
+pub enum ChainWorkerRequest {
+    /// Execute a block but discard any changes to the chain state.
+    StageBlockExecution {
+        block: Block,
+        callback: oneshot::Sender<Result<(ExecutedBlock, ChainInfoResponse), WorkerError>>,
+    },
+}
 
 /// The actor worker type.
 pub struct ChainWorkerActor<StorageClient>
@@ -56,7 +63,11 @@ where
         trace!("Starting `ChainWorkerActor`");
 
         while let Some(request) = self.incoming_requests.recv().await {
-            match request {}
+            match request {
+                ChainWorkerRequest::StageBlockExecution { block, callback } => {
+                    let _ = callback.send(self.worker.stage_block_execution(block).await);
+                }
+            }
         }
 
         trace!("`ChainWorkerActor` finished");
