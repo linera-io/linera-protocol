@@ -30,7 +30,10 @@ use {
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState};
 use crate::{
-    data_types::ChainInfoResponse, value_cache::ValueCache, worker::WorkerError, JoinSetExt as _,
+    data_types::{ChainInfoQuery, ChainInfoResponse},
+    value_cache::ValueCache,
+    worker::{NetworkActions, WorkerError},
+    JoinSetExt as _,
 };
 
 /// A request for the [`ChainWorkerActor`].
@@ -88,6 +91,12 @@ pub enum ChainWorkerRequest {
     ConfirmUpdatedRecipient {
         latest_heights: Vec<(Target, BlockHeight)>,
         callback: oneshot::Sender<Result<BlockHeight, WorkerError>>,
+    },
+
+    /// Handle a [`ChainInfoQuery`].
+    HandleChainInfoQuery {
+        query: ChainInfoQuery,
+        callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 }
 
@@ -197,6 +206,9 @@ where
                 } => {
                     let _ =
                         callback.send(self.worker.confirm_updated_recipient(latest_heights).await);
+                }
+                ChainWorkerRequest::HandleChainInfoQuery { query, callback } => {
+                    let _ = callback.send(self.worker.handle_chain_info_query(query).await);
                 }
             }
         }
