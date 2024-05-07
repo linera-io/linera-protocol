@@ -619,10 +619,10 @@ where
         chain_id: ChainId,
         height: BlockHeight,
     ) -> Result<Option<Certificate>, WorkerError> {
-        self.create_chain_worker(chain_id)
-            .await?
-            .read_certificate(height)
-            .await
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::ReadCertificate { height, callback }
+        })
+        .await
     }
 
     /// Returns an [`IncomingMessage`] that's awaiting to be received by the chain specified by
