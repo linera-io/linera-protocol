@@ -895,13 +895,11 @@ where
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, query);
-        let result = async move {
-            self.create_chain_worker(query.chain_id)
-                .await?
-                .handle_chain_info_query(query)
-                .await
-        }
-        .await;
+        let result = self
+            .query_chain_worker(query.chain_id, move |callback| {
+                ChainWorkerRequest::HandleChainInfoQuery { query, callback }
+            })
+            .await;
         trace!("{} --> {:?}", self.nickname, result);
         result
     }
