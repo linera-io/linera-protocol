@@ -1065,20 +1065,16 @@ where
         };
         let origin = Origin { sender, medium };
 
-        let mut chain = self.storage.load_active_chain(chain_id).await?;
-        let mut inbox = chain.inboxes.try_load_entry_mut(&origin).await?;
-
-        let certificate_hash = certificate.hash();
-        let Some(event) = inbox
-            .added_events
-            .iter_mut()
+        let Some(event) = self
+            .create_chain_worker(chain_id)
             .await?
-            .find(|event| {
-                event.certificate_hash == certificate_hash
-                    && event.height == message_id.height
-                    && event.index == message_id.index
-            })
-            .cloned()
+            .find_event_in_inbox(
+                origin.clone(),
+                certificate.hash(),
+                message_id.height,
+                message_id.index,
+            )
+            .await?
         else {
             return Ok(None);
         };
