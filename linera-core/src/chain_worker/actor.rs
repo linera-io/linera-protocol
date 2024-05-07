@@ -10,7 +10,9 @@ use linera_base::{
     data_types::{BlockHeight, HashedBlob},
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types::{Block, ExecutedBlock, HashedCertificateValue, Target};
+use linera_chain::data_types::{
+    Block, ExecutedBlock, HashedCertificateValue, MessageBundle, Origin, Target,
+};
 use linera_execution::{Query, Response, UserApplicationDescription, UserApplicationId};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -43,6 +45,13 @@ pub enum ChainWorkerRequest {
     StageBlockExecution {
         block: Block,
         callback: oneshot::Sender<Result<(ExecutedBlock, ChainInfoResponse), WorkerError>>,
+    },
+
+    /// Process a cross-chain update.
+    ProcessCrossChainUpdate {
+        origin: Origin,
+        bundles: Vec<MessageBundle>,
+        callback: oneshot::Sender<Result<Option<BlockHeight>, WorkerError>>,
     },
 
     /// Handle cross-chain request to confirm that the recipient was updated.
@@ -115,6 +124,17 @@ where
                 }
                 ChainWorkerRequest::StageBlockExecution { block, callback } => {
                     let _ = callback.send(self.worker.stage_block_execution(block).await);
+                }
+                ChainWorkerRequest::ProcessCrossChainUpdate {
+                    origin,
+                    bundles,
+                    callback,
+                } => {
+                    let _ = callback.send(
+                        self.worker
+                            .process_cross_chain_update(origin, bundles)
+                            .await,
+                    );
                 }
                 ChainWorkerRequest::ConfirmUpdatedRecipient {
                     latest_heights,
