@@ -10,8 +10,6 @@ use linera_base::{
     data_types::{BlockHeight, HashedBlob},
     identifiers::{BlobId, ChainId},
 };
-#[cfg(with_testing)]
-use linera_chain::data_types::Certificate;
 use linera_chain::data_types::{
     Block, ExecutedBlock, HashedCertificateValue, MessageBundle, Origin, Target,
 };
@@ -23,6 +21,11 @@ use tokio::{
     task::JoinSet,
 };
 use tracing::{instrument, trace};
+#[cfg(with_testing)]
+use {
+    linera_base::identifiers::BytecodeId, linera_chain::data_types::Certificate,
+    linera_execution::BytecodeLocation,
+};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState};
 use crate::{
@@ -42,6 +45,13 @@ pub enum ChainWorkerRequest {
     QueryApplication {
         query: Query,
         callback: oneshot::Sender<Result<Response, WorkerError>>,
+    },
+
+    /// Read the [`BytecodeLocation`] for a requested [`BytecodeId`].
+    #[cfg(with_testing)]
+    ReadBytecodeLocation {
+        bytecode_id: BytecodeId,
+        callback: oneshot::Sender<Result<Option<BytecodeLocation>, WorkerError>>,
     },
 
     /// Describe an application.
@@ -128,6 +138,13 @@ where
                 }
                 ChainWorkerRequest::QueryApplication { query, callback } => {
                     let _ = callback.send(self.worker.query_application(query).await);
+                }
+                #[cfg(with_testing)]
+                ChainWorkerRequest::ReadBytecodeLocation {
+                    bytecode_id,
+                    callback,
+                } => {
+                    let _ = callback.send(self.worker.read_bytecode_location(bytecode_id).await);
                 }
                 ChainWorkerRequest::DescribeApplication {
                     application_id,
