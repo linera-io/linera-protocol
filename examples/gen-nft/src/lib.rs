@@ -192,8 +192,7 @@ pub enum Operation {
     /// Mints a token
     Mint {
         minter: AccountOwner,
-        name: String,
-        payload: Vec<u8>,
+        prompt: String,
     },
     /// Transfers a token from a (locally owned) account to a (possibly remote) account.
     Transfer {
@@ -231,9 +230,8 @@ pub enum Message {
 pub struct Nft {
     pub token_id: TokenId,
     pub owner: AccountOwner,
-    pub name: String,
+    pub prompt: String,
     pub minter: AccountOwner,
-    pub payload: Vec<u8>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, SimpleObject, PartialEq, Eq)]
@@ -241,9 +239,8 @@ pub struct Nft {
 pub struct NftOutput {
     pub token_id: String,
     pub owner: AccountOwner,
-    pub name: String,
+    pub prompt: String,
     pub minter: AccountOwner,
-    pub payload: Vec<u8>,
 }
 
 impl NftOutput {
@@ -253,9 +250,8 @@ impl NftOutput {
         Self {
             token_id,
             owner: nft.owner,
-            name: nft.name,
+            prompt: nft.prompt,
             minter: nft.minter,
-            payload: nft.payload,
         }
     }
 
@@ -263,9 +259,8 @@ impl NftOutput {
         Self {
             token_id,
             owner: nft.owner,
-            name: nft.name,
+            prompt: nft.prompt,
             minter: nft.minter,
-            payload: nft.payload,
         }
     }
 }
@@ -280,9 +275,8 @@ impl Nft {
     pub fn create_token_id(
         chain_id: &ChainId,
         application_id: &ApplicationId,
-        name: &String,
+        prompt: &String,
         minter: &AccountOwner,
-        payload: &Vec<u8>,
         num_minted_nfts: u64,
     ) -> Result<TokenId, bcs::Error> {
         use sha3::Digest as _;
@@ -290,10 +284,8 @@ impl Nft {
         let mut hasher = sha3::Sha3_256::new();
         hasher.update(chain_id.to_bcs_bytes()?);
         hasher.update(application_id.to_bcs_bytes()?);
-        hasher.update(name);
-        hasher.update(name.len().to_bcs_bytes()?);
+        hasher.update(prompt);
         hasher.update(minter.to_bcs_bytes()?);
-        hasher.update(payload);
         hasher.update(num_minted_nfts.to_bcs_bytes()?);
 
         Ok(TokenId {

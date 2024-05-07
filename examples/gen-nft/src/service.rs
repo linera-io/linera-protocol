@@ -3,26 +3,32 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
+mod model;
 mod state;
+mod token;
+mod random;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
-use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
+use async_graphql::{Context, EmptySubscription, Object, Request, Response, Schema};
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use fungible::Account;
+use gen_nft::{NftOutput, Operation, TokenId};
 use linera_sdk::{
     base::{AccountOwner, WithServiceAbi},
     Service, ServiceRuntime,
 };
-use gen_nft::{NftOutput, Operation, TokenId};
+use log::info;
 
 use self::state::GenNft;
+use crate::model::ModelContext;
 
 pub struct GenNftService {
     state: Arc<GenNft>,
+    runtime: Arc<Mutex<ServiceRuntime<Self>>>,
 }
 
 linera_sdk::service!(GenNftService);
@@ -35,13 +41,15 @@ impl Service for GenNftService {
     type State = GenNft;
     type Parameters = ();
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Self {
+    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Self {
         GenNftService {
             state: Arc::new(state),
+            runtime: Arc::new(Mutex::new(runtime)),
         }
     }
 
     async fn handle_query(&self, request: Request) -> Response {
+        let runtime = self.runtime.clone();
         let schema = Schema::build(
             QueryRoot {
                 non_fungible_token: self.state.clone(),
@@ -49,6 +57,7 @@ impl Service for GenNftService {
             MutationRoot,
             EmptySubscription,
         )
+        .data(runtime)
         .finish();
         schema.execute(request).await
     }
@@ -146,19 +155,30 @@ impl QueryRoot {
 
         result
     }
+
+    async fn prompt(&self, ctx: &Context<'_>, prompt: String) -> String {
+        let runtime = ctx
+            .data::<Arc<Mutex<ServiceRuntime<GenNftService>>>>()
+            .unwrap();
+        let runtime = runtime.lock().unwrap();
+        info!("prompt: {}", prompt);
+        let raw_weights = runtime.fetch_url("http://localhost:10001/model.bin");
+        info!("got weights: {}B", raw_weights.len());
+        let tokenizer_bytes = runtime.fetch_url("http://localhost:10001/tokenizer.json");
+        let model_context = ModelContext {
+            model: raw_weights,
+            tokenizer: tokenizer_bytes,
+        };
+        model_context.run_model(&prompt).unwrap()
+    }
 }
 
 struct MutationRoot;
 
 #[Object]
 impl MutationRoot {
-    async fn mint(&self, minter: AccountOwner, name: String, payload: Vec<u8>) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Mint {
-            minter,
-            name,
-            payload,
-        })
-        .unwrap()
+    async fn mint(&self, minter: AccountOwner, prompt: String) -> Vec<u8> {
+        bcs::to_bytes(&Operation::Mint { minter, prompt }).unwrap()
     }
 
     async fn transfer(

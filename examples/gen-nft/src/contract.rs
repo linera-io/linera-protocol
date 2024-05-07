@@ -8,11 +8,11 @@ mod state;
 use std::collections::BTreeSet;
 
 use fungible::Account;
+use gen_nft::{GenNftAbi, Message, Nft, Operation, TokenId};
 use linera_sdk::{
     base::{AccountOwner, WithContractAbi},
     Contract, ContractRuntime,
 };
-use gen_nft::{Message, Nft, GenNftAbi, Operation, TokenId};
 
 use self::state::GenNft;
 
@@ -49,13 +49,9 @@ impl Contract for GenNftContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
-            Operation::Mint {
-                minter,
-                name,
-                payload,
-            } => {
+            Operation::Mint { minter, prompt } => {
                 self.check_account_authentication(minter);
-                self.mint(minter, name, payload).await;
+                self.mint(minter, prompt).await;
             }
 
             Operation::Transfer {
@@ -173,13 +169,12 @@ impl GenNftContract {
             .expect("NFT {token_id} not found")
     }
 
-    async fn mint(&mut self, owner: AccountOwner, name: String, payload: Vec<u8>) {
+    async fn mint(&mut self, owner: AccountOwner, prompt: String) {
         let token_id = Nft::create_token_id(
             &self.runtime.chain_id(),
             &self.runtime.application_id().forget_abi(),
-            &name,
+            &prompt,
             &owner,
-            &payload,
             *self.state.num_minted_nfts.get(),
         )
         .expect("Failed to serialize NFT metadata");
@@ -187,9 +182,8 @@ impl GenNftContract {
         self.add_nft(Nft {
             token_id,
             owner,
-            name,
+            prompt,
             minter: owner,
-            payload,
         })
         .await;
 
