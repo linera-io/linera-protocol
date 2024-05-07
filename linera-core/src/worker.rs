@@ -660,14 +660,16 @@ where
         let origin = Origin { sender, medium };
 
         let Some(event) = self
-            .create_chain_worker(chain_id)
-            .await?
-            .find_event_in_inbox(
-                origin.clone(),
-                certificate.hash(),
-                message_id.height,
-                message_id.index,
-            )
+            .query_chain_worker(chain_id, {
+                let origin = origin.clone();
+                move |callback| ChainWorkerRequest::FindEventInInbox {
+                    inbox_id: origin,
+                    certificate_hash: certificate.hash(),
+                    height: message_id.height,
+                    index: message_id.index,
+                    callback,
+                }
+            })
             .await?
         else {
             return Ok(None);
