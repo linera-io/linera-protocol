@@ -507,9 +507,10 @@ where
         chain_id: ChainId,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, WorkerError> {
-        let mut chain = self.storage.load_active_chain(chain_id).await?;
-        let response = chain.describe_application(application_id).await?;
-        Ok(response)
+        self.create_chain_worker(chain_id)
+            .await?
+            .describe_application(application_id)
+            .await
     }
 
     /// Gets a reference to the [`KeyPair`], if available.
