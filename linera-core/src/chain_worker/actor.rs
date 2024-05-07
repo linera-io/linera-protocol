@@ -10,6 +10,8 @@ use linera_base::{
     data_types::{BlockHeight, HashedBlob},
     identifiers::{BlobId, ChainId},
 };
+#[cfg(with_testing)]
+use linera_chain::data_types::Certificate;
 use linera_chain::data_types::{
     Block, ExecutedBlock, HashedCertificateValue, MessageBundle, Origin, Target,
 };
@@ -29,6 +31,13 @@ use crate::{
 
 /// A request for the [`ChainWorkerActor`].
 pub enum ChainWorkerRequest {
+    /// Reads the certificate for a requested [`BlockHeight`].
+    #[cfg(with_testing)]
+    ReadCertificate {
+        height: BlockHeight,
+        callback: oneshot::Sender<Result<Option<Certificate>, WorkerError>>,
+    },
+
     /// Query an application's state.
     QueryApplication {
         query: Query,
@@ -113,6 +122,10 @@ where
 
         while let Some(request) = self.incoming_requests.recv().await {
             match request {
+                #[cfg(with_testing)]
+                ChainWorkerRequest::ReadCertificate { height, callback } => {
+                    let _ = callback.send(self.worker.read_certificate(height).await);
+                }
                 ChainWorkerRequest::QueryApplication { query, callback } => {
                     let _ = callback.send(self.worker.query_application(query).await);
                 }
