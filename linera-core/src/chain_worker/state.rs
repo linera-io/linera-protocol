@@ -8,7 +8,7 @@ use linera_chain::{
     data_types::{Block, ExecutedBlock},
     ChainStateView,
 };
-use linera_execution::{Query, Response};
+use linera_execution::{Query, Response, UserApplicationDescription, UserApplicationId};
 use linera_storage::Storage;
 use linera_views::views::{View, ViewError};
 
@@ -50,6 +50,16 @@ where
     pub async fn query_application(&mut self, query: Query) -> Result<Response, WorkerError> {
         self.ensure_is_active()?;
         let response = self.chain.query_application(query).await?;
+        Ok(response)
+    }
+
+    /// Returns an application's description.
+    pub async fn describe_application(
+        &mut self,
+        application_id: UserApplicationId,
+    ) -> Result<UserApplicationDescription, WorkerError> {
+        self.ensure_is_active()?;
+        let response = self.chain.describe_application(application_id).await?;
         Ok(response)
     }
 
