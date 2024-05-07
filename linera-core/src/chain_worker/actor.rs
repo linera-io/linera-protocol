@@ -5,7 +5,7 @@
 
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{Block, ExecutedBlock};
-use linera_execution::{Query, Response};
+use linera_execution::{Query, Response, UserApplicationDescription, UserApplicationId};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use tokio::sync::{mpsc, oneshot};
@@ -20,6 +20,12 @@ pub enum ChainWorkerRequest {
     QueryApplication {
         query: Query,
         callback: oneshot::Sender<Result<Response, WorkerError>>,
+    },
+
+    /// Describe an application.
+    DescribeApplication {
+        application_id: UserApplicationId,
+        callback: oneshot::Sender<Result<UserApplicationDescription, WorkerError>>,
     },
 
     /// Execute a block but discard any changes to the chain state.
@@ -73,6 +79,12 @@ where
             match request {
                 ChainWorkerRequest::QueryApplication { query, callback } => {
                     let _ = callback.send(self.worker.query_application(query).await);
+                }
+                ChainWorkerRequest::DescribeApplication {
+                    application_id,
+                    callback,
+                } => {
+                    let _ = callback.send(self.worker.describe_application(application_id).await);
                 }
                 ChainWorkerRequest::StageBlockExecution { block, callback } => {
                     let _ = callback.send(self.worker.stage_block_execution(block).await);
