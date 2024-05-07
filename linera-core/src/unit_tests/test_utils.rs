@@ -125,11 +125,11 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedCertificateValue>,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, blobs, sender)
+            validator.do_handle_certificate(certificate, hashed_certificate_values, sender)
         })
         .await
     }
@@ -256,7 +256,7 @@ where
     async fn do_handle_certificate(
         self,
         certificate: Certificate,
-        blobs: Vec<HashedCertificateValue>,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;
@@ -271,7 +271,7 @@ where
                 .state
                 .fully_handle_certificate_with_notifications(
                     certificate,
-                    blobs,
+                    hashed_certificate_values,
                     Some(&mut notifications),
                 )
                 .await

@@ -701,7 +701,7 @@ impl Runnable for Job {
                     .map(|certificate| {
                         HandleCertificateRequest {
                             certificate: certificate.clone(),
-                            blobs: vec![],
+                            hashed_certificate_values: vec![],
                             wait_for_outgoing_messages: true,
                         }
                         .into()
