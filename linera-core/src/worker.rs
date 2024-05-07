@@ -589,10 +589,14 @@ where
         recipient: ChainId,
         bundles: Vec<MessageBundle>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
-        self.create_chain_worker(recipient)
-            .await?
-            .process_cross_chain_update(origin, bundles)
-            .await
+        self.query_chain_worker(recipient, move |callback| {
+            ChainWorkerRequest::ProcessCrossChainUpdate {
+                origin,
+                bundles,
+                callback,
+            }
+        })
+        .await
     }
 
     /// Inserts a [`HashedCertificateValue`] into the worker's cache.
