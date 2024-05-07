@@ -8,6 +8,7 @@ use linera_chain::{
     data_types::{Block, ExecutedBlock},
     ChainStateView,
 };
+use linera_execution::{Query, Response};
 use linera_storage::Storage;
 use linera_views::views::{View, ViewError};
 
@@ -43,6 +44,13 @@ where
     /// Returns the [`ChainId`] of the chain handled by this worker.
     pub fn chain_id(&self) -> ChainId {
         self.chain.chain_id()
+    }
+
+    /// Queries an application's state on the chain.
+    pub async fn query_application(&mut self, query: Query) -> Result<Response, WorkerError> {
+        self.ensure_is_active()?;
+        let response = self.chain.query_application(query).await?;
+        Ok(response)
     }
 
     /// Executes a block without persisting any changes to the state.
