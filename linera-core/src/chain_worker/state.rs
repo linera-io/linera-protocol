@@ -3,14 +3,20 @@
 
 //! The state and functionality of a chain worker.
 
-use linera_base::{data_types::BlockHeight, identifiers::ChainId};
+use std::collections::BTreeMap;
+
+use linera_base::{data_types::BlockHeight, ensure, identifiers::ChainId};
 use linera_chain::{
-    data_types::{Block, ExecutedBlock, Target},
+    data_types::{Block, ExecutedBlock, MessageBundle, Origin, Target},
     ChainStateView,
 };
-use linera_execution::{Query, Response, UserApplicationDescription, UserApplicationId};
+use linera_execution::{
+    committee::{Committee, Epoch},
+    Query, Response, UserApplicationDescription, UserApplicationId,
+};
 use linera_storage::Storage;
 use linera_views::views::{RootView, View, ViewError};
+use tracing::{debug, warn};
 
 use super::ChainWorkerConfig;
 use crate::{data_types::ChainInfoResponse, worker::WorkerError};
@@ -102,6 +108,57 @@ where
         Ok((executed_block, response))
     }
 
+    /// Updates the chain's inboxes, receiving messages from a cross-chain update.
+    pub async fn process_cross_chain_update(
+        &mut self,
+        origin: Origin,
+        bundles: Vec<MessageBundle>,
+    ) -> Result<Option<BlockHeight>, WorkerError> {
+        // Only process certificates with relevant heights and epochs.
+        let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
+        let last_anticipated_block_height =
+            self.chain.last_anticipated_block_height(&origin).await?;
+        let helper = CrossChainUpdateHelper {
+            allow_messages_from_deprecated_epochs: self
+                .config
+                .allow_messages_from_deprecated_epochs,
+            current_epoch: *self.chain.execution_state.system.epoch.get(),
+            committees: self.chain.execution_state.system.committees.get(),
+        };
+        let recipient = self.chain_id();
+        let bundles = helper.select_message_bundles(
+            &origin,
+            recipient,
+            next_height_to_receive,
+            last_anticipated_block_height,
+            bundles,
+        )?;
+        let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
+            return Ok(None);
+        };
+        // Process the received messages in certificates.
+        let local_time = self.storage.clock().current_time();
+        for bundle in bundles {
+            // Update the staged chain state with the received block.
+            self.chain
+                .receive_message_bundle(&origin, bundle, local_time)
+                .await?
+        }
+        if !self.config.allow_inactive_chains && !self.chain.is_active() {
+            // Refuse to create a chain state if the chain is still inactive by
+            // now. Accordingly, do not send a confirmation, so that the
+            // cross-chain update is retried later.
+            warn!(
+                "Refusing to deliver messages to {recipient:?} from {origin:?} \
+                at height {last_updated_height} because the recipient is still inactive",
+            );
+            return Ok(None);
+        }
+        // Save the chain.
+        self.chain.save().await?;
+        Ok(Some(last_updated_height))
+    }
+
     /// Handles the cross-chain request confirming that the recipient was updated.
     pub async fn confirm_updated_recipient(
         &mut self,
@@ -133,5 +190,77 @@ where
             self.knows_chain_is_active = true;
         }
         Ok(())
+    }
+}
+
+/// Helper type for handling cross-chain updates.
+pub(crate) struct CrossChainUpdateHelper<'a> {
+    pub allow_messages_from_deprecated_epochs: bool,
+    pub current_epoch: Option<Epoch>,
+    pub committees: &'a BTreeMap<Epoch, Committee>,
+}
+
+impl<'a> CrossChainUpdateHelper<'a> {
+    /// Checks basic invariants and deals with repeated heights and deprecated epochs.
+    /// * Returns a range of message bundles that are both new to us and not relying on
+    /// an untrusted set of validators.
+    /// * In the case of validators, if the epoch(s) of the highest bundles are not
+    /// trusted, we only accept bundles that contain messages that were already
+    /// executed by anticipation (i.e. received in certified blocks).
+    /// * Basic invariants are checked for good measure. We still crucially trust
+    /// the worker of the sending chain to have verified and executed the blocks
+    /// correctly.
+    pub fn select_message_bundles(
+        &self,
+        origin: &'a Origin,
+        recipient: ChainId,
+        next_height_to_receive: BlockHeight,
+        last_anticipated_block_height: Option<BlockHeight>,
+        mut bundles: Vec<MessageBundle>,
+    ) -> Result<Vec<MessageBundle>, WorkerError> {
+        let mut latest_height = None;
+        let mut skipped_len = 0;
+        let mut trusted_len = 0;
+        for (i, bundle) in bundles.iter().enumerate() {
+            // Make sure that heights are increasing.
+            ensure!(
+                latest_height < Some(bundle.height),
+                WorkerError::InvalidCrossChainRequest
+            );
+            latest_height = Some(bundle.height);
+            // Check if the block has been received already.
+            if bundle.height < next_height_to_receive {
+                skipped_len = i + 1;
+            }
+            // Check if the height is trusted or the epoch is trusted.
+            if self.allow_messages_from_deprecated_epochs
+                || Some(bundle.height) <= last_anticipated_block_height
+                || Some(bundle.epoch) >= self.current_epoch
+                || self.committees.contains_key(&bundle.epoch)
+            {
+                trusted_len = i + 1;
+            }
+        }
+        if skipped_len > 0 {
+            let sample_bundle = &bundles[skipped_len - 1];
+            debug!(
+                "Ignoring repeated messages to {recipient:?} from {origin:?} at height {}",
+                sample_bundle.height,
+            );
+        }
+        if skipped_len < bundles.len() && trusted_len < bundles.len() {
+            let sample_bundle = &bundles[trusted_len];
+            warn!(
+                "Refusing messages to {recipient:?} from {origin:?} at height {} \
+                 because the epoch {:?} is not trusted any more",
+                sample_bundle.height, sample_bundle.epoch,
+            );
+        }
+        let certificates = if skipped_len < trusted_len {
+            bundles.drain(skipped_len..trusted_len).collect()
+        } else {
+            vec![]
+        };
+        Ok(certificates)
     }
 }
