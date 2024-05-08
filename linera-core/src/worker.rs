@@ -20,9 +20,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
-        ExecutedBlock, HashedCertificateValue, LiteCertificate, Medium, MessageBundle, Origin,
-        OutgoingMessage, Target,
+        Block, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
+        HashedCertificateValue, LiteCertificate, Medium, MessageBundle, Origin, OutgoingMessage,
+        Target,
     },
     manager, ChainError, ChainStateView,
 };
@@ -33,7 +33,7 @@ use linera_execution::{
 use linera_storage::Storage;
 use linera_views::{
     log_view::LogView,
-    views::{RootView, View, ViewError},
+    views::{RootView, ViewError},
 };
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
@@ -271,9 +271,6 @@ pub struct WorkerState<StorageClient> {
     storage: StorageClient,
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
-    /// Blocks with a timestamp this far in the future will still be accepted, but the validator
-    /// will wait until that timestamp before voting.
-    grace_period: Duration,
     /// Cached values by hash.
     recent_values: Arc<Mutex<LruCache<CryptoHash, HashedCertificateValue>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -293,7 +290,6 @@ impl<StorageClient> WorkerState<StorageClient> {
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
-            grace_period: Duration::ZERO,
             recent_values,
             delivery_notifiers: Arc::default(),
         }
@@ -309,7 +305,6 @@ impl<StorageClient> WorkerState<StorageClient> {
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
-            grace_period: Duration::ZERO,
             recent_values,
             delivery_notifiers,
         }
@@ -331,7 +326,7 @@ impl<StorageClient> WorkerState<StorageClient> {
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
     pub fn with_grace_period(mut self, grace_period: Duration) -> Self {
-        self.grace_period = grace_period;
+        self.chain_worker_config.grace_period = grace_period;
         self
     }
 
@@ -1013,101 +1008,21 @@ where
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, proposal);
-        let BlockProposal {
-            content: BlockAndRound { block, round },
-            owner,
-            blobs,
-            validated,
-            signature: _,
-        } = &proposal;
-        let chain_id = block.chain_id;
-        let mut chain = self.storage.load_active_chain(chain_id).await?;
-        // Check the epoch.
-        let (epoch, committee) = chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
-        Self::check_block_epoch(epoch, block)?;
-        if let Some(validated) = validated {
-            validated.check(committee)?;
-        }
-        // Check the authentication of the block.
-        let public_key = chain
-            .manager
-            .get()
-            .verify_owner(&proposal)
-            .ok_or(WorkerError::InvalidOwner)?;
-        proposal.check_signature(public_key)?;
-        // Check the authentication of the operations in the block.
-        if let Some(signer) = block.authenticated_signer {
-            ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
-        }
-        // Check if the chain is ready for this new block proposal.
-        // This should always pass for nodes without voting key.
-        chain.tip_state.get().verify_block_chaining(block)?;
-        if chain.manager.get().check_proposed_block(&proposal)? == manager::Outcome::Skip {
-            // If we just processed the same pending block, return the chain info unchanged.
-            return Ok((
-                ChainInfoResponse::new(&chain, self.key_pair()),
-                NetworkActions::default(),
-            ));
-        }
-        // Update the inboxes so that we can verify the provided blobs are legitimately required.
-        // Actual execution happens below, after other validity checks.
-        chain.remove_events_from_inboxes(block).await?;
-        // Verify that all required bytecode blobs are available, and no unrelated ones provided.
-        self.check_no_missing_bytecode(block, blobs).await?;
-        // Write the values so that the bytecode is available during execution.
-        self.storage.write_hashed_certificate_values(blobs).await?;
-        let local_time = self.storage.clock().current_time();
-        ensure!(
-            block.timestamp.duration_since(local_time) <= self.grace_period,
-            WorkerError::InvalidTimestamp
-        );
-        self.storage.clock().sleep_until(block.timestamp).await;
-        let local_time = self.storage.clock().current_time();
-        let outcome = if let Some(validated) = validated {
-            validated
-                .value()
-                .executed_block()
-                .ok_or_else(|| WorkerError::MissingExecutedBlockInProposal)?
-                .outcome
-                .clone()
-        } else {
-            chain.execute_block(block, local_time, None).await?
-        };
-        if round.is_fast() {
-            let mut records = outcome.oracle_records.iter();
-            ensure!(
-                records.all(|record| record.responses.is_empty()),
-                WorkerError::FastBlockUsingOracles
-            );
-        }
-        // Check if the counters of tip_state would be valid.
-        chain.tip_state.get().verify_counters(block, &outcome)?;
-        // Verify that the resulting chain would have no unconfirmed incoming messages.
-        chain.validate_incoming_messages().await?;
-        // Reset all the staged changes as we were only validating things.
-        chain.rollback();
-        // Create the vote and store it in the chain state.
-        let manager = chain.manager.get_mut();
         #[cfg(with_metrics)]
         let round = proposal.content.round;
-        manager.create_vote(proposal, outcome, self.key_pair(), local_time);
-        // Cache the value we voted on, so the client doesn't have to send it again.
-        if let Some(vote) = manager.pending() {
-            self.cache_validated(&vote.value).await;
-        }
-        let info = ChainInfoResponse::new(&chain, self.key_pair());
-        chain.save().await?;
-        // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
-        let actions = self.create_network_actions(&chain).await?;
+        let response = ChainWorkerState::new(
+            self.chain_worker_config.clone(),
+            self.storage.clone(),
+            proposal.content.block.chain_id,
+        )
+        .await?
+        .handle_block_proposal(proposal)
+        .await?;
         #[cfg(with_metrics)]
         NUM_ROUNDS_IN_BLOCK_PROPOSAL
             .with_label_values(&[round.type_name()])
             .observe(round.number() as f64);
-        Ok((info, actions))
+        Ok(response)
     }
 
     // Other fields will be included in handle_certificate's span.

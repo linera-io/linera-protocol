@@ -3,7 +3,10 @@
 
 //! The state and functionality of a chain worker.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet, HashMap},
+};
 
 use linera_base::{
     data_types::{ArithmeticError, BlockHeight},
@@ -12,10 +15,11 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, Certificate, CertificateValue, ExecutedBlock, IncomingMessage, Medium,
-        MessageAction, MessageBundle, Origin, Target,
+        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
+        HashedCertificateValue, IncomingMessage, Medium, MessageAction, MessageBundle, Origin,
+        Target,
     },
-    ChainError, ChainStateView,
+    manager, ChainError, ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -233,6 +237,107 @@ where
         Ok((info, actions))
     }
 
+    /// Handles a proposal for the next block for this chain.
+    pub async fn handle_proposal(
+        &mut self,
+        proposal: BlockProposal,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        let BlockProposal {
+            content: BlockAndRound { block, round },
+            owner,
+            blobs,
+            validated,
+            signature: _,
+        } = &proposal;
+        let chain_id = block.chain_id;
+        self.ensure_is_active()?;
+        // Check the epoch.
+        let (epoch, committee) = self
+            .chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        Self::check_block_epoch(epoch, block)?;
+        if let Some(validated) = validated {
+            validated.check(committee)?;
+        }
+        // Check the authentication of the block.
+        let public_key = self
+            .chain
+            .manager
+            .get()
+            .verify_owner(&proposal)
+            .ok_or(WorkerError::InvalidOwner)?;
+        proposal.check_signature(public_key)?;
+        // Check the authentication of the operations in the block.
+        if let Some(signer) = block.authenticated_signer {
+            ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
+        }
+        // Check if the chain is ready for this new block proposal.
+        // This should always pass for nodes without voting key.
+        self.chain.tip_state.get().verify_block_chaining(block)?;
+        if self.chain.manager.get().check_proposed_block(&proposal)? == manager::Outcome::Skip {
+            // If we just processed the same pending block, return the chain info unchanged.
+            return Ok((
+                ChainInfoResponse::new(&self.chain, self.config.key_pair()),
+                NetworkActions::default(),
+            ));
+        }
+        // Update the inboxes so that we can verify the provided blobs are legitimately required.
+        // Actual execution happens below, after other validity checks.
+        self.chain.remove_events_from_inboxes(block).await?;
+        // Verify that all required bytecode blobs are available, and no unrelated ones provided.
+        self.check_no_missing_bytecode(block, blobs).await?;
+        // Write the values so that the bytecode is available during execution.
+        self.storage.write_hashed_certificate_values(blobs).await?;
+        let local_time = self.storage.clock().current_time();
+        ensure!(
+            block.timestamp.duration_since(local_time) <= self.config.grace_period,
+            WorkerError::InvalidTimestamp
+        );
+        self.storage.clock().sleep_until(block.timestamp).await;
+        let local_time = self.storage.clock().current_time();
+        let outcome = if let Some(validated) = validated {
+            validated
+                .value()
+                .executed_block()
+                .ok_or_else(|| WorkerError::MissingExecutedBlockInProposal)?
+                .outcome
+                .clone()
+        } else {
+            self.chain.execute_block(block, local_time, None).await?
+        };
+        if round.is_fast() {
+            let mut records = outcome.oracle_records.iter();
+            ensure!(
+                records.all(|record| record.responses.is_empty()),
+                WorkerError::FastBlockUsingOracles
+            );
+        }
+        // Check if the counters of tip_state would be valid.
+        self.chain
+            .tip_state
+            .get()
+            .verify_counters(block, &outcome)?;
+        // Verify that the resulting chain would have no unconfirmed incoming messages.
+        self.chain.validate_incoming_messages().await?;
+        // Reset all the staged changes as we were only validating things.
+        self.chain.rollback();
+        // Create the vote and store it in the chain state.
+        let manager = self.chain.manager.get_mut();
+        manager.create_vote(proposal, outcome, self.config.key_pair(), local_time);
+        // Cache the value we voted on, so the client doesn't have to send it again.
+        if let Some(vote) = manager.pending() {
+            self.cache_validated(&vote.value).await;
+        }
+        let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
+        self.chain.save().await?;
+        // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
+        let actions = self.create_network_actions().await?;
+        Ok((info, actions))
+    }
+
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
     pub async fn process_cross_chain_update(
         &mut self,
@@ -416,6 +521,26 @@ where
             self.knows_chain_is_active = true;
         }
         Ok(())
+    }
+
+    pub async fn cache_recent_value<'a>(&mut self, value: Cow<'a, HashedCertificateValue>) -> bool {
+        let hash = value.hash();
+        let mut recent_values = self.recent_values.lock().await;
+        if recent_values.contains(&hash) {
+            return false;
+        }
+        // Cache the certificate so that clients don't have to send the value again.
+        recent_values.push(hash, value.into_owned());
+        true
+    }
+
+    /// Caches the validated block and the corresponding confirmed block.
+    async fn cache_validated(&mut self, value: &HashedCertificateValue) {
+        if self.cache_recent_value(Cow::Borrowed(value)).await {
+            if let Some(value) = value.validated_to_confirmed() {
+                self.cache_recent_value(Cow::Owned(value)).await;
+            }
+        }
     }
 
     /// Loads pending cross-chain requests.
