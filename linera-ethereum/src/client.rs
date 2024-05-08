@@ -11,6 +11,7 @@ use alloy::{
         BlockId, BlockNumberOrTag, Filter,
     },
 };
+
 use alloy_primitives::Bytes;
 use eyre::Result;
 
@@ -21,12 +22,11 @@ pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
 
 /// The Ethereum endpoint and its provider used for accessing the ethereum node.
 pub struct EthereumEndpoint<M> {
-    provider: M,
+    pub provider: M,
 }
 
-impl<M> EthereumEndpoint<M>
-where
-    M: Provider,
+//
+impl EthereumEndpoint<HttpProvider>
 {
     /// Lists all the accounts of the Ethereum node.
     pub async fn get_accounts(&self) -> Result<Vec<String>, EthereumServiceError> {
@@ -113,6 +113,7 @@ impl EthereumEndpoint<HttpProvider> {
     pub fn new(url: String) -> Result<Self, EthereumServiceError> {
         let rpc_url = reqwest::Url::parse(&url)?;
         let provider = ProviderBuilder::new().on_http(rpc_url);
-        Ok(Self { provider })
+        let endpoint = Self { provider };
+        Ok(endpoint)
     }
 }
