@@ -38,6 +38,7 @@ pub struct AnvilTest {
     pub anvil_instance: AnvilInstance,
     pub endpoint: String,
     pub ethereum_endpoint: EthereumEndpoint<HttpProvider>,
+    pub wallet_info: (LocalWallet, String),
     pub rpc_url: reqwest::Url,
     pub provider: FillProvider<JoinFill<JoinFill<JoinFill<JoinFill<alloy::providers::Identity, GasFiller>, NonceFiller>, ChainIdFiller>, SignerFiller<EthereumSigner>>, RootProvider<alloy::transports::http::Http<Client>>, alloy::transports::http::Http<Client>, Ethereum>,
 }
@@ -47,7 +48,10 @@ pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
     let anvil_instance = Anvil::new()
         .port(port)
         .try_spawn()?;
-    let wallet: LocalWallet = anvil_instance.keys()[0].clone().into();
+    let index = 0;
+    let wallet: LocalWallet = anvil_instance.keys()[index].clone().into();
+    let address = format!("{:?}", anvil_instance.addresses()[index]);
+    let wallet_info = (wallet.clone(), address);
     let endpoint = anvil_instance.endpoint();
     let ethereum_endpoint = EthereumEndpoint::new(endpoint.clone())?;
     let rpc_url = reqwest::Url::parse(&endpoint)?;
@@ -59,6 +63,7 @@ pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
         anvil_instance,
         endpoint,
         ethereum_endpoint,
+        wallet_info,
         rpc_url,
         provider,
     })
@@ -120,13 +125,15 @@ impl SimpleTokenContractFunction {
         Ok(balance)
     }
 
-    pub async fn transfer(&self, to: &str, value: U256) -> anyhow::Result<()> {
+    pub async fn transfer(&self, from: &str, to: &str, value: U256) -> anyhow::Result<()> {
         // 1: Getting the simple_token
         let contract_address = self.contract_address.parse::<Address>()?;
-        let simple_token = SimpleTokenContract::new(contract_address, self.anvil_test.provider.clone());
-        // 2: Doing the transfer
         let to_address = to.parse::<Address>()?;
-        let builder = simple_token.transfer(to_address, value);
+        let from_address = from.parse::<Address>()?;
+        let simple_token = SimpleTokenContract::new(contract_address, self.anvil_test.provider.clone());
+        // 3: Doing the transfer
+        let builder = simple_token.transfer(to_address, value)
+            .from(from_address);
         let _receipt = builder.send().await?.get_receipt().await?;
         Ok(())
     }

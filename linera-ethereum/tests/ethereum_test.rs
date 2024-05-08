@@ -74,24 +74,19 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
     let contract_address = simple_token.contract_address.clone();
     let addr0 = simple_token.anvil_test.get_address(0);
     let addr1 = simple_token.anvil_test.get_address(1);
-    println!("addr0={}", addr0);
-    println!("addr1={}", addr1);
 
     let balance0 = simple_token.balance_of(&addr0).await?;
     assert_eq!(balance0, U256::from(1000));
     let balance1 = simple_token.balance_of(&addr1).await?;
     assert_eq!(balance1, U256::from(0));
 
-    
     // Doing the transfer
     // We have to use a direct call since only non-executive operation
     // are done in the client. So, we use a direct call.
     // First await returns a PendingTransaction and the second does the
     // mining.
     let value = U256::from(10);
-    println!("Before the simple_token.transfer");
-    simple_token.transfer(&addr1, value).await?;
-    println!("After the simple_token.transfer");
+    simple_token.transfer(&addr0, &addr1, value).await?;
 
     // Test the Transfer entries
     let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
@@ -129,7 +124,7 @@ async fn test_simple_token_queries() -> anyhow::Result<()> {
     // First await returns a PendingTransaction and the second does the
     // mining.
     let value = U256::from(10);
-    simple_token.transfer(&addr1, value).await?;
+    simple_token.transfer(&addr0, &addr1, value).await?;
 
     // Checking the balances
     let balance0 = simple_token.balance_of(&addr0).await?;
