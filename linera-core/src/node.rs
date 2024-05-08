@@ -61,7 +61,7 @@ pub trait LocalValidatorNode {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedCertificateValue>,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 

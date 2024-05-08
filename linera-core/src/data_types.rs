@@ -68,8 +68,8 @@ pub struct ChainInfoQuery {
     pub request_leader_timeout: bool,
     /// Include a vote to switch to fallback mode, if appropriate.
     pub request_fallback: bool,
-    /// Query a value that contains a binary blob (e.g. bytecode) required by this chain.
-    pub request_blob: Option<CryptoHash>,
+    /// Query a value that contains a binary hashed certificate value (e.g. bytecode) required by this chain.
+    pub request_hashed_certificate_value: Option<CryptoHash>,
 }
 
 impl ChainInfoQuery {
@@ -85,7 +85,7 @@ impl ChainInfoQuery {
             request_manager_values: false,
             request_leader_timeout: false,
             request_fallback: false,
-            request_blob: None,
+            request_hashed_certificate_value: None,
         }
     }
 
@@ -134,8 +134,8 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_blob(mut self, hash: CryptoHash) -> Self {
-        self.request_blob = Some(hash);
+    pub fn with_hashed_certificate_value(mut self, hash: CryptoHash) -> Self {
+        self.request_hashed_certificate_value = Some(hash);
         self
     }
 }
@@ -173,8 +173,8 @@ pub struct ChainInfo {
     pub count_received_log: usize,
     /// The response to `request_received_certificates_excluding_first_nth`
     pub requested_received_log: Vec<ChainAndHeight>,
-    /// The requested blob, if any.
-    pub requested_blob: Option<HashedCertificateValue>,
+    /// The requested hashed certificate value, if any.
+    pub requested_hashed_certificate_value: Option<HashedCertificateValue>,
 }
 
 /// The response to an `ChainInfoQuery`
@@ -253,7 +253,7 @@ where
             requested_sent_certificates: Vec::new(),
             count_received_log: view.received_log.count(),
             requested_received_log: Vec::new(),
-            requested_blob: None,
+            requested_hashed_certificate_value: None,
         }
     }
 }

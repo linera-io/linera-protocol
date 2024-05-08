@@ -35,7 +35,7 @@ pub struct HandleLiteCertRequest<'a> {
 pub struct HandleCertificateRequest {
     pub certificate: linera_chain::data_types::Certificate,
     pub wait_for_outgoing_messages: bool,
-    pub blobs: Vec<linera_chain::data_types::HashedCertificateValue>,
+    pub hashed_certificate_values: Vec<linera_chain::data_types::HashedCertificateValue>,
 }
 
 pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("file_descriptor_set");

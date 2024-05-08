@@ -96,7 +96,7 @@ BlockProposal:
         TYPENAME: Owner
     - signature:
         TYPENAME: Signature
-    - blobs:
+    - hashed_certificate_values:
         SEQ:
           TYPENAME: CertificateValue
     - validated:
@@ -208,7 +208,7 @@ ChainInfo:
     - requested_received_log:
         SEQ:
           TYPENAME: ChainAndHeight
-    - requested_blob:
+    - requested_hashed_certificate_value:
         OPTION:
           TYPENAME: CertificateValue
 ChainInfoQuery:
@@ -231,7 +231,7 @@ ChainInfoQuery:
     - request_manager_values: BOOL
     - request_leader_timeout: BOOL
     - request_fallback: BOOL
-    - request_blob:
+    - request_hashed_certificate_value:
         OPTION:
           TYPENAME: CryptoHash
 ChainInfoResponse:
@@ -406,7 +406,7 @@ HandleCertificateRequest:
     - certificate:
         TYPENAME: Certificate
     - wait_for_outgoing_messages: BOOL
-    - blobs:
+    - hashed_certificate_values:
         SEQ:
           TYPENAME: CertificateValue
 HandleLiteCertRequest:

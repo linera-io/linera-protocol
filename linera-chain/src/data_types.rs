@@ -220,7 +220,7 @@ pub struct BlockProposal {
     pub content: BlockAndRound,
     pub owner: Owner,
     pub signature: Signature,
-    pub blobs: Vec<HashedCertificateValue>,
+    pub hashed_certificate_values: Vec<HashedCertificateValue>,
     pub validated: Option<Certificate>,
 }
 
@@ -799,7 +799,7 @@ impl BlockProposal {
     pub fn new(
         content: BlockAndRound,
         secret: &KeyPair,
-        blobs: Vec<HashedCertificateValue>,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
         validated: Option<Certificate>,
     ) -> Self {
         let outcome = validated
@@ -817,7 +817,7 @@ impl BlockProposal {
             content,
             owner: secret.public().into(),
             signature,
-            blobs,
+            hashed_certificate_values,
             validated,
         }
     }

@@ -139,8 +139,8 @@ message ChainInfoQuery {
   // Request a signed vote for a leader timeout.
   bool request_leader_timeout = 8;
 
-  // Query a value that contains a binary blob (e.g. bytecode) required by this chain.
-  optional bytes request_blob = 9;
+  // Query a value that contains a binary hashed certificate value (e.g. bytecode) required by this chain.
+  optional bytes request_hashed_certificate_value = 9;
 
   // Query the balance of a given owner.
   optional Owner request_owner_balance = 10;
@@ -164,7 +164,7 @@ message BlockProposal {
   Signature signature = 4;
 
   // Required bytecode
-  bytes blobs = 5;
+  bytes hashed_certificate_values = 5;
 
   // A certificate for a validated block that justifies the proposal in this round.
   optional bytes validated = 6;
@@ -205,7 +205,7 @@ message Certificate {
   bytes signatures = 4;
 
   // Other certificates containing bytecode required by the first one
-  bytes blobs = 5;
+  bytes hashed_certificate_values = 5;
 
   // Wait until all outgoing cross-chain messages from this certificate have
   // been received by the target chains.

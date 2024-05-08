@@ -728,25 +728,30 @@ where
         self.node_client
             .download_certificates(nodes.clone(), block.chain_id, block.height)
             .await?;
-        // Process the received operations. Download required blobs if necessary.
+        // Process the received operations. Download required hashed certificate values if necessary.
         if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
             if let LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
                 locations,
             )) = &err
             {
-                let blobs = future::join_all(locations.iter().map(|location| {
-                    LocalNodeClient::<S>::download_blob(nodes.clone(), block.chain_id, *location)
+                let values = future::join_all(locations.iter().map(|location| {
+                    LocalNodeClient::<S>::download_hashed_certificate_value(
+                        nodes.clone(),
+                        block.chain_id,
+                        *location,
+                    )
                 }))
                 .await
                 .into_iter()
                 .flatten()
                 .collect::<Vec<_>>();
-                if !blobs.is_empty() {
-                    self.process_certificate(certificate.clone(), blobs).await?;
+                if !values.is_empty() {
+                    self.process_certificate(certificate.clone(), values)
+                        .await?;
                 }
             }
             // The certificate is not as expected. Give up.
-            tracing::warn!("Failed to process network blob");
+            tracing::warn!("Failed to process network hashed certificate value");
             return Err(err.into());
         }
         // Make sure a quorum of validators (according to our new local committee) are up-to-date
@@ -973,11 +978,11 @@ where
     async fn process_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedCertificateValue>,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
     ) -> Result<(), LocalNodeError> {
         let info = self
             .node_client
-            .handle_certificate(certificate, blobs)
+            .handle_certificate(certificate, hashed_certificate_values)
             .await?
             .info;
         self.update_from_info(&info);
@@ -1123,12 +1128,12 @@ where
         } else {
             HashedCertificateValue::new_validated(executed_block)
         };
-        // Collect the blobs required for execution.
+        // Collect the hashed certificate values required for execution.
         let committee = self.local_committee().await?;
         let nodes = self.validator_node_provider.make_nodes(&committee)?;
-        let blobs = self
+        let values = self
             .node_client
-            .read_or_download_blobs(nodes, block.bytecode_locations())
+            .read_or_download_hashed_certificate_values(nodes, block.bytecode_locations())
             .await?;
         // Create the final block proposal.
         let key_pair = self.key_pair().await?;
@@ -1138,7 +1143,7 @@ where
                 round,
             },
             key_pair,
-            blobs,
+            values,
             validated,
         );
         // Check the final block proposal. This will be cheaper after #1401.

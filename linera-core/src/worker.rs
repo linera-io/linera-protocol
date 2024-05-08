@@ -121,7 +121,7 @@ pub trait ValidatorWorker {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedCertificateValue>,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
         notify_message_delivery: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
@@ -396,20 +396,26 @@ where
     pub async fn fully_handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedCertificateValue>,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        self.fully_handle_certificate_with_notifications(certificate, blobs, None)
-            .await
+        self.fully_handle_certificate_with_notifications(
+            certificate,
+            hashed_certificate_values,
+            None,
+        )
+        .await
     }
 
     #[inline]
     pub(crate) async fn fully_handle_certificate_with_notifications(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedCertificateValue>,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
         mut notifications: Option<&mut Vec<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let (response, actions) = self.handle_certificate(certificate, blobs, None).await?;
+        let (response, actions) = self
+            .handle_certificate(certificate, hashed_certificate_values, None)
+            .await?;
         if let Some(notifications) = notifications.as_mut() {
             notifications.extend(actions.notifications);
         }
@@ -592,7 +598,7 @@ where
     async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
-        blobs: &[HashedCertificateValue],
+        hashed_certificate_values: &[HashedCertificateValue],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
@@ -656,17 +662,19 @@ where
             tip.block_hash == block.previous_block_hash,
             WorkerError::InvalidBlockChaining
         );
-        // Verify that all required bytecode blobs are available, and no unrelated ones provided.
-        self.check_no_missing_bytecode(block, blobs).await?;
-        // Persist certificate and blobs.
-        for value in blobs {
+        // Verify that all required bytecode hashed certificate values are available, and no unrelated ones provided.
+        self.check_no_missing_bytecode(block, hashed_certificate_values)
+            .await?;
+        // Persist certificate and hashed certificate values.
+        for value in hashed_certificate_values {
             self.cache_recent_value(Cow::Borrowed(value)).await;
         }
-        let (result_blob, result_certificate) = tokio::join!(
-            self.storage.write_hashed_certificate_values(blobs),
+        let (result_hashed_certificate_value, result_certificate) = tokio::join!(
+            self.storage
+                .write_hashed_certificate_values(hashed_certificate_values),
             self.storage.write_certificate(&certificate)
         );
-        result_blob?;
+        result_hashed_certificate_value?;
         result_certificate?;
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
@@ -726,11 +734,11 @@ where
     }
 
     /// Returns an error if the block requires bytecode we don't have, or if unrelated bytecode
-    /// blobs were provided.
+    /// hashed certificate values were provided.
     async fn check_no_missing_bytecode(
         &self,
         block: &Block,
-        blobs: &[HashedCertificateValue],
+        hashed_certificate_values: &[HashedCertificateValue],
     ) -> Result<(), WorkerError> {
         let required_locations = block.bytecode_locations();
         // Find all certificates containing bytecode used when executing this block.
@@ -738,20 +746,23 @@ where
             .keys()
             .map(|bytecode_location| bytecode_location.certificate_hash)
             .collect();
-        for value in blobs {
+        for value in hashed_certificate_values {
             let value_hash = value.hash();
             ensure!(
                 required_hashes.remove(&value_hash),
                 WorkerError::UnneededValue { value_hash }
             );
         }
-        let blob_hashes: HashSet<_> = blobs.iter().map(|blob| blob.hash()).collect();
+        let value_hashes: HashSet<_> = hashed_certificate_values
+            .iter()
+            .map(|hashed_certificate_value| hashed_certificate_value.hash())
+            .collect();
         let recent_values = self.recent_values.lock().await;
         let tasks = required_locations
             .into_keys()
             .filter(|location| {
                 !recent_values.contains(&location.certificate_hash)
-                    && !blob_hashes.contains(&location.certificate_hash)
+                    && !value_hashes.contains(&location.certificate_hash)
             })
             .map(|location| {
                 self.storage
@@ -1074,7 +1085,7 @@ where
         let BlockProposal {
             content: BlockAndRound { block, round },
             owner,
-            blobs,
+            hashed_certificate_values,
             validated,
             signature: _,
         } = &proposal;
@@ -1111,13 +1122,16 @@ where
                 NetworkActions::default(),
             ));
         }
-        // Update the inboxes so that we can verify the provided blobs are legitimately required.
+        // Update the inboxes so that we can verify the provided hashed certificate values are legitimately required.
         // Actual execution happens below, after other validity checks.
         chain.remove_events_from_inboxes(block).await?;
-        // Verify that all required bytecode blobs are available, and no unrelated ones provided.
-        self.check_no_missing_bytecode(block, blobs).await?;
+        // Verify that all required bytecode hashed certificate values are available, and no unrelated ones provided.
+        self.check_no_missing_bytecode(block, hashed_certificate_values)
+            .await?;
         // Write the values so that the bytecode is available during execution.
-        self.storage.write_hashed_certificate_values(blobs).await?;
+        self.storage
+            .write_hashed_certificate_values(hashed_certificate_values)
+            .await?;
         let local_time = self.storage.clock().current_time();
         ensure!(
             block.timestamp.duration_since(local_time) <= self.grace_period,
@@ -1190,14 +1204,14 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedCertificateValue>,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
         ensure!(
-            certificate.value().is_confirmed() || blobs.is_empty(),
+            certificate.value().is_confirmed() || hashed_certificate_values.is_empty(),
             WorkerError::UnneededValue {
-                value_hash: blobs[0].hash(),
+                value_hash: hashed_certificate_values[0].hash(),
             }
         );
 
@@ -1232,7 +1246,7 @@ where
                 // Execute the confirmed block.
                 self.process_confirmed_block(
                     certificate,
-                    &blobs,
+                    &hashed_certificate_values,
                     notify_when_messages_are_delivered,
                 )
                 .await?
@@ -1351,8 +1365,9 @@ where
             let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
             info.requested_received_log = chain.received_log.read(start..).await?;
         }
-        if let Some(hash) = query.request_blob {
-            info.requested_blob = Some(self.storage.read_hashed_certificate_value(hash).await?);
+        if let Some(hash) = query.request_hashed_certificate_value {
+            info.requested_hashed_certificate_value =
+                Some(self.storage.read_hashed_certificate_value(hash).await?);
         }
         if query.request_manager_values {
             info.manager.add_values(chain.manager.get());
