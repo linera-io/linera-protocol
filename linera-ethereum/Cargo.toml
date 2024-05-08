@@ -17,9 +17,9 @@ features = ["ethereum"]
 ethereum = []
 
 [dependencies]
-anyhow.workspace = true
 alloy.workspace = true
 alloy-primitives.workspace = true
+anyhow.workspace = true
 linera-storage-service.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true
