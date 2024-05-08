@@ -11,7 +11,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::{
-    Block, ExecutedBlock, HashedCertificateValue, MessageBundle, Origin, Target,
+    Block, Certificate, ExecutedBlock, HashedCertificateValue, MessageBundle, Origin, Target,
 };
 use linera_execution::{Query, Response, UserApplicationDescription, UserApplicationId};
 use linera_storage::Storage;
@@ -23,8 +23,7 @@ use tokio::{
 use tracing::{instrument, trace};
 #[cfg(with_testing)]
 use {
-    linera_base::identifiers::BytecodeId,
-    linera_chain::data_types::{Certificate, Event},
+    linera_base::identifiers::BytecodeId, linera_chain::data_types::Event,
     linera_execution::BytecodeLocation,
 };
 
@@ -78,6 +77,12 @@ pub enum ChainWorkerRequest {
     StageBlockExecution {
         block: Block,
         callback: oneshot::Sender<Result<(ExecutedBlock, ChainInfoResponse), WorkerError>>,
+    },
+
+    /// Process a leader timeout issued for this multi-owner chain.
+    ProcessTimeout {
+        certificate: Certificate,
+        callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
     /// Process a cross-chain update.
@@ -188,6 +193,12 @@ where
                 }
                 ChainWorkerRequest::StageBlockExecution { block, callback } => {
                     let _ = callback.send(self.worker.stage_block_execution(block).await);
+                }
+                ChainWorkerRequest::ProcessTimeout {
+                    certificate,
+                    callback,
+                } => {
+                    let _ = callback.send(self.worker.process_timeout(certificate).await);
                 }
                 ChainWorkerRequest::ProcessCrossChainUpdate {
                     origin,
