@@ -73,23 +73,6 @@ impl AnvilTest {
     }
 }
 
-/*
-pub fn get_abi_bytecode(contract_file: &str, contract_name: &str) -> (usize, Bytes) {
-    let full_contract_file = format!("contracts/{}", contract_file);
-    let source = Path::new(&env!("CARGO_MANIFEST_DIR")).join(full_contract_file);
-    let compiled = Solc::default()
-        .compile_source(source)
-        .expect("Could not compile contracts");
-
-    // 2. Access to the contract that interests us
-    let (abi, bytecode, _runtime_bytecode) = compiled
-        .find(contract_name)
-        .expect("could not find contract")
-        .into_parts_or_default();
-    (abi, bytecode)
-}
-*/
-
 pub struct SimpleTokenContractFunction {
     pub contract_address: String,
     pub anvil_test: AnvilTest,
@@ -97,19 +80,18 @@ pub struct SimpleTokenContractFunction {
 
 impl SimpleTokenContractFunction {
     pub async fn new(anvil_test: AnvilTest) -> Result<Self> {
-        // 2. Reading the client
+        // 1: Creating a client
         let wallet_info = anvil_test.get_wallet(0);
 	let rpc_url = reqwest::Url::parse(&anvil_test.endpoint)?;
         let provider = ProviderBuilder::new()
             .with_recommended_fillers()
             .signer(EthereumSigner::from(wallet_info.0))
             .on_http(rpc_url);
-
+        // 2: initializing the contract
         let initial_supply = U256::from(1000);
         let simple_token = SimpleTokenContract::deploy(&provider, initial_supply).await?;
         let contract_address = simple_token.address();
         let contract_address = format!("{:?}", contract_address);
-
         Ok(Self {
             contract_address,
             anvil_test,
@@ -147,45 +129,28 @@ impl SimpleTokenContractFunction {
     }
 }
 
-/*
 pub struct EventNumericsContractFunction {
-    pub event_numerics: usize,
     pub contract_address: String,
     pub anvil_test: AnvilTest,
 }
 
 impl EventNumericsContractFunction {
     pub async fn new(anvil_test: AnvilTest) -> Result<Self> {
-        // 1. Getting the code
-        let (abi, bytecode) = get_abi_bytecode("event_numerics.sol", "EventNumerics");
-
-        // 2. Reading the client
+        // 1: Creating a client
         let wallet_info = anvil_test.get_wallet(0);
-        let client0 = SignerMiddleware::new(
-            anvil_test.ethereum_endpoint.provider.clone(),
-            wallet_info.0.clone(),
-        );
-        let client0 = Arc::new(client0);
-
-        // 3. Factory
-        let factory = ContractFactory::new(abi, bytecode, client0.clone());
-
-        // 6. deploy it with the constructor arguments, note the `legacy` call
-        let initial_supply = U256::zero();
-        let contract = factory.deploy(initial_supply)?.legacy().send().await?;
-
-        // 7. get the contract's address
-        let contract_address = contract.address();
-
-        // 8. instantiate the contract
-        let event_numerics = EventNumericsContract::new(contract_address, client0.clone());
+	let rpc_url = reqwest::Url::parse(&anvil_test.endpoint)?;
+        let provider = ProviderBuilder::new()
+            .with_recommended_fillers()
+            .signer(EthereumSigner::from(wallet_info.0))
+            .on_http(rpc_url);
+        // 2: Deploying the event numerics contract
+        let initial_supply = U256::from(0);
+        let event_numerics = EventNumericsContract::deploy(&provider, initial_supply).await?;
+        let contract_address = event_numerics.address();
         let contract_address = format!("{:?}", contract_address);
-
         Ok(Self {
-            event_numerics,
             contract_address,
             anvil_test,
         })
     }
 }
-*/
