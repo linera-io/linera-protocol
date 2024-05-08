@@ -1,26 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
 use alloy::{
     network::EthereumSigner, node_bindings::{Anvil, AnvilInstance}, primitives::U256, providers::ProviderBuilder,
     signers::wallet::LocalWallet, sol,
 };
 use alloy::signers::Signer;
 use linera_storage_service::child::get_free_port;
-//use alloy::providers::Provider;
 use crate::client::HttpProvider;
 use alloy_primitives::Bytes;
 use alloy_primitives::Address;
-//use crate::test_utils::SimpleTokenContract::SimpleTokenContractInstance;
-//use reqwest::Client;
-//use alloy::providers::fillers::FillProvider;
-//use alloy::providers::fillers::JoinFill;
-//use alloy::providers::fillers::GasFiller;
-//use alloy::providers::fillers::NonceFiller;
-//use alloy::providers::fillers::ChainIdFiller;
-//use alloy::providers::fillers::SignerFiller;
-//use alloy::providers::RootProvider;
 use crate::client::EthereumEndpoint;
 
 sol!(
@@ -44,7 +33,7 @@ pub struct AnvilTest {
     pub ethereum_endpoint: EthereumEndpoint<HttpProvider>,
 }
 
-pub async fn get_anvil() -> Result<AnvilTest> {
+pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
     let port = get_free_port().await?;
     let anvil_instance = Anvil::new()
         .port(port)
@@ -79,7 +68,7 @@ pub struct SimpleTokenContractFunction {
 }
 
 impl SimpleTokenContractFunction {
-    pub async fn new(anvil_test: AnvilTest) -> Result<Self> {
+    pub async fn new(anvil_test: AnvilTest) -> anyhow::Result<Self> {
         // 1: Creating a client
         let wallet_info = anvil_test.get_wallet(0);
 	let rpc_url = reqwest::Url::parse(&anvil_test.endpoint)?;
@@ -99,7 +88,7 @@ impl SimpleTokenContractFunction {
     }
 
     // Only the balanceOf operation is of interest for this contract
-    pub async fn balance_of(&self, to: &str) -> Result<U256> {
+    pub async fn balance_of(&self, to: &str) -> anyhow::Result<U256> {
         // 1: getting the provider
         let wallet_info = self.anvil_test.get_wallet(0);
 	let rpc_url = reqwest::Url::parse(&self.anvil_test.endpoint)?;
@@ -110,7 +99,6 @@ impl SimpleTokenContractFunction {
         // 2: getting the simple_token
         let contract_address = self.contract_address.parse::<Address>()?;
         let simple_token = SimpleTokenContract::new(contract_address, provider);
-
         // 3: gettting the balance transaction stuff
         let to_address = to.parse::<Address>()?;
         let data : Bytes = simple_token.balanceOf(to_address).calldata().clone();
@@ -127,6 +115,24 @@ impl SimpleTokenContractFunction {
         let balance = U256::from_be_bytes(vec);
         Ok(balance)
     }
+
+    pub async fn transfer(&self, to: &str, value: U256) -> anyhow::Result<()> {
+        // 1: Creating a client
+        let wallet_info = self.anvil_test.get_wallet(0);
+	let rpc_url = reqwest::Url::parse(&self.anvil_test.endpoint)?;
+        let provider = ProviderBuilder::new()
+            .with_recommended_fillers()
+            .signer(EthereumSigner::from(wallet_info.0))
+            .on_http(rpc_url);
+        // 2: Getting the simple_token
+        let contract_address = self.contract_address.parse::<Address>()?;
+        let simple_token = SimpleTokenContract::new(contract_address, provider);
+        // 3: Doing the transfer
+        let to_address = to.parse::<Address>()?;
+        let builder = simple_token.transfer(to_address, value);
+        let _receipt = builder.send().await?.get_receipt().await?;
+        Ok(())
+    }
 }
 
 pub struct EventNumericsContractFunction {
@@ -135,7 +141,7 @@ pub struct EventNumericsContractFunction {
 }
 
 impl EventNumericsContractFunction {
-    pub async fn new(anvil_test: AnvilTest) -> Result<Self> {
+    pub async fn new(anvil_test: AnvilTest) -> anyhow::Result<Self> {
         // 1: Creating a client
         let wallet_info = anvil_test.get_wallet(0);
 	let rpc_url = reqwest::Url::parse(&anvil_test.endpoint)?;

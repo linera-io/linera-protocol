@@ -3,8 +3,8 @@
 
 #[cfg(feature = "ethereum")]
 use {
-    ethers::types::U256,
-    ethers_core::types::Address,
+    std::str::FromStr,
+    alloy_primitives::U256,
     linera_ethereum::{
         common::{EthereumDataType, EthereumEvent},
         test_utils::{get_anvil, EventNumericsContractFunction, SimpleTokenContractFunction},
@@ -13,19 +13,19 @@ use {
 
 #[cfg(feature = "ethereum")]
 #[tokio::test]
-async fn test_get_accounts_balance() {
-    let anvil_test = get_anvil().await.unwrap();
+async fn test_get_accounts_balance() -> anyhow::Result<()> {
+    let anvil_test = get_anvil().await?;
     let ethereum_endpoint = anvil_test.ethereum_endpoint;
-    let addresses = ethereum_endpoint.get_accounts().await.unwrap();
-    let block_nr = ethereum_endpoint.get_block_number().await.unwrap();
-    let target_balance = U256::from_dec_str("10000000000000000000000").unwrap();
+    let addresses = ethereum_endpoint.get_accounts().await?;
+    let block_nr = ethereum_endpoint.get_block_number().await?;
+    let target_balance = U256::from_str("10000000000000000000000")?;
     for address in addresses {
         let balance = ethereum_endpoint
             .get_balance(&address, Some(block_nr))
-            .await
-            .unwrap();
+            .await?;
         assert_eq!(balance, target_balance);
     }
+    Ok(())
 }
 
 #[cfg(feature = "ethereum")]
@@ -44,7 +44,7 @@ async fn test_event_numerics() -> anyhow::Result<()> {
         .await?;
     let addr0 = event_numerics.anvil_test.get_address(0);
     let big_value =
-        U256::from_dec_str("239675476885367459284564394732743434463843674346373355625").unwrap();
+        U256::from_str("239675476885367459284564394732743434463843674346373355625")?;
     let target_event = EthereumEvent {
         values: vec![
             EthereumDataType::Address(addr0.clone()),
@@ -71,7 +71,7 @@ async fn test_event_numerics() -> anyhow::Result<()> {
 async fn test_simple_token_events() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
     let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
-    let contract_address = simple_token.contract_address;
+    let contract_address = simple_token.contract_address.clone();
     let addr0 = simple_token.anvil_test.get_address(0);
     let addr1 = simple_token.anvil_test.get_address(1);
 
@@ -80,15 +80,8 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
     // are done in the client. So, we use a direct call.
     // First await returns a PendingTransaction and the second does the
     // mining.
-    let value = U256::from_dec_str("10")?;
-    let addr1_address = addr1.parse::<Address>()?;
-    let _receipt = simple_token
-        .simple_token
-        .transfer(addr1_address, value)
-        .legacy()
-        .send()
-        .await?
-        .await?;
+    let value = U256::from(10);
+    simple_token.transfer(&addr1, value).await?;
 
     // Test the Transfer entries
     let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
@@ -97,7 +90,7 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
         .ethereum_endpoint
         .read_events(&contract_address, event_name_expanded, 0)
         .await?;
-    let value = U256::from_dec_str("10").unwrap();
+    let value = U256::from(10);
     let target_event = EthereumEvent {
         values: vec![
             EthereumDataType::Address(addr0),
@@ -125,22 +118,15 @@ async fn test_simple_token_queries() -> anyhow::Result<()> {
     // are done in the client. So, we use a direct call.
     // First await returns a PendingTransaction and the second does the
     // mining.
-    let value = U256::from_dec_str("10")?;
-    let addr1_address = addr1.parse::<Address>()?;
-    let _receipt = simple_token
-        .simple_token
-        .transfer(addr1_address, value)
-        .legacy()
-        .send()
-        .await?
-        .await?;
+    let value = U256::from(10);
+    simple_token.transfer(&addr1, value).await?;
 
     // Checking the balances
     let balance0 = simple_token.balance_of(&addr0).await?;
-    assert_eq!(balance0, U256::from_dec_str("990")?);
+    assert_eq!(balance0, U256::from(990));
     let balance1 = simple_token.balance_of(&addr1).await?;
-    assert_eq!(balance1, U256::from_dec_str("10")?);
+    assert_eq!(balance1, U256::from(10));
     let balance_contract = simple_token.balance_of(&contract_address).await?;
-    assert_eq!(balance_contract, U256::zero());
+    assert_eq!(balance_contract, U256::from(0));
     Ok(())
 }
