@@ -836,13 +836,12 @@ where
         let CertificateValue::Timeout { chain_id, .. } = certificate.value() else {
             panic!("Expecting a leader timeout certificate");
         };
-        ChainWorkerState::new(
-            self.chain_worker_config.clone(),
-            self.storage.clone(),
-            *chain_id,
-        )
-        .await?
-        .process_timeout(certificate)
+        self.query_chain_worker(*chain_id, move |callback| {
+            ChainWorkerRequest::ProcessTimeout {
+                certificate,
+                callback,
+            }
+        })
         .await
     }
 
