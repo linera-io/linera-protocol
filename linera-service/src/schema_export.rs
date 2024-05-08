@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use linera_base::{crypto::KeyPair, data_types::Timestamp, identifiers::ChainId};
+use linera_base::{
+    crypto::KeyPair,
+    data_types::{HashedBlob, Timestamp},
+    identifiers::ChainId,
+};
 use linera_chain::data_types::{
     BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
 };
@@ -52,6 +56,7 @@ impl ValidatorNode for DummyValidatorNode {
         &mut self,
         _: Certificate,
         _: Vec<HashedCertificateValue>,
+        _: Vec<HashedBlob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)

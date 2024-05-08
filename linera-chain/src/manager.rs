@@ -72,9 +72,9 @@ use std::collections::BTreeMap;
 
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, HashedBlob, Round, Timestamp},
     doc_scalar, ensure,
-    identifiers::{ChainId, Owner},
+    identifiers::{BlobId, ChainId, Owner},
     ownership::ChainOwnership,
 };
 use linera_execution::committee::Epoch;
@@ -134,6 +134,8 @@ pub struct ChainManager {
     pub current_round: Round,
     /// The owners that take over in fallback mode.
     pub fallback_owners: BTreeMap<Owner, (PublicKey, u64)>,
+    /// These are blobs belonging to proposed or validated blocks that have not been confirmed yet.
+    pub pending_blobs: BTreeMap<BlobId, HashedBlob>,
 }
 
 doc_scalar!(
@@ -202,6 +204,7 @@ impl ChainManager {
             round_timeout,
             current_round,
             fallback_owners,
+            pending_blobs: BTreeMap::new(),
         })
     }
 
@@ -404,6 +407,11 @@ impl ChainManager {
                 self.locked = Some(validated.clone());
             }
         }
+
+        for hashed_blob in proposal.hashed_blobs {
+            self.pending_blobs.insert(hashed_blob.id(), hashed_blob);
+        }
+
         if let Some(key_pair) = key_pair {
             let BlockAndRound { block, round } = proposal.content;
             let executed_block = outcome.with(block);
@@ -583,6 +591,8 @@ pub struct ChainManagerInfo {
     pub leader: Option<Owner>,
     /// The timestamp when the current round times out.
     pub round_timeout: Option<Timestamp>,
+    /// These are blobs belonging to proposed or validated blocks that have not been confirmed yet.
+    pub pending_blobs: BTreeMap<BlobId, HashedBlob>,
 }
 
 impl From<&ChainManager> for ChainManagerInfo {
@@ -600,6 +610,7 @@ impl From<&ChainManager> for ChainManagerInfo {
             current_round,
             leader: manager.round_leader(current_round).cloned(),
             round_timeout: manager.round_timeout,
+            pending_blobs: BTreeMap::new(),
         }
     }
 }
@@ -613,6 +624,7 @@ impl ChainManagerInfo {
             .pending
             .as_ref()
             .map(|vote| Box::new(vote.value.clone()));
+        self.pending_blobs = manager.pending_blobs.clone();
     }
 
     /// Returns the highest known validated block certificate.

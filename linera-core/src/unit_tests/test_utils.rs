@@ -126,10 +126,16 @@ where
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, hashed_certificate_values, sender)
+            validator.do_handle_certificate(
+                certificate,
+                hashed_certificate_values,
+                hashed_blobs,
+                sender,
+            )
         })
         .await
     }
@@ -238,6 +244,7 @@ where
                     .fully_handle_certificate_with_notifications(
                         cert,
                         vec![],
+                        vec![],
                         Some(&mut notifications),
                     )
                     .await
@@ -257,6 +264,7 @@ where
         self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;
@@ -272,6 +280,7 @@ where
                 .fully_handle_certificate_with_notifications(
                     certificate,
                     hashed_certificate_values,
+                    hashed_blobs,
                     Some(&mut notifications),
                 )
                 .await
@@ -616,6 +625,7 @@ where
             Timestamp::from(0),
             block_height,
             None,
+            BTreeMap::new(),
         ))
     }
 

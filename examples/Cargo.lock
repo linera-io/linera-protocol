@@ -2728,6 +2728,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex-game"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "linera-sdk",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "hex-literal"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2740,16 +2750,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
  "digest 0.10.7",
-]
-
-[[package]]
-name = "hex-game"
-version = "0.1.0"
-dependencies = [
- "async-graphql",
- "linera-sdk",
- "serde",
- "tokio",
 ]
 
 [[package]]

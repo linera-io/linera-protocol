@@ -173,6 +173,7 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
             hashed_certificate_values: bincode::serialize(
                 &block_proposal.hashed_certificate_values,
             )?,
+            blobs: bincode::serialize(&block_proposal.hashed_blobs)?,
             validated: block_proposal
                 .validated
                 .map(|cert| bincode::serialize(&cert))
@@ -197,6 +198,7 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
             hashed_certificate_values: bincode::deserialize(
                 &block_proposal.hashed_certificate_values,
             )?,
+            hashed_blobs: bincode::deserialize(&block_proposal.blobs)?,
             validated: block_proposal
                 .validated
                 .map(|bytes| bincode::deserialize(&bytes))
@@ -310,11 +312,13 @@ impl TryFrom<api::Certificate> for HandleCertificateRequest {
         );
         let signatures = bincode::deserialize(&cert_request.signatures)?;
         let values = bincode::deserialize(&cert_request.hashed_certificate_values)?;
+        let blobs = bincode::deserialize(&cert_request.blobs)?;
         let round = bincode::deserialize(&cert_request.round)?;
         Ok(HandleCertificateRequest {
             certificate: Certificate::new(value, round, signatures),
             wait_for_outgoing_messages: cert_request.wait_for_outgoing_messages,
             hashed_certificate_values: values,
+            hashed_blobs: blobs,
         })
     }
 }
@@ -329,6 +333,7 @@ impl TryFrom<HandleCertificateRequest> for api::Certificate {
             round: bincode::serialize(&request.certificate.round)?,
             signatures: bincode::serialize(request.certificate.signatures())?,
             hashed_certificate_values: bincode::serialize(&request.hashed_certificate_values)?,
+            blobs: bincode::serialize(&request.hashed_blobs)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
         })
     }
@@ -344,6 +349,10 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             .transpose()?;
         let request_hashed_certificate_value = chain_info_query
             .request_hashed_certificate_value
+            .map(|bytes| bincode::deserialize(&bytes))
+            .transpose()?;
+        let request_blob = chain_info_query
+            .request_blob
             .map(|bytes| bincode::deserialize(&bytes))
             .transpose()?;
 
@@ -363,6 +372,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             request_leader_timeout: chain_info_query.request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
             request_hashed_certificate_value,
+            request_blob,
         })
     }
 }
@@ -379,6 +389,10 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             .request_hashed_certificate_value
             .map(|hash| bincode::serialize(&hash))
             .transpose()?;
+        let request_blob = chain_info_query
+            .request_blob
+            .map(|blob_id| bincode::serialize(&blob_id))
+            .transpose()?;
 
         Ok(Self {
             chain_id: Some(chain_info_query.chain_id.into()),
@@ -393,6 +407,7 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             request_leader_timeout: chain_info_query.request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
             request_hashed_certificate_value,
+            request_blob,
         })
     }
 }
@@ -613,6 +628,7 @@ pub mod tests {
             count_received_log: 0,
             requested_received_log: vec![],
             requested_hashed_certificate_value: None,
+            requested_blob: None,
         });
 
         let chain_info_response_none = ChainInfoResponse {
@@ -650,6 +666,7 @@ pub mod tests {
             request_leader_timeout: false,
             request_fallback: true,
             request_hashed_certificate_value: None,
+            request_blob: None,
         };
         round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);
     }
@@ -703,6 +720,7 @@ pub mod tests {
         let request = HandleCertificateRequest {
             certificate,
             hashed_certificate_values: values,
+            hashed_blobs: vec![],
             wait_for_outgoing_messages: false,
         };
 
@@ -749,6 +767,7 @@ pub mod tests {
                 }
                 .with(get_block()),
             )],
+            hashed_blobs: vec![],
             validated: Some(Certificate::new(
                 HashedCertificateValue::new_validated(
                     BlockExecutionOutcome {

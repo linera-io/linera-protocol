@@ -18,8 +18,8 @@ use futures::{
 };
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
-    data_types::{Amount, ApplicationPermissions, TimeDelta, Timestamp},
-    identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
+    data_types::{Amount, ApplicationPermissions, Blob, TimeDelta, Timestamp},
+    identifiers::{ApplicationId, BlobId, BytecodeId, ChainId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
 };
@@ -616,6 +616,22 @@ where
                     .await
                     .map_err(Error::from)
                     .map(|outcome| outcome.map(|(bytecode_id, _)| bytecode_id));
+                (result, client)
+            }
+        })
+        .await
+    }
+
+    /// Publishes a new blob.
+    async fn publish_blob(&self, chain_id: ChainId, blob: Blob) -> Result<BlobId, Error> {
+        self.apply_client_command(&chain_id, move |mut client| {
+            let blob = blob.clone();
+            async move {
+                let result = client
+                    .publish_blob(blob.into_hashed())
+                    .await
+                    .map_err(Error::from)
+                    .map(|outcome| outcome.map(|(blob_id, _)| blob_id));
                 (result, client)
             }
         })

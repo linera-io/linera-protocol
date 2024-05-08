@@ -6,6 +6,7 @@ use std::{
     collections::{hash_map, BTreeMap, HashMap},
     convert::Infallible,
     iter,
+    num::NonZeroUsize,
     ops::Deref,
     sync::Arc,
 };
@@ -18,9 +19,11 @@ use futures::{
 use linera_base::{
     abi::Abi,
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Round, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, Round, Timestamp,
+    },
     ensure,
-    identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{Account, ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -36,11 +39,12 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation, UserData,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX, PUBLISH_BYTECODE_MESSAGE_INDEX,
     },
-    Bytecode, ExecutionError, Message, Operation, Query, Response, SystemExecutionError,
-    SystemMessage, SystemQuery, SystemResponse, UserApplicationId,
+    Bytecode, BytecodeLocation, ExecutionError, Message, Operation, Query, Response,
+    SystemExecutionError, SystemMessage, SystemQuery, SystemResponse, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
+use lru::LruCache;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, error, info};
@@ -56,7 +60,7 @@ use crate::{
     },
     notifier::Notifier,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
-    value_cache::CertificateValueCache,
+    value_cache::{CertificateValueCache, DEFAULT_VALUE_CACHE_SIZE},
     worker::{DeliveryNotifiers, Notification, Reason, WorkerError, WorkerState},
 };
 
@@ -74,8 +78,10 @@ pub struct ChainClientBuilder<ValidatorNodeProvider> {
     message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
     cross_chain_message_delivery: CrossChainMessageDelivery,
-    /// Cached values by hash.
-    recent_values: Arc<CertificateValueCache>,
+    /// Cached hashed certificate values by hash.
+    recent_hashed_certificate_values: Arc<CertificateValueCache>,
+    /// Cached blobs by blob ID.
+    recent_hashed_blobs: Arc<tokio::sync::Mutex<LruCache<BlobId, HashedBlob>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<tokio::sync::Mutex<DeliveryNotifiers>>,
@@ -90,12 +96,16 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
         max_pending_messages: usize,
         cross_chain_message_delivery: CrossChainMessageDelivery,
     ) -> Self {
+        let recent_hashed_blobs = Arc::new(tokio::sync::Mutex::new(LruCache::new(
+            NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
+        )));
         Self {
             validator_node_provider,
             max_pending_messages,
             message_policy: MessagePolicy::Accept,
             cross_chain_message_delivery,
-            recent_values: Arc::new(CertificateValueCache::default()),
+            recent_hashed_certificate_values: Arc::new(CertificateValueCache::default()),
+            recent_hashed_blobs,
             delivery_notifiers: Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
             notifier: Arc::new(Notifier::default()),
         }
@@ -119,6 +129,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_block: Option<Block>,
+        pending_blobs: BTreeMap<BlobId, HashedBlob>,
     ) -> ChainClient<ValidatorNodeProvider, Storage> {
         let known_key_pairs = known_key_pairs
             .into_iter()
@@ -127,7 +138,8 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
         let state = WorkerState::new_for_client(
             format!("Client node {:?}", chain_id),
             storage,
-            self.recent_values.clone(),
+            self.recent_hashed_certificate_values.clone(),
+            self.recent_hashed_blobs.clone(),
             self.delivery_notifiers.clone(),
         )
         .with_allow_inactive_chains(true)
@@ -147,6 +159,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
             next_block_height,
             pending_block,
             node_client,
+            pending_blobs,
         }
     }
 }
@@ -211,6 +224,9 @@ pub struct ChainClient<ValidatorNodeProvider, Storage> {
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
     node_client: LocalNodeClient<Storage>,
+    /// This contains blobs belonging to our `pending_block` that may not even have
+    /// been processed by (i.e. been proposed to) our own local chain manager yet.
+    pending_blobs: BTreeMap<BlobId, HashedBlob>,
 }
 
 /// Error type for [`ChainClient`].
@@ -263,6 +279,9 @@ pub enum ChainClientError {
 
     #[error("Found several possible identities to interact with chain {0}")]
     FoundMultipleKeysForChain(ChainId),
+
+    #[error(transparent)]
+    ViewError(#[from] ViewError),
 }
 
 impl From<Infallible> for ChainClientError {
@@ -292,6 +311,10 @@ impl<P, S> ChainClient<P, S> {
 
     pub fn pending_block(&self) -> &Option<Block> {
         &self.pending_block
+    }
+
+    pub fn pending_blobs(&self) -> &BTreeMap<BlobId, HashedBlob> {
+        &self.pending_blobs
     }
 }
 
@@ -602,12 +625,19 @@ where
             .communicate_chain_action(committee, submit_action, value)
             .await?;
         if certificate.value().is_confirmed() {
-            self.process_certificate(certificate.clone(), vec![])
+            self.process_certificate(certificate.clone(), vec![], vec![])
                 .await?;
             Ok(certificate)
         } else {
             self.finalize_block(committee, certificate).await
         }
+    }
+
+    async fn chain_managers_pending_blobs(
+        &self,
+    ) -> Result<BTreeMap<BlobId, HashedBlob>, LocalNodeError> {
+        let chain = self.chain_state_view().await?;
+        Ok(chain.manager.get().pending_blobs.clone())
     }
 
     /// Broadcasts certified blocks to validators.
@@ -619,6 +649,8 @@ where
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
         let storage_client = self.storage_client().await;
+        let recent_hashed_blobs = self.node_client.recent_hashed_blobs().await;
+        let chain_manager_pending_blobs = self.chain_managers_pending_blobs().await?;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
         communicate_with_quorum(
             &nodes,
@@ -629,6 +661,8 @@ where
                     name,
                     node,
                     storage: storage_client.clone(),
+                    local_node_recent_hashed_blobs: recent_hashed_blobs.clone(),
+                    local_node_chain_managers_pending_blobs: chain_manager_pending_blobs.clone(),
                 };
                 Box::pin(async move {
                     updater
@@ -653,6 +687,8 @@ where
         value: HashedCertificateValue,
     ) -> Result<Certificate, ChainClientError> {
         let storage_client = self.storage_client().await;
+        let recent_hashed_blobs = self.node_client.recent_hashed_blobs().await;
+        let chain_manager_pending_blobs = self.chain_managers_pending_blobs().await?;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
             &nodes,
@@ -663,6 +699,8 @@ where
                     name,
                     node,
                     storage: storage_client.clone(),
+                    local_node_recent_hashed_blobs: recent_hashed_blobs.clone(),
+                    local_node_chain_managers_pending_blobs: chain_manager_pending_blobs.clone(),
                 };
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })
@@ -691,6 +729,40 @@ where
                 ChainClientError::ProtocolError("A quorum voted for an unexpected value")
             })?;
         Ok(certificate)
+    }
+
+    async fn find_missing_application_bytecodes(
+        &self,
+        locations: &[BytecodeLocation],
+        nodes: &[(ValidatorName, <P as LocalValidatorNodeProvider>::Node)],
+        chain_id: ChainId,
+    ) -> Vec<HashedCertificateValue> {
+        future::join_all(locations.iter().map(|location| {
+            LocalNodeClient::<S>::download_hashed_certificate_value(
+                nodes.to_owned(),
+                chain_id,
+                *location,
+            )
+        }))
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+    }
+
+    async fn find_missing_blobs(
+        &self,
+        blob_ids: &[BlobId],
+        nodes: &[(ValidatorName, <P as LocalValidatorNodeProvider>::Node)],
+        chain_id: ChainId,
+    ) -> Vec<HashedBlob> {
+        future::join_all(blob_ids.iter().map(|blob_id| {
+            LocalNodeClient::<S>::download_blob(nodes.to_owned(), chain_id, *blob_id)
+        }))
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
     }
 
     async fn receive_certificate_internal(
@@ -723,30 +795,55 @@ where
             .download_certificates(nodes.clone(), block.chain_id, block.height)
             .await?;
         // Process the received operations. Download required hashed certificate values if necessary.
-        if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
-            if let LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
-                locations,
-            )) = &err
-            {
-                let values = future::join_all(locations.iter().map(|location| {
-                    LocalNodeClient::<S>::download_hashed_certificate_value(
-                        nodes.clone(),
-                        block.chain_id,
-                        *location,
-                    )
-                }))
-                .await
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>();
-                if !values.is_empty() {
-                    self.process_certificate(certificate.clone(), values)
+        if let Err(err) = self
+            .process_certificate(certificate.clone(), vec![], vec![])
+            .await
+        {
+            match &err {
+                LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
+                    locations,
+                )) => {
+                    let values = self
+                        .find_missing_application_bytecodes(locations, &nodes, block.chain_id)
+                        .await;
+
+                    ensure!(values.len() == locations.len(), err);
+                    self.process_certificate(certificate.clone(), values.clone(), vec![])
                         .await?;
                 }
+                LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
+                    let blobs = self
+                        .find_missing_blobs(blob_ids, &nodes, block.chain_id)
+                        .await;
+
+                    ensure!(blobs.len() == blob_ids.len(), err);
+                    self.process_certificate(certificate.clone(), vec![], blobs)
+                        .await?;
+                }
+                LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesAndBlobsNotFound(
+                    locations,
+                    blob_ids,
+                )) => {
+                    let values = self
+                        .find_missing_application_bytecodes(locations, &nodes, block.chain_id)
+                        .await;
+                    let blobs = self
+                        .find_missing_blobs(blob_ids, &nodes, block.chain_id)
+                        .await;
+
+                    ensure!(
+                        blobs.len() == blob_ids.len() && values.len() == locations.len(),
+                        err
+                    );
+                    self.process_certificate(certificate.clone(), values, blobs)
+                        .await?;
+                }
+                _ => {
+                    // The certificate is not as expected. Give up.
+                    tracing::warn!("Failed to process network hashed certificate value");
+                    return Err(err.into());
+                }
             }
-            // The certificate is not as expected. Give up.
-            tracing::warn!("Failed to process network hashed certificate value");
-            return Err(err.into());
         }
         // Make sure a quorum of validators (according to our new local committee) are up-to-date
         // for data availability.
@@ -973,10 +1070,11 @@ where
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
     ) -> Result<(), LocalNodeError> {
         let info = self
             .node_client
-            .handle_certificate(certificate, hashed_certificate_values)
+            .handle_certificate(certificate, hashed_certificate_values, hashed_blobs)
             .await?
             .info;
         self.update_from_info(&info);
@@ -1015,7 +1113,7 @@ where
         let certificate = self
             .communicate_chain_action(&committee, action, value)
             .await?;
-        self.process_certificate(certificate.clone(), vec![])
+        self.process_certificate(certificate.clone(), vec![], vec![])
             .await?;
         // The block height didn't increase, but this will communicate the timeout as well.
         self.communicate_chain_updates(
@@ -1062,6 +1160,30 @@ where
             }
             return Ok(result?);
         }
+    }
+
+    /// Tries to read blobs from either the pending blobs or the local node's cache, or
+    /// the chain manager's pending blobs
+    async fn read_local_blobs(
+        &mut self,
+        blob_ids: impl IntoIterator<Item = BlobId>,
+    ) -> Result<Vec<HashedBlob>, LocalNodeError> {
+        let mut blobs = Vec::new();
+        for blob_id in blob_ids {
+            if let Some(blob) = self.node_client.recent_blob(&blob_id).await {
+                blobs.push(blob);
+            } else if let Some(blob) = self.pending_blobs.get(&blob_id) {
+                self.node_client.cache_recent_blob(blob).await;
+                blobs.push(blob.to_owned());
+            } else {
+                return Err(LocalNodeError::CannotReadLocalBlob {
+                    chain_id: self.chain_id,
+                    blob_id,
+                });
+            }
+        }
+
+        Ok(blobs)
     }
 
     /// Executes (or retries) a regular block proposal. Updates local balance.
@@ -1124,11 +1246,13 @@ where
         };
         // Collect the hashed certificate values required for execution.
         let committee = self.local_committee().await?;
-        let nodes = self.validator_node_provider.make_nodes(&committee)?;
+        let nodes: Vec<(ValidatorName, P::Node)> =
+            self.validator_node_provider.make_nodes(&committee)?;
         let values = self
             .node_client
-            .read_or_download_hashed_certificate_values(nodes, block.bytecode_locations())
+            .read_or_download_hashed_certificate_values(nodes.clone(), block.bytecode_locations())
             .await?;
+        let hashed_blobs = self.read_local_blobs(block.blob_ids()).await?;
         // Create the final block proposal.
         let key_pair = self.key_pair().await?;
         let proposal = BlockProposal::new(
@@ -1138,6 +1262,7 @@ where
             },
             key_pair,
             values,
+            hashed_blobs,
             validated,
         );
         // Check the final block proposal. This will be cheaper after #1401.
@@ -1151,6 +1276,7 @@ where
             .submit_block_proposal(&committee, proposal, hashed_value)
             .await?;
         self.pending_block = None;
+        self.pending_blobs.clear();
         // Communicate the new certificate now.
         self.communicate_chain_updates(
             &committee,
@@ -1543,6 +1669,7 @@ where
         if let Some(block) = &self.pending_block {
             if block.height != info.next_block_height {
                 self.pending_block = None;
+                self.pending_blobs.clear();
             }
         }
         // If there is a validated block in the current round, finalize it.
@@ -1633,6 +1760,7 @@ where
     /// Clears the information on any operation that previously failed.
     pub fn clear_pending_block(&mut self) {
         self.pending_block = None;
+        self.pending_blobs.clear();
     }
 
     /// Processes confirmed operation for which this chain is a recipient.
@@ -1804,6 +1932,21 @@ where
                 .ok_or_else(|| ChainClientError::InternalError("Failed to publish bytecode"))?;
             Ok((BytecodeId::new(message_id), certificate))
         })
+    }
+
+    /// Publishes some blob.
+    pub async fn publish_blob(
+        &mut self,
+        hashed_blob: HashedBlob,
+    ) -> Result<ClientOutcome<(BlobId, Certificate)>, ChainClientError> {
+        self.node_client.cache_recent_blob(&hashed_blob).await;
+        self.pending_blobs
+            .insert(hashed_blob.id(), hashed_blob.clone());
+        self.execute_operation(Operation::System(SystemOperation::PublishBlob {
+            blob_id: hashed_blob.id(),
+        }))
+        .await?
+        .try_map(|certificate| Ok((hashed_blob.id(), certificate)))
     }
 
     /// Creates an application by instantiating some bytecode.

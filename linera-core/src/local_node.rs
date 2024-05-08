@@ -6,8 +6,8 @@ use std::{borrow::Cow, sync::Arc};
 
 use futures::{future, lock::Mutex};
 use linera_base::{
-    data_types::{ArithmeticError, BlockHeight},
-    identifiers::{ChainId, MessageId},
+    data_types::{ArithmeticError, BlockHeight, HashedBlob},
+    identifiers::{BlobId, ChainId, MessageId},
 };
 use linera_chain::data_types::{
     Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, LiteCertificate,
@@ -18,6 +18,7 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
+use lru::LruCache;
 use rand::prelude::SliceRandom;
 use thiserror::Error;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -62,6 +63,9 @@ pub enum LocalNodeError {
         target_next_block_height: BlockHeight,
     },
 
+    #[error("Failed to read blob {blob_id:?} of chain {chain_id:?}")]
+    CannotReadLocalBlob { chain_id: ChainId, blob_id: BlobId },
+
     #[error("The local node doesn't have an active chain {0:?}")]
     InactiveChain(ChainId),
 
@@ -96,6 +100,7 @@ where
             .fully_handle_certificate_with_notifications(
                 full_cert,
                 vec![],
+                vec![],
                 Some(&mut notifications),
             )
             .await?;
@@ -107,6 +112,7 @@ where
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let mut node = self.node.lock().await;
         let mut notifications = Vec::new();
@@ -115,6 +121,7 @@ where
             .fully_handle_certificate_with_notifications(
                 certificate,
                 hashed_certificate_values,
+                hashed_blobs,
                 Some(&mut notifications),
             )
             .await?;
@@ -176,6 +183,51 @@ where
         Ok((executed_block, info))
     }
 
+    async fn find_missing_application_bytecodes<A>(
+        &self,
+        chain_id: ChainId,
+        locations: &[BytecodeLocation],
+        node: &mut A,
+        name: ValidatorName,
+    ) -> Vec<HashedCertificateValue>
+    where
+        A: LocalValidatorNode + Clone + 'static,
+    {
+        future::join_all(locations.iter().map(|location| {
+            let mut node = node.clone();
+            async move {
+                Self::try_download_hashed_certificate_value_from(
+                    name, &mut node, chain_id, *location,
+                )
+                .await
+            }
+        }))
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+    }
+
+    async fn find_missing_blobs<A>(
+        &self,
+        chain_id: ChainId,
+        blob_ids: &[BlobId],
+        node: &mut A,
+        name: ValidatorName,
+    ) -> Vec<HashedBlob>
+    where
+        A: LocalValidatorNode + Clone + 'static,
+    {
+        future::join_all(blob_ids.iter().map(|blob_id| {
+            let mut node = node.clone();
+            async move { Self::try_download_blob_from(name, &mut node, chain_id, *blob_id).await }
+        }))
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+    }
+
     async fn try_process_certificates<A>(
         &mut self,
         name: ValidatorName,
@@ -194,34 +246,60 @@ where
                 tracing::warn!("Failed to process network certificate {}", hash);
                 return info;
             }
-            let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
-            if let Err(LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
-                locations,
-            ))) = &result
-            {
-                let chain_id = certificate.value().chain_id();
-                let mut values = Vec::new();
-                let maybe_values = future::join_all(locations.iter().map(|location| {
-                    let mut node = node.clone();
-                    async move {
-                        Self::try_download_hashed_certificate_value_from(
-                            name, &mut node, chain_id, *location,
-                        )
-                        .await
-                    }
-                }))
+            let mut result = self
+                .handle_certificate(certificate.clone(), vec![], vec![])
                 .await;
-                for maybe_value in maybe_values {
-                    if let Some(value) = maybe_value {
-                        values.push(value);
+
+            result = match &result {
+                Err(LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
+                    locations,
+                ))) => {
+                    let values = self
+                        .find_missing_application_bytecodes(
+                            certificate.value().chain_id(),
+                            locations,
+                            node,
+                            name,
+                        )
+                        .await;
+
+                    if values.len() != locations.len() {
+                        result
                     } else {
-                        // The certificate is not as expected. Give up.
-                        tracing::warn!("Failed to process network hashed certificate value");
-                        return info;
+                        self.handle_certificate(certificate, values, vec![]).await
                     }
                 }
-                result = self.handle_certificate(certificate.clone(), values).await;
-            }
+                Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids))) => {
+                    let blobs = self
+                        .find_missing_blobs(certificate.value().chain_id(), blob_ids, node, name)
+                        .await;
+
+                    if blobs.len() != blob_ids.len() {
+                        result
+                    } else {
+                        self.handle_certificate(certificate, vec![], blobs).await
+                    }
+                }
+                Err(LocalNodeError::WorkerError(
+                    WorkerError::ApplicationBytecodesAndBlobsNotFound(locations, blob_ids),
+                )) => {
+                    let chain_id = certificate.value().chain_id();
+                    let values = self
+                        .find_missing_application_bytecodes(chain_id, locations, node, name)
+                        .await;
+                    let blobs = self
+                        .find_missing_blobs(chain_id, blob_ids, node, name)
+                        .await;
+
+                    if values.len() != locations.len() || blobs.len() != blob_ids.len() {
+                        result
+                    } else {
+                        self.handle_certificate(certificate, values, blobs).await
+                    }
+                }
+                _ => result,
+            };
+
             match result {
                 Ok(response) => info = Some(response.info),
                 Err(error) => {
@@ -264,6 +342,25 @@ where
             .describe_application(chain_id, application_id)
             .await?;
         Ok(response)
+    }
+
+    pub async fn recent_blob(&self, blob_id: &BlobId) -> Option<HashedBlob> {
+        let mut node = self.node.lock().await;
+        node.state.recent_blob(blob_id).await
+    }
+
+    pub async fn recent_hashed_blobs(
+        &self,
+    ) -> Arc<tokio::sync::Mutex<LruCache<BlobId, HashedBlob>>> {
+        let node = self.node.lock().await;
+        node.state.recent_hashed_blobs()
+    }
+
+    pub async fn cache_recent_blob(&self, hashed_blob: &HashedBlob) -> bool {
+        let mut node = self.node.lock().await;
+        node.state
+            .cache_recent_blob(Cow::Borrowed(hashed_blob))
+            .await
     }
 
     pub async fn download_certificates<A>(
@@ -317,7 +414,11 @@ where
         let mut tasks = vec![];
         let mut node = self.node.lock().await;
         for (location, chain_id) in hashed_certificate_value_locations {
-            if let Some(value) = node.state.recent_value(&location.certificate_hash).await {
+            if let Some(value) = node
+                .state
+                .recent_hashed_certificate_value(&location.certificate_hash)
+                .await
+            {
                 values.push(value);
             } else {
                 let validators = validators.clone();
@@ -335,7 +436,9 @@ where
         let mut node = self.node.lock().await;
         for result in results {
             if let Some(value) = result? {
-                node.state.cache_recent_value(Cow::Borrowed(&value)).await;
+                node.state
+                    .cache_recent_hashed_certificate_value(Cow::Borrowed(&value))
+                    .await;
                 values.push(value);
             }
         }
@@ -531,7 +634,7 @@ where
         if let Some(cert) = info.manager.requested_locked {
             if cert.value().is_validated() && cert.value().chain_id() == chain_id {
                 let hash = cert.hash();
-                if let Err(error) = self.handle_certificate(*cert, vec![]).await {
+                if let Err(error) = self.handle_certificate(*cert, vec![], vec![]).await {
                     tracing::warn!("Skipping certificate {}: {}", hash, error);
                 }
             }
@@ -556,6 +659,44 @@ where
             .await
             {
                 return Some(value);
+            }
+        }
+        None
+    }
+
+    pub async fn download_blob<A>(
+        mut validators: Vec<(ValidatorName, A)>,
+        chain_id: ChainId,
+        blob_id: BlobId,
+    ) -> Option<HashedBlob>
+    where
+        A: LocalValidatorNode + Clone + 'static,
+    {
+        // Sequentially try each validator in random order.
+        validators.shuffle(&mut rand::thread_rng());
+        for (name, mut node) in validators {
+            if let Some(blob) =
+                Self::try_download_blob_from(name, &mut node, chain_id, blob_id).await
+            {
+                return Some(blob);
+            }
+        }
+        None
+    }
+
+    async fn try_download_blob_from<A>(
+        name: ValidatorName,
+        node: &mut A,
+        chain_id: ChainId,
+        blob_id: BlobId,
+    ) -> Option<HashedBlob>
+    where
+        A: LocalValidatorNode + Clone + 'static,
+    {
+        let query = ChainInfoQuery::new(chain_id).with_blob(blob_id);
+        if let Ok(response) = node.handle_chain_info_query(query).await {
+            if response.check(name).is_ok() {
+                return response.info.requested_blob;
             }
         }
         None

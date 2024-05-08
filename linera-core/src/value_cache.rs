@@ -22,7 +22,7 @@ use {
 use crate::worker::WorkerError;
 
 /// The default cache size.
-const DEFAULT_VALUE_CACHE_SIZE: usize = 1000;
+pub const DEFAULT_VALUE_CACHE_SIZE: usize = 1000;
 
 /// A counter metric for the number of cache hits in the [`CertificateValueCache`].
 #[cfg(with_metrics)]

@@ -14,7 +14,7 @@ use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, ApplicationPermissions, ArithmeticError, Timestamp},
     ensure, hex_debug,
-    identifiers::{Account, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{Account, BlobId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_views::{
@@ -158,6 +158,8 @@ pub enum SystemOperation {
         contract: Bytecode,
         service: Bytecode,
     },
+    /// Publishes a new blob
+    PublishBlob { blob_id: BlobId },
     /// Creates a new application.
     CreateApplication {
         bytecode_id: BytecodeId,
@@ -670,6 +672,7 @@ where
                 };
                 outcome.messages.push(message);
             }
+            PublishBlob { .. } => (),
         }
 
         Ok((outcome, new_application))

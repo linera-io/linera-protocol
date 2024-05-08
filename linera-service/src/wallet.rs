@@ -10,8 +10,8 @@ use comfy_table::{
 };
 use linera_base::{
     crypto::{CryptoHash, CryptoRng, KeyPair, PublicKey},
-    data_types::{BlockHeight, Timestamp},
-    identifiers::{ChainDescription, ChainId, Owner},
+    data_types::{BlockHeight, HashedBlob, Timestamp},
+    identifiers::{BlobId, ChainDescription, ChainId, Owner},
 };
 use linera_chain::data_types::Block;
 use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
@@ -131,6 +131,7 @@ impl Wallet {
             timestamp,
             next_block_height: BlockHeight(0),
             pending_block: None,
+            pending_blobs: BTreeMap::new(),
         };
         self.insert(user_chain);
         Ok(())
@@ -162,6 +163,7 @@ impl Wallet {
                 next_block_height: state.next_block_height(),
                 timestamp: state.timestamp(),
                 pending_block: state.pending_block().clone(),
+                pending_blobs: state.pending_blobs().clone(),
             },
         );
     }
@@ -267,6 +269,7 @@ pub struct UserChain {
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
     pub pending_block: Option<Block>,
+    pub pending_blobs: BTreeMap<BlobId, HashedBlob>,
 }
 
 impl UserChain {
@@ -284,6 +287,7 @@ impl UserChain {
             timestamp,
             next_block_height: BlockHeight::ZERO,
             pending_block: None,
+            pending_blobs: BTreeMap::new(),
         }
     }
 
@@ -297,6 +301,7 @@ impl UserChain {
             timestamp,
             next_block_height: BlockHeight::ZERO,
             pending_block: None,
+            pending_blobs: BTreeMap::new(),
         }
     }
 }

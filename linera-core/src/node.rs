@@ -5,8 +5,8 @@
 use futures::stream::{BoxStream, LocalBoxStream, Stream};
 use linera_base::{
     crypto::CryptoError,
-    data_types::{ArithmeticError, BlockHeight},
-    identifiers::ChainId,
+    data_types::{ArithmeticError, BlockHeight, HashedBlob},
+    identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
     data_types::{BlockProposal, Certificate, HashedCertificateValue, LiteCertificate, Origin},
@@ -62,6 +62,7 @@ pub trait LocalValidatorNode {
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
@@ -162,6 +163,13 @@ pub enum NodeError {
     // This error must be normalized during conversions.
     #[error("The following values containing application bytecode are missing: {0:?}.")]
     ApplicationBytecodesNotFound(Vec<BytecodeLocation>),
+
+    // This error must be normalized during conversions.
+    #[error("The following blobs are missing: {0:?}.")]
+    BlobsNotFound(Vec<BlobId>),
+
+    #[error("The following values containing application bytecode are missing: {0:?} and the following blobs are missing: {1:?}.")]
+    ApplicationBytecodesAndBlobsNotFound(Vec<BytecodeLocation>, Vec<BlobId>),
 
     // This error must be normalized during conversions.
     #[error("We don't have the value for the certificate.")]
@@ -276,6 +284,10 @@ impl From<WorkerError> for NodeError {
             WorkerError::MissingCertificateValue => Self::MissingCertificateValue,
             WorkerError::ApplicationBytecodesNotFound(locations) => {
                 NodeError::ApplicationBytecodesNotFound(locations)
+            }
+            WorkerError::BlobsNotFound(blob_ids) => NodeError::BlobsNotFound(blob_ids),
+            WorkerError::ApplicationBytecodesAndBlobsNotFound(locations, blob_ids) => {
+                NodeError::ApplicationBytecodesAndBlobsNotFound(locations, blob_ids)
             }
             error => Self::WorkerError {
                 error: error.to_string(),

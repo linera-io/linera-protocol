@@ -6,7 +6,7 @@ use std::{future::Future, time::Duration};
 
 use async_trait::async_trait;
 use futures::{sink::SinkExt, stream::StreamExt};
-use linera_base::identifiers::ChainId;
+use linera_base::{data_types::HashedBlob, identifiers::ChainId};
 use linera_chain::data_types::{
     BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
 };
@@ -100,12 +100,14 @@ impl ValidatorNode for SimpleClient {
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
         let request = HandleCertificateRequest {
             certificate,
             hashed_certificate_values,
+            hashed_blobs,
             wait_for_outgoing_messages,
         };
         self.query(request.into()).await

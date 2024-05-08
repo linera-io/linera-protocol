@@ -7,19 +7,27 @@ use std::{
     fmt,
     hash::Hash,
     ops::Range,
+    sync::Arc,
 };
 
 use futures::{future, Future, StreamExt};
 use linera_base::{
-    data_types::{BlockHeight, Round},
-    identifiers::ChainId,
+    data_types::{BlockHeight, HashedBlob, Round},
+    identifiers::{BlobId, ChainId},
     time::{Duration, Instant},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
-use linera_execution::committee::{Committee, ValidatorName};
+use linera_chain::data_types::{
+    BlockProposal, Certificate, CertificateValue, HashedCertificateValue, LiteVote,
+};
+use linera_execution::{
+    committee::{Committee, ValidatorName},
+    BytecodeLocation,
+};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
+use lru::LruCache;
 use thiserror::Error;
+use tokio::sync::Mutex;
 use tracing::{error, warn};
 
 use crate::{
@@ -63,6 +71,8 @@ pub struct ValidatorUpdater<A, S> {
     pub name: ValidatorName,
     pub node: A,
     pub storage: S,
+    pub local_node_recent_hashed_blobs: Arc<Mutex<LruCache<BlobId, HashedBlob>>>,
+    pub local_node_chain_managers_pending_blobs: BTreeMap<BlobId, HashedBlob>,
 }
 
 /// An error result for [`communicate_with_quorum`].
@@ -198,8 +208,106 @@ where
             }
         }
         self.node
-            .handle_certificate(certificate.clone(), vec![], delivery)
+            .handle_certificate(certificate.clone(), vec![], vec![], delivery)
             .await
+    }
+
+    async fn find_missing_application_bytecodes(
+        &self,
+        certificate: &Certificate,
+        locations: &Vec<BytecodeLocation>,
+    ) -> Result<Vec<HashedCertificateValue>, NodeError> {
+        // Find the missing bytecodes locally and retry.
+        let required = match certificate.value() {
+            CertificateValue::ConfirmedBlock { executed_block, .. }
+            | CertificateValue::ValidatedBlock { executed_block, .. } => {
+                executed_block.block.bytecode_locations()
+            }
+            CertificateValue::Timeout { .. } => HashMap::new(),
+        };
+        for location in locations {
+            if !required.contains_key(location) {
+                let hash = location.certificate_hash;
+                warn!("validator requested {:?} but it is not required", hash);
+                return Err(NodeError::InvalidChainInfoResponse);
+            }
+        }
+        let unique_locations = locations.iter().cloned().collect::<HashSet<_>>();
+        if locations.len() > unique_locations.len() {
+            warn!("locations requested by validator contain duplicates");
+            return Err(NodeError::InvalidChainInfoResponse);
+        }
+        Ok(
+            future::join_all(unique_locations.into_iter().map(|location| {
+                self.storage
+                    .read_hashed_certificate_value(location.certificate_hash)
+            }))
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?,
+        )
+    }
+
+    async fn find_missing_blobs(
+        &self,
+        certificate: &Certificate,
+        blob_ids: &Vec<BlobId>,
+    ) -> Result<Vec<HashedBlob>, NodeError> {
+        // Find the missing blobs locally and retry.
+        let required = match certificate.value() {
+            CertificateValue::ConfirmedBlock { executed_block, .. }
+            | CertificateValue::ValidatedBlock { executed_block, .. } => {
+                executed_block.block.blob_ids()
+            }
+            CertificateValue::Timeout { .. } => HashSet::new(),
+        };
+        for blob_id in blob_ids {
+            if !required.contains(blob_id) {
+                warn!(
+                    "validator requested blob {:?} but it is not required",
+                    blob_id
+                );
+                return Err(NodeError::InvalidChainInfoResponse);
+            }
+        }
+        let mut unique_blob_ids_to_find = blob_ids.iter().cloned().collect::<HashSet<_>>();
+        if blob_ids.len() > unique_blob_ids_to_find.len() {
+            warn!("blobs requested by validator contain duplicates");
+            return Err(NodeError::InvalidChainInfoResponse);
+        }
+
+        let mut missing_blobs = Vec::new();
+        for blob_id in blob_ids {
+            if let Some(blob) = self
+                .local_node_recent_hashed_blobs
+                .lock()
+                .await
+                .get(blob_id)
+                .cloned()
+            {
+                missing_blobs.push(blob);
+                unique_blob_ids_to_find.remove(blob_id);
+            } else if let Some(blob) = self
+                .local_node_chain_managers_pending_blobs
+                .get(blob_id)
+                .cloned()
+            {
+                missing_blobs.push(blob);
+                unique_blob_ids_to_find.remove(blob_id);
+            }
+        }
+
+        missing_blobs.extend(
+            future::join_all(
+                unique_blob_ids_to_find
+                    .into_iter()
+                    .map(|blob_id| self.storage.read_hashed_blob(blob_id)),
+            )
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?,
+        );
+        Ok(missing_blobs)
     }
 
     async fn send_certificate(
@@ -207,45 +315,37 @@ where
         certificate: Certificate,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
-        let mut result = self
+        let result = self
             .send_optimized_certificate(&certificate, delivery)
             .await;
 
-        if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
-            // Find the missing bytecodes locally and retry.
-            let required = match certificate.value() {
-                CertificateValue::ConfirmedBlock { executed_block, .. }
-                | CertificateValue::ValidatedBlock { executed_block, .. } => {
-                    executed_block.block.bytecode_locations()
-                }
-                CertificateValue::Timeout { .. } => HashMap::new(),
-            };
-            for location in locations {
-                if !required.contains_key(location) {
-                    let hash = location.certificate_hash;
-                    warn!("validator requested {:?} but it is not required", hash);
-                    return Err(NodeError::InvalidChainInfoResponse);
-                }
+        let response = match &result {
+            Err(NodeError::ApplicationBytecodesNotFound(locations)) => {
+                let values = self
+                    .find_missing_application_bytecodes(&certificate, locations)
+                    .await?;
+                self.node
+                    .handle_certificate(certificate, values, vec![], delivery)
+                    .await
             }
-            let unique_locations = locations.iter().cloned().collect::<HashSet<_>>();
-            if locations.len() > unique_locations.len() {
-                warn!("locations requested by validator contain duplicates");
-                return Err(NodeError::InvalidChainInfoResponse);
+            Err(NodeError::BlobsNotFound(blob_ids)) => {
+                let blobs = self.find_missing_blobs(&certificate, blob_ids).await?;
+                self.node
+                    .handle_certificate(certificate, vec![], blobs, delivery)
+                    .await
             }
-            let values = future::join_all(unique_locations.into_iter().map(|location| {
-                self.storage
-                    .read_hashed_certificate_value(location.certificate_hash)
-            }))
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?;
-            result = self
-                .node
-                .handle_certificate(certificate.clone(), values, delivery)
-                .await;
-        }
+            Err(NodeError::ApplicationBytecodesAndBlobsNotFound(locations, blob_ids)) => {
+                let values = self
+                    .find_missing_application_bytecodes(&certificate, locations)
+                    .await?;
+                let blobs = self.find_missing_blobs(&certificate, blob_ids).await?;
+                self.node
+                    .handle_certificate(certificate, values, blobs, delivery)
+                    .await
+            }
+            _ => result,
+        }?;
 
-        let response = result?;
         response.check(self.name)?;
         // Succeed
         Ok(response.info)
@@ -260,6 +360,7 @@ where
             Ok(response) => response,
             Err(NodeError::MissingCrossChainUpdate { .. })
             | Err(NodeError::InactiveChain(_))
+            | Err(NodeError::BlobsNotFound(_))
             | Err(NodeError::ApplicationBytecodesNotFound(_)) => {
                 // Some received certificates may be missing for this validator
                 // (e.g. to create the chain or make the balance sufficient) so we are going to

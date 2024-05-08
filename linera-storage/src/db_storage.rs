@@ -7,8 +7,8 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{TimeDelta, Timestamp},
-    identifiers::{Blob, BlobId, ChainId},
+    data_types::{Blob, HashedBlob, TimeDelta, Timestamp},
+    identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
     data_types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
@@ -428,12 +428,13 @@ where
         Ok(value.with_hash_unchecked(hash))
     }
 
-    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
+    async fn read_hashed_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::BlobId(blob_id))?;
-        let maybe_value = self.client.client.read_value::<Blob>(&blob_key).await?;
+        let maybe_blob = self.client.client.read_value::<Blob>(&blob_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
-        Ok(maybe_value.ok_or_else(|| ViewError::not_found("value for blob id", blob_id))?)
+        let blob = maybe_blob.ok_or_else(|| ViewError::not_found("value for blob ID", blob_id))?;
+        Ok(blob.with_hash_unchecked(blob_id))
     }
 
     async fn read_hashed_certificate_values_downward(
@@ -466,11 +467,11 @@ where
         self.write_batch(batch).await
     }
 
-    async fn write_blob(&self, blob: &Blob) -> Result<BlobId, ViewError> {
+    async fn write_hashed_blob(&self, blob: &HashedBlob) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        let blob_id = self.add_blob_to_batch(blob, &mut batch)?;
+        self.add_blob_to_batch(&blob.id(), blob, &mut batch)?;
         self.write_batch(batch).await?;
-        Ok(blob_id)
+        Ok(())
     }
 
     async fn write_hashed_certificate_values(
@@ -484,10 +485,10 @@ where
         self.write_batch(batch).await
     }
 
-    async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError> {
+    async fn write_hashed_blobs(&self, blobs: &[HashedBlob]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for blob in blobs {
-            self.add_blob_to_batch(blob, &mut batch)?;
+            self.add_blob_to_batch(&blob.id(), blob, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -566,13 +567,17 @@ where
         Ok(())
     }
 
-    fn add_blob_to_batch(&self, blob: &Blob, batch: &mut Batch) -> Result<BlobId, ViewError> {
+    fn add_blob_to_batch(
+        &self,
+        blob_id: &BlobId,
+        blob: &HashedBlob,
+        batch: &mut Batch,
+    ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_id = BlobId(CryptoHash::new(blob));
-        let blob_key = bcs::to_bytes(&BaseKey::BlobId(blob_id))?;
+        let blob_key = bcs::to_bytes(&BaseKey::BlobId(*blob_id))?;
         batch.put_key_value(blob_key.to_vec(), blob)?;
-        Ok(blob_id)
+        Ok(())
     }
 
     fn add_certificate_to_batch(
