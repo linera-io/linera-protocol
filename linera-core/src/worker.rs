@@ -580,10 +580,13 @@ where
         let CertificateValue::Timeout { chain_id, .. } = certificate.value() else {
             panic!("Expecting a leader timeout certificate");
         };
-        self.create_chain_worker(*chain_id)
-            .await?
-            .process_timeout(certificate)
-            .await
+        self.query_chain_worker(*chain_id, move |callback| {
+            ChainWorkerRequest::ProcessTimeout {
+                certificate,
+                callback,
+            }
+        })
+        .await
     }
 
     async fn process_cross_chain_update(
