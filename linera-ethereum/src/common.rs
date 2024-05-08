@@ -47,7 +47,7 @@ pub enum EthereumServiceError {
     #[error(transparent)]
     FromHexError(#[from] alloy_primitives::hex::FromHexError),
 
-    /// RpcError
+    /// Rpc error
     #[error(transparent)]
     RpcError(#[from] json_rpc::RpcError<alloy::transports::TransportErrorKind>),
 }

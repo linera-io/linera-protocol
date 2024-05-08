@@ -26,7 +26,7 @@ num-traits.workspace = true
 rustc-hex.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-reqwest = { version = "0.12.4", features = ["json"] }
+reqwest = { version = "0.12.4" }
 tokio = { workspace = true, features = ["full"] }
 url.workspace = true
 

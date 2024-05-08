@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//use std::time::Duration;
-
 use alloy::{
     primitives::{Address, U256},
     providers::{Provider, ProviderBuilder, RootProvider},
@@ -26,12 +24,13 @@ pub struct EthereumEndpoint<M> {
 impl EthereumEndpoint<HttpProvider> {
     /// Lists all the accounts of the Ethereum node.
     pub async fn get_accounts(&self) -> Result<Vec<String>, EthereumServiceError> {
-        let mut accounts = Vec::new();
-        for account in self.provider.get_accounts().await? {
-            let account = format!("{:?}", account);
-            accounts.push(account);
-        }
-        Ok(accounts)
+        Ok(self
+            .provider
+            .get_accounts()
+            .await?
+            .into_iter()
+            .map(|x| format!("{:?}", x))
+            .collect::<Vec<_>>())
     }
 
     /// Gets the latest block number of the Ethereum node.
@@ -53,8 +52,7 @@ impl EthereumEndpoint<HttpProvider> {
             Some(val) => BlockNumberOrTag::Number(val),
         };
         let block_id = BlockId::Number(number);
-        let balance = self.provider.get_balance(address, block_id).await?;
-        Ok(balance)
+        Ok(self.provider.get_balance(address, block_id).await?)
     }
 
     /// Reads the events of the smart contract.
@@ -74,11 +72,10 @@ impl EthereumEndpoint<HttpProvider> {
             .event(&event_name)
             .from_block(starting_block);
         let events = self.provider.get_logs(&filter).await?;
-        let events = events
+        Ok(events
             .into_iter()
             .map(|x| parse_log(event_name_expanded, x))
-            .collect::<Result<_, _>>()?;
-        Ok(events)
+            .collect::<Result<_, _>>()?)
     }
 
     /// The operation done with `eth_call` on Ethereum returns
@@ -98,8 +95,7 @@ impl EthereumEndpoint<HttpProvider> {
             .from(from)
             .to(contract_address)
             .input(input);
-        let eth_call = self.provider.call(&tx).await?;
-        Ok(eth_call)
+        Ok(self.provider.call(&tx).await?)
     }
 }
 
