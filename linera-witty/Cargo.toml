@@ -32,7 +32,7 @@ wasmtime = { workspace = true, optional = true }
 [dev-dependencies]
 assert_matches.workspace = true
 insta.workspace = true
-linera-witty = { workspace = true, features = ["macros", "test"] }
+linera-witty = { path = ".", features = ["macros", "test"] }
 test-case.workspace = true
 tracing.workspace = true
 
