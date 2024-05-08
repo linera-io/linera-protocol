@@ -12,7 +12,6 @@ use alloy::{
     },
 };
 use alloy_primitives::Bytes;
-//use alloy_primitives::BlockNumber;
 use eyre::Result;
 
 use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};

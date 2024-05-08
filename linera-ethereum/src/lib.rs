@@ -11,5 +11,5 @@
 pub mod client;
 pub mod common;
 
-// /// Helper types for tests and similar purposes.
-//pub mod test_utils;
+/// Helper types for tests and similar purposes.
+pub mod test_utils;

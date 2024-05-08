@@ -4,50 +4,47 @@
 use std::{path::Path, sync::Arc};
 
 use anyhow::Result;
-use ethers::{
-    abi::Abi,
-    contract::abigen,
-    core::{k256::ecdsa::SigningKey, types::Bytes},
-    prelude::{ContractFactory, SignerMiddleware},
-    providers::{Http, Provider},
-    signers::LocalWallet,
-    solc::Solc,
-    types::{transaction::eip2718::TypedTransaction, Address, U256},
+use alloy::{
+    network::EthereumSigner, node_bindings::{Anvil, AnvilInstance}, primitives::U256, providers::ProviderBuilder,
+    signers::wallet::LocalWallet, sol,
 };
-use ethers_core::utils::{Anvil, AnvilInstance};
-use ethers_signers::{Signer, Wallet};
 use linera_storage_service::child::get_free_port;
-
+use alloy::providers::Provider;
+use crate::client::HttpProvider;
+use alloy_primitives::Bytes;
+use alloy_primitives::Address;
 use crate::client::EthereumEndpoint;
 
-abigen!(
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
     SimpleTokenContract,
-    "./contracts/SimpleToken.json",
-    event_derives(serde::Deserialize, serde::Serialize)
+    "./contracts/SimpleToken.json"
 );
 
-abigen!(
+
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
     EventNumericsContract,
-    "./contracts/EventNumerics.json",
-    event_derives(serde::Deserialize, serde::Serialize)
+    "./contracts/EventNumerics.json"
 );
 
-pub async fn get_provider(url: &str) -> Provider<Http> {
+pub async fn get_provider(url: &str) -> Provider<HttpProvider> {
     Provider::try_from(url).unwrap()
 }
 
 pub struct AnvilTest {
     pub anvil_instance: AnvilInstance,
     pub endpoint: String,
-    pub ethereum_endpoint: EthereumEndpoint<Http>,
+    pub ethereum_endpoint: EthereumEndpoint<HttpProvider>,
 }
 
 pub async fn get_anvil() -> Result<AnvilTest> {
     let port = get_free_port().await?;
     let anvil_instance = Anvil::new()
         .port(port)
-        .mnemonic("abstract vacuum mammal awkward pudding scene penalty purchase dinner depart evoke puzzle")
-        .spawn();
+        .try_spawn()?;
     let endpoint = anvil_instance.endpoint();
     let ethereum_endpoint = EthereumEndpoint::new(endpoint.clone())?;
     Ok(AnvilTest {
