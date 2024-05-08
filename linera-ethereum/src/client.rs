@@ -21,11 +21,14 @@ use reqwest::Client;
 pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
 
 /// The Ethereum endpoint and its provider used for accessing the ethereum node.
-pub struct EthereumEndpoint {
-    provider: HttpProvider,
+pub struct EthereumEndpoint<M> {
+    provider: M,
 }
 
-impl EthereumEndpoint {
+impl<M> EthereumEndpoint<M>
+where
+    M: Provider,
+{
     /// Lists all the accounts of the Ethereum node.
     pub async fn get_accounts(&self) -> Result<Vec<String>, EthereumServiceError> {
         let mut accounts = Vec::new();
@@ -105,7 +108,7 @@ impl EthereumEndpoint {
     }
 }
 
-impl EthereumEndpoint {
+impl EthereumEndpoint<HttpProvider> {
     /// Connects to an existing Ethereum node and creates an `EthereumEndpoint`
     /// if successful.
     pub fn new(url: String) -> Result<Self, EthereumServiceError> {
