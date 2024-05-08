@@ -938,51 +938,13 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let (chain_id, height, epoch) = match certificate.value() {
-            CertificateValue::Timeout {
-                chain_id,
-                height,
-                epoch,
-                ..
-            } => (*chain_id, *height, *epoch),
-            _ => panic!("Expecting a leader timeout certificate"),
+        let CertificateValue::Timeout { chain_id, .. } = certificate.value() else {
+            panic!("Expecting a leader timeout certificate");
         };
-        // Check that the chain is active and ready for this confirmation.
-        // Verify the certificate. Returns a catch-all error to make client code more robust.
-        let mut chain = self.storage.load_active_chain(chain_id).await?;
-        let (chain_epoch, committee) = chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
-        ensure!(
-            epoch == chain_epoch,
-            WorkerError::InvalidEpoch {
-                chain_id,
-                chain_epoch,
-                epoch
-            }
-        );
-        certificate.check(committee)?;
-        let mut actions = NetworkActions::default();
-        if chain.tip_state.get().already_validated_block(height)? {
-            return Ok((ChainInfoResponse::new(&chain, self.key_pair()), actions));
-        }
-        let old_round = chain.manager.get().current_round;
-        chain
-            .manager
-            .get_mut()
-            .handle_timeout_certificate(certificate.clone(), self.storage.clock().current_time());
-        let round = chain.manager.get().current_round;
-        if round > old_round {
-            actions.notifications.push(Notification {
-                chain_id,
-                reason: Reason::NewRound { height, round },
-            })
-        }
-        let info = ChainInfoResponse::new(&chain, self.key_pair());
-        chain.save().await?;
-        Ok((info, actions))
+        self.create_chain_worker(*chain_id)
+            .await?
+            .process_timeout(certificate)
+            .await
     }
 
     async fn process_cross_chain_update(

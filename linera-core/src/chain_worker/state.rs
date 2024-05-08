@@ -12,7 +12,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, ExecutedBlock, IncomingMessage, Medium, MessageAction, MessageBundle, Origin, Target,
+        Block, Certificate, CertificateValue, ExecutedBlock, IncomingMessage, Medium,
+        MessageAction, MessageBundle, Origin, Target,
     },
     ChainError, ChainStateView,
 };
@@ -29,14 +30,14 @@ use tracing::{debug, warn};
 #[cfg(with_testing)]
 use {
     linera_base::{crypto::CryptoHash, identifiers::BytecodeId},
-    linera_chain::data_types::{Certificate, Event},
+    linera_chain::data_types::Event,
     linera_execution::BytecodeLocation,
 };
 
 use super::ChainWorkerConfig;
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    worker::{NetworkActions, WorkerError},
+    worker::{NetworkActions, Notification, Reason, WorkerError},
 };
 
 /// The state of the chain worker.
@@ -174,6 +175,62 @@ where
         self.chain.rollback();
 
         Ok((executed_block, response))
+    }
+
+    /// Processes a leader timeout issued for this multi-owner chain.
+    pub async fn process_timeout(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        let (chain_id, height, epoch) = match certificate.value() {
+            CertificateValue::Timeout {
+                chain_id,
+                height,
+                epoch,
+                ..
+            } => (*chain_id, *height, *epoch),
+            _ => panic!("Expecting a leader timeout certificate"),
+        };
+        // Check that the chain is active and ready for this confirmation.
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        self.ensure_is_active()?;
+        let (chain_epoch, committee) = self
+            .chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        ensure!(
+            epoch == chain_epoch,
+            WorkerError::InvalidEpoch {
+                chain_id,
+                chain_epoch,
+                epoch
+            }
+        );
+        certificate.check(committee)?;
+        let mut actions = NetworkActions::default();
+        if self.chain.tip_state.get().already_validated_block(height)? {
+            return Ok((
+                ChainInfoResponse::new(&self.chain, self.config.key_pair()),
+                actions,
+            ));
+        }
+        let old_round = self.chain.manager.get().current_round;
+        self.chain
+            .manager
+            .get_mut()
+            .handle_timeout_certificate(certificate.clone(), self.storage.clock().current_time());
+        let round = self.chain.manager.get().current_round;
+        if round > old_round {
+            actions.notifications.push(Notification {
+                chain_id,
+                reason: Reason::NewRound { height, round },
+            })
+        }
+        let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
+        self.chain.save().await?;
+        Ok((info, actions))
     }
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
