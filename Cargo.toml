@@ -65,14 +65,7 @@ derive_more = "0.99.17"
 dirs = "5.0.1"
 ed25519-dalek = { version = "2.1.1", features = ["batch", "serde"] }
 either = "1.10.0"
-
-
 ethers = { version = "2.0.14", features = ["solc"] }
-ethers-core = "2.0.14"
-ethers-providers = "2.0.14"
-ethers-middleware = "2.0.14"
-ethers-signers = "2.0.14"
-eyre = "0.6.12"
 frunk = "0.4.2"
 fs-err = { version = "2.11.0", features = ["tokio"] }
 fs4 = "0.8.2"
