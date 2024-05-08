@@ -2,22 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use alloy::{
-    network::{Ethereum, EthereumSigner}, node_bindings::{Anvil, AnvilInstance}, primitives::U256, providers::ProviderBuilder,
-    signers::wallet::LocalWallet, sol,
+    network::{Ethereum, EthereumSigner},
+    node_bindings::{Anvil, AnvilInstance},
+    primitives::U256,
+    providers::{
+        fillers::{ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, SignerFiller},
+        ProviderBuilder, RootProvider,
+    },
+    signers::{wallet::LocalWallet, Signer},
+    sol,
 };
-use alloy::signers::Signer;
-use linera_storage_service::child::get_free_port;
-use crate::client::HttpProvider;
 use alloy_primitives::Address;
-use crate::client::EthereumEndpoint;
+use linera_storage_service::child::get_free_port;
 use reqwest::Client;
-use alloy::providers::fillers::FillProvider;
-use alloy::providers::fillers::JoinFill;
-use alloy::providers::fillers::GasFiller;
-use alloy::providers::fillers::NonceFiller;
-use alloy::providers::fillers::ChainIdFiller;
-use alloy::providers::fillers::SignerFiller;
-use alloy::providers::RootProvider;
+
+use crate::client::{EthereumEndpoint, HttpProvider};
 
 sol!(
     #[allow(missing_docs)]
@@ -26,7 +25,6 @@ sol!(
     "./contracts/SimpleToken.json"
 );
 
-
 sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
@@ -34,20 +32,30 @@ sol!(
     "./contracts/EventNumerics.json"
 );
 
+#[allow(clippy::type_complexity)]
 pub struct AnvilTest {
     pub anvil_instance: AnvilInstance,
     pub endpoint: String,
     pub ethereum_endpoint: EthereumEndpoint<HttpProvider>,
     pub wallet_info: (LocalWallet, String),
     pub rpc_url: reqwest::Url,
-    pub provider: FillProvider<JoinFill<JoinFill<JoinFill<JoinFill<alloy::providers::Identity, GasFiller>, NonceFiller>, ChainIdFiller>, SignerFiller<EthereumSigner>>, RootProvider<alloy::transports::http::Http<Client>>, alloy::transports::http::Http<Client>, Ethereum>,
+    pub provider: FillProvider<
+        JoinFill<
+            JoinFill<
+                JoinFill<JoinFill<alloy::providers::Identity, GasFiller>, NonceFiller>,
+                ChainIdFiller,
+            >,
+            SignerFiller<EthereumSigner>,
+        >,
+        RootProvider<alloy::transports::http::Http<Client>>,
+        alloy::transports::http::Http<Client>,
+        Ethereum,
+    >,
 }
 
 pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
     let port = get_free_port().await?;
-    let anvil_instance = Anvil::new()
-        .port(port)
-        .try_spawn()?;
+    let anvil_instance = Anvil::new().port(port).try_spawn()?;
     let index = 0;
     let wallet: LocalWallet = anvil_instance.keys()[index].clone().into();
     let address = format!("{:?}", anvil_instance.addresses()[index]);
@@ -93,7 +101,8 @@ impl SimpleTokenContractFunction {
     pub async fn new(anvil_test: AnvilTest) -> anyhow::Result<Self> {
         // 2: initializing the contract
         let initial_supply = U256::from(1000);
-        let simple_token = SimpleTokenContract::deploy(&anvil_test.provider, initial_supply).await?;
+        let simple_token =
+            SimpleTokenContract::deploy(&anvil_test.provider, initial_supply).await?;
         let contract_address = simple_token.address();
         let contract_address = format!("{:?}", contract_address);
         Ok(Self {
@@ -106,7 +115,8 @@ impl SimpleTokenContractFunction {
     pub async fn balance_of(&self, to: &str) -> anyhow::Result<U256> {
         // 1: getting the simple_token
         let contract_address = self.contract_address.parse::<Address>()?;
-        let simple_token = SimpleTokenContract::new(contract_address, self.anvil_test.provider.clone());
+        let simple_token =
+            SimpleTokenContract::new(contract_address, self.anvil_test.provider.clone());
         // 2: gettting the balance transaction stuff
         let to_address = to.parse::<Address>()?;
         let data = simple_token.balanceOf(to_address).calldata().clone();
@@ -130,10 +140,10 @@ impl SimpleTokenContractFunction {
         let contract_address = self.contract_address.parse::<Address>()?;
         let to_address = to.parse::<Address>()?;
         let from_address = from.parse::<Address>()?;
-        let simple_token = SimpleTokenContract::new(contract_address, self.anvil_test.provider.clone());
+        let simple_token =
+            SimpleTokenContract::new(contract_address, self.anvil_test.provider.clone());
         // 3: Doing the transfer
-        let builder = simple_token.transfer(to_address, value)
-            .from(from_address);
+        let builder = simple_token.transfer(to_address, value).from(from_address);
         let _receipt = builder.send().await?.get_receipt().await?;
         Ok(())
     }
@@ -148,7 +158,8 @@ impl EventNumericsContractFunction {
     pub async fn new(anvil_test: AnvilTest) -> anyhow::Result<Self> {
         // 1: Deploying the event numerics contract
         let initial_supply = U256::from(0);
-        let event_numerics = EventNumericsContract::deploy(&anvil_test.provider, initial_supply).await?;
+        let event_numerics =
+            EventNumericsContract::deploy(&anvil_test.provider, initial_supply).await?;
         let contract_address = event_numerics.address();
         let contract_address = format!("{:?}", contract_address);
         Ok(Self {

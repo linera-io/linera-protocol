@@ -3,12 +3,12 @@
 
 #[cfg(feature = "ethereum")]
 use {
-    std::str::FromStr,
     alloy_primitives::U256,
     linera_ethereum::{
         common::{EthereumDataType, EthereumEvent},
         test_utils::{get_anvil, EventNumericsContractFunction, SimpleTokenContractFunction},
     },
+    std::str::FromStr,
 };
 
 #[cfg(feature = "ethereum")]
@@ -43,8 +43,7 @@ async fn test_event_numerics() -> anyhow::Result<()> {
         .read_events(&contract_address, event_name_expanded, 0)
         .await?;
     let addr0 = event_numerics.anvil_test.get_address(0);
-    let big_value =
-        U256::from_str("239675476885367459284564394732743434463843674346373355625")?;
+    let big_value = U256::from_str("239675476885367459284564394732743434463843674346373355625")?;
     let target_event = EthereumEvent {
         values: vec![
             EthereumDataType::Address(addr0.clone()),

@@ -5,19 +5,16 @@
 
 use alloy::{
     primitives::{Address, U256},
-    providers::{Provider, RootProvider, ProviderBuilder},
+    providers::{Provider, ProviderBuilder, RootProvider},
     rpc::types::eth::{
         request::{TransactionInput, TransactionRequest},
         BlockId, BlockNumberOrTag, Filter,
     },
 };
-
 use alloy_primitives::Bytes;
-use eyre::Result;
+use reqwest::Client;
 
 use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
-
-use reqwest::Client;
 pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
 
 /// The Ethereum endpoint and its provider used for accessing the ethereum node.
@@ -26,8 +23,7 @@ pub struct EthereumEndpoint<M> {
 }
 
 //
-impl EthereumEndpoint<HttpProvider>
-{
+impl EthereumEndpoint<HttpProvider> {
     /// Lists all the accounts of the Ethereum node.
     pub async fn get_accounts(&self) -> Result<Vec<String>, EthereumServiceError> {
         let mut accounts = Vec::new();
