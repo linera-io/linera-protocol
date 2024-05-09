@@ -72,10 +72,10 @@ impl EthereumEndpoint<HttpProvider> {
             .event(&event_name)
             .from_block(starting_block);
         let events = self.provider.get_logs(&filter).await?;
-        Ok(events
+        events
             .into_iter()
             .map(|x| parse_log(event_name_expanded, x))
-            .collect::<Result<_, _>>()?)
+            .collect::<Result<_, _>>()
     }
 
     /// The operation done with `eth_call` on Ethereum returns
