@@ -57,4 +57,4 @@ test-case.workspace = true
 cfg_aliases.workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["getrandom", "serde_bytes"]
+ignored = ["async-graphql-derive", "getrandom", "serde_bytes"]
