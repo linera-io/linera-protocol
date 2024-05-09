@@ -72,6 +72,29 @@ async fn test_insert_many_values_together() {
     );
 }
 
+/// Tests re-inserting many values in the cache, all-at-once.
+#[tokio::test]
+async fn test_reinsertion_of_values() {
+    let cache = CertificateValueCache::default();
+    let values = create_dummy_values(0..(DEFAULT_VALUE_CACHE_SIZE as u64)).collect::<Vec<_>>();
+
+    cache.insert_all(values.iter().map(Cow::Borrowed)).await;
+
+    for value in &values {
+        assert!(!cache.insert(Cow::Borrowed(value)).await);
+    }
+
+    for value in &values {
+        assert!(cache.contains(&value.hash()).await);
+        assert_eq!(cache.get(&value.hash()).await.as_ref(), Some(value));
+    }
+
+    assert_eq!(
+        cache.keys::<BTreeSet<_>>().await,
+        BTreeSet::from_iter(values.iter().map(HashedCertificateValue::hash))
+    );
+}
+
 /// Tests eviction of one entry.
 #[tokio::test]
 async fn test_one_eviction() {
