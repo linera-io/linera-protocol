@@ -166,7 +166,7 @@ pub fn parse_log(
         .map(|s| s.to_string())
         .collect::<Vec<_>>();
     let mut values = Vec::new();
-    let mut idx_topic = 0;
+    let mut topic_index = 0;
     let mut idx_data = 0;
     let mut vec = [0_u8; 32];
     let log_data = log.data();
@@ -182,8 +182,8 @@ pub fn parse_log(
                 parse_entry(entry, &ethereum_type)?
             }
             Some(ethereum_type) => {
-                idx_topic += 1;
-                parse_entry(topics[idx_topic], ethereum_type)?
+                topic_index += 1;
+                parse_entry(topics[topic_index], ethereum_type)?
             }
         });
     }

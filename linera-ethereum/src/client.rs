@@ -20,7 +20,7 @@ pub struct EthereumEndpoint<M> {
     pub provider: M,
 }
 
-//
+// TODO(2011) We need to support via a trait.
 impl EthereumEndpoint<HttpProvider> {
     /// Lists all the accounts of the Ethereum node.
     pub async fn get_accounts(&self) -> Result<Vec<String>, EthereumServiceError> {
@@ -44,10 +44,10 @@ impl EthereumEndpoint<HttpProvider> {
     pub async fn get_balance(
         &self,
         address: &str,
-        block_nr: Option<u64>,
+        block_number: Option<u64>,
     ) -> Result<U256, EthereumServiceError> {
         let address = address.parse::<Address>()?;
-        let number = match block_nr {
+        let number = match block_number {
             None => BlockNumberOrTag::Latest,
             Some(val) => BlockNumberOrTag::Number(val),
         };

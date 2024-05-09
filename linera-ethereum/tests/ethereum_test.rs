@@ -17,11 +17,11 @@ async fn test_get_accounts_balance() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
     let ethereum_endpoint = anvil_test.ethereum_endpoint;
     let addresses = ethereum_endpoint.get_accounts().await?;
-    let block_nr = ethereum_endpoint.get_block_number().await?;
+    let block_number = ethereum_endpoint.get_block_number().await?;
     let target_balance = U256::from_str("10000000000000000000000")?;
     for address in addresses {
         let balance = ethereum_endpoint
-            .get_balance(&address, Some(block_nr))
+            .get_balance(&address, Some(block_number))
             .await?;
         assert_eq!(balance, target_balance);
     }
