@@ -9,11 +9,38 @@ use linera_base::crypto::CryptoHash;
 use linera_chain::data_types::{Certificate, HashedCertificateValue, LiteCertificate};
 use lru::LruCache;
 use tokio::sync::Mutex;
+#[cfg(with_metrics)]
+use {
+    linera_base::{prometheus_util, sync::Lazy},
+    prometheus::IntCounterVec,
+};
 
 use crate::worker::WorkerError;
 
 /// The default cache size.
 const DEFAULT_VALUE_CACHE_SIZE: usize = 1000;
+
+/// A counter metric for the number of cache hits in the [`CertificateValueCache`].
+#[cfg(with_metrics)]
+static CACHE_HIT_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "certificate_value_cache_hit",
+        "Cache hits in `CertificateValueCache`",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
+
+/// A counter metric for the number of cache misses in the [`CertificateValueCache`].
+#[cfg(with_metrics)]
+static CACHE_MISS_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "certificate_value_cache_miss",
+        "Cache misses in `CertificateValueCache`",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
 
 /// A least-recently used cache of [`HashedCertificateValue`]s.
 pub struct CertificateValueCache {
@@ -76,7 +103,20 @@ impl CertificateValueCache {
 
     /// Returns a [`HashedCertificateValue`] from the cache, if present.
     pub async fn get(&self, hash: &CryptoHash) -> Option<HashedCertificateValue> {
-        self.cache.lock().await.get(hash).cloned()
+        let maybe_value = self.cache.lock().await.get(hash).cloned();
+
+        #[cfg(with_metrics)]
+        {
+            let metric = if maybe_value.is_some() {
+                &CACHE_HIT_COUNT
+            } else {
+                &CACHE_MISS_COUNT
+            };
+
+            metric.with_label_values(&[]).inc();
+        }
+
+        maybe_value
     }
 
     /// Populates a [`LiteCertificate`] with its [`CertificateValue`], if it's present in
