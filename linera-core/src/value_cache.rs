@@ -151,6 +151,24 @@ impl CertificateValueCache {
         true
     }
 
+    /// Inserts multiple [`HashedCertificateValue`]s into the cache. If they're not
+    /// already present.
+    ///
+    /// The `values` are wrapped in [`Cow`]s so that each `value` is only cloned if it
+    /// needs to be inserted in the cache.
+    pub async fn insert_all<'a>(
+        &self,
+        values: impl IntoIterator<Item = Cow<'a, HashedCertificateValue>>,
+    ) {
+        let mut cache = self.cache.lock().await;
+        for value in values {
+            let hash = value.hash();
+            if !cache.contains(&hash) {
+                cache.push(hash, value.into_owned());
+            }
+        }
+    }
+
     /// Inserts the validated block and the corresponding confirmed block.
     pub async fn insert_validated_and_confirmed(&self, value: &HashedCertificateValue) {
         if self.insert(Cow::Borrowed(value)).await {

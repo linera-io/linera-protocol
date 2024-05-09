@@ -656,9 +656,9 @@ where
         self.check_no_missing_bytecode(block, hashed_certificate_values)
             .await?;
         // Persist certificate and hashed certificate values.
-        for value in hashed_certificate_values {
-            self.cache_recent_value(Cow::Borrowed(value)).await;
-        }
+        self.recent_values
+            .insert_all(hashed_certificate_values.iter().map(Cow::Borrowed))
+            .await;
         let (result_hashed_certificate_value, result_certificate) = tokio::join!(
             self.storage
                 .write_hashed_certificate_values(hashed_certificate_values),
