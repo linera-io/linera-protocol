@@ -5,7 +5,6 @@
 use std::{
     borrow::Cow,
     collections::{hash_map, BTreeMap, BTreeSet, HashMap, VecDeque},
-    num::NonZeroUsize,
     sync::Arc,
     time::Duration,
 };
@@ -35,7 +34,6 @@ use linera_views::{
     log_view::LogView,
     views::{RootView, View, ViewError},
 };
-use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{oneshot, Mutex};
@@ -52,7 +50,10 @@ use {
     prometheus::{HistogramVec, IntCounterVec},
 };
 
-use crate::data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest};
+use crate::{
+    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    value_cache::CertificateValueCache,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
@@ -259,8 +260,6 @@ impl From<linera_chain::ChainError> for WorkerError {
     }
 }
 
-pub(crate) const DEFAULT_VALUE_CACHE_SIZE: usize = 1000;
-
 /// State of a worker in a validator or a local node.
 #[derive(Clone)]
 pub struct WorkerState<StorageClient> {
@@ -279,7 +278,7 @@ pub struct WorkerState<StorageClient> {
     /// will wait until that timestamp before voting.
     grace_period: Duration,
     /// Cached values by hash.
-    recent_values: Arc<Mutex<LruCache<CryptoHash, HashedCertificateValue>>>,
+    recent_values: Arc<CertificateValueCache>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
@@ -290,9 +289,6 @@ pub(crate) type DeliveryNotifiers =
 
 impl<StorageClient> WorkerState<StorageClient> {
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
-        let recent_values = Arc::new(Mutex::new(LruCache::new(
-            NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
-        )));
         WorkerState {
             nickname,
             key_pair: key_pair.map(Arc::new),
@@ -300,7 +296,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
             grace_period: Duration::ZERO,
-            recent_values,
+            recent_values: Arc::new(CertificateValueCache::default()),
             delivery_notifiers: Arc::default(),
         }
     }
@@ -308,7 +304,7 @@ impl<StorageClient> WorkerState<StorageClient> {
     pub fn new_for_client(
         nickname: String,
         storage: StorageClient,
-        recent_values: Arc<Mutex<LruCache<CryptoHash, HashedCertificateValue>>>,
+        recent_values: Arc<CertificateValueCache>,
         delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     ) -> Self {
         WorkerState {
@@ -369,21 +365,14 @@ impl<StorageClient> WorkerState<StorageClient> {
         &mut self,
         certificate: LiteCertificate<'_>,
     ) -> Result<Certificate, WorkerError> {
-        let hash = certificate.value.value_hash;
-        let mut recent_values = self.recent_values.lock().await;
-        let value = recent_values
-            .get(&hash)
-            .ok_or(WorkerError::MissingCertificateValue)?;
-        certificate
-            .with_value(value.clone())
-            .ok_or(WorkerError::InvalidLiteCertificate)
+        self.recent_values.full_certificate(certificate).await
     }
 
     pub(crate) async fn recent_value(
         &mut self,
         hash: &CryptoHash,
     ) -> Option<HashedCertificateValue> {
-        self.recent_values.lock().await.get(hash).cloned()
+        self.recent_values.get(hash).await
     }
 }
 
@@ -726,7 +715,9 @@ where
             notify_when_messages_are_delivered,
         )
         .await;
-        self.cache_recent_value(Cow::Owned(certificate.value)).await;
+        self.recent_values
+            .insert(Cow::Owned(certificate.value))
+            .await;
 
         #[cfg(with_metrics)]
         NUM_BLOCKS.with_label_values(&[]).inc();
@@ -754,10 +745,14 @@ where
                 WorkerError::UnneededValue { value_hash }
             );
         }
-        let recent_values = self.recent_values.lock().await;
-        let tasks = required_locations_left
-            .into_values()
-            .filter(|location| !recent_values.contains(&location.certificate_hash))
+        let tasks = self
+            .recent_values
+            .subtract_cached_items_from::<_, Vec<_>>(
+                required_locations_left.into_values(),
+                |location| &location.certificate_hash,
+            )
+            .await
+            .into_iter()
             .map(|location| {
                 self.storage
                     .contains_hashed_certificate_value(location.certificate_hash)
@@ -815,7 +810,9 @@ where
                 true,
             ));
         }
-        self.cache_validated(&certificate.value).await;
+        self.recent_values
+            .insert_validated_and_confirmed(&certificate.value)
+            .await;
         let old_round = chain.manager.get().current_round;
         chain.manager.get_mut().create_final_vote(
             certificate,
@@ -937,23 +934,7 @@ where
     }
 
     pub async fn cache_recent_value<'a>(&mut self, value: Cow<'a, HashedCertificateValue>) -> bool {
-        let hash = value.hash();
-        let mut recent_values = self.recent_values.lock().await;
-        if recent_values.contains(&hash) {
-            return false;
-        }
-        // Cache the certificate so that clients don't have to send the value again.
-        recent_values.push(hash, value.into_owned());
-        true
-    }
-
-    /// Caches the validated block and the corresponding confirmed block.
-    async fn cache_validated(&mut self, value: &HashedCertificateValue) {
-        if self.cache_recent_value(Cow::Borrowed(value)).await {
-            if let Some(value) = value.validated_to_confirmed() {
-                self.cache_recent_value(Cow::Owned(value)).await;
-            }
-        }
+        self.recent_values.insert(value).await
     }
 
     /// Returns a stored [`Certificate`] for a chain's block.
@@ -1164,7 +1145,9 @@ where
         manager.create_vote(proposal, outcome, self.key_pair(), local_time);
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
-            self.cache_validated(&vote.value).await;
+            self.recent_values
+                .insert_validated_and_confirmed(&vote.value)
+                .await;
         }
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
