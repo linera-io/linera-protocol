@@ -4707,7 +4707,6 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "reqwest 0.12.4",
- "rustc-hex",
  "serde",
  "thiserror",
  "tokio",
