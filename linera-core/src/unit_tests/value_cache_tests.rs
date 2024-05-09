@@ -53,6 +53,25 @@ async fn test_insert_many_values_individually() {
     );
 }
 
+/// Tests inserting many values in the cache, all-at-once.
+#[tokio::test]
+async fn test_insert_many_values_together() {
+    let cache = CertificateValueCache::default();
+    let values = create_dummy_values(0..(DEFAULT_VALUE_CACHE_SIZE as u64)).collect::<Vec<_>>();
+
+    cache.insert_all(values.iter().map(Cow::Borrowed)).await;
+
+    for value in &values {
+        assert!(cache.contains(&value.hash()).await);
+        assert_eq!(cache.get(&value.hash()).await.as_ref(), Some(value));
+    }
+
+    assert_eq!(
+        cache.keys::<BTreeSet<_>>().await,
+        BTreeSet::from_iter(values.iter().map(HashedCertificateValue::hash))
+    );
+}
+
 /// Creates multiple dummy [`HashedCertificateValue`]s to use in the tests.
 fn create_dummy_values<Heights>(heights: Heights) -> impl Iterator<Item = HashedCertificateValue>
 where
