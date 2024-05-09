@@ -9,6 +9,16 @@ use linera_execution::committee::Epoch;
 
 use super::CertificateValueCache;
 
+/// Tests attempt to retrieve non-existent value.
+#[tokio::test]
+async fn test_retrieve_missing_value() {
+    let cache = CertificateValueCache::default();
+    let hash = CryptoHash::test_hash("Missing value");
+
+    assert!(cache.get(&hash).await.is_none());
+    assert!(cache.keys::<Vec<_>>().await.is_empty());
+}
+
 /// Tests inserting a value in the cache.
 #[tokio::test]
 async fn test_insert_single_value() {
