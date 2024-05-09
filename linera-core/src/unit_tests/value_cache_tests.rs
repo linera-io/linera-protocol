@@ -72,6 +72,28 @@ async fn test_insert_many_values_together() {
     );
 }
 
+/// Tests eviction of one entry.
+#[tokio::test]
+async fn test_one_eviction() {
+    let cache = CertificateValueCache::default();
+    let values = create_dummy_values(0..=(DEFAULT_VALUE_CACHE_SIZE as u64)).collect::<Vec<_>>();
+
+    cache.insert_all(values.iter().map(Cow::Borrowed)).await;
+
+    assert!(!cache.contains(&values[0].hash()).await);
+    assert!(cache.get(&values[0].hash()).await.is_none());
+
+    for value in values.iter().skip(1) {
+        assert!(cache.contains(&value.hash()).await);
+        assert_eq!(cache.get(&value.hash()).await.as_ref(), Some(value));
+    }
+
+    assert_eq!(
+        cache.keys::<BTreeSet<_>>().await,
+        BTreeSet::from_iter(values.iter().skip(1).map(HashedCertificateValue::hash))
+    );
+}
+
 /// Creates multiple dummy [`HashedCertificateValue`]s to use in the tests.
 fn create_dummy_values<Heights>(heights: Heights) -> impl Iterator<Item = HashedCertificateValue>
 where
