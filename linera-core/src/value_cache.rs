@@ -3,6 +3,10 @@
 
 //! A least-recently used cache of [`HashedCertificateValue`]s.
 
+#[cfg(test)]
+#[path = "unit_tests/value_cache_tests.rs"]
+mod unit_tests;
+
 use std::{borrow::Cow, num::NonZeroUsize};
 
 use linera_base::crypto::CryptoHash;
