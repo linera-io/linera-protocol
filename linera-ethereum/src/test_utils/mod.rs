@@ -11,10 +11,11 @@ use alloy::{
     },
     signers::{wallet::LocalWallet, Signer},
     sol,
+    transports::http::reqwest::Client,
 };
 use alloy_primitives::Address;
 use linera_storage_service::child::get_free_port;
-use reqwest::Client;
+use url::Url;
 
 use crate::client::{EthereumEndpoint, HttpProvider};
 
@@ -38,7 +39,7 @@ pub struct AnvilTest {
     pub endpoint: String,
     pub ethereum_endpoint: EthereumEndpoint<HttpProvider>,
     pub wallet_info: (LocalWallet, String),
-    pub rpc_url: reqwest::Url,
+    pub rpc_url: Url,
     pub provider: FillProvider<
         JoinFill<
             JoinFill<
@@ -62,7 +63,7 @@ pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
     let wallet_info = (wallet.clone(), address);
     let endpoint = anvil_instance.endpoint();
     let ethereum_endpoint = EthereumEndpoint::new(endpoint.clone())?;
-    let rpc_url = reqwest::Url::parse(&endpoint)?;
+    let rpc_url = Url::parse(&endpoint)?;
     let provider = ProviderBuilder::new()
         .with_recommended_fillers()
         .signer(EthereumSigner::from(wallet))

@@ -8,9 +8,10 @@ use alloy::{
         request::{TransactionInput, TransactionRequest},
         BlockId, BlockNumberOrTag, Filter,
     },
+    transports::http::reqwest::Client,
 };
 use alloy_primitives::Bytes;
-use reqwest::Client;
+use url::Url;
 
 use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
 pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
@@ -103,7 +104,7 @@ impl EthereumEndpoint<HttpProvider> {
     /// Connects to an existing Ethereum node and creates an `EthereumEndpoint`
     /// if successful.
     pub fn new(url: String) -> Result<Self, EthereumServiceError> {
-        let rpc_url = reqwest::Url::parse(&url)?;
+        let rpc_url = Url::parse(&url)?;
         let provider = ProviderBuilder::new().on_http(rpc_url);
         let endpoint = Self { provider };
         Ok(endpoint)

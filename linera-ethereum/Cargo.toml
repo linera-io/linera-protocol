@@ -23,7 +23,6 @@ anyhow.workspace = true
 linera-storage-service.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true
-reqwest = { version = "0.12.4" }
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
