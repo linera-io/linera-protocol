@@ -167,7 +167,7 @@ pub fn parse_log(
         .collect::<Vec<_>>();
     let mut values = Vec::new();
     let mut topic_index = 0;
-    let mut idx_data = 0;
+    let mut data_index = 0;
     let mut vec = [0_u8; 32];
     let log_data = log.data();
     let topics = log_data.topics();
@@ -175,9 +175,9 @@ pub fn parse_log(
         values.push(match ethereum_type.strip_suffix(" indexed") {
             None => {
                 for (i, val) in vec.iter_mut().enumerate() {
-                    *val = log_data.data[idx_data * 32 + i];
+                    *val = log_data.data[data_index * 32 + i];
                 }
-                idx_data += 1;
+                data_index += 1;
                 let entry = vec.into();
                 parse_entry(entry, &ethereum_type)?
             }
