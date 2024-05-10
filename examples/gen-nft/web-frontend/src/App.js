@@ -250,15 +250,12 @@ function App({ chainId, owner }) {
 
           <Typography style={{ fontWeight: 'bold' }} variant="h6">Your Owned NFTs:</Typography>
           <Table columns={columns} loading={ownedNftsLoading} dataSource={ownedNftsData ? Object.entries(ownedNftsData.ownedNfts).map(([token_id, nft]) => {
-            const decoder = new TextDecoder();
-            const deserializedImage = decoder.decode(new Uint8Array(nft.payload));
-
             return {
               key: token_id,
               token_id: token_id,
               name: nft.name,
               minter: nft.minter,
-              payload: deserializedImage,
+              prompt: nft.prompt,
             };
           }) : []} />
 
