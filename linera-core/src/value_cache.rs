@@ -151,18 +151,26 @@ impl CertificateValueCache {
     /// [`HashedCertificateValue::ConfirmedBlock`] is also cached.
     pub async fn insert<'a>(&self, value: Cow<'a, HashedCertificateValue>) -> bool {
         let hash = value.hash();
+        let maybe_confirmed_value = value.validated_to_confirmed();
         let mut cache = self.cache.lock().await;
         if cache.contains(&hash) {
-            return false;
+            // Promote the re-inserted value in the cache, as if it was accessed again.
+            cache.promote(&hash);
+            if let Some(confirmed_value) = maybe_confirmed_value {
+                // Also promote its respective confirmed certificate value
+                cache.promote(&confirmed_value.hash());
+            }
+            false
+        } else {
+            // Cache the certificate so that clients don't have to send the value again.
+            cache.push(hash, value.into_owned());
+            if let Some(confirmed_value) = maybe_confirmed_value {
+                // Cache the certificate for the confirmed block in advance, so that the clients don't
+                // have to send it.
+                cache.push(confirmed_value.hash(), confirmed_value);
+            }
+            true
         }
-        if let Some(confirmed_value) = value.validated_to_confirmed() {
-            // Cache the certificate for the confirmed block in advance, so that the clients don't
-            // have to send it.
-            cache.push(confirmed_value.hash(), confirmed_value);
-        }
-        // Cache the certificate so that clients don't have to send the value again.
-        cache.push(hash, value.into_owned());
-        true
     }
 
     /// Inserts multiple [`HashedCertificateValue`]s into the cache. If they're not
