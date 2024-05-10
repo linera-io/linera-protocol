@@ -28,6 +28,8 @@ resolver = "2"
 
 [workspace.dependencies]
 heck = "0.4.1"
+alloy = { git = "https://github.com/alloy-rs/alloy", rev = "b79db21734cffddc11753fe62ba571565c896f42", default-features = false, features = [ "providers", "rpc-types-eth", "reqwest", "rpc-client", "provider-http", "json-rpc", "signers", "sol-types", "node-bindings", "signer-wallet", "network", "json-abi", "json-rpc", "contract" ] }
+alloy-primitives = "0.7.2"
 anyhow = "1.0.80"
 assert_matches = "1.5.0"
 async-graphql = "=7.0.2"
@@ -64,10 +66,6 @@ dirs = "5.0.1"
 ed25519-dalek = { version = "2.1.1", features = ["batch", "serde"] }
 either = "1.10.0"
 ethers = { version = "2.0.14", features = ["solc"] }
-ethers-core = "2.0.14"
-ethers-providers = "2.0.14"
-ethers-middleware = "2.0.14"
-ethers-signers = "2.0.14"
 frunk = "0.4.2"
 fs-err = { version = "2.11.0", features = ["tokio"] }
 fs4 = "0.8.2"
@@ -105,7 +103,6 @@ kube = "0.88.1"
 rcgen = "0.12.1"
 reqwest = { version = "0.11.24", default-features = false, features = ["rustls-tls"] }
 rocksdb = "0.21.0"
-rustc-hex = "2.1.0"
 scylla = "0.12.0"
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }

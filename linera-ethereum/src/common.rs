@@ -3,8 +3,11 @@
 
 use std::num::ParseIntError;
 
-use ethers::types::{Log, U256};
-use ethers_core::types::{Address, H256};
+use alloy::{
+    primitives::{Address, U256},
+    rpc::{json_rpc, types::eth::Log},
+};
+use alloy_primitives::B256;
 use num_bigint::{BigInt, BigUint};
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -40,13 +43,13 @@ pub enum EthereumServiceError {
     #[error("Parse bool error")]
     ParseBoolError,
 
-    /// Provider error
-    #[error(transparent)]
-    ProviderError(#[from] ethers_providers::ProviderError),
-
     /// Hex parsing error
     #[error(transparent)]
-    FromHexError(#[from] rustc_hex::FromHexError),
+    FromHexError(#[from] alloy_primitives::hex::FromHexError),
+
+    /// Rpc error
+    #[error(transparent)]
+    RpcError(#[from] json_rpc::RpcError<alloy::transports::TransportErrorKind>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,14 +74,14 @@ pub fn event_name_from_expanded(event_name_expanded: &str) -> String {
     event_name_expanded.replace(" indexed", "").to_string()
 }
 
-fn parse_entry(entry: H256, ethereum_type: &str) -> Result<EthereumDataType, EthereumServiceError> {
+fn parse_entry(entry: B256, ethereum_type: &str) -> Result<EthereumDataType, EthereumServiceError> {
     if ethereum_type == "address" {
-        let address = Address::from(entry);
+        let address = Address::from_word(entry);
         let address = format!("{:?}", address);
         return Ok(EthereumDataType::Address(address));
     }
     if ethereum_type == "uint256" {
-        let entry = U256::from_big_endian(&entry.0);
+        let entry = U256::from_be_bytes(entry.0);
         return Ok(EthereumDataType::Uint256(entry));
     }
     if ethereum_type == "uint64" {
@@ -163,27 +166,28 @@ pub fn parse_log(
         .map(|s| s.to_string())
         .collect::<Vec<_>>();
     let mut values = Vec::new();
-    let mut idx_topic = 0;
-    let mut idx_data = 0;
+    let mut topic_index = 0;
+    let mut data_index = 0;
     let mut vec = [0_u8; 32];
+    let log_data = log.data();
+    let topics = log_data.topics();
     for ethereum_type in ethereum_types {
         values.push(match ethereum_type.strip_suffix(" indexed") {
             None => {
                 for (i, val) in vec.iter_mut().enumerate() {
-                    *val = log.data[idx_data * 32 + i];
+                    *val = log_data.data[data_index * 32 + i];
                 }
-                idx_data += 1;
+                data_index += 1;
                 let entry = vec.into();
                 parse_entry(entry, &ethereum_type)?
             }
             Some(ethereum_type) => {
-                idx_topic += 1;
-                parse_entry(log.topics[idx_topic], ethereum_type)?
+                topic_index += 1;
+                parse_entry(topics[topic_index], ethereum_type)?
             }
         });
     }
     let block_number = log.block_number.unwrap();
-    let block_number = block_number.0[0];
     Ok(EthereumEvent {
         values,
         block_number,
