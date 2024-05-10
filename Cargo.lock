@@ -3040,6 +3040,7 @@ version = "0.10.1"
 dependencies = [
  "anyhow",
  "async-graphql",
+ "async-graphql-derive",
  "async-trait",
  "bcs",
  "cfg_aliases",
