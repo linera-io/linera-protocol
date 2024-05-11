@@ -34,6 +34,7 @@ COPY examples examples
 COPY linera-base linera-base
 COPY linera-chain linera-chain
 COPY linera-core linera-core
+COPY linera-ethereum linera-ethereum
 COPY linera-execution linera-execution
 COPY linera-explorer linera-explorer
 COPY linera-indexer linera-indexer
