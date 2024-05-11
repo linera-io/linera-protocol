@@ -277,9 +277,6 @@ pub struct WorkerState<StorageClient> {
     storage: StorageClient,
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
-    /// Blocks with a timestamp this far in the future will still be accepted, but the validator
-    /// will wait until that timestamp before voting.
-    grace_period: Duration,
     /// Cached hashed certificate values by hash.
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
     /// Cached hashed blobs by `BlobId`.
@@ -298,7 +295,6 @@ impl<StorageClient> WorkerState<StorageClient> {
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
-            grace_period: Duration::ZERO,
             recent_hashed_certificate_values: Arc::new(ValueCache::default()),
             recent_hashed_blobs: Arc::new(ValueCache::default()),
             delivery_notifiers: Arc::default(),
@@ -316,7 +312,6 @@ impl<StorageClient> WorkerState<StorageClient> {
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
-            grace_period: Duration::ZERO,
             recent_hashed_certificate_values,
             recent_hashed_blobs,
             delivery_notifiers,
@@ -339,7 +334,7 @@ impl<StorageClient> WorkerState<StorageClient> {
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
     pub fn with_grace_period(mut self, grace_period: Duration) -> Self {
-        self.grace_period = grace_period;
+        self.chain_worker_config.grace_period = grace_period;
         self
     }
 
@@ -1151,7 +1146,7 @@ where
             .await?;
         let local_time = self.storage.clock().current_time();
         ensure!(
-            block.timestamp.duration_since(local_time) <= self.grace_period,
+            block.timestamp.duration_since(local_time) <= self.chain_worker_config.grace_period,
             WorkerError::InvalidTimestamp
         );
         self.storage.clock().sleep_until(block.timestamp).await;
