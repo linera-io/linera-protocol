@@ -782,9 +782,9 @@ where
         #[cfg(with_metrics)]
         let round = proposal.content.round;
         let response = self
-            .create_chain_worker(proposal.content.block.chain_id)
-            .await?
-            .handle_block_proposal(proposal)
+            .query_chain_worker(proposal.content.block.chain_id, move |callback| {
+                ChainWorkerRequest::HandleBlockProposal { proposal, callback }
+            })
             .await?;
         #[cfg(with_metrics)]
         NUM_ROUNDS_IN_BLOCK_PROPOSAL
