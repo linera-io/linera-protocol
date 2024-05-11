@@ -11,7 +11,8 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::{
-    Block, Certificate, ExecutedBlock, HashedCertificateValue, MessageBundle, Origin, Target,
+    Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, MessageBundle,
+    Origin, Target,
 };
 use linera_execution::{Query, Response, UserApplicationDescription, UserApplicationId};
 use linera_storage::Storage;
@@ -82,6 +83,12 @@ pub enum ChainWorkerRequest {
     /// Process a leader timeout issued for this multi-owner chain.
     ProcessTimeout {
         certificate: Certificate,
+        callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
+    },
+
+    /// Handle a proposal for the next block on this chain.
+    HandleBlockProposal {
+        proposal: BlockProposal,
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
@@ -199,6 +206,9 @@ where
                     callback,
                 } => {
                     let _ = callback.send(self.worker.process_timeout(certificate).await);
+                }
+                ChainWorkerRequest::HandleBlockProposal { proposal, callback } => {
+                    let _ = callback.send(self.worker.handle_block_proposal(proposal).await);
                 }
                 ChainWorkerRequest::ProcessCrossChainUpdate {
                     origin,
