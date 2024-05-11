@@ -4,10 +4,12 @@
 //! The state and functionality of a chain worker.
 
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
 
+use futures::{future, FutureExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{ArithmeticError, BlockHeight, HashedBlob},
@@ -16,14 +18,15 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
-        IncomingMessage, Medium, MessageAction, MessageBundle, Origin, Target,
+        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
+        HashedCertificateValue, IncomingMessage, Medium, MessageAction, MessageBundle, Origin,
+        Target,
     },
-    ChainError, ChainStateView,
+    manager, ChainError, ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    Query, Response, UserApplicationDescription, UserApplicationId,
+    BytecodeLocation, Query, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::{
@@ -32,10 +35,7 @@ use linera_views::{
 };
 use tracing::{debug, warn};
 #[cfg(with_testing)]
-use {
-    linera_base::identifiers::BytecodeId, linera_chain::data_types::Event,
-    linera_execution::BytecodeLocation,
-};
+use {linera_base::identifiers::BytecodeId, linera_chain::data_types::Event};
 
 use super::ChainWorkerConfig;
 use crate::{
@@ -243,6 +243,114 @@ where
         Ok((info, actions))
     }
 
+    /// Handles a proposal for the next block for this chain.
+    pub async fn handle_block_proposal(
+        &mut self,
+        proposal: BlockProposal,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        let BlockProposal {
+            content: BlockAndRound { block, round },
+            owner,
+            hashed_certificate_values,
+            hashed_blobs,
+            validated,
+            signature: _,
+        } = &proposal;
+        self.ensure_is_active()?;
+        // Check the epoch.
+        let (epoch, committee) = self
+            .chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        Self::check_block_epoch(epoch, block)?;
+        if let Some(validated) = validated {
+            validated.check(committee)?;
+        }
+        // Check the authentication of the block.
+        let public_key = self
+            .chain
+            .manager
+            .get()
+            .verify_owner(&proposal)
+            .ok_or(WorkerError::InvalidOwner)?;
+        proposal.check_signature(public_key)?;
+        // Check the authentication of the operations in the block.
+        if let Some(signer) = block.authenticated_signer {
+            ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
+        }
+        // Check if the chain is ready for this new block proposal.
+        // This should always pass for nodes without voting key.
+        self.chain.tip_state.get().verify_block_chaining(block)?;
+        if self.chain.manager.get().check_proposed_block(&proposal)? == manager::Outcome::Skip {
+            // If we just processed the same pending block, return the chain info unchanged.
+            return Ok((
+                ChainInfoResponse::new(&self.chain, self.config.key_pair()),
+                NetworkActions::default(),
+            ));
+        }
+        // Update the inboxes so that we can verify the provided hashed certificate values are
+        // legitimately required.
+        // Actual execution happens below, after other validity checks.
+        self.chain.remove_events_from_inboxes(block).await?;
+        // Verify that all required bytecode hashed certificate values are available, and no
+        // unrelated ones provided.
+        self.check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
+            .await?;
+        // Write the values so that the bytecode is available during execution.
+        self.storage
+            .write_hashed_certificate_values(hashed_certificate_values)
+            .await?;
+        let local_time = self.storage.clock().current_time();
+        ensure!(
+            block.timestamp.duration_since(local_time) <= self.config.grace_period,
+            WorkerError::InvalidTimestamp
+        );
+        self.storage.clock().sleep_until(block.timestamp).await;
+        let local_time = self.storage.clock().current_time();
+        let outcome = if let Some(validated) = validated {
+            validated
+                .value()
+                .executed_block()
+                .ok_or_else(|| WorkerError::MissingExecutedBlockInProposal)?
+                .outcome
+                .clone()
+        } else {
+            self.chain.execute_block(block, local_time, None).await?
+        };
+        if round.is_fast() {
+            let mut records = outcome.oracle_records.iter();
+            ensure!(
+                records.all(|record| record.responses.is_empty()),
+                WorkerError::FastBlockUsingOracles
+            );
+        }
+        // Check if the counters of tip_state would be valid.
+        self.chain
+            .tip_state
+            .get()
+            .verify_counters(block, &outcome)?;
+        // Verify that the resulting chain would have no unconfirmed incoming messages.
+        self.chain.validate_incoming_messages().await?;
+        // Reset all the staged changes as we were only validating things.
+        self.chain.rollback();
+        // Create the vote and store it in the chain state.
+        let manager = self.chain.manager.get_mut();
+        manager.create_vote(proposal, outcome, self.config.key_pair(), local_time);
+        // Cache the value we voted on, so the client doesn't have to send it again.
+        if let Some(vote) = manager.pending() {
+            self.recent_hashed_certificate_values
+                .insert(Cow::Borrowed(&vote.value))
+                .await;
+        }
+        let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
+        self.chain.save().await?;
+        // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
+        let actions = self.create_network_actions().await?;
+        Ok((info, actions))
+    }
+
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
     pub async fn process_cross_chain_update(
         &mut self,
@@ -430,6 +538,120 @@ where
             self.knows_chain_is_active = true;
         }
         Ok(())
+    }
+
+    /// Returns an error if the block is not at the expected epoch.
+    fn check_block_epoch(chain_epoch: Epoch, block: &Block) -> Result<(), WorkerError> {
+        ensure!(
+            block.epoch == chain_epoch,
+            WorkerError::InvalidEpoch {
+                chain_id: block.chain_id,
+                epoch: block.epoch,
+                chain_epoch
+            }
+        );
+        Ok(())
+    }
+
+    /// Returns an error if the block requires bytecode or a blob we don't have, or if unrelated bytecode
+    /// hashed certificate values or blobs were provided.
+    async fn check_no_missing_blobs(
+        &self,
+        block: &Block,
+        hashed_certificate_values: &[HashedCertificateValue],
+        hashed_blobs: &[HashedBlob],
+    ) -> Result<(), WorkerError> {
+        let missing_bytecodes = self
+            .get_missing_bytecodes(block, hashed_certificate_values)
+            .await?;
+        let missing_blobs = self.get_missing_blobs(block, hashed_blobs).await?;
+
+        if missing_bytecodes.is_empty() {
+            if missing_blobs.is_empty() {
+                Ok(())
+            } else {
+                Err(WorkerError::BlobsNotFound(missing_blobs))
+            }
+        } else if missing_blobs.is_empty() {
+            Err(WorkerError::ApplicationBytecodesNotFound(missing_bytecodes))
+        } else {
+            Err(WorkerError::ApplicationBytecodesAndBlobsNotFound(
+                missing_bytecodes,
+                missing_blobs,
+            ))
+        }
+    }
+
+    /// Returns the blobs required by the block that we don't have, or an error if unrelated blobs were provided.
+    async fn get_missing_blobs(
+        &self,
+        block: &Block,
+        hashed_blobs: &[HashedBlob],
+    ) -> Result<Vec<BlobId>, WorkerError> {
+        let mut required_blob_ids = block.blob_ids();
+        // Find all certificates containing blobs used when executing this block.
+        for hashed_blob in hashed_blobs {
+            let blob_id = hashed_blob.id();
+            ensure!(
+                required_blob_ids.remove(&blob_id),
+                WorkerError::UnneededBlob { blob_id }
+            );
+        }
+
+        let pending_blobs = &self.chain.manager.get().pending_blobs;
+        Ok(self
+            .recent_hashed_blobs
+            .subtract_cached_items_from::<_, Vec<_>>(required_blob_ids, |id| id)
+            .await
+            .into_iter()
+            .filter(|blob_id| !pending_blobs.contains_key(blob_id))
+            .collect::<Vec<_>>())
+    }
+
+    /// Returns an error if the block requires bytecode we don't have, or if unrelated bytecode
+    /// hashed certificate values were provided.
+    async fn get_missing_bytecodes(
+        &self,
+        block: &Block,
+        hashed_certificate_values: &[HashedCertificateValue],
+    ) -> Result<Vec<BytecodeLocation>, WorkerError> {
+        // Find all certificates containing bytecode used when executing this block.
+        let mut required_locations_left: HashMap<_, _> = block
+            .bytecode_locations()
+            .into_keys()
+            .map(|bytecode_location| (bytecode_location.certificate_hash, bytecode_location))
+            .collect();
+        for value in hashed_certificate_values {
+            let value_hash = value.hash();
+            ensure!(
+                required_locations_left.remove(&value_hash).is_some(),
+                WorkerError::UnneededValue { value_hash }
+            );
+        }
+        let tasks = self
+            .recent_hashed_certificate_values
+            .subtract_cached_items_from::<_, Vec<_>>(
+                required_locations_left.into_values(),
+                |location| &location.certificate_hash,
+            )
+            .await
+            .into_iter()
+            .map(|location| {
+                self.storage
+                    .contains_hashed_certificate_value(location.certificate_hash)
+                    .map(move |result| (location, result))
+            })
+            .collect::<Vec<_>>();
+        let mut missing_locations = vec![];
+        for (location, result) in future::join_all(tasks).await {
+            match result {
+                Ok(true) => {}
+                Ok(false) => missing_locations.push(location),
+                Err(err) => Err(err)?,
+            }
+        }
+
+        Ok(missing_locations.into_iter().collect())
     }
 
     /// Loads pending cross-chain requests.
