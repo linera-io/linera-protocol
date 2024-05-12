@@ -39,6 +39,10 @@ pub enum EthereumServiceError {
     #[error(transparent)]
     ParseBigIntError(#[from] num_bigint::ParseBigIntError),
 
+    /// Ethereum parsing error
+    #[error("Ethereum parsing error")]
+    EthereumParsingError,
+
     /// Parse bool error
     #[error("Parse bool error")]
     ParseBoolError,
@@ -51,9 +55,17 @@ pub enum EthereumServiceError {
     #[error(transparent)]
     RpcError(#[from] json_rpc::RpcError<alloy::transports::TransportErrorKind>),
 
+    /// Serde json error
+    #[error(transparent)]
+    SerdeJsonError(#[from] serde_json::Error),
+
     /// Reqwest error
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
+
+    /// Alloy Reqwest error
+    #[error(transparent)]
+    AlloyReqwestError(#[from] alloy::transports::http::reqwest::Error),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -5,7 +5,7 @@
 use {
     alloy_primitives::U256,
     linera_ethereum::{
-        client::EthereumQueries,
+        client::{EthereumClientSimplified, EthereumQueries},
         common::{EthereumDataType, EthereumEvent},
         test_utils::{get_anvil, EventNumericsContractFunction, SimpleTokenContractFunction},
     },
@@ -17,7 +17,9 @@ use {
 async fn test_get_accounts_balance() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
     let ethereum_client = anvil_test.ethereum_client;
+    let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint);
     let addresses = ethereum_client.get_accounts().await?;
+    let addresses_simp = ethereum_client_simp.get_accounts().await?;
     let block_number = ethereum_client.get_block_number().await?;
     let target_balance = U256::from_str("10000000000000000000000")?;
     for address in addresses {

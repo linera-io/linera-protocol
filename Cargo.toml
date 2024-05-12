@@ -28,7 +28,7 @@ resolver = "2"
 
 [workspace.dependencies]
 heck = "0.4.1"
-alloy = { git = "https://github.com/alloy-rs/alloy", rev = "b79db21734cffddc11753fe62ba571565c896f42", default-features = false, features = [ "providers", "rpc-types-eth", "reqwest", "rpc-client", "provider-http", "json-rpc", "signers", "sol-types", "node-bindings", "signer-wallet", "network", "json-abi", "json-rpc", "contract" ] }
+alloy = { git = "https://github.com/alloy-rs/alloy", rev = "b79db21734cffddc11753fe62ba571565c896f42", default-features = false, features = [ "providers", "rpc-types-eth", "reqwest", "rpc-client", "provider-http", "json-rpc", "signers", "sol-types", "node-bindings", "transports", "transport-http", "signer-wallet", "network", "json-abi", "json-rpc", "contract" ] }
 alloy-primitives = "0.7.2"
 anyhow = "1.0.80"
 assert_matches = "1.5.0"
