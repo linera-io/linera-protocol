@@ -29,7 +29,7 @@ pub trait JsonRpcClient {
 }
 
 #[async_trait]
-impl JsonRpcClient for EthereumEndpointSimplified {
+impl JsonRpcClient for EthereumClientSimplified {
     type Error = EthereumServiceError;
     async fn request<T: Debug + Serialize + Send + Sync, R: DeserializeOwned + Send>(&self, method: &str, params: T) -> Result<R, Self::Error> {
         let params = serde_json::to_string(&params).expect("Failed to serialize parameters");
@@ -86,7 +86,7 @@ pub trait EthereumQueries {
 
 
 /// The Ethereum endpoint and its provider used for accessing the ethereum node.
-pub struct EthereumEndpointSimplified {
+pub struct EthereumClientSimplified {
     pub url: String,
 }
 
@@ -99,7 +99,7 @@ fn get_block_id(block_number: Option<u64>) -> BlockId {
 }
 
 #[async_trait]
-impl EthereumQueries for EthereumEndpointSimplified {
+impl EthereumQueries for EthereumClientSimplified {
     type Error = EthereumServiceError;
 
     async fn get_accounts(&self) -> Result<Vec<String>, Self::Error> {
@@ -158,22 +158,20 @@ impl EthereumQueries for EthereumEndpointSimplified {
     }
 }
 
-impl EthereumEndpointSimplified {
+impl EthereumClientSimplified {
     /// Connects to an existing Ethereum node and creates an `EthereumEndpoint`
     /// if successful.
-    pub fn new(url: String) -> Result<Self, EthereumServiceError> {
-        let endpoint = Self { url };
-        Ok(endpoint)
+    pub fn new(url: String) -> Self {
+        Self { url }
     }
 }
 
-
-pub struct EthereumEndpoint<M> {
+pub struct EthereumClient<M> {
     pub provider: M,
 }
 
 #[async_trait]
-impl EthereumQueries for EthereumEndpoint<HttpProvider> {
+impl EthereumQueries for EthereumClient<HttpProvider> {
     type Error = EthereumServiceError;
 
     async fn get_accounts(&self) -> Result<Vec<String>, EthereumServiceError> {
@@ -240,8 +238,8 @@ impl EthereumQueries for EthereumEndpoint<HttpProvider> {
     }
 }
 
-impl EthereumEndpoint<HttpProvider> {
-    /// Connects to an existing Ethereum node and creates an `EthereumEndpoint`
+impl EthereumClient<HttpProvider> {
+    /// Connects to an existing Ethereum node and creates an `EthereumClient`
     /// if successful.
     pub fn new(url: String) -> Result<Self, EthereumServiceError> {
         let rpc_url = Url::parse(&url)?;

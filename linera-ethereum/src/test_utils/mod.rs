@@ -18,7 +18,7 @@ use linera_storage_service::child::get_free_port;
 use url::Url;
 use crate::client::EthereumQueries;
 
-use crate::client::{EthereumEndpoint, HttpProvider};
+use crate::client::{EthereumClient, HttpProvider};
 
 sol!(
     #[allow(missing_docs)]
@@ -38,7 +38,7 @@ sol!(
 pub struct AnvilTest {
     pub anvil_instance: AnvilInstance,
     pub endpoint: String,
-    pub ethereum_endpoint: EthereumEndpoint<HttpProvider>,
+    pub ethereum_client: EthereumClient<HttpProvider>,
     pub wallet_info: (LocalWallet, String),
     pub rpc_url: Url,
     pub provider: FillProvider<
@@ -63,7 +63,7 @@ pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
     let address = format!("{:?}", anvil_instance.addresses()[index]);
     let wallet_info = (wallet.clone(), address);
     let endpoint = anvil_instance.endpoint();
-    let ethereum_endpoint = EthereumEndpoint::new(endpoint.clone())?;
+    let ethereum_client = EthereumClient::new(endpoint.clone())?;
     let rpc_url = Url::parse(&endpoint)?;
     let provider = ProviderBuilder::new()
         .with_recommended_fillers()
@@ -72,7 +72,7 @@ pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
     Ok(AnvilTest {
         anvil_instance,
         endpoint,
-        ethereum_endpoint,
+        ethereum_client,
         wallet_info,
         rpc_url,
         provider,
@@ -125,7 +125,7 @@ impl SimpleTokenContractFunction {
         // 3: transmitting it
         let answer = self
             .anvil_test
-            .ethereum_endpoint
+            .ethereum_client
             .non_executive_call(&self.contract_address, data, to)
             .await?;
         // 4: Converting the output

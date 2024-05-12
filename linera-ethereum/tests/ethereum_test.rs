@@ -5,6 +5,7 @@
 use {
     alloy_primitives::U256,
     linera_ethereum::{
+        client::EthereumQueries,
         common::{EthereumDataType, EthereumEvent},
         test_utils::{get_anvil, EventNumericsContractFunction, SimpleTokenContractFunction},
     },
@@ -15,12 +16,12 @@ use {
 #[tokio::test]
 async fn test_get_accounts_balance() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
-    let ethereum_endpoint = anvil_test.ethereum_endpoint;
-    let addresses = ethereum_endpoint.get_accounts().await?;
-    let block_number = ethereum_endpoint.get_block_number().await?;
+    let ethereum_client = anvil_test.ethereum_client;
+    let addresses = ethereum_client.get_accounts().await?;
+    let block_number = ethereum_client.get_block_number().await?;
     let target_balance = U256::from_str("10000000000000000000000")?;
     for address in addresses {
-        let balance = ethereum_endpoint
+        let balance = ethereum_client
             .get_balance(&address, Some(block_number))
             .await?;
         assert_eq!(balance, target_balance);
@@ -39,7 +40,7 @@ async fn test_event_numerics() -> anyhow::Result<()> {
     let event_name_expanded = "Types(address indexed,address,uint256,uint64,int64,uint32,int32,uint16,int16,uint8,int8,bool)";
     let events = event_numerics
         .anvil_test
-        .ethereum_endpoint
+        .ethereum_client
         .read_events(&contract_address, event_name_expanded, 0)
         .await?;
     let addr0 = event_numerics.anvil_test.get_address(0);
@@ -91,7 +92,7 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
     let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
     let events = simple_token
         .anvil_test
-        .ethereum_endpoint
+        .ethereum_client
         .read_events(&contract_address, event_name_expanded, 0)
         .await?;
     let value = U256::from(10);
