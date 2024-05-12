@@ -1,13 +1,15 @@
 [package]
 name = "linera-service-graphql-client"
-version = "0.11.0"
-edition = "2021"
 description = "A GraphQL client for Linera node service"
 readme = "README.md"
-repository = "https://github.com/linera-io/linera-protocol"
-homepage = "https://linera.dev"
 documentation = "https://docs.rs/linera-service-graphql-client/latest/linera_service_graphql_client/"
-license = "Apache-2.0"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
 
 [features]
 default = ["rocksdb"]

@@ -1,13 +1,13 @@
 [package]
 name = "linera-sdk-derive"
-version = "0.11.0"
 description = "The procedural macros for the crate `linera-sdk`"
-authors = ["Linera <contact@linera.io>"]
-repository = "https://github.com/linera-io/linera-protocol"
-homepage = "https://linera.io"
-license = "Apache-2.0"
-edition = "2021"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
 
 [lib]
 proc-macro = true
