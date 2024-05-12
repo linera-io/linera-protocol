@@ -26,6 +26,14 @@ members = [
 exclude = ["examples", "scripts"]
 resolver = "2"
 
+[workspace.package]
+version = "0.11.0"
+authors = ["Linera <contact@linera.io>"]
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.dev"
+license = "Apache-2.0"
+edition = "2021"
+
 [workspace.dependencies]
 heck = "0.4.1"
 alloy = { git = "https://github.com/alloy-rs/alloy", rev = "b79db21734cffddc11753fe62ba571565c896f42", default-features = false, features = [ "providers", "rpc-types-eth", "reqwest", "rpc-client", "provider-http", "json-rpc", "signers", "sol-types", "node-bindings", "signer-wallet", "network", "json-abi", "json-rpc", "contract" ] }
