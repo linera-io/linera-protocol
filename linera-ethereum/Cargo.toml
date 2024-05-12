@@ -20,10 +20,12 @@ ethereum = []
 alloy.workspace = true
 alloy-primitives.workspace = true
 anyhow.workspace = true
+async-trait.workspace = true
 linera-storage-service.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 url.workspace = true

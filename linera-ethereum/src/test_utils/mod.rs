@@ -16,6 +16,7 @@ use alloy::{
 use alloy_primitives::Address;
 use linera_storage_service::child::get_free_port;
 use url::Url;
+use crate::client::EthereumQueries;
 
 use crate::client::{EthereumEndpoint, HttpProvider};
 
