@@ -50,6 +50,10 @@ pub enum EthereumServiceError {
     /// Rpc error
     #[error(transparent)]
     RpcError(#[from] json_rpc::RpcError<alloy::transports::TransportErrorKind>),
+
+    /// Reqwest error
+    #[error(transparent)]
+    ReqwestError(#[from] reqwest::Error),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

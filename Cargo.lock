@@ -4707,6 +4707,7 @@ dependencies = [
  "linera-storage-service",
  "num-bigint",
  "num-traits",
+ "reqwest 0.11.24",
  "serde",
  "serde_json",
  "thiserror",

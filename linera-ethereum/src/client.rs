@@ -33,9 +33,9 @@ impl JsonRpcClient for EthereumEndpointSimplified {
     type Error = EthereumServiceError;
     async fn request<T: Debug + Serialize + Send + Sync, R: DeserializeOwned + Send>(&self, method: &str, params: T) -> Result<R, Self::Error> {
         let params = serde_json::to_string(&params).expect("Failed to serialize parameters");
-        let _url = format!("{}?method={method}&params={params}", self.url);
-        let json = "triggering_entry";
-        //        let json = contract_system_api::fetch_json(&url);
+        let url = format!("{}?method={method}&params={params}", self.url);
+        let response = reqwest::get(&url).await?;
+        let json = response.text().await?;
         Ok(serde_json::from_str(&json).expect("Failed to deserialize JSON response"))
     }
 }

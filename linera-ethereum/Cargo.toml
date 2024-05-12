@@ -24,6 +24,7 @@ async-trait.workspace = true
 linera-storage-service.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true
+reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
