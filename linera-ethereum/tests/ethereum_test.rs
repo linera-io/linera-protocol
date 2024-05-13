@@ -5,12 +5,12 @@
 use {
     alloy_primitives::U256,
     linera_ethereum::{
-        client::{EthereumClientSimplified, EthereumQueries},
+        client::EthereumQueries,
         common::{EthereumDataType, EthereumEvent},
+        provider::EthereumClientSimplified,
         test_utils::{get_anvil, EventNumericsContractFunction, SimpleTokenContractFunction},
     },
-    std::collections::BTreeSet,
-    std::str::FromStr,
+    std::{collections::BTreeSet, str::FromStr},
 };
 
 #[cfg(feature = "ethereum")]

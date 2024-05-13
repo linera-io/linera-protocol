@@ -3,6 +3,8 @@
 
 use std::num::ParseIntError;
 
+#[cfg(not(target_arch = "wasm32"))]
+use alloy::rpc::json_rpc;
 use alloy::{
     primitives::{Address, U256},
     rpc::types::eth::Log,
@@ -12,11 +14,6 @@ use num_bigint::{BigInt, BigUint};
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-#[cfg(not(target_arch = "wasm32"))]
-use alloy::rpc::json_rpc;
-
-
 
 #[derive(Debug, Error)]
 pub enum EthereumServiceError {
@@ -76,9 +73,6 @@ pub enum EthereumServiceError {
     #[cfg(not(target_arch = "wasm32"))]
     AlloyReqwestError(#[from] alloy::transports::http::reqwest::Error),
 }
-
-
-
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EthereumDataType {

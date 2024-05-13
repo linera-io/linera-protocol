@@ -241,7 +241,7 @@ pub(crate) fn get_block_id(block_number: Option<u64>) -> BlockId {
 #[async_trait]
 impl<C> EthereumQueries for C
 where
-    C: JsonRpcClient+ Sync,
+    C: JsonRpcClient + Sync,
     EthereumServiceError: From<<C as JsonRpcClient>::Error>,
 {
     type Error = EthereumServiceError;
@@ -251,7 +251,7 @@ where
     }
 
     async fn get_block_number(&self) -> Result<u64, Self::Error> {
-        let result = self.request::<_,U64>("eth_blockNumber", ()).await?;
+        let result = self.request::<_, U64>("eth_blockNumber", ()).await?;
         Ok(result.to::<u64>())
     }
 
@@ -277,7 +277,9 @@ where
             .address(contract_address)
             .event(&event_name)
             .from_block(starting_block);
-        let events = self.request::<_,Vec<Log>>("eth_getLogs", (filter,)).await?;
+        let events = self
+            .request::<_, Vec<Log>>("eth_getLogs", (filter,))
+            .await?;
         events
             .into_iter()
             .map(|x| parse_log(event_name_expanded, x))
@@ -297,6 +299,6 @@ where
             .from(from)
             .to(contract_address)
             .input(input);
-        Ok(self.request::<_,Bytes>("eth_call", (tx,)).await?)
+        Ok(self.request::<_, Bytes>("eth_call", (tx,)).await?)
     }
 }
