@@ -53,7 +53,7 @@ pub enum EthereumServiceError {
     #[error(transparent)]
     SerdeJsonError(#[from] serde_json::Error),
 
-    /// Rpc error
+    /// RPC error
     #[error(transparent)]
     #[cfg(not(target_arch = "wasm32"))]
     RpcError(#[from] json_rpc::RpcError<alloy::transports::TransportErrorKind>),
