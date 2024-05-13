@@ -10,7 +10,6 @@ use alloy::{
         BlockId, BlockNumberOrTag, Filter, Log,
     },
 };
-use reqwest::Client as Client_json_ser;
 use alloy_primitives::{Bytes, U64};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -187,17 +186,6 @@ impl<'de: 'a, 'a> Deserialize<'de> for Response<'a> {
     }
 }
 
-#[async_trait]
-impl JsonRpcClient for EthereumClientSimplified {
-    type Error = EthereumServiceError;
-    async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
-        let client = Client_json_ser::new();
-        let res = client.post(self.url.clone()).json_ser(payload).send().await?;
-        let body = res.bytes().await?;
-        Ok(body.as_ref().to_vec())
-    }
-}
-
 /// The basic Ethereum queries that can be used from a smart contract and do not require
 /// gas to be executed.
 #[async_trait]
@@ -240,11 +228,6 @@ pub trait EthereumQueries {
         data: Bytes,
         from: &str,
     ) -> Result<Bytes, Self::Error>;
-}
-
-/// The Ethereum endpoint and its provider used for accessing the ethereum node.
-pub struct EthereumClientSimplified {
-    pub url: String,
 }
 
 pub(crate) fn get_block_id(block_number: Option<u64>) -> BlockId {
@@ -315,13 +298,5 @@ where
             .to(contract_address)
             .input(input);
         Ok(self.request::<_,Bytes>("eth_call", (tx,)).await?)
-    }
-}
-
-impl EthereumClientSimplified {
-    /// Connects to an existing Ethereum node and creates an `EthereumEndpoint`
-    /// if successful.
-    pub fn new(url: String) -> Self {
-        Self { url }
     }
 }

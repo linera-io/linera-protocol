@@ -4733,7 +4733,6 @@ dependencies = [
  "alloy-primitives",
  "anyhow",
  "async-trait",
- "bcs",
  "cfg_aliases",
  "linera-storage-service",
  "num-bigint",

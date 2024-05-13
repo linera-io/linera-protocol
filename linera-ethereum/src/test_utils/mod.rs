@@ -17,8 +17,8 @@ use alloy_primitives::Address;
 use linera_storage_service::child::get_free_port;
 use url::Url;
 
-use crate::provider::{EthereumClient, HttpProvider};
-use crate::client::{EthereumClientSimplified, EthereumQueries};
+use crate::provider::{EthereumClient, EthereumClientSimplified, HttpProvider};
+use crate::client::EthereumQueries;
 
 sol!(
     #[allow(missing_docs)]

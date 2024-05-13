@@ -5,13 +5,18 @@ use std::num::ParseIntError;
 
 use alloy::{
     primitives::{Address, U256},
-    rpc::{json_rpc, types::eth::Log},
+    rpc::types::eth::Log,
 };
 use alloy_primitives::B256;
 use num_bigint::{BigInt, BigUint};
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+#[cfg(not(target_arch = "wasm32"))]
+use alloy::rpc::json_rpc;
+
+
 
 #[derive(Debug, Error)]
 pub enum EthereumServiceError {
@@ -31,10 +36,6 @@ pub enum EthereumServiceError {
     #[error("Event parsing error")]
     EventParsingError,
 
-    /// URL parsing error
-    #[error(transparent)]
-    UrlParseError(#[from] url::ParseError),
-
     /// Parse big int error
     #[error(transparent)]
     ParseBigIntError(#[from] num_bigint::ParseBigIntError),
@@ -51,24 +52,28 @@ pub enum EthereumServiceError {
     #[error(transparent)]
     FromHexError(#[from] alloy_primitives::hex::FromHexError),
 
-    /// Rpc error
-    #[error(transparent)]
-    RpcError(#[from] json_rpc::RpcError<alloy::transports::TransportErrorKind>),
-
-    /// Bcs error
-    #[error(transparent)]
-    BcsError(#[from] bcs::Error),
-
     /// Serde json error
     #[error(transparent)]
     SerdeJsonError(#[from] serde_json::Error),
 
+    /// Rpc error
+    #[error(transparent)]
+    #[cfg(not(target_arch = "wasm32"))]
+    RpcError(#[from] json_rpc::RpcError<alloy::transports::TransportErrorKind>),
+
     /// Reqwest error
     #[error(transparent)]
+    #[cfg(not(target_arch = "wasm32"))]
     ReqwestError(#[from] reqwest::Error),
+
+    /// URL parsing error
+    #[error(transparent)]
+    #[cfg(not(target_arch = "wasm32"))]
+    UrlParseError(#[from] url::ParseError),
 
     /// Alloy Reqwest error
     #[error(transparent)]
+    #[cfg(not(target_arch = "wasm32"))]
     AlloyReqwestError(#[from] alloy::transports::http::reqwest::Error),
 }
 
