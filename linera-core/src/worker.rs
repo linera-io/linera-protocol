@@ -897,9 +897,15 @@ where
         Self::check_block_epoch(epoch, block)?;
         certificate.check(committee)?;
         let mut actions = NetworkActions::default();
-        if chain.tip_state.get().already_validated_block(height)?
-            || chain.manager.get().check_validated_block(&certificate)? == manager::Outcome::Skip
-        {
+        let already_validated_block = chain.tip_state.get().already_validated_block(height)?;
+        let should_skip_validated_block = || {
+            chain
+                .manager
+                .get()
+                .check_validated_block(&certificate)
+                .map(|outcome| outcome == manager::Outcome::Skip)
+        };
+        if already_validated_block || should_skip_validated_block()? {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
                 ChainInfoResponse::new(&chain, self.key_pair()),
