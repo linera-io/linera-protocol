@@ -1183,7 +1183,7 @@ dependencies = [
  "http 0.2.12",
  "http-body 0.4.6",
  "hyper 0.14.28",
- "hyper-rustls 0.24.2",
+ "hyper-rustls",
  "once_cell",
  "pin-project-lite",
  "pin-utils",
@@ -4047,23 +4047,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper-rustls"
-version = "0.26.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0bea761b46ae2b24eb4aef630d8d1c398157b6fc29e6350ecf090a0b70c952c"
-dependencies = [
- "futures-util",
- "http 1.1.0",
- "hyper 1.2.0",
- "hyper-util",
- "rustls 0.22.2",
- "rustls-pki-types",
- "tokio",
- "tokio-rustls 0.25.0",
- "tower-service",
-]
-
-[[package]]
 name = "hyper-timeout"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4463,7 +4446,7 @@ dependencies = [
  "http 0.2.12",
  "http-body 0.4.6",
  "hyper 0.14.28",
- "hyper-rustls 0.24.2",
+ "hyper-rustls",
  "hyper-timeout",
  "jsonpath-rust",
  "k8s-openapi",
@@ -4758,7 +4741,7 @@ dependencies = [
  "once_cell",
  "oneshot",
  "prometheus",
- "reqwest 0.12.4",
+ "reqwest 0.11.24",
  "serde",
  "serde_bytes",
  "serde_json",
@@ -4789,7 +4772,7 @@ dependencies = [
  "linera-indexer-graphql-client",
  "linera-service-graphql-client",
  "once_cell",
- "reqwest 0.12.4",
+ "reqwest 0.11.24",
  "serde",
  "serde-wasm-bindgen 0.6.5",
  "serde_json",
@@ -4822,7 +4805,7 @@ dependencies = [
  "linera-service-graphql-client",
  "linera-version",
  "linera-views",
- "reqwest 0.12.4",
+ "reqwest 0.11.24",
  "thiserror",
  "tokio",
  "tower-http 0.5.2",
@@ -4841,7 +4824,7 @@ dependencies = [
  "linera-indexer-plugins",
  "linera-service",
  "linera-service-graphql-client",
- "reqwest 0.12.4",
+ "reqwest 0.11.24",
  "serde",
  "serde_json",
  "tempfile",
@@ -5025,7 +5008,7 @@ dependencies = [
  "proptest",
  "rand",
  "rcgen",
- "reqwest 0.12.4",
+ "reqwest 0.11.24",
  "serde",
  "serde_json",
  "social",
@@ -5058,7 +5041,7 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-service",
- "reqwest 0.12.4",
+ "reqwest 0.11.24",
  "serde",
  "serde_json",
  "tempfile",
@@ -6690,7 +6673,7 @@ dependencies = [
  "http 0.2.12",
  "http-body 0.4.6",
  "hyper 0.14.28",
- "hyper-rustls 0.24.2",
+ "hyper-rustls",
  "ipnet",
  "js-sys",
  "log",
@@ -6712,7 +6695,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
- "webpki-roots 0.25.4",
+ "webpki-roots",
  "winreg 0.50.0",
 ]
 
@@ -6724,14 +6707,12 @@ checksum = "566cafdd92868e0939d3fb961bd0dc25fcfaaed179291093b3d43e6b3150ea10"
 dependencies = [
  "base64 0.22.0",
  "bytes",
- "futures-channel",
  "futures-core",
  "futures-util",
  "http 1.1.0",
  "http-body 1.0.0",
  "http-body-util",
  "hyper 1.2.0",
- "hyper-rustls 0.26.0",
  "hyper-tls",
  "hyper-util",
  "ipnet",
@@ -6742,22 +6723,18 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
- "rustls 0.22.2",
  "rustls-pemfile 2.1.0",
- "rustls-pki-types",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tokio-native-tls",
- "tokio-rustls 0.25.0",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
- "webpki-roots 0.26.1",
  "winreg 0.52.0",
 ]
 
@@ -8268,7 +8245,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.24.1",
  "tungstenite 0.20.1",
- "webpki-roots 0.25.4",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -9550,15 +9527,6 @@ name = "webpki-roots"
 version = "0.25.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f20c57d8d7db6d3b86154206ae5d8fba62dd39573114de97c2cb0578251f8e1"
-
-[[package]]
-name = "webpki-roots"
-version = "0.26.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3de34ae270483955a94f4b21bdaaeb83d508bb84a01435f393818edb0012009"
-dependencies = [
- "rustls-pki-types",
-]
 
 [[package]]
 name = "which"

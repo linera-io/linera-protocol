@@ -16,8 +16,9 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{value::RawValue, Value};
 use thiserror::Error;
 
-use crate::common::EthereumQueryError;
-use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
+use crate::common::{
+    event_name_from_expanded, parse_log, EthereumEvent, EthereumQueryError, EthereumServiceError,
+};
 
 /// A basic RPC client for making JSON queries
 #[async_trait]

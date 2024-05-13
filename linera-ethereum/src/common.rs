@@ -22,7 +22,6 @@ pub enum EthereumQueryError {
     DeserializationError,
 }
 
-
 #[derive(Debug, Error)]
 pub enum EthereumServiceError {
     /// Parsing error
