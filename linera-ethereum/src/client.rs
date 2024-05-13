@@ -18,7 +18,7 @@ use thiserror::Error;
 
 use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
 
-/// The basic JsonRpcClient that we need for running the Json queries
+/// A basic RPC client for making JSON queries
 #[async_trait]
 pub trait JsonRpcClient {
     type Error: From<serde_json::Error>;
