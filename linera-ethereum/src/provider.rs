@@ -8,7 +8,7 @@ use alloy::{
         request::{TransactionInput, TransactionRequest},
         Filter,
     },
-    transports::http::reqwest::{Client, header::CONTENT_TYPE},
+    transports::http::reqwest::{header::CONTENT_TYPE, Client},
 };
 use alloy_primitives::Bytes;
 use async_trait::async_trait;
@@ -34,7 +34,8 @@ impl JsonRpcClient for EthereumClientSimplified {
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
         let res = Client::new()
             .post(self.url.clone())
-            .body(payload).header(CONTENT_TYPE, "application/json")
+            .body(payload)
+            .header(CONTENT_TYPE, "application/json")
             .send()
             .await?;
         let body = res.bytes().await?;

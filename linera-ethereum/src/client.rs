@@ -23,11 +23,11 @@ use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, Ethereum
 pub trait JsonRpcClient {
     type Error: From<serde_json::Error>;
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
-    async fn request<T: Debug + Serialize + Send + Sync, R: DeserializeOwned + Send>(
-        &self,
-        method: &str,
-        params: T,
-    ) -> Result<R, Self::Error> {
+    async fn request<T, R>(&self, method: &str, params: T) -> Result<R, Self::Error>
+    where
+        T: Debug + Serialize + Send + Sync,
+        R: DeserializeOwned + Send,
+    {
         let payload = Request::new(method, params);
         let payload = serde_json::to_vec(&payload)?;
         let body = self.request_inner(payload).await?;
