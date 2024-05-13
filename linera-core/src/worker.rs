@@ -566,10 +566,13 @@ where
         else {
             panic!("Expecting a validation certificate");
         };
-        self.create_chain_worker(block.chain_id)
-            .await?
-            .process_validated_block(certificate)
-            .await
+        self.query_chain_worker(block.chain_id, move |callback| {
+            ChainWorkerRequest::ProcessValidatedBlock {
+                certificate,
+                callback,
+            }
+        })
+        .await
     }
 
     /// Processes a leader timeout issued from a multi-owner chain.
