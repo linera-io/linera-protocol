@@ -23,7 +23,7 @@ use crate::{
     common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError},
 };
 
-/// The Ethereum endpoint and its provider used for accessing the ethereum node.
+/// The Ethereum endpoint and its provider used for accessing the Ethereum node.
 pub struct EthereumClientSimplified {
     pub url: String,
 }
