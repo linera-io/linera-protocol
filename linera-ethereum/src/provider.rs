@@ -8,11 +8,10 @@ use alloy::{
         request::{TransactionInput, TransactionRequest},
         Filter,
     },
-    transports::http::reqwest::Client,
+    transports::http::reqwest::{Client, header::CONTENT_TYPE},
 };
 use alloy_primitives::Bytes;
 use async_trait::async_trait;
-use reqwest::Client as Client_json_ser;
 use url::Url;
 
 use crate::client::{EthereumQueries, JsonRpcClient};
@@ -33,10 +32,9 @@ pub struct EthereumClientSimplified {
 impl JsonRpcClient for EthereumClientSimplified {
     type Error = EthereumServiceError;
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
-        let client = Client_json_ser::new();
-        let res = client
+        let res = Client::new()
             .post(self.url.clone())
-            .json_ser(payload)
+            .body(payload).header(CONTENT_TYPE, "application/json")
             .send()
             .await?;
         let body = res.bytes().await?;

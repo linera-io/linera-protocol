@@ -35,7 +35,7 @@ linera-core.workspace = true
 linera-service-graphql-client.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
-reqwest = { version = "0.11.24" }
+reqwest.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tower-http = { workspace = true, features = ["cors"] }

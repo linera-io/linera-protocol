@@ -58,11 +58,6 @@ pub enum EthereumServiceError {
     #[cfg(not(target_arch = "wasm32"))]
     RpcError(#[from] json_rpc::RpcError<alloy::transports::TransportErrorKind>),
 
-    /// Reqwest error
-    #[error(transparent)]
-    #[cfg(not(target_arch = "wasm32"))]
-    ReqwestError(#[from] reqwest::Error),
-
     /// URL parsing error
     #[error(transparent)]
     #[cfg(not(target_arch = "wasm32"))]

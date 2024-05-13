@@ -114,7 +114,7 @@ dependencies = [
  "alloy-signer-wallet",
  "alloy-transport",
  "alloy-transport-http",
- "reqwest 0.12.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.12.4",
 ]
 
 [[package]]
@@ -303,7 +303,7 @@ dependencies = [
  "futures",
  "futures-utils-wasm",
  "lru",
- "reqwest 0.12.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.12.4",
  "serde_json",
  "tokio",
  "tracing",
@@ -342,7 +342,7 @@ dependencies = [
  "alloy-transport-http",
  "futures",
  "pin-project",
- "reqwest 0.12.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.12.4",
  "serde",
  "serde_json",
  "tokio",
@@ -503,7 +503,7 @@ source = "git+https://github.com/alloy-rs/alloy?rev=b79db21734cffddc11753fe62ba5
 dependencies = [
  "alloy-json-rpc",
  "alloy-transport",
- "reqwest 0.12.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.12.4",
  "serde_json",
  "tower",
  "tracing",
@@ -4077,19 +4077,6 @@ dependencies = [
 
 [[package]]
 name = "hyper-tls"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
-dependencies = [
- "bytes",
- "hyper 0.14.28",
- "native-tls",
- "tokio",
- "tokio-native-tls",
-]
-
-[[package]]
-name = "hyper-tls"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
@@ -4737,7 +4724,6 @@ dependencies = [
  "linera-storage-service",
  "num-bigint",
  "num-traits",
- "reqwest 0.12.4 (git+https://github.com/MathieuDutSik/reqwest?rev=dff1d229d247c877e8c25da55fde27a4cdbb4ce8)",
  "serde",
  "serde_json",
  "thiserror",
@@ -4772,7 +4758,7 @@ dependencies = [
  "once_cell",
  "oneshot",
  "prometheus",
- "reqwest 0.12.4 (git+https://github.com/MathieuDutSik/reqwest?rev=dff1d229d247c877e8c25da55fde27a4cdbb4ce8)",
+ "reqwest 0.12.4",
  "serde",
  "serde_bytes",
  "serde_json",
@@ -4803,7 +4789,7 @@ dependencies = [
  "linera-indexer-graphql-client",
  "linera-service-graphql-client",
  "once_cell",
- "reqwest 0.11.24",
+ "reqwest 0.12.4",
  "serde",
  "serde-wasm-bindgen 0.6.5",
  "serde_json",
@@ -4836,7 +4822,7 @@ dependencies = [
  "linera-service-graphql-client",
  "linera-version",
  "linera-views",
- "reqwest 0.11.24",
+ "reqwest 0.12.4",
  "thiserror",
  "tokio",
  "tower-http 0.5.2",
@@ -4855,7 +4841,7 @@ dependencies = [
  "linera-indexer-plugins",
  "linera-service",
  "linera-service-graphql-client",
- "reqwest 0.11.24",
+ "reqwest 0.12.4",
  "serde",
  "serde_json",
  "tempfile",
@@ -5039,7 +5025,7 @@ dependencies = [
  "proptest",
  "rand",
  "rcgen",
- "reqwest 0.12.4 (git+https://github.com/MathieuDutSik/reqwest?rev=dff1d229d247c877e8c25da55fde27a4cdbb4ce8)",
+ "reqwest 0.12.4",
  "serde",
  "serde_json",
  "social",
@@ -5072,7 +5058,7 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-service",
- "reqwest 0.11.24",
+ "reqwest 0.12.4",
  "serde",
  "serde_json",
  "tempfile",
@@ -6705,12 +6691,10 @@ dependencies = [
  "http-body 0.4.6",
  "hyper 0.14.28",
  "hyper-rustls 0.24.2",
- "hyper-tls 0.5.0",
  "ipnet",
  "js-sys",
  "log",
  "mime",
- "native-tls",
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
@@ -6722,7 +6706,6 @@ dependencies = [
  "sync_wrapper",
  "system-configuration",
  "tokio",
- "tokio-native-tls",
  "tokio-rustls 0.24.1",
  "tower-service",
  "url",
@@ -6741,44 +6724,6 @@ checksum = "566cafdd92868e0939d3fb961bd0dc25fcfaaed179291093b3d43e6b3150ea10"
 dependencies = [
  "base64 0.22.0",
  "bytes",
- "futures-core",
- "futures-util",
- "http 1.1.0",
- "http-body 1.0.0",
- "http-body-util",
- "hyper 1.2.0",
- "hyper-tls 0.6.0",
- "hyper-util",
- "ipnet",
- "js-sys",
- "log",
- "mime",
- "native-tls",
- "once_cell",
- "percent-encoding",
- "pin-project-lite",
- "rustls-pemfile 2.1.0",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "sync_wrapper",
- "tokio",
- "tokio-native-tls",
- "tower-service",
- "url",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "winreg 0.52.0",
-]
-
-[[package]]
-name = "reqwest"
-version = "0.12.4"
-source = "git+https://github.com/MathieuDutSik/reqwest?rev=dff1d229d247c877e8c25da55fde27a4cdbb4ce8#dff1d229d247c877e8c25da55fde27a4cdbb4ce8"
-dependencies = [
- "base64 0.22.0",
- "bytes",
  "futures-channel",
  "futures-core",
  "futures-util",
@@ -6787,11 +6732,13 @@ dependencies = [
  "http-body-util",
  "hyper 1.2.0",
  "hyper-rustls 0.26.0",
+ "hyper-tls",
  "hyper-util",
  "ipnet",
  "js-sys",
  "log",
  "mime",
+ "native-tls",
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
@@ -6803,6 +6750,7 @@ dependencies = [
  "serde_urlencoded",
  "sync_wrapper",
  "tokio",
+ "tokio-native-tls",
  "tokio-rustls 0.25.0",
  "tower-service",
  "url",

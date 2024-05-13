@@ -31,7 +31,6 @@ alloy = { workspace = true, default-features = false, features = [ "providers", 
 url.workspace = true
 tokio = { workspace = true, features = ["full"] }
 linera-storage-service.workspace = true
-reqwest = { workspace = true, features = ["json"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
