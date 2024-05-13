@@ -92,6 +92,12 @@ pub enum ChainWorkerRequest {
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
+    /// Process a validated block issued for this multi-owner chain.
+    ProcessValidatedBlock {
+        certificate: Certificate,
+        callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions, bool), WorkerError>>,
+    },
+
     /// Process a cross-chain update.
     ProcessCrossChainUpdate {
         origin: Origin,
@@ -209,6 +215,12 @@ where
                 }
                 ChainWorkerRequest::HandleBlockProposal { proposal, callback } => {
                     let _ = callback.send(self.worker.handle_block_proposal(proposal).await);
+                }
+                ChainWorkerRequest::ProcessValidatedBlock {
+                    certificate,
+                    callback,
+                } => {
+                    let _ = callback.send(self.worker.process_validated_block(certificate).await);
                 }
                 ChainWorkerRequest::ProcessCrossChainUpdate {
                     origin,
