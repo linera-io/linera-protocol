@@ -24,7 +24,7 @@ const GET_TICKER_SYMBOL = gql`
 `;
 
 const MAKE_PAYMENT = gql`
-  mutation Transfer($owner: AccountOwner, $amount: Amount, $targetAccount: Account) {
+  mutation Transfer($owner: AccountOwner, $amount: Amount, $targetAccount: FungibleAccount) {
     transfer(owner: $owner, amount: $amount, targetAccount: $targetAccount)
   }
 `;
