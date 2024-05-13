@@ -1,6 +1,6 @@
 [package]
 name = "linera-storage-service"
-version = "0.10.1"
+version = "0.10.2"
 description = "RPC shared key value store."
 authors = ["Linera <contact@linera.io>"]
 readme = "README.md"

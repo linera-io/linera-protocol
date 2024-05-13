@@ -1,6 +1,6 @@
 [package]
 name = "linera-execution"
-version = "0.10.1"
+version = "0.10.2"
 description = "Persistent data and the corresponding logics used by the Linera protocol for runtime and execution of smart contracts / applications."
 authors = ["Linera <contact@linera.io>"]
 readme = "README.md"
