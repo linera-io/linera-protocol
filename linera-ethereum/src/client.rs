@@ -219,7 +219,7 @@ pub trait EthereumQueries {
     ) -> Result<Vec<EthereumEvent>, Self::Error>;
 
     /// The operation done with `eth_call` on Ethereum returns
-    /// a result but are not executed. This can be useful for example
+    /// a result but are not committed to the blockchain. This can be useful for example
     /// for executing function that are const and allow to inspect
     /// the contract without modifying it.
     async fn non_executive_call(
