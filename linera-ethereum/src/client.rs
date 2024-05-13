@@ -12,6 +12,7 @@ use alloy::{
     },
     transports::http::reqwest::Client,
 };
+use reqwest::Client as Client_json_ser;
 use alloy_primitives::{Bytes, U64};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -26,6 +27,7 @@ pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
 #[async_trait]
 pub trait JsonRpcClient {
     type Error;
+    async fn request_inner(url: &str, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
     async fn request<T: Debug + Serialize + Send + Sync, R: DeserializeOwned + Send>(
         &self,
         method: &str,
@@ -175,9 +177,24 @@ impl<'de: 'a, 'a> Deserialize<'de> for Response<'a> {
     }
 }
 
+
+#[derive(Serialize, Deserialize, Debug)]
+struct FullRequest<T> {
+    url: String,
+    method: String,
+    params: T,
+}
+
 #[async_trait]
 impl JsonRpcClient for EthereumClientSimplified {
     type Error = EthereumServiceError;
+    async fn request_inner(url: &str, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
+        let client = Client_json_ser::new();
+        let res = client.post(url).json_ser(payload).send().await?;
+        let body = res.bytes().await?;
+        Ok(body.as_ref().to_vec())
+    }
+
     async fn request<T: Debug + Serialize + Send + Sync, R: DeserializeOwned + Send>(
         &self,
         method: &str,

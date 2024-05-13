@@ -55,6 +55,10 @@ pub enum EthereumServiceError {
     #[error(transparent)]
     RpcError(#[from] json_rpc::RpcError<alloy::transports::TransportErrorKind>),
 
+    /// Bcs error
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
+
     /// Serde json error
     #[error(transparent)]
     SerdeJsonError(#[from] serde_json::Error),
