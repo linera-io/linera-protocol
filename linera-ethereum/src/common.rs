@@ -72,6 +72,9 @@ pub enum EthereumServiceError {
     AlloyReqwestError(#[from] alloy::transports::http::reqwest::Error),
 }
 
+
+
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EthereumDataType {
     Address(String),

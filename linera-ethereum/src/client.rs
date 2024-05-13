@@ -5,12 +5,10 @@ use std::{fmt, fmt::Debug};
 
 use alloy::{
     primitives::{Address, U256},
-    providers::{Provider, ProviderBuilder, RootProvider},
     rpc::types::eth::{
         request::{TransactionInput, TransactionRequest},
         BlockId, BlockNumberOrTag, Filter, Log,
     },
-    transports::http::reqwest::Client,
 };
 use reqwest::Client as Client_json_ser;
 use alloy_primitives::{Bytes, U64};
@@ -18,12 +16,10 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{value::RawValue, Value};
 use thiserror::Error;
-use url::Url;
 
 use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
-pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
 
-/// The basic JsonRpcClient that we need for running the Json queroies
+/// The basic JsonRpcClient that we need for running the Json queries
 #[async_trait]
 pub trait JsonRpcClient {
     type Error: From<serde_json::Error>;
@@ -191,14 +187,6 @@ impl<'de: 'a, 'a> Deserialize<'de> for Response<'a> {
     }
 }
 
-
-#[derive(Serialize, Deserialize, Debug)]
-struct FullRequest<T> {
-    url: String,
-    method: String,
-    params: T,
-}
-
 #[async_trait]
 impl JsonRpcClient for EthereumClientSimplified {
     type Error = EthereumServiceError;
@@ -259,7 +247,7 @@ pub struct EthereumClientSimplified {
     pub url: String,
 }
 
-fn get_block_id(block_number: Option<u64>) -> BlockId {
+pub(crate) fn get_block_id(block_number: Option<u64>) -> BlockId {
     let number = match block_number {
         None => BlockNumberOrTag::Latest,
         Some(val) => BlockNumberOrTag::Number(val),
@@ -335,84 +323,5 @@ impl EthereumClientSimplified {
     /// if successful.
     pub fn new(url: String) -> Self {
         Self { url }
-    }
-}
-
-pub struct EthereumClient<M> {
-    pub provider: M,
-}
-
-#[async_trait]
-impl EthereumQueries for EthereumClient<HttpProvider> {
-    type Error = EthereumServiceError;
-
-    async fn get_accounts(&self) -> Result<Vec<String>, EthereumServiceError> {
-        Ok(self
-            .provider
-            .get_accounts()
-            .await?
-            .into_iter()
-            .map(|x| format!("{:?}", x))
-            .collect::<Vec<_>>())
-    }
-
-    async fn get_block_number(&self) -> Result<u64, EthereumServiceError> {
-        Ok(self.provider.get_block_number().await?)
-    }
-
-    async fn get_balance(
-        &self,
-        address: &str,
-        block_number: Option<u64>,
-    ) -> Result<U256, EthereumServiceError> {
-        let address = address.parse::<Address>()?;
-        let block_id = get_block_id(block_number);
-        Ok(self.provider.get_balance(address, block_id).await?)
-    }
-
-    async fn read_events(
-        &self,
-        contract_address: &str,
-        event_name_expanded: &str,
-        starting_block: u64,
-    ) -> Result<Vec<EthereumEvent>, EthereumServiceError> {
-        let contract_address = contract_address.parse::<Address>()?;
-        let event_name = event_name_from_expanded(event_name_expanded);
-        let filter = Filter::new()
-            .address(contract_address)
-            .event(&event_name)
-            .from_block(starting_block);
-        let events = self.provider.get_logs(&filter).await?;
-        events
-            .into_iter()
-            .map(|x| parse_log(event_name_expanded, x))
-            .collect::<Result<_, _>>()
-    }
-
-    async fn non_executive_call(
-        &self,
-        contract_address: &str,
-        data: Bytes,
-        from: &str,
-    ) -> Result<Bytes, EthereumServiceError> {
-        let contract_address = contract_address.parse::<Address>()?;
-        let from = from.parse::<Address>()?;
-        let input = TransactionInput::new(data);
-        let tx = TransactionRequest::default()
-            .from(from)
-            .to(contract_address)
-            .input(input);
-        Ok(self.provider.call(&tx).await?)
-    }
-}
-
-impl EthereumClient<HttpProvider> {
-    /// Connects to an existing Ethereum node and creates an `EthereumClient`
-    /// if successful.
-    pub fn new(url: String) -> Result<Self, EthereumServiceError> {
-        let rpc_url = Url::parse(&url)?;
-        let provider = ProviderBuilder::new().on_http(rpc_url);
-        let endpoint = Self { provider };
-        Ok(endpoint)
     }
 }
