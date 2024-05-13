@@ -3539,6 +3539,7 @@ name = "linera-version"
 version = "0.10.2"
 dependencies = [
  "async-graphql",
+ "async-graphql-derive",
  "base64 0.22.0",
  "cargo_metadata",
  "glob",
