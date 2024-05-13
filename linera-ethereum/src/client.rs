@@ -15,14 +15,12 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::value::RawValue;
 
-use crate::common::{
-    event_name_from_expanded, parse_log, EthereumEvent, EthereumQueryError, EthereumServiceError,
-};
+use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
 
 /// A basic RPC client for making JSON queries
 #[async_trait]
 pub trait JsonRpcClient {
-    type Error: From<serde_json::Error> + From<EthereumQueryError>;
+    type Error: From<serde_json::Error>;
 
     /// The inner function that has to be implemented and access the client
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
