@@ -23,7 +23,6 @@ use linera_chain::{
         HashedCertificateValue, LiteCertificate, Medium, MessageBundle, Origin, OutgoingMessage,
         Target,
     },
-    manager::{self},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -878,60 +877,16 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
-        let block = match certificate.value() {
-            CertificateValue::ValidatedBlock {
-                executed_block: ExecutedBlock { block, .. },
-            } => block,
-            _ => panic!("Expecting a validation certificate"),
+        let CertificateValue::ValidatedBlock {
+            executed_block: ExecutedBlock { block, .. },
+        } = certificate.value()
+        else {
+            panic!("Expecting a validation certificate");
         };
-        let chain_id = block.chain_id;
-        let height = block.height;
-        // Check that the chain is active and ready for this confirmation.
-        // Verify the certificate. Returns a catch-all error to make client code more robust.
-        let mut chain = self.storage.load_active_chain(chain_id).await?;
-        let (epoch, committee) = chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
-        Self::check_block_epoch(epoch, block)?;
-        certificate.check(committee)?;
-        let mut actions = NetworkActions::default();
-        let already_validated_block = chain.tip_state.get().already_validated_block(height)?;
-        let should_skip_validated_block = || {
-            chain
-                .manager
-                .get()
-                .check_validated_block(&certificate)
-                .map(|outcome| outcome == manager::Outcome::Skip)
-        };
-        if already_validated_block || should_skip_validated_block()? {
-            // If we just processed the same pending block, return the chain info unchanged.
-            return Ok((
-                ChainInfoResponse::new(&chain, self.key_pair()),
-                actions,
-                true,
-            ));
-        }
-        self.recent_hashed_certificate_values
-            .insert(Cow::Borrowed(&certificate.value))
-            .await;
-        let old_round = chain.manager.get().current_round;
-        chain.manager.get_mut().create_final_vote(
-            certificate,
-            self.key_pair(),
-            self.storage.clock().current_time(),
-        );
-        let info = ChainInfoResponse::new(&chain, self.key_pair());
-        chain.save().await?;
-        let round = chain.manager.get().current_round;
-        if round > old_round {
-            actions.notifications.push(Notification {
-                chain_id,
-                reason: Reason::NewRound { height, round },
-            })
-        }
-        Ok((info, actions, false))
+        self.create_chain_worker(block.chain_id)
+            .await?
+            .process_validated_block(certificate)
+            .await
     }
 
     /// Processes a leader timeout issued from a multi-owner chain.

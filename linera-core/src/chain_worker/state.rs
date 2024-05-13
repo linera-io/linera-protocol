@@ -351,6 +351,67 @@ where
         Ok((info, actions))
     }
 
+    /// Processes a validated block issued for this multi-owner chain.
+    pub async fn process_validated_block(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
+        let block = match certificate.value() {
+            CertificateValue::ValidatedBlock {
+                executed_block: ExecutedBlock { block, .. },
+            } => block,
+            _ => panic!("Expecting a validation certificate"),
+        };
+        let height = block.height;
+        // Check that the chain is active and ready for this confirmation.
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        self.ensure_is_active()?;
+        let (epoch, committee) = self
+            .chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        Self::check_block_epoch(epoch, block)?;
+        certificate.check(committee)?;
+        let mut actions = NetworkActions::default();
+        let already_validated_block = self.chain.tip_state.get().already_validated_block(height)?;
+        let should_skip_validated_block = || {
+            self.chain
+                .manager
+                .get()
+                .check_validated_block(&certificate)
+                .map(|outcome| outcome == manager::Outcome::Skip)
+        };
+        if already_validated_block || should_skip_validated_block()? {
+            // If we just processed the same pending block, return the chain info unchanged.
+            return Ok((
+                ChainInfoResponse::new(&self.chain, self.config.key_pair()),
+                actions,
+                true,
+            ));
+        }
+        self.recent_hashed_certificate_values
+            .insert(Cow::Borrowed(&certificate.value))
+            .await;
+        let old_round = self.chain.manager.get().current_round;
+        self.chain.manager.get_mut().create_final_vote(
+            certificate,
+            self.config.key_pair(),
+            self.storage.clock().current_time(),
+        );
+        let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
+        self.chain.save().await?;
+        let round = self.chain.manager.get().current_round;
+        if round > old_round {
+            actions.notifications.push(Notification {
+                chain_id: self.chain_id(),
+                reason: Reason::NewRound { height, round },
+            })
+        }
+        Ok((info, actions, false))
+    }
+
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
     pub async fn process_cross_chain_update(
         &mut self,
