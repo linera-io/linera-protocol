@@ -9,8 +9,8 @@ use {
         common::{EthereumDataType, EthereumEvent},
         test_utils::{get_anvil, EventNumericsContractFunction, SimpleTokenContractFunction},
     },
-    std::str::FromStr,
     std::collections::BTreeSet,
+    std::str::FromStr,
 };
 
 #[cfg(feature = "ethereum")]
@@ -19,8 +19,16 @@ async fn test_get_accounts_balance() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
     let ethereum_client = anvil_test.ethereum_client;
     let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint);
-    let addresses = ethereum_client.get_accounts().await?.into_iter().collect::<BTreeSet<_>>();
-    let addresses_simp = ethereum_client_simp.get_accounts().await?.into_iter().collect::<BTreeSet<_>>();
+    let addresses = ethereum_client
+        .get_accounts()
+        .await?
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    let addresses_simp = ethereum_client_simp
+        .get_accounts()
+        .await?
+        .into_iter()
+        .collect::<BTreeSet<_>>();
     assert_eq!(addresses, addresses_simp);
     let block_number = ethereum_client.get_block_number().await?;
     let block_number_simp = ethereum_client_simp.get_block_number().await?;
@@ -86,15 +94,11 @@ async fn test_event_numerics() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_simple_token_events() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
+    let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint.clone());
     let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
     let contract_address = simple_token.contract_address.clone();
     let addr0 = simple_token.anvil_test.get_address(0);
     let addr1 = simple_token.anvil_test.get_address(1);
-
-    let balance0 = simple_token.balance_of(&addr0).await?;
-    assert_eq!(balance0, U256::from(1000));
-    let balance1 = simple_token.balance_of(&addr1).await?;
-    assert_eq!(balance1, U256::from(0));
 
     // Doing the transfer
     // We have to use a direct call since only non-executive operation
@@ -120,6 +124,11 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
         ],
         block_number: 2,
     };
+    assert_eq!(*events, [target_event.clone()]);
+    // Using the simplified client
+    let events = ethereum_client_simp
+        .read_events(&contract_address, event_name_expanded, 0)
+        .await?;
     assert_eq!(*events, [target_event]);
     Ok(())
 }

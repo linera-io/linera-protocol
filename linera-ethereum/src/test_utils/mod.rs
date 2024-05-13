@@ -16,9 +16,8 @@ use alloy::{
 use alloy_primitives::Address;
 use linera_storage_service::child::get_free_port;
 use url::Url;
-use crate::client::EthereumQueries;
 
-use crate::client::{EthereumClient, HttpProvider};
+use crate::client::{EthereumClient, EthereumClientSimplified, EthereumQueries, HttpProvider};
 
 sol!(
     #[allow(missing_docs)]
@@ -122,12 +121,18 @@ impl SimpleTokenContractFunction {
         // 2: gettting the balance transaction stuff
         let to_address = to.parse::<Address>()?;
         let data = simple_token.balanceOf(to_address).calldata().clone();
-        // 3: transmitting it
+        // 3A: Doing the check using the anvil_test provider
         let answer = self
             .anvil_test
             .ethereum_client
+            .non_executive_call(&self.contract_address, data.clone(), to)
+            .await?;
+        // 3B: Using the Ethereum client simplified.
+        let ethereum_client_simp = EthereumClientSimplified::new(self.anvil_test.endpoint.clone());
+        let answer_simp = ethereum_client_simp
             .non_executive_call(&self.contract_address, data, to)
             .await?;
+        assert_eq!(answer_simp, answer);
         // 4: Converting the output
         let mut vec = [0_u8; 32];
         for (i, val) in vec.iter_mut().enumerate() {

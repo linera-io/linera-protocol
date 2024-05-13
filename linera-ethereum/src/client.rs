@@ -1,26 +1,23 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use alloy::rpc::types::eth::Log;
-use async_trait::async_trait;
+use std::{fmt, fmt::Debug};
+
 use alloy::{
     primitives::{Address, U256},
     providers::{Provider, ProviderBuilder, RootProvider},
     rpc::types::eth::{
         request::{TransactionInput, TransactionRequest},
-        BlockId, BlockNumberOrTag, Filter,
+        BlockId, BlockNumberOrTag, Filter, Log,
     },
     transports::http::reqwest::Client,
 };
-use serde::Deserialize;
-use alloy_primitives::Bytes;
-use alloy_primitives::U64;
-use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
-use url::Url;
+use alloy_primitives::{Bytes, U64};
+use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{value::RawValue, Value};
 use thiserror::Error;
-use std::fmt;
+use url::Url;
 
 use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
 pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
@@ -29,7 +26,11 @@ pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
 #[async_trait]
 pub trait JsonRpcClient {
     type Error;
-    async fn request<T: Debug + Serialize + Send + Sync, R: DeserializeOwned + Send>(&self, method: &str, params: T) -> Result<R, Self::Error>;
+    async fn request<T: Debug + Serialize + Send + Sync, R: DeserializeOwned + Send>(
+        &self,
+        method: &str,
+        params: T,
+    ) -> Result<R, Self::Error>;
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -43,7 +44,12 @@ struct Request<'a, T> {
 impl<'a, T> Request<'a, T> {
     /// Creates a new JSON RPC request, the id does not matter
     pub fn new(method: &'a str, params: T) -> Self {
-        Self { id: 1, jsonrpc: "2.0", method, params }
+        Self {
+            id: 1,
+            jsonrpc: "2.0",
+            method,
+            params,
+        }
     }
 }
 
@@ -59,7 +65,11 @@ pub struct JsonRpcError {
 
 impl fmt::Display for JsonRpcError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "(code: {}, message: {}, data: {:?})", self.code, self.message, self.data)
+        write!(
+            f,
+            "(code: {}, message: {}, data: {:?})",
+            self.code, self.message, self.data
+        )
     }
 }
 
@@ -100,19 +110,22 @@ impl<'de: 'a, 'a> Deserialize<'de> for Response<'a> {
                     match key {
                         "jsonrpc" => {
                             if jsonrpc {
-                                return Err(serde::de::Error::duplicate_field("jsonrpc"))
+                                return Err(serde::de::Error::duplicate_field("jsonrpc"));
                             }
 
                             let value = map.next_value()?;
                             if value != "2.0" {
-                                return Err(serde::de::Error::invalid_value(serde::de::Unexpected::Str(value), &"2.0"))
+                                return Err(serde::de::Error::invalid_value(
+                                    serde::de::Unexpected::Str(value),
+                                    &"2.0",
+                                ));
                             }
 
                             jsonrpc = true;
                         }
                         "id" => {
                             if id.is_some() {
-                                return Err(serde::de::Error::duplicate_field("id"))
+                                return Err(serde::de::Error::duplicate_field("id"));
                             }
 
                             let value: u64 = map.next_value()?;
@@ -120,7 +133,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for Response<'a> {
                         }
                         "result" => {
                             if result.is_some() {
-                                return Err(serde::de::Error::duplicate_field("result"))
+                                return Err(serde::de::Error::duplicate_field("result"));
                             }
 
                             let value: &RawValue = map.next_value()?;
@@ -128,7 +141,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for Response<'a> {
                         }
                         "error" => {
                             if error.is_some() {
-                                return Err(serde::de::Error::duplicate_field("error"))
+                                return Err(serde::de::Error::duplicate_field("error"));
                             }
 
                             let value: JsonRpcError = map.next_value()?;
@@ -145,13 +158,11 @@ impl<'de: 'a, 'a> Deserialize<'de> for Response<'a> {
 
                 // jsonrpc version must be present in all responses
                 if !jsonrpc {
-                    return Err(serde::de::Error::missing_field("jsonrpc"))
+                    return Err(serde::de::Error::missing_field("jsonrpc"));
                 }
 
                 match (id, result, error) {
-                    (Some(id), Some(result), None) => {
-                        Ok(Response::Success { id, result })
-                    }
+                    (Some(id), Some(result), None) => Ok(Response::Success { id, result }),
                     (Some(id), None, Some(error)) => Ok(Response::Error { id, error }),
                     _ => Err(serde::de::Error::custom(
                         "response must be either a success/error or notification object",
@@ -164,12 +175,14 @@ impl<'de: 'a, 'a> Deserialize<'de> for Response<'a> {
     }
 }
 
-
-
 #[async_trait]
 impl JsonRpcClient for EthereumClientSimplified {
     type Error = EthereumServiceError;
-    async fn request<T: Debug + Serialize + Send + Sync, R: DeserializeOwned + Send>(&self, method: &str, params: T) -> Result<R, Self::Error> {
+    async fn request<T: Debug + Serialize + Send + Sync, R: DeserializeOwned + Send>(
+        &self,
+        method: &str,
+        params: T,
+    ) -> Result<R, Self::Error> {
         let payload = Request::new(method, params);
         let client = Client::new();
         let res = client.post(self.url.clone()).json(&payload).send().await?;
@@ -229,7 +242,6 @@ pub trait EthereumQueries {
         from: &str,
     ) -> Result<Bytes, Self::Error>;
 }
-
 
 /// The Ethereum endpoint and its provider used for accessing the ethereum node.
 pub struct EthereumClientSimplified {
