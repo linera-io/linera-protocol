@@ -171,18 +171,13 @@ impl JsonRpcClient for EthereumClientSimplified {
     type Error = EthereumServiceError;
     async fn request<T: Debug + Serialize + Send + Sync, R: DeserializeOwned + Send>(&self, method: &str, params: T) -> Result<R, Self::Error> {
         let payload = Request::new(method, params);
-        println!("We have payload");
         let client = Client::new();
         let res = client.post(self.url.clone()).json(&payload).send().await?;
-        println!("We have res");
         let body = res.bytes().await?;
-        println!("We have body");
-        println!("body={:?}", body);
         let result = serde_json::from_slice::<Response>(&body)?;
-        println!("We have result");
         let raw = match result {
             Response::Success { result, .. } => result.to_owned(),
-            Response::Error { error, .. } => {
+            Response::Error { error: _, .. } => {
                 return Err(EthereumServiceError::EthereumParsingError);
             }
         };

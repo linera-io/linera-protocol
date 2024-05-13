@@ -10,6 +10,7 @@ use {
         test_utils::{get_anvil, EventNumericsContractFunction, SimpleTokenContractFunction},
     },
     std::str::FromStr,
+    std::collections::BTreeSet,
 };
 
 #[cfg(feature = "ethereum")]
@@ -18,14 +19,21 @@ async fn test_get_accounts_balance() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
     let ethereum_client = anvil_test.ethereum_client;
     let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint);
-    let addresses = ethereum_client.get_accounts().await?;
-    let addresses_simp = ethereum_client_simp.get_accounts().await?;
+    let addresses = ethereum_client.get_accounts().await?.into_iter().collect::<BTreeSet<_>>();
+    let addresses_simp = ethereum_client_simp.get_accounts().await?.into_iter().collect::<BTreeSet<_>>();
+    assert_eq!(addresses, addresses_simp);
     let block_number = ethereum_client.get_block_number().await?;
+    let block_number_simp = ethereum_client_simp.get_block_number().await?;
+    assert_eq!(block_number, block_number_simp);
     let target_balance = U256::from_str("10000000000000000000000")?;
     for address in addresses {
         let balance = ethereum_client
             .get_balance(&address, Some(block_number))
             .await?;
+        let balance_simp = ethereum_client_simp
+            .get_balance(&address, Some(block_number))
+            .await?;
+        assert_eq!(balance, balance_simp);
         assert_eq!(balance, target_balance);
     }
     Ok(())
@@ -35,6 +43,7 @@ async fn test_get_accounts_balance() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_event_numerics() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
+    let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint.clone());
     let event_numerics = EventNumericsContractFunction::new(anvil_test).await?;
     let contract_address = event_numerics.contract_address;
 
@@ -64,6 +73,11 @@ async fn test_event_numerics() -> anyhow::Result<()> {
         ],
         block_number: 1,
     };
+    assert_eq!(*events, [target_event.clone()]);
+    //
+    let events = ethereum_client_simp
+        .read_events(&contract_address, event_name_expanded, 0)
+        .await?;
     assert_eq!(*events, [target_event]);
     Ok(())
 }
