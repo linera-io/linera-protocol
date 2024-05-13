@@ -16,13 +16,18 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{value::RawValue, Value};
 use thiserror::Error;
 
+use crate::common::EthereumQueryError;
 use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
 
 /// A basic RPC client for making JSON queries
 #[async_trait]
 pub trait JsonRpcClient {
-    type Error: From<serde_json::Error>;
+    type Error: From<serde_json::Error> + From<EthereumQueryError>;
+
+    /// The inner function that has to be implemented and access the client
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
+
+    /// The function doing the parsing of the input and output.
     async fn request<T, R>(&self, method: &str, params: T) -> Result<R, Self::Error>
     where
         T: Debug + Serialize + Send + Sync,
@@ -31,12 +36,11 @@ pub trait JsonRpcClient {
         let payload = Request::new(method, params);
         let payload = serde_json::to_vec(&payload)?;
         let body = self.request_inner(payload).await?;
-        let result = serde_json::from_slice::<Response>(&body)?;
+        let result = serde_json::from_slice::<JsonRpcResponse>(&body)?;
         let raw = match result {
-            Response::Success { result, .. } => result.to_owned(),
-            Response::Error { error: _, .. } => {
-                // Needs to handle this better, but the error handling is problematic
-                panic!();
+            JsonRpcResponse::Success { result, .. } => result.to_owned(),
+            JsonRpcResponse::Error { error: _, .. } => {
+                return Err(EthereumQueryError::DeserializationError.into());
             }
         };
         let res = serde_json::from_str(raw.get())?;
@@ -85,20 +89,20 @@ impl fmt::Display for JsonRpcError {
 }
 
 #[derive(Debug)]
-pub enum Response<'a> {
+pub enum JsonRpcResponse<'a> {
     Success { id: u64, result: &'a RawValue },
     Error { id: u64, error: JsonRpcError },
 }
 
-impl<'de: 'a, 'a> Deserialize<'de> for Response<'a> {
+impl<'de: 'a, 'a> Deserialize<'de> for JsonRpcResponse<'a> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         #[allow(dead_code)]
-        struct ResponseVisitor<'a>(&'a ());
-        impl<'de: 'a, 'a> serde::de::Visitor<'de> for ResponseVisitor<'a> {
-            type Value = Response<'a>;
+        struct JsonRpcResponseVisitor<'a>(&'a ());
+        impl<'de: 'a, 'a> serde::de::Visitor<'de> for JsonRpcResponseVisitor<'a> {
+            type Value = JsonRpcResponse<'a>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("a valid jsonrpc 2.0 response object")
@@ -173,8 +177,8 @@ impl<'de: 'a, 'a> Deserialize<'de> for Response<'a> {
                 }
 
                 match (id, result, error) {
-                    (Some(id), Some(result), None) => Ok(Response::Success { id, result }),
-                    (Some(id), None, Some(error)) => Ok(Response::Error { id, error }),
+                    (Some(id), Some(result), None) => Ok(JsonRpcResponse::Success { id, result }),
+                    (Some(id), None, Some(error)) => Ok(JsonRpcResponse::Error { id, error }),
                     _ => Err(serde::de::Error::custom(
                         "response must be either a success/error or notification object",
                     )),
@@ -182,7 +186,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for Response<'a> {
             }
         }
 
-        deserializer.deserialize_map(ResponseVisitor(&()))
+        deserializer.deserialize_map(JsonRpcResponseVisitor(&()))
     }
 }
 

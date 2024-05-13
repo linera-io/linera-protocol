@@ -15,6 +15,14 @@ use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+#[derive(Error, Debug)]
+pub enum EthereumQueryError {
+    /// Deserialization error
+    #[error("Deserialization error")]
+    DeserializationError,
+}
+
+
 #[derive(Debug, Error)]
 pub enum EthereumServiceError {
     /// Parsing error
@@ -52,6 +60,10 @@ pub enum EthereumServiceError {
     /// `serde_json` error
     #[error(transparent)]
     SerdeJsonError(#[from] serde_json::Error),
+
+    /// The database is not coherent
+    #[error(transparent)]
+    EthereumQueryError(#[from] EthereumQueryError),
 
     /// RPC error
     #[error(transparent)]
