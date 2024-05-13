@@ -19,7 +19,7 @@ const MINT_NFT = gql`
 `;
 
 const TRANSFER_NFT = gql`
-  mutation Transfer($sourceOwner: AccountOwner!, $tokenId: String!, $targetAccount: Account!) {
+  mutation Transfer($sourceOwner: AccountOwner!, $tokenId: String!, $targetAccount: FungibleAccount!) {
     transfer(sourceOwner: $sourceOwner, tokenId: $tokenId, targetAccount: $targetAccount)
   }
 `;
