@@ -82,7 +82,6 @@ async fn test_event_numerics() -> anyhow::Result<()> {
         block_number: 1,
     };
     assert_eq!(*events, [target_event.clone()]);
-    //
     let events = ethereum_client_simp
         .read_events(&contract_address, event_name_expanded, 0)
         .await?;
