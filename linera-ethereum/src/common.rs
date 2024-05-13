@@ -49,7 +49,7 @@ pub enum EthereumServiceError {
     #[error(transparent)]
     FromHexError(#[from] alloy_primitives::hex::FromHexError),
 
-    /// Serde json error
+    /// `serde_json` error
     #[error(transparent)]
     SerdeJsonError(#[from] serde_json::Error),
 
