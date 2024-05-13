@@ -26,13 +26,27 @@ pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
 /// The basic JsonRpcClient that we need for running the Json queroies
 #[async_trait]
 pub trait JsonRpcClient {
-    type Error;
-    async fn request_inner(url: &str, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
+    type Error: From<serde_json::Error>;
+    async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
     async fn request<T: Debug + Serialize + Send + Sync, R: DeserializeOwned + Send>(
         &self,
         method: &str,
         params: T,
-    ) -> Result<R, Self::Error>;
+    ) -> Result<R, Self::Error> {
+        let payload = Request::new(method, params);
+        let payload = serde_json::to_vec(&payload)?;
+        let body = self.request_inner(payload).await?;
+        let result = serde_json::from_slice::<Response>(&body)?;
+        let raw = match result {
+            Response::Success { result, .. } => result.to_owned(),
+            Response::Error { error: _, .. } => {
+                // Needs to handle this better, but the error handling is problematic
+                panic!();
+            }
+        };
+        let res = serde_json::from_str(raw.get())?;
+        Ok(res)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -188,31 +202,11 @@ struct FullRequest<T> {
 #[async_trait]
 impl JsonRpcClient for EthereumClientSimplified {
     type Error = EthereumServiceError;
-    async fn request_inner(url: &str, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
+    async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
         let client = Client_json_ser::new();
-        let res = client.post(url).json_ser(payload).send().await?;
+        let res = client.post(self.url.clone()).json_ser(payload).send().await?;
         let body = res.bytes().await?;
         Ok(body.as_ref().to_vec())
-    }
-
-    async fn request<T: Debug + Serialize + Send + Sync, R: DeserializeOwned + Send>(
-        &self,
-        method: &str,
-        params: T,
-    ) -> Result<R, Self::Error> {
-        let payload = Request::new(method, params);
-        let client = Client::new();
-        let res = client.post(self.url.clone()).json(&payload).send().await?;
-        let body = res.bytes().await?;
-        let result = serde_json::from_slice::<Response>(&body)?;
-        let raw = match result {
-            Response::Success { result, .. } => result.to_owned(),
-            Response::Error { error: _, .. } => {
-                return Err(EthereumServiceError::EthereumParsingError);
-            }
-        };
-        let res = serde_json::from_str(raw.get())?;
-        Ok(res)
     }
 }
 
