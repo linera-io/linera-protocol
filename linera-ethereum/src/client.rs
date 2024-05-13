@@ -257,7 +257,11 @@ fn get_block_id(block_number: Option<u64>) -> BlockId {
 }
 
 #[async_trait]
-impl EthereumQueries for EthereumClientSimplified {
+impl<C> EthereumQueries for C
+where
+    C: JsonRpcClient+ Sync,
+    EthereumServiceError: From<<C as JsonRpcClient>::Error>,
+{
     type Error = EthereumServiceError;
 
     async fn get_accounts(&self) -> Result<Vec<String>, Self::Error> {
@@ -265,7 +269,7 @@ impl EthereumQueries for EthereumClientSimplified {
     }
 
     async fn get_block_number(&self) -> Result<u64, Self::Error> {
-        let result: U64 = self.request("eth_blockNumber", ()).await?;
+        let result = self.request::<_,U64>("eth_blockNumber", ()).await?;
         Ok(result.to::<u64>())
     }
 
@@ -276,7 +280,7 @@ impl EthereumQueries for EthereumClientSimplified {
     ) -> Result<U256, Self::Error> {
         let address = address.parse::<Address>()?;
         let tag = get_block_id(block_number);
-        self.request("eth_getBalance", (address, tag)).await
+        Ok(self.request("eth_getBalance", (address, tag)).await?)
     }
 
     async fn read_events(
@@ -291,7 +295,7 @@ impl EthereumQueries for EthereumClientSimplified {
             .address(contract_address)
             .event(&event_name)
             .from_block(starting_block);
-        let events: Vec<Log> = self.request("eth_getLogs", (filter,)).await?;
+        let events = self.request::<_,Vec<Log>>("eth_getLogs", (filter,)).await?;
         events
             .into_iter()
             .map(|x| parse_log(event_name_expanded, x))
@@ -311,8 +315,7 @@ impl EthereumQueries for EthereumClientSimplified {
             .from(from)
             .to(contract_address)
             .input(input);
-        let result: Bytes = self.request("eth_call", (tx,)).await?;
-        Ok(result)
+        Ok(self.request::<_,Bytes>("eth_call", (tx,)).await?)
     }
 }
 
@@ -352,11 +355,7 @@ impl EthereumQueries for EthereumClient<HttpProvider> {
         block_number: Option<u64>,
     ) -> Result<U256, EthereumServiceError> {
         let address = address.parse::<Address>()?;
-        let number = match block_number {
-            None => BlockNumberOrTag::Latest,
-            Some(val) => BlockNumberOrTag::Number(val),
-        };
-        let block_id = BlockId::Number(number);
+        let block_id = get_block_id(block_number);
         Ok(self.provider.get_balance(address, block_id).await?)
     }
 
