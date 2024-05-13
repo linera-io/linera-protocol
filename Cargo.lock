@@ -4737,7 +4737,7 @@ dependencies = [
  "linera-storage-service",
  "num-bigint",
  "num-traits",
- "reqwest 0.12.4 (git+https://github.com/MathieuDutSik/reqwest?rev=904df0e029c011fabd05bfe03665b59c91498821)",
+ "reqwest 0.12.4 (git+https://github.com/MathieuDutSik/reqwest?rev=dff1d229d247c877e8c25da55fde27a4cdbb4ce8)",
  "serde",
  "serde_json",
  "thiserror",
@@ -4772,7 +4772,7 @@ dependencies = [
  "once_cell",
  "oneshot",
  "prometheus",
- "reqwest 0.12.4 (git+https://github.com/MathieuDutSik/reqwest?rev=904df0e029c011fabd05bfe03665b59c91498821)",
+ "reqwest 0.12.4 (git+https://github.com/MathieuDutSik/reqwest?rev=dff1d229d247c877e8c25da55fde27a4cdbb4ce8)",
  "serde",
  "serde_bytes",
  "serde_json",
@@ -5039,7 +5039,7 @@ dependencies = [
  "proptest",
  "rand",
  "rcgen",
- "reqwest 0.12.4 (git+https://github.com/MathieuDutSik/reqwest?rev=904df0e029c011fabd05bfe03665b59c91498821)",
+ "reqwest 0.12.4 (git+https://github.com/MathieuDutSik/reqwest?rev=dff1d229d247c877e8c25da55fde27a4cdbb4ce8)",
  "serde",
  "serde_json",
  "social",
@@ -6775,7 +6775,7 @@ dependencies = [
 [[package]]
 name = "reqwest"
 version = "0.12.4"
-source = "git+https://github.com/MathieuDutSik/reqwest?rev=904df0e029c011fabd05bfe03665b59c91498821#904df0e029c011fabd05bfe03665b59c91498821"
+source = "git+https://github.com/MathieuDutSik/reqwest?rev=dff1d229d247c877e8c25da55fde27a4cdbb4ce8#dff1d229d247c877e8c25da55fde27a4cdbb4ce8"
 dependencies = [
  "base64 0.22.0",
  "bytes",
