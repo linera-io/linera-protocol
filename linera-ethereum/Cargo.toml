@@ -27,14 +27,14 @@ serde_json = { workspace = true, features = ["raw_value"] }
 thiserror.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-alloy = { git = "https://github.com/alloy-rs/alloy", rev = "b79db21734cffddc11753fe62ba571565c896f42", default-features = false, features = [ "providers", "rpc-types-eth", "reqwest", "rpc-client", "provider-http", "json-rpc", "signers", "sol-types", "node-bindings", "transports", "transport-http", "signer-wallet", "network", "json-abi", "json-rpc", "contract" ] }
+alloy = { workspace = true, default-features = false, features = [ "providers", "rpc-types-eth", "reqwest", "rpc-client", "provider-http", "json-rpc", "signers", "sol-types", "node-bindings", "transports", "transport-http", "signer-wallet", "network", "json-abi", "json-rpc", "contract" ] }
 url.workspace = true
 tokio = { workspace = true, features = ["full"] }
 linera-storage-service.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-alloy = { git = "https://github.com/alloy-rs/alloy", rev = "b79db21734cffddc11753fe62ba571565c896f42", default-features = false, features = [ "rpc-types-eth" ] }
+alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
