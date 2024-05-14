@@ -16,7 +16,9 @@ use linera_base::ensure;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::value::RawValue;
 
-use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumQueryError, EthereumServiceError};
+use crate::common::{
+    event_name_from_expanded, parse_log, EthereumEvent, EthereumQueryError, EthereumServiceError,
+};
 
 /// A basic RPC client for making JSON queries
 #[async_trait]
@@ -43,7 +45,10 @@ pub trait JsonRpcClient {
         let raw = result.result;
         let res = serde_json::from_str(raw.get())?;
         ensure!(id == result.id, EthereumQueryError::IdIsNotMatching);
-        ensure!(*"2.0" == result.jsonrpc, EthereumQueryError::WrongJsonRpcVersion);
+        ensure!(
+            *"2.0" == result.jsonrpc,
+            EthereumQueryError::WrongJsonRpcVersion
+        );
         Ok(res)
     }
 }

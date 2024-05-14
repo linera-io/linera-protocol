@@ -4669,6 +4669,7 @@ dependencies = [
  "alloy",
  "alloy-primitives",
  "anyhow",
+ "async-lock",
  "async-trait",
  "cfg_aliases",
  "linera-base",
