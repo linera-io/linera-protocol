@@ -1076,6 +1076,7 @@ impl Job {
         ViewError: From<S::ContextError>,
     {
         let state = WorkerState::new("Local node".to_string(), None, storage)
+            .with_tracked_chains([message_id.chain_id, chain_id])
             .with_allow_inactive_chains(true)
             .with_allow_messages_from_deprecated_epochs(true);
         let mut node_client = LocalNodeClient::new(state, Arc::new(Notifier::default()));

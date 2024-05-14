@@ -327,6 +327,15 @@ impl<StorageClient> WorkerState<StorageClient> {
         self
     }
 
+    /// Configures the subset of chains that this worker is tracking.
+    pub fn with_tracked_chains(
+        mut self,
+        tracked_chains: impl IntoIterator<Item = ChainId>,
+    ) -> Self {
+        self.tracked_chains = Some(tracked_chains.into_iter().collect());
+        self
+    }
+
     /// Returns an instance with the specified grace period, in microseconds.
     ///
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
