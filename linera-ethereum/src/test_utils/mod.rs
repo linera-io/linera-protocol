@@ -121,7 +121,7 @@ impl SimpleTokenContractFunction {
         let contract_address = self.contract_address.parse::<Address>()?;
         let simple_token =
             SimpleTokenContract::new(contract_address, self.anvil_test.provider.clone());
-        // Fetching the balance transaction stuff
+        // Creating the calldata
         let to_address = to.parse::<Address>()?;
         let data = simple_token.balanceOf(to_address).calldata().clone();
         // Doing the check using the anvil_test provider

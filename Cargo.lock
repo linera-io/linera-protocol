@@ -4671,6 +4671,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "cfg_aliases",
+ "linera-base",
  "linera-storage-service",
  "num-bigint",
  "num-traits",

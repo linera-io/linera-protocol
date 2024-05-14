@@ -15,8 +15,23 @@ use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+#[derive(Error, Debug)]
+pub enum EthereumQueryError {
+    /// The id should be matching
+    #[error("the is should be matching")]
+    IdIsNotMatching,
+
+    /// wrong jsonrpc version
+    #[error("wrong jsonrpc version")]
+    WrongJsonRpcVersion,
+}
+
 #[derive(Debug, Error)]
 pub enum EthereumServiceError {
+    /// The database is not coherent
+    #[error(transparent)]
+    EthereumQueryError(#[from] EthereumQueryError),
+
     /// Parsing error
     #[error(transparent)]
     ParseIntError(#[from] ParseIntError),

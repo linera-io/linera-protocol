@@ -12,20 +12,21 @@ use alloy::{
 };
 use alloy_primitives::{Bytes, U64};
 use async_trait::async_trait;
+use linera_base::ensure;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::value::RawValue;
 
-use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
+use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumQueryError, EthereumServiceError};
 
 /// A basic RPC client for making JSON queries
 #[async_trait]
 pub trait JsonRpcClient {
-    type Error: From<serde_json::Error>;
+    type Error: From<serde_json::Error> + From<EthereumQueryError>;
 
     /// The inner function that has to be implemented and access the client
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
 
-    /// Getting the id
+    /// Gets a new ID for the next message.
     async fn get_id(&self) -> u64;
 
     /// The function doing the parsing of the input and output.
@@ -35,26 +36,27 @@ pub trait JsonRpcClient {
         R: DeserializeOwned + Send,
     {
         let id = self.get_id().await;
-        let payload = Request::new(id, method, params);
+        let payload = JsonRpcRequest::new(id, method, params);
         let payload = serde_json::to_vec(&payload)?;
         let body = self.request_inner(payload).await?;
         let result = serde_json::from_slice::<JsonRpcResponse>(&body)?;
         let raw = result.result;
         let res = serde_json::from_str(raw.get())?;
-        assert_eq!(id, result.id);
+        ensure!(id == result.id, EthereumQueryError::IdIsNotMatching);
+        ensure!(*"2.0" == result.jsonrpc, EthereumQueryError::WrongJsonRpcVersion);
         Ok(res)
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Request<'a, T> {
+struct JsonRpcRequest<'a, T> {
     id: u64,
     jsonrpc: &'a str,
     method: &'a str,
     params: T,
 }
 
-impl<'a, T> Request<'a, T> {
+impl<'a, T> JsonRpcRequest<'a, T> {
     /// Creates a new JSON RPC request, the id does not matter
     pub fn new(id: u64, method: &'a str, params: T) -> Self {
         Self {
@@ -68,9 +70,9 @@ impl<'a, T> Request<'a, T> {
 
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcResponse {
-    pub id: u64,
-    pub jsonrpc: String,
-    pub result: Box<RawValue>,
+    id: u64,
+    jsonrpc: String,
+    result: Box<RawValue>,
 }
 
 /// The basic Ethereum queries that can be used from a smart contract and do not require
