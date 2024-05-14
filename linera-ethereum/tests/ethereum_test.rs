@@ -5,24 +5,43 @@
 use {
     alloy_primitives::U256,
     linera_ethereum::{
+        client::EthereumQueries,
         common::{EthereumDataType, EthereumEvent},
+        provider::EthereumClientSimplified,
         test_utils::{get_anvil, EventNumericsContractFunction, SimpleTokenContractFunction},
     },
-    std::str::FromStr,
+    std::{collections::BTreeSet, str::FromStr},
 };
 
 #[cfg(feature = "ethereum")]
 #[tokio::test]
 async fn test_get_accounts_balance() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
-    let ethereum_endpoint = anvil_test.ethereum_endpoint;
-    let addresses = ethereum_endpoint.get_accounts().await?;
-    let block_number = ethereum_endpoint.get_block_number().await?;
+    let ethereum_client = anvil_test.ethereum_client;
+    let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint);
+    let addresses = ethereum_client
+        .get_accounts()
+        .await?
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    let addresses_simp = ethereum_client_simp
+        .get_accounts()
+        .await?
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    assert_eq!(addresses, addresses_simp);
+    let block_number = ethereum_client.get_block_number().await?;
+    let block_number_simp = ethereum_client_simp.get_block_number().await?;
+    assert_eq!(block_number, block_number_simp);
     let target_balance = U256::from_str("10000000000000000000000")?;
     for address in addresses {
-        let balance = ethereum_endpoint
+        let balance = ethereum_client
             .get_balance(&address, Some(block_number))
             .await?;
+        let balance_simp = ethereum_client_simp
+            .get_balance(&address, Some(block_number))
+            .await?;
+        assert_eq!(balance, balance_simp);
         assert_eq!(balance, target_balance);
     }
     Ok(())
@@ -32,6 +51,7 @@ async fn test_get_accounts_balance() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_event_numerics() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
+    let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint.clone());
     let event_numerics = EventNumericsContractFunction::new(anvil_test).await?;
     let contract_address = event_numerics.contract_address;
 
@@ -39,7 +59,7 @@ async fn test_event_numerics() -> anyhow::Result<()> {
     let event_name_expanded = "Types(address indexed,address,uint256,uint64,int64,uint32,int32,uint16,int16,uint8,int8,bool)";
     let events = event_numerics
         .anvil_test
-        .ethereum_endpoint
+        .ethereum_client
         .read_events(&contract_address, event_name_expanded, 0)
         .await?;
     let addr0 = event_numerics.anvil_test.get_address(0);
@@ -61,6 +81,10 @@ async fn test_event_numerics() -> anyhow::Result<()> {
         ],
         block_number: 1,
     };
+    assert_eq!(*events, [target_event.clone()]);
+    let events = ethereum_client_simp
+        .read_events(&contract_address, event_name_expanded, 0)
+        .await?;
     assert_eq!(*events, [target_event]);
     Ok(())
 }
@@ -69,15 +93,11 @@ async fn test_event_numerics() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_simple_token_events() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
+    let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint.clone());
     let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
     let contract_address = simple_token.contract_address.clone();
     let addr0 = simple_token.anvil_test.get_address(0);
     let addr1 = simple_token.anvil_test.get_address(1);
-
-    let balance0 = simple_token.balance_of(&addr0).await?;
-    assert_eq!(balance0, U256::from(1000));
-    let balance1 = simple_token.balance_of(&addr1).await?;
-    assert_eq!(balance1, U256::from(0));
 
     // Doing the transfer
     // We have to use a direct call since only non-executive operation
@@ -91,7 +111,7 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
     let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
     let events = simple_token
         .anvil_test
-        .ethereum_endpoint
+        .ethereum_client
         .read_events(&contract_address, event_name_expanded, 0)
         .await?;
     let value = U256::from(10);
@@ -103,6 +123,11 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
         ],
         block_number: 2,
     };
+    assert_eq!(*events, [target_event.clone()]);
+    // Using the simplified client
+    let events = ethereum_client_simp
+        .read_events(&contract_address, event_name_expanded, 0)
+        .await?;
     assert_eq!(*events, [target_event]);
     Ok(())
 }

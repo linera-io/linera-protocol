@@ -1,94 +1,192 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Debug;
+
 use alloy::{
     primitives::{Address, U256},
-    providers::{Provider, ProviderBuilder, RootProvider},
     rpc::types::eth::{
         request::{TransactionInput, TransactionRequest},
-        BlockId, BlockNumberOrTag, Filter,
+        BlockId, BlockNumberOrTag, Filter, Log,
     },
-    transports::http::reqwest::Client,
 };
-use alloy_primitives::Bytes;
-use url::Url;
+use alloy_primitives::{Bytes, U64};
+use async_trait::async_trait;
+use linera_base::ensure;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_json::value::RawValue;
 
-use crate::common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError};
-pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
+use crate::common::{
+    event_name_from_expanded, parse_log, EthereumEvent, EthereumQueryError, EthereumServiceError,
+};
 
-/// The Ethereum endpoint and its provider used for accessing the ethereum node.
-pub struct EthereumEndpoint<M> {
-    pub provider: M,
+/// A basic RPC client for making JSON queries
+#[async_trait]
+pub trait JsonRpcClient {
+    type Error: From<serde_json::Error> + From<EthereumQueryError>;
+
+    /// The inner function that has to be implemented and access the client
+    async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
+
+    /// Gets a new ID for the next message.
+    async fn get_id(&self) -> u64;
+
+    /// The function doing the parsing of the input and output.
+    async fn request<T, R>(&self, method: &str, params: T) -> Result<R, Self::Error>
+    where
+        T: Debug + Serialize + Send + Sync,
+        R: DeserializeOwned + Send,
+    {
+        let id = self.get_id().await;
+        let payload = JsonRpcRequest::new(id, method, params);
+        let payload = serde_json::to_vec(&payload)?;
+        let body = self.request_inner(payload).await?;
+        let result = serde_json::from_slice::<JsonRpcResponse>(&body)?;
+        let raw = result.result;
+        let res = serde_json::from_str(raw.get())?;
+        ensure!(id == result.id, EthereumQueryError::IdIsNotMatching);
+        ensure!(
+            *"2.0" == result.jsonrpc,
+            EthereumQueryError::WrongJsonRpcVersion
+        );
+        Ok(res)
+    }
 }
 
-// TODO(2011) We need to support via a trait.
-impl EthereumEndpoint<HttpProvider> {
-    /// Lists all the accounts of the Ethereum node.
-    pub async fn get_accounts(&self) -> Result<Vec<String>, EthereumServiceError> {
-        Ok(self
-            .provider
-            .get_accounts()
-            .await?
-            .into_iter()
-            .map(|x| format!("{:?}", x))
-            .collect::<Vec<_>>())
+#[derive(Serialize, Deserialize, Debug)]
+struct JsonRpcRequest<'a, T> {
+    id: u64,
+    jsonrpc: &'a str,
+    method: &'a str,
+    params: T,
+}
+
+impl<'a, T> JsonRpcRequest<'a, T> {
+    /// Creates a new JSON RPC request, the id does not matter
+    pub fn new(id: u64, method: &'a str, params: T) -> Self {
+        Self {
+            id,
+            jsonrpc: "2.0",
+            method,
+            params,
+        }
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct JsonRpcResponse {
+    id: u64,
+    jsonrpc: String,
+    result: Box<RawValue>,
+}
+
+/// The basic Ethereum queries that can be used from a smart contract and do not require
+/// gas to be executed.
+#[async_trait]
+pub trait EthereumQueries {
+    type Error;
+
+    /// Lists all the accounts of the Ethereum node.
+    async fn get_accounts(&self) -> Result<Vec<String>, Self::Error>;
 
     /// Gets the latest block number of the Ethereum node.
-    pub async fn get_block_number(&self) -> Result<u64, EthereumServiceError> {
-        Ok(self.provider.get_block_number().await?)
-    }
+    async fn get_block_number(&self) -> Result<u64, Self::Error>;
 
     /// Gets the balance of the specified address at the specified block number.
     /// if no block number is specified then the balance of the latest block is
     /// returned.
-    pub async fn get_balance(
+    async fn get_balance(
         &self,
         address: &str,
         block_number: Option<u64>,
-    ) -> Result<U256, EthereumServiceError> {
-        let address = address.parse::<Address>()?;
-        let number = match block_number {
-            None => BlockNumberOrTag::Latest,
-            Some(val) => BlockNumberOrTag::Number(val),
-        };
-        let block_id = BlockId::Number(number);
-        Ok(self.provider.get_balance(address, block_id).await?)
-    }
+    ) -> Result<U256, Self::Error>;
 
     /// Reads the events of the smart contract.
+    ///
     /// This is done from a specified `contract_address` and `event_name_expanded`.
     /// That is one should have "MyEvent(type1 indexed,type2)" instead
     /// of the usual "MyEvent(type1,type2)"
-    pub async fn read_events(
+    async fn read_events(
         &self,
         contract_address: &str,
         event_name_expanded: &str,
         starting_block: u64,
-    ) -> Result<Vec<EthereumEvent>, EthereumServiceError> {
+    ) -> Result<Vec<EthereumEvent>, Self::Error>;
+
+    /// The operation done with `eth_call` on Ethereum returns
+    /// a result but are not committed to the blockchain. This can be useful for example
+    /// for executing function that are const and allow to inspect
+    /// the contract without modifying it.
+    async fn non_executive_call(
+        &self,
+        contract_address: &str,
+        data: Bytes,
+        from: &str,
+    ) -> Result<Bytes, Self::Error>;
+}
+
+pub(crate) fn get_block_id(block_number: Option<u64>) -> BlockId {
+    let number = match block_number {
+        None => BlockNumberOrTag::Latest,
+        Some(val) => BlockNumberOrTag::Number(val),
+    };
+    BlockId::Number(number)
+}
+
+#[async_trait]
+impl<C> EthereumQueries for C
+where
+    C: JsonRpcClient + Sync,
+    EthereumServiceError: From<<C as JsonRpcClient>::Error>,
+{
+    type Error = EthereumServiceError;
+
+    async fn get_accounts(&self) -> Result<Vec<String>, Self::Error> {
+        Ok(self.request("eth_accounts", ()).await?)
+    }
+
+    async fn get_block_number(&self) -> Result<u64, Self::Error> {
+        let result = self.request::<_, U64>("eth_blockNumber", ()).await?;
+        Ok(result.to::<u64>())
+    }
+
+    async fn get_balance(
+        &self,
+        address: &str,
+        block_number: Option<u64>,
+    ) -> Result<U256, Self::Error> {
+        let address = address.parse::<Address>()?;
+        let tag = get_block_id(block_number);
+        Ok(self.request("eth_getBalance", (address, tag)).await?)
+    }
+
+    async fn read_events(
+        &self,
+        contract_address: &str,
+        event_name_expanded: &str,
+        starting_block: u64,
+    ) -> Result<Vec<EthereumEvent>, Self::Error> {
         let contract_address = contract_address.parse::<Address>()?;
         let event_name = event_name_from_expanded(event_name_expanded);
         let filter = Filter::new()
             .address(contract_address)
             .event(&event_name)
             .from_block(starting_block);
-        let events = self.provider.get_logs(&filter).await?;
+        let events = self
+            .request::<_, Vec<Log>>("eth_getLogs", (filter,))
+            .await?;
         events
             .into_iter()
             .map(|x| parse_log(event_name_expanded, x))
             .collect::<Result<_, _>>()
     }
 
-    /// The operation done with `eth_call` on Ethereum returns
-    /// a result but are not executed. This can be useful for example
-    /// for executing function that are const and allow to inspect
-    /// the contract without modifying it.
-    pub async fn non_executive_call(
+    async fn non_executive_call(
         &self,
         contract_address: &str,
         data: Bytes,
         from: &str,
-    ) -> Result<Bytes, EthereumServiceError> {
+    ) -> Result<Bytes, Self::Error> {
         let contract_address = contract_address.parse::<Address>()?;
         let from = from.parse::<Address>()?;
         let input = TransactionInput::new(data);
@@ -96,17 +194,6 @@ impl EthereumEndpoint<HttpProvider> {
             .from(from)
             .to(contract_address)
             .input(input);
-        Ok(self.provider.call(&tx).await?)
-    }
-}
-
-impl EthereumEndpoint<HttpProvider> {
-    /// Connects to an existing Ethereum node and creates an `EthereumEndpoint`
-    /// if successful.
-    pub fn new(url: String) -> Result<Self, EthereumServiceError> {
-        let rpc_url = Url::parse(&url)?;
-        let provider = ProviderBuilder::new().on_http(rpc_url);
-        let endpoint = Self { provider };
-        Ok(endpoint)
+        Ok(self.request::<_, Bytes>("eth_call", (tx,)).await?)
     }
 }

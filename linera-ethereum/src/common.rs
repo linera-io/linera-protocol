@@ -3,9 +3,11 @@
 
 use std::num::ParseIntError;
 
+#[cfg(not(target_arch = "wasm32"))]
+use alloy::rpc::json_rpc;
 use alloy::{
     primitives::{Address, U256},
-    rpc::{json_rpc, types::eth::Log},
+    rpc::types::eth::Log,
 };
 use alloy_primitives::B256;
 use num_bigint::{BigInt, BigUint};
@@ -13,8 +15,23 @@ use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+#[derive(Error, Debug)]
+pub enum EthereumQueryError {
+    /// The id should be matching
+    #[error("the is should be matching")]
+    IdIsNotMatching,
+
+    /// wrong jsonrpc version
+    #[error("wrong jsonrpc version")]
+    WrongJsonRpcVersion,
+}
+
 #[derive(Debug, Error)]
 pub enum EthereumServiceError {
+    /// The database is not coherent
+    #[error(transparent)]
+    EthereumQueryError(#[from] EthereumQueryError),
+
     /// Parsing error
     #[error(transparent)]
     ParseIntError(#[from] ParseIntError),
@@ -31,13 +48,13 @@ pub enum EthereumServiceError {
     #[error("Event parsing error")]
     EventParsingError,
 
-    /// URL parsing error
-    #[error(transparent)]
-    UrlParseError(#[from] url::ParseError),
-
     /// Parse big int error
     #[error(transparent)]
     ParseBigIntError(#[from] num_bigint::ParseBigIntError),
+
+    /// Ethereum parsing error
+    #[error("Ethereum parsing error")]
+    EthereumParsingError,
 
     /// Parse bool error
     #[error("Parse bool error")]
@@ -47,9 +64,24 @@ pub enum EthereumServiceError {
     #[error(transparent)]
     FromHexError(#[from] alloy_primitives::hex::FromHexError),
 
-    /// Rpc error
+    /// `serde_json` error
     #[error(transparent)]
+    SerdeJsonError(#[from] serde_json::Error),
+
+    /// RPC error
+    #[error(transparent)]
+    #[cfg(not(target_arch = "wasm32"))]
     RpcError(#[from] json_rpc::RpcError<alloy::transports::TransportErrorKind>),
+
+    /// URL parsing error
+    #[error(transparent)]
+    #[cfg(not(target_arch = "wasm32"))]
+    UrlParseError(#[from] url::ParseError),
+
+    /// Alloy Reqwest error
+    #[error(transparent)]
+    #[cfg(not(target_arch = "wasm32"))]
+    AlloyReqwestError(#[from] alloy::transports::http::reqwest::Error),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
