@@ -606,7 +606,12 @@ where
         let storage = self.make_storage().await?;
         self.chain_client_storages.push(storage.clone());
         let provider = self.make_node_provider();
-        let builder = ChainClientBuilder::new(provider, 10, CrossChainMessageDelivery::NonBlocking);
+        let builder = ChainClientBuilder::new(
+            provider,
+            10,
+            CrossChainMessageDelivery::NonBlocking,
+            [chain_id],
+        );
         Ok(builder.build(
             chain_id,
             vec![key_pair],

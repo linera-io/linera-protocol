@@ -147,7 +147,12 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let delivery = CrossChainMessageDelivery::NonBlocking;
     let mut context = ClientContext {
         wallet: Wallet::new(genesis_config, Some(37)),
-        chain_client_builder: ChainClientBuilder::new(builder.make_node_provider(), 10, delivery),
+        chain_client_builder: ChainClientBuilder::new(
+            builder.make_node_provider(),
+            10,
+            delivery,
+            [ChainId::from(description0), ChainId::from(description1)],
+        ),
     };
     let key_pair = KeyPair::generate_from(&mut rng);
     let public_key = key_pair.public();
