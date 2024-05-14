@@ -3539,7 +3539,6 @@ where
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value.value_hash, value1.hash());
-    println!("DDD");
 
     // Set the clock to the end of the round.
     clock.set(response.info.manager.round_timeout.unwrap());
@@ -3554,7 +3553,6 @@ where
         .await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
     assert_eq!(response.info.manager.leader, None);
-    println!("CCC");
 
     // Now any owner can propose a block. But block1 is locked.
     let block2 = make_child_block(&value0).with_simple_transfer(ChainId::root(1), Amount::ONE);
@@ -3569,7 +3567,6 @@ where
         .clone()
         .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
     assert!(worker.handle_block_proposal(proposal3).await.is_ok());
-    println!("BBB");
 
     // A validated block certificate from a later round can override the locked fast block.
     let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await?;
@@ -3592,7 +3589,6 @@ where
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
     assert_eq!(vote.round, Round::MultiLeader(1));
-    println!("AAA");
 
     // Re-proposing the locked block also works.
     let proposal = block2.into_proposal_with_round(&key_pairs[1], Round::MultiLeader(2));
