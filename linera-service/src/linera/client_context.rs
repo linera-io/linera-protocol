@@ -333,8 +333,11 @@ impl ClientContext {
             self.save_wallet();
             return Ok(certificates);
         }
+
         // Start listening for notifications, so we learn about new rounds and blocks.
-        let (_listen_handle, mut notification_stream) = chain_client.listen().await?;
+        let (listener, _listen_handle, mut notification_stream) = chain_client.listen().await?;
+        tokio::spawn(listener);
+
         loop {
             let (new_certificates, maybe_timeout) = {
                 let mut guard = chain_client.0.lock().await;
@@ -428,8 +431,11 @@ impl ClientContext {
         if let ClientOutcome::Committed(t) = result? {
             return Ok(t);
         }
+
         // Start listening for notifications, so we learn about new rounds and blocks.
-        let (_listen_handle, mut notification_stream) = client.listen().await?;
+        let (listener, _listen_handle, mut notification_stream) = client.listen().await?;
+        tokio::spawn(listener);
+
         loop {
             // Try applying f. Return if committed.
             let result = f(client.0.clone().lock_owned().await).await;

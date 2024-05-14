@@ -139,7 +139,8 @@ where
             entry.insert(client.clone());
             client
         };
-        let (_listen_handle, mut local_stream) = client.listen().await?;
+        let (listener, _listen_handle, mut local_stream) = client.listen().await?;
+        tokio::spawn(listener);
         let mut timeout = storage.clock().current_time();
         loop {
             let sleep = Box::pin(storage.clock().sleep_until(timeout));

@@ -101,7 +101,8 @@ static NUM_BLOCKS: Lazy<IntCounterVec> = Lazy::new(|| {
 /// * Repeating commands produces no changes and returns no error.
 /// * Some handlers may return cross-chain requests, that is, messages
 ///   to be communicated to other workers of the same validator.
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 pub trait ValidatorWorker {
     /// Proposes a new block. In case of success, the chain info contains a vote on the new
     /// block.
@@ -1066,7 +1067,8 @@ where
     }
 }
 
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 impl<StorageClient> ValidatorWorker for WorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
