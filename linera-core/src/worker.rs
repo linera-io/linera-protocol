@@ -269,6 +269,8 @@ pub struct WorkerState<StorageClient> {
     grace_period: Duration,
     /// Cached values by hash.
     recent_values: Arc<Mutex<LruCache<CryptoHash, HashedValue>>>,
+    /// Chain IDs that should be tracked by a worker.
+    tracked_chains: Option<HashSet<ChainId>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
@@ -290,6 +292,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             allow_messages_from_deprecated_epochs: false,
             grace_period: Duration::ZERO,
             recent_values,
+            tracked_chains: None,
             delivery_notifiers: Arc::default(),
         }
     }
@@ -298,6 +301,7 @@ impl<StorageClient> WorkerState<StorageClient> {
         nickname: String,
         storage: StorageClient,
         recent_values: Arc<Mutex<LruCache<CryptoHash, HashedValue>>>,
+        tracked_chains: HashSet<ChainId>,
         delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     ) -> Self {
         WorkerState {
@@ -308,6 +312,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             allow_messages_from_deprecated_epochs: false,
             grace_period: Duration::ZERO,
             recent_values,
+            tracked_chains: Some(tracked_chains),
             delivery_notifiers,
         }
     }
