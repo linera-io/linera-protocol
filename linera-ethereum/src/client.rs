@@ -25,18 +25,23 @@ pub trait JsonRpcClient {
     /// The inner function that has to be implemented and access the client
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
 
+    /// Getting the id
+    async fn get_id(&self) -> u64;
+
     /// The function doing the parsing of the input and output.
     async fn request<T, R>(&self, method: &str, params: T) -> Result<R, Self::Error>
     where
         T: Debug + Serialize + Send + Sync,
         R: DeserializeOwned + Send,
     {
-        let payload = Request::new(method, params);
+        let id = self.get_id().await;
+        let payload = Request::new(id, method, params);
         let payload = serde_json::to_vec(&payload)?;
         let body = self.request_inner(payload).await?;
         let result = serde_json::from_slice::<JsonRpcResponse>(&body)?;
         let raw = result.result;
         let res = serde_json::from_str(raw.get())?;
+        assert_eq!(id, result.id);
         Ok(res)
     }
 }
@@ -51,9 +56,9 @@ struct Request<'a, T> {
 
 impl<'a, T> Request<'a, T> {
     /// Creates a new JSON RPC request, the id does not matter
-    pub fn new(method: &'a str, params: T) -> Self {
+    pub fn new(id: u64, method: &'a str, params: T) -> Self {
         Self {
-            id: 1,
+            id,
             jsonrpc: "2.0",
             method,
             params,

@@ -31,6 +31,9 @@ pub struct EthereumClientSimplified {
 #[async_trait]
 impl JsonRpcClient for EthereumClientSimplified {
     type Error = EthereumServiceError;
+    async fn get_id(&self) -> u64 {
+        1
+    }
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
         let res = Client::new()
             .post(self.url.clone())
