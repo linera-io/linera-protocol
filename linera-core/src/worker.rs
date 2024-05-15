@@ -552,7 +552,10 @@ where
         chain: &ChainStateView<StorageClient::Context>,
     ) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
-        let targets = chain.outboxes.indices().await?;
+        let mut targets = chain.outboxes.indices().await?;
+        if let Some(tracked_chains) = self.tracked_chains.as_ref() {
+            targets.retain(|target| tracked_chains.contains(&target.recipient));
+        }
         let outboxes = chain.outboxes.try_load_entries(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
             let heights = outbox.queue.elements().await?;
