@@ -4,28 +4,35 @@
 //! Support for Linera applications that interact with Ethereum or other EVM contracts.
 
 use std::fmt::Debug;
-use async_lock::Mutex;
+use async_graphql::scalar;
 use linera_ethereum::{client::JsonRpcClient, common::EthereumServiceError};
+use serde::{Deserialize, Serialize};
 
 use crate::contract::wit::contract_system_api;
 
 /// A wrapper for a URL that implements `JsonRpcClient` and uses the JSON oracle to make requests.
-#[derive(Debug)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct EthereumClient {
     /// The URL of the JSON-RPC server, without the method or parameters.
     pub url: String,
-    /// The id that is being incremented from one operation to the next
-    pub id: Mutex<u64>,
 }
+scalar!(EthereumClient);
 
 impl EthereumClient {
     /// Creates a new `EthereumClient` from an URL.
     pub fn new(url: String) -> Self {
-        let id = Mutex::new(0);
-        Self { url, id }
+        Self { url }
     }
 }
 
+/// The Ethereum type for a single event
+pub type EthereumDataType = linera_ethereum::common::EthereumDataType;
+
+/// The Ethereum type for an event
+pub type EthereumEvent = linera_ethereum::common::EthereumEvent;
+
+/// The U256 type from Ethereum
+pub type U256 = alloy::primitives::U256;
 
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
@@ -33,9 +40,7 @@ impl JsonRpcClient for EthereumClient {
     type Error = EthereumServiceError;
 
     async fn get_id(&self) -> u64 {
-        let mut id = self.id.lock().await;
-        *id += 1;
-        *id
+        1
     }
 
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>
