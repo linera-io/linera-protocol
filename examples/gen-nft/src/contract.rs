@@ -11,6 +11,7 @@ use fungible::Account;
 use gen_nft::{GenNftAbi, Message, Nft, Operation, TokenId};
 use linera_sdk::{
     base::{AccountOwner, WithContractAbi},
+    views::{RootView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
 
@@ -28,17 +29,15 @@ impl WithContractAbi for GenNftContract {
 }
 
 impl Contract for GenNftContract {
-    type State = GenNft;
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ();
 
-    async fn new(state: GenNft, runtime: ContractRuntime<Self>) -> Self {
+    async fn load(runtime: ContractRuntime<Self>) -> Self {
+        let state = GenNft::load(ViewStorageContext::from(runtime.key_value_store()))
+            .await
+            .expect("Failed to load state");
         GenNftContract { state, runtime }
-    }
-
-    fn state_mut(&mut self) -> &mut Self::State {
-        &mut self.state
     }
 
     async fn instantiate(&mut self, _state: Self::InstantiationArgument) {
@@ -116,6 +115,10 @@ impl Contract for GenNftContract {
                 self.transfer(nft, target_account).await;
             }
         }
+    }
+
+    async fn store(mut self) {
+        self.state.save().await.expect("Failed to save state");
     }
 }
 

@@ -4,9 +4,9 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 mod model;
+mod random;
 mod state;
 mod token;
-mod random;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -19,6 +19,7 @@ use fungible::Account;
 use gen_nft::{NftOutput, Operation, TokenId};
 use linera_sdk::{
     base::{AccountOwner, WithServiceAbi},
+    views::{View, ViewStorageContext},
     Service, ServiceRuntime,
 };
 use log::info;
@@ -38,10 +39,12 @@ impl WithServiceAbi for GenNftService {
 }
 
 impl Service for GenNftService {
-    type State = GenNft;
     type Parameters = ();
 
-    async fn new(state: Self::State, runtime: ServiceRuntime<Self>) -> Self {
+    async fn new(runtime: ServiceRuntime<Self>) -> Self {
+        let state = GenNft::load(ViewStorageContext::from(runtime.key_value_store()))
+            .await
+            .expect("Failed to load state");
         GenNftService {
             state: Arc::new(state),
             runtime: Arc::new(Mutex::new(runtime)),
