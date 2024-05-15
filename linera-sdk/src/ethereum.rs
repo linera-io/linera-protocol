@@ -5,6 +5,7 @@
 
 use std::fmt::Debug;
 use async_graphql::scalar;
+use async_trait::async_trait;
 use linera_ethereum::{client::JsonRpcClient, common::EthereumServiceError};
 use serde::{Deserialize, Serialize};
 
@@ -34,8 +35,7 @@ pub type EthereumEvent = linera_ethereum::common::EthereumEvent;
 /// The U256 type from Ethereum
 pub type U256 = alloy::primitives::U256;
 
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[async_trait]
 impl JsonRpcClient for EthereumClient {
     type Error = EthereumServiceError;
 

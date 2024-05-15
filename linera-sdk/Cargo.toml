@@ -19,7 +19,6 @@ features = ["test", "wasmer"]
 targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-gnu"]
 
 [features]
-ethereum = ["async-trait", "linera-ethereum"]
 wasmer = [
     "linera-core/wasmer",
     "linera-execution/wasmer",
@@ -37,10 +36,11 @@ test = ["linera-base/test"]
 [dependencies]
 alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
 async-graphql.workspace = true
+async-trait = { workspace = true }
 bcs.workspace = true
 futures.workspace = true
 linera-base.workspace = true
-linera-ethereum = { workspace = true, optional = true }
+linera-ethereum = { workspace = true }
 linera-sdk-derive.workspace = true
 linera-views.workspace = true
 log.workspace = true
@@ -50,7 +50,6 @@ wit-bindgen.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-graphql.workspace = true
-async-trait = { workspace = true, optional = true }
 anyhow.workspace = true
 cargo_toml.workspace = true
 clap.workspace = true

@@ -8,17 +8,18 @@ edition = "2021"
 async-graphql.workspace = true
 bcs.workspace = true
 futures.workspace = true
+linera-ethereum.workspace = true
 linera-sdk.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-linera-sdk = { workspace = true, features = ["ethereum", "test", "wasmer"] }
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 tokio = { workspace = true, features = ["rt", "sync"] }
 
 [dev-dependencies]
 assert_matches.workspace = true
-linera-sdk = { workspace = true, features = ["ethereum", "test"] }
+linera-sdk = { workspace = true, features = ["test"] }
 
 [[bin]]
 name = "ethereum_tracker_contract"

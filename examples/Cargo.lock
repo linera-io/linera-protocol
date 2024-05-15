@@ -2111,6 +2111,7 @@ dependencies = [
  "async-graphql",
  "bcs",
  "futures",
+ "linera-ethereum",
  "linera-sdk",
  "serde",
  "serde_json",

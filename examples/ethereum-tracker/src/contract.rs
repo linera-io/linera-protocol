@@ -8,10 +8,11 @@ mod state;
 use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument, U256Cont};
 use linera_sdk::{
     base::WithContractAbi,
-    ethereum::{EthereumClient, EthereumDataType, EthereumEndpoint, Provider},
+    ethereum::{EthereumClient, EthereumDataType},
     views::{RootView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
+use linera_ethereum::client::EthereumQueries as _;
 
 use self::state::EthereumTracker;
 
@@ -63,19 +64,18 @@ impl Contract for EthereumTrackerContract {
 }
 
 impl EthereumTrackerContract {
-    fn get_endpoints(&self) -> (EthereumEndpoint, String) {
+    fn get_endpoints(&self) -> (EthereumClient, String) {
         let argument = self.state.argument.get();
         let url = argument.ethereum_endpoint.clone();
         let contract_address = argument.contract_address.clone();
         let ethereum_client = EthereumClient { url };
-        let provider = Provider::new(ethereum_client);
-        (EthereumEndpoint { provider }, contract_address)
+        (ethereum_client, contract_address)
     }
 
     async fn read_initial(&mut self) {
         let event_name_expanded = "Initial(address,uint256)";
-        let (ethereum_endpoint, contract_address) = self.get_endpoints();
-        let events = ethereum_endpoint
+        let (ethereum_client, contract_address) = self.get_endpoints();
+        let events = ethereum_client
             .read_events(&contract_address, event_name_expanded, 0)
             .await
             .expect("Read the Initial event");
@@ -93,9 +93,9 @@ impl EthereumTrackerContract {
 
     async fn update(&mut self) {
         let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
-        let (ethereum_endpoint, contract_address) = self.get_endpoints();
+        let (ethereum_client, contract_address) = self.get_endpoints();
         let start_block = self.state.last_block.get_mut();
-        let events = ethereum_endpoint
+        let events = ethereum_client
             .read_events(&contract_address, event_name_expanded, *start_block)
             .await
             .expect("Read a transfer event");
