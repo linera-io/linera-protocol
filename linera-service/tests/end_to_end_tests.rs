@@ -46,7 +46,7 @@ impl EthereumTrackerApp {
     async fn get_amount(&self, account_owner: &str) -> alloy::primitives::U256 {
         use ethereum_tracker::U256Cont;
         let query = format!(
-            "accounts {{ entry(key: {}) {{ value }} }}",
+            "accounts {{ entry(key: \"{}\") {{ value }} }}",
             account_owner
         );
         let response_body = self.0.query(&query).await.unwrap();
@@ -349,7 +349,6 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     use alloy::primitives::U256;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-
     let anvil_test = get_anvil().await?;
     let address0 = anvil_test.get_address(0);
     let address1 = anvil_test.get_address(1);
@@ -360,8 +359,20 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     let argument = InstantiationArgument { ethereum_endpoint, contract_address };
 
     let (_net, client) = config.instantiate().await?;
-
     let chain = client.load_wallet()?.default_chain().unwrap();
+
+    // Change the ownership so that the blocks inserted are not
+    // fast blocks. Fast blocks are not allowed for the oracles.
+    let pub_key1 = {
+        let wallet = client.load_wallet()?;
+        let user_chain = wallet.get(chain).unwrap();
+        user_chain.key_pair.as_ref().unwrap().public()
+    };
+    let pub_key2 = PublicKey::test_key(2);
+    client
+        .change_ownership(chain, vec![], vec![pub_key1, pub_key2])
+        .await?;
+
     let (contract, service) = client.build_example("ethereum-tracker").await?;
 
     let application_id = client
