@@ -1,12 +1,14 @@
 <!-- cargo-rdme start -->
 
-# Non-Fungible Token Example Application
+# Generative NFT Example Application
 
 This example application implements non-fungible tokens (NFTs), showcasing the creation and management of unique digital assets. It highlights cross-chain messages, demonstrating how NFTs can be minted, transferred, and claimed across different chains, emphasizing the instantiation and auto-deployment of applications within the Linera blockchain ecosystem.
 
 Once this application's bytecode is published on a Linera chain, that application will contain the registry of the different NFTs.
 
-Some portions of this are very similar to the `fungible` README, and we'll refer to it throughout. Bash commands will always be included here for testing purposes.
+Most of the core application logic is identical to the [non-fungible](../non-fungible) application, with the payload changed to account for the change from images to strings.
+
+Furthermore,
 
 # How It Works
 
@@ -89,9 +91,8 @@ linera service --port $PORT &
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     mutation {
         mint(
-            minter: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
-            name: "nft1",
-            payload: [1, 2, 3, 4]
+            minter: "User:289c661d6da9b5d1a54c50642b9129f0115f762e60c6568f9db5c3ac71996d32",
+            prompt: "Hello!"
         )
     }
 ```
@@ -101,16 +102,15 @@ linera service --port $PORT &
         nft(tokenId: "kSIB3o59Ut8wioJdISqZwWedPGUlHK2HapnkOLqLSRA") {
             tokenId,
             owner,
-            name,
+            prompt,
             minter,
-            payload
         }
     }
 ```
 - To check that it's assigned to the owner, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query{
-        ownedNfts(owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f")
+        ownedNfts(owner: "User:289c661d6da9b5d1a54c50642b9129f0115f762e60c6568f9db5c3ac71996d32")
     }
 ```
 - To check everything that it's there, run the query:
@@ -123,7 +123,7 @@ linera service --port $PORT &
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     mutation {
         transfer(
-            sourceOwner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            sourceOwner: "User:289c661d6da9b5d1a54c50642b9129f0115f762e60c6568f9db5c3ac71996d32",
             tokenId: "kSIB3o59Ut8wioJdISqZwWedPGUlHK2HapnkOLqLSRA",
             targetAccount: {
                 chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
