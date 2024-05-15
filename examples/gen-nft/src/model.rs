@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use std::io::{Cursor, Seek, SeekFrom};
 
 use candle_core::{
