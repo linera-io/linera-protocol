@@ -1,7 +1,7 @@
 import { useState } from "react";
 import React from "react";
-import {gql, useMutation, useLazyQuery, useSubscription, useQuery} from "@apollo/client";
-import { Card, Typography, Button, Table, Layout, Modal, Form, Input, Space, Alert, Descriptions, Upload, Image } from 'antd';
+import {gql, useMutation, useLazyQuery, useSubscription} from "@apollo/client";
+import { Card, Typography, Button, Table, Layout, Modal, Form, Input, Space, Alert, Descriptions} from 'antd';
 import Loader from './Loader.js'
 
 const { Title } = Typography;
@@ -52,13 +52,7 @@ function App({ chainId, owner }) {
   const [transferForm] = Form.useForm();
 
   // Mint dialog
-  const [name, setName] = useState('');
   const [mintForm] = Form.useForm();
-  const [mintPreviewOpen, setMintPreviewOpen] = useState(false);
-  const [mintPreviewImage, setMintPreviewImage] = useState('');
-  const [mintPreviewTitle, setMintPreviewTitle] = useState('');
-  const [mintUploadedFileList, setMintUploadedFileList] = useState([]);
-  const [mintImageUrl, setMintImageUrl] = useState("");
   const [promptPreview, setPromptPreview] = useState("");
   const [prompt, setPrompt] = useState("");
 
@@ -118,17 +112,12 @@ function App({ chainId, owner }) {
   }
 
   const resetMintDialog = () => {
-    setName("");
     setMintError("");
-    setMintUploadedFileList([]);
-    setMintImageUrl("");
     mintForm.resetFields();
   };
 
   // Placeholder for form submission logic
   const handleMintSubmit = () => {
-    const encoder = new TextEncoder();
-    const byteArrayFile = encoder.encode(mintImageUrl);
 
     mintNft({
       variables: {
@@ -188,9 +177,6 @@ function App({ chainId, owner }) {
       setPrompt(values.story);
     }
   };
-
-  const handleMintPreviewCancel = () => setMintPreviewOpen(false);
-
 
   const columns = [
     {
@@ -345,16 +331,6 @@ function App({ chainId, owner }) {
               </Space>
             </Form.Item>
           </Form>
-        </Modal>
-
-        <Modal open={mintPreviewOpen} title={mintPreviewTitle} footer={null} onCancel={handleMintPreviewCancel}>
-          <img
-            alt=""
-            style={{
-              width: '100%',
-            }}
-            src={mintPreviewImage}
-          />
         </Modal>
 
         <Modal title="Transfer NFT" open={isTransferOpen} footer={null} onCancel={handleTransferClose}>
