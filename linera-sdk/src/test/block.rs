@@ -8,8 +8,10 @@
 use std::mem;
 
 use linera_base::{
+    crypto::PublicKey,
     data_types::{ApplicationPermissions, Round, Timestamp},
     identifiers::{ApplicationId, ChainId, MessageId, Owner},
+    ownership::TimeoutConfig,
 };
 use linera_chain::data_types::{
     Block, Certificate, HashedCertificateValue, IncomingMessage, LiteVote, MessageAction,
@@ -93,6 +95,22 @@ impl BlockBuilder {
         self.with_system_operation(SystemOperation::RequestApplication {
             chain_id: application.creation.chain_id,
             application_id: application.forget_abi(),
+        })
+    }
+
+    /// Adds an operation to change this chain's ownership.
+    pub fn with_owner_change(
+        &mut self,
+        super_owners: Vec<PublicKey>,
+        owners: Vec<(PublicKey, u64)>,
+        multi_leader_rounds: u32,
+        timeout_config: TimeoutConfig,
+    ) -> &mut Self {
+        self.with_system_operation(SystemOperation::ChangeOwnership {
+            super_owners,
+            owners,
+            multi_leader_rounds,
+            timeout_config,
         })
     }
 

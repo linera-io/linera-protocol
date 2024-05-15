@@ -1,0 +1,247 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+/*!
+# Hex
+
+Hex is a game where player `One` tries to connect the left and right sides of the board and player
+`Two` tries to connect top to bottom. The board is rhombic and has a configurable side length `s`.
+It consists of `s * s` hexagonal cells, indexed like this:
+
+```ignore
+(0, 0)      (1, 0)      (2, 0)
+
+      (0, 1)      (1, 1)      (2, 1)
+
+            (0, 2)      (1, 2)      (2, 2)
+```
+
+The players alternate placing a stone in their color on an empty cell until one of them wins.
+
+This implementation shows how to write a game that is meant to be played on a shared chain:
+Users make turns by submitting operations to the chain, not by sending messages, so a player
+does not have to wait for any other chain owner to accept any message.
+*/
+
+use std::iter;
+
+use async_graphql::{Enum, Request, Response, SimpleObject};
+use linera_sdk::{
+    base::{ContractAbi, ServiceAbi},
+    graphql::GraphQLMutationRoot,
+};
+use serde::{Deserialize, Serialize};
+
+pub struct HexAbi;
+
+#[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
+pub enum Operation {
+    /// Make a move, and place a stone onto cell `(x, y)`.
+    MakeMove { x: u16, y: u16 },
+}
+
+impl ContractAbi for HexAbi {
+    type Operation = Operation;
+    type Response = MoveOutcome;
+}
+
+impl ServiceAbi for HexAbi {
+    type Query = Request;
+    type QueryResponse = Response;
+}
+
+/// The outcome of a valid move.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MoveOutcome {
+    /// A player wins the game.
+    Winner(Player),
+    /// The game continues.
+    Ok,
+}
+
+/// A player: `One` or `Two`
+///
+/// It's player `One`'s turn whenever the number of stones on the board is even, so they make
+/// the first move. Otherwise it's `Two`'s turn.
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Enum)]
+pub enum Player {
+    #[default]
+    /// Player one
+    One,
+    /// Player two
+    Two,
+}
+
+impl Player {
+    /// Returns the opponent of `self`.
+    fn other(&self) -> Self {
+        match self {
+            Player::One => Player::Two,
+            Player::Two => Player::One,
+        }
+    }
+
+    /// Returns `0` for player `One` and `1` for player `Two`.
+    pub fn index(&self) -> usize {
+        match self {
+            Player::One => 0,
+            Player::Two => 1,
+        }
+    }
+}
+
+/// The state of a cell on the board.
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, SimpleObject)]
+pub struct Cell {
+    /// `None` if the cell is empty; otherwise the player who placed a stone here.
+    stone: Option<Player>,
+    /// This is `true` if the cell belongs to player `One` and is connected to the left edge
+    /// of the board via other cells containing a stone placed by player `One`, or if it
+    /// belongs to player `Two` and is connected to the top edge of the board via other cells
+    /// containing stones placed by player `Two`.
+    ///
+    /// So the game ends if this is `true` for any cell at the right or bottom edge.
+    connected: bool,
+}
+
+impl Cell {
+    /// Returns whether this cell is connected to the top or left edge and belongs to the
+    /// given player.
+    fn is_connected(&self, player: Player) -> bool {
+        self.connected && self.stone == Some(player)
+    }
+}
+
+/// The state of a Hex game.
+#[derive(Clone, Default, Serialize, Deserialize, SimpleObject)]
+pub struct Board {
+    /// The cells, row-by-row.
+    ///
+    /// Cell `(x, y)` has index `(x + y * size)`.
+    cells: Vec<Cell>,
+    /// The width and height of the board, in cells.
+    size: u16,
+    /// The player whose turn it is. If the game has ended, this player loses.
+    active: Player,
+}
+
+impl Board {
+    /// Creates a new board with the given size and player owners.
+    pub fn new(size: u16) -> Self {
+        let size_usize = usize::from(size);
+        let cell_count = size_usize
+            .checked_mul(size_usize)
+            .expect("Board is too large.");
+        let cells = vec![Cell::default(); cell_count];
+        Board {
+            size,
+            cells,
+            active: Player::One,
+        }
+    }
+
+    /// Updates the board: The active player places a stone on cell `(x, y)`.
+    ///
+    /// Panics if the move is invalid.
+    pub fn make_move(&mut self, x: u16, y: u16) -> MoveOutcome {
+        assert!(self.winner().is_none(), "Game has ended.");
+        assert!(x < self.size && y < self.size, "Invalid coordinates.");
+        assert!(self.cell(x, y).stone.is_none(), "Cell is not empty.");
+        self.place_stone(x, y);
+        if let Some(winner) = self.winner() {
+            return MoveOutcome::Winner(winner);
+        }
+        MoveOutcome::Ok
+    }
+
+    /// Places the active player's stone on the given cell, updates all cells'
+    /// `connected` flags accordingly. The new cell _must_ be empty!
+    fn place_stone(&mut self, x: u16, y: u16) {
+        let player = self.active;
+        self.cell_mut(x, y).stone = Some(player);
+        self.active = player.other();
+        if !((x == 0 && player == Player::One)
+            || (y == 0 && player == Player::Two)
+            || self
+                .neighbors(x, y)
+                .any(|(nx, ny)| self.cell(nx, ny).is_connected(player)))
+        {
+            return;
+        }
+        let mut stack = vec![(x, y)];
+        while let Some((x, y)) = stack.pop() {
+            self.cell_mut(x, y).connected = true;
+            stack.extend(self.neighbors(x, y).filter(|(nx, ny)| {
+                let cell = self.cell(*nx, *ny);
+                !cell.connected && cell.stone == Some(player)
+            }));
+        }
+    }
+
+    /// Returns the winner, or `None` if the game is still in progress.
+    pub fn winner(&self) -> Option<Player> {
+        let s = self.size - 1;
+        for i in 0..self.size {
+            if self.cell(s, i).is_connected(Player::One) {
+                return Some(Player::One);
+            }
+            if self.cell(i, s).is_connected(Player::Two) {
+                return Some(Player::Two);
+            }
+        }
+        None
+    }
+
+    /// Returns the `Owner` controlling the active player.
+    pub fn active_player(&self) -> Player {
+        self.active
+    }
+
+    /// Returns the cell `(x, y)`.
+    fn cell(&self, x: u16, y: u16) -> Cell {
+        self.cells[x as usize + (y as usize) * (self.size as usize)]
+    }
+
+    /// Returns a mutable reference to cell `(x, y)`.
+    fn cell_mut(&mut self, x: u16, y: u16) -> &mut Cell {
+        &mut self.cells[x as usize + (y as usize) * (self.size as usize)]
+    }
+
+    /// Returns all neighbors of cell `(x, y)`, in the order:
+    /// left, top left, right, bottom right, top right, bottom left
+    fn neighbors(&self, x: u16, y: u16) -> impl Iterator<Item = (u16, u16)> {
+        iter::empty()
+            .chain((x > 0).then(|| (x - 1, y)))
+            .chain((y > 0).then(|| (x, y - 1)))
+            .chain((x + 1 < self.size).then(|| (x + 1, y)))
+            .chain((y + 1 < self.size).then(|| (x, y + 1)))
+            .chain((x + 1 < self.size && y > 0).then(|| (x + 1, y - 1)))
+            .chain((y + 1 < self.size && x > 0).then(|| (x - 1, y + 1)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_simple_game() {
+        let mut board = Board::new(3);
+        // Make a few moves; no winner yet:
+        // 0 2 2
+        //  2 1 0
+        //   1 0 1
+        assert_eq!(Player::One, board.active_player());
+        assert_eq!(MoveOutcome::Ok, board.make_move(0, 2));
+        assert_eq!(Player::Two, board.active_player());
+        assert_eq!(MoveOutcome::Ok, board.make_move(0, 1));
+        assert_eq!(MoveOutcome::Ok, board.make_move(1, 1));
+        assert_eq!(MoveOutcome::Ok, board.make_move(1, 0));
+        assert_eq!(MoveOutcome::Ok, board.make_move(2, 2));
+        assert_eq!(MoveOutcome::Ok, board.make_move(2, 0));
+        assert!(board.winner().is_none());
+        // Player 1 connects left to right and wins:
+        assert_eq!(MoveOutcome::Winner(Player::One), board.make_move(2, 1));
+        assert_eq!(Some(Player::One), board.winner());
+    }
+}
