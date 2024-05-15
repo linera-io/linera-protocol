@@ -162,6 +162,7 @@ wit-bindgen = "0.24.0"
 linera-base = { version = "0.11.0", path = "./linera-base" }
 linera-chain = { version = "0.11.0", path = "./linera-chain" }
 linera-core = { version = "0.11.0", path = "./linera-core", default-features = false }
+linera-ethereum = { version = "0.11.0", path = "./linera-ethereum", default-features = false }
 linera-execution = { version = "0.11.0", path = "./linera-execution", default-features = false }
 linera-indexer = { path = "./linera-indexer/lib" }
 linera-indexer-graphql-client = { path = "./linera-indexer/graphql-client" }

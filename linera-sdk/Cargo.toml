@@ -19,7 +19,7 @@ features = ["test", "wasmer"]
 targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-gnu"]
 
 [features]
-ethereum = ["async-trait", "ethers"]
+ethereum = ["async-trait", "linera-ethereum"]
 wasmer = [
     "linera-core/wasmer",
     "linera-execution/wasmer",
@@ -39,6 +39,7 @@ async-graphql.workspace = true
 bcs.workspace = true
 futures.workspace = true
 linera-base.workspace = true
+linera-ethereum = { workspace = true, optional = true }
 linera-sdk-derive.workspace = true
 linera-views.workspace = true
 log.workspace = true
@@ -53,7 +54,6 @@ anyhow.workspace = true
 cargo_toml.workspace = true
 clap.workspace = true
 dashmap.workspace = true
-ethers = { workspace = true, optional = true }
 linera-base = { workspace = true, features = ["metrics"] }
 linera-chain = { workspace = true, features = ["metrics"] }
 linera-core = { workspace = true, features = ["test", "metrics", "wasmer"] }
