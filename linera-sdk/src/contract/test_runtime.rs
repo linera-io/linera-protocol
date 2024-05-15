@@ -628,7 +628,7 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn fetch_json(&mut self, url: &str) -> String {
+    pub fn fetch_json(&mut self, url: &str, payload: Vec<u8>) -> Vec<u8> {
         let maybe_request = self.expected_json_requests.pop_front();
         let (expected_url, response) = maybe_request.expect("Unexpected JSON request");
         assert_eq!(*url, expected_url);

@@ -4252,6 +4252,7 @@ version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-graphql",
+ "async-lock",
  "async-trait",
  "bcs",
  "cargo_toml",

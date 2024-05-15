@@ -4,9 +4,8 @@
 //! Support for Linera applications that interact with Ethereum or other EVM contracts.
 
 use std::fmt::Debug;
-
+use async_lock::Mutex;
 use linera_ethereum::{client::JsonRpcClient, common::EthereumServiceError};
-use serde::{de::DeserializeOwned, Serialize};
 
 use crate::contract::wit::contract_system_api;
 
@@ -15,8 +14,18 @@ use crate::contract::wit::contract_system_api;
 pub struct EthereumClient {
     /// The URL of the JSON-RPC server, without the method or parameters.
     pub url: String,
+    /// The id that is being incremented from one operation to the next
     pub id: Mutex<u64>,
 }
+
+impl EthereumClient {
+    /// Creates a new `EthereumClient` from an URL.
+    pub fn new(url: String) -> Self {
+        let id = Mutex::new(0);
+        Self { url, id }
+    }
+}
+
 
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
@@ -31,6 +40,6 @@ impl JsonRpcClient for EthereumClient {
 
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>
     {
-        contract_system_api::fetch_json(&self.url, payload)
+        Ok(contract_system_api::fetch_json(&self.url, &payload))
     }
 }

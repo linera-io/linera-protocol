@@ -699,7 +699,7 @@ pub enum OracleResponse {
     /// The response from a service query.
     Service(Vec<u8>),
     /// The JSON response from an HTTP GET request.
-    Json(String),
+    Json(Vec<u8>),
 }
 
 impl fmt::Display for OracleResponse {
@@ -708,7 +708,9 @@ impl fmt::Display for OracleResponse {
             OracleResponse::Service(bytes) => {
                 write!(f, "Service:{}", STANDARD_NO_PAD.encode(bytes))?
             }
-            OracleResponse::Json(json) => write!(f, "Json:\"{}\"", json)?,
+            OracleResponse::Json(bytes) => {
+                write!(f, "Json:{}", STANDARD_NO_PAD.encode(bytes))?
+            }
         };
 
         Ok(())
@@ -724,8 +726,10 @@ impl std::str::FromStr for OracleResponse {
                 STANDARD_NO_PAD.decode(string).context("Invalid base64")?,
             ));
         }
-        if let Some(json) = s.strip_prefix("Json:\"").and_then(|s| s.strip_suffix('"')) {
-            return Ok(OracleResponse::Json(json.to_string()));
+        if let Some(string) = s.strip_prefix("Json:") {
+            return Ok(OracleResponse::Json(
+                STANDARD_NO_PAD.decode(string).context("Invalid base64")?,
+            ));
         }
         Err(anyhow::anyhow!("Invalid enum! Enum: {}", s))
     }

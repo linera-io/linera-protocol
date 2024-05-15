@@ -21,6 +21,7 @@ use linera_views::{
     common::Context,
     views::{View, ViewError},
 };
+use reqwest::{header::CONTENT_TYPE, Client};
 use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
@@ -267,10 +268,16 @@ where
                 callback.respond(bytes);
             }
 
-            FetchJson { url, callback } => {
-                let json: serde_json::Value = reqwest::get(url).await?.json().await?;
-                let string = serde_json::to_string_pretty(&json)?;
-                callback.respond(string);
+            FetchJson { url, payload, callback } => {
+                let res = Client::new()
+                    .post(url)
+                    .body(payload)
+                    .header(CONTENT_TYPE, "application/json")
+                    .send()
+                    .await?;
+                let body = res.bytes().await?;
+                let bytes = body.as_ref().to_vec();
+                callback.respond(bytes);
             }
         }
 
@@ -387,7 +394,8 @@ pub enum Request {
 
     FetchJson {
         url: String,
-        callback: oneshot::Sender<String>,
+        payload: Vec<u8>,
+        callback: oneshot::Sender<Vec<u8>>,
     },
 }
 

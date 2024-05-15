@@ -639,8 +639,8 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().query_service(application_id, query)
     }
 
-    fn fetch_json(&mut self, url: &str) -> Result<String, ExecutionError> {
-        self.inner().fetch_json(url)
+    fn fetch_json(&mut self, url: &str, payload: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+        self.inner().fetch_json(url, payload)
     }
 }
 
@@ -867,7 +867,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(response)
     }
 
-    fn fetch_json(&mut self, url: &str) -> Result<String, ExecutionError> {
+    fn fetch_json(&mut self, url: &str, payload: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
             return match responses.next() {
                 Some(OracleResponse::Json(json)) => Ok(json),
@@ -878,7 +878,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let url = url.to_string();
         let json = self
             .execution_state_sender
-            .send_request(|callback| Request::FetchJson { url, callback })?
+            .send_request(|callback| Request::FetchJson { url, payload, callback })?
             .recv_response()?;
         if let OracleResponses::Record(responses) = &mut self.oracle_responses {
             responses.push(OracleResponse::Json(json.clone()));

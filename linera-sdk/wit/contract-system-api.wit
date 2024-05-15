@@ -22,7 +22,7 @@ interface contract-system-api {
     close-chain: func() -> result<tuple<>, close-chain-error>;
     try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
-    fetch-json: func(query: string) -> string;
+    fetch-json: func(query: string, payload: list<u8>) -> list<u8>;
     log: func(message: string, level: log-level);
     consume-fuel: func(fuel: u64);
 

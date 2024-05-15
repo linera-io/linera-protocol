@@ -313,11 +313,11 @@ where
     }
 
     /// Makes a GET request to the given URL and returns the JSON part, if any.
-    fn fetch_json(caller: &mut Caller, query: String) -> Result<String, RuntimeError> {
+    fn fetch_json(caller: &mut Caller, query: String, payload: Vec<u8>) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .fetch_json(&query)
+            .fetch_json(&query, payload)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -473,11 +473,11 @@ where
     }
 
     /// Makes a GET request to the given URL and returns the JSON part, if any.
-    fn fetch_json(caller: &mut Caller, query: String) -> Result<String, RuntimeError> {
+    fn fetch_json(caller: &mut Caller, query: String, payload: Vec<u8>) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .fetch_json(&query)
+            .fetch_json(&query, payload)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
