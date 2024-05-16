@@ -572,9 +572,15 @@ impl ClientContext {
                     .context("failed to create new chain")?;
                 let chain_id = ChainId::child(message_id);
                 key_pairs.insert(chain_id, key_pair.copy());
+                self.chain_client_builder.track_chain(chain_id);
                 self.update_wallet_for_new_chain(chain_id, Some(key_pair.copy()), timestamp);
             }
         }
+        let mut updated_chain_client = self.make_chain_client(storage.clone(), default_chain_id);
+        updated_chain_client
+            .retry_pending_outgoing_messages()
+            .await
+            .context("outgoing messages to create the new chains should be delivered")?;
 
         for chain_id in key_pairs.keys() {
             let mut child_client = self.make_chain_client(storage.clone(), *chain_id);
