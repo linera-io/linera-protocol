@@ -2109,12 +2109,9 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "async-graphql",
- "bcs",
- "futures",
  "linera-ethereum",
  "linera-sdk",
  "serde",
- "serde_json",
  "tokio",
 ]
 
