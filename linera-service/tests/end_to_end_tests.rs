@@ -346,8 +346,8 @@ async fn test_wallet_lock() -> Result<()> {
 }
 
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_eth(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_eth(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_ethereum_tracker(_config: impl LineraNetConfig) -> Result<()> {
     #[cfg(feture = "ethereum")]
