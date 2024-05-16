@@ -375,9 +375,8 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
         let user_chain = wallet.get(chain).unwrap();
         user_chain.key_pair.as_ref().unwrap().public()
     };
-    let pub_key2 = PublicKey::test_key(2);
     client
-        .change_ownership(chain, vec![], vec![pub_key1, pub_key2])
+        .change_ownership(chain, vec![], vec![pub_key1])
         .await?;
 
     let (contract, service) = client.build_example("ethereum-tracker").await?;
