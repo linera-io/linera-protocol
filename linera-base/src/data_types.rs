@@ -698,8 +698,8 @@ pub struct OracleRecord {
 pub enum OracleResponse {
     /// The response from a service query.
     Service(Vec<u8>),
-    /// The JSON response from an HTTP GET request.
-    Json(Vec<u8>),
+    /// The response from an HTTP POST request.
+    Post(Vec<u8>),
 }
 
 impl fmt::Display for OracleResponse {
@@ -708,7 +708,7 @@ impl fmt::Display for OracleResponse {
             OracleResponse::Service(bytes) => {
                 write!(f, "Service:{}", STANDARD_NO_PAD.encode(bytes))?
             }
-            OracleResponse::Json(bytes) => write!(f, "Json:{}", STANDARD_NO_PAD.encode(bytes))?,
+            OracleResponse::Post(bytes) => write!(f, "Post:{}", STANDARD_NO_PAD.encode(bytes))?,
         };
 
         Ok(())
@@ -724,8 +724,8 @@ impl std::str::FromStr for OracleResponse {
                 STANDARD_NO_PAD.decode(string).context("Invalid base64")?,
             ));
         }
-        if let Some(string) = s.strip_prefix("Json:") {
-            return Ok(OracleResponse::Json(
+        if let Some(string) = s.strip_prefix("Post:") {
+            return Ok(OracleResponse::Post(
                 STANDARD_NO_PAD.decode(string).context("Invalid base64")?,
             ));
         }

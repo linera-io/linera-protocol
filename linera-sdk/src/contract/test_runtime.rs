@@ -597,7 +597,8 @@ where
 
     /// Adds an expected `http_post` call, and the response it should return in the test.
     pub fn add_expected_post_request(&mut self, url: String, payload: Vec<u8>, response: Vec<u8>) {
-        self.expected_post_requests.push_back((url, payload, response));
+        self.expected_post_requests
+            .push_back((url, payload, response));
     }
 
     /// Queries our application service as an oracle and returns the response.
@@ -630,7 +631,8 @@ where
     /// owner, not a super owner.
     pub fn http_post(&mut self, url: &str, payload: Vec<u8>) -> Vec<u8> {
         let maybe_request = self.expected_post_requests.pop_front();
-        let (expected_url, expected_payload, response) = maybe_request.expect("Unexpected POST request");
+        let (expected_url, expected_payload, response) =
+            maybe_request.expect("Unexpected POST request");
         assert_eq!(*url, expected_url);
         assert_eq!(payload, expected_payload);
         response

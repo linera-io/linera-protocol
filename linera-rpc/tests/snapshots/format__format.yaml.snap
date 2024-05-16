@@ -627,8 +627,9 @@ OracleResponse:
         NEWTYPE:
           SEQ: U8
     1:
-      Json:
-        NEWTYPE: STR
+      Post:
+        NEWTYPE:
+          SEQ: U8
 Origin:
   STRUCT:
     - sender:

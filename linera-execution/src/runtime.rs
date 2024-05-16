@@ -870,13 +870,13 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     fn http_post(&mut self, url: &str, payload: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
             return match responses.next() {
-                Some(OracleResponse::Json(json)) => Ok(json),
+                Some(OracleResponse::Post(bytes)) => Ok(bytes),
                 Some(_) => Err(ExecutionError::OracleResponseMismatch),
                 None => Err(ExecutionError::MissingOracleResponse),
             };
         }
         let url = url.to_string();
-        let json = self
+        let bytes = self
             .execution_state_sender
             .send_request(|callback| Request::HttpPost {
                 url,
@@ -885,9 +885,9 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             })?
             .recv_response()?;
         if let OracleResponses::Record(responses) = &mut self.oracle_responses {
-            responses.push(OracleResponse::Json(json.clone()));
+            responses.push(OracleResponse::Post(bytes.clone()));
         }
-        Ok(json)
+        Ok(bytes)
     }
 }
 
