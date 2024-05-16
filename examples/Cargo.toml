@@ -5,6 +5,7 @@ members = [
     "counter",
     "crowd-funding",
     "fungible",
+    "hex-game",
     "llm",
     "matching-engine",
     "meta-counter",

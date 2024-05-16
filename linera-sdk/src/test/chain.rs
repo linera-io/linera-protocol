@@ -68,9 +68,19 @@ impl ActiveChain {
         self.description.into()
     }
 
-    /// Returns the [`PublicKey`] of the owner of this microchain.
+    /// Returns the [`PublicKey`] of the active owner of this microchain.
     pub fn public_key(&self) -> PublicKey {
         self.key_pair.public()
+    }
+
+    /// Returns the [`KeyPair`] of the active owner of this microchain.
+    pub fn key_pair(&self) -> &KeyPair {
+        &self.key_pair
+    }
+
+    /// Sets the [`KeyPair`] to use for signing new blocks.
+    pub fn set_key_pair(&mut self, key_pair: KeyPair) {
+        self.key_pair = key_pair
     }
 
     /// Adds a block to this microchain.

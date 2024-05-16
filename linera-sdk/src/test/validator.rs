@@ -112,11 +112,12 @@ impl TestValidator {
     /// The bytecode is first published on one microchain, then the application is created on
     /// another microchain.
     ///
-    /// Returns the new [`TestValidator`] and the [`ApplicationId`] of the created application.
+    /// Returns the new [`TestValidator`], the [`ApplicationId`] of the created application, and
+    /// the chain on which it was created.
     pub async fn with_current_application<Abi, Parameters, InstantiationArgument>(
         parameters: Parameters,
         instantiation_argument: InstantiationArgument,
-    ) -> (TestValidator, ApplicationId<Abi>)
+    ) -> (TestValidator, ApplicationId<Abi>, ActiveChain)
     where
         Abi: ContractAbi,
         Parameters: Serialize,
@@ -131,7 +132,7 @@ impl TestValidator {
             .create_application(bytecode_id, parameters, instantiation_argument, vec![])
             .await;
 
-        (validator, application_id)
+        (validator, application_id, creator)
     }
 
     /// Returns the locked [`WorkerState`] of this validator.
