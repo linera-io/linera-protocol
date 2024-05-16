@@ -313,7 +313,7 @@ where
     }
 
     /// Makes a POST request to the given URL and returns the JSON part, if any.
-    fn fetch_json(
+    fn http_post(
         caller: &mut Caller,
         query: String,
         payload: Vec<u8>,
@@ -321,7 +321,7 @@ where
         caller
             .user_data_mut()
             .runtime
-            .fetch_json(&query, payload)
+            .http_post(&query, payload)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -477,7 +477,7 @@ where
     }
 
     /// Makes a POST request to the given URL and returns the JSON part, if any.
-    fn fetch_json(
+    fn http_post(
         caller: &mut Caller,
         query: String,
         payload: Vec<u8>,
@@ -485,7 +485,7 @@ where
         caller
             .user_data_mut()
             .runtime
-            .fetch_json(&query, payload)
+            .http_post(&query, payload)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

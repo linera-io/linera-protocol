@@ -224,15 +224,15 @@ where
         serde_json::from_slice(&response).expect("Failed to deserialize service response")
     }
 
-    /// Makes a GET request to the given URL as an oracle and returns the JSON part, if any.
+    /// Makes a POST request to the given URL as an oracle and returns the answer, if any.
     ///
     /// Should only be used with queries where it is very likely that all validators will receive
     /// the same response, otherwise most block proposals will fail.
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn fetch_json(&mut self, url: &str, payload: Vec<u8>) -> Vec<u8> {
-        wit::fetch_json(url, &payload)
+    pub fn http_post(&mut self, url: &str, payload: Vec<u8>) -> Vec<u8> {
+        wit::http_post(url, &payload)
     }
 }
 

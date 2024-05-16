@@ -2697,12 +2697,9 @@ name = "ethereum-tracker"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "bcs",
- "futures",
  "linera-ethereum",
  "linera-sdk",
  "serde",
- "serde_json",
 ]
 
 [[package]]

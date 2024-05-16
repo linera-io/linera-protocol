@@ -639,8 +639,8 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().query_service(application_id, query)
     }
 
-    fn fetch_json(&mut self, url: &str, payload: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
-        self.inner().fetch_json(url, payload)
+    fn http_post(&mut self, url: &str, payload: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+        self.inner().http_post(url, payload)
     }
 }
 
@@ -867,7 +867,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(response)
     }
 
-    fn fetch_json(&mut self, url: &str, payload: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+    fn http_post(&mut self, url: &str, payload: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
             return match responses.next() {
                 Some(OracleResponse::Json(json)) => Ok(json),
@@ -878,7 +878,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let url = url.to_string();
         let json = self
             .execution_state_sender
-            .send_request(|callback| Request::FetchJson {
+            .send_request(|callback| Request::HttpPost {
                 url,
                 payload,
                 callback,

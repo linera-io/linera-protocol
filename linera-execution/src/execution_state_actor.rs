@@ -268,7 +268,7 @@ where
                 callback.respond(bytes);
             }
 
-            FetchJson {
+            HttpPost {
                 url,
                 payload,
                 callback,
@@ -396,7 +396,7 @@ pub enum Request {
         callback: Sender<Vec<u8>>,
     },
 
-    FetchJson {
+    HttpPost {
         url: String,
         payload: Vec<u8>,
         callback: oneshot::Sender<Vec<u8>>,
@@ -520,8 +520,8 @@ impl Debug for Request {
                 .field("url", url)
                 .finish_non_exhaustive(),
 
-            Request::FetchJson { url, .. } => formatter
-                .debug_struct("Request::FetchJson")
+            Request::HttpPost { url, .. } => formatter
+                .debug_struct("Request::HttpPost")
                 .field("url", url)
                 .finish_non_exhaustive(),
         }

@@ -425,8 +425,8 @@ pub trait BaseRuntime {
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
-    /// Makes a POST request to the given URL and returns the JSON part, if any.
-    fn fetch_json(&mut self, url: &str, payload: Vec<u8>) -> Result<Vec<u8>, ExecutionError>;
+    /// Makes a POST request to the given URL and returns the answer, if any.
+    fn http_post(&mut self, url: &str, payload: Vec<u8>) -> Result<Vec<u8>, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
