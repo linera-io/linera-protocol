@@ -21,10 +21,10 @@ use linera_views::{
     common::Context,
     views::{View, ViewError},
 };
-use reqwest::{header::CONTENT_TYPE, Client};
 use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
+use reqwest::{header::CONTENT_TYPE, Client};
 
 use crate::{
     system::{OpenChainConfig, Recipient, UserData},
@@ -268,7 +268,11 @@ where
                 callback.respond(bytes);
             }
 
-            FetchJson { url, payload, callback } => {
+            FetchJson {
+                url,
+                payload,
+                callback,
+            } => {
                 let res = Client::new()
                     .post(url)
                     .body(payload)

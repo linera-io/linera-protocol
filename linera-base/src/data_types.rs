@@ -708,9 +708,7 @@ impl fmt::Display for OracleResponse {
             OracleResponse::Service(bytes) => {
                 write!(f, "Service:{}", STANDARD_NO_PAD.encode(bytes))?
             }
-            OracleResponse::Json(bytes) => {
-                write!(f, "Json:{}", STANDARD_NO_PAD.encode(bytes))?
-            }
+            OracleResponse::Json(bytes) => write!(f, "Json:{}", STANDARD_NO_PAD.encode(bytes))?,
         };
 
         Ok(())

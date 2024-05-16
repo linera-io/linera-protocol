@@ -52,17 +52,21 @@ impl EthereumTrackerApp {
         let response_body = self.0.query(&query).await.unwrap();
         let amount_option = serde_json::from_value::<Option<U256Cont>>(
             response_body["accounts"]["entry"]["value"].clone(),
-        ).unwrap();
+        )
+        .unwrap();
         match amount_option {
             None => alloy::primitives::U256::from(0),
             Some(value) => {
                 let U256Cont { value } = value;
                 value
-            },
+            }
         }
     }
 
-    async fn assert_balances(&self, accounts: impl IntoIterator<Item = (String, alloy::primitives::U256)>) {
+    async fn assert_balances(
+        &self,
+        accounts: impl IntoIterator<Item = (String, alloy::primitives::U256)>,
+    ) {
         for (account_owner, amount) in accounts {
             let value = self.get_amount(&account_owner).await;
             assert_eq!(value, amount);
@@ -344,9 +348,9 @@ async fn test_wallet_lock() -> Result<()> {
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_eth(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> Result<()> {
+    use alloy::primitives::U256;
     use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
     use linera_ethereum::test_utils::{get_anvil, SimpleTokenContractFunction};
-    use alloy::primitives::U256;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let anvil_test = get_anvil().await?;
@@ -356,7 +360,10 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
 
     let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
     let contract_address = simple_token.contract_address.clone();
-    let argument = InstantiationArgument { ethereum_endpoint, contract_address };
+    let argument = InstantiationArgument {
+        ethereum_endpoint,
+        contract_address,
+    };
 
     let (_net, client) = config.instantiate().await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
@@ -395,9 +402,11 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
 
     // Check after the initialization
 
-    app.assert_balances(
-        [(address0.clone(), U256::from(1000)),
-         (address1.clone(), U256::from(0))]).await;
+    app.assert_balances([
+        (address0.clone(), U256::from(1000)),
+        (address1.clone(), U256::from(0)),
+    ])
+    .await;
 
     // Doing a transfer and updating the smart contract
     // First await gets you the pending transaction, second gets it mined.
@@ -409,9 +418,11 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
 
     // Now checking the balances after the operations.
 
-    app.assert_balances(
-        [(address0.clone(), U256::from(990)),
-         (address1.clone(), U256::from(10))]).await;
+    app.assert_balances([
+        (address0.clone(), U256::from(990)),
+        (address1.clone(), U256::from(10)),
+    ])
+    .await;
 
     Ok(())
 }

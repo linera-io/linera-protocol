@@ -878,7 +878,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let url = url.to_string();
         let json = self
             .execution_state_sender
-            .send_request(|callback| Request::FetchJson { url, payload, callback })?
+            .send_request(|callback| Request::FetchJson {
+                url,
+                payload,
+                callback,
+            })?
             .recv_response()?;
         if let OracleResponses::Record(responses) = &mut self.oracle_responses {
             responses.push(OracleResponse::Json(json.clone()));

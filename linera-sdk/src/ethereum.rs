@@ -4,6 +4,7 @@
 //! Support for Linera applications that interact with Ethereum or other EVM contracts.
 
 use std::fmt::Debug;
+
 use async_graphql::scalar;
 use async_trait::async_trait;
 use linera_ethereum::{client::JsonRpcClient, common::EthereumServiceError};
@@ -43,8 +44,7 @@ impl JsonRpcClient for EthereumClient {
         1
     }
 
-    async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>
-    {
+    async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
         Ok(contract_system_api::fetch_json(&self.url, &payload))
     }
 }
