@@ -312,7 +312,7 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Makes a GET request to the given URL and returns the JSON part, if any.
+    /// Makes a POST request to the given URL and returns the JSON part, if any.
     fn fetch_json(
         caller: &mut Caller,
         query: String,
