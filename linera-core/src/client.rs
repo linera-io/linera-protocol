@@ -2065,6 +2065,14 @@ where
             .await
     }
 
+    /// Handles any cross-chain requests for any pending outgoing messages.
+    pub async fn retry_pending_outgoing_messages(&mut self) -> Result<(), ChainClientError> {
+        self.node_client
+            .retry_pending_cross_chain_requests(self.chain_id)
+            .await?;
+        Ok(())
+    }
+
     /// Wraps this chain client into an `Arc<Mutex<_>>`.
     pub fn into_arc(self) -> ArcChainClient<P, S> {
         ArcChainClient::new(self)
