@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{data_types::HashedBlob, identifiers::ChainId};
+use linera_base::{
+    data_types::{Blob, HashedBlob},
+    identifiers::{BlobId, ChainId},
+};
 use linera_chain::data_types::{
     BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
 };
@@ -139,6 +142,15 @@ impl ValidatorNode for Client {
 
             #[cfg(with_simple_network)]
             Client::Simple(simple_client) => simple_client.get_version_info().await?,
+        })
+    }
+
+    async fn download_blob(&mut self, blob_id: BlobId) -> Result<Blob, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.download_blob(blob_id).await?,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.download_blob(blob_id).await?,
         })
     }
 }

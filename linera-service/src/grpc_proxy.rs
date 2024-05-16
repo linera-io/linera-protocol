@@ -27,13 +27,14 @@ use linera_rpc::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
-            BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, LiteCertificate,
-            Notification, SubscriptionRequest, VersionInfo,
+            Blob, BlobId, BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult,
+            LiteCertificate, Notification, SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProxyable, GRPC_MAX_MESSAGE_SIZE,
     },
 };
+use linera_storage::Storage;
 use rcgen::generate_simple_self_signed;
 use tokio::select;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -141,23 +142,28 @@ where
 }
 
 #[derive(Clone)]
-pub struct GrpcProxy(Arc<GrpcProxyInner>);
+pub struct GrpcProxy<S>(Arc<GrpcProxyInner<S>>);
 
-struct GrpcProxyInner {
+struct GrpcProxyInner<S> {
     public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
     worker_connection_pool: GrpcConnectionPool,
     notifier: Notifier<Result<Notification, Status>>,
     tls: TlsConfig,
+    storage: S,
 }
 
-impl GrpcProxy {
+impl<S> GrpcProxy<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
     pub fn new(
         public_config: ValidatorPublicNetworkConfig,
         internal_config: ValidatorInternalNetworkConfig,
         connect_timeout: Duration,
         timeout: Duration,
         tls: TlsConfig,
+        storage: S,
     ) -> Self {
         Self(Arc::new(GrpcProxyInner {
             public_config,
@@ -167,6 +173,7 @@ impl GrpcProxy {
                 .with_timeout(timeout),
             notifier: Notifier::default(),
             tls,
+            storage,
         }))
     }
 
@@ -225,7 +232,7 @@ impl GrpcProxy {
 
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
         health_reporter
-            .set_serving::<ValidatorNodeServer<GrpcProxy>>()
+            .set_serving::<ValidatorNodeServer<GrpcProxy<S>>>()
             .await;
         let internal_server = Server::builder()
             .add_service(self.as_notifier_service())
@@ -309,7 +316,10 @@ impl GrpcProxy {
 }
 
 #[async_trait]
-impl ValidatorNode for GrpcProxy {
+impl<S> ValidatorNode for GrpcProxy<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
     type SubscribeStream = UnboundedReceiverStream<Result<Notification, Status>>;
 
     #[instrument(skip_all, err(Display))]
@@ -383,10 +393,25 @@ impl ValidatorNode for GrpcProxy {
         // We assume each shard is running the same version as the proxy
         Ok(Response::new(linera_version::VersionInfo::default().into()))
     }
+
+    #[instrument(skip_all, err(Display))]
+    async fn download_blob(&self, request: Request<BlobId>) -> Result<Response<Blob>, Status> {
+        let blob_id = request.into_inner().try_into()?;
+        let hashed_blob = self
+            .0
+            .storage
+            .read_hashed_blob(blob_id)
+            .await
+            .map_err(|err| Status::from_error(Box::new(err)))?;
+        Ok(Response::new(hashed_blob.into_inner().into()))
+    }
 }
 
 #[async_trait]
-impl NotifierService for GrpcProxy {
+impl<S> NotifierService for GrpcProxy<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
     #[instrument(skip_all, err(Display))]
     async fn notify(&self, request: Request<Notification>) -> Result<Response<()>, Status> {
         let notification = request.into_inner();

@@ -4,7 +4,10 @@
 use std::{iter, time::Duration};
 
 use futures::{future, stream, StreamExt};
-use linera_base::{data_types::HashedBlob, identifiers::ChainId};
+use linera_base::{
+    data_types::{Blob, HashedBlob},
+    identifiers::{BlobId, ChainId},
+};
 use linera_chain::data_types;
 #[cfg(web)]
 use linera_core::node::{
@@ -26,7 +29,8 @@ use {
 
 use super::{
     api::{
-        chain_info_result::Inner, validator_node_client::ValidatorNodeClient, SubscriptionRequest,
+        self, chain_info_result::Inner, validator_node_client::ValidatorNodeClient,
+        SubscriptionRequest,
     },
     transport, GrpcError, GRPC_MAX_MESSAGE_SIZE,
 };
@@ -259,6 +263,16 @@ impl ValidatorNode for GrpcClient {
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError> {
         Ok(self.client.get_version_info(()).await?.into_inner().into())
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn download_blob(&mut self, blob_id: BlobId) -> Result<Blob, NodeError> {
+        Ok(self
+            .client
+            .download_blob(<BlobId as Into<api::BlobId>>::into(blob_id))
+            .await?
+            .into_inner()
+            .into())
     }
 }
 

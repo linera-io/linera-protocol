@@ -737,8 +737,9 @@ impl std::str::FromStr for OracleResponse {
 /// A blob of binary data.
 #[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize)]
 pub struct Blob {
+    /// Bytes of the binary blob.
     #[serde(with = "serde_bytes")]
-    bytes: Vec<u8>,
+    pub bytes: Vec<u8>,
 }
 
 impl Blob {
@@ -793,6 +794,16 @@ impl HashedBlob {
             bytes: content.as_bytes().to_vec(),
         };
         blob.into_hashed()
+    }
+
+    /// Returns a reference to the inner `Blob`, without the hash.
+    pub fn blob(&self) -> &Blob {
+        &self.blob
+    }
+
+    /// Moves ownership of the blob of binary data
+    pub fn into_inner(self) -> Blob {
+        self.blob
     }
 }
 

@@ -762,24 +762,32 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: ChainInfoQuery
     4:
-      VersionInfoQuery: UNIT
+      DownloadBlob:
+        NEWTYPE:
+          TYPENAME: BlobId
     5:
+      VersionInfoQuery: UNIT
+    6:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    6:
+    7:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    7:
+    8:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    8:
+    9:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    9:
+    10:
+      DownloadBlobResponse:
+        NEWTYPE:
+          TYPENAME: Blob
+    11:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest
