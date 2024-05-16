@@ -345,6 +345,13 @@ impl<StorageClient> WorkerState<StorageClient> {
         self
     }
 
+    /// Adds a chain to the set of tracked chains.
+    pub fn track_chain(&mut self, chain_id: ChainId) {
+        if let Some(tracked_chains) = self.tracked_chains.as_mut() {
+            tracked_chains.insert(chain_id);
+        }
+    }
+
     pub fn nickname(&self) -> &str {
         &self.nickname
     }

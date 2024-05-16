@@ -540,6 +540,11 @@ where
         None
     }
 
+    /// Adds a chain to the set of chains tracked by this node.
+    pub async fn track_chain(&mut self, chain_id: ChainId) {
+        self.node.lock().await.state.track_chain(chain_id)
+    }
+
     /// Handles any pending local cross-chain requests.
     pub async fn retry_pending_cross_chain_requests(
         &mut self,
