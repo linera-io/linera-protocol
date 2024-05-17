@@ -279,6 +279,8 @@ pub struct WorkerState<StorageClient> {
     grace_period: Duration,
     /// Cached values by hash.
     recent_values: Arc<Mutex<LruCache<CryptoHash, HashedCertificateValue>>>,
+    /// Chain IDs that should be tracked by a worker.
+    tracked_chains: Option<HashSet<ChainId>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
@@ -300,6 +302,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             allow_messages_from_deprecated_epochs: false,
             grace_period: Duration::ZERO,
             recent_values,
+            tracked_chains: None,
             delivery_notifiers: Arc::default(),
         }
     }
@@ -308,6 +311,7 @@ impl<StorageClient> WorkerState<StorageClient> {
         nickname: String,
         storage: StorageClient,
         recent_values: Arc<Mutex<LruCache<CryptoHash, HashedCertificateValue>>>,
+        tracked_chains: HashSet<ChainId>,
         delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     ) -> Self {
         WorkerState {
@@ -318,6 +322,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             allow_messages_from_deprecated_epochs: false,
             grace_period: Duration::ZERO,
             recent_values,
+            tracked_chains: Some(tracked_chains),
             delivery_notifiers,
         }
     }
@@ -332,6 +337,15 @@ impl<StorageClient> WorkerState<StorageClient> {
         self
     }
 
+    /// Configures the subset of chains that this worker is tracking.
+    pub fn with_tracked_chains(
+        mut self,
+        tracked_chains: impl IntoIterator<Item = ChainId>,
+    ) -> Self {
+        self.tracked_chains = Some(tracked_chains.into_iter().collect());
+        self
+    }
+
     /// Returns an instance with the specified grace period, in microseconds.
     ///
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
@@ -339,6 +353,13 @@ impl<StorageClient> WorkerState<StorageClient> {
     pub fn with_grace_period(mut self, grace_period: Duration) -> Self {
         self.grace_period = grace_period;
         self
+    }
+
+    /// Adds a chain to the set of tracked chains.
+    pub fn track_chain(&mut self, chain_id: ChainId) {
+        if let Some(tracked_chains) = self.tracked_chains.as_mut() {
+            tracked_chains.insert(chain_id);
+        }
     }
 
     pub fn nickname(&self) -> &str {
@@ -563,7 +584,10 @@ where
         chain: &ChainStateView<StorageClient::Context>,
     ) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
-        let targets = chain.outboxes.indices().await?;
+        let mut targets = chain.outboxes.indices().await?;
+        if let Some(tracked_chains) = self.tracked_chains.as_ref() {
+            targets.retain(|target| tracked_chains.contains(&target.recipient));
+        }
         let outboxes = chain.outboxes.try_load_entries(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
             let heights = outbox.queue.elements().await?;
