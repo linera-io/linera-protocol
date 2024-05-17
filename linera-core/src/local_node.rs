@@ -118,6 +118,35 @@ where
         Ok(response)
     }
 
+    /// Fully handles a sequence of certificates.
+    pub async fn handle_certificates<Certificates>(
+        &mut self,
+        certificates: Certificates,
+        blobs: &[HashedValue],
+    ) -> Result<Option<ChainInfoResponse>, LocalNodeError>
+    where
+        Certificates: IntoIterator<Item = Certificate> + Send,
+        Certificates::IntoIter: Send,
+    {
+        let mut node = self.node.lock().await;
+        let response = node
+            .state
+            .handle_certificates(certificates, blobs, None)
+            .await?;
+        match response {
+            Some((response, actions)) => {
+                let secondary_notifications = node
+                    .state
+                    .handle_cross_chain_requests(actions.cross_chain_requests)
+                    .await?;
+                node.notifier.handle_notifications(&actions.notifications);
+                node.notifier.handle_notifications(&secondary_notifications);
+                Ok(Some(response))
+            }
+            None => Ok(None),
+        }
+    }
+
     pub async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
@@ -182,33 +211,31 @@ where
     where
         A: LocalValidatorNode + Clone + 'static,
     {
-        let mut info = None;
-        for certificate in certificates {
+        for certificate in &certificates {
             let hash = certificate.hash();
             if !certificate.value().is_confirmed() || certificate.value().chain_id() != chain_id {
                 // The certificate is not as expected. Give up.
                 tracing::warn!("Failed to process network certificate {}", hash);
-                return info;
+                return None;
             }
-            let mut result = self.handle_certificate(certificate.clone(), &[]).await;
-            if let Err(LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
-                locations,
-            ))) = &result
-            {
-                let blobs = Self::load_missing_bytecodes(name, node, chain_id, locations).await;
-                result = self.handle_certificate(certificate.clone(), &blobs).await;
-            }
-            match result {
-                Ok(response) => info = Some(response.info),
-                Err(error) => {
-                    // The certificate is not as expected. Give up.
-                    tracing::warn!("Failed to process network certificate {}: {}", hash, error);
-                    return info;
-                }
-            };
         }
-        // Done with all certificates.
-        info
+        let mut result = self.handle_certificates(certificates.clone(), &[]).await;
+        if let Err(LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
+            locations,
+        ))) = &result
+        {
+            let blobs = Self::load_missing_bytecodes(name, node, chain_id, locations).await;
+            result = self.handle_certificates(certificates, &blobs).await;
+        }
+        match result {
+            Ok(Some(response)) => Some(response.info),
+            Ok(None) => None,
+            Err(error) => {
+                // Some certificate is not as expected. Give up.
+                tracing::warn!("Failed to process network certificates: {error}");
+                None
+            }
+        }
     }
 
     /// Uses the provided `node` to fetch the certificates that contain the needed bytecodes.
