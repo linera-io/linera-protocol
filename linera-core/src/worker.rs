@@ -933,7 +933,11 @@ where
         Ok(Some(last_updated_height))
     }
 
-    pub async fn cache_recent_value<'a>(&mut self, value: Cow<'a, HashedCertificateValue>) -> bool {
+    /// Inserts a [`HashedCertificateValue`] into the worker's cache.
+    pub(crate) async fn cache_recent_value<'a>(
+        &mut self,
+        value: Cow<'a, HashedCertificateValue>,
+    ) -> bool {
         self.recent_values.insert(value).await
     }
 
