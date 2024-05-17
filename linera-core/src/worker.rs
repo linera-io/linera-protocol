@@ -625,6 +625,7 @@ where
     /// Processes a confirmed block (aka a commit).
     async fn process_confirmed_block(
         &mut self,
+        chain: &mut ChainStateView<StorageClient::Context>,
         certificate: Certificate,
         blobs: &[HashedValue],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
@@ -638,8 +639,8 @@ where
             message_counts,
             state_hash,
         } = executed_block;
-        let mut chain = self.storage.load_chain(block.chain_id).await?;
         // Check that the chain is active and ready for this confirmation.
+        assert_eq!(chain.chain_id(), block.chain_id);
         let tip = chain.tip_state.get().clone();
         if tip.next_block_height < block.height {
             return Err(WorkerError::MissingEarlierBlocks {
@@ -648,8 +649,8 @@ where
         }
         if tip.next_block_height > block.height {
             // Block was already confirmed.
-            let info = ChainInfoResponse::new(&chain, self.key_pair());
-            let actions = self.create_network_actions(&chain).await?;
+            let info = ChainInfoResponse::new(&*chain, self.key_pair());
+            let actions = self.create_network_actions(chain).await?;
             self.register_delivery_notifier(
                 block.chain_id,
                 block.height,
@@ -729,8 +730,8 @@ where
         tip.num_operations += block.operations.len() as u32;
         tip.num_outgoing_messages += messages.len() as u32;
         chain.confirmed_log.push(certificate.hash());
-        let info = ChainInfoResponse::new(&chain, self.key_pair());
-        let mut actions = self.create_network_actions(&chain).await?;
+        let info = ChainInfoResponse::new(&*chain, self.key_pair());
+        let mut actions = self.create_network_actions(chain).await?;
         actions.notifications.push(Notification {
             chain_id: block.chain_id,
             reason: Reason::NewBlock {
@@ -806,6 +807,7 @@ where
     /// Processes a validated block issued from a multi-owner chain.
     async fn process_validated_block(
         &mut self,
+        chain: &mut ChainStateView<StorageClient::Context>,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let block = match certificate.value() {
@@ -817,8 +819,9 @@ where
         let chain_id = block.chain_id;
         let height = block.height;
         // Check that the chain is active and ready for this confirmation.
+        assert_eq!(chain.chain_id(), chain_id);
+        chain.ensure_is_active()?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        let mut chain = self.storage.load_active_chain(chain_id).await?;
         let (epoch, committee) = chain
             .execution_state
             .system
@@ -832,7 +835,7 @@ where
         {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
-                ChainInfoResponse::new(&chain, self.key_pair()),
+                ChainInfoResponse::new(&*chain, self.key_pair()),
                 actions,
                 true,
             ));
@@ -844,7 +847,7 @@ where
             self.key_pair(),
             self.storage.current_time(),
         );
-        let info = ChainInfoResponse::new(&chain, self.key_pair());
+        let info = ChainInfoResponse::new(&*chain, self.key_pair());
         chain.save().await?;
         let round = chain.manager.get().current_round();
         if round > old_round {
@@ -859,6 +862,7 @@ where
     /// Processes a leader timeout issued from a multi-owner chain.
     async fn process_leader_timeout(
         &mut self,
+        chain: &mut ChainStateView<StorageClient::Context>,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let (chain_id, height, epoch) = match certificate.value() {
@@ -871,8 +875,9 @@ where
             _ => panic!("Expecting a leader timeout certificate"),
         };
         // Check that the chain is active and ready for this confirmation.
+        assert_eq!(chain.chain_id(), chain_id);
+        chain.ensure_is_active()?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        let mut chain = self.storage.load_active_chain(chain_id).await?;
         let (chain_epoch, committee) = chain
             .execution_state
             .system
@@ -889,7 +894,7 @@ where
         certificate.check(committee)?;
         let mut actions = NetworkActions::default();
         if chain.tip_state.get().already_validated_block(height)? {
-            return Ok((ChainInfoResponse::new(&chain, self.key_pair()), actions));
+            return Ok((ChainInfoResponse::new(&*chain, self.key_pair()), actions));
         }
         let current_round = chain.manager.get().current_round();
         chain
@@ -905,7 +910,7 @@ where
                 },
             })
         }
-        let info = ChainInfoResponse::new(&chain, self.key_pair());
+        let info = ChainInfoResponse::new(&*chain, self.key_pair());
         chain.save().await?;
         Ok((info, actions))
     }
@@ -1225,10 +1230,17 @@ where
             false,
         );
 
+        // Check that the chain is active and ready for a certificate.
+        let mut chain = self
+            .storage
+            .load_chain(certificate.value().chain_id())
+            .await?;
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                let validation_outcomes = self.process_validated_block(certificate).await?;
+                let validation_outcomes = self
+                    .process_validated_block(&mut chain, certificate)
+                    .await?;
                 #[cfg(with_metrics)]
                 {
                     duplicated = validation_outcomes.2;
@@ -1247,12 +1259,17 @@ where
                         as u64;
                 }
                 // Execute the confirmed block.
-                self.process_confirmed_block(certificate, blobs, notify_when_messages_are_delivered)
-                    .await?
+                self.process_confirmed_block(
+                    &mut chain,
+                    certificate,
+                    blobs,
+                    notify_when_messages_are_delivered,
+                )
+                .await?
             }
             CertificateValue::LeaderTimeout { .. } => {
                 // Handle the leader timeout.
-                self.process_leader_timeout(certificate).await?
+                self.process_leader_timeout(&mut chain, certificate).await?
             }
         };
 
