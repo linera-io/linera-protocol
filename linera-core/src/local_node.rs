@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, collections::VecDeque, sync::Arc};
 
 use futures::{future, lock::Mutex};
 use linera_base::{
@@ -538,5 +538,28 @@ where
             }
         }
         None
+    }
+
+    /// Adds a chain to the set of chains tracked by this node.
+    pub async fn track_chain(&mut self, chain_id: ChainId) {
+        self.node.lock().await.state.track_chain(chain_id)
+    }
+
+    /// Handles any pending local cross-chain requests.
+    pub async fn retry_pending_cross_chain_requests(
+        &mut self,
+        sender_chain: ChainId,
+    ) -> Result<(), LocalNodeError> {
+        let mut node = self.node.lock().await;
+        let (_response, actions) = node
+            .state
+            .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
+            .await?;
+        let mut requests = VecDeque::from_iter(actions.cross_chain_requests);
+        while let Some(request) = requests.pop_front() {
+            let new_actions = node.state.handle_cross_chain_request(request).await?;
+            requests.extend(new_actions.cross_chain_requests);
+        }
+        Ok(())
     }
 }

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{hash_map, BTreeMap, HashMap},
+    collections::{hash_map, BTreeMap, HashMap, HashSet},
     convert::Infallible,
     iter,
     num::NonZeroUsize,
@@ -80,6 +80,8 @@ pub struct ChainClientBuilder<ValidatorNodeProvider> {
     cross_chain_message_delivery: CrossChainMessageDelivery,
     /// Cached values by hash.
     recent_values: Arc<tokio::sync::Mutex<LruCache<CryptoHash, HashedValue>>>,
+    /// Chains that should be tracked by the client.
+    tracked_chains: HashSet<ChainId>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<tokio::sync::Mutex<DeliveryNotifiers>>,
@@ -93,6 +95,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
         validator_node_provider: ValidatorNodeProvider,
         max_pending_messages: usize,
         cross_chain_message_delivery: CrossChainMessageDelivery,
+        tracked_chains: impl IntoIterator<Item = ChainId>,
     ) -> Self {
         let recent_values = Arc::new(tokio::sync::Mutex::new(LruCache::new(
             NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
@@ -102,9 +105,17 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
             max_pending_messages,
             cross_chain_message_delivery,
             recent_values,
+            tracked_chains: tracked_chains.into_iter().collect(),
             delivery_notifiers: Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
             notifier: Arc::new(Notifier::default()),
         }
+    }
+
+    /// Adds a chain to the set of chains tracked by the local node.
+    ///
+    /// This only affects the [`ChainClient`]s created after this call.
+    pub fn track_chain(&mut self, chain_id: ChainId) {
+        self.tracked_chains.insert(chain_id);
     }
 
     /// Creates a new `ChainClient`.
@@ -128,6 +139,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
             format!("Client node {:?}", chain_id),
             storage,
             self.recent_values.clone(),
+            self.tracked_chains.clone(),
             self.delivery_notifiers.clone(),
         )
         .with_allow_inactive_chains(true)
@@ -1725,6 +1737,13 @@ where
                     executed_block.message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
                 })
                 .ok_or_else(|| ChainClientError::InternalError("Failed to create new chain"))?;
+            // Add the new chain to the list of tracked chains
+            self.node_client
+                .track_chain(ChainId::child(message_id))
+                .await;
+            self.node_client
+                .retry_pending_cross_chain_requests(self.chain_id)
+                .await?;
             return Ok(ClientOutcome::Committed((message_id, certificate)));
         }
     }
@@ -1971,6 +1990,14 @@ where
             user_data,
         }))
         .await
+    }
+
+    /// Handles any cross-chain requests for any pending outgoing messages.
+    pub async fn retry_pending_outgoing_messages(&mut self) -> Result<(), ChainClientError> {
+        self.node_client
+            .retry_pending_cross_chain_requests(self.chain_id)
+            .await?;
+        Ok(())
     }
 
     pub async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
