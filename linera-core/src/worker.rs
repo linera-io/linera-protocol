@@ -444,18 +444,38 @@ where
         mut notifications: Option<&mut Vec<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (response, actions) = self.handle_certificate(certificate, blobs, None).await?;
+        let secondary_notifications = self
+            .handle_cross_chain_requests(actions.cross_chain_requests)
+            .await?;
         if let Some(notifications) = notifications.as_mut() {
             notifications.extend(actions.notifications);
+            notifications.extend(secondary_notifications);
         }
-        let mut requests = VecDeque::from(actions.cross_chain_requests);
+
+        Ok(response)
+    }
+
+    /// Handles multiple cross-chain requests, and any resulting cross-chain requests.
+    ///
+    /// Returns the resulting notifications.
+    ///
+    /// # Notes
+    ///
+    /// This only works for non-sharded workers.
+    pub(crate) async fn handle_cross_chain_requests(
+        &mut self,
+        requests: impl IntoIterator<Item = CrossChainRequest>,
+    ) -> Result<Vec<Notification>, WorkerError> {
+        let mut requests = VecDeque::from_iter(requests);
+        let mut notifications = Vec::new();
+
         while let Some(request) = requests.pop_front() {
             let actions = self.handle_cross_chain_request(request).await?;
             requests.extend(actions.cross_chain_requests);
-            if let Some(notifications) = notifications.as_mut() {
-                notifications.extend(actions.notifications);
-            }
+            notifications.extend(actions.notifications);
         }
-        Ok(response)
+
+        Ok(notifications)
     }
 
     /// Tries to execute a block proposal without any verification other than block execution.
