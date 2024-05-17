@@ -628,8 +628,7 @@ where
         chain: &mut ChainStateView<StorageClient::Context>,
         certificate: Certificate,
         blobs: &[HashedValue],
-        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
-    ) -> Result<NetworkActions, WorkerError> {
+    ) -> Result<Vec<Notification>, WorkerError> {
         let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
             panic!("Expecting a confirmation certificate");
         };
@@ -649,15 +648,7 @@ where
         }
         if tip.next_block_height > block.height {
             // Block was already confirmed.
-            let actions = self.create_network_actions(chain).await?;
-            self.register_delivery_notifier(
-                block.chain_id,
-                block.height,
-                &actions,
-                notify_when_messages_are_delivered,
-            )
-            .await;
-            return Ok(actions);
+            return Ok(vec![]);
         }
         if tip.is_first_block() && !chain.is_active() {
             let local_time = self.storage.current_time();
@@ -729,26 +720,17 @@ where
         tip.num_operations += block.operations.len() as u32;
         tip.num_outgoing_messages += messages.len() as u32;
         chain.confirmed_log.push(certificate.hash());
-        let mut actions = self.create_network_actions(chain).await?;
-        actions.notifications.push(Notification {
+        // Persist chain.
+        chain.save().await?;
+        let notification = Notification {
             chain_id: block.chain_id,
             reason: Reason::NewBlock {
                 height: block.height,
                 hash: certificate.value.hash(),
             },
-        });
-        // Persist chain.
-        chain.save().await?;
-        // Notify the caller when cross-chain messages are delivered.
-        self.register_delivery_notifier(
-            block.chain_id,
-            block.height,
-            &actions,
-            notify_when_messages_are_delivered,
-        )
-        .await;
+        };
         self.cache_recent_value(Cow::Owned(certificate.value)).await;
-        Ok(actions)
+        Ok(vec![notification])
     }
 
     /// Returns an error if the block requires bytecode we don't have, or if unrelated bytecode
@@ -807,7 +789,7 @@ where
         &mut self,
         chain: &mut ChainStateView<StorageClient::Context>,
         certificate: Certificate,
-    ) -> Result<(NetworkActions, bool), WorkerError> {
+    ) -> Result<(Vec<Notification>, bool), WorkerError> {
         let block = match certificate.value() {
             CertificateValue::ValidatedBlock {
                 executed_block: ExecutedBlock { block, .. },
@@ -827,12 +809,11 @@ where
             .expect("chain is active");
         Self::check_block_epoch(epoch, block)?;
         certificate.check(committee)?;
-        let mut actions = NetworkActions::default();
         if chain.tip_state.get().already_validated_block(height)?
             || chain.manager.get().check_validated_block(&certificate)? == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info unchanged.
-            return Ok((actions, true));
+            return Ok((vec![], true));
         }
         self.cache_validated(&certificate.value).await;
         let old_round = chain.manager.get().current_round();
@@ -843,13 +824,14 @@ where
         );
         chain.save().await?;
         let round = chain.manager.get().current_round();
+        let mut notifications = vec![];
         if round > old_round {
-            actions.notifications.push(Notification {
+            notifications.push(Notification {
                 chain_id,
                 reason: Reason::NewRound { height, round },
-            })
+            });
         }
-        Ok((actions, false))
+        Ok((notifications, false))
     }
 
     /// Processes a leader timeout issued from a multi-owner chain.
@@ -857,7 +839,7 @@ where
         &mut self,
         chain: &mut ChainStateView<StorageClient::Context>,
         certificate: Certificate,
-    ) -> Result<NetworkActions, WorkerError> {
+    ) -> Result<Vec<Notification>, WorkerError> {
         let (chain_id, height, epoch) = match certificate.value() {
             CertificateValue::LeaderTimeout {
                 chain_id,
@@ -885,26 +867,26 @@ where
             }
         );
         certificate.check(committee)?;
-        let mut actions = NetworkActions::default();
         if chain.tip_state.get().already_validated_block(height)? {
-            return Ok(actions);
+            return Ok(vec![]);
         }
         let current_round = chain.manager.get().current_round();
         chain
             .manager
             .get_mut()
             .handle_timeout_certificate(certificate.clone(), self.storage.current_time());
+        let mut notifications = vec![];
         if chain.manager.get().current_round() > current_round {
-            actions.notifications.push(Notification {
+            notifications.push(Notification {
                 chain_id,
                 reason: Reason::NewRound {
                     height,
                     round: chain.manager.get().current_round(),
                 },
-            })
+            });
         }
         chain.save().await?;
-        Ok(actions)
+        Ok(notifications)
     }
 
     async fn process_cross_chain_update(
@@ -1227,7 +1209,20 @@ where
             .storage
             .load_chain(certificate.value().chain_id())
             .await?;
-        let actions = match certificate.value() {
+
+        let confirmed_block_summary = match certificate.value() {
+            CertificateValue::ConfirmedBlock { executed_block } => {
+                let Block {
+                    chain_id, height, ..
+                } = &executed_block.block;
+                Some((*chain_id, *height))
+            }
+            CertificateValue::ValidatedBlock { .. } | CertificateValue::LeaderTimeout { .. } => {
+                None
+            }
+        };
+
+        let notifications = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
                 let validation_outcomes = self
@@ -1250,20 +1245,36 @@ where
                         as u64;
                 }
                 // Execute the confirmed block.
-                self.process_confirmed_block(
-                    &mut chain,
-                    certificate,
-                    blobs,
-                    notify_when_messages_are_delivered,
-                )
-                .await?
+                self.process_confirmed_block(&mut chain, certificate, blobs)
+                    .await?
             }
             CertificateValue::LeaderTimeout { .. } => {
                 // Handle the leader timeout.
                 self.process_leader_timeout(&mut chain, certificate).await?
             }
         };
+
         let info = ChainInfoResponse::new(&chain, self.key_pair());
+
+        let actions = if let Some((chain_id, height)) = confirmed_block_summary {
+            let mut actions = self.create_network_actions(&chain).await?;
+            actions.notifications.extend(notifications);
+
+            self.register_delivery_notifier(
+                chain_id,
+                height,
+                &actions,
+                notify_when_messages_are_delivered,
+            )
+            .await;
+
+            actions
+        } else {
+            NetworkActions {
+                cross_chain_requests: vec![],
+                notifications,
+            }
+        };
 
         #[cfg(with_metrics)]
         if !duplicated {
