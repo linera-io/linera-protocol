@@ -312,7 +312,7 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Makes a POST request to the given URL and returns the JSON part, if any.
+    /// Makes a POST request to the given URL and returns the response body.
     fn http_post(
         caller: &mut Caller,
         query: String,
