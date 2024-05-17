@@ -811,7 +811,7 @@ where
             ));
         }
         self.recent_values
-            .insert_validated_and_confirmed(&certificate.value)
+            .insert(Cow::Borrowed(&certificate.value))
             .await;
         let old_round = chain.manager.get().current_round;
         chain.manager.get_mut().create_final_vote(
@@ -1149,9 +1149,7 @@ where
         manager.create_vote(proposal, outcome, self.key_pair(), local_time);
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
-            self.recent_values
-                .insert_validated_and_confirmed(&vote.value)
-                .await;
+            self.recent_values.insert(Cow::Borrowed(&vote.value)).await;
         }
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;

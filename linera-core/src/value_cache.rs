@@ -144,11 +144,21 @@ impl CertificateValueCache {
     /// inserted in the cache.
     ///
     /// Returns [`true`] if the value was not already present in the cache.
+    ///
+    /// # Notes
+    ///
+    /// If the `value` is a [`HashedCertificateValue::ValidatedBlock`], its respective
+    /// [`HashedCertificateValue::ConfirmedBlock`] is also cached.
     pub async fn insert<'a>(&self, value: Cow<'a, HashedCertificateValue>) -> bool {
         let hash = value.hash();
         let mut cache = self.cache.lock().await;
         if cache.contains(&hash) {
             return false;
+        }
+        if let Some(confirmed_value) = value.validated_to_confirmed() {
+            // Cache the certificate for the confirmed block in advance, so that the clients don't
+            // have to send it.
+            cache.push(confirmed_value.hash(), confirmed_value);
         }
         // Cache the certificate so that clients don't have to send the value again.
         cache.push(hash, value.into_owned());
@@ -169,15 +179,6 @@ impl CertificateValueCache {
             let hash = value.hash();
             if !cache.contains(&hash) {
                 cache.push(hash, value.into_owned());
-            }
-        }
-    }
-
-    /// Inserts the validated block and the corresponding confirmed block.
-    pub async fn insert_validated_and_confirmed(&self, value: &HashedCertificateValue) {
-        if self.insert(Cow::Borrowed(value)).await {
-            if let Some(value) = value.validated_to_confirmed() {
-                self.insert(Cow::Owned(value)).await;
             }
         }
     }
