@@ -622,6 +622,74 @@ where
         Ok(actions)
     }
 
+    /// Processes a certificate.
+    async fn process_certificate(
+        &mut self,
+        chain: &mut ChainStateView<StorageClient::Context>,
+        certificate: Certificate,
+        blobs: &[HashedValue],
+    ) -> Result<Vec<Notification>, WorkerError> {
+        trace!("{} <-- {:?}", self.nickname, certificate);
+        ensure!(
+            certificate.value().is_confirmed() || blobs.is_empty(),
+            WorkerError::UnneededValue {
+                value_hash: blobs[0].hash(),
+            }
+        );
+
+        #[cfg(with_metrics)]
+        let (round, log_str, mut confirmed_transactions, mut duplicated) = (
+            certificate.round,
+            certificate_value.to_log_str(),
+            0u64,
+            false,
+        );
+
+        let notifications = match certificate.value() {
+            CertificateValue::ValidatedBlock { .. } => {
+                // Confirm the validated block.
+                let validation_outcomes = self.process_validated_block(chain, certificate).await?;
+                #[cfg(with_metrics)]
+                {
+                    duplicated = validation_outcomes.1;
+                }
+                validation_outcomes.0
+            }
+            CertificateValue::ConfirmedBlock {
+                executed_block: _executed_block,
+            } => {
+                #[cfg(with_metrics)]
+                {
+                    #[allow(clippy::used_underscore_bindings)]
+                    confirmed_transactions = (_executed_block.block.incoming_messages.len()
+                        + _executed_block.block.operations.len())
+                        as u64;
+                }
+                // Execute the confirmed block.
+                self.process_confirmed_block(chain, certificate, blobs)
+                    .await?
+            }
+            CertificateValue::LeaderTimeout { .. } => {
+                // Handle the leader timeout.
+                self.process_leader_timeout(chain, certificate).await?
+            }
+        };
+
+        #[cfg(with_metrics)]
+        if !duplicated {
+            NUM_ROUNDS_IN_CERTIFICATE
+                .with_label_values(&[log_str, round.type_name()])
+                .observe(round.number() as f64);
+            if confirmed_transactions > 0 {
+                TRANSACTION_COUNT
+                    .with_label_values(&[])
+                    .inc_by(confirmed_transactions);
+            }
+        }
+
+        Ok(notifications)
+    }
+
     /// Processes a confirmed block (aka a commit).
     async fn process_confirmed_block(
         &mut self,
@@ -1188,22 +1256,6 @@ where
         blobs: &[HashedValue],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, certificate);
-        ensure!(
-            certificate.value().is_confirmed() || blobs.is_empty(),
-            WorkerError::UnneededValue {
-                value_hash: blobs[0].hash(),
-            }
-        );
-
-        #[cfg(with_metrics)]
-        let (round, log_str, mut confirmed_transactions, mut duplicated) = (
-            certificate.round,
-            certificate_value.to_log_str(),
-            0u64,
-            false,
-        );
-
         // Check that the chain is active and ready for a certificate.
         let mut chain = self
             .storage
@@ -1222,40 +1274,10 @@ where
             }
         };
 
-        let notifications = match certificate.value() {
-            CertificateValue::ValidatedBlock { .. } => {
-                // Confirm the validated block.
-                let validation_outcomes = self
-                    .process_validated_block(&mut chain, certificate)
-                    .await?;
-                #[cfg(with_metrics)]
-                {
-                    duplicated = validation_outcomes.1;
-                }
-                validation_outcomes.0
-            }
-            CertificateValue::ConfirmedBlock {
-                executed_block: _executed_block,
-            } => {
-                #[cfg(with_metrics)]
-                {
-                    #[allow(clippy::used_underscore_bindings)]
-                    confirmed_transactions = (_executed_block.block.incoming_messages.len()
-                        + _executed_block.block.operations.len())
-                        as u64;
-                }
-                // Execute the confirmed block.
-                self.process_confirmed_block(&mut chain, certificate, blobs)
-                    .await?
-            }
-            CertificateValue::LeaderTimeout { .. } => {
-                // Handle the leader timeout.
-                self.process_leader_timeout(&mut chain, certificate).await?
-            }
-        };
-
+        let notifications = self
+            .process_certificate(&mut chain, certificate, blobs)
+            .await?;
         let info = ChainInfoResponse::new(&chain, self.key_pair());
-
         let actions = if let Some((chain_id, height)) = confirmed_block_summary {
             let mut actions = self.create_network_actions(&chain).await?;
             actions.notifications.extend(notifications);
@@ -1276,17 +1298,6 @@ where
             }
         };
 
-        #[cfg(with_metrics)]
-        if !duplicated {
-            NUM_ROUNDS_IN_CERTIFICATE
-                .with_label_values(&[log_str, round.type_name()])
-                .observe(round.number() as f64);
-            if confirmed_transactions > 0 {
-                TRANSACTION_COUNT
-                    .with_label_values(&[])
-                    .inc_by(confirmed_transactions);
-            }
-        }
         Ok((info, actions))
     }
 
