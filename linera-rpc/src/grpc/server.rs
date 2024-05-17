@@ -523,7 +523,7 @@ where
         match self
             .state
             .clone()
-            .handle_certificate(certificate, blobs, sender)
+            .handle_certificate(certificate, &blobs, sender)
             .await
         {
             Ok((info, actions)) => {

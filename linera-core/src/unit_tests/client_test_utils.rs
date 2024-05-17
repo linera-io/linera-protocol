@@ -234,7 +234,7 @@ where
                     .state
                     .fully_handle_certificate_with_notifications(
                         cert,
-                        vec![],
+                        &[],
                         Some(&mut notifications),
                     )
                     .await
@@ -268,7 +268,7 @@ where
                 .state
                 .fully_handle_certificate_with_notifications(
                     certificate,
-                    blobs,
+                    &blobs,
                     Some(&mut notifications),
                 )
                 .await

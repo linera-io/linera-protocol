@@ -234,7 +234,7 @@ where
                 match self
                     .server
                     .state
-                    .handle_certificate(request.certificate, request.blobs, sender)
+                    .handle_certificate(request.certificate, &request.blobs, sender)
                     .await
                 {
                     Ok((info, actions)) => {

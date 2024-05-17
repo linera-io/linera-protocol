@@ -115,7 +115,7 @@ pub trait ValidatorWorker {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: &[HashedValue],
         notify_message_delivery: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
@@ -404,7 +404,7 @@ where
     pub async fn fully_handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: &[HashedValue],
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.fully_handle_certificate_with_notifications(certificate, blobs, None)
             .await
@@ -414,7 +414,7 @@ where
     pub(crate) async fn fully_handle_certificate_with_notifications(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: &[HashedValue],
         mut notifications: Option<&mut Vec<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (response, actions) = self.handle_certificate(certificate, blobs, None).await?;
@@ -1167,7 +1167,7 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let full_cert = self.full_certificate(certificate).await?;
-        self.handle_certificate(full_cert, vec![], notify_when_messages_are_delivered)
+        self.handle_certificate(full_cert, &[], notify_when_messages_are_delivered)
             .await
     }
 
@@ -1180,7 +1180,7 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: &[HashedValue],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
@@ -1221,12 +1221,8 @@ where
                         as u64;
                 }
                 // Execute the confirmed block.
-                self.process_confirmed_block(
-                    certificate,
-                    &blobs,
-                    notify_when_messages_are_delivered,
-                )
-                .await?
+                self.process_confirmed_block(certificate, blobs, notify_when_messages_are_delivered)
+                    .await?
             }
             CertificateValue::LeaderTimeout { .. } => {
                 // Handle the leader timeout.

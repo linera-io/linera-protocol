@@ -93,11 +93,7 @@ where
         let full_cert = node.state.full_certificate(certificate).await?;
         let response = node
             .state
-            .fully_handle_certificate_with_notifications(
-                full_cert,
-                vec![],
-                Some(&mut notifications),
-            )
+            .fully_handle_certificate_with_notifications(full_cert, &[], Some(&mut notifications))
             .await?;
         node.notifier.handle_notifications(&notifications);
         Ok(response)
@@ -106,7 +102,7 @@ where
     pub async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: &[HashedValue],
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let mut node = self.node.lock().await;
         let mut notifications = Vec::new();
@@ -194,7 +190,7 @@ where
                 tracing::warn!("Failed to process network certificate {}", hash);
                 return info;
             }
-            let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
+            let mut result = self.handle_certificate(certificate.clone(), &[]).await;
             if let Err(LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
                 locations,
             ))) = &result
@@ -217,7 +213,7 @@ where
                         return info;
                     }
                 }
-                result = self.handle_certificate(certificate.clone(), blobs).await;
+                result = self.handle_certificate(certificate.clone(), &blobs).await;
             }
             match result {
                 Ok(response) => info = Some(response.info),
@@ -494,7 +490,7 @@ where
         if let Some(cert) = info.manager.requested_locked {
             if cert.value().is_validated() && cert.value().chain_id() == chain_id {
                 let hash = cert.hash();
-                if let Err(error) = self.handle_certificate(*cert, vec![]).await {
+                if let Err(error) = self.handle_certificate(*cert, &[]).await {
                     tracing::warn!("Skipping certificate {}: {}", hash, error);
                 }
             }

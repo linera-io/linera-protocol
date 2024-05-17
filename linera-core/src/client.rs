@@ -572,8 +572,7 @@ where
             .communicate_chain_action(committee, submit_action, value)
             .await?;
         if certificate.value().is_confirmed() {
-            self.process_certificate(certificate.clone(), vec![])
-                .await?;
+            self.process_certificate(certificate.clone(), &[]).await?;
             Ok(certificate)
         } else {
             self.finalize_block(committee, certificate).await
@@ -693,7 +692,7 @@ where
             .download_certificates(nodes.clone(), block.chain_id, block.height)
             .await?;
         // Process the received operations. Download required blobs if necessary.
-        if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
+        if let Err(err) = self.process_certificate(certificate.clone(), &[]).await {
             if let LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
                 locations,
             )) = &err
@@ -706,7 +705,8 @@ where
                 .flatten()
                 .collect::<Vec<_>>();
                 if !blobs.is_empty() {
-                    self.process_certificate(certificate.clone(), blobs).await?;
+                    self.process_certificate(certificate.clone(), &blobs)
+                        .await?;
                 }
             }
             // The certificate is not as expected. Give up.
@@ -937,7 +937,7 @@ where
     async fn process_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<HashedValue>,
+        blobs: &[HashedValue],
     ) -> Result<(), LocalNodeError> {
         let info = self
             .node_client
@@ -980,8 +980,7 @@ where
         let certificate = self
             .communicate_chain_action(&committee, action, value)
             .await?;
-        self.process_certificate(certificate.clone(), vec![])
-            .await?;
+        self.process_certificate(certificate.clone(), &[]).await?;
         // The block height didn't increase, but this will communicate the timeout as well.
         self.communicate_chain_updates(
             &committee,
