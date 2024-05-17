@@ -1256,11 +1256,47 @@ where
         blobs: &[HashedValue],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        self.handle_certificates(Some(certificate), blobs, notify_when_messages_are_delivered)
+            .await
+            .map(|response| {
+                response.expect(
+                    "Response should be available because exactly one certificate was provided",
+                )
+            })
+    }
+
+    /// Processes multiple certificates.
+    #[instrument(skip_all, fields(nick = self.nickname))]
+    async fn handle_certificates<Certificates>(
+        &mut self,
+        certificates: Certificates,
+        blobs: &[HashedValue],
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
+    ) -> Result<Option<(ChainInfoResponse, NetworkActions)>, WorkerError>
+    where
+        Certificates: IntoIterator<Item = Certificate> + Send,
+        Certificates::IntoIter: Send,
+    {
+        let mut certificates = certificates.into_iter();
+        let Some(mut certificate) = certificates.next() else {
+            return Ok(None);
+        };
+
         // Check that the chain is active and ready for a certificate.
         let mut chain = self
             .storage
             .load_chain(certificate.value().chain_id())
             .await?;
+
+        let mut notifications = vec![];
+
+        for next_certificate in certificates {
+            let new_notifications = self
+                .process_certificate(&mut chain, certificate, blobs)
+                .await?;
+            notifications.extend(new_notifications);
+            certificate = next_certificate;
+        }
 
         let confirmed_block_summary = match certificate.value() {
             CertificateValue::ConfirmedBlock { executed_block } => {
@@ -1298,7 +1334,7 @@ where
             }
         };
 
-        Ok((info, actions))
+        Ok(Some((info, actions)))
     }
 
     #[instrument(skip_all, fields(
