@@ -629,7 +629,7 @@ where
         certificate: Certificate,
         blobs: &[HashedValue],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+    ) -> Result<NetworkActions, WorkerError> {
         let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
             panic!("Expecting a confirmation certificate");
         };
@@ -649,7 +649,6 @@ where
         }
         if tip.next_block_height > block.height {
             // Block was already confirmed.
-            let info = ChainInfoResponse::new(&*chain, self.key_pair());
             let actions = self.create_network_actions(chain).await?;
             self.register_delivery_notifier(
                 block.chain_id,
@@ -658,7 +657,7 @@ where
                 notify_when_messages_are_delivered,
             )
             .await;
-            return Ok((info, actions));
+            return Ok(actions);
         }
         if tip.is_first_block() && !chain.is_active() {
             let local_time = self.storage.current_time();
@@ -730,7 +729,6 @@ where
         tip.num_operations += block.operations.len() as u32;
         tip.num_outgoing_messages += messages.len() as u32;
         chain.confirmed_log.push(certificate.hash());
-        let info = ChainInfoResponse::new(&*chain, self.key_pair());
         let mut actions = self.create_network_actions(chain).await?;
         actions.notifications.push(Notification {
             chain_id: block.chain_id,
@@ -750,7 +748,7 @@ where
         )
         .await;
         self.cache_recent_value(Cow::Owned(certificate.value)).await;
-        Ok((info, actions))
+        Ok(actions)
     }
 
     /// Returns an error if the block requires bytecode we don't have, or if unrelated bytecode
@@ -809,7 +807,7 @@ where
         &mut self,
         chain: &mut ChainStateView<StorageClient::Context>,
         certificate: Certificate,
-    ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
+    ) -> Result<(NetworkActions, bool), WorkerError> {
         let block = match certificate.value() {
             CertificateValue::ValidatedBlock {
                 executed_block: ExecutedBlock { block, .. },
@@ -834,11 +832,7 @@ where
             || chain.manager.get().check_validated_block(&certificate)? == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info unchanged.
-            return Ok((
-                ChainInfoResponse::new(&*chain, self.key_pair()),
-                actions,
-                true,
-            ));
+            return Ok((actions, true));
         }
         self.cache_validated(&certificate.value).await;
         let old_round = chain.manager.get().current_round();
@@ -847,7 +841,6 @@ where
             self.key_pair(),
             self.storage.current_time(),
         );
-        let info = ChainInfoResponse::new(&*chain, self.key_pair());
         chain.save().await?;
         let round = chain.manager.get().current_round();
         if round > old_round {
@@ -856,7 +849,7 @@ where
                 reason: Reason::NewRound { height, round },
             })
         }
-        Ok((info, actions, false))
+        Ok((actions, false))
     }
 
     /// Processes a leader timeout issued from a multi-owner chain.
@@ -864,7 +857,7 @@ where
         &mut self,
         chain: &mut ChainStateView<StorageClient::Context>,
         certificate: Certificate,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+    ) -> Result<NetworkActions, WorkerError> {
         let (chain_id, height, epoch) = match certificate.value() {
             CertificateValue::LeaderTimeout {
                 chain_id,
@@ -894,7 +887,7 @@ where
         certificate.check(committee)?;
         let mut actions = NetworkActions::default();
         if chain.tip_state.get().already_validated_block(height)? {
-            return Ok((ChainInfoResponse::new(&*chain, self.key_pair()), actions));
+            return Ok(actions);
         }
         let current_round = chain.manager.get().current_round();
         chain
@@ -910,9 +903,8 @@ where
                 },
             })
         }
-        let info = ChainInfoResponse::new(&*chain, self.key_pair());
         chain.save().await?;
-        Ok((info, actions))
+        Ok(actions)
     }
 
     async fn process_cross_chain_update(
@@ -1235,7 +1227,7 @@ where
             .storage
             .load_chain(certificate.value().chain_id())
             .await?;
-        let (info, actions) = match certificate.value() {
+        let actions = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
                 let validation_outcomes = self
@@ -1243,10 +1235,9 @@ where
                     .await?;
                 #[cfg(with_metrics)]
                 {
-                    duplicated = validation_outcomes.2;
+                    duplicated = validation_outcomes.1;
                 }
-                let (info, actions, _) = validation_outcomes;
-                (info, actions)
+                validation_outcomes.0
             }
             CertificateValue::ConfirmedBlock {
                 executed_block: _executed_block,
@@ -1272,6 +1263,7 @@ where
                 self.process_leader_timeout(&mut chain, certificate).await?
             }
         };
+        let info = ChainInfoResponse::new(&chain, self.key_pair());
 
         #[cfg(with_metrics)]
         if !duplicated {
