@@ -119,6 +119,32 @@ pub trait ValidatorWorker {
         notify_message_delivery: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
+    /// Processes multiple certificates, e.g. to extend a chain with confirmed blocks.
+    async fn handle_certificates<Certificates>(
+        &mut self,
+        certificates: Certificates,
+        blobs: &[HashedValue],
+        notify_message_delivery: Option<oneshot::Sender<()>>,
+    ) -> Result<Option<(ChainInfoResponse, NetworkActions)>, WorkerError>
+    where
+        Certificates: IntoIterator<Item = Certificate> + Send,
+        Certificates::IntoIter: Send,
+    {
+        let mut certificates = certificates.into_iter();
+        let Some(mut certificate) = certificates.next() else {
+            return Ok(None);
+        };
+
+        for next_certificate in certificates {
+            self.handle_certificate(certificate, blobs, None).await?;
+            certificate = next_certificate;
+        }
+
+        self.handle_certificate(certificate, blobs, notify_message_delivery)
+            .await
+            .map(Some)
+    }
+
     /// Handles information queries on chains.
     async fn handle_chain_info_query(
         &self,
