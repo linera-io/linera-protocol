@@ -385,36 +385,65 @@ where
         name: ValidatorName,
         mut node: A,
         chain_id: ChainId,
-        start: BlockHeight,
+        mut start: BlockHeight,
         stop: BlockHeight,
     ) -> Result<(), LocalNodeError>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
-        let limit = u64::from(stop)
-            .checked_sub(u64::from(start))
-            .ok_or(ArithmeticError::Overflow)?;
+        while start < stop {
+            // TODO(#2045): Analyze network errors instead of guessing the batch size.
+            let limit = u64::from(stop)
+                .checked_sub(u64::from(start))
+                .ok_or(ArithmeticError::Overflow)?
+                .min(1000);
+            let Some(certificates) = self
+                .try_query_certificates_from(name, &mut node, chain_id, start, limit)
+                .await?
+            else {
+                break;
+            };
+            let Some(info) = self
+                .try_process_certificates(name, &mut node, chain_id, certificates)
+                .await
+            else {
+                break;
+            };
+            assert!(info.next_block_height > start);
+            start = info.next_block_height;
+        }
+        Ok(())
+    }
+
+    async fn try_query_certificates_from<A>(
+        &mut self,
+        name: ValidatorName,
+        node: &mut A,
+        chain_id: ChainId,
+        start: BlockHeight,
+        limit: u64,
+    ) -> Result<Option<Vec<Certificate>>, LocalNodeError>
+    where
+        A: LocalValidatorNode + Clone + 'static,
+    {
+        tracing::debug!(?name, ?chain_id, ?start, ?limit, "Querying certificates");
         let range = BlockHeightRange {
             start,
             limit: Some(limit),
         };
         let query = ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(range);
         if let Ok(response) = node.handle_chain_info_query(query).await {
-            if response.check(name).is_ok() {
-                let ChainInfo {
-                    requested_sent_certificates,
-                    ..
-                } = *response.info;
-                self.try_process_certificates(
-                    name,
-                    &mut node,
-                    chain_id,
-                    requested_sent_certificates,
-                )
-                .await;
+            if response.check(name).is_err() {
+                return Ok(None);
             }
+            let ChainInfo {
+                requested_sent_certificates,
+                ..
+            } = *response.info;
+            Ok(Some(requested_sent_certificates))
+        } else {
+            Ok(None)
         }
-        Ok(())
     }
 
     pub async fn synchronize_chain_state<A>(
