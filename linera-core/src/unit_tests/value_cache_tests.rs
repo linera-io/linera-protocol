@@ -3,8 +3,14 @@
 
 use std::{borrow::Cow, collections::BTreeSet};
 
-use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
-use linera_chain::data_types::{CertificateValue, HashedCertificateValue};
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::{BlockHeight, Timestamp},
+    identifiers::ChainId,
+};
+use linera_chain::data_types::{
+    Block, BlockExecutionOutcome, CertificateValue, ExecutedBlock, HashedCertificateValue,
+};
 use linera_execution::committee::Epoch;
 
 use super::{CertificateValueCache, DEFAULT_VALUE_CACHE_SIZE};
@@ -164,6 +170,32 @@ async fn test_eviction_of_second_entry() {
     );
 }
 
+/// Test that insertion of a validated block certificate also inserts its respective confirmed
+/// block certificate.
+#[tokio::test]
+async fn test_insertion_of_validated_also_inserts_confirmed() {
+    let cache = CertificateValueCache::default();
+
+    let validated_value = create_dummy_validated_block_value();
+    let validated_hash = validated_value.hash();
+
+    let confirmed_value = validated_value
+        .validated_to_confirmed()
+        .expect("a validated value should be convertible to a confirmed value");
+    let confirmed_hash = confirmed_value.hash();
+
+    assert!(cache.insert(Cow::Borrowed(&validated_value)).await);
+
+    assert!(cache.contains(&validated_hash).await);
+    assert!(cache.contains(&confirmed_hash).await);
+    assert_eq!(cache.get(&validated_hash).await, Some(validated_value));
+    assert_eq!(cache.get(&confirmed_hash).await, Some(confirmed_value));
+    assert_eq!(
+        cache.keys::<BTreeSet<_>>().await,
+        BTreeSet::from([validated_hash, confirmed_hash])
+    );
+}
+
 /// Test that the cache correctly filters out cached items from an iterator.
 #[tokio::test]
 async fn test_filtering_out_cached_items() {
@@ -210,6 +242,26 @@ fn create_dummy_value(height: impl Into<BlockHeight>) -> HashedCertificateValue 
         chain_id: ChainId(CryptoHash::test_hash("Fake chain ID")),
         height: height.into(),
         epoch: Epoch(0),
+    }
+    .into()
+}
+
+/// Creates a dummy [`HashedCertificateValue::ValidatedBlock`] to use in the tests.
+fn create_dummy_validated_block_value() -> HashedCertificateValue {
+    CertificateValue::ValidatedBlock {
+        executed_block: ExecutedBlock {
+            block: Block {
+                chain_id: ChainId(CryptoHash::test_hash("Fake chain ID")),
+                epoch: Epoch::ZERO,
+                incoming_messages: vec![],
+                operations: vec![],
+                height: BlockHeight::ZERO,
+                timestamp: Timestamp::from(0),
+                authenticated_signer: None,
+                previous_block_hash: None,
+            },
+            outcome: BlockExecutionOutcome::default(),
+        },
     }
     .into()
 }
