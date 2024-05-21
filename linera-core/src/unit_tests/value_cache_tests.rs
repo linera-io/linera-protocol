@@ -164,6 +164,37 @@ async fn test_eviction_of_second_entry() {
     );
 }
 
+/// Test that the cache correctly filters out cached items from an iterator.
+#[tokio::test]
+async fn test_filtering_out_cached_items() {
+    #[derive(Debug, Eq, PartialEq)]
+    struct DummyWrapper(CryptoHash);
+
+    let cached_values = create_dummy_values(3..7).collect::<Vec<_>>();
+    let items = create_dummy_values(0..10).map(|value| DummyWrapper(value.hash()));
+
+    let cache = CertificateValueCache::default();
+    cache
+        .insert_all(cached_values.iter().map(Cow::Borrowed))
+        .await;
+
+    let output = cache
+        .subtract_cached_items_from::<_, Vec<_>>(items, |item| &item.0)
+        .await;
+
+    let expected = create_dummy_values(0..3)
+        .chain(create_dummy_values(7..10))
+        .map(|value| DummyWrapper(value.hash()))
+        .collect::<Vec<_>>();
+
+    assert_eq!(output, expected);
+
+    assert_eq!(
+        cache.keys::<BTreeSet<_>>().await,
+        BTreeSet::from_iter(cached_values.iter().map(HashedCertificateValue::hash))
+    );
+}
+
 /// Creates multiple dummy [`HashedCertificateValue`]s to use in the tests.
 fn create_dummy_values<Heights>(heights: Heights) -> impl Iterator<Item = HashedCertificateValue>
 where
