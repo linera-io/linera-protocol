@@ -35,9 +35,26 @@ permissions:
   contents: read
 
 jobs:
+  end-to-end:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Clear up some space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+    - name: Run the end-to-end tests using the default features
+      run: |
+        cargo test --locked -p linera-service
+
   test:
-    runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 95
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@v3
@@ -86,9 +103,9 @@ jobs:
     - name: Check that the WIT files are up-to-date
       run: |
         cargo run --bin wit-generator -- -c
-    - name: Run all tests using the default features
+    - name: Run tests except end to end tests using the default features
       run: |
-        cargo test --locked
+        cargo test --locked --exclude linera-service
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime
