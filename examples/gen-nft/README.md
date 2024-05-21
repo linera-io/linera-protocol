@@ -42,10 +42,10 @@ linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37
 Compile the `non-fungible` application WebAssembly binaries, and publish them as an application bytecode:
 
 ```bash
-(cd examples/non-fungible && cargo build --release)
+(cd examples/gen-nft && cargo build --release)
 
 BYTECODE_ID=$(linera publish-bytecode \
-    examples/target/wasm32-unknown-unknown/release/non_fungible_{contract,service}.wasm)
+    examples/target/wasm32-unknown-unknown/release/gen_nft_{contract,service}.wasm)
 ```
 
 Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused it later.
@@ -138,7 +138,7 @@ linera service --port $PORT &
 Installing and starting the web server:
 
 ```bash
-cd examples/non-fungible/web-frontend
+cd examples/gen-nft/web-frontend
 npm install --no-save
 
 # Start the server but not open the web page right away.

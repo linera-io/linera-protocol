@@ -1,4 +1,4 @@
-# Getting Started with the Non Fungible App
+# Getting Started with the Gen-NFT App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
