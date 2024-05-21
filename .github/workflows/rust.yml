@@ -52,6 +52,9 @@ jobs:
       uses: arduino/setup-protoc@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Compile the linera-storage-service needed for the tests
+      run: |
+        cargo build -p linera-storage-service
     - name: Run the end-to-end tests using the default features
       run: |
         cargo test --locked -p linera-service
@@ -109,7 +112,7 @@ jobs:
         cargo run --bin wit-generator -- -c
     - name: Run tests except end to end tests using the default features
       run: |
-        cargo test --locked --exclude linera-service
+        cargo test --locked --workspace --exclude linera-service
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime
