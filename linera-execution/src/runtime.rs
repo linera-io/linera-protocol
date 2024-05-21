@@ -639,8 +639,13 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().query_service(application_id, query)
     }
 
-    fn http_post(&mut self, url: &str, payload: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
-        self.inner().http_post(url, payload)
+    fn http_post(
+        &mut self,
+        url: &str,
+        content_type: String,
+        payload: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        self.inner().http_post(url, content_type, payload)
     }
 }
 
@@ -867,7 +872,12 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(response)
     }
 
-    fn http_post(&mut self, url: &str, payload: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+    fn http_post(
+        &mut self,
+        url: &str,
+        content_type: String,
+        payload: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
         if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
             return match responses.next() {
                 Some(OracleResponse::Post(bytes)) => Ok(bytes),
@@ -880,6 +890,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             .execution_state_sender
             .send_request(|callback| Request::HttpPost {
                 url,
+                content_type,
                 payload,
                 callback,
             })?

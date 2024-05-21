@@ -316,12 +316,13 @@ where
     fn http_post(
         caller: &mut Caller,
         query: String,
+        content_type: String,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .http_post(&query, payload)
+            .http_post(&query, content_type, payload)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -480,12 +481,13 @@ where
     fn http_post(
         caller: &mut Caller,
         query: String,
+        content_type: String,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .http_post(&query, payload)
+            .http_post(&query, content_type, payload)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

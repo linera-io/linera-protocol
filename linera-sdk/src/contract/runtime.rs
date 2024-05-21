@@ -231,8 +231,8 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn http_post(&mut self, url: &str, payload: Vec<u8>) -> Vec<u8> {
-        wit::http_post(url, &payload)
+    pub fn http_post(&mut self, url: &str, content_type: &str, payload: Vec<u8>) -> Vec<u8> {
+        wit::http_post(url, content_type, &payload)
     }
 }
 

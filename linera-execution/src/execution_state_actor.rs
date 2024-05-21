@@ -270,13 +270,14 @@ where
 
             HttpPost {
                 url,
+                content_type,
                 payload,
                 callback,
             } => {
                 let res = Client::new()
                     .post(url)
                     .body(payload)
-                    .header(CONTENT_TYPE, "application/json")
+                    .header(CONTENT_TYPE, content_type)
                     .send()
                     .await?;
                 let body = res.bytes().await?;
@@ -398,6 +399,7 @@ pub enum Request {
 
     HttpPost {
         url: String,
+        content_type: String,
         payload: Vec<u8>,
         callback: oneshot::Sender<Vec<u8>>,
     },
