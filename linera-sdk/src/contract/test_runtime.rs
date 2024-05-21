@@ -43,7 +43,7 @@ where
     outgoing_transfers: HashMap<Account, Amount>,
     claim_requests: Vec<ClaimRequest>,
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
-    expected_json_requests: VecDeque<(String, String)>,
+    expected_post_requests: VecDeque<(String, Vec<u8>, Vec<u8>)>,
     key_value_store: KeyValueStore,
 }
 
@@ -83,7 +83,7 @@ where
             outgoing_transfers: HashMap::new(),
             claim_requests: Vec::new(),
             expected_service_queries: VecDeque::new(),
-            expected_json_requests: VecDeque::new(),
+            expected_post_requests: VecDeque::new(),
             key_value_store: KeyValueStore::mock().to_mut(),
         }
     }
@@ -595,9 +595,10 @@ where
             .push_back((application_id.forget_abi(), query, response));
     }
 
-    /// Adds an expected `fetch_json` call, and the response it should return in the test.
-    pub fn add_expected_json_request(&mut self, url: String, response: String) {
-        self.expected_json_requests.push_back((url, response));
+    /// Adds an expected `http_post` call, and the response it should return in the test.
+    pub fn add_expected_post_request(&mut self, url: String, payload: Vec<u8>, response: Vec<u8>) {
+        self.expected_post_requests
+            .push_back((url, payload, response));
     }
 
     /// Queries our application service as an oracle and returns the response.
@@ -628,10 +629,12 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn fetch_json(&mut self, url: &str) -> String {
-        let maybe_request = self.expected_json_requests.pop_front();
-        let (expected_url, response) = maybe_request.expect("Unexpected JSON request");
+    pub fn http_post(&mut self, url: &str, payload: Vec<u8>) -> Vec<u8> {
+        let maybe_request = self.expected_post_requests.pop_front();
+        let (expected_url, expected_payload, response) =
+            maybe_request.expect("Unexpected POST request");
         assert_eq!(*url, expected_url);
+        assert_eq!(payload, expected_payload);
         response
     }
 }

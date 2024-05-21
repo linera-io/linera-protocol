@@ -4,6 +4,7 @@ members = [
     "amm",
     "counter",
     "crowd-funding",
+    "ethereum-tracker",
     "fungible",
     "hex-game",
     "llm",
@@ -15,6 +16,7 @@ members = [
 ]
 
 [workspace.dependencies]
+alloy = { git = "https://github.com/alloy-rs/alloy", rev = "b79db21734cffddc11753fe62ba571565c896f42", default-features = false }
 assert_matches = "1.5.0"
 async-graphql = { version = "=7.0.2", default-features = false }
 base64 = "0.22.0"
@@ -27,6 +29,7 @@ getrandom = { version = "0.2.12", default-features = false, features = ["custom"
 hex = "0.4.3"
 linera-sdk = { path = "../linera-sdk" }
 linera-views = { path = "../linera-views", default-features = false }
+linera-ethereum = { path = "../linera-ethereum" }
 log = "0.4.20"
 num-bigint = "0.4.3"
 num-traits = "0.2.16"
@@ -39,6 +42,7 @@ tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 
 counter = { path = "./counter" }
 crowd-funding = { path = "./crowd-funding" }
+ethereum-tracker = { path = "./ethereum-tracker", features = ["ethereum"] }
 fungible = { path = "./fungible" }
 native-fungible = { path = "./native-fungible" }
 non-fungible = { path = "./non-fungible" }

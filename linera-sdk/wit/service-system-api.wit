@@ -13,7 +13,7 @@ interface service-system-api {
     try-query-application: func(application: application-id, argument: list<u8>) -> list<u8>;
     fetch-url: func(url: string) -> list<u8>;
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
-    fetch-json: func(query: string) -> string;
+    http-post: func(query: string, content-type: string, payload: list<u8>) -> list<u8>;
     log: func(message: string, level: log-level);
 
     record amount {

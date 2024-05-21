@@ -24,6 +24,7 @@ use linera_views::{
 use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
+use reqwest::{header::CONTENT_TYPE, Client};
 
 use crate::{
     system::{OpenChainConfig, Recipient, UserData},
@@ -267,10 +268,21 @@ where
                 callback.respond(bytes);
             }
 
-            FetchJson { url, callback } => {
-                let json: serde_json::Value = reqwest::get(url).await?.json().await?;
-                let string = serde_json::to_string_pretty(&json)?;
-                callback.respond(string);
+            HttpPost {
+                url,
+                content_type,
+                payload,
+                callback,
+            } => {
+                let res = Client::new()
+                    .post(url)
+                    .body(payload)
+                    .header(CONTENT_TYPE, content_type)
+                    .send()
+                    .await?;
+                let body = res.bytes().await?;
+                let bytes = body.as_ref().to_vec();
+                callback.respond(bytes);
             }
         }
 
@@ -385,9 +397,11 @@ pub enum Request {
         callback: Sender<Vec<u8>>,
     },
 
-    FetchJson {
+    HttpPost {
         url: String,
-        callback: oneshot::Sender<String>,
+        content_type: String,
+        payload: Vec<u8>,
+        callback: oneshot::Sender<Vec<u8>>,
     },
 }
 
@@ -508,9 +522,12 @@ impl Debug for Request {
                 .field("url", url)
                 .finish_non_exhaustive(),
 
-            Request::FetchJson { url, .. } => formatter
-                .debug_struct("Request::FetchJson")
+            Request::HttpPost {
+                url, content_type, ..
+            } => formatter
+                .debug_struct("Request::HttpPost")
                 .field("url", url)
+                .field("content_type", content_type)
                 .finish_non_exhaustive(),
         }
     }

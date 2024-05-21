@@ -5,31 +5,46 @@
 
 use std::fmt::Debug;
 
-use ethers::providers::{JsonRpcClient, ProviderError};
-use serde::{de::DeserializeOwned, Serialize};
+use async_graphql::scalar;
+use async_trait::async_trait;
+/// The Ethereum type for a single event
+pub use linera_ethereum::common::EthereumDataType;
+/// The Ethereum type for an event
+pub use linera_ethereum::common::EthereumEvent;
+use linera_ethereum::{client::JsonRpcClient, common::EthereumServiceError};
+use serde::{Deserialize, Serialize};
 
 use crate::contract::wit::contract_system_api;
 
 /// A wrapper for a URL that implements `JsonRpcClient` and uses the JSON oracle to make requests.
-#[derive(Debug)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct EthereumClient {
     /// The URL of the JSON-RPC server, without the method or parameters.
     pub url: String,
 }
+scalar!(EthereumClient);
 
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+impl EthereumClient {
+    /// Creates a new `EthereumClient` from an URL.
+    pub fn new(url: String) -> Self {
+        Self { url }
+    }
+}
+
+#[async_trait]
 impl JsonRpcClient for EthereumClient {
-    type Error = ProviderError;
+    type Error = EthereumServiceError;
 
-    async fn request<T, R>(&self, method: &str, params: T) -> Result<R, Self::Error>
-    where
-        T: Debug + Serialize + Send + Sync,
-        R: DeserializeOwned + Send,
-    {
-        let params = serde_json::to_string(&params).expect("Failed to serialize parameters");
-        let url = format!("{}?method={method}&params={params}", self.url);
-        let json = contract_system_api::fetch_json(&url);
-        Ok(serde_json::from_str(&json).expect("Failed to deserialize JSON response"))
+    async fn get_id(&self) -> u64 {
+        1
+    }
+
+    async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
+        let content_type = "application/json";
+        Ok(contract_system_api::http_post(
+            &self.url,
+            content_type,
+            &payload,
+        ))
     }
 }

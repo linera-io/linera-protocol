@@ -312,12 +312,17 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Makes a GET request to the given URL and returns the JSON part, if any.
-    fn fetch_json(caller: &mut Caller, query: String) -> Result<String, RuntimeError> {
+    /// Makes a POST request to the given URL and returns the response body.
+    fn http_post(
+        caller: &mut Caller,
+        query: String,
+        content_type: String,
+        payload: Vec<u8>,
+    ) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .fetch_json(&query)
+            .http_post(&query, content_type, payload)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -472,12 +477,17 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Makes a GET request to the given URL and returns the JSON part, if any.
-    fn fetch_json(caller: &mut Caller, query: String) -> Result<String, RuntimeError> {
+    /// Makes a POST request to the given URL and returns the response body.
+    fn http_post(
+        caller: &mut Caller,
+        query: String,
+        content_type: String,
+        payload: Vec<u8>,
+    ) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .fetch_json(&query)
+            .http_post(&query, content_type, payload)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

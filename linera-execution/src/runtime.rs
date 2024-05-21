@@ -639,8 +639,13 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().query_service(application_id, query)
     }
 
-    fn fetch_json(&mut self, url: &str) -> Result<String, ExecutionError> {
-        self.inner().fetch_json(url)
+    fn http_post(
+        &mut self,
+        url: &str,
+        content_type: String,
+        payload: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        self.inner().http_post(url, content_type, payload)
     }
 }
 
@@ -867,23 +872,33 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(response)
     }
 
-    fn fetch_json(&mut self, url: &str) -> Result<String, ExecutionError> {
+    fn http_post(
+        &mut self,
+        url: &str,
+        content_type: String,
+        payload: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
         if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
             return match responses.next() {
-                Some(OracleResponse::Json(json)) => Ok(json),
+                Some(OracleResponse::Post(bytes)) => Ok(bytes),
                 Some(_) => Err(ExecutionError::OracleResponseMismatch),
                 None => Err(ExecutionError::MissingOracleResponse),
             };
         }
         let url = url.to_string();
-        let json = self
+        let bytes = self
             .execution_state_sender
-            .send_request(|callback| Request::FetchJson { url, callback })?
+            .send_request(|callback| Request::HttpPost {
+                url,
+                content_type,
+                payload,
+                callback,
+            })?
             .recv_response()?;
         if let OracleResponses::Record(responses) = &mut self.oracle_responses {
-            responses.push(OracleResponse::Json(json.clone()));
+            responses.push(OracleResponse::Post(bytes.clone()));
         }
-        Ok(json)
+        Ok(bytes)
     }
 }
 
