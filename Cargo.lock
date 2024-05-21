@@ -4261,7 +4261,6 @@ dependencies = [
 name = "linera-sdk"
 version = "0.11.0"
 dependencies = [
- "alloy",
  "anyhow",
  "async-graphql",
  "async-trait",
