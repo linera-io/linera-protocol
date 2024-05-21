@@ -48,6 +48,10 @@ jobs:
         sudo rm -rf /opt/ghc
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Run the end-to-end tests using the default features
       run: |
         cargo test --locked -p linera-service
