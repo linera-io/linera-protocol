@@ -522,7 +522,9 @@ impl Debug for Request {
                 .field("url", url)
                 .finish_non_exhaustive(),
 
-            Request::HttpPost { url, content_type, .. } => formatter
+            Request::HttpPost {
+                url, content_type, ..
+            } => formatter
                 .debug_struct("Request::HttpPost")
                 .field("url", url)
                 .field("content_type", content_type)
