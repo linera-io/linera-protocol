@@ -3,6 +3,11 @@
 
 //! Support for Linera applications that interact with Ethereum or other EVM contracts.
 
+/// The Ethereum type for a single event
+pub use linera_ethereum::common::EthereumDataType;
+/// The Ethereum type for an event
+pub use linera_ethereum::common::EthereumEvent;
+
 use std::fmt::Debug;
 
 use async_graphql::scalar;
@@ -26,11 +31,6 @@ impl EthereumClient {
         Self { url }
     }
 }
-
-/// The Ethereum type for a single event
-pub use linera_ethereum::common::EthereumDataType;
-/// The Ethereum type for an event
-pub use linera_ethereum::common::EthereumEvent;
 
 #[async_trait]
 impl JsonRpcClient for EthereumClient {
