@@ -19,6 +19,7 @@ features = ["test", "wasmer"]
 targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-gnu"]
 
 [features]
+ethereum = ["async-trait", "linera-ethereum"]
 wasmer = [
     "linera-core/wasmer",
     "linera-execution/wasmer",
@@ -36,11 +37,11 @@ test = ["linera-base/test"]
 [dependencies]
 alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
 async-graphql.workspace = true
-async-trait = { workspace = true }
+async-trait = { workspace = true, optional = true }
 bcs.workspace = true
 futures.workspace = true
 linera-base.workspace = true
-linera-ethereum = { workspace = true }
+linera-ethereum = { workspace = true, optional = true }
 linera-sdk-derive.workspace = true
 linera-views.workspace = true
 log.workspace = true

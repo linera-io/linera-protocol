@@ -15,6 +15,7 @@ members = [
 ]
 
 [workspace.dependencies]
+alloy = { git = "https://github.com/alloy-rs/alloy", rev = "b79db21734cffddc11753fe62ba571565c896f42", default-features = false }
 assert_matches = "1.5.0"
 async-graphql = { version = "=7.0.2", default-features = false }
 base64 = "0.22.0"

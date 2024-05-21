@@ -28,13 +28,9 @@ impl EthereumClient {
 }
 
 /// The Ethereum type for a single event
-pub type EthereumDataType = linera_ethereum::common::EthereumDataType;
-
+pub use linera_ethereum::common::EthereumDataType;
 /// The Ethereum type for an event
-pub type EthereumEvent = linera_ethereum::common::EthereumEvent;
-
-/// The U256 type from Ethereum
-pub type U256 = alloy::primitives::U256;
+pub use linera_ethereum::common::EthereumEvent;
 
 #[async_trait]
 impl JsonRpcClient for EthereumClient {

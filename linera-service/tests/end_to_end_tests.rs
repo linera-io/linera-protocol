@@ -407,7 +407,8 @@ async fn test_wasm_end_to_end_ethereum_tracker(_config: impl LineraNetConfig) ->
     app.assert_balances([
         (address0.clone(), U256::from(1000)),
         (address1.clone(), U256::from(0)),
-    ]).await;
+    ])
+    .await;
 
     // Doing a transfer and updating the smart contract
     // First await gets you the pending transaction, second gets it mined.
@@ -422,7 +423,8 @@ async fn test_wasm_end_to_end_ethereum_tracker(_config: impl LineraNetConfig) ->
     app.assert_balances([
         (address0.clone(), U256::from(990)),
         (address1.clone(), U256::from(10)),
-    ]).await;
+    ])
+    .await;
     Ok(())
 }
 

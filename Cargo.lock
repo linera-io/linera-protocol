@@ -2696,6 +2696,7 @@ dependencies = [
 name = "ethereum-tracker"
 version = "0.1.0"
 dependencies = [
+ "alloy",
  "async-graphql",
  "linera-ethereum",
  "linera-sdk",
