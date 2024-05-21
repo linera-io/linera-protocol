@@ -76,8 +76,7 @@ impl EthereumTrackerApp {
     }
 
     async fn update(&self) {
-        let mutation = "update".to_string();
-        self.0.mutate(mutation).await.unwrap();
+        self.0.mutate("update").await.unwrap();
     }
 }
 
