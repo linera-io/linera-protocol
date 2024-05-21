@@ -345,88 +345,84 @@ async fn test_wallet_lock() -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "ethereum")]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_ethereum_tracker(_config: impl LineraNetConfig) -> Result<()> {
-    #[cfg(feture = "ethereum")]
-    {
-        use alloy::primitives::U256;
-        use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
-        use linera_ethereum::test_utils::{get_anvil, SimpleTokenContractFunction};
-        let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    use alloy::primitives::U256;
+    use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
+    use linera_ethereum::test_utils::{get_anvil, SimpleTokenContractFunction};
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-        let anvil_test = get_anvil().await?;
-        let address0 = anvil_test.get_address(0);
-        let address1 = anvil_test.get_address(1);
-        let ethereum_endpoint = anvil_test.endpoint.clone();
+    let anvil_test = get_anvil().await?;
+    let address0 = anvil_test.get_address(0);
+    let address1 = anvil_test.get_address(1);
+    let ethereum_endpoint = anvil_test.endpoint.clone();
 
-        let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
-        let contract_address = simple_token.contract_address.clone();
-        let argument = InstantiationArgument {
-            ethereum_endpoint,
-            contract_address,
-        };
+    let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
+    let contract_address = simple_token.contract_address.clone();
+    let argument = InstantiationArgument {
+        ethereum_endpoint,
+        contract_address,
+    };
 
-        let (_net, client) = _config.instantiate().await?;
-        let chain = client.load_wallet()?.default_chain().unwrap();
+    let (_net, client) = _config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
 
-        // Change the ownership so that the blocks inserted are not
-        // fast blocks. Fast blocks are not allowed for the oracles.
-        let pub_key1 = {
-            let wallet = client.load_wallet()?;
-            let user_chain = wallet.get(chain).unwrap();
-            user_chain.key_pair.as_ref().unwrap().public()
-        };
-        client
-            .change_ownership(chain, vec![], vec![pub_key1])
-            .await?;
+    // Change the ownership so that the blocks inserted are not
+    // fast blocks. Fast blocks are not allowed for the oracles.
+    let pub_key1 = {
+        let wallet = client.load_wallet()?;
+        let user_chain = wallet.get(chain).unwrap();
+        user_chain.key_pair.as_ref().unwrap().public()
+    };
+    client
+        .change_ownership(chain, vec![], vec![pub_key1])
+        .await?;
 
-        let (contract, service) = client.build_example("ethereum-tracker").await?;
+    let (contract, service) = client.build_example("ethereum-tracker").await?;
 
-        let application_id = client
-            .publish_and_create::<EthereumTrackerAbi, (), InstantiationArgument>(
-                contract,
-                service,
-                &(),
-                &argument,
-                &[],
-                None,
-            )
-            .await?;
-        let node_service = client.run_node_service(None).await?;
+    let application_id = client
+        .publish_and_create::<EthereumTrackerAbi, (), InstantiationArgument>(
+            contract,
+            service,
+            &(),
+            &argument,
+            &[],
+            None,
+        )
+        .await?;
+    let node_service = client.run_node_service(None).await?;
 
-        let app = EthereumTrackerApp(
-            node_service
-                .make_application(&chain, &application_id)
-                .await?,
-        );
+    let app = EthereumTrackerApp(
+        node_service
+            .make_application(&chain, &application_id)
+            .await?,
+    );
 
-        // Check after the initialization
+    // Check after the initialization
 
-        app.assert_balances([
-            (address0.clone(), U256::from(1000)),
-            (address1.clone(), U256::from(0)),
-        ])
-        .await;
+    app.assert_balances([
+        (address0.clone(), U256::from(1000)),
+        (address1.clone(), U256::from(0)),
+    ]).await;
 
-        // Doing a transfer and updating the smart contract
-        // First await gets you the pending transaction, second gets it mined.
+    // Doing a transfer and updating the smart contract
+    // First await gets you the pending transaction, second gets it mined.
 
-        let value = U256::from(10);
-        simple_token.transfer(&address0, &address1, value).await?;
+    let value = U256::from(10);
+    simple_token.transfer(&address0, &address1, value).await?;
 
-        app.update().await;
+    app.update().await;
 
-        // Now checking the balances after the operations.
+    // Now checking the balances after the operations.
 
-        app.assert_balances([
-            (address0.clone(), U256::from(990)),
-            (address1.clone(), U256::from(10)),
-        ])
-        .await;
-    }
+    app.assert_balances([
+        (address0.clone(), U256::from(990)),
+        (address1.clone(), U256::from(10)),
+    ]).await;
     Ok(())
 }
 
