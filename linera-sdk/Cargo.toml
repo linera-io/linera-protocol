@@ -35,7 +35,6 @@ wasmtime = [
 test = ["linera-base/test"]
 
 [dependencies]
-alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
 async-graphql.workspace = true
 async-trait = { workspace = true, optional = true }
 bcs.workspace = true
