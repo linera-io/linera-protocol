@@ -40,10 +40,10 @@ fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     AccountOwner::User(owner)
 }
 
-#[cfg(feture = "ethereum")]
+#[cfg(feature = "ethereum")]
 struct EthereumTrackerApp(ApplicationWrapper<ethereum_tracker::EthereumTrackerAbi>);
 
-#[cfg(feture = "ethereum")]
+#[cfg(feature = "ethereum")]
 impl EthereumTrackerApp {
     async fn get_amount(&self, account_owner: &str) -> alloy::primitives::U256 {
         use ethereum_tracker::U256Cont;
