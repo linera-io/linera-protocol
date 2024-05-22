@@ -196,7 +196,7 @@ async fn test_insertion_of_validated_also_inserts_confirmed() {
     );
 }
 
-/// Tests if reinstertion of the first entry promotes it so that it's not evicted so soon.
+/// Tests if reinsertion of the first entry promotes it so that it's not evicted so soon.
 #[tokio::test]
 async fn test_promotion_of_reinsertion() {
     let cache = CertificateValueCache::default();
@@ -243,7 +243,7 @@ async fn test_promotion_of_reinsertion() {
     );
 }
 
-/// Tests if reinstertion of a validated block certificate value promotes it and its respective
+/// Tests if reinsertion of a validated block certificate value promotes it and its respective
 /// confirmed block certificate value so that it's not evicted so soon.
 #[tokio::test]
 async fn test_promotion_of_reinsertion_of_validated_block() {
@@ -295,7 +295,7 @@ async fn test_promotion_of_reinsertion_of_validated_block() {
     );
 }
 
-/// Tests if reinstertion of a confirmed block certificate value promotes it but not its respective
+/// Tests if reinsertion of a confirmed block certificate value promotes it but not its respective
 /// validated block certificate value.
 #[tokio::test]
 async fn test_promotion_of_reinsertion_of_confirmed_block() {
