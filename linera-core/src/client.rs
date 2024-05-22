@@ -6,7 +6,6 @@ use std::{
     collections::{hash_map, BTreeMap, HashMap},
     convert::Infallible,
     iter,
-    num::NonZeroUsize,
     ops::Deref,
     sync::Arc,
 };
@@ -42,7 +41,6 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use lru::LruCache;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, error, info};
@@ -58,9 +56,8 @@ use crate::{
     },
     notifier::Notifier,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
-    worker::{
-        DeliveryNotifiers, Notification, Reason, WorkerError, WorkerState, DEFAULT_VALUE_CACHE_SIZE,
-    },
+    value_cache::CertificateValueCache,
+    worker::{DeliveryNotifiers, Notification, Reason, WorkerError, WorkerState},
 };
 
 #[cfg(test)]
@@ -78,7 +75,7 @@ pub struct ChainClientBuilder<ValidatorNodeProvider> {
     /// Whether to block on cross-chain message delivery.
     cross_chain_message_delivery: CrossChainMessageDelivery,
     /// Cached values by hash.
-    recent_values: Arc<tokio::sync::Mutex<LruCache<CryptoHash, HashedCertificateValue>>>,
+    recent_values: Arc<CertificateValueCache>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<tokio::sync::Mutex<DeliveryNotifiers>>,
@@ -93,15 +90,12 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
         max_pending_messages: usize,
         cross_chain_message_delivery: CrossChainMessageDelivery,
     ) -> Self {
-        let recent_values = Arc::new(tokio::sync::Mutex::new(LruCache::new(
-            NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
-        )));
         Self {
             validator_node_provider,
             max_pending_messages,
             message_policy: MessagePolicy::Accept,
             cross_chain_message_delivery,
-            recent_values,
+            recent_values: Arc::new(CertificateValueCache::default()),
             delivery_notifiers: Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
             notifier: Arc::new(Notifier::default()),
         }
