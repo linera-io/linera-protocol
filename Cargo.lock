@@ -4148,7 +4148,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer"
-version = "0.11.0"
+version = "0.11.3"
 dependencies = [
  "async-graphql",
  "async-graphql-axum",
@@ -4176,7 +4176,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer-example"
-version = "0.11.0"
+version = "0.11.3"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -4199,7 +4199,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer-graphql-client"
-version = "0.11.0"
+version = "0.11.3"
 dependencies = [
  "graphql_client",
  "linera-base",
@@ -4216,7 +4216,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer-plugins"
-version = "0.11.0"
+version = "0.11.3"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -4572,7 +4572,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty-test-modules"
-version = "0.11.0"
+version = "0.11.3"
 dependencies = [
  "wit-bindgen 0.7.0",
 ]
