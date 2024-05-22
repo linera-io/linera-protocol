@@ -1,6 +1,6 @@
 [package]
 name = "linera-explorer"
-version = "0.10.4"
+version = "0.10.5"
 edition = "2021"
 description = "Block explorer for the Linera network"
 readme = "README.md"

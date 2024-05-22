@@ -1,6 +1,6 @@
 [package]
 name = "linera-indexer-graphql-client"
-version = "0.10.4"
+version = "0.10.5"
 edition = "2021"
 description = "GraphQL client for the indexer"
 readme = "README.md"
