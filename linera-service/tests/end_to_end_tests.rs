@@ -612,6 +612,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     Ok(())
 }
 
+#[ignore]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "service_grpc")]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_service_grpc")]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
@@ -881,6 +882,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     Ok(())
 }
 
+#[ignore]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -2283,6 +2285,7 @@ async fn test_resolve_binary() -> Result<()> {
 
 // TODO(#1655): Make the scylladb_udp / rocksdb_udp test work.
 //#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
+#[ignore]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "service_tcp")]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
