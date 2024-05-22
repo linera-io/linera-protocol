@@ -196,6 +196,40 @@ async fn test_insertion_of_validated_also_inserts_confirmed() {
     );
 }
 
+/// Test that an inserted validated block certificate value gets evicted before its respective
+/// confirmed block certificate value that was inserted with it.
+#[tokio::test]
+async fn test_eviction_of_validated_before_respective_confirmed() {
+    let cache = CertificateValueCache::default();
+    let values = create_dummy_values(0..(DEFAULT_VALUE_CACHE_SIZE as u64 - 1)).collect::<Vec<_>>();
+
+    let validated_value = create_dummy_validated_block_value();
+    let validated_hash = validated_value.hash();
+
+    let confirmed_value = validated_value
+        .validated_to_confirmed()
+        .expect("a validated value should be convertible to a confirmed value");
+    let confirmed_hash = confirmed_value.hash();
+
+    assert!(cache.insert(Cow::Borrowed(&validated_value)).await);
+    cache.insert_all(values.iter().map(Cow::Borrowed)).await;
+
+    assert!(!cache.contains(&validated_hash).await);
+    assert!(cache.get(&validated_hash).await.is_none());
+
+    assert!(cache.contains(&confirmed_hash).await);
+    assert_eq!(cache.get(&confirmed_hash).await, Some(confirmed_value));
+    assert_eq!(
+        cache.keys::<BTreeSet<_>>().await,
+        BTreeSet::from_iter(
+            values
+                .iter()
+                .map(HashedCertificateValue::hash)
+                .chain([confirmed_hash])
+        )
+    );
+}
+
 /// Tests if reinsertion of the first entry promotes it so that it's not evicted so soon.
 #[tokio::test]
 async fn test_promotion_of_reinsertion() {
