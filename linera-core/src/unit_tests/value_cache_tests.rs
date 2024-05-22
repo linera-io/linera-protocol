@@ -378,6 +378,52 @@ async fn test_promotion_of_reinsertion_of_confirmed_block() {
     );
 }
 
+/// Test that a re-inserted validated block certificate value gets evicted before its respective
+/// confirmed block certificate value that was inserted with it.
+#[tokio::test]
+async fn test_eviction_of_reinserted_validated_before_respective_confirmed() {
+    let cache = CertificateValueCache::default();
+
+    let initial_values =
+        create_dummy_values(0..(DEFAULT_VALUE_CACHE_SIZE as u64 - 2)).collect::<Vec<_>>();
+
+    let final_values = create_dummy_values(
+        (0..(DEFAULT_VALUE_CACHE_SIZE - 1)).map(|index| (index + DEFAULT_VALUE_CACHE_SIZE) as u64),
+    )
+    .collect::<Vec<_>>();
+
+    let validated_value = create_dummy_validated_block_value();
+    let confirmed_value = validated_value
+        .validated_to_confirmed()
+        .expect("a validated value should be convertible to a confirmed value");
+
+    assert!(cache.insert(Cow::Borrowed(&validated_value)).await);
+    cache
+        .insert_all(initial_values.iter().map(Cow::Borrowed))
+        .await;
+    assert!(!cache.insert(Cow::Borrowed(&validated_value)).await);
+    cache
+        .insert_all(final_values.iter().map(Cow::Borrowed))
+        .await;
+
+    for value in initial_values.iter().chain([&validated_value]) {
+        assert!(!cache.contains(&value.hash()).await);
+        assert_eq!(cache.get(&value.hash()).await.as_ref(), None);
+    }
+
+    let expected_values_in_cache = final_values.iter().chain([&confirmed_value]);
+
+    for value in expected_values_in_cache.clone() {
+        assert!(cache.contains(&value.hash()).await);
+        assert_eq!(cache.get(&value.hash()).await.as_ref(), Some(value));
+    }
+
+    assert_eq!(
+        cache.keys::<BTreeSet<_>>().await,
+        BTreeSet::from_iter(expected_values_in_cache.map(HashedCertificateValue::hash))
+    );
+}
+
 /// Test that the cache correctly filters out cached items from an iterator.
 #[tokio::test]
 async fn test_filtering_out_cached_items() {
