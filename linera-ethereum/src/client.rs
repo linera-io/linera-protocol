@@ -110,7 +110,8 @@ pub trait EthereumQueries {
         &self,
         contract_address: &str,
         event_name_expanded: &str,
-        starting_block: u64,
+        from_block: u64,
+        to_block: u64,
     ) -> Result<Vec<EthereumEvent>, Self::Error>;
 
     /// The operation done with `eth_call` on Ethereum returns
@@ -164,14 +165,16 @@ where
         &self,
         contract_address: &str,
         event_name_expanded: &str,
-        starting_block: u64,
+        from_block: u64,
+        to_block: u64,
     ) -> Result<Vec<EthereumEvent>, Self::Error> {
         let contract_address = contract_address.parse::<Address>()?;
         let event_name = event_name_from_expanded(event_name_expanded);
         let filter = Filter::new()
             .address(contract_address)
             .event(&event_name)
-            .from_block(starting_block);
+            .from_block(from_block)
+            .to_block(to_block);
         let events = self
             .request::<_, Vec<Log>>("eth_getLogs", (filter,))
             .await?;
