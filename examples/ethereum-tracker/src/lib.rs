@@ -45,6 +45,15 @@ pub struct InstantiationArgument {
     pub start_block: u64,
 }
 
+/// The initialization data required to create an Ethereum tracker
+#[derive(Clone, Debug, Default, Deserialize, Serialize, SimpleObject)]
+pub struct EndpointAndAddress {
+    /// The Ethereum endpoint being used
+    pub ethereum_endpoint: String,
+    /// The address of the contract
+    pub contract_address: String,
+}
+
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct U256Cont {
     pub value: U256,

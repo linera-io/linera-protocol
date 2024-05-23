@@ -5,7 +5,7 @@
 
 mod state;
 
-use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument, U256Cont};
+use ethereum_tracker::{EndpointAndAddress, EthereumTrackerAbi, InstantiationArgument, U256Cont};
 use linera_ethereum::client::EthereumQueries as _;
 use linera_sdk::{
     base::WithContractAbi,
@@ -42,9 +42,18 @@ impl Contract for EthereumTrackerContract {
     async fn instantiate(&mut self, argument: InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
-        self.state.argument.set(argument);
+        let InstantiationArgument {
+            ethereum_endpoint,
+            contract_address,
+            start_block,
+        } = argument;
+        let endpoint_and_address = EndpointAndAddress {
+            ethereum_endpoint,
+            contract_address,
+        };
+        self.state.argument.set(endpoint_and_address);
         self.state.start_block.set(0);
-        self.read_initial().await;
+        self.read_initial(start_block).await;
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
@@ -64,18 +73,17 @@ impl Contract for EthereumTrackerContract {
 }
 
 impl EthereumTrackerContract {
-    fn get_endpoints(&self) -> (EthereumClient, String, u64) {
+    fn get_endpoints(&self) -> (EthereumClient, String) {
         let argument = self.state.argument.get();
         let url = argument.ethereum_endpoint.clone();
         let contract_address = argument.contract_address.clone();
-        let start_block = argument.start_block;
         let ethereum_client = EthereumClient { url };
-        (ethereum_client, contract_address, start_block)
+        (ethereum_client, contract_address)
     }
 
-    async fn read_initial(&mut self) {
+    async fn read_initial(&mut self, start_block: u64) {
         let event_name_expanded = "Initial(address,uint256)";
-        let (ethereum_client, contract_address, start_block) = self.get_endpoints();
+        let (ethereum_client, contract_address) = self.get_endpoints();
         let events = ethereum_client
             .read_events(
                 &contract_address,
@@ -99,7 +107,7 @@ impl EthereumTrackerContract {
 
     async fn update(&mut self, to_block: u64) {
         let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
-        let (ethereum_client, contract_address, _) = self.get_endpoints();
+        let (ethereum_client, contract_address) = self.get_endpoints();
         let start_block = self.state.start_block.get_mut();
         let events = ethereum_client
             .read_events(
