@@ -384,7 +384,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     let events = ethereum_client
         .read_events(&contract_address, event_name_expanded, 0, 2)
         .await?;
-    let start_block = events.get(0).unwrap().block_number;
+    let start_block = events.first().unwrap().block_number;
     let argument = InstantiationArgument {
         ethereum_endpoint,
         contract_address,

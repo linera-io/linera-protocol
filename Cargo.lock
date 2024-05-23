@@ -2788,7 +2788,6 @@ version = "0.1.0"
 dependencies = [
  "alloy 0.1.0 (git+https://github.com/alloy-rs/alloy?rev=b79db21734cffddc11753fe62ba571565c896f42)",
  "async-graphql",
- "linera-ethereum",
  "linera-sdk",
  "serde",
 ]
