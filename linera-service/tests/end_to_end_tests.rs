@@ -164,8 +164,20 @@ impl FungibleApp {
     }
 }
 
+#[cfg(any(
+    feature = "scylladb",
+    feature = "dynamodb",
+    feature = "kubernetes",
+    feature = "remote_net"
+))]
 struct NonFungibleApp(ApplicationWrapper<non_fungible::NonFungibleTokenAbi>);
 
+#[cfg(any(
+    feature = "scylladb",
+    feature = "dynamodb",
+    feature = "kubernetes",
+    feature = "remote_net"
+))]
 impl NonFungibleApp {
     pub fn create_token_id(
         chain_id: &ChainId,
@@ -612,9 +624,11 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     Ok(())
 }
 
+// TODO(#2051): Enable the test `test_wasm_end_to_end_fungible::scylladb_grpc` that is frequently failing.
+// The failure is `Error: Could not find application URI: .... after 15 tries`.
+//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "service_grpc")]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_service_grpc")]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
@@ -881,7 +895,15 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+// TODO(#2051): The test `test_wasm_end_to_end_non_fungible::service_grpc` is frequently failing
+// with the error `Error: Could not find application URI: .... after 15 tries`.
+//#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg(any(
+    feature = "scylladb",
+    feature = "dynamodb",
+    feature = "kubernetes",
+    feature = "remote_net"
+))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
@@ -2282,10 +2304,11 @@ async fn test_resolve_binary() -> Result<()> {
 }
 
 // TODO(#1655): Make the scylladb_udp / rocksdb_udp test work.
+// TODO(#2051): Enable the `test_end_to_end_reconfiguration::scylladb_grpc` that is sometimes failing due to runtime exhaustion.
 //#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
+//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "service_tcp")]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
