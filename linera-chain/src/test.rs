@@ -122,7 +122,7 @@ impl BlockTestExt for Block {
 
     fn into_proposal_with_round(self, key_pair: &KeyPair, round: Round) -> BlockProposal {
         let content = BlockAndRound { block: self, round };
-        BlockProposal::new(content, key_pair, vec![], None)
+        BlockProposal::new(content, key_pair, vec![], vec![], None)
     }
 
     fn into_justified_proposal(
@@ -132,7 +132,7 @@ impl BlockTestExt for Block {
         validated: Certificate,
     ) -> BlockProposal {
         let content = BlockAndRound { block: self, round };
-        BlockProposal::new(content, key_pair, vec![], Some(validated))
+        BlockProposal::new(content, key_pair, vec![], vec![], Some(validated))
     }
 }
 

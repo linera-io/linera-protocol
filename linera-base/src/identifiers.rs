@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     bcs_scalar,
-    crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, PublicKey},
-    data_types::BlockHeight,
+    crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
+    data_types::{Blob, BlockHeight},
     doc_scalar,
 };
 
@@ -78,7 +78,7 @@ impl Account {
     }
 }
 
-impl std::fmt::Display for Account {
+impl Display for Account {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.owner {
             Some(owner) => write!(f, "{}:{}", self.chain_id, owner),
@@ -142,19 +142,23 @@ impl ChainDescription {
 #[cfg_attr(with_testing, derive(Default))]
 pub struct ChainId(pub CryptoHash);
 
-/// A blob ID.
+/// A content-addressed blob ID i.e. the hash of the Blob.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Debug, Serialize, Deserialize)]
-#[cfg_attr(with_testing, derive(Default))]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Default))]
 pub struct BlobId(pub CryptoHash);
 
-/// A blob.
-#[derive(Serialize, Deserialize)]
-pub struct Blob {
-    #[serde(with = "serde_bytes")]
-    bytes: Vec<u8>,
+impl BlobId {
+    /// Creates a new `BlobId` from a `Blob`
+    pub fn new(blob: &Blob) -> Self {
+        BlobId(CryptoHash::new(blob))
+    }
 }
 
-impl BcsSignable for Blob {}
+impl Display for BlobId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
 
 /// The index of a message in a chain.
 #[derive(
@@ -802,7 +806,10 @@ doc_scalar!(
 );
 doc_scalar!(AccountOwner, "An owner of an account.");
 doc_scalar!(Account, "An account");
-doc_scalar!(BlobId, "A blob id");
+doc_scalar!(
+    BlobId,
+    "A content-addressed blob ID i.e. the hash of the Blob"
+);
 
 #[cfg(test)]
 mod tests {

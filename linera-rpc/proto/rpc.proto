@@ -147,6 +147,9 @@ message ChainInfoQuery {
 
   // Request a signed vote for fallback mode.
   bool request_fallback = 11;
+  
+  // Query a value that contains a binary blob (e.g. bytecode) required by this chain.
+  optional bytes request_blob = 12;
 }
 
 // An authenticated proposal for a new block.
@@ -168,6 +171,9 @@ message BlockProposal {
 
   // A certificate for a validated block that justifies the proposal in this round.
   optional bytes validated = 6;
+  
+  // Required blob
+  bytes blobs = 7;
 }
 
 // A certified statement from the committee, without the value.
@@ -210,6 +216,9 @@ message Certificate {
   // Wait until all outgoing cross-chain messages from this certificate have
   // been received by the target chains.
   bool wait_for_outgoing_messages = 6;
+  
+  // Blobs required by this certificate
+  bytes blobs = 7;
 }
 
 message ChainId {

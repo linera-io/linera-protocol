@@ -516,6 +516,7 @@ where
         let HandleCertificateRequest {
             certificate,
             hashed_certificate_values,
+            hashed_blobs,
             wait_for_outgoing_messages,
         } = request.into_inner().try_into()?;
         debug!(?certificate, "Handling certificate");
@@ -523,7 +524,7 @@ where
         match self
             .state
             .clone()
-            .handle_certificate(certificate, hashed_certificate_values, sender)
+            .handle_certificate(certificate, hashed_certificate_values, hashed_blobs, sender)
             .await
         {
             Ok((info, actions)) => {

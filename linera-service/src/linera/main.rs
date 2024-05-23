@@ -702,6 +702,7 @@ impl Runnable for Job {
                         HandleCertificateRequest {
                             certificate: certificate.clone(),
                             hashed_certificate_values: vec![],
+                            hashed_blobs: vec![],
                             wait_for_outgoing_messages: true,
                         }
                         .into()
@@ -800,6 +801,20 @@ impl Runnable for Job {
                     .await?;
                 println!("{}", bytecode_id);
                 info!("{}", "Bytecode published successfully!".green().bold());
+                info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
+            }
+
+            PublishBlob {
+                blob_path,
+                publisher,
+            } => {
+                let start_time = Instant::now();
+                let publisher = publisher.unwrap_or_else(|| context.default_chain());
+                info!("Publishing blob on chain {}", publisher);
+                let chain_client = context.make_chain_client(storage, publisher).into_arc();
+                let blob_id = context.publish_blob(&chain_client, blob_path).await?;
+                println!("{}", blob_id);
+                info!("{}", "Blob published successfully!".green().bold());
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
             }
 

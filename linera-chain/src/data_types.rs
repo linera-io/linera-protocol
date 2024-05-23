@@ -10,15 +10,15 @@ use std::{
 use async_graphql::{Object, SimpleObject};
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
-    data_types::{Amount, BlockHeight, OracleRecord, Round, Timestamp},
+    data_types::{Amount, BlockHeight, HashedBlob, OracleRecord, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{
-        Account, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
+        Account, BlobId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
     },
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    BytecodeLocation, Message, MessageKind, Operation,
+    BytecodeLocation, Message, MessageKind, Operation, SystemOperation,
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
 
@@ -76,6 +76,18 @@ impl Block {
             }
         }
         locations
+    }
+
+    /// Returns all the blob IDs referred to in this block's operations.
+    pub fn blob_ids(&self) -> HashSet<BlobId> {
+        let mut blob_ids = HashSet::new();
+        for operation in &self.operations {
+            if let Operation::System(SystemOperation::PublishBlob { blob_id }) = operation {
+                blob_ids.insert(blob_id.to_owned());
+            }
+        }
+
+        blob_ids
     }
 
     /// Returns whether the block contains only rejected incoming messages, which
@@ -221,6 +233,7 @@ pub struct BlockProposal {
     pub owner: Owner,
     pub signature: Signature,
     pub hashed_certificate_values: Vec<HashedCertificateValue>,
+    pub hashed_blobs: Vec<HashedBlob>,
     pub validated: Option<Certificate>,
 }
 
@@ -800,6 +813,7 @@ impl BlockProposal {
         content: BlockAndRound,
         secret: &KeyPair,
         hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
         validated: Option<Certificate>,
     ) -> Self {
         let outcome = validated
@@ -818,6 +832,7 @@ impl BlockProposal {
             owner: secret.public().into(),
             signature,
             hashed_certificate_values,
+            hashed_blobs,
             validated,
         }
     }

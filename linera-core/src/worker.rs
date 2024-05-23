@@ -4,7 +4,8 @@
 
 use std::{
     borrow::Cow,
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap, VecDeque},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    num::NonZeroUsize,
     sync::Arc,
     time::Duration,
 };
@@ -13,9 +14,9 @@ use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, Round},
+    data_types::{ArithmeticError, BlockHeight, HashedBlob, Round},
     doc_scalar, ensure,
-    identifiers::{ChainId, Owner},
+    identifiers::{BlobId, ChainId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -23,7 +24,8 @@ use linera_chain::{
         ExecutedBlock, HashedCertificateValue, IncomingMessage, LiteCertificate, Medium,
         MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
     },
-    manager, ChainError, ChainStateView,
+    manager::{self},
+    ChainError, ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -34,6 +36,7 @@ use linera_views::{
     log_view::LogView,
     views::{RootView, View, ViewError},
 };
+use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{oneshot, Mutex};
@@ -52,7 +55,7 @@ use {
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    value_cache::CertificateValueCache,
+    value_cache::{CertificateValueCache, DEFAULT_VALUE_CACHE_SIZE},
 };
 
 #[cfg(test)]
@@ -124,6 +127,7 @@ pub trait ValidatorWorker {
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
         notify_message_delivery: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
@@ -246,12 +250,18 @@ pub enum WorkerError {
     InvalidLiteCertificate,
     #[error("An additional value was provided that is not required: {value_hash}.")]
     UnneededValue { value_hash: CryptoHash },
+    #[error("An additional blob was provided that is not required: {blob_id}.")]
+    UnneededBlob { blob_id: BlobId },
     #[error("The following values containing application bytecode are missing: {0:?}.")]
     ApplicationBytecodesNotFound(Vec<BytecodeLocation>),
     #[error("The certificate in the block proposal is not a ValidatedBlock")]
     MissingExecutedBlockInProposal,
     #[error("Fast blocks cannot query oracles")]
     FastBlockUsingOracles,
+    #[error("The following blobs are missing: {0:?}.")]
+    BlobsNotFound(Vec<BlobId>),
+    #[error("The following values containing application bytecode are missing: {0:?} and the following blobs are missing: {1:?}.")]
+    ApplicationBytecodesAndBlobsNotFound(Vec<BytecodeLocation>, Vec<BlobId>),
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -277,8 +287,10 @@ pub struct WorkerState<StorageClient> {
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
     grace_period: Duration,
-    /// Cached values by hash.
-    recent_values: Arc<CertificateValueCache>,
+    /// Cached hashed certificate values by hash.
+    recent_hashed_certificate_values: Arc<CertificateValueCache>,
+    /// Cached hashed blobs by `BlobId`.
+    recent_hashed_blobs: Arc<Mutex<LruCache<BlobId, HashedBlob>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
@@ -289,6 +301,9 @@ pub(crate) type DeliveryNotifiers =
 
 impl<StorageClient> WorkerState<StorageClient> {
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
+        let recent_hashed_blobs = Arc::new(Mutex::new(LruCache::new(
+            NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
+        )));
         WorkerState {
             nickname,
             key_pair: key_pair.map(Arc::new),
@@ -296,7 +311,8 @@ impl<StorageClient> WorkerState<StorageClient> {
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
             grace_period: Duration::ZERO,
-            recent_values: Arc::new(CertificateValueCache::default()),
+            recent_hashed_certificate_values: Arc::new(CertificateValueCache::default()),
+            recent_hashed_blobs,
             delivery_notifiers: Arc::default(),
         }
     }
@@ -304,7 +320,8 @@ impl<StorageClient> WorkerState<StorageClient> {
     pub fn new_for_client(
         nickname: String,
         storage: StorageClient,
-        recent_values: Arc<CertificateValueCache>,
+        recent_hashed_certificate_values: Arc<CertificateValueCache>,
+        recent_hashed_blobs: Arc<Mutex<LruCache<BlobId, HashedBlob>>>,
         delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     ) -> Self {
         WorkerState {
@@ -314,7 +331,8 @@ impl<StorageClient> WorkerState<StorageClient> {
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
             grace_period: Duration::ZERO,
-            recent_values,
+            recent_hashed_certificate_values,
+            recent_hashed_blobs,
             delivery_notifiers,
         }
     }
@@ -342,6 +360,10 @@ impl<StorageClient> WorkerState<StorageClient> {
         &self.nickname
     }
 
+    pub fn recent_hashed_blobs(&self) -> Arc<Mutex<LruCache<BlobId, HashedBlob>>> {
+        self.recent_hashed_blobs.clone()
+    }
+
     /// Returns the storage client so that it can be manipulated or queried.
     #[cfg(not(feature = "test"))]
     pub(crate) fn storage_client(&self) -> &StorageClient {
@@ -365,14 +387,20 @@ impl<StorageClient> WorkerState<StorageClient> {
         &mut self,
         certificate: LiteCertificate<'_>,
     ) -> Result<Certificate, WorkerError> {
-        self.recent_values.full_certificate(certificate).await
+        self.recent_hashed_certificate_values
+            .full_certificate(certificate)
+            .await
     }
 
-    pub(crate) async fn recent_value(
+    pub(crate) async fn recent_hashed_certificate_value(
         &mut self,
         hash: &CryptoHash,
     ) -> Option<HashedCertificateValue> {
-        self.recent_values.get(hash).await
+        self.recent_hashed_certificate_values.get(hash).await
+    }
+
+    pub(crate) async fn recent_blob(&mut self, blob_id: &BlobId) -> Option<HashedBlob> {
+        self.recent_hashed_blobs.lock().await.get(blob_id).cloned()
     }
 }
 
@@ -387,10 +415,12 @@ where
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.fully_handle_certificate_with_notifications(
             certificate,
             hashed_certificate_values,
+            hashed_blobs,
             None,
         )
         .await
@@ -401,10 +431,11 @@ where
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
         mut notifications: Option<&mut Vec<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (response, actions) = self
-            .handle_certificate(certificate, hashed_certificate_values, None)
+            .handle_certificate(certificate, hashed_certificate_values, hashed_blobs, None)
             .await?;
         if let Some(notifications) = notifications.as_mut() {
             notifications.extend(actions.notifications);
@@ -589,6 +620,7 @@ where
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: &[HashedCertificateValue],
+        hashed_blobs: &[HashedBlob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
@@ -652,19 +684,32 @@ where
             tip.block_hash == block.previous_block_hash,
             WorkerError::InvalidBlockChaining
         );
-        // Verify that all required bytecode hashed certificate values are available, and no unrelated ones provided.
-        self.check_no_missing_bytecode(block, hashed_certificate_values)
-            .await?;
+        let pending_blobs = &chain.manager.get().pending_blobs;
+        // Verify that all required bytecode hashed certificate values and blobs are available, and no unrelated ones provided.
+        self.check_no_missing_blobs(
+            block,
+            hashed_certificate_values,
+            hashed_blobs,
+            pending_blobs,
+        )
+        .await?;
         // Persist certificate and hashed certificate values.
-        self.recent_values
+        self.recent_hashed_certificate_values
             .insert_all(hashed_certificate_values.iter().map(Cow::Borrowed))
             .await;
-        let (result_hashed_certificate_value, result_certificate) = tokio::join!(
+        for hashed_blob in hashed_blobs {
+            self.cache_recent_blob(Cow::Borrowed(hashed_blob)).await;
+        }
+
+        let blobs_in_block = self.get_blobs(block.blob_ids(), pending_blobs).await?;
+        let (result_hashed_certificate_value, result_blobs, result_certificate) = tokio::join!(
             self.storage
                 .write_hashed_certificate_values(hashed_certificate_values),
+            self.storage.write_hashed_blobs(&blobs_in_block),
             self.storage.write_certificate(&certificate)
         );
         result_hashed_certificate_value?;
+        result_blobs?;
         result_certificate?;
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
@@ -715,7 +760,7 @@ where
             notify_when_messages_are_delivered,
         )
         .await;
-        self.recent_values
+        self.recent_hashed_certificate_values
             .insert(Cow::Owned(certificate.value))
             .await;
 
@@ -725,13 +770,89 @@ where
         Ok((info, actions))
     }
 
-    /// Returns an error if the block requires bytecode we don't have, or if unrelated bytecode
-    /// hashed certificate values were provided.
-    async fn check_no_missing_bytecode(
+    /// Returns an error if the block requires bytecode or a blob we don't have, or if unrelated bytecode
+    /// hashed certificate values or blobs were provided.
+    async fn check_no_missing_blobs(
         &self,
         block: &Block,
         hashed_certificate_values: &[HashedCertificateValue],
+        hashed_blobs: &[HashedBlob],
+        pending_blobs: &BTreeMap<BlobId, HashedBlob>,
     ) -> Result<(), WorkerError> {
+        let missing_bytecodes = self
+            .get_missing_bytecodes(block, hashed_certificate_values)
+            .await?;
+        let missing_blobs = self
+            .get_missing_blobs(block, hashed_blobs, pending_blobs)
+            .await?;
+
+        if missing_bytecodes.is_empty() {
+            if missing_blobs.is_empty() {
+                Ok(())
+            } else {
+                Err(WorkerError::BlobsNotFound(missing_blobs))
+            }
+        } else if missing_blobs.is_empty() {
+            Err(WorkerError::ApplicationBytecodesNotFound(missing_bytecodes))
+        } else {
+            Err(WorkerError::ApplicationBytecodesAndBlobsNotFound(
+                missing_bytecodes,
+                missing_blobs,
+            ))
+        }
+    }
+
+    /// Returns the blobs required by the block that we don't have, or an error if unrelated blobs were provided.
+    async fn get_missing_blobs(
+        &self,
+        block: &Block,
+        hashed_blobs: &[HashedBlob],
+        pending_blobs: &BTreeMap<BlobId, HashedBlob>,
+    ) -> Result<Vec<BlobId>, WorkerError> {
+        let mut required_blob_ids = block.blob_ids();
+        // Find all certificates containing blobs used when executing this block.
+        for hashed_blob in hashed_blobs {
+            let blob_id = hashed_blob.id();
+            ensure!(
+                required_blob_ids.remove(&blob_id),
+                WorkerError::UnneededBlob { blob_id }
+            );
+        }
+
+        let recent_blobs = self.recent_hashed_blobs.lock().await;
+        Ok(required_blob_ids
+            .into_iter()
+            .filter(|blob_id| {
+                !recent_blobs.contains(blob_id) && !pending_blobs.contains_key(blob_id)
+            })
+            .collect::<Vec<_>>())
+    }
+
+    async fn get_blobs(
+        &self,
+        blob_ids: HashSet<BlobId>,
+        pending_blobs: &BTreeMap<BlobId, HashedBlob>,
+    ) -> Result<Vec<HashedBlob>, WorkerError> {
+        let mut blobs = Vec::new();
+        let mut recent_blobs = self.recent_hashed_blobs.lock().await;
+        for blob_id in blob_ids {
+            if let Some(blob) = recent_blobs.get(&blob_id) {
+                blobs.push(blob.clone());
+            } else if let Some(blob) = pending_blobs.get(&blob_id) {
+                blobs.push(blob.clone());
+            }
+        }
+
+        Ok(blobs)
+    }
+
+    /// Returns an error if the block requires bytecode we don't have, or if unrelated bytecode
+    /// hashed certificate values were provided.
+    async fn get_missing_bytecodes(
+        &self,
+        block: &Block,
+        hashed_certificate_values: &[HashedCertificateValue],
+    ) -> Result<Vec<BytecodeLocation>, WorkerError> {
         // Find all certificates containing bytecode used when executing this block.
         let mut required_locations_left: HashMap<_, _> = block
             .bytecode_locations()
@@ -746,7 +867,7 @@ where
             );
         }
         let tasks = self
-            .recent_values
+            .recent_hashed_certificate_values
             .subtract_cached_items_from::<_, Vec<_>>(
                 required_locations_left.into_values(),
                 |location| &location.certificate_hash,
@@ -767,13 +888,8 @@ where
                 Err(err) => Err(err)?,
             }
         }
-        if missing_locations.is_empty() {
-            Ok(())
-        } else {
-            Err(WorkerError::ApplicationBytecodesNotFound(
-                missing_locations.into_iter().collect(),
-            ))
-        }
+
+        Ok(missing_locations.into_iter().collect())
     }
 
     /// Processes a validated block issued from a multi-owner chain.
@@ -810,7 +926,7 @@ where
                 true,
             ));
         }
-        self.recent_values
+        self.recent_hashed_certificate_values
             .insert(Cow::Borrowed(&certificate.value))
             .await;
         let old_round = chain.manager.get().current_round;
@@ -934,11 +1050,21 @@ where
     }
 
     /// Inserts a [`HashedCertificateValue`] into the worker's cache.
-    pub(crate) async fn cache_recent_value<'a>(
+    pub(crate) async fn cache_recent_hashed_certificate_value<'a>(
         &mut self,
         value: Cow<'a, HashedCertificateValue>,
     ) -> bool {
-        self.recent_values.insert(value).await
+        self.recent_hashed_certificate_values.insert(value).await
+    }
+
+    pub async fn cache_recent_blob<'a>(&mut self, hashed_blob: Cow<'a, HashedBlob>) -> bool {
+        let mut recent_blobs = self.recent_hashed_blobs.lock().await;
+        if recent_blobs.contains(&hashed_blob.id()) {
+            return false;
+        }
+        // Cache the blob so that clients don't have to send it again.
+        recent_blobs.push(hashed_blob.id(), hashed_blob.into_owned());
+        true
     }
 
     /// Returns a stored [`Certificate`] for a chain's block.
@@ -1066,6 +1192,7 @@ where
             content: BlockAndRound { block, round },
             owner,
             hashed_certificate_values,
+            hashed_blobs,
             validated,
             signature: _,
         } = &proposal;
@@ -1105,9 +1232,14 @@ where
         // Update the inboxes so that we can verify the provided hashed certificate values are legitimately required.
         // Actual execution happens below, after other validity checks.
         chain.remove_events_from_inboxes(block).await?;
-        // Verify that all required bytecode hashed certificate values are available, and no unrelated ones provided.
-        self.check_no_missing_bytecode(block, hashed_certificate_values)
-            .await?;
+        // Verify that all required bytecode hashed certificate values and blobs are available, and no unrelated ones provided.
+        self.check_no_missing_blobs(
+            block,
+            hashed_certificate_values,
+            hashed_blobs,
+            &chain.manager.get().pending_blobs,
+        )
+        .await?;
         // Write the values so that the bytecode is available during execution.
         self.storage
             .write_hashed_certificate_values(hashed_certificate_values)
@@ -1149,7 +1281,9 @@ where
         manager.create_vote(proposal, outcome, self.key_pair(), local_time);
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
-            self.recent_values.insert(Cow::Borrowed(&vote.value)).await;
+            self.recent_hashed_certificate_values
+                .insert(Cow::Borrowed(&vote.value))
+                .await;
         }
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
@@ -1171,8 +1305,13 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let full_cert = self.full_certificate(certificate).await?;
-        self.handle_certificate(full_cert, vec![], notify_when_messages_are_delivered)
-            .await
+        self.handle_certificate(
+            full_cert,
+            vec![],
+            vec![],
+            notify_when_messages_are_delivered,
+        )
+        .await
     }
 
     /// Processes a certificate.
@@ -1185,6 +1324,7 @@ where
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
@@ -1227,6 +1367,7 @@ where
                 self.process_confirmed_block(
                     certificate,
                     &hashed_certificate_values,
+                    &hashed_blobs,
                     notify_when_messages_are_delivered,
                 )
                 .await?
@@ -1348,6 +1489,9 @@ where
         if let Some(hash) = query.request_hashed_certificate_value {
             info.requested_hashed_certificate_value =
                 Some(self.storage.read_hashed_certificate_value(hash).await?);
+        }
+        if let Some(blob_id) = query.request_blob {
+            info.requested_blob = Some(self.storage.read_hashed_blob(blob_id).await?);
         }
         if query.request_manager_values {
             info.manager.add_values(chain.manager.get());

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::BTreeMap,
     path::PathBuf,
     time::{Duration, Instant},
 };
@@ -12,8 +13,8 @@ use colored::Colorize;
 use futures::{lock::OwnedMutexGuard, Future};
 use linera_base::{
     crypto::{CryptoRng, KeyPair},
-    data_types::{BlockHeight, Timestamp},
-    identifiers::{Account, BytecodeId, ChainId},
+    data_types::{BlockHeight, HashedBlob, Timestamp},
+    identifiers::{Account, BlobId, BytecodeId, ChainId},
     ownership::ChainOwnership,
 };
 use linera_chain::data_types::Certificate;
@@ -244,6 +245,7 @@ impl ClientContext {
             chain.timestamp,
             chain.next_block_height,
             chain.pending_block.clone(),
+            chain.pending_blobs.clone(),
         )
     }
 
@@ -304,6 +306,7 @@ impl ClientContext {
                 timestamp,
                 next_block_height: BlockHeight::ZERO,
                 pending_block: None,
+                pending_blobs: BTreeMap::new(),
             });
         }
     }
@@ -403,6 +406,37 @@ impl ClientContext {
             .await?;
         self.process_inbox(chain_client).await?;
         Ok(bytecode_id)
+    }
+
+    pub async fn publish_blob<S>(
+        &mut self,
+        chain_client: &ArcChainClient<NodeProvider, S>,
+        blob_path: PathBuf,
+    ) -> anyhow::Result<BlobId>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        info!("Loading blob file");
+        let blob = HashedBlob::load_from_file(&blob_path)
+            .await
+            .context(format!("failed to load blob from {:?}", &blob_path))?;
+        let blob_id = blob.id();
+
+        info!("Publishing blob");
+        self.apply_client_command(chain_client, |mut chain_client| {
+            let blob = blob.clone();
+            async move {
+                chain_client
+                    .publish_blob(blob)
+                    .await
+                    .context("Failed to publish blob")
+            }
+        })
+        .await?;
+
+        info!("{}", "Blob published successfully!".green().bold());
+        Ok(blob_id)
     }
 
     pub fn generate_key_pair(&mut self) -> KeyPair {
@@ -713,6 +747,7 @@ impl ClientContext {
                 },
                 key_pair,
                 vec![],
+                vec![],
                 None,
             );
             proposals.push(proposal.into());
@@ -842,7 +877,9 @@ impl ClientContext {
         // Second replay the certificates locally.
         for certificate in certificates {
             // No required certificates from other chains: This is only used with benchmark.
-            node.handle_certificate(certificate, vec![]).await.unwrap();
+            node.handle_certificate(certificate, vec![], vec![])
+                .await
+                .unwrap();
         }
         // Last update the wallet.
         for chain in self.wallet_mut().chains_mut() {

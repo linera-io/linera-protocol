@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -69,6 +69,7 @@ impl chain_listener::ClientContext<NodeProvider<MemoryStorage<TestClock>>> for C
             chain.timestamp,
             chain.next_block_height,
             chain.pending_block.clone(),
+            chain.pending_blobs.clone(),
         )
     }
 
@@ -86,6 +87,7 @@ impl chain_listener::ClientContext<NodeProvider<MemoryStorage<TestClock>>> for C
                 timestamp,
                 next_block_height: BlockHeight::ZERO,
                 pending_block: None,
+                pending_blobs: BTreeMap::new(),
             });
         }
     }

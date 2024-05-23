@@ -40,6 +40,12 @@ ApplicationPermissions:
     - close_chain:
         SEQ:
           TYPENAME: ApplicationId
+Blob:
+  STRUCT:
+    - bytes: BYTES
+BlobId:
+  NEWTYPESTRUCT:
+    TYPENAME: CryptoHash
 Block:
   STRUCT:
     - chain_id:
@@ -99,6 +105,9 @@ BlockProposal:
     - hashed_certificate_values:
         SEQ:
           TYPENAME: CertificateValue
+    - hashed_blobs:
+        SEQ:
+          TYPENAME: Blob
     - validated:
         OPTION:
           TYPENAME: Certificate
@@ -211,6 +220,9 @@ ChainInfo:
     - requested_hashed_certificate_value:
         OPTION:
           TYPENAME: CertificateValue
+    - requested_blob:
+        OPTION:
+          TYPENAME: Blob
 ChainInfoQuery:
   STRUCT:
     - chain_id:
@@ -234,6 +246,9 @@ ChainInfoQuery:
     - request_hashed_certificate_value:
         OPTION:
           TYPENAME: CryptoHash
+    - request_blob:
+        OPTION:
+          TYPENAME: BlobId
 ChainInfoResponse:
   STRUCT:
     - info:
@@ -274,6 +289,12 @@ ChainManagerInfo:
     - round_timeout:
         OPTION:
           TYPENAME: Timestamp
+    - pending_blobs:
+        MAP:
+          KEY:
+            TYPENAME: BlobId
+          VALUE:
+            TYPENAME: Blob
 ChainOwnership:
   STRUCT:
     - super_owners:
@@ -409,6 +430,9 @@ HandleCertificateRequest:
     - hashed_certificate_values:
         SEQ:
           TYPENAME: CertificateValue
+    - hashed_blobs:
+        SEQ:
+          TYPENAME: Blob
 HandleLiteCertRequest:
   STRUCT:
     - certificate:
@@ -548,40 +572,52 @@ NodeError:
           SEQ:
             TYPENAME: BytecodeLocation
     8:
-      MissingCertificateValue: UNIT
+      BlobsNotFound:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BlobId
     9:
-      MissingVoteInValidatorResponse: UNIT
+      ApplicationBytecodesAndBlobsNotFound:
+        TUPLE:
+          - SEQ:
+              TYPENAME: BytecodeLocation
+          - SEQ:
+              TYPENAME: BlobId
     10:
+      MissingCertificateValue: UNIT
+    11:
+      MissingVoteInValidatorResponse: UNIT
+    12:
       InactiveLocalChain:
         NEWTYPE:
           TYPENAME: ChainId
-    11:
-      InvalidChainInfoResponse: UNIT
-    12:
-      InvalidDecoding: UNIT
     13:
-      UnexpectedMessage: UNIT
+      InvalidChainInfoResponse: UNIT
     14:
+      InvalidDecoding: UNIT
+    15:
+      UnexpectedMessage: UNIT
+    16:
       GrpcError:
         STRUCT:
           - error: STR
-    15:
+    17:
       ClientIoError:
         STRUCT:
           - error: STR
-    16:
+    18:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    17:
+    19:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    18:
+    20:
       SubscriptionFailed:
         STRUCT:
           - status: STR
-    19:
+    21:
       LocalNodeQuery:
         STRUCT:
           - error: STR
@@ -913,6 +949,11 @@ SystemOperation:
           - service:
               TYPENAME: Bytecode
     9:
+      PublishBlob:
+        STRUCT:
+          - blob_id:
+              TYPENAME: BlobId
+    10:
       CreateApplication:
         STRUCT:
           - bytecode_id:
@@ -922,14 +963,14 @@ SystemOperation:
           - required_application_ids:
               SEQ:
                 TYPENAME: ApplicationId
-    10:
+    11:
       RequestApplication:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - application_id:
               TYPENAME: ApplicationId
-    11:
+    12:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation

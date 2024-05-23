@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 
 use linera_base::{
     crypto::{BcsSignable, CryptoError, CryptoHash, KeyPair, Signature},
-    data_types::{Amount, BlockHeight, Round, Timestamp},
-    identifiers::{ChainDescription, ChainId, Owner},
+    data_types::{Amount, BlockHeight, HashedBlob, Round, Timestamp},
+    identifiers::{BlobId, ChainDescription, ChainId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -68,8 +68,10 @@ pub struct ChainInfoQuery {
     pub request_leader_timeout: bool,
     /// Include a vote to switch to fallback mode, if appropriate.
     pub request_fallback: bool,
-    /// Query a value that contains a binary hashed certificate value (e.g. bytecode) required by this chain.
+    /// Query a certificate value that contains a binary blob (e.g. bytecode) required by this chain.
     pub request_hashed_certificate_value: Option<CryptoHash>,
+    /// Query a binary blob (e.g. bytecode) required by this chain.
+    pub request_blob: Option<BlobId>,
 }
 
 impl ChainInfoQuery {
@@ -86,6 +88,7 @@ impl ChainInfoQuery {
             request_leader_timeout: false,
             request_fallback: false,
             request_hashed_certificate_value: None,
+            request_blob: None,
         }
     }
 
@@ -138,6 +141,11 @@ impl ChainInfoQuery {
         self.request_hashed_certificate_value = Some(hash);
         self
     }
+
+    pub fn with_blob(mut self, blob_id: BlobId) -> Self {
+        self.request_blob = Some(blob_id);
+        self
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -175,6 +183,8 @@ pub struct ChainInfo {
     pub requested_received_log: Vec<ChainAndHeight>,
     /// The requested hashed certificate value, if any.
     pub requested_hashed_certificate_value: Option<HashedCertificateValue>,
+    /// The requested blob, if any.
+    pub requested_blob: Option<HashedBlob>,
 }
 
 /// The response to an `ChainInfoQuery`
@@ -254,6 +264,7 @@ where
             count_received_log: view.received_log.count(),
             requested_received_log: Vec::new(),
             requested_hashed_certificate_value: None,
+            requested_blob: None,
         }
     }
 }

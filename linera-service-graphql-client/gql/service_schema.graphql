@@ -20,6 +20,16 @@ type ApplicationOverview {
 }
 
 """
+A blob of binary data.
+"""
+scalar Blob
+
+"""
+A content-addressed blob ID i.e. the hash of the Blob
+"""
+scalar BlobId
+
+"""
 A block containing operations to apply on a given chain, as well as the
 acknowledgment of a number of incoming messages from other chains.
 * Incoming messages must be selected in the order they were
@@ -603,6 +613,10 @@ type MutationRoot {
 	Publishes a new application bytecode.
 	"""
 	publishBytecode(chainId: ChainId!, contract: Bytecode!, service: Bytecode!): BytecodeId!
+	"""
+	Publishes a new blob.
+	"""
+	publishBlob(chainId: ChainId!, blob: Blob!): BlobId!
 	"""
 	Creates a new application.
 	"""

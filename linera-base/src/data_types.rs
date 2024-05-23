@@ -10,12 +10,13 @@ use anyhow::Context as _;
 use async_graphql::SimpleObject;
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use linera_witty::{WitLoad, WitStore, WitType};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 use crate::{
+    crypto::BcsHashable,
     doc_scalar,
-    identifiers::{ApplicationId, Destination, GenericApplicationId},
+    identifiers::{ApplicationId, BlobId, Destination, GenericApplicationId},
     time::{Duration, SystemTime},
 };
 
@@ -733,6 +734,77 @@ impl std::str::FromStr for OracleResponse {
     }
 }
 
+/// A blob of binary data.
+#[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize)]
+pub struct Blob {
+    #[serde(with = "serde_bytes")]
+    bytes: Vec<u8>,
+}
+
+impl Blob {
+    /// Creates a `HashedBlob` without checking that this is the correct `BlobId`!
+    pub fn with_hash_unchecked(self, blob_id: BlobId) -> HashedBlob {
+        HashedBlob {
+            id: blob_id,
+            blob: self,
+        }
+    }
+
+    /// Get the `HashedBlob` from the `Blob`.
+    pub fn into_hashed(self) -> HashedBlob {
+        let id = BlobId::new(&self);
+        HashedBlob { blob: self, id }
+    }
+}
+
+impl BcsHashable for Blob {}
+
+impl From<HashedBlob> for Blob {
+    fn from(blob: HashedBlob) -> Blob {
+        blob.blob
+    }
+}
+
+/// A blob of binary data, with its content-addressed blob ID
+#[derive(Eq, PartialEq, Debug, Hash, Clone)]
+pub struct HashedBlob {
+    id: BlobId,
+    blob: Blob,
+}
+
+impl HashedBlob {
+    /// Loads a hashed blob from a file.
+    pub async fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
+        let blob = Blob {
+            bytes: std::fs::read(path)?,
+        };
+        Ok(blob.into_hashed())
+    }
+
+    /// A content-addressed blob ID i.e. the hash of the `Blob`.
+    pub fn id(&self) -> BlobId {
+        self.id
+    }
+}
+
+impl Serialize for HashedBlob {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.blob.serialize(serializer)
+    }
+}
+
+impl<'a> Deserialize<'a> for HashedBlob {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'a>,
+    {
+        Ok(Blob::deserialize(deserializer)?.into_hashed())
+    }
+}
+
 doc_scalar!(Amount, "A non-negative amount of tokens.");
 doc_scalar!(BlockHeight, "A block height to identify blocks in a chain");
 doc_scalar!(
@@ -744,6 +816,11 @@ doc_scalar!(
     "A number to identify successive attempts to decide a value in a consensus protocol."
 );
 doc_scalar!(OracleResponse, "A record of a single oracle response.");
+doc_scalar!(Blob, "A blob of binary data.");
+doc_scalar!(
+    HashedBlob,
+    "A blob of binary data, with its content-addressed blob ID."
+);
 
 #[cfg(test)]
 mod tests {

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::identifiers::ChainId;
+use linera_base::{data_types::HashedBlob, identifiers::ChainId};
 use linera_chain::data_types::{
     BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
 };
@@ -80,19 +80,30 @@ impl ValidatorNode for Client {
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
             Client::Grpc(grpc_client) => {
                 grpc_client
-                    .handle_certificate(certificate, hashed_certificate_values, delivery)
+                    .handle_certificate(
+                        certificate,
+                        hashed_certificate_values,
+                        hashed_blobs,
+                        delivery,
+                    )
                     .await
             }
 
             #[cfg(with_simple_network)]
             Client::Simple(simple_client) => {
                 simple_client
-                    .handle_certificate(certificate, hashed_certificate_values, delivery)
+                    .handle_certificate(
+                        certificate,
+                        hashed_certificate_values,
+                        hashed_blobs,
+                        delivery,
+                    )
                     .await
             }
         }
