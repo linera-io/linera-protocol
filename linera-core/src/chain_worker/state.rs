@@ -5,7 +5,7 @@
 
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -18,9 +18,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
-        HashedCertificateValue, IncomingMessage, Medium, MessageAction, MessageBundle, Origin,
-        Target,
+        Block, BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
+        ExecutedBlock, HashedCertificateValue, IncomingMessage, Medium, MessageAction,
+        MessageBundle, Origin, Target,
     },
     manager, ChainError, ChainStateView,
 };
@@ -412,6 +412,139 @@ where
         Ok((info, actions, false))
     }
 
+    /// Processes a confirmed block (aka a commit).
+    pub async fn process_confirmed_block(
+        &mut self,
+        certificate: Certificate,
+        hashed_certificate_values: &[HashedCertificateValue],
+        hashed_blobs: &[HashedBlob],
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
+            panic!("Expecting a confirmation certificate");
+        };
+        let block = &executed_block.block;
+        let BlockExecutionOutcome {
+            messages,
+            message_counts,
+            state_hash,
+            oracle_records,
+        } = &executed_block.outcome;
+        // Check that the chain is active and ready for this confirmation.
+        let tip = self.chain.tip_state.get().clone();
+        if tip.next_block_height < block.height {
+            return Err(WorkerError::MissingEarlierBlocks {
+                current_block_height: tip.next_block_height,
+            });
+        }
+        if tip.next_block_height > block.height {
+            // Block was already confirmed.
+            let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
+            let actions = self.create_network_actions().await?;
+            return Ok((info, actions));
+        }
+        if tip.is_first_block() && !self.chain.is_active() {
+            let local_time = self.storage.clock().current_time();
+            for message in &block.incoming_messages {
+                if self
+                    .chain
+                    .execute_init_message(
+                        message.id(),
+                        &message.event.message,
+                        message.event.timestamp,
+                        local_time,
+                    )
+                    .await?
+                {
+                    break;
+                }
+            }
+        }
+        self.ensure_is_active()?;
+        // Verify the certificate.
+        let (epoch, committee) = self
+            .chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        Self::check_block_epoch(epoch, block)?;
+        certificate.check(committee)?;
+        // This should always be true for valid certificates.
+        ensure!(
+            tip.block_hash == block.previous_block_hash,
+            WorkerError::InvalidBlockChaining
+        );
+        // Verify that all required bytecode hashed certificate values are available, and no
+        // unrelated ones provided.
+        self.check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
+            .await?;
+        // Persist certificate and hashed certificate values.
+        self.recent_hashed_certificate_values
+            .insert_all(hashed_certificate_values.iter().map(Cow::Borrowed))
+            .await;
+        for hashed_blob in hashed_blobs {
+            self.cache_recent_blob(Cow::Borrowed(hashed_blob)).await;
+        }
+
+        let blobs_in_block = self.get_blobs(block.blob_ids()).await?;
+        let (result_hashed_certificate_value, result_blobs, result_certificate) = tokio::join!(
+            self.storage
+                .write_hashed_certificate_values(hashed_certificate_values),
+            self.storage.write_hashed_blobs(&blobs_in_block),
+            self.storage.write_certificate(&certificate)
+        );
+        result_hashed_certificate_value?;
+        result_blobs?;
+        result_certificate?;
+        // Execute the block and update inboxes.
+        self.chain.remove_events_from_inboxes(block).await?;
+        let local_time = self.storage.clock().current_time();
+        let verified_outcome = self
+            .chain
+            .execute_block(block, local_time, Some(oracle_records.clone()))
+            .await?;
+        // We should always agree on the messages and state hash.
+        ensure!(
+            *messages == verified_outcome.messages,
+            WorkerError::IncorrectMessages {
+                computed: verified_outcome.messages,
+                submitted: messages.clone(),
+            }
+        );
+        ensure!(
+            *message_counts == verified_outcome.message_counts,
+            WorkerError::IncorrectMessageCounts
+        );
+        ensure!(
+            *state_hash == verified_outcome.state_hash,
+            WorkerError::IncorrectStateHash
+        );
+        // Advance to next block height.
+        let tip = self.chain.tip_state.get_mut();
+        tip.block_hash = Some(certificate.hash());
+        tip.next_block_height.try_add_assign_one()?;
+        tip.num_incoming_messages += block.incoming_messages.len() as u32;
+        tip.num_operations += block.operations.len() as u32;
+        tip.num_outgoing_messages += messages.len() as u32;
+        self.chain.confirmed_log.push(certificate.hash());
+        let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
+        let mut actions = self.create_network_actions().await?;
+        actions.notifications.push(Notification {
+            chain_id: block.chain_id,
+            reason: Reason::NewBlock {
+                height: block.height,
+                hash: certificate.value.hash(),
+            },
+        });
+        // Persist chain.
+        self.chain.save().await?;
+        self.recent_hashed_certificate_values
+            .insert(Cow::Owned(certificate.value))
+            .await;
+
+        Ok((info, actions))
+    }
+
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
     pub async fn process_cross_chain_update(
         &mut self,
@@ -669,6 +802,23 @@ where
             .collect::<Vec<_>>())
     }
 
+    /// Returns the blobs requested by their `blob_ids` that are either in pending in the
+    /// chain or in the `recent_hashed_blobs` cache.
+    async fn get_blobs(&self, blob_ids: HashSet<BlobId>) -> Result<Vec<HashedBlob>, WorkerError> {
+        let pending_blobs = &self.chain.manager.get().pending_blobs;
+        let (found_blobs, not_found_blobs): (HashMap<BlobId, HashedBlob>, HashSet<BlobId>) =
+            self.recent_hashed_blobs.try_get_many(blob_ids).await;
+
+        let mut blobs = found_blobs.into_values().collect::<Vec<_>>();
+        for blob_id in not_found_blobs {
+            if let Some(blob) = pending_blobs.get(&blob_id) {
+                blobs.push(blob.clone());
+            }
+        }
+
+        Ok(blobs)
+    }
+
     /// Returns an error if the block requires bytecode we don't have, or if unrelated bytecode
     /// hashed certificate values were provided.
     async fn get_missing_bytecodes(
@@ -713,6 +863,11 @@ where
         }
 
         Ok(missing_locations.into_iter().collect())
+    }
+
+    /// Inserts a [`HashedBlob`] into the worker's cache.
+    async fn cache_recent_blob<'a>(&mut self, hashed_blob: Cow<'a, HashedBlob>) -> bool {
+        self.recent_hashed_blobs.insert(hashed_blob).await
     }
 
     /// Loads pending cross-chain requests.
