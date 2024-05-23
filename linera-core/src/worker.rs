@@ -32,7 +32,10 @@ use tokio::sync::{oneshot, Mutex};
 use tracing::{error, instrument, trace, warn};
 #[cfg(with_testing)]
 use {
-    linera_base::identifiers::{BytecodeId, Destination, MessageId},
+    linera_base::{
+        crypto::PublicKey,
+        identifiers::{BytecodeId, Destination, MessageId},
+    },
     linera_chain::data_types::{ChannelFullName, IncomingMessage, Medium, MessageAction},
 };
 #[cfg(with_metrics)]
@@ -676,10 +679,21 @@ where
     }
 }
 
+#[cfg(with_testing)]
 impl<StorageClient> WorkerState<StorageClient> {
-    /// Gets a reference to the [`KeyPair`], if available.
-    fn key_pair(&self) -> Option<&KeyPair> {
-        self.chain_worker_config.key_pair()
+    /// Gets a reference to the validator's [`PublicKey`].
+    ///
+    /// # Panics
+    ///
+    /// If the validator doesn't have a key pair assigned to it.
+    pub fn public_key(&self) -> PublicKey {
+        self.chain_worker_config
+            .key_pair()
+            .expect(
+                "Test validator should have a key pair assigned to it \
+                in order to obtain it's public key",
+            )
+            .public()
     }
 }
 
