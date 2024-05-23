@@ -164,8 +164,10 @@ impl FungibleApp {
     }
 }
 
+#[cfg(any(feature = "scylladb", feature = "dynamodb", feature = "kubernetes", feature = "remote_net"))]
 struct NonFungibleApp(ApplicationWrapper<non_fungible::NonFungibleTokenAbi>);
 
+#[cfg(any(feature = "scylladb", feature = "dynamodb", feature = "kubernetes", feature = "remote_net"))]
 impl NonFungibleApp {
     pub fn create_token_id(
         chain_id: &ChainId,
