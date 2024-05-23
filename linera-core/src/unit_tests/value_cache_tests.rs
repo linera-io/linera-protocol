@@ -196,6 +196,234 @@ async fn test_insertion_of_validated_also_inserts_confirmed() {
     );
 }
 
+/// Test that an inserted validated block certificate value gets evicted before its respective
+/// confirmed block certificate value that was inserted with it.
+#[tokio::test]
+async fn test_eviction_of_validated_before_respective_confirmed() {
+    let cache = CertificateValueCache::default();
+    let values = create_dummy_values(0..(DEFAULT_VALUE_CACHE_SIZE as u64 - 1)).collect::<Vec<_>>();
+
+    let validated_value = create_dummy_validated_block_value();
+    let validated_hash = validated_value.hash();
+
+    let confirmed_value = validated_value
+        .validated_to_confirmed()
+        .expect("a validated value should be convertible to a confirmed value");
+    let confirmed_hash = confirmed_value.hash();
+
+    assert!(cache.insert(Cow::Borrowed(&validated_value)).await);
+    cache.insert_all(values.iter().map(Cow::Borrowed)).await;
+
+    assert!(!cache.contains(&validated_hash).await);
+    assert!(cache.get(&validated_hash).await.is_none());
+
+    assert!(cache.contains(&confirmed_hash).await);
+    assert_eq!(cache.get(&confirmed_hash).await, Some(confirmed_value));
+    assert_eq!(
+        cache.keys::<BTreeSet<_>>().await,
+        BTreeSet::from_iter(
+            values
+                .iter()
+                .map(HashedCertificateValue::hash)
+                .chain([confirmed_hash])
+        )
+    );
+}
+
+/// Tests if reinsertion of the first entry promotes it so that it's not evicted so soon.
+#[tokio::test]
+async fn test_promotion_of_reinsertion() {
+    let cache = CertificateValueCache::default();
+    let values = create_dummy_values(0..=(DEFAULT_VALUE_CACHE_SIZE as u64)).collect::<Vec<_>>();
+
+    cache
+        .insert_all(
+            values
+                .iter()
+                .take(DEFAULT_VALUE_CACHE_SIZE)
+                .map(Cow::Borrowed),
+        )
+        .await;
+    assert!(!cache.insert(Cow::Borrowed(&values[0])).await);
+    assert!(
+        cache
+            .insert(Cow::Borrowed(&values[DEFAULT_VALUE_CACHE_SIZE]))
+            .await
+    );
+
+    assert!(cache.contains(&values[0].hash()).await);
+    assert_eq!(
+        cache.get(&values[0].hash()).await.as_ref(),
+        Some(&values[0])
+    );
+
+    assert!(!cache.contains(&values[1].hash()).await);
+    assert!(cache.get(&values[1].hash()).await.is_none());
+
+    for value in values.iter().skip(2) {
+        assert!(cache.contains(&value.hash()).await);
+        assert_eq!(cache.get(&value.hash()).await.as_ref(), Some(value));
+    }
+
+    assert_eq!(
+        cache.keys::<BTreeSet<_>>().await,
+        BTreeSet::from_iter(
+            values
+                .iter()
+                .skip(2)
+                .map(HashedCertificateValue::hash)
+                .chain(Some(values[0].hash()))
+        )
+    );
+}
+
+/// Tests if reinsertion of a validated block certificate value promotes it and its respective
+/// confirmed block certificate value so that it's not evicted so soon.
+#[tokio::test]
+async fn test_promotion_of_reinsertion_of_validated_block() {
+    let cache = CertificateValueCache::default();
+    let dummy_values =
+        create_dummy_values(0..(DEFAULT_VALUE_CACHE_SIZE as u64)).collect::<Vec<_>>();
+    let validated_value = create_dummy_validated_block_value();
+    let confirmed_value = validated_value
+        .validated_to_confirmed()
+        .expect("Dummy validated value should be able to create a confirmed value");
+
+    assert!(cache.insert(Cow::Borrowed(&validated_value)).await);
+    cache
+        .insert_all(
+            dummy_values
+                .iter()
+                .take(DEFAULT_VALUE_CACHE_SIZE - 2)
+                .map(Cow::Borrowed),
+        )
+        .await;
+    assert!(!cache.insert(Cow::Borrowed(&validated_value)).await);
+    cache
+        .insert_all(
+            dummy_values
+                .iter()
+                .skip(DEFAULT_VALUE_CACHE_SIZE - 2)
+                .map(Cow::Borrowed),
+        )
+        .await;
+
+    for value in dummy_values.iter().take(2) {
+        assert!(!cache.contains(&value.hash()).await);
+        assert_eq!(cache.get(&value.hash()).await.as_ref(), None);
+    }
+
+    let expected_values_in_cache = dummy_values
+        .iter()
+        .skip(2)
+        .chain([&validated_value, &confirmed_value]);
+
+    for value in expected_values_in_cache.clone() {
+        assert!(cache.contains(&value.hash()).await);
+        assert_eq!(cache.get(&value.hash()).await.as_ref(), Some(value));
+    }
+
+    assert_eq!(
+        cache.keys::<BTreeSet<_>>().await,
+        BTreeSet::from_iter(expected_values_in_cache.map(HashedCertificateValue::hash))
+    );
+}
+
+/// Tests if reinsertion of a confirmed block certificate value promotes it but not its respective
+/// validated block certificate value.
+#[tokio::test]
+async fn test_promotion_of_reinsertion_of_confirmed_block() {
+    let cache = CertificateValueCache::default();
+    let dummy_values =
+        create_dummy_values(0..(DEFAULT_VALUE_CACHE_SIZE as u64)).collect::<Vec<_>>();
+    let validated_value = create_dummy_validated_block_value();
+    let confirmed_value = validated_value
+        .validated_to_confirmed()
+        .expect("Dummy validated value should be able to create a confirmed value");
+
+    assert!(cache.insert(Cow::Borrowed(&validated_value)).await);
+    cache
+        .insert_all(
+            dummy_values
+                .iter()
+                .take(DEFAULT_VALUE_CACHE_SIZE - 2)
+                .map(Cow::Borrowed),
+        )
+        .await;
+    assert!(!cache.insert(Cow::Borrowed(&confirmed_value)).await);
+    cache
+        .insert_all(
+            dummy_values
+                .iter()
+                .skip(DEFAULT_VALUE_CACHE_SIZE - 2)
+                .map(Cow::Borrowed),
+        )
+        .await;
+
+    for value in dummy_values.iter().take(1).chain([&validated_value]) {
+        assert!(!cache.contains(&value.hash()).await);
+        assert_eq!(cache.get(&value.hash()).await.as_ref(), None);
+    }
+
+    let expected_values_in_cache = dummy_values.iter().skip(1).chain([&confirmed_value]);
+
+    for value in expected_values_in_cache.clone() {
+        assert!(cache.contains(&value.hash()).await);
+        assert_eq!(cache.get(&value.hash()).await.as_ref(), Some(value));
+    }
+
+    assert_eq!(
+        cache.keys::<BTreeSet<_>>().await,
+        BTreeSet::from_iter(expected_values_in_cache.map(HashedCertificateValue::hash))
+    );
+}
+
+/// Test that a re-inserted validated block certificate value gets evicted before its respective
+/// confirmed block certificate value that was inserted with it.
+#[tokio::test]
+async fn test_eviction_of_reinserted_validated_before_respective_confirmed() {
+    let cache = CertificateValueCache::default();
+
+    let initial_values =
+        create_dummy_values(0..(DEFAULT_VALUE_CACHE_SIZE as u64 - 2)).collect::<Vec<_>>();
+
+    let final_values = create_dummy_values(
+        (0..(DEFAULT_VALUE_CACHE_SIZE - 1)).map(|index| (index + DEFAULT_VALUE_CACHE_SIZE) as u64),
+    )
+    .collect::<Vec<_>>();
+
+    let validated_value = create_dummy_validated_block_value();
+    let confirmed_value = validated_value
+        .validated_to_confirmed()
+        .expect("a validated value should be convertible to a confirmed value");
+
+    assert!(cache.insert(Cow::Borrowed(&validated_value)).await);
+    cache
+        .insert_all(initial_values.iter().map(Cow::Borrowed))
+        .await;
+    assert!(!cache.insert(Cow::Borrowed(&validated_value)).await);
+    cache
+        .insert_all(final_values.iter().map(Cow::Borrowed))
+        .await;
+
+    for value in initial_values.iter().chain([&validated_value]) {
+        assert!(!cache.contains(&value.hash()).await);
+        assert_eq!(cache.get(&value.hash()).await.as_ref(), None);
+    }
+
+    let expected_values_in_cache = final_values.iter().chain([&confirmed_value]);
+
+    for value in expected_values_in_cache.clone() {
+        assert!(cache.contains(&value.hash()).await);
+        assert_eq!(cache.get(&value.hash()).await.as_ref(), Some(value));
+    }
+
+    assert_eq!(
+        cache.keys::<BTreeSet<_>>().await,
+        BTreeSet::from_iter(expected_values_in_cache.map(HashedCertificateValue::hash))
+    );
+}
+
 /// Test that the cache correctly filters out cached items from an iterator.
 #[tokio::test]
 async fn test_filtering_out_cached_items() {
