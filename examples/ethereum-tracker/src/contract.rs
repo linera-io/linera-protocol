@@ -50,7 +50,7 @@ impl Contract for EthereumTrackerContract {
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         // The only input is updating the database
         match operation {
-            Self::Operation::Update(to_block) => self.update(to_block).await,
+            Self::Operation::Update { to_block } => self.update(to_block).await,
         }
     }
 

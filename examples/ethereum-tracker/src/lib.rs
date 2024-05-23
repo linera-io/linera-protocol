@@ -31,7 +31,7 @@ impl ServiceAbi for EthereumTrackerAbi {
 pub enum Operation {
     /// Update the database by querying an Ethereum node
     /// up to an exclusive block number
-    Update(u64),
+    Update { to_block: u64 },
 }
 
 /// The initialization data required to create an Ethereum tracker

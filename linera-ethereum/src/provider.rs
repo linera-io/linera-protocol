@@ -61,6 +61,7 @@ impl EthereumClientSimplified {
     }
 }
 
+#[derive(Clone)]
 pub struct EthereumClient<M> {
     pub provider: M,
 }
@@ -107,7 +108,7 @@ impl EthereumQueries for EthereumClient<HttpProvider> {
             .address(contract_address)
             .event(&event_name)
             .from_block(from_block)
-            .to_block(to_block-1);
+            .to_block(to_block - 1);
         let events = self.provider.get_logs(&filter).await?;
         events
             .into_iter()

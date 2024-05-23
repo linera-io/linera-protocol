@@ -75,8 +75,9 @@ impl EthereumTrackerApp {
         }
     }
 
-    async fn update(&self) {
-        self.0.mutate("update").await.unwrap();
+    async fn update(&self, to_block: u64) {
+        let mutation = format!("update(toBlock: {})", to_block);
+        self.0.mutate(mutation).await.unwrap();
     }
 }
 
@@ -361,25 +362,37 @@ async fn test_wallet_lock() -> Result<()> {
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_wasm_end_to_end_ethereum_tracker(_config: impl LineraNetConfig) -> Result<()> {
+async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> Result<()> {
     use alloy::primitives::U256;
     use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
-    use linera_ethereum::test_utils::{get_anvil, SimpleTokenContractFunction};
+    use linera_ethereum::{
+        client::EthereumQueries,
+        test_utils::{get_anvil, SimpleTokenContractFunction},
+    };
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
+    // Setting up the Ethereum smart contract
     let anvil_test = get_anvil().await?;
     let address0 = anvil_test.get_address(0);
     let address1 = anvil_test.get_address(1);
     let ethereum_endpoint = anvil_test.endpoint.clone();
+    let ethereum_client = anvil_test.ethereum_client.clone();
 
     let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
     let contract_address = simple_token.contract_address.clone();
+    let event_name_expanded = "Initial(address,uint256)";
+    let events = ethereum_client
+        .read_events(&contract_address, event_name_expanded, 0, 2)
+        .await?;
+    let start_block = events.get(0).unwrap().block_number;
     let argument = InstantiationArgument {
         ethereum_endpoint,
         contract_address,
+        start_block,
     };
 
-    let (_net, client) = _config.instantiate().await?;
+    // Setting up the validators
+    let (_net, client) = config.instantiate().await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     // Change the ownership so that the blocks inserted are not
@@ -426,8 +439,9 @@ async fn test_wasm_end_to_end_ethereum_tracker(_config: impl LineraNetConfig) ->
 
     let value = U256::from(10);
     simple_token.transfer(&address0, &address1, value).await?;
-
-    app.update().await;
+    let last_block = ethereum_client.get_block_number().await?;
+    // increment by 1 since the read_events is exclusive in the last block.
+    app.update(last_block + 1).await;
 
     // Now checking the balances after the operations.
 

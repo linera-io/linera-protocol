@@ -177,7 +177,7 @@ where
             .address(contract_address)
             .event(&event_name)
             .from_block(from_block)
-            .to_block(to_block-1);
+            .to_block(to_block - 1);
         let events = self
             .request::<_, Vec<Log>>("eth_getLogs", (filter,))
             .await?;
