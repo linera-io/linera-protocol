@@ -6,12 +6,10 @@ on:
   pull_request:
     branches:
       - "**"
-    paths-ignore:
-      - '**/*.md'
-      - 'configuration/**'
-      - 'kubernetes/**'
-      - 'examples/**'
-      - 'scripts/**'
+    paths:
+      - 'docker/Dockerfile'
+      - 'Cargo.toml'
+      - '.github/workflows/docker.yml'
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
