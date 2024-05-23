@@ -1389,6 +1389,88 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
+async fn test_publish_blob<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
+{
+    // Configure a chain with two regular and no super owners.
+    let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
+    let description = ChainDescription::Root(1);
+    let chain_id = ChainId::from(description);
+    let mut client_a = builder
+        .add_initial_chain(description, Amount::from_tokens(10))
+        .await?;
+    let pub_key0 = client_a.public_key().await.unwrap();
+    let key_pair1 = KeyPair::generate();
+    let pub_key1 = key_pair1.public();
+    let owner_change_op = SystemOperation::ChangeOwnership {
+        super_owners: Vec::new(),
+        owners: vec![(pub_key0, 100), (pub_key1, 100)],
+        multi_leader_rounds: 10,
+        timeout_config: TimeoutConfig {
+            fast_round_duration: Some(TimeDelta::from_secs(5)),
+            ..TimeoutConfig::default()
+        },
+    }
+    .into();
+    client_a.execute_operation(owner_change_op).await.unwrap();
+    let mut client_b = builder
+        .make_client(
+            chain_id,
+            key_pair1,
+            client_a.block_hash,
+            BlockHeight::from(1),
+        )
+        .await?;
+
+    // Take one validator down
+    builder.set_fault_type(..1, FaultType::Offline).await;
+    let blob = HashedBlob::test_blob("blob1");
+    let expected_blob_id = blob.id();
+    let (blob_id, certificate) = client_a.publish_blob(blob).await.unwrap().unwrap();
+    client_a.synchronize_from_validators().await.unwrap();
+    assert_eq!(expected_blob_id, blob_id);
+    assert_eq!(certificate.round, Round::MultiLeader(0));
+    let previous_block_hash = client_a.block_hash.unwrap();
+
+    // Validators goes back up
+    builder.set_fault_type(..1, FaultType::Honest).await;
+    // But another one goes down
+    builder.set_fault_type(1..2, FaultType::Offline).await;
+
+    let certificate = client_b
+        .burn(None, Amount::from_tokens(1), UserData::default())
+        .await
+        .unwrap()
+        .unwrap();
+    client_b.synchronize_from_validators().await.unwrap();
+    client_b.process_inbox().await.unwrap();
+    assert_eq!(
+        client_b.local_balance().await.unwrap(),
+        Amount::from_tokens(9)
+    );
+    // We're in a new height, so this will also be multileader round 0
+    assert_eq!(certificate.round, Round::MultiLeader(0));
+    // Check that this block is a child of the previous one
+    assert_eq!(
+        previous_block_hash,
+        certificate
+            .value()
+            .block()
+            .unwrap()
+            .previous_block_hash
+            .unwrap()
+    );
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
 async fn test_request_leader_timeout<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
@@ -1560,7 +1642,7 @@ where
         .await;
     assert!(result.is_err());
 
-    // Client 1 thinks it is madness to burn 3 tokens! They want to only burn 2.
+    // Client 1 thinks it is madness to burn 3 tokens! They want to publish a blob instead.
     // The validators are still faulty: They validate blocks but don't confirm them.
     builder.set_fault_type(2..3, FaultType::NoConfirm).await;
     client1.synchronize_from_validators().await.unwrap();
@@ -1571,10 +1653,10 @@ where
         .manager;
     assert!(manager.requested_proposed.is_some());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
-    let result = client1
-        .burn(None, Amount::from_tokens(2), UserData::default())
-        .await;
+    let result = client1.publish_blob(HashedBlob::test_blob("blob1")).await;
     assert!(result.is_err());
+    assert!(client1.pending_block.is_some());
+    assert!(!client1.pending_blobs.is_empty());
 
     // Finally, the validators are online and honest again.
     builder.set_fault_type(1..3, FaultType::Honest).await;
@@ -1588,9 +1670,10 @@ where
         manager.highest_validated().unwrap().round,
         Round::MultiLeader(1)
     );
+    assert!(client0.pending_block.is_some());
 
     // Client 0 now only tries to burn 1 token. Before that, they automatically finalize the
-    // pending block, which burns 2 tokens, leaving 10 - 2 - 1 = 7.
+    // pending block, which publishes the blob, leaving 10 - 1 = 9.
     client0
         .burn(None, Amount::from_tokens(1), UserData::default())
         .await
@@ -1599,8 +1682,23 @@ where
     client0.process_inbox().await.unwrap();
     assert_eq!(
         client0.local_balance().await.unwrap(),
-        Amount::from_tokens(7)
+        Amount::from_tokens(9)
     );
+    assert!(client0.pending_block.is_none());
+
+    // Burn another token so Client 1 sees that the blob is already published
+    client1
+        .burn(None, Amount::from_tokens(1), UserData::default())
+        .await
+        .unwrap();
+    client1.synchronize_from_validators().await.unwrap();
+    client1.process_inbox().await.unwrap();
+    assert_eq!(
+        client1.local_balance().await.unwrap(),
+        Amount::from_tokens(8)
+    );
+    assert!(client1.pending_block.is_none());
+    assert!(client1.pending_blobs.is_empty());
     Ok(())
 }
 
