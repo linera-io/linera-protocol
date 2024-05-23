@@ -9,6 +9,6 @@ use linera_sdk::views::{linera_views, MapView, RegisterView, RootView, ViewStora
 #[view(context = "ViewStorageContext")]
 pub struct EthereumTracker {
     pub argument: RegisterView<InstantiationArgument>,
-    pub last_block: RegisterView<u64>,
+    pub start_block: RegisterView<u64>,
     pub accounts: MapView<String, U256Cont>,
 }

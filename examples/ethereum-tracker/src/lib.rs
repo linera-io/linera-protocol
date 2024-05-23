@@ -30,7 +30,8 @@ impl ServiceAbi for EthereumTrackerAbi {
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum Operation {
     /// Update the database by querying an Ethereum node
-    Update,
+    /// up to an exclusive block number
+    Update(u64),
 }
 
 /// The initialization data required to create an Ethereum tracker

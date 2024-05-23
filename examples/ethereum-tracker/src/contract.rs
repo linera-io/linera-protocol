@@ -43,14 +43,14 @@ impl Contract for EthereumTrackerContract {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
         self.state.argument.set(argument);
-        self.state.last_block.set(0);
+        self.state.start_block.set(0);
         self.read_initial().await;
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         // The only input is updating the database
         match operation {
-            Self::Operation::Update => self.update().await,
+            Self::Operation::Update(to_block) => self.update(to_block).await,
         }
     }
 
@@ -76,7 +76,7 @@ impl EthereumTrackerContract {
         let event_name_expanded = "Initial(address,uint256)";
         let (ethereum_client, contract_address) = self.get_endpoints();
         let events = ethereum_client
-            .read_events(&contract_address, event_name_expanded, 0)
+            .read_events(&contract_address, event_name_expanded, 0, 1000)
             .await
             .expect("Read the Initial event");
         assert_eq!(events.len(), 1);
@@ -91,14 +91,15 @@ impl EthereumTrackerContract {
         self.state.accounts.insert(&address, value).unwrap();
     }
 
-    async fn update(&mut self) {
+    async fn update(&mut self, to_block: u64) {
         let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
         let (ethereum_client, contract_address) = self.get_endpoints();
-        let start_block = self.state.last_block.get_mut();
+        let start_block = self.state.start_block.get_mut();
         let events = ethereum_client
-            .read_events(&contract_address, event_name_expanded, *start_block)
+            .read_events(&contract_address, event_name_expanded, *start_block, to_block)
             .await
             .expect("Read a transfer event");
+        *start_block = to_block;
         for event in events {
             let EthereumDataType::Address(from) = event.values[0].clone() else {
                 panic!("wrong type for the first entry");
