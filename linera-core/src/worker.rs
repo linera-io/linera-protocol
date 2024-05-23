@@ -4,32 +4,28 @@
 
 use std::{
     borrow::Cow,
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{hash_map, BTreeMap, HashMap, VecDeque},
     sync::Arc,
     time::Duration,
 };
 
 use async_trait::async_trait;
-use futures::{future, FutureExt};
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
     data_types::{ArithmeticError, BlockHeight, HashedBlob, Round},
     doc_scalar, ensure,
     identifiers::{BlobId, ChainId, Owner},
 };
-use linera_chain::{
-    data_types::{
-        Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
-        LiteCertificate, Medium, MessageBundle, Origin, OutgoingMessage, Target,
-    },
-    ChainError, ChainStateView,
+use linera_chain::data_types::{
+    Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
+    LiteCertificate, MessageBundle, Origin, OutgoingMessage, Target,
 };
 use linera_execution::{
     committee::Epoch, BytecodeLocation, Query, Response, UserApplicationDescription,
     UserApplicationId,
 };
 use linera_storage::Storage;
-use linera_views::{log_view::LogView, views::ViewError};
+use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{oneshot, Mutex};
@@ -37,7 +33,7 @@ use tracing::{error, instrument, trace, warn};
 #[cfg(with_testing)]
 use {
     linera_base::identifiers::{BytecodeId, Destination, MessageId},
-    linera_chain::data_types::{ChannelFullName, IncomingMessage, MessageAction},
+    linera_chain::data_types::{ChannelFullName, IncomingMessage, Medium, MessageAction},
 };
 #[cfg(with_metrics)]
 use {
@@ -506,91 +502,6 @@ where
             .await
     }
 
-    /// Creates an `UpdateRecipient` request that informs the `recipient` about new
-    /// cross-chain messages from `sender`.
-    async fn create_cross_chain_request(
-        &self,
-        confirmed_log: &LogView<StorageClient::Context, CryptoHash>,
-        height_map: Vec<(Medium, Vec<BlockHeight>)>,
-        sender: ChainId,
-        recipient: ChainId,
-    ) -> Result<CrossChainRequest, WorkerError> {
-        // Load all the certificates we will need, regardless of the medium.
-        let heights =
-            BTreeSet::from_iter(height_map.iter().flat_map(|(_, heights)| heights).copied());
-        let heights_usize = heights
-            .iter()
-            .copied()
-            .map(usize::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-        let hashes = confirmed_log
-            .multi_get(heights_usize.clone())
-            .await?
-            .into_iter()
-            .zip(heights_usize)
-            .map(|(maybe_hash, height)| {
-                maybe_hash.ok_or_else(|| ViewError::not_found("confirmed log entry", height))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let certificates = self.storage.read_certificates(hashes).await?;
-        let certificates = heights
-            .into_iter()
-            .zip(certificates)
-            .collect::<HashMap<_, _>>();
-        // For each medium, select the relevant messages.
-        let bundle_vecs = height_map
-            .into_iter()
-            .map(|(medium, heights)| {
-                let bundles = heights
-                    .into_iter()
-                    .map(|height| {
-                        certificates
-                            .get(&height)?
-                            .message_bundle_for(&medium, recipient)
-                    })
-                    .collect::<Option<_>>()?;
-                Some((medium, bundles))
-            })
-            .collect::<Option<_>>()
-            .ok_or_else(|| ChainError::InternalError("missing certificates".to_string()))?;
-        Ok(CrossChainRequest::UpdateRecipient {
-            sender,
-            recipient,
-            bundle_vecs,
-        })
-    }
-
-    /// Loads pending cross-chain requests.
-    async fn create_network_actions(
-        &self,
-        chain: &ChainStateView<StorageClient::Context>,
-    ) -> Result<NetworkActions, WorkerError> {
-        let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
-        let targets = chain.outboxes.indices().await?;
-        let outboxes = chain.outboxes.try_load_entries(&targets).await?;
-        for (target, outbox) in targets.into_iter().zip(outboxes) {
-            let heights = outbox.queue.elements().await?;
-            heights_by_recipient
-                .entry(target.recipient)
-                .or_default()
-                .insert(target.medium, heights);
-        }
-        let mut actions = NetworkActions::default();
-        let chain_id = chain.chain_id();
-        for (recipient, height_map) in heights_by_recipient {
-            let request = self
-                .create_cross_chain_request(
-                    &chain.confirmed_log,
-                    height_map.into_iter().collect(),
-                    chain_id,
-                    recipient,
-                )
-                .await?;
-            actions.cross_chain_requests.push(request);
-        }
-        Ok(actions)
-    }
-
     /// Processes a confirmed block (aka a commit).
     async fn process_confirmed_block(
         &mut self,
@@ -623,128 +534,6 @@ where
         NUM_BLOCKS.with_label_values(&[]).inc();
 
         Ok((response, actions))
-    }
-
-    /// Returns an error if the block requires bytecode or a blob we don't have, or if unrelated bytecode
-    /// hashed certificate values or blobs were provided.
-    async fn check_no_missing_blobs(
-        &self,
-        block: &Block,
-        hashed_certificate_values: &[HashedCertificateValue],
-        hashed_blobs: &[HashedBlob],
-        pending_blobs: &BTreeMap<BlobId, HashedBlob>,
-    ) -> Result<(), WorkerError> {
-        let missing_bytecodes = self
-            .get_missing_bytecodes(block, hashed_certificate_values)
-            .await?;
-        let missing_blobs = self
-            .get_missing_blobs(block, hashed_blobs, pending_blobs)
-            .await?;
-
-        if missing_bytecodes.is_empty() {
-            if missing_blobs.is_empty() {
-                Ok(())
-            } else {
-                Err(WorkerError::BlobsNotFound(missing_blobs))
-            }
-        } else if missing_blobs.is_empty() {
-            Err(WorkerError::ApplicationBytecodesNotFound(missing_bytecodes))
-        } else {
-            Err(WorkerError::ApplicationBytecodesAndBlobsNotFound(
-                missing_bytecodes,
-                missing_blobs,
-            ))
-        }
-    }
-
-    /// Returns the blobs required by the block that we don't have, or an error if unrelated blobs were provided.
-    async fn get_missing_blobs(
-        &self,
-        block: &Block,
-        hashed_blobs: &[HashedBlob],
-        pending_blobs: &BTreeMap<BlobId, HashedBlob>,
-    ) -> Result<Vec<BlobId>, WorkerError> {
-        let mut required_blob_ids = block.blob_ids();
-        // Find all certificates containing blobs used when executing this block.
-        for hashed_blob in hashed_blobs {
-            let blob_id = hashed_blob.id();
-            ensure!(
-                required_blob_ids.remove(&blob_id),
-                WorkerError::UnneededBlob { blob_id }
-            );
-        }
-
-        Ok(self
-            .recent_hashed_blobs
-            .subtract_cached_items_from::<_, Vec<_>>(required_blob_ids, |id| id)
-            .await
-            .into_iter()
-            .filter(|blob_id| !pending_blobs.contains_key(blob_id))
-            .collect::<Vec<_>>())
-    }
-
-    async fn get_blobs(
-        &self,
-        blob_ids: HashSet<BlobId>,
-        pending_blobs: &BTreeMap<BlobId, HashedBlob>,
-    ) -> Result<Vec<HashedBlob>, WorkerError> {
-        let (found_blobs, not_found_blobs): (HashMap<BlobId, HashedBlob>, HashSet<BlobId>) =
-            self.recent_hashed_blobs.try_get_many(blob_ids).await;
-
-        let mut blobs = found_blobs.into_values().collect::<Vec<_>>();
-        for blob_id in not_found_blobs {
-            if let Some(blob) = pending_blobs.get(&blob_id) {
-                blobs.push(blob.clone());
-            }
-        }
-
-        Ok(blobs)
-    }
-
-    /// Returns an error if the block requires bytecode we don't have, or if unrelated bytecode
-    /// hashed certificate values were provided.
-    async fn get_missing_bytecodes(
-        &self,
-        block: &Block,
-        hashed_certificate_values: &[HashedCertificateValue],
-    ) -> Result<Vec<BytecodeLocation>, WorkerError> {
-        // Find all certificates containing bytecode used when executing this block.
-        let mut required_locations_left: HashMap<_, _> = block
-            .bytecode_locations()
-            .into_keys()
-            .map(|bytecode_location| (bytecode_location.certificate_hash, bytecode_location))
-            .collect();
-        for value in hashed_certificate_values {
-            let value_hash = value.hash();
-            ensure!(
-                required_locations_left.remove(&value_hash).is_some(),
-                WorkerError::UnneededValue { value_hash }
-            );
-        }
-        let tasks = self
-            .recent_hashed_certificate_values
-            .subtract_cached_items_from::<_, Vec<_>>(
-                required_locations_left.into_values(),
-                |location| &location.certificate_hash,
-            )
-            .await
-            .into_iter()
-            .map(|location| {
-                self.storage
-                    .contains_hashed_certificate_value(location.certificate_hash)
-                    .map(move |result| (location, result))
-            })
-            .collect::<Vec<_>>();
-        let mut missing_locations = vec![];
-        for (location, result) in future::join_all(tasks).await {
-            match result {
-                Ok(true) => {}
-                Ok(false) => missing_locations.push(location),
-                Err(err) => Err(err)?,
-            }
-        }
-
-        Ok(missing_locations.into_iter().collect())
     }
 
     /// Processes a validated block issued from a multi-owner chain.
@@ -869,19 +658,6 @@ where
             event,
             action: MessageAction::Accept,
         }))
-    }
-
-    /// Returns an error if the block is not at the expected epoch.
-    fn check_block_epoch(chain_epoch: Epoch, block: &Block) -> Result<(), WorkerError> {
-        ensure!(
-            block.epoch == chain_epoch,
-            WorkerError::InvalidEpoch {
-                chain_id: block.chain_id,
-                epoch: block.epoch,
-                chain_epoch
-            }
-        );
-        Ok(())
     }
 
     /// Creates a [`ChainWorkerState`] instance for a specific chain.
