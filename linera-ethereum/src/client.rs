@@ -106,6 +106,9 @@ pub trait EthereumQueries {
     /// This is done from a specified `contract_address` and `event_name_expanded`.
     /// That is one should have "MyEvent(type1 indexed,type2)" instead
     /// of the usual "MyEvent(type1,type2)"
+    ///
+    /// The `from_block` is inclusive.
+    /// The `to_block` is exclusive (contrary to Ethereum where it is inclusive)
     async fn read_events(
         &self,
         contract_address: &str,
@@ -174,7 +177,7 @@ where
             .address(contract_address)
             .event(&event_name)
             .from_block(from_block)
-            .to_block(to_block);
+            .to_block(to_block-1);
         let events = self
             .request::<_, Vec<Log>>("eth_getLogs", (filter,))
             .await?;

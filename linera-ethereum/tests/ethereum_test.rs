@@ -58,7 +58,7 @@ async fn test_event_numerics() -> anyhow::Result<()> {
     // Test the conversion of the types
     let event_name_expanded = "Types(address indexed,address,uint256,uint64,int64,uint32,int32,uint16,int16,uint8,int8,bool)";
     let from_block = 0;
-    let to_block = 1;
+    let to_block = 2;
     let events = event_numerics
         .anvil_test
         .ethereum_client
@@ -109,7 +109,7 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
     let value = U256::from(10);
     simple_token.transfer(&addr0, &addr1, value).await?;
     let from_block = 0;
-    let to_block = 2;
+    let to_block = 3;
 
     // Test the Transfer entries
     let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
