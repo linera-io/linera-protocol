@@ -6,10 +6,9 @@
 mod state;
 
 use ethereum_tracker::{EndpointAndAddress, EthereumTrackerAbi, InstantiationArgument, U256Cont};
-use linera_ethereum::client::EthereumQueries as _;
 use linera_sdk::{
     base::WithContractAbi,
-    ethereum::{EthereumClient, EthereumDataType},
+    ethereum::{EthereumClient, EthereumDataType, EthereumQueries as _},
     views::{RootView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
