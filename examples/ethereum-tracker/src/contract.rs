@@ -64,19 +64,25 @@ impl Contract for EthereumTrackerContract {
 }
 
 impl EthereumTrackerContract {
-    fn get_endpoints(&self) -> (EthereumClient, String) {
+    fn get_endpoints(&self) -> (EthereumClient, String, u64) {
         let argument = self.state.argument.get();
         let url = argument.ethereum_endpoint.clone();
         let contract_address = argument.contract_address.clone();
+        let start_block = argument.start_block;
         let ethereum_client = EthereumClient { url };
-        (ethereum_client, contract_address)
+        (ethereum_client, contract_address, start_block)
     }
 
     async fn read_initial(&mut self) {
         let event_name_expanded = "Initial(address,uint256)";
-        let (ethereum_client, contract_address) = self.get_endpoints();
+        let (ethereum_client, contract_address, start_block) = self.get_endpoints();
         let events = ethereum_client
-            .read_events(&contract_address, event_name_expanded, 0, 1000)
+            .read_events(
+                &contract_address,
+                event_name_expanded,
+                start_block,
+                start_block + 1,
+            )
             .await
             .expect("Read the Initial event");
         assert_eq!(events.len(), 1);
@@ -93,10 +99,15 @@ impl EthereumTrackerContract {
 
     async fn update(&mut self, to_block: u64) {
         let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
-        let (ethereum_client, contract_address) = self.get_endpoints();
+        let (ethereum_client, contract_address, _) = self.get_endpoints();
         let start_block = self.state.start_block.get_mut();
         let events = ethereum_client
-            .read_events(&contract_address, event_name_expanded, *start_block, to_block)
+            .read_events(
+                &contract_address,
+                event_name_expanded,
+                *start_block,
+                to_block,
+            )
             .await
             .expect("Read a transfer event");
         *start_block = to_block;
