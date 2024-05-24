@@ -1061,6 +1061,7 @@ where
         ChainWorkerState::load(
             self.chain_worker_config.clone(),
             self.storage.clone(),
+            self.recent_hashed_certificate_values.clone(),
             chain_id,
         )
         .await
