@@ -25,14 +25,13 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use lru::LruCache;
 use thiserror::Error;
-use tokio::sync::Mutex;
 use tracing::{error, warn};
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, LocalValidatorNode, NodeError},
+    value_cache::ValueCache,
 };
 
 cfg_if::cfg_if! {
@@ -71,7 +70,7 @@ pub struct ValidatorUpdater<A, S> {
     pub name: ValidatorName,
     pub node: A,
     pub storage: S,
-    pub local_node_recent_hashed_blobs: Arc<Mutex<LruCache<BlobId, HashedBlob>>>,
+    pub local_node_recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
     pub local_node_chain_managers_pending_blobs: BTreeMap<BlobId, HashedBlob>,
 }
 
@@ -276,24 +275,24 @@ where
             return Err(NodeError::InvalidChainInfoResponse);
         }
 
-        let mut missing_blobs = Vec::new();
-        for blob_id in blob_ids {
+        let (found_blobs, not_found_blobs): (HashMap<BlobId, HashedBlob>, Vec<BlobId>) = self
+            .local_node_recent_hashed_blobs
+            .try_get_many(blob_ids.clone())
+            .await;
+        let mut missing_blobs = found_blobs.clone().into_values().collect::<Vec<_>>();
+
+        unique_blob_ids_to_find = unique_blob_ids_to_find
+            .difference(&found_blobs.into_keys().collect::<HashSet<_>>())
+            .copied()
+            .collect::<HashSet<BlobId>>();
+        for blob_id in not_found_blobs {
             if let Some(blob) = self
-                .local_node_recent_hashed_blobs
-                .lock()
-                .await
-                .get(blob_id)
-                .cloned()
-            {
-                missing_blobs.push(blob);
-                unique_blob_ids_to_find.remove(blob_id);
-            } else if let Some(blob) = self
                 .local_node_chain_managers_pending_blobs
-                .get(blob_id)
+                .get(&blob_id)
                 .cloned()
             {
                 missing_blobs.push(blob);
-                unique_blob_ids_to_find.remove(blob_id);
+                unique_blob_ids_to_find.remove(&blob_id);
             }
         }
 

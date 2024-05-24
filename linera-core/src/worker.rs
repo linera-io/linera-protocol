@@ -5,7 +5,6 @@
 use std::{
     borrow::Cow,
     collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
-    num::NonZeroUsize,
     sync::Arc,
     time::Duration,
 };
@@ -36,7 +35,6 @@ use linera_views::{
     log_view::LogView,
     views::{RootView, View, ViewError},
 };
-use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{oneshot, Mutex};
@@ -55,7 +53,7 @@ use {
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    value_cache::{CertificateValueCache, DEFAULT_VALUE_CACHE_SIZE},
+    value_cache::ValueCache,
 };
 
 #[cfg(test)]
@@ -288,9 +286,9 @@ pub struct WorkerState<StorageClient> {
     /// will wait until that timestamp before voting.
     grace_period: Duration,
     /// Cached hashed certificate values by hash.
-    recent_hashed_certificate_values: Arc<CertificateValueCache>,
+    recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
     /// Cached hashed blobs by `BlobId`.
-    recent_hashed_blobs: Arc<Mutex<LruCache<BlobId, HashedBlob>>>,
+    recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
@@ -301,9 +299,6 @@ pub(crate) type DeliveryNotifiers =
 
 impl<StorageClient> WorkerState<StorageClient> {
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
-        let recent_hashed_blobs = Arc::new(Mutex::new(LruCache::new(
-            NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
-        )));
         WorkerState {
             nickname,
             key_pair: key_pair.map(Arc::new),
@@ -311,8 +306,8 @@ impl<StorageClient> WorkerState<StorageClient> {
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
             grace_period: Duration::ZERO,
-            recent_hashed_certificate_values: Arc::new(CertificateValueCache::default()),
-            recent_hashed_blobs,
+            recent_hashed_certificate_values: Arc::new(ValueCache::default()),
+            recent_hashed_blobs: Arc::new(ValueCache::default()),
             delivery_notifiers: Arc::default(),
         }
     }
@@ -320,8 +315,8 @@ impl<StorageClient> WorkerState<StorageClient> {
     pub fn new_for_client(
         nickname: String,
         storage: StorageClient,
-        recent_hashed_certificate_values: Arc<CertificateValueCache>,
-        recent_hashed_blobs: Arc<Mutex<LruCache<BlobId, HashedBlob>>>,
+        recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
+        recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
         delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     ) -> Self {
         WorkerState {
@@ -360,7 +355,7 @@ impl<StorageClient> WorkerState<StorageClient> {
         &self.nickname
     }
 
-    pub fn recent_hashed_blobs(&self) -> Arc<Mutex<LruCache<BlobId, HashedBlob>>> {
+    pub fn recent_hashed_blobs(&self) -> Arc<ValueCache<BlobId, HashedBlob>> {
         self.recent_hashed_blobs.clone()
     }
 
@@ -400,7 +395,7 @@ impl<StorageClient> WorkerState<StorageClient> {
     }
 
     pub(crate) async fn recent_blob(&mut self, blob_id: &BlobId) -> Option<HashedBlob> {
-        self.recent_hashed_blobs.lock().await.get(blob_id).cloned()
+        self.recent_hashed_blobs.get(blob_id).await
     }
 }
 
@@ -819,12 +814,12 @@ where
             );
         }
 
-        let recent_blobs = self.recent_hashed_blobs.lock().await;
-        Ok(required_blob_ids
+        Ok(self
+            .recent_hashed_blobs
+            .subtract_cached_items_from::<_, Vec<_>>(required_blob_ids, |id| id)
+            .await
             .into_iter()
-            .filter(|blob_id| {
-                !recent_blobs.contains(blob_id) && !pending_blobs.contains_key(blob_id)
-            })
+            .filter(|blob_id| !pending_blobs.contains_key(blob_id))
             .collect::<Vec<_>>())
     }
 
@@ -833,12 +828,12 @@ where
         blob_ids: HashSet<BlobId>,
         pending_blobs: &BTreeMap<BlobId, HashedBlob>,
     ) -> Result<Vec<HashedBlob>, WorkerError> {
-        let mut blobs = Vec::new();
-        let mut recent_blobs = self.recent_hashed_blobs.lock().await;
-        for blob_id in blob_ids {
-            if let Some(blob) = recent_blobs.get(&blob_id) {
-                blobs.push(blob.clone());
-            } else if let Some(blob) = pending_blobs.get(&blob_id) {
+        let (found_blobs, not_found_blobs): (HashMap<BlobId, HashedBlob>, HashSet<BlobId>) =
+            self.recent_hashed_blobs.try_get_many(blob_ids).await;
+
+        let mut blobs = found_blobs.into_values().collect::<Vec<_>>();
+        for blob_id in not_found_blobs {
+            if let Some(blob) = pending_blobs.get(&blob_id) {
                 blobs.push(blob.clone());
             }
         }
@@ -1057,14 +1052,9 @@ where
         self.recent_hashed_certificate_values.insert(value).await
     }
 
+    /// Inserts a [`HashedBlob`] into the worker's cache.
     pub async fn cache_recent_blob<'a>(&mut self, hashed_blob: Cow<'a, HashedBlob>) -> bool {
-        let mut recent_blobs = self.recent_hashed_blobs.lock().await;
-        if recent_blobs.contains(&hashed_blob.id()) {
-            return false;
-        }
-        // Cache the blob so that clients don't have to send it again.
-        recent_blobs.push(hashed_blob.id(), hashed_blob.into_owned());
-        true
+        self.recent_hashed_blobs.insert(hashed_blob).await
     }
 
     /// Returns a stored [`Certificate`] for a chain's block.

@@ -785,6 +785,15 @@ impl HashedBlob {
     pub fn id(&self) -> BlobId {
         self.id
     }
+
+    /// Creates a [`HashedBlob`] from a string for testing purposes.
+    #[cfg(with_testing)]
+    pub fn test_blob(content: &str) -> Self {
+        let blob = Blob {
+            bytes: content.as_bytes().to_vec(),
+        };
+        blob.into_hashed()
+    }
 }
 
 impl Serialize for HashedBlob {

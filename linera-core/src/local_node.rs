@@ -18,7 +18,6 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use lru::LruCache;
 use rand::prelude::SliceRandom;
 use thiserror::Error;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -27,6 +26,7 @@ use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{LocalValidatorNode, NotificationStream},
     notifier::Notifier,
+    value_cache::ValueCache,
     worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
 };
 
@@ -349,9 +349,7 @@ where
         node.state.recent_blob(blob_id).await
     }
 
-    pub async fn recent_hashed_blobs(
-        &self,
-    ) -> Arc<tokio::sync::Mutex<LruCache<BlobId, HashedBlob>>> {
+    pub async fn recent_hashed_blobs(&self) -> Arc<ValueCache<BlobId, HashedBlob>> {
         let node = self.node.lock().await;
         node.state.recent_hashed_blobs()
     }
