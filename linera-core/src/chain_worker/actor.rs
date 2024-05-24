@@ -98,6 +98,14 @@ pub enum ChainWorkerRequest {
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions, bool), WorkerError>>,
     },
 
+    /// Process a confirmed block (a commit).
+    ProcessConfirmedBlock {
+        certificate: Certificate,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
+        callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
+    },
+
     /// Process a cross-chain update.
     ProcessCrossChainUpdate {
         origin: Origin,
@@ -221,6 +229,22 @@ where
                     callback,
                 } => {
                     let _ = callback.send(self.worker.process_validated_block(certificate).await);
+                }
+                ChainWorkerRequest::ProcessConfirmedBlock {
+                    certificate,
+                    hashed_certificate_values,
+                    hashed_blobs,
+                    callback,
+                } => {
+                    let _ = callback.send(
+                        self.worker
+                            .process_confirmed_block(
+                                certificate,
+                                &hashed_certificate_values,
+                                &hashed_blobs,
+                            )
+                            .await,
+                    );
                 }
                 ChainWorkerRequest::ProcessCrossChainUpdate {
                     origin,
