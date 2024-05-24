@@ -536,9 +536,14 @@ where
         let height = executed_block.block.height;
 
         let (response, actions) = self
-            .create_chain_worker(chain_id)
-            .await?
-            .process_confirmed_block(certificate, hashed_certificate_values, hashed_blobs)
+            .query_chain_worker(chain_id, move |callback| {
+                ChainWorkerRequest::ProcessConfirmedBlock {
+                    certificate,
+                    hashed_certificate_values: hashed_certificate_values.to_owned(),
+                    hashed_blobs: hashed_blobs.to_owned(),
+                    callback,
+                }
+            })
             .await?;
 
         self.register_delivery_notifier(
