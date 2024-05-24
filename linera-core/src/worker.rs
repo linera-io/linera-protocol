@@ -52,6 +52,7 @@ use {
 };
 
 use crate::{
+    chain_worker::ChainWorkerState,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
 };
@@ -1158,6 +1159,14 @@ where
             }
         );
         Ok(())
+    }
+
+    /// Creates a [`ChainWorkerState`] instance for a specific chain.
+    async fn create_chain_worker(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainWorkerState<StorageClient>, WorkerError> {
+        ChainWorkerState::load(self.storage.clone(), chain_id).await
     }
 }
 
