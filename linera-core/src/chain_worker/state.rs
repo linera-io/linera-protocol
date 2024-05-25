@@ -799,7 +799,7 @@ where
             .await
             .into_iter()
             .filter(|blob_id| !pending_blobs.contains_key(blob_id))
-            .collect::<Vec<_>>())
+            .collect())
     }
 
     /// Returns the blobs requested by their `blob_ids` that are either in pending in the
