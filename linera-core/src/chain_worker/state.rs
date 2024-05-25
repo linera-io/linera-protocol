@@ -862,7 +862,7 @@ where
             }
         }
 
-        Ok(missing_locations.into_iter().collect())
+        Ok(missing_locations)
     }
 
     /// Inserts a [`HashedBlob`] into the worker's cache.
