@@ -10,9 +10,9 @@ use std::{
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{ArithmeticError, BlockHeight},
+    data_types::{ArithmeticError, BlockHeight, HashedBlob},
     ensure,
-    identifiers::ChainId,
+    identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
     data_types::{
@@ -54,6 +54,7 @@ where
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
+    recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
     knows_chain_is_active: bool,
 }
 
@@ -67,6 +68,7 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
+        blob_cache: Arc<ValueCache<BlobId, HashedBlob>>,
         chain_id: ChainId,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
@@ -76,6 +78,7 @@ where
             storage,
             chain,
             recent_hashed_certificate_values: certificate_value_cache,
+            recent_hashed_blobs: blob_cache,
             knows_chain_is_active: false,
         })
     }

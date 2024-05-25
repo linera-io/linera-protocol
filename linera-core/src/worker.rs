@@ -1062,6 +1062,7 @@ where
             self.chain_worker_config.clone(),
             self.storage.clone(),
             self.recent_hashed_certificate_values.clone(),
+            self.recent_hashed_blobs.clone(),
             chain_id,
         )
         .await
