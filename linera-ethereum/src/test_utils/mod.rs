@@ -116,7 +116,7 @@ impl SimpleTokenContractFunction {
     }
 
     // Only the balanceOf operation is of interest for this contract
-    pub async fn balance_of(&self, to: &str) -> anyhow::Result<U256> {
+    pub async fn balance_of(&self, to: &str, block: u64) -> anyhow::Result<U256> {
         // Getting the simple_token
         let contract_address = self.contract_address.parse::<Address>()?;
         let simple_token =
@@ -128,12 +128,12 @@ impl SimpleTokenContractFunction {
         let answer = self
             .anvil_test
             .ethereum_client
-            .non_executive_call(&self.contract_address, data.clone(), to)
+            .non_executive_call(&self.contract_address, data.clone(), to, block)
             .await?;
         // Using the Ethereum client simplified.
         let ethereum_client_simp = EthereumClientSimplified::new(self.anvil_test.endpoint.clone());
         let answer_simp = ethereum_client_simp
-            .non_executive_call(&self.contract_address, data, to)
+            .non_executive_call(&self.contract_address, data, to, block)
             .await?;
         assert_eq!(answer_simp, answer);
         // Converting the output

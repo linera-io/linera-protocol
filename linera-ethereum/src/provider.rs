@@ -121,6 +121,7 @@ impl EthereumQueries for EthereumClient<HttpProvider> {
         contract_address: &str,
         data: Bytes,
         from: &str,
+        block: u64,
     ) -> Result<Bytes, EthereumServiceError> {
         let contract_address = contract_address.parse::<Address>()?;
         let from = from.parse::<Address>()?;
@@ -129,7 +130,10 @@ impl EthereumQueries for EthereumClient<HttpProvider> {
             .from(from)
             .to(contract_address)
             .input(input);
-        Ok(self.provider.call(&tx).await?)
+        let block_id = get_block_id(Some(block));
+        let eth_call = self.provider.call(&tx)
+            .block(block_id);
+        Ok(eth_call.await?)
     }
 }
 
