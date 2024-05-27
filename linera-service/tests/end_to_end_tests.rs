@@ -689,6 +689,10 @@ async fn test_wasm_end_to_end_fungible(
             .make_application(&chain1, &application_id)
             .await?,
     );
+
+    // Needed synchronization though removing it does not get error in 100% of cases.
+    node_service1.process_inbox(&chain1).await?;
+
     let expected_balances = [
         (account_owner1, Amount::from_tokens(5)),
         (account_owner2, Amount::from_tokens(2)),
@@ -848,6 +852,10 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
             .make_application(&chain1, &application_id)
             .await?,
     );
+
+    // Needed synchronization though removing it does not get error in 100% of cases.
+    node_service.process_inbox(&chain1).await?;
+
     let expected_balances = [
         (account_owner1, Amount::from_tokens(5)),
         (account_owner2, Amount::from_tokens(2)),
