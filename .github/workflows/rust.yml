@@ -42,7 +42,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - uses: foundry-rs/foundry-toolchain@v1
+    - uses: foundry-rs/foundry-toolchain@v1.2.0
     - uses: pontem-network/get-solc@master
       with:
         version: v0.8.25
@@ -63,6 +63,10 @@ jobs:
       with:
         version: 'latest'
 
+    - name: Run Ethereum tests
+      run: |
+        cargo test -p linera-ethereum --features ethereum
+        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum
     - name: Build example applications
       run: |
         cd examples
