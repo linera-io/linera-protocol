@@ -201,7 +201,7 @@ where
             } => (*chain_id, *height, *epoch),
             _ => panic!("Expecting a leader timeout certificate"),
         };
-        // Check that the chain is active and ready for this confirmation.
+        // Check that the chain is active and ready for this timeout.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         self.ensure_is_active()?;
         let (chain_epoch, committee) = self
@@ -363,7 +363,7 @@ where
             _ => panic!("Expecting a validation certificate"),
         };
         let height = block.height;
-        // Check that the chain is active and ready for this confirmation.
+        // Check that the chain is active and ready for this validated block.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         self.ensure_is_active()?;
         let (epoch, committee) = self
