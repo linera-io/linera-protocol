@@ -3,6 +3,9 @@
 
 //! Generator of WIT files representing the interface between Linera applications and nodes.
 
+#![cfg_attr(target_arch = "wasm32", no_main)]
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{
     fs::File,
     io::{BufReader, BufWriter, Read, Write},
