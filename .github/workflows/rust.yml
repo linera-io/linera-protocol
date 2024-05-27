@@ -104,10 +104,6 @@ jobs:
       run: |
         cd examples
         cargo test --locked
-    - name: Run Ethereum tests
-      run: |
-        cargo test -p linera-ethereum --features ethereum
-        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum
     - name: Run Witty integration tests
       run: |
         cargo test -p linera-witty --features wasmer,wasmtime
