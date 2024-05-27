@@ -229,11 +229,9 @@ pub enum WorkerError {
     "
     )]
     IncorrectMessages {
-        computed: Vec<OutgoingMessage>,
-        submitted: Vec<OutgoingMessage>,
+        computed: Vec<Vec<OutgoingMessage>>,
+        submitted: Vec<Vec<OutgoingMessage>>,
     },
-    #[error("The given message counts are not what we computed after executing the block")]
-    IncorrectMessageCounts,
     #[error("The timestamp of a Tick operation is in the future.")]
     InvalidTimestamp,
     #[error("We don't have the value for the certificate.")]
@@ -619,14 +617,13 @@ where
         message_id: MessageId,
     ) -> Result<Option<IncomingMessage>, WorkerError> {
         let sender = message_id.chain_id;
-        let index = usize::try_from(message_id.index).map_err(|_| ArithmeticError::Overflow)?;
         let Some(certificate) = self.read_certificate(sender, message_id.height).await? else {
             return Ok(None);
         };
-        let Some(messages) = certificate.value().messages() else {
+        let Some(executed_block) = certificate.value().executed_block() else {
             return Ok(None);
         };
-        let Some(outgoing_message) = messages.get(index).cloned() else {
+        let Some(outgoing_message) = executed_block.message_by_id(&message_id).cloned() else {
             return Ok(None);
         };
 

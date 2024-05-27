@@ -438,7 +438,6 @@ where
         let block = &executed_block.block;
         let BlockExecutionOutcome {
             messages,
-            message_counts,
             state_hash,
             oracle_records,
         } = &executed_block.outcome;
@@ -523,10 +522,6 @@ where
                 computed: verified_outcome.messages,
                 submitted: messages.clone(),
             }
-        );
-        ensure!(
-            *message_counts == verified_outcome.message_counts,
-            WorkerError::IncorrectMessageCounts
         );
         ensure!(
             *state_hash == verified_outcome.state_hash,

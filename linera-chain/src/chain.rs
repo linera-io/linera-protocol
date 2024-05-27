@@ -736,7 +736,6 @@ where
             account: block.authenticated_signer,
         };
         let mut messages = Vec::new();
-        let mut message_counts = Vec::new();
 
         if self.is_closed() {
             ensure!(
@@ -907,7 +906,7 @@ where
                     }
                 }
             };
-            let mut messages_out = self
+            let messages_out = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
             if let MessageAction::Accept = message.action {
@@ -919,9 +918,7 @@ where
                         .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
                 }
             }
-            messages.append(&mut messages_out);
-            message_counts
-                .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
+            messages.push(messages_out);
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
@@ -958,7 +955,7 @@ where
                 .await
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             new_oracle_records.push(oracle_record);
-            let mut messages_out = self
+            let messages_out = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
             resource_controller
@@ -973,9 +970,7 @@ where
                     .track_message(&message_out.message)
                     .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             }
-            messages.append(&mut messages_out);
-            message_counts
-                .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
+            messages.push(messages_out);
         }
 
         // Finally, charge for the block fee, except if the chain is closed. Closed chains should
@@ -1023,12 +1018,11 @@ where
         }
 
         assert_eq!(
-            message_counts.len(),
+            messages.len(),
             block.incoming_messages.len() + block.operations.len()
         );
         Ok(BlockExecutionOutcome {
             messages,
-            message_counts,
             state_hash,
             oracle_records: new_oracle_records,
         })

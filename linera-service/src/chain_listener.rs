@@ -186,6 +186,7 @@ where
             let new_chains = executed_block
                 .messages()
                 .iter()
+                .flatten()
                 .filter_map(|outgoing_message| {
                     if let OutgoingMessage {
                         destination: Destination::Recipient(new_id),

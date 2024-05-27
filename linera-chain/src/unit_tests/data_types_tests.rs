@@ -16,8 +16,7 @@ fn test_signed_values() {
     let block =
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(2), Amount::ONE);
     let executed_block = BlockExecutionOutcome {
-        messages: Vec::new(),
-        message_counts: vec![1],
+        messages: vec![Vec::new()],
         state_hash: CryptoHash::test_hash("state"),
         oracle_records: vec![OracleRecord::default()],
     }
@@ -45,8 +44,7 @@ fn test_certificates() {
     let block =
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(1), Amount::ONE);
     let executed_block = BlockExecutionOutcome {
-        messages: Vec::new(),
-        message_counts: vec![1],
+        messages: vec![Vec::new()],
         state_hash: CryptoHash::test_hash("state"),
         oracle_records: vec![OracleRecord::default()],
     }

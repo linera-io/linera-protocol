@@ -413,7 +413,7 @@ impl ActiveChain {
                 .value()
                 .messages()
                 .expect("Unexpected certificate value");
-            let message_index = messages.iter().position(|message| {
+            let message_index = messages.iter().flatten().position(|message| {
                 matches!(
                     &message.message,
                     Message::System(SystemMessage::BytecodeLocations { locations })

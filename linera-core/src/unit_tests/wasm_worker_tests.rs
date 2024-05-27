@@ -138,15 +138,14 @@ where
     let publisher_state_hash = publisher_system_state.clone().into_hash().await;
     let publish_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![OutgoingMessage {
+            messages: vec![vec![OutgoingMessage {
                 destination: Destination::Recipient(publisher_chain.into()),
                 authenticated_signer: None,
                 grant: Amount::ZERO,
                 refund_grant_to: None,
                 kind: MessageKind::Protected,
                 message: Message::System(publish_message.clone()),
-            }],
-            message_counts: vec![1],
+            }]],
             state_hash: publisher_state_hash,
             oracle_records: vec![OracleRecord::default()],
         }
@@ -215,8 +214,7 @@ where
     };
     let failing_broadcast_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![failing_broadcast_outgoing_message],
-            message_counts: vec![1],
+            messages: vec![vec![failing_broadcast_outgoing_message]],
             state_hash: publisher_state_hash,
             oracle_records: vec![OracleRecord::default()],
         }
@@ -240,8 +238,7 @@ where
     };
     let broadcast_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![broadcast_outgoing_message],
-            message_counts: vec![1],
+            messages: vec![vec![broadcast_outgoing_message]],
             state_hash: publisher_state_hash,
             oracle_records: vec![OracleRecord::default()],
         }
@@ -288,15 +285,14 @@ where
     let creator_state = creator_system_state.clone().into_view().await;
     let subscribe_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![OutgoingMessage {
+            messages: vec![vec![OutgoingMessage {
                 destination: Destination::Recipient(publisher_chain.into()),
                 authenticated_signer: None,
                 grant: Amount::ZERO,
                 refund_grant_to: None,
                 kind: MessageKind::Protected,
                 message: Message::System(subscribe_message.clone()),
-            }],
-            message_counts: vec![1],
+            }]],
             state_hash: creator_state.crypto_hash().await?,
             oracle_records: vec![OracleRecord::default()],
         }
@@ -339,7 +335,7 @@ where
     let publisher_state_hash = publisher_system_state.into_hash().await;
     let accept_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![OutgoingMessage {
+            messages: vec![vec![OutgoingMessage {
                 destination: Destination::Recipient(creator_chain.into()),
                 authenticated_signer: None,
                 grant: Amount::ZERO,
@@ -348,8 +344,7 @@ where
                 message: Message::System(SystemMessage::Notify {
                     id: creator_chain.into(),
                 }),
-            }],
-            message_counts: vec![1],
+            }]],
             state_hash: publisher_state_hash,
             oracle_records: vec![OracleRecord::default()],
         }
@@ -436,15 +431,17 @@ where
         .await?;
     let create_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![OutgoingMessage {
-                destination: Destination::Recipient(creator_chain.into()),
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                message: Message::System(SystemMessage::ApplicationCreated),
-            }],
-            message_counts: vec![0, 1],
+            messages: vec![
+                Vec::new(),
+                vec![OutgoingMessage {
+                    destination: Destination::Recipient(creator_chain.into()),
+                    authenticated_signer: None,
+                    grant: Amount::ZERO,
+                    refund_grant_to: None,
+                    kind: MessageKind::Protected,
+                    message: Message::System(SystemMessage::ApplicationCreated),
+                }],
+            ],
             state_hash: creator_state.crypto_hash().await?,
             oracle_records: vec![OracleRecord::default(); 2],
         }
@@ -498,7 +495,6 @@ where
     let run_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: Vec::new(),
-            message_counts: vec![0],
             state_hash: creator_state.crypto_hash().await?,
             oracle_records: vec![OracleRecord::default()],
         }

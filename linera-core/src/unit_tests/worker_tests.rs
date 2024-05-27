@@ -233,25 +233,25 @@ async fn make_transfer_certificate_for_epoch<S>(
         Some(cert) => make_child_block(&cert.value),
     };
 
-    let mut message_counts = Vec::new();
-    let mut message_count = 0;
-    let mut messages = Vec::new();
-    for incoming_message in &incoming_messages {
-        if matches!(incoming_message.action, MessageAction::Reject)
-            && matches!(incoming_message.event.kind, MessageKind::Tracked)
-        {
-            messages.push(OutgoingMessage {
-                authenticated_signer: incoming_message.event.authenticated_signer,
-                destination: Destination::Recipient(incoming_message.origin.sender),
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Bouncing,
-                message: incoming_message.event.message.clone(),
-            });
-            message_count += 1;
-        }
-        message_counts.push(message_count);
-    }
+    let mut messages = incoming_messages
+        .iter()
+        .map(|incoming_message| {
+            if matches!(incoming_message.action, MessageAction::Reject)
+                && matches!(incoming_message.event.kind, MessageKind::Tracked)
+            {
+                vec![OutgoingMessage {
+                    authenticated_signer: incoming_message.event.authenticated_signer,
+                    destination: Destination::Recipient(incoming_message.origin.sender),
+                    grant: Amount::ZERO,
+                    refund_grant_to: None,
+                    kind: MessageKind::Bouncing,
+                    message: incoming_message.event.message.clone(),
+                }]
+            } else {
+                Vec::new()
+            }
+        })
+        .collect::<Vec<_>>();
 
     let block = Block {
         epoch,
@@ -262,7 +262,7 @@ async fn make_transfer_certificate_for_epoch<S>(
     .with_transfer(source, recipient, amount);
     match recipient {
         Recipient::Account(account) => {
-            messages.push(direct_outgoing_message(
+            messages.push(vec![direct_outgoing_message(
                 account.chain_id,
                 MessageKind::Tracked,
                 SystemMessage::Credit {
@@ -270,12 +270,10 @@ async fn make_transfer_certificate_for_epoch<S>(
                     target: account.owner,
                     amount,
                 },
-            ));
-            message_count += 1;
+            )]);
         }
-        Recipient::Burn => (),
+        Recipient::Burn => messages.push(Vec::new()),
     }
-    message_counts.push(message_count);
     let oracle_records = iter::repeat_with(OracleRecord::default)
         .take(block.operations.len() + block.incoming_messages.len())
         .collect();
@@ -283,7 +281,6 @@ async fn make_transfer_certificate_for_epoch<S>(
     let value = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages,
-            message_counts,
             state_hash,
             oracle_records,
         }
@@ -712,10 +709,12 @@ where
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
                 messages: vec![
-                    direct_credit_message(ChainId::root(2), Amount::ONE),
-                    direct_credit_message(ChainId::root(2), Amount::from_tokens(2)),
+                    vec![direct_credit_message(ChainId::root(2), Amount::ONE)],
+                    vec![direct_credit_message(
+                        ChainId::root(2),
+                        Amount::from_tokens(2),
+                    )],
                 ],
-                message_counts: vec![1, 2],
                 state_hash: SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(sender_key_pair.public()),
@@ -739,11 +738,10 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: vec![direct_credit_message(
+                messages: vec![vec![direct_credit_message(
                     ChainId::root(2),
                     Amount::from_tokens(3),
-                )],
-                message_counts: vec![1],
+                )]],
                 state_hash: SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(sender_key_pair.public()),
@@ -1002,8 +1000,10 @@ where
             &worker,
             HashedCertificateValue::new_confirmed(
                 BlockExecutionOutcome {
-                    messages: vec![direct_credit_message(ChainId::root(3), Amount::ONE)],
-                    message_counts: vec![0, 1],
+                    messages: vec![
+                        Vec::new(),
+                        vec![direct_credit_message(ChainId::root(3), Amount::ONE)],
+                    ],
                     state_hash: SystemExecutionState {
                         committees: [(epoch, committee.clone())].into_iter().collect(),
                         ownership: ChainOwnership::single(recipient_key_pair.public()),
@@ -1303,8 +1303,7 @@ where
     };
     let value = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: Vec::new(),
-            message_counts: vec![0],
+            messages: vec![Vec::new()],
             state_hash: state.into_hash().await,
             oracle_records: vec![OracleRecord::default()],
         }
@@ -2311,7 +2310,7 @@ where
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
                 messages: vec![
-                    direct_outgoing_message(
+                    vec![direct_outgoing_message(
                         user_id,
                         MessageKind::Protected,
                         SystemMessage::OpenChain(OpenChainConfig {
@@ -2322,17 +2321,16 @@ where
                             balance: Amount::ZERO,
                             application_permissions: Default::default(),
                         }),
-                    ),
-                    direct_outgoing_message(
+                    )],
+                    vec![direct_outgoing_message(
                         admin_id,
                         MessageKind::Protected,
                         SystemMessage::Subscribe {
                             id: user_id,
                             subscription: admin_channel_subscription.clone(),
                         },
-                    ),
+                    )],
                 ],
-                message_counts: vec![2],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(key_pair.public()),
@@ -2389,13 +2387,12 @@ where
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
                 messages: vec![
-                    channel_admin_message(SystemMessage::SetCommittees {
+                    vec![channel_admin_message(SystemMessage::SetCommittees {
                         epoch: Epoch::from(1),
                         committees: committees2.clone(),
-                    }),
-                    direct_credit_message(user_id, Amount::from_tokens(2)),
+                    })],
+                    vec![direct_credit_message(user_id, Amount::from_tokens(2))],
                 ],
-                message_counts: vec![1, 2],
                 state_hash: SystemExecutionState {
                     // The root chain knows both committees at the end.
                     committees: committees2.clone(),
@@ -2426,12 +2423,11 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: vec![direct_outgoing_message(
+                messages: vec![vec![direct_outgoing_message(
                     user_id,
                     MessageKind::Protected,
                     SystemMessage::Notify { id: user_id },
-                )],
-                message_counts: vec![1],
+                )]],
                 state_hash: SystemExecutionState {
                     // The root chain knows both committees at the end.
                     committees: committees2.clone(),
@@ -2550,8 +2546,7 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: Vec::new(),
-                message_counts: vec![0, 0, 0, 0],
+                messages: vec![Vec::new(); 4],
                 state_hash: SystemExecutionState {
                     subscriptions: [ChannelSubscription {
                         chain_id: admin_id,
@@ -2726,8 +2721,7 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: vec![direct_credit_message(admin_id, Amount::ONE)],
-                message_counts: vec![1],
+                messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(key_pair1.public()),
@@ -2751,11 +2745,10 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: vec![channel_admin_message(SystemMessage::SetCommittees {
+                messages: vec![vec![channel_admin_message(SystemMessage::SetCommittees {
                     epoch: Epoch::from(1),
                     committees: committees2.clone(),
-                })],
-                message_counts: vec![1],
+                })]],
                 state_hash: SystemExecutionState {
                     committees: committees2.clone(),
                     ownership: ChainOwnership::single(key_pair0.public()),
@@ -2853,8 +2846,7 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: vec![direct_credit_message(admin_id, Amount::ONE)],
-                message_counts: vec![1],
+                messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(key_pair1.public()),
@@ -2880,16 +2872,15 @@ where
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
                 messages: vec![
-                    channel_admin_message(SystemMessage::SetCommittees {
+                    vec![channel_admin_message(SystemMessage::SetCommittees {
                         epoch: Epoch::from(1),
                         committees: committees2.clone(),
-                    }),
-                    channel_admin_message(SystemMessage::SetCommittees {
+                    })],
+                    vec![channel_admin_message(SystemMessage::SetCommittees {
                         epoch: Epoch::from(1),
                         committees: committees3.clone(),
-                    }),
+                    })],
                 ],
-                message_counts: vec![1, 2],
                 state_hash: SystemExecutionState {
                     committees: committees3.clone(),
                     ownership: ChainOwnership::single(key_pair0.public()),
@@ -2947,8 +2938,7 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: Vec::new(),
-                message_counts: vec![0],
+                messages: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees3.clone(),
                     ownership: ChainOwnership::single(key_pair0.public()),

@@ -557,7 +557,7 @@ where
             destination,
             message,
             ..
-        } = &messages[0];
+        } = &messages[0][0];
         assert_matches!(
             message, Message::System(SystemMessage::RegisterApplications { applications })
             if applications.len() == 1 && matches!(

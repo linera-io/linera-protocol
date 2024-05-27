@@ -209,20 +209,18 @@ mod from {
                 outcome:
                     block::BlockBlockValueExecutedBlockOutcome {
                         messages,
-                        message_counts,
                         state_hash,
                         oracle_records,
                     },
             } = val;
             let messages = messages
                 .into_iter()
-                .map(OutgoingMessage::from)
-                .collect::<Vec<_>>();
+                .map(|messages| messages.into_iter().map(OutgoingMessage::from).collect())
+                .collect::<Vec<Vec<_>>>();
             ExecutedBlock {
                 block: block.into(),
                 outcome: BlockExecutionOutcome {
                     messages,
-                    message_counts: message_counts.into_iter().map(|c| c as u32).collect(),
                     state_hash,
                     oracle_records: oracle_records.into_iter().map(Into::into).collect(),
                 },

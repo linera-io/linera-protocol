@@ -75,9 +75,8 @@ BlockExecutionOutcome:
   STRUCT:
     - messages:
         SEQ:
-          TYPENAME: OutgoingMessage
-    - message_counts:
-        SEQ: U32
+          SEQ:
+            TYPENAME: OutgoingMessage
     - state_hash:
         TYPENAME: CryptoHash
     - oracle_records:
