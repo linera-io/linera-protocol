@@ -494,7 +494,7 @@ where
     creator_state.system.timestamp.set(Timestamp::from(5));
     let run_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: Vec::new(),
+            messages: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_records: vec![OracleRecord::default()],
         }

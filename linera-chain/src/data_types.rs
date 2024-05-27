@@ -699,7 +699,9 @@ impl ExecutedBlock {
         )
         .ok()?;
         let index = first_message_index.checked_add(message_index)?;
-        if index < u32::try_from(self.outcome.messages.get(transaction_index)?.len()).ok()? {
+        if message_index
+            < u32::try_from(self.outcome.messages.get(transaction_index)?.len()).ok()?
+        {
             Some(self.message_id(index))
         } else {
             None

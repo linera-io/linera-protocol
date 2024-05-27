@@ -798,13 +798,12 @@ where
         );
         let mut oracle_records = oracle_records.map(Vec::into_iter);
         let mut new_oracle_records = Vec::new();
+        let mut next_message_index = 0;
         for (index, message) in block.incoming_messages.iter().enumerate() {
             #[cfg(with_metrics)]
             let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
-            let next_message_index =
-                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
             // Execute the received message.
             let context = MessageContext {
                 chain_id,
@@ -918,6 +917,8 @@ where
                         .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
                 }
             }
+            next_message_index +=
+                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
             messages.push(messages_out);
         }
         // Second, execute the operations in the block and remember the recipients to notify.
@@ -926,8 +927,6 @@ where
             let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::Operation(index);
-            let next_message_index =
-                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
             let context = OperationContext {
                 chain_id,
                 height: block.height,
@@ -970,6 +969,8 @@ where
                     .track_message(&message_out.message)
                     .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             }
+            next_message_index +=
+                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
             messages.push(messages_out);
         }
 

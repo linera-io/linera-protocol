@@ -2309,8 +2309,8 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: vec![
-                    vec![direct_outgoing_message(
+                messages: vec![vec![
+                    direct_outgoing_message(
                         user_id,
                         MessageKind::Protected,
                         SystemMessage::OpenChain(OpenChainConfig {
@@ -2321,16 +2321,16 @@ where
                             balance: Amount::ZERO,
                             application_permissions: Default::default(),
                         }),
-                    )],
-                    vec![direct_outgoing_message(
+                    ),
+                    direct_outgoing_message(
                         admin_id,
                         MessageKind::Protected,
                         SystemMessage::Subscribe {
                             id: user_id,
                             subscription: admin_channel_subscription.clone(),
                         },
-                    )],
-                ],
+                    ),
+                ]],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(key_pair.public()),
