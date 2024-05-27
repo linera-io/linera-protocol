@@ -1,0 +1,20 @@
+# List of packages to be published on `crates.io`, in this order.
+# - Specific arguments for cargo publish or cargo package may be added on the same line.
+# - See scripts/publish.sh and scripts/test_publish.sh for usage.
+linera-version --no-verify
+linera-witty-macros
+linera-witty
+linera-base
+linera-ethereum
+linera-views-derive
+linera-views
+linera-execution
+linera-chain
+linera-storage-service
+linera-storage
+linera-core
+linera-sdk-derive
+linera-sdk
+linera-rpc
+linera-service
+linera-service-graphql-client
