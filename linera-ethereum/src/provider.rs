@@ -61,6 +61,7 @@ impl EthereumClientSimplified {
     }
 }
 
+#[derive(Clone)]
 pub struct EthereumClient<M> {
     pub provider: M,
 }
@@ -98,14 +99,16 @@ impl EthereumQueries for EthereumClient<HttpProvider> {
         &self,
         contract_address: &str,
         event_name_expanded: &str,
-        starting_block: u64,
+        from_block: u64,
+        to_block: u64,
     ) -> Result<Vec<EthereumEvent>, EthereumServiceError> {
         let contract_address = contract_address.parse::<Address>()?;
         let event_name = event_name_from_expanded(event_name_expanded);
         let filter = Filter::new()
             .address(contract_address)
             .event(&event_name)
-            .from_block(starting_block);
+            .from_block(from_block)
+            .to_block(to_block - 1);
         let events = self.provider.get_logs(&filter).await?;
         events
             .into_iter()

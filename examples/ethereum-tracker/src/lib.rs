@@ -30,16 +30,19 @@ impl ServiceAbi for EthereumTrackerAbi {
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum Operation {
     /// Update the database by querying an Ethereum node
-    Update,
+    /// up to an exclusive block number
+    Update { to_block: u64 },
 }
 
-/// The initialization data required to create an Ethereum tracker
+/// The instantiation argument used for the contract.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, SimpleObject)]
 pub struct InstantiationArgument {
     /// The Ethereum endpoint being used
     pub ethereum_endpoint: String,
     /// The address of the contract
     pub contract_address: String,
+    /// The block height at which the EVM contract was created
+    pub start_block: u64,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]

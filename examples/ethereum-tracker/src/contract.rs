@@ -6,10 +6,9 @@
 mod state;
 
 use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument, U256Cont};
-use linera_ethereum::client::EthereumQueries as _;
 use linera_sdk::{
     base::WithContractAbi,
-    ethereum::{EthereumClient, EthereumDataType},
+    ethereum::{EthereumClient, EthereumDataType, EthereumQueries as _},
     views::{RootView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
@@ -42,15 +41,21 @@ impl Contract for EthereumTrackerContract {
     async fn instantiate(&mut self, argument: InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
-        self.state.argument.set(argument);
-        self.state.last_block.set(0);
-        self.read_initial().await;
+        let InstantiationArgument {
+            ethereum_endpoint,
+            contract_address,
+            start_block,
+        } = argument;
+        self.state.ethereum_endpoint.set(ethereum_endpoint);
+        self.state.contract_address.set(contract_address);
+        self.state.start_block.set(start_block);
+        self.read_initial(start_block).await;
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         // The only input is updating the database
         match operation {
-            Self::Operation::Update => self.update().await,
+            Self::Operation::Update { to_block } => self.update(to_block).await,
         }
     }
 
@@ -65,18 +70,22 @@ impl Contract for EthereumTrackerContract {
 
 impl EthereumTrackerContract {
     fn get_endpoints(&self) -> (EthereumClient, String) {
-        let argument = self.state.argument.get();
-        let url = argument.ethereum_endpoint.clone();
-        let contract_address = argument.contract_address.clone();
+        let url = self.state.ethereum_endpoint.get().clone();
+        let contract_address = self.state.contract_address.get().clone();
         let ethereum_client = EthereumClient { url };
         (ethereum_client, contract_address)
     }
 
-    async fn read_initial(&mut self) {
+    async fn read_initial(&mut self, start_block: u64) {
         let event_name_expanded = "Initial(address,uint256)";
         let (ethereum_client, contract_address) = self.get_endpoints();
         let events = ethereum_client
-            .read_events(&contract_address, event_name_expanded, 0)
+            .read_events(
+                &contract_address,
+                event_name_expanded,
+                start_block,
+                start_block + 1,
+            )
             .await
             .expect("Read the Initial event");
         assert_eq!(events.len(), 1);
@@ -91,14 +100,20 @@ impl EthereumTrackerContract {
         self.state.accounts.insert(&address, value).unwrap();
     }
 
-    async fn update(&mut self) {
+    async fn update(&mut self, to_block: u64) {
         let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
         let (ethereum_client, contract_address) = self.get_endpoints();
-        let start_block = self.state.last_block.get_mut();
+        let start_block = self.state.start_block.get_mut();
         let events = ethereum_client
-            .read_events(&contract_address, event_name_expanded, *start_block)
+            .read_events(
+                &contract_address,
+                event_name_expanded,
+                *start_block,
+                to_block,
+            )
             .await
             .expect("Read a transfer event");
+        *start_block = to_block;
         for event in events {
             let EthereumDataType::Address(from) = event.values[0].clone() else {
                 panic!("wrong type for the first entry");

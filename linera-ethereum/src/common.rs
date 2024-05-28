@@ -84,6 +84,8 @@ pub enum EthereumServiceError {
     AlloyReqwestError(#[from] alloy::transports::http::reqwest::Error),
 }
 
+/// A single primitive data type. This is used for example for the
+/// entries of Ethereum events.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EthereumDataType {
     Address(String),
@@ -171,6 +173,7 @@ fn parse_entry(entry: B256, ethereum_type: &str) -> Result<EthereumDataType, Eth
     Err(EthereumServiceError::UnsupportedEthereumTypeError)
 }
 
+/// The data type for an Ethereum event emitted by a smart contract
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EthereumEvent {
     pub values: Vec<EthereumDataType>,

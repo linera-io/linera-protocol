@@ -7,10 +7,10 @@ use std::fmt::Debug;
 
 use async_graphql::scalar;
 use async_trait::async_trait;
-/// The Ethereum type for a single event
-pub use linera_ethereum::common::EthereumDataType;
-/// The Ethereum type for an event
-pub use linera_ethereum::common::EthereumEvent;
+pub use linera_ethereum::{
+    client::EthereumQueries,
+    common::{EthereumDataType, EthereumEvent},
+};
 use linera_ethereum::{client::JsonRpcClient, common::EthereumServiceError};
 use serde::{Deserialize, Serialize};
 
