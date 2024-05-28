@@ -267,7 +267,9 @@ pub enum ClientCommand {
         /// no system operations.
         #[arg(long)]
         execute_operations: Option<Vec<ApplicationId>>,
-        /// At least one operation from each of these applications must occur in every block.
+        /// At least one operation or incoming message from each of these applications must
+        /// occur in every block.
+        #[arg(long)]
         mandatory_applications: Vec<ApplicationId>,
         /// These applications are allowed to close the current chain using the system API.
         #[arg(long)]

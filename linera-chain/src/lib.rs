@@ -137,7 +137,7 @@ pub enum ChainError {
     #[error("All operations on this chain must be from one of the following applications: {0:?}")]
     AuthorizedApplications(Vec<ApplicationId>),
     #[error("Missing operations from mandatory applications: {0:?}")]
-    MissingMandatoryApplicationOperations(Vec<ApplicationId>),
+    MissingMandatoryApplications(Vec<ApplicationId>),
     #[error("Can't use grant across different broadcast messages")]
     GrantUseOnBroadcast,
     #[error("ExecutedBlock contains fewer oracle responses than requests")]

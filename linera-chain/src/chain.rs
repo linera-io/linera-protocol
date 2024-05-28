@@ -761,9 +761,17 @@ where
                 mandatory.remove(application_id);
             }
         }
+        for message in &block.incoming_messages {
+            if mandatory.is_empty() {
+                break;
+            }
+            if let Message::User { application_id, .. } = &message.event.message {
+                mandatory.remove(application_id);
+            }
+        }
         ensure!(
             mandatory.is_empty(),
-            ChainError::MissingMandatoryApplicationOperations(mandatory.into_iter().collect())
+            ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
         );
         let mut oracle_records = oracle_records.map(Vec::into_iter);
         let mut new_oracle_records = Vec::new();

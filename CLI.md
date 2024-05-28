@@ -270,16 +270,13 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 
 Changes the application permissions configuration
 
-**Usage:** `linera change-application-permissions [OPTIONS] [MANDATORY_OPERATIONS]...`
-
-###### **Arguments:**
-
-* `<MANDATORY_OPERATIONS>` — At least one operation from each of these applications must occur in every block
+**Usage:** `linera change-application-permissions [OPTIONS]`
 
 ###### **Options:**
 
 * `--chain-id <CHAIN_ID>` — The ID of the chain to which the new permissions will be applied
 * `--execute-operations <EXECUTE_OPERATIONS>` — If this is not set, all system operations and application operations are allowed. If it is set, only operations from the specified applications are allowed, and no system operations
+* `--mandatory-applications <MANDATORY_APPLICATIONS>` — At least one operation or incoming message from each of these applications must occur in every block
 * `--close-chain <CLOSE_CHAIN>` — These applications are allowed to close the current chain using the system API
 
 

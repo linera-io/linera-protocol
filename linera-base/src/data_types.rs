@@ -658,7 +658,8 @@ pub struct ApplicationPermissions {
     /// If it is `Some`, only operations from the specified applications are allowed, and
     /// no system operations.
     pub execute_operations: Option<Vec<ApplicationId>>,
-    /// At least one operation from each of these applications must occur in every block.
+    /// At least one operation or incoming message from each of these applications must occur in
+    /// every block.
     pub mandatory_applications: Vec<ApplicationId>,
     /// These applications are allowed to close the current chain using the system API.
     pub close_chain: Vec<ApplicationId>,
