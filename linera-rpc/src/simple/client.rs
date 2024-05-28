@@ -7,11 +7,12 @@ use std::{future::Future, time::Duration};
 use async_trait::async_trait;
 use futures::{sink::SinkExt, stream::StreamExt};
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{Blob, HashedBlob},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::{
-    BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
+    BlockProposal, Certificate, CertificateValue, HashedCertificateValue, LiteCertificate,
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
@@ -138,6 +139,14 @@ impl ValidatorNode for SimpleClient {
 
     async fn download_blob(&mut self, blob_id: BlobId) -> Result<Blob, NodeError> {
         self.query(RpcMessage::DownloadBlob(Box::new(blob_id)))
+            .await
+    }
+
+    async fn download_certificate_value(
+        &mut self,
+        hash: CryptoHash,
+    ) -> Result<CertificateValue, NodeError> {
+        self.query(RpcMessage::DownloadCertificateValue(Box::new(hash)))
             .await
     }
 }

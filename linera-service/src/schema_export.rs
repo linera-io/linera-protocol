@@ -3,12 +3,12 @@
 
 use async_trait::async_trait;
 use linera_base::{
-    crypto::KeyPair,
+    crypto::{CryptoHash, KeyPair},
     data_types::{Blob, HashedBlob, Timestamp},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::{
-    BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
+    BlockProposal, Certificate, CertificateValue, HashedCertificateValue, LiteCertificate,
 };
 use linera_core::{
     client::ChainClient,
@@ -78,6 +78,13 @@ impl ValidatorNode for DummyValidatorNode {
     }
 
     async fn download_blob(&mut self, _: BlobId) -> Result<Blob, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
+    async fn download_certificate_value(
+        &mut self,
+        _: CryptoHash,
+    ) -> Result<CertificateValue, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 }
