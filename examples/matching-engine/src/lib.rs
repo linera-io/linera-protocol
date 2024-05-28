@@ -167,8 +167,7 @@ your tokens.
 Fortunately, Linera provides a solution based on temporary chains:
 If the number of parties who want to swap tokens is limited, we can make them all chain
 owners, allow only Matching Engine operations on the chain, and allow only the Matching
-Engine to close the chain. In addition, we make Matching Engine operation per block
-mandatory, so owners cannot spam the chain with empty blocks.
+Engine to close the chain.
 
 ```bash
 kill %% && sleep 1    # Kill the service so we can use CLI commands for chain 1.
@@ -178,7 +177,6 @@ linera --wait-for-outgoing-messages change-ownership \
 
 linera --wait-for-outgoing-messages change-application-permissions \
     --execute-operations $MATCHING_ENGINE \
-    --mandatory-applications $MATCHING_ENGINE \
     --close-chain $MATCHING_ENGINE
 
 linera service --port $PORT &
