@@ -2621,6 +2621,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "gen-nft"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "base64 0.22.0",
+ "bcs",
+ "candle-core",
+ "candle-transformers",
+ "fungible",
+ "getrandom",
+ "linera-sdk",
+ "log",
+ "non-fungible",
+ "rand",
+ "serde",
+ "sha3",
+ "tokenizers",
+ "tokio",
+]
+
+[[package]]
 name = "genawaiter"
 version = "0.99.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

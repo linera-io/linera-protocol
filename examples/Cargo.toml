@@ -6,6 +6,7 @@ members = [
     "crowd-funding",
     "ethereum-tracker",
     "fungible",
+    "gen-nft",
     "hex-game",
     "llm",
     "matching-engine",

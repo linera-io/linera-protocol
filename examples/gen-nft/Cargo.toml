@@ -1,0 +1,37 @@
+[package]
+name = "gen-nft"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[features]
+test = []
+
+[dependencies]
+async-graphql.workspace = true
+base64.workspace = true
+bcs.workspace = true
+candle-core.workspace = true
+candle-transformers.workspace = true
+fungible.workspace = true
+getrandom.workspace = true
+linera-sdk.workspace = true
+log.workspace = true
+rand.workspace = true
+serde.workspace = true
+sha3.workspace = true
+tokenizers.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+fungible = { workspace = true, features = ["test"] }
+non-fungible = { workspace = true, features = ["test"] }
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+tokio.workspace = true
+
+[[bin]]
+name = "gen_nft_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "gen_nft_service"
+path = "src/service.rs"
