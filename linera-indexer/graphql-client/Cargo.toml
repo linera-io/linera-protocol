@@ -1,13 +1,15 @@
 [package]
 name = "linera-indexer-graphql-client"
-version = "0.11.0"
-edition = "2021"
 description = "GraphQL client for the indexer"
 readme = "README.md"
-repository = "https://github.com/linera-io/linera-protocol"
-homepage = "https://linera.dev"
 documentation = "https://docs.rs/linera-indexer-graphql-client/latest/linera_indexer_graphql_client/"
-license = "Apache-2.0"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
 
 [dependencies]
 graphql_client = { version = "0.13", features = [ "reqwest-rustls" ] }

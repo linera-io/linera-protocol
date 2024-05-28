@@ -1,12 +1,13 @@
 [package]
 name = "linera-witty-test-modules"
 description = "Generation of WIT compatible host code from Rust code"
-authors = ["Linera <contact@linera.io>"]
-repository = "https://github.com/linera-io/linera-protocol"
-homepage = "https://linera.dev"
-license = "Apache-2.0"
-version = "0.11.0"
-edition = "2021"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
 
 [[bin]]
 name = "export-simple-function"
