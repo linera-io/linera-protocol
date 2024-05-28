@@ -41,7 +41,7 @@ pub struct InstantiationArgument {
     pub ethereum_endpoint: String,
     /// The address of the contract
     pub contract_address: String,
-    /// The creation block
+    /// The block height at which the EVM contract was created
     pub start_block: u64,
 }
 
