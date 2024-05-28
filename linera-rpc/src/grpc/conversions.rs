@@ -8,7 +8,8 @@ use linera_base::{
     identifiers::{BlobId, ChainId, Owner},
 };
 use linera_chain::data_types::{
-    BlockProposal, Certificate, HashedCertificateValue, LiteCertificate, LiteValue, ProposalContent,
+    BlockProposal, Certificate, CertificateValue, HashedCertificateValue, LiteCertificate,
+    LiteValue, ProposalContent,
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -47,6 +48,14 @@ where
 impl From<GrpcProtoConversionError> for Status {
     fn from(error: GrpcProtoConversionError) -> Self {
         Status::new(Code::InvalidArgument, error.to_string())
+    }
+}
+
+impl From<GrpcProtoConversionError> for NodeError {
+    fn from(error: GrpcProtoConversionError) -> Self {
+        NodeError::GrpcError {
+            error: error.to_string(),
+        }
     }
 }
 
@@ -536,6 +545,14 @@ impl From<BlobId> for api::BlobId {
     }
 }
 
+impl TryFrom<api::CryptoHash> for CryptoHash {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(hash: api::CryptoHash) -> Result<Self, Self::Error> {
+        Ok(CryptoHash::try_from(hash.bytes.as_slice())?)
+    }
+}
+
 impl From<Blob> for api::Blob {
     fn from(blob: Blob) -> Self {
         Self { bytes: blob.bytes }
@@ -545,6 +562,40 @@ impl From<Blob> for api::Blob {
 impl From<api::Blob> for Blob {
     fn from(blob: api::Blob) -> Self {
         Self { bytes: blob.bytes }
+    }
+}
+
+impl TryFrom<api::CertificateValue> for CertificateValue {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: api::CertificateValue) -> Result<Self, Self::Error> {
+        Ok(bincode::deserialize(certificate.bytes.as_slice())?)
+    }
+}
+
+impl TryFrom<CertificateValue> for api::CertificateValue {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: CertificateValue) -> Result<Self, Self::Error> {
+        Ok(Self {
+            bytes: bincode::serialize(&certificate)?,
+        })
+    }
+}
+
+impl TryFrom<HashedCertificateValue> for api::CertificateValue {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(hv: HashedCertificateValue) -> Result<Self, Self::Error> {
+        CertificateValue::from(hv).try_into()
+    }
+}
+
+impl From<CryptoHash> for api::CryptoHash {
+    fn from(hash: CryptoHash) -> Self {
+        Self {
+            bytes: hash.as_bytes().to_vec(),
+        }
     }
 }
 

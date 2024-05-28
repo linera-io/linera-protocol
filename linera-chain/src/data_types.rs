@@ -556,8 +556,7 @@ impl<'a> Deserialize<'a> for HashedCertificateValue {
 
 impl From<CertificateValue> for HashedCertificateValue {
     fn from(value: CertificateValue) -> HashedCertificateValue {
-        let hash = CryptoHash::new(&value);
-        HashedCertificateValue { value, hash }
+        value.with_hash()
     }
 }
 
@@ -594,6 +593,25 @@ impl CertificateValue {
             | CertificateValue::ValidatedBlock { executed_block, .. } => executed_block.block.epoch,
             CertificateValue::Timeout { epoch, .. } => *epoch,
         }
+    }
+
+    /// Creates a `HashedCertificateValue` checking that this is the correct hash.
+    pub fn with_hash_checked(self, hash: CryptoHash) -> Result<HashedCertificateValue, ChainError> {
+        let hashed_certificate_value = self.with_hash();
+        ensure!(
+            hashed_certificate_value.hash == hash,
+            ChainError::CertificateValueHashMismatch {
+                expected: hash,
+                actual: hashed_certificate_value.hash
+            }
+        );
+        Ok(hashed_certificate_value)
+    }
+
+    /// Creates a `HashedCertificateValue` by hashing `self`. No hash checks are made!
+    pub fn with_hash(self) -> HashedCertificateValue {
+        let hash = CryptoHash::new(&self);
+        HashedCertificateValue { value: self, hash }
     }
 
     /// Creates a `HashedCertificateValue` without checking that this is the correct hash!

@@ -16,7 +16,7 @@ pub mod test;
 pub use chain::ChainStateView;
 use data_types::{Event, Origin};
 use linera_base::{
-    crypto::CryptoError,
+    crypto::{CryptoError, CryptoHash},
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
@@ -142,6 +142,11 @@ pub enum ChainError {
     GrantUseOnBroadcast,
     #[error("ExecutedBlock contains fewer oracle responses than requests")]
     MissingOracleRecord,
+    #[error("Unexpected hash for CertificateValue! Expected: {expected:?}, Actual: {actual:?}")]
+    CertificateValueHashMismatch {
+        expected: CryptoHash,
+        actual: CryptoHash,
+    },
 }
 
 #[derive(Copy, Clone, Debug)]

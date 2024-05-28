@@ -280,19 +280,40 @@ where
     }
 
     async fn try_local_message(&self, message: RpcMessage) -> Result<Option<RpcMessage>> {
+        use RpcMessage::*;
+
         match message {
-            RpcMessage::VersionInfoQuery => {
+            VersionInfoQuery => {
                 // We assume each shard is running the same version as the proxy
                 Ok(Some(linera_version::VersionInfo::default().into()))
             }
-            RpcMessage::DownloadBlob(blob_id) => Ok(Some(
+            DownloadBlob(blob_id) => Ok(Some(
                 self.storage
                     .read_hashed_blob(*blob_id)
                     .await?
                     .into_inner()
                     .into(),
             )),
-            _ => Err(anyhow::Error::from(NodeError::UnexpectedMessage)),
+            DownloadCertificateValue(hash) => Ok(Some(
+                self.storage
+                    .read_hashed_certificate_value(*hash)
+                    .await?
+                    .into_inner()
+                    .into(),
+            )),
+            BlockProposal(_)
+            | LiteCertificate(_)
+            | Certificate(_)
+            | ChainInfoQuery(_)
+            | CrossChainRequest(_)
+            | Vote(_)
+            | Error(_)
+            | ChainInfoResponse(_)
+            | VersionInfoResponse(_)
+            | DownloadBlobResponse(_)
+            | DownloadCertificateValueResponse(_) => {
+                Err(anyhow::Error::from(NodeError::UnexpectedMessage))
+            }
         }
     }
 }

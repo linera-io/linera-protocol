@@ -54,6 +54,9 @@ service ValidatorNode {
 
   // Downloads a blob.
   rpc DownloadBlob(BlobId) returns (Blob);
+
+  // Downloads a certificate value.
+  rpc DownloadCertificateValue(CryptoHash) returns (CertificateValue);
 }
 
 // Information about the Linera crate version the validator is running
@@ -221,11 +224,19 @@ message Certificate {
   bytes blobs = 7;
 }
 
+message CertificateValue {
+  bytes bytes = 1;
+}
+
 message ChainId {
   bytes bytes = 1;
 }
 
 message PublicKey {
+  bytes bytes = 1;
+}
+
+message CryptoHash {
   bytes bytes = 1;
 }
 

@@ -4,7 +4,7 @@
 
 use futures::stream::{BoxStream, LocalBoxStream, Stream};
 use linera_base::{
-    crypto::CryptoError,
+    crypto::{CryptoError, CryptoHash},
     data_types::{ArithmeticError, Blob, BlockHeight, HashedBlob},
     identifiers::{BlobId, ChainId},
 };
@@ -82,6 +82,11 @@ pub trait LocalValidatorNode {
     ) -> Result<Self::NotificationStream, NodeError>;
 
     async fn download_blob(&mut self, blob_id: BlobId) -> Result<Blob, NodeError>;
+
+    async fn download_certificate_value(
+        &mut self,
+        hash: CryptoHash,
+    ) -> Result<HashedCertificateValue, NodeError>;
 }
 
 /// Turn an address into a validator node.

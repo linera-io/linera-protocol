@@ -5,10 +5,11 @@ use std::{iter, time::Duration};
 
 use futures::{future, stream, StreamExt};
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{Blob, HashedBlob},
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types;
+use linera_chain::data_types::{self, CertificateValue, HashedCertificateValue};
 #[cfg(web)]
 use linera_core::node::{
     LocalNotificationStream as NotificationStream, LocalValidatorNode as ValidatorNode,
@@ -273,6 +274,20 @@ impl ValidatorNode for GrpcClient {
             .await?
             .into_inner()
             .into())
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn download_certificate_value(
+        &mut self,
+        hash: CryptoHash,
+    ) -> Result<HashedCertificateValue, NodeError> {
+        let certificate_value: CertificateValue = self
+            .client
+            .download_certificate_value(<CryptoHash as Into<api::CryptoHash>>::into(hash))
+            .await?
+            .into_inner()
+            .try_into()?;
+        Ok(certificate_value.with_hash_checked(hash)?)
     }
 }
 
