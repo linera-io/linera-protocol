@@ -8,14 +8,15 @@ use linera_base::{
     identifiers::{BlobId, ChainId, Owner},
 };
 use linera_chain::data_types::{
-    BlockAndRound, BlockProposal, Certificate, HashedCertificateValue, LiteCertificate, LiteValue,
+    BlockAndRound, BlockProposal, Certificate, CertificateValue, HashedCertificateValue,
+    LiteCertificate, LiteValue,
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::NodeError,
     worker::Notification,
 };
-use linera_execution::committee::ValidatorName;
+use linera_execution::committee::{Epoch, ValidatorName};
 use thiserror::Error;
 use tonic::{Code, Status};
 
@@ -47,6 +48,14 @@ where
 impl From<GrpcProtoConversionError> for Status {
     fn from(error: GrpcProtoConversionError) -> Self {
         Status::new(Code::InvalidArgument, error.to_string())
+    }
+}
+
+impl From<GrpcProtoConversionError> for NodeError {
+    fn from(error: GrpcProtoConversionError) -> Self {
+        NodeError::GrpcError {
+            error: error.to_string(),
+        }
     }
 }
 
@@ -514,6 +523,18 @@ impl From<api::BlockHeight> for BlockHeight {
     }
 }
 
+impl From<api::Epoch> for Epoch {
+    fn from(epoch: api::Epoch) -> Self {
+        Self(epoch.epoch)
+    }
+}
+
+impl From<Epoch> for api::Epoch {
+    fn from(epoch: Epoch) -> Self {
+        Self { epoch: epoch.0 }
+    }
+}
+
 impl From<Owner> for api::Owner {
     fn from(owner: Owner) -> Self {
         Self {
@@ -546,6 +567,14 @@ impl From<BlobId> for api::BlobId {
     }
 }
 
+impl TryFrom<api::CryptoHash> for CryptoHash {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(hash: api::CryptoHash) -> Result<Self, Self::Error> {
+        Ok(CryptoHash::try_from(hash.bytes.as_slice())?)
+    }
+}
+
 impl From<Blob> for api::Blob {
     fn from(blob: Blob) -> Self {
         Self { bytes: blob.bytes }
@@ -555,6 +584,89 @@ impl From<Blob> for api::Blob {
 impl From<api::Blob> for Blob {
     fn from(blob: api::Blob) -> Self {
         Self { bytes: blob.bytes }
+    }
+}
+
+impl TryFrom<api::CertificateValue> for CertificateValue {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: api::CertificateValue) -> Result<Self, Self::Error> {
+        use api::certificate_value::Inner;
+
+        Ok(
+            match certificate
+                .inner
+                .ok_or(GrpcProtoConversionError::MissingField)?
+            {
+                Inner::ConfirmedBlock(api::ConfirmedBlock { executed_block }) => {
+                    CertificateValue::ConfirmedBlock {
+                        executed_block: bincode::deserialize(&executed_block)?,
+                    }
+                }
+                Inner::ValidatedBlock(api::ValidatedBlock { executed_block }) => {
+                    CertificateValue::ValidatedBlock {
+                        executed_block: bincode::deserialize(&executed_block)?,
+                    }
+                }
+                Inner::Timeout(api::Timeout {
+                    chain_id,
+                    height,
+                    epoch,
+                }) => CertificateValue::Timeout {
+                    chain_id: try_proto_convert(chain_id)?,
+                    height: height.ok_or(GrpcProtoConversionError::MissingField)?.into(),
+                    epoch: epoch.ok_or(GrpcProtoConversionError::MissingField)?.into(),
+                },
+            },
+        )
+    }
+}
+
+impl TryFrom<CertificateValue> for api::CertificateValue {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: CertificateValue) -> Result<Self, Self::Error> {
+        use api::certificate_value::Inner;
+
+        let inner = match certificate {
+            CertificateValue::ConfirmedBlock { executed_block } => {
+                Inner::ConfirmedBlock(api::ConfirmedBlock {
+                    executed_block: bincode::serialize(&executed_block)?,
+                })
+            }
+            CertificateValue::ValidatedBlock { executed_block } => {
+                Inner::ValidatedBlock(api::ValidatedBlock {
+                    executed_block: bincode::serialize(&executed_block)?,
+                })
+            }
+            CertificateValue::Timeout {
+                chain_id,
+                height,
+                epoch,
+            } => Inner::Timeout(api::Timeout {
+                chain_id: Some(chain_id.into()),
+                height: Some(height.into()),
+                epoch: Some(epoch.into()),
+            }),
+        };
+
+        Ok(Self { inner: Some(inner) })
+    }
+}
+
+impl TryFrom<HashedCertificateValue> for api::CertificateValue {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(hv: HashedCertificateValue) -> Result<Self, Self::Error> {
+        <HashedCertificateValue as Into<CertificateValue>>::into(hv).try_into()
+    }
+}
+
+impl From<CryptoHash> for api::CryptoHash {
+    fn from(hash: CryptoHash) -> Self {
+        Self {
+            bytes: hash.as_bytes().to_vec(),
+        }
     }
 }
 

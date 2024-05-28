@@ -54,6 +54,9 @@ service ValidatorNode {
 
   // Downloads a blob.
   rpc DownloadBlob(BlobId) returns (Blob);
+
+  // Downloads a certificate value.
+  rpc DownloadCertificateValue(CryptoHash) returns (CertificateValue);
 }
 
 // Information about the Linera crate version the validator is running
@@ -224,11 +227,37 @@ message Certificate {
   bytes blobs = 7;
 }
 
+message CertificateValue {
+  oneof inner {
+    ValidatedBlock validated_block = 1;
+    ConfirmedBlock confirmed_block = 2;
+    Timeout timeout = 3;
+  }
+}
+
+message ValidatedBlock {
+  bytes executed_block = 1;
+}
+
+message ConfirmedBlock {
+  bytes executed_block = 1;
+}
+
+message Timeout {
+  ChainId chain_id = 1;
+  BlockHeight height = 2;
+  Epoch epoch = 3;
+}
+
 message ChainId {
   bytes bytes = 1;
 }
 
 message PublicKey {
+  bytes bytes = 1;
+}
+
+message CryptoHash {
   bytes bytes = 1;
 }
 
@@ -261,4 +290,8 @@ message ChainInfoResponse {
 
 message BlockHeight {
   uint64 height = 1;
+}
+
+message Epoch {
+  uint32 epoch = 1;
 }
