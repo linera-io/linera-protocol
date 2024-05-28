@@ -549,11 +549,14 @@ impl LocalNet {
         Ok(())
     }
 
-    async fn run_proxy(&self, validator: usize) -> Result<Child> {
+    async fn run_proxy(&mut self, validator: usize) -> Result<Child> {
+        let storage = self.initialize_storage(validator, 0).await?;
         let child = self
             .command_for_binary("linera-proxy")
             .await?
             .arg(format!("server_{}.json", validator))
+            .args(["--storage", &storage])
+            .args(["--genesis", "genesis.json"])
             .spawn_into()?;
 
         match self.network {
@@ -588,21 +591,23 @@ impl LocalNet {
         bail!("Failed to start {nickname}");
     }
 
-    async fn run_server(&mut self, validator: usize, shard: usize) -> Result<Child> {
+    async fn initialize_storage(&mut self, validator: usize, shard: usize) -> Result<String> {
         let shard_str = match self.database {
             Database::RocksDb => format!("_{}", shard),
             _ => String::new(),
         };
         let namespace = format!("{}_server_{}{}_db", self.table_name, validator, shard_str);
-        let key = match self.database {
-            Database::RocksDb => (validator, shard),
-            _ => (validator, 0),
-        };
         let storage = StorageConfigNamespace {
             storage_config: self.storage_config.clone(),
             namespace,
         }
         .to_string();
+
+        let key = match self.database {
+            Database::RocksDb => (validator, shard),
+            _ => (validator, 0),
+        };
+
         if !self.set_init.contains(&key) {
             let max_try = 4;
             let mut i_try = 0;
@@ -634,6 +639,11 @@ impl LocalNet {
             self.set_init.insert(key);
         }
 
+        Ok(storage)
+    }
+
+    async fn run_server(&mut self, validator: usize, shard: usize) -> Result<Child> {
+        let storage = self.initialize_storage(validator, shard).await?;
         let mut command = self.command_for_binary("linera-server").await?;
         if let Ok(var) = env::var(SERVER_ENV) {
             command.args(var.split_whitespace());

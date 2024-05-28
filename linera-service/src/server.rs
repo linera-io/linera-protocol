@@ -297,7 +297,7 @@ enum ServerCommand {
         #[arg(long = "server")]
         server_config_path: PathBuf,
 
-        /// Storage configuration for the blockchain history and security states.
+        /// Storage configuration for the blockchain history, chain states and binary blobs.
         #[arg(long = "storage")]
         storage_config: StorageConfigNamespace,
 
@@ -359,7 +359,7 @@ enum ServerCommand {
     /// Initialize the database
     #[command(name = "initialize")]
     Initialize {
-        /// Storage configuration for the blockchain history and security states.
+        /// Storage configuration for the blockchain history, chain states and binary blobs.
         #[arg(long = "storage")]
         storage_config: StorageConfigNamespace,
 

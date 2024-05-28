@@ -291,7 +291,9 @@ where
             RpcMessage::Vote(_)
             | RpcMessage::Error(_)
             | RpcMessage::ChainInfoResponse(_)
-            | RpcMessage::VersionInfoResponse(_) => Err(NodeError::UnexpectedMessage),
+            | RpcMessage::VersionInfoResponse(_)
+            | RpcMessage::DownloadBlob(_)
+            | RpcMessage::DownloadBlobResponse(_) => Err(NodeError::UnexpectedMessage),
         };
 
         self.server.packets_processed += 1;

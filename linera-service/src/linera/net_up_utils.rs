@@ -6,13 +6,16 @@ use std::time::Duration;
 use colored::Colorize as _;
 use linera_base::data_types::Amount;
 use linera_execution::ResourceControlPolicy;
-use linera_service::cli_wrappers::{
-    ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
-};
-#[cfg(feature = "rocksdb")]
 use linera_service::{
-    cli_wrappers::local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
+    cli_wrappers::{
+        local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
+        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+    },
     storage::StorageConfig,
+};
+use linera_storage_service::{
+    child::{get_free_endpoint, StorageService},
+    common::get_service_storage_binary,
 };
 use tokio::{signal::unix, sync::mpsc};
 use tracing::info;
@@ -57,8 +60,7 @@ pub async fn handle_net_up_kubernetes(
     listen_for_signals(&mut shutdown_receiver, &mut net).await
 }
 
-#[cfg(feature = "rocksdb")]
-pub async fn handle_net_up_rocks_db(
+pub async fn handle_net_up_service(
     extra_wallets: Option<usize>,
     num_other_initial_chains: u32,
     initial_amount: u128,
@@ -79,13 +81,20 @@ pub async fn handle_net_up_rocks_db(
 
     let tmp_dir = tempfile::tempdir()?;
     let path = tmp_dir.path();
-    let path_buf = path.to_path_buf();
-    let storage_config = StorageConfig::RocksDb { path: path_buf };
+
+    let service_endpoint = get_free_endpoint().await.unwrap();
+    let binary = get_service_storage_binary().await?.display().to_string();
+    let service = StorageService::new(&service_endpoint, binary);
+    let _service_guard = service.run().await?;
+
+    let storage_config = StorageConfig::Service {
+        endpoint: service_endpoint,
+    };
     let storage_config_builder = StorageConfigBuilder::ExistingConfig { storage_config };
     let path_provider = PathProvider::new(path);
     let config = LocalNetConfig {
         network: Network::Grpc,
-        database: Database::RocksDb,
+        database: Database::Service,
         testing_prng_seed,
         table_name: table_name.to_string(),
         num_other_initial_chains,

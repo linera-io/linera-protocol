@@ -49,7 +49,6 @@ use tracing::{debug, info, warn};
 
 mod client_context;
 mod client_options;
-#[cfg(any(feature = "kubernetes", feature = "rocksdb"))]
 mod net_up_utils;
 
 #[cfg(feature = "benchmark")]
@@ -1367,7 +1366,6 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                 .await
             }
 
-            #[cfg(feature = "rocksdb")]
             NetCommand::Up {
                 extra_wallets,
                 other_initial_chains,
@@ -1378,7 +1376,7 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                 table_name,
                 ..
             } => {
-                net_up_utils::handle_net_up_rocks_db(
+                net_up_utils::handle_net_up_service(
                     *extra_wallets,
                     *other_initial_chains,
                     *initial_amount,
@@ -1388,11 +1386,6 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                     table_name,
                 )
                 .await
-            }
-
-            #[cfg(not(feature = "rocksdb"))]
-            NetCommand::Up { .. } => {
-                bail!("Kubernetes or the rocksdb feature is required")
             }
 
             NetCommand::Helper => {

@@ -12,7 +12,7 @@ use futures::{lock::Mutex, Future};
 use linera_base::{
     crypto::*,
     data_types::*,
-    identifiers::{ChainDescription, ChainId},
+    identifiers::{BlobId, ChainDescription, ChainId},
 };
 use linera_chain::data_types::{
     BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
@@ -157,6 +157,11 @@ where
 
     async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError> {
         Ok(Default::default())
+    }
+
+    async fn download_blob(&mut self, blob_id: BlobId) -> Result<Blob, NodeError> {
+        self.spawn_and_receive(move |validator, sender| validator.do_download_blob(blob_id, sender))
+            .await
     }
 }
 
@@ -323,6 +328,21 @@ where
         let rx = validator.notifier.subscribe(chains);
         let stream: NotificationStream = Box::pin(UnboundedReceiverStream::new(rx));
         sender.send(Ok(stream))
+    }
+
+    async fn do_download_blob(
+        self,
+        blob_id: BlobId,
+        sender: oneshot::Sender<Result<Blob, NodeError>>,
+    ) -> Result<(), Result<Blob, NodeError>> {
+        let validator = self.client.lock().await;
+        let hashed_blob = validator
+            .state
+            .storage_client()
+            .read_hashed_blob(blob_id)
+            .await
+            .map_err(Into::into);
+        sender.send(hashed_blob.map(|hashed_blob| hashed_blob.blob().clone()))
     }
 }
 

@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::identifiers::ChainId;
+use linera_base::{
+    data_types::Blob,
+    identifiers::{BlobId, ChainId},
+};
 use linera_chain::data_types::{BlockProposal, LiteVote};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -21,6 +24,7 @@ pub enum RpcMessage {
     Certificate(Box<HandleCertificateRequest>),
     LiteCertificate(Box<HandleLiteCertRequest<'static>>),
     ChainInfoQuery(Box<ChainInfoQuery>),
+    DownloadBlob(Box<BlobId>),
     VersionInfoQuery,
 
     // Outbound
@@ -28,6 +32,7 @@ pub enum RpcMessage {
     ChainInfoResponse(Box<ChainInfoResponse>),
     Error(Box<NodeError>),
     VersionInfoResponse(Box<VersionInfo>),
+    DownloadBlobResponse(Box<Blob>),
 
     // Internal to a validator
     CrossChainRequest(Box<CrossChainRequest>),
@@ -50,12 +55,34 @@ impl RpcMessage {
             | Error(_)
             | ChainInfoResponse(_)
             | VersionInfoQuery
-            | VersionInfoResponse(_) => {
+            | VersionInfoResponse(_)
+            | DownloadBlob(_)
+            | DownloadBlobResponse(_) => {
                 return None;
             }
         };
 
         Some(chain_id)
+    }
+
+    /// Wether this messsage is "local" i.e. will be executed locally on the proxy
+    /// or if it'll be proxied to the server.
+    pub fn is_local_message(&self) -> bool {
+        use RpcMessage::*;
+
+        match self {
+            VersionInfoQuery | DownloadBlob(_) => true,
+            BlockProposal(_)
+            | LiteCertificate(_)
+            | Certificate(_)
+            | ChainInfoQuery(_)
+            | CrossChainRequest(_)
+            | Vote(_)
+            | Error(_)
+            | ChainInfoResponse(_)
+            | VersionInfoResponse(_)
+            | DownloadBlobResponse(_) => false,
+        }
     }
 }
 
@@ -77,6 +104,18 @@ impl TryFrom<RpcMessage> for VersionInfo {
         use RpcMessage::*;
         match message {
             VersionInfoResponse(version_info) => Ok(*version_info),
+            Error(error) => Err(*error),
+            _ => Err(NodeError::UnexpectedMessage),
+        }
+    }
+}
+
+impl TryFrom<RpcMessage> for Blob {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        use RpcMessage::*;
+        match message {
+            DownloadBlobResponse(blob) => Ok(*blob),
             Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }
@@ -134,5 +173,11 @@ impl From<CrossChainRequest> for RpcMessage {
 impl From<VersionInfo> for RpcMessage {
     fn from(version_info: VersionInfo) -> Self {
         RpcMessage::VersionInfoResponse(Box::new(version_info))
+    }
+}
+
+impl From<Blob> for RpcMessage {
+    fn from(blob: Blob) -> Self {
+        RpcMessage::DownloadBlobResponse(Box::new(blob))
     }
 }

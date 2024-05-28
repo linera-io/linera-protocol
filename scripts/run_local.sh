@@ -40,18 +40,39 @@ done
 # Initialize the second wallet.
 ./linera --wallet wallet_2.json --storage rocksdb:linera_2.db wallet init --genesis genesis.json --testing-prng-seed 3
 
+# Find free port for service
+while true; do
+    PORT=$(shuf -i 2000-65000 -n 1)
+    if ! lsof -i:$PORT >/dev/null; then
+        break
+    fi
+done
+
+ENDPOINT="127.0.0.1:$PORT"
+
+# Run Storage Service Server
+./storage_service_server memory --endpoint "$ENDPOINT" &
+SERVER_PID=$!
+sleep 2  # Wait a moment to ensure the server starts properly
+if ! kill -0 $SERVER_PID 2>/dev/null; then
+    echo "Failed to start storage_service_server. Exiting."
+    exit 1
+fi
+
+STORAGE="service:tcp:$ENDPOINT:linera"
+
 # Start servers and create initial chains in DB
 for I in $(seq 1 $NUM_VALIDATORS)
 do
-    ./linera-proxy server_"$I".json &
+    ./linera-proxy server_"$I".json --storage $STORAGE --genesis genesis.json &
 
     for J in $(seq 0 $((SHARDS_PER_VALIDATOR - 1)))
     do
-        ./linera-server initialize --storage rocksdb:server_"$I"_"$J".db --genesis genesis.json
+        ./linera-server initialize --storage $STORAGE --genesis genesis.json
     done
     for J in $(seq 0 $((SHARDS_PER_VALIDATOR - 1)))
     do
-        ./linera-server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
+        ./linera-server run --storage $STORAGE --server server_"$I".json --shard "$J" --genesis genesis.json &
     done
 done
 

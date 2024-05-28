@@ -3,9 +3,9 @@
 
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
-    data_types::BlockHeight,
+    data_types::{Blob, BlockHeight},
     ensure,
-    identifiers::{ChainId, Owner},
+    identifiers::{BlobId, ChainId, Owner},
 };
 use linera_chain::data_types::{
     BlockAndRound, BlockProposal, Certificate, HashedCertificateValue, LiteCertificate, LiteValue,
@@ -527,6 +527,34 @@ impl TryFrom<api::Owner> for Owner {
 
     fn try_from(owner: api::Owner) -> Result<Self, Self::Error> {
         Ok(Self(CryptoHash::try_from(owner.bytes.as_slice())?))
+    }
+}
+
+impl TryFrom<api::BlobId> for BlobId {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(blob_id: api::BlobId) -> Result<Self, Self::Error> {
+        Ok(Self(CryptoHash::try_from(blob_id.bytes.as_slice())?))
+    }
+}
+
+impl From<BlobId> for api::BlobId {
+    fn from(blob_id: BlobId) -> Self {
+        Self {
+            bytes: blob_id.0.as_bytes().to_vec(),
+        }
+    }
+}
+
+impl From<Blob> for api::Blob {
+    fn from(blob: Blob) -> Self {
+        Self { bytes: blob.bytes }
+    }
+}
+
+impl From<api::Blob> for Blob {
+    fn from(blob: api::Blob) -> Self {
+        Self { bytes: blob.bytes }
     }
 }
 

@@ -6,6 +6,7 @@ use std::{path::PathBuf, time::Duration};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
+use linera_core::node::NodeError;
 use linera_rpc::{
     config::{
         NetworkProtocol, ShardConfig, ValidatorInternalNetworkPreConfig,
@@ -15,16 +16,19 @@ use linera_rpc::{
     RpcMessage,
 };
 use linera_service::{
-    config::{Import, ValidatorServerConfig},
+    config::{GenesisConfig, Import, ValidatorServerConfig},
     grpc_proxy::GrpcProxy,
+    storage::{run_with_storage, Runnable, StorageConfigNamespace},
     util,
 };
+use linera_storage::Storage;
+use linera_views::{common::CommonStoreConfig, views::ViewError};
 use tracing::{error, info, instrument};
 #[cfg(with_metrics)]
 use {linera_service::prometheus_server, std::net::SocketAddr};
 
 /// Options for running the proxy.
-#[derive(clap::Parser, Debug)]
+#[derive(clap::Parser, Debug, Clone)]
 #[command(
     name = "Linera Proxy",
     about = "A proxy to redirect incoming requests to Linera Server shards",
@@ -45,54 +49,108 @@ pub struct ProxyOptions {
     /// The number of Tokio worker threads to use.
     #[arg(long, env = "LINERA_PROXY_TOKIO_THREADS")]
     tokio_threads: Option<usize>,
+
+    /// Storage configuration for the blockchain history, chain states and binary blobs.
+    #[arg(long = "storage")]
+    storage_config: StorageConfigNamespace,
+
+    /// The maximal number of simultaneous queries to the database
+    #[arg(long)]
+    max_concurrent_queries: Option<usize>,
+
+    /// The maximal number of stream queries to the database
+    #[arg(long, default_value = "10")]
+    max_stream_queries: usize,
+
+    /// The maximal number of entries in the storage cache.
+    #[arg(long, default_value = "1000")]
+    cache_size: usize,
+
+    /// Path to the file describing the initial user chains (aka genesis state)
+    #[arg(long = "genesis")]
+    genesis_config_path: PathBuf,
 }
 
 /// A Linera Proxy, either gRPC or over 'Simple Transport', meaning TCP or UDP.
 /// The proxy can be configured to have a gRPC ingress and egress, or a combination
 /// of TCP / UDP ingress and egress.
-enum Proxy {
-    Simple(SimpleProxy),
-    Grpc(GrpcProxy),
+enum Proxy<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
+    Simple(SimpleProxy<S>),
+    Grpc(GrpcProxy<S>),
 }
 
-impl Proxy {
-    /// Run the proxy.
-    async fn run(self) -> Result<()> {
-        match self {
+struct ProxyContext {
+    config: ValidatorServerConfig,
+    send_timeout: Duration,
+    recv_timeout: Duration,
+}
+
+impl ProxyContext {
+    pub fn from_options(options: &ProxyOptions) -> Result<Self> {
+        let config = ValidatorServerConfig::read(&options.config_path)?;
+        Ok(Self {
+            config,
+            send_timeout: options.send_timeout,
+            recv_timeout: options.recv_timeout,
+        })
+    }
+}
+
+#[async_trait]
+impl Runnable for ProxyContext {
+    type Output = ();
+
+    async fn run<S>(self, storage: S) -> Result<(), anyhow::Error>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        let proxy = Proxy::from_context(self, storage).await?;
+        match proxy {
             Proxy::Simple(simple_proxy) => simple_proxy.run().await,
             Proxy::Grpc(grpc_proxy) => grpc_proxy.run().await,
         }
     }
+}
 
-    /// Constructs and configures the [`Proxy`] given [`ProxyOptions`].
-    async fn from_options(options: ProxyOptions) -> Result<Self> {
-        let config = ValidatorServerConfig::read(&options.config_path)?;
-
-        let internal_protocol = config.internal_network.protocol;
-        let external_protocol = config.validator.network.protocol;
+impl<S> Proxy<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
+    /// Constructs and configures the [`Proxy`] given [`ProxyContext`].
+    async fn from_context(context: ProxyContext, storage: S) -> Result<Self> {
+        let internal_protocol = context.config.internal_network.protocol;
+        let external_protocol = context.config.validator.network.protocol;
         let proxy = match (internal_protocol, external_protocol) {
             (NetworkProtocol::Grpc { .. }, NetworkProtocol::Grpc(tls)) => {
                 Self::Grpc(GrpcProxy::new(
-                    config.validator.network,
-                    config.internal_network,
-                    options.send_timeout,
-                    options.recv_timeout,
+                    context.config.validator.network,
+                    context.config.internal_network,
+                    context.send_timeout,
+                    context.recv_timeout,
                     tls,
+                    storage,
                 ))
             }
             (
                 NetworkProtocol::Simple(internal_transport),
                 NetworkProtocol::Simple(public_transport),
             ) => Self::Simple(SimpleProxy {
-                internal_config: config
+                internal_config: context
+                    .config
                     .internal_network
                     .clone_with_protocol(internal_transport),
-                public_config: config
+                public_config: context
+                    .config
                     .validator
                     .network
                     .clone_with_protocol(public_transport),
-                send_timeout: options.send_timeout,
-                recv_timeout: options.recv_timeout,
+                send_timeout: context.send_timeout,
+                recv_timeout: context.recv_timeout,
+                storage,
             }),
             _ => {
                 bail!(
@@ -108,20 +166,34 @@ impl Proxy {
 }
 
 #[derive(Debug, Clone)]
-pub struct SimpleProxy {
+pub struct SimpleProxy<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
     public_config: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     internal_config: ValidatorInternalNetworkPreConfig<TransportProtocol>,
     send_timeout: Duration,
     recv_timeout: Duration,
+    storage: S,
 }
 
 #[async_trait]
-impl MessageHandler for SimpleProxy {
+impl<S> MessageHandler for SimpleProxy<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
     #[instrument(skip_all, fields(chain_id = ?message.target_chain_id()))]
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage> {
-        if let RpcMessage::VersionInfoQuery = message {
-            // We assume each shard is running the same version as the proxy
-            return Some(linera_version::VersionInfo::default().into());
+        if message.is_local_message() {
+            match self.try_local_message(message).await {
+                Ok(maybe_response) => {
+                    return maybe_response;
+                }
+                Err(error) => {
+                    error!(error = %error, "Failed to handle local message");
+                    return None;
+                }
+            }
         }
 
         let Some(chain_id) = message.target_chain_id() else {
@@ -150,7 +222,10 @@ impl MessageHandler for SimpleProxy {
     }
 }
 
-impl SimpleProxy {
+impl<S> SimpleProxy<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
     #[instrument(skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port), err)]
     async fn run(self) -> Result<()> {
         info!("Starting simple server");
@@ -195,6 +270,23 @@ impl SimpleProxy {
             .transpose()?;
         Ok(message)
     }
+
+    async fn try_local_message(&self, message: RpcMessage) -> Result<Option<RpcMessage>> {
+        match message {
+            RpcMessage::VersionInfoQuery => {
+                // We assume each shard is running the same version as the proxy
+                Ok(Some(linera_version::VersionInfo::default().into()))
+            }
+            RpcMessage::DownloadBlob(blob_id) => Ok(Some(
+                self.storage
+                    .read_hashed_blob(*blob_id)
+                    .await?
+                    .into_inner()
+                    .into(),
+            )),
+            _ => Err(anyhow::Error::from(NodeError::UnexpectedMessage)),
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -224,5 +316,25 @@ fn main() -> Result<()> {
         .enable_all()
         .build()
         .expect("Failed to create Tokio runtime")
-        .block_on(async move { Proxy::from_options(options).await?.run().await })
+        .block_on(options.run())
+}
+
+impl ProxyOptions {
+    async fn run(&self) -> Result<()> {
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: self.max_concurrent_queries,
+            max_stream_queries: self.max_stream_queries,
+            cache_size: self.cache_size,
+        };
+        let full_storage_config = self.storage_config.add_common_config(common_config).await?;
+        let genesis_config = GenesisConfig::read(&self.genesis_config_path)
+            .expect("Fail to read initial chain config");
+        run_with_storage(
+            full_storage_config,
+            &genesis_config,
+            None,
+            ProxyContext::from_options(self)?,
+        )
+        .await
+    }
 }
