@@ -16,8 +16,9 @@ use linera_base::{
 };
 use linera_execution::{
     system::SystemMessage, ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView, Message,
-    MessageContext, OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
-    ResourceController, ResourceTracker, Response, UserApplicationDescription, UserApplicationId,
+    MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
+    RawOutgoingMessage, ResourceController, ResourceTracker, Response, UserApplicationDescription,
+    UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -745,6 +746,25 @@ where
                 ChainError::InactiveChain(self.chain_id())
             );
         }
+        let app_permissions = self.execution_state.system.application_permissions.get();
+        let mut mandatory = HashSet::<UserApplicationId>::from_iter(
+            app_permissions.mandatory_operations.iter().cloned(),
+        );
+        for operation in &block.operations {
+            ensure!(
+                app_permissions.can_execute_operations(&operation.application_id()),
+                ChainError::AuthorizedApplications(
+                    app_permissions.execute_operations.clone().unwrap()
+                )
+            );
+            if let Operation::User { application_id, .. } = operation {
+                mandatory.remove(application_id);
+            }
+        }
+        ensure!(
+            mandatory.is_empty(),
+            ChainError::MissingMandatoryOperations(mandatory.into_iter().collect())
+        );
         let mut oracle_records = oracle_records.map(Vec::into_iter);
         let mut new_oracle_records = Vec::new();
         for (index, message) in block.incoming_messages.iter().enumerate() {
@@ -872,13 +892,6 @@ where
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
-            let app_permissions = self.execution_state.system.application_permissions.get();
-            ensure!(
-                app_permissions.can_execute_operations(&operation.application_id()),
-                ChainError::AuthorizedApplications(
-                    app_permissions.execute_operations.clone().unwrap()
-                )
-            );
             #[cfg(with_metrics)]
             let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;

@@ -540,9 +540,11 @@ where
         chain_id: ChainId,
         close_chain: Vec<ApplicationId>,
         execute_operations: Option<Vec<ApplicationId>>,
+        mandatory_operations: Vec<ApplicationId>,
     ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeApplicationPermissions(ApplicationPermissions {
             execute_operations,
+            mandatory_operations,
             close_chain,
         });
         self.execute_system_operation(operation, chain_id).await

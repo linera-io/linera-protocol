@@ -242,6 +242,8 @@ your tokens.
 Fortunately, Linera provides a solution based on temporary chains:
 If the number of parties who want to swap tokens is limited, we can make them all chain
 owners, allow only AMM operations on the chain, and allow only the AMM to close the chain.
+In addition, we make an AMM operation per block mandatory, so owners cannot spam the chain
+with empty blocks.
 
 ```bash
 PUB_KEY_AMM=fcf518d56455283ace2bbc11c71e684eb58af81bc98b96a18129e825ce24ea84
@@ -254,6 +256,7 @@ linera --wait-for-outgoing-messages change-ownership \
 
 linera --wait-for-outgoing-messages change-application-permissions \
     --execute-operations $AMM_APPLICATION_ID \
+    --mandatory-operations $AMM_APPLICATION_ID \
     --close-chain $AMM_APPLICATION_ID
 
 linera service --port $PORT &

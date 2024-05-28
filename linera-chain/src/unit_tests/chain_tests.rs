@@ -141,9 +141,18 @@ async fn test_application_permissions() {
     let value = HashedCertificateValue::new_confirmed(outcome.with(valid_block));
 
     // In the second block, other operations are still not allowed.
-    let invalid_block = make_child_block(&value).with_simple_transfer(chain_id, Amount::ONE);
+    let invalid_block = make_child_block(&value)
+        .with_simple_transfer(chain_id, Amount::ONE)
+        .with_operation(app_operation.clone());
     let result = chain.execute_block(&invalid_block, time, None).await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
+        if app_ids == vec![application_id]
+    );
+
+    // Also, blocks without an application operation are forbidden.
+    let invalid_block = make_child_block(&value);
+    let result = chain.execute_block(&invalid_block, time, None).await;
+    assert_matches!(result, Err(ChainError::MissingMandatoryOperations(app_ids))
         if app_ids == vec![application_id]
     );
 

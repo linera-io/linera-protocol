@@ -37,6 +37,9 @@ ApplicationPermissions:
         OPTION:
           SEQ:
             TYPENAME: ApplicationId
+    - mandatory_operations:
+        SEQ:
+          TYPENAME: ApplicationId
     - close_chain:
         SEQ:
           TYPENAME: ApplicationId

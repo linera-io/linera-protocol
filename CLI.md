@@ -270,7 +270,11 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 
 Changes the application permissions configuration
 
-**Usage:** `linera change-application-permissions [OPTIONS]`
+**Usage:** `linera change-application-permissions [OPTIONS] [MANDATORY_OPERATIONS]...`
+
+###### **Arguments:**
+
+* `<MANDATORY_OPERATIONS>` — At least one operation from each of these applications must occur in every block
 
 ###### **Options:**
 

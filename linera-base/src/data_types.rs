@@ -658,16 +658,19 @@ pub struct ApplicationPermissions {
     /// If it is `Some`, only operations from the specified applications are allowed, and
     /// no system operations.
     pub execute_operations: Option<Vec<ApplicationId>>,
+    /// At least one operation from each of these applications must occur in every block.
+    pub mandatory_operations: Vec<ApplicationId>,
     /// These applications are allowed to close the current chain using the system API.
     pub close_chain: Vec<ApplicationId>,
 }
 
 impl ApplicationPermissions {
     /// Creates new `ApplicationPermissions` where the given application is the only one
-    /// whose operations are allowed, and it can also close the chain.
+    /// whose operations are allowed and mandatory, and it can also close the chain.
     pub fn new_single(app_id: ApplicationId) -> Self {
         Self {
             execute_operations: Some(vec![app_id]),
+            mandatory_operations: vec![app_id],
             close_chain: vec![app_id],
         }
     }
