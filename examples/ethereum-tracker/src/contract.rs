@@ -5,7 +5,7 @@
 
 mod state;
 
-use ethereum_tracker::{EndpointAndAddress, EthereumTrackerAbi, InstantiationArgument, U256Cont};
+use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument, U256Cont};
 use linera_sdk::{
     base::WithContractAbi,
     ethereum::{EthereumClient, EthereumDataType, EthereumQueries as _},
@@ -46,12 +46,9 @@ impl Contract for EthereumTrackerContract {
             contract_address,
             start_block,
         } = argument;
-        let endpoint_and_address = EndpointAndAddress {
-            ethereum_endpoint,
-            contract_address,
-        };
-        self.state.argument.set(endpoint_and_address);
-        self.state.start_block.set(0);
+        self.state.ethereum_endpoint.set(ethereum_endpoint);
+        self.state.contract_address.set(contract_address);
+        self.state.start_block.set(start_block);
         self.read_initial(start_block).await;
     }
 
@@ -73,9 +70,8 @@ impl Contract for EthereumTrackerContract {
 
 impl EthereumTrackerContract {
     fn get_endpoints(&self) -> (EthereumClient, String) {
-        let argument = self.state.argument.get();
-        let url = argument.ethereum_endpoint.clone();
-        let contract_address = argument.contract_address.clone();
+        let url = self.state.ethereum_endpoint.get().clone();
+        let contract_address = self.state.contract_address.get().clone();
         let ethereum_client = EthereumClient { url };
         (ethereum_client, contract_address)
     }

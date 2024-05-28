@@ -34,7 +34,7 @@ pub enum Operation {
     Update { to_block: u64 },
 }
 
-/// The initialization data required to create an Ethereum tracker
+/// The instantiation argument used for the contract.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, SimpleObject)]
 pub struct InstantiationArgument {
     /// The Ethereum endpoint being used
@@ -43,15 +43,6 @@ pub struct InstantiationArgument {
     pub contract_address: String,
     /// The block height at which the EVM contract was created
     pub start_block: u64,
-}
-
-/// The initialization data required to create an Ethereum tracker
-#[derive(Clone, Debug, Default, Deserialize, Serialize, SimpleObject)]
-pub struct EndpointAndAddress {
-    /// The Ethereum endpoint being used
-    pub ethereum_endpoint: String,
-    /// The address of the contract
-    pub contract_address: String,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
