@@ -83,22 +83,27 @@ impl QuotedBashAndGraphQlScript {
 
         while let Some(line) = lines.next() {
             let line = line?;
-            if line.starts_with("```bash") {
-                let mut quote = String::new();
-                while let Some(line) = lines.next() {
-                    let line = line?;
-                    if line.starts_with("```") {
-                        break;
-                    }
-                    quote += &line;
-                    quote += "\n";
 
-                    if line.contains("linera service") {
-                        quote += "sleep 3";
+            if line.starts_with("```bash") {
+                if line.ends_with("ignore") {
+                    continue;
+                } else {
+                    let mut quote = String::new();
+                    while let Some(line) = lines.next() {
+                        let line = line?;
+                        if line.starts_with("```") {
+                            break;
+                        }
+                        quote += &line;
                         quote += "\n";
+
+                        if line.contains("linera service") {
+                            quote += "sleep 3";
+                            quote += "\n";
+                        }
                     }
+                    result.push(quote);
                 }
-                result.push(quote);
             } else if let Some(uri) = line.strip_prefix("```gql,uri=") {
                 let mut quote = String::new();
                 while let Some(line) = lines.next() {
@@ -160,4 +165,26 @@ fn test_parse_version_message() {
 
     let s = "";
     assert_eq!(parse_version_message(s), "");
+}
+
+#[test]
+fn test_ignore() {
+    let readme = r#"
+first line
+```bash
+some bash
+```
+second line
+```bash
+some other bash
+```
+third line
+```bash,ignore
+this will be ignored
+```
+    "#;
+    let cursor = std::io::Cursor::new(readme);
+    let parsed = QuotedBashAndGraphQlScript::read_bash_and_gql_quotes(cursor, None).unwrap();
+    let expected = vec!["some bash\n".to_string(), "some other bash\n".to_string()];
+    assert_eq!(parsed, expected)
 }
