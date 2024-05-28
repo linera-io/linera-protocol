@@ -176,7 +176,7 @@ linera --wait-for-outgoing-messages change-ownership \
 
 linera --wait-for-outgoing-messages change-application-permissions \
     --execute-operations $MATCHING_ENGINE \
-    --mandatory-operations $MATCHING_ENGINE \
+    --mandatory-applications $MATCHING_ENGINE \
     --close-chain $MATCHING_ENGINE
 
 linera service --port $PORT &

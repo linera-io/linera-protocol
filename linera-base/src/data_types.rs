@@ -659,7 +659,7 @@ pub struct ApplicationPermissions {
     /// no system operations.
     pub execute_operations: Option<Vec<ApplicationId>>,
     /// At least one operation from each of these applications must occur in every block.
-    pub mandatory_operations: Vec<ApplicationId>,
+    pub mandatory_applications: Vec<ApplicationId>,
     /// These applications are allowed to close the current chain using the system API.
     pub close_chain: Vec<ApplicationId>,
 }
@@ -670,7 +670,7 @@ impl ApplicationPermissions {
     pub fn new_single(app_id: ApplicationId) -> Self {
         Self {
             execute_operations: Some(vec![app_id]),
-            mandatory_operations: vec![app_id],
+            mandatory_applications: vec![app_id],
             close_chain: vec![app_id],
         }
     }

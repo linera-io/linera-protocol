@@ -748,7 +748,7 @@ where
         }
         let app_permissions = self.execution_state.system.application_permissions.get();
         let mut mandatory = HashSet::<UserApplicationId>::from_iter(
-            app_permissions.mandatory_operations.iter().cloned(),
+            app_permissions.mandatory_applications.iter().cloned(),
         );
         for operation in &block.operations {
             ensure!(
@@ -763,7 +763,7 @@ where
         }
         ensure!(
             mandatory.is_empty(),
-            ChainError::MissingMandatoryOperations(mandatory.into_iter().collect())
+            ChainError::MissingMandatoryApplicationOperations(mandatory.into_iter().collect())
         );
         let mut oracle_records = oracle_records.map(Vec::into_iter);
         let mut new_oracle_records = Vec::new();

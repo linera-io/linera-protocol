@@ -152,7 +152,7 @@ async fn test_application_permissions() {
     // Also, blocks without an application operation are forbidden.
     let invalid_block = make_child_block(&value);
     let result = chain.execute_block(&invalid_block, time, None).await;
-    assert_matches!(result, Err(ChainError::MissingMandatoryOperations(app_ids))
+    assert_matches!(result, Err(ChainError::MissingMandatoryApplicationOperations(app_ids))
         if app_ids == vec![application_id]
     );
 
