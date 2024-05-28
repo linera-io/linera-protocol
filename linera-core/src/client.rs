@@ -1312,7 +1312,8 @@ where
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         loop {
             let messages = self.pending_messages().await?;
-            match self.execute_block(messages, operations.clone()).await? {
+            // TODO(#2066): Remove boxing once the call-stack is shallower
+            match Box::pin(self.execute_block(messages, operations.clone())).await? {
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate));
                 }

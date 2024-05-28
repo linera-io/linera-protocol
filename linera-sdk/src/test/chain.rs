@@ -101,7 +101,8 @@ impl ActiveChain {
 
         block_builder(&mut block);
 
-        let (certificate, message_ids) = block.sign().await;
+        // TODO(#2066): Remove boxing once call-stack is shallower
+        let (certificate, message_ids) = Box::pin(block.sign()).await;
 
         self.validator
             .worker()
