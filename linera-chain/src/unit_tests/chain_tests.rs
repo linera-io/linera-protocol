@@ -149,7 +149,7 @@ async fn test_application_permissions() {
         if app_ids == vec![application_id]
     );
 
-    // Also, blocks without an application operation are forbidden.
+    // Also, blocks without an application operation or incoming message are forbidden.
     let invalid_block = make_child_block(&value);
     let result = chain.execute_block(&invalid_block, time, None).await;
     assert_matches!(result, Err(ChainError::MissingMandatoryApplications(app_ids))
