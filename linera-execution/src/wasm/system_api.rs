@@ -4,7 +4,7 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use linera_base::{
-    data_types::{Amount, BlockHeight, SendMessageRequest, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, ChannelName, MessageId, Owner},
     ownership::{ChainOwnership, CloseChainError},
 };
@@ -259,17 +259,18 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Opens a new chain, configuring it with the provided `chain_ownership` and initial `balance`
-    /// (debited from the current chain).
+    /// Opens a new chain, configuring it with the provided `chain_ownership`,
+    /// `application_permissions` and initial `balance` (debited from the current chain).
     fn open_chain(
         caller: &mut Caller,
         chain_ownership: ChainOwnership,
+        application_permissions: ApplicationPermissions,
         balance: Amount,
     ) -> Result<ChainId, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .open_chain(chain_ownership, balance)
+            .open_chain(chain_ownership, application_permissions, balance)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

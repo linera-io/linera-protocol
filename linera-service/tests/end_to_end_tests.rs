@@ -2495,15 +2495,18 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     // Open another new chain.
     // This is a regression test; a PR had to be reverted because this was hanging:
     // https://github.com/linera-io/linera-protocol/pull/899
+    // We use openMultiOwnerChain to test that mutation, too, and allow only the fungible app.
+    let raw_app_id = application_id.forget_abi();
     let query = format!(
-        "mutation {{ openChain(\
-            chainId:\"{chain1}\", \
-            publicKey:\"{public_key}\", \
-            balance:\"1\"
+        "mutation {{ openMultiOwnerChain(\
+            chainId: \"{chain1}\", \
+            publicKeys: [\"{public_key}\"], \
+            applicationPermissions: {{ executeOperations: [\"{raw_app_id}\"] }}, \
+            balance: \"1\"
         ) }}"
     );
     let data = node_service.query_node(query).await?;
-    let chain2: ChainId = serde_json::from_value(data["openChain"].clone())?;
+    let chain2: ChainId = serde_json::from_value(data["openMultiOwnerChain"].clone())?;
 
     // Send 8 tokens to the new chain.
     let app1 = FungibleApp(

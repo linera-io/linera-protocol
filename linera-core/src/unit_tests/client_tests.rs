@@ -509,7 +509,11 @@ where
     let new_key_pair = KeyPair::generate();
     // Open the new chain.
     let (message_id, certificate) = sender
-        .open_chain(ChainOwnership::single(new_key_pair.public()), Amount::ZERO)
+        .open_chain(
+            ChainOwnership::single(new_key_pair.public()),
+            ApplicationPermissions::default(),
+            Amount::ZERO,
+        )
         .await
         .unwrap()
         .unwrap();
@@ -567,7 +571,11 @@ where
         .unwrap();
     // Open the new chain.
     let (open_chain_message_id, certificate) = parent
-        .open_chain(ChainOwnership::single(new_key_pair.public()), Amount::ZERO)
+        .open_chain(
+            ChainOwnership::single(new_key_pair.public()),
+            ApplicationPermissions::default(),
+            Amount::ZERO,
+        )
         .await
         .unwrap()
         .unwrap();
@@ -664,7 +672,11 @@ where
         .unwrap();
     // Open the new chain.
     let (open_chain_message_id, certificate) = sender
-        .open_chain(ChainOwnership::single(new_key_pair.public()), Amount::ZERO)
+        .open_chain(
+            ChainOwnership::single(new_key_pair.public()),
+            ApplicationPermissions::default(),
+            Amount::ZERO,
+        )
         .await
         .unwrap()
         .unwrap();
@@ -737,7 +749,7 @@ where
     let ownership = ChainOwnership::single(new_key_pair.public())
         .with_regular_owner(new_key_pair.public(), 100);
     let (message_id, creation_certificate) = sender
-        .open_chain(ownership, Amount::ZERO)
+        .open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO)
         .await
         .unwrap()
         .unwrap();

@@ -385,7 +385,7 @@ where
                 let ownership = ownership.clone();
                 async move {
                     let result = client
-                        .open_chain(ownership, balance)
+                        .open_chain(ownership, ApplicationPermissions::default(), balance)
                         .await
                         .map_err(Error::from)
                         .map(|outcome| outcome.map(|(message_id, _)| message_id));
@@ -402,6 +402,7 @@ where
     async fn open_multi_owner_chain(
         &self,
         chain_id: ChainId,
+        application_permissions: Option<ApplicationPermissions>,
         public_keys: Vec<PublicKey>,
         weights: Option<Vec<u64>>,
         multi_leader_rounds: Option<u32>,
@@ -453,9 +454,10 @@ where
         let message_id = self
             .apply_client_command(&chain_id, move |mut client| {
                 let ownership = ownership.clone();
+                let application_permissions = application_permissions.clone().unwrap_or_default();
                 async move {
                     let result = client
-                        .open_chain(ownership, balance)
+                        .open_chain(ownership, application_permissions, balance)
                         .await
                         .map_err(Error::from)
                         .map(|outcome| outcome.map(|(message_id, _)| message_id));

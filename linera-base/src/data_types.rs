@@ -7,7 +7,7 @@
 use std::fmt;
 
 use anyhow::Context as _;
-use async_graphql::SimpleObject;
+use async_graphql::{InputObject, SimpleObject};
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -652,7 +652,20 @@ impl Amount {
 }
 
 /// Permissions for applications on a chain.
-#[derive(Default, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(
+    Default,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Clone,
+    Serialize,
+    Deserialize,
+    WitType,
+    WitLoad,
+    WitStore,
+    InputObject,
+)]
 pub struct ApplicationPermissions {
     /// If this is `None`, all system operations and application operations are allowed.
     /// If it is `Some`, only operations from the specified applications are allowed, and
@@ -660,8 +673,10 @@ pub struct ApplicationPermissions {
     pub execute_operations: Option<Vec<ApplicationId>>,
     /// At least one operation or incoming message from each of these applications must occur in
     /// every block.
+    #[graphql(default)]
     pub mandatory_applications: Vec<ApplicationId>,
     /// These applications are allowed to close the current chain using the system API.
+    #[graphql(default)]
     pub close_chain: Vec<ApplicationId>,
 }
 

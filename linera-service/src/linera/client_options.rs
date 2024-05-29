@@ -7,7 +7,7 @@ use anyhow::Error;
 use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::PublicKey,
-    data_types::{Amount, TimeDelta},
+    data_types::{Amount, ApplicationPermissions, TimeDelta},
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -238,6 +238,9 @@ pub enum ClientCommand {
         #[clap(flatten)]
         ownership_config: ChainOwnershipConfig,
 
+        #[clap(flatten)]
+        application_permissions_config: ApplicationPermissionsConfig,
+
         /// The initial balance of the new chain. This is subtracted from the parent chain's
         /// balance.
         #[arg(long = "initial-balance", default_value = "0")]
@@ -262,18 +265,9 @@ pub enum ClientCommand {
         /// The ID of the chain to which the new permissions will be applied.
         #[arg(long)]
         chain_id: Option<ChainId>,
-        /// If this is not set, all system operations and application operations are allowed.
-        /// If it is set, only operations from the specified applications are allowed, and
-        /// no system operations.
-        #[arg(long)]
-        execute_operations: Option<Vec<ApplicationId>>,
-        /// At least one operation or incoming message from each of these applications must
-        /// occur in every block.
-        #[arg(long)]
-        mandatory_applications: Vec<ApplicationId>,
-        /// These applications are allowed to close the current chain using the system API.
-        #[arg(long)]
-        close_chain: Vec<ApplicationId>,
+
+        #[clap(flatten)]
+        application_permissions_config: ApplicationPermissionsConfig,
     },
 
     /// Close an existing chain.
@@ -959,5 +953,30 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
             multi_leader_rounds,
             timeout_config,
         })
+    }
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct ApplicationPermissionsConfig {
+    /// If present, only operations from the specified applications are allowed, and
+    /// no system operations. Otherwise all operations are allowed.
+    #[arg(long)]
+    pub execute_operations: Option<Vec<ApplicationId>>,
+    /// At least one operation or incoming message from each of these applications must occur in
+    /// every block.
+    #[arg(long)]
+    pub mandatory_applications: Option<Vec<ApplicationId>>,
+    /// These applications are allowed to close the current chain using the system API.
+    #[arg(long)]
+    pub close_chain: Option<Vec<ApplicationId>>,
+}
+
+impl From<ApplicationPermissionsConfig> for ApplicationPermissions {
+    fn from(config: ApplicationPermissionsConfig) -> ApplicationPermissions {
+        ApplicationPermissions {
+            execute_operations: config.execute_operations,
+            mandatory_applications: config.mandatory_applications.unwrap_or_default(),
+            close_chain: config.close_chain.unwrap_or_default(),
+        }
     }
 }

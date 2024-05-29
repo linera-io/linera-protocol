@@ -20,6 +20,27 @@ type ApplicationOverview {
 }
 
 """
+Permissions for applications on a chain.
+"""
+input ApplicationPermissions {
+	"""
+	If this is `None`, all system operations and application operations are allowed.
+	If it is `Some`, only operations from the specified applications are allowed, and
+	no system operations.
+	"""
+	executeOperations: [ApplicationId!]
+	"""
+	At least one operation or incoming message from each of these applications must occur in
+	every block.
+	"""
+	mandatoryApplications: [ApplicationId!]! = []
+	"""
+	These applications are allowed to close the current chain using the system API.
+	"""
+	closeChain: [ApplicationId!]! = []
+}
+
+"""
 A blob of binary data.
 """
 scalar Blob
@@ -538,7 +559,7 @@ type MutationRoot {
 	Creates (or activates) a new chain by installing the given authentication keys.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openMultiOwnerChain(		chainId: ChainId!,		publicKeys: [PublicKey!]!,		weights: [Int!],		multiLeaderRounds: Int,		balance: Amount,
+	openMultiOwnerChain(		chainId: ChainId!,		applicationPermissions: ApplicationPermissions,		publicKeys: [PublicKey!]!,		weights: [Int!],		multiLeaderRounds: Int,		balance: Amount,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""
