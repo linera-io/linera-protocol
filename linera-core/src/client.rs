@@ -729,18 +729,14 @@ where
     async fn find_missing_application_bytecodes(
         &self,
         locations: &[BytecodeLocation],
-        nodes: &[(ValidatorName, <P as LocalValidatorNodeProvider>::Node)],
-        chain_id: ChainId,
+        nodes: &[<P as LocalValidatorNodeProvider>::Node],
     ) -> Vec<HashedCertificateValue> {
         future::join_all(locations.iter().map(|location| {
-            LocalNodeClient::<S>::download_hashed_certificate_value(
-                nodes.to_owned(),
-                chain_id,
-                *location,
-            )
+            LocalNodeClient::<S>::download_hashed_certificate_value(nodes.to_owned(), *location)
         }))
         .await
         .into_iter()
+        .flatten()
         .flatten()
         .collect::<Vec<_>>()
     }
@@ -796,12 +792,17 @@ where
             .process_certificate(certificate.clone(), vec![], vec![])
             .await
         {
+            let nodes = nodes
+                .into_iter()
+                .map(|(_name, node)| node)
+                .collect::<Vec<_>>();
+
             match &err {
                 LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
                     locations,
                 )) => {
                     let values = self
-                        .find_missing_application_bytecodes(locations, &nodes, block.chain_id)
+                        .find_missing_application_bytecodes(locations, &nodes)
                         .await;
 
                     ensure!(values.len() == locations.len(), err);
@@ -809,15 +810,7 @@ where
                         .await?;
                 }
                 LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
-                    let blobs = self
-                        .find_missing_blobs(
-                            blob_ids,
-                            &nodes
-                                .into_iter()
-                                .map(|(_name, node)| node)
-                                .collect::<Vec<_>>(),
-                        )
-                        .await;
+                    let blobs = self.find_missing_blobs(blob_ids, &nodes).await;
 
                     ensure!(blobs.len() == blob_ids.len(), err);
                     self.process_certificate(certificate.clone(), vec![], blobs)
@@ -828,17 +821,9 @@ where
                     blob_ids,
                 )) => {
                     let values = self
-                        .find_missing_application_bytecodes(locations, &nodes, block.chain_id)
+                        .find_missing_application_bytecodes(locations, &nodes)
                         .await;
-                    let blobs = self
-                        .find_missing_blobs(
-                            blob_ids,
-                            &nodes
-                                .into_iter()
-                                .map(|(_name, node)| node)
-                                .collect::<Vec<_>>(),
-                        )
-                        .await;
+                    let blobs = self.find_missing_blobs(blob_ids, &nodes).await;
 
                     ensure!(
                         blobs.len() == blob_ids.len() && values.len() == locations.len(),
@@ -1255,11 +1240,18 @@ where
         };
         // Collect the hashed certificate values required for execution.
         let committee = self.local_committee().await?;
-        let nodes: Vec<(ValidatorName, P::Node)> =
-            self.validator_node_provider.make_nodes(&committee)?;
+        let nodes = self
+            .validator_node_provider
+            .make_nodes::<Vec<_>>(&committee)?
+            .into_iter()
+            .map(|(_name, node)| node)
+            .collect();
         let values = self
             .node_client
-            .read_or_download_hashed_certificate_values(nodes.clone(), block.bytecode_locations())
+            .read_or_download_hashed_certificate_values(
+                nodes,
+                block.bytecode_locations().into_keys(),
+            )
             .await?;
         let hashed_blobs = self.read_local_blobs(block.blob_ids()).await?;
         // Create the final block proposal.
