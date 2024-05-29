@@ -958,9 +958,8 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct ApplicationPermissionsConfig {
-    /// If this is `None`, all system operations and application operations are allowed.
-    /// If it is `Some`, only operations from the specified applications are allowed, and
-    /// no system operations.
+    /// If present, only operations from the specified applications are allowed, and
+    /// no system operations. Otherwise all operations are allowed.
     #[arg(long)]
     pub execute_operations: Option<Vec<ApplicationId>>,
     /// At least one operation or incoming message from each of these applications must occur in
