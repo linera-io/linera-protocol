@@ -17,11 +17,14 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
 };
-use linera_chain::data_types::Certificate;
-use linera_core::{data_types::ChainInfoQuery, worker::ValidatorWorker};
+use linera_chain::{data_types::Certificate, ChainError, ChainExecutionContext};
+use linera_core::{
+    data_types::ChainInfoQuery,
+    worker::{ValidatorWorker, WorkerError},
+};
 use linera_execution::{
     system::{SystemChannel, SystemExecutionError, SystemMessage, SystemOperation},
-    Bytecode, Message, Query, Response,
+    Bytecode, ExecutionError, Message, Query, Response,
 };
 use serde::Serialize;
 use tokio::{fs, sync::Mutex};
@@ -98,7 +101,8 @@ impl ActiveChain {
 
         block_builder(&mut block);
 
-        let (certificate, message_ids) = block.sign().await;
+        // TODO(#2066): Remove boxing once call-stack is shallower
+        let (certificate, message_ids) = Box::pin(block.sign()).await;
 
         self.validator
             .worker()
@@ -368,16 +372,10 @@ impl ActiveChain {
         &self,
         bytecode_id: BytecodeId<Abi, Parameters, InstantiationArgument>,
     ) -> bool {
-        let applications = self
-            .validator
+        self.validator
             .worker()
             .await
-            .load_application_registry(self.id())
-            .await
-            .expect("Failed to load application registry");
-
-        applications
-            .bytecode_location_for(&bytecode_id.forget_abi())
+            .read_bytecode_location(self.id(), bytecode_id.forget_abi())
             .await
             .expect("Failed to check known bytecode locations")
             .is_none()
@@ -458,20 +456,26 @@ impl ActiveChain {
 
     /// Checks if the `application_id` is missing from this microchain.
     async fn needs_application_description<Abi>(&self, application_id: ApplicationId<Abi>) -> bool {
-        let applications = self
+        let description_result = self
             .validator
             .worker()
             .await
-            .load_application_registry(self.id())
-            .await
-            .expect("Failed to load application registry");
+            .describe_application(self.id(), application_id.forget_abi())
+            .await;
 
-        match applications
-            .describe_application(application_id.forget_abi())
-            .await
-        {
+        match description_result {
             Ok(_) => false,
-            Err(SystemExecutionError::UnknownApplicationId(_)) => true,
+            Err(WorkerError::ChainError(boxed_chain_error))
+                if matches!(
+                    &*boxed_chain_error,
+                    ChainError::ExecutionError(
+                        ExecutionError::SystemError(SystemExecutionError::UnknownApplicationId(_)),
+                        ChainExecutionContext::DescribeApplication,
+                    )
+                ) =>
+            {
+                true
+            }
             Err(_) => panic!("Failed to check known bytecode locations"),
         }
     }

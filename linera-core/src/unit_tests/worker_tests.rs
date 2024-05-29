@@ -52,10 +52,11 @@ use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
 use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::{
+    chain_worker::CrossChainUpdateHelper,
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
-        CrossChainUpdateHelper, Notification,
+        Notification,
         Reason::{self, NewBlock, NewIncomingMessage},
         ValidatorWorker, WorkerError, WorkerState,
     },
@@ -133,7 +134,11 @@ fn make_certificate_with_round<S>(
     value: HashedCertificateValue,
     round: Round,
 ) -> Certificate {
-    let vote = LiteVote::new(value.lite(), round, worker.key_pair.as_ref().unwrap());
+    let vote = LiteVote::new(
+        value.lite(),
+        round,
+        worker.chain_worker_config.key_pair().unwrap(),
+    );
     let mut builder = SignatureAggregator::new(value, round, committee);
     builder
         .append(vote.validator, vote.signature)
@@ -1141,7 +1146,7 @@ where
         .into_fast_proposal(&sender_key_pair);
 
     let (chain_info_response, _actions) = worker.handle_block_proposal(block_proposal).await?;
-    chain_info_response.check(ValidatorName(worker.key_pair.unwrap().public()))?;
+    chain_info_response.check(ValidatorName(worker.public_key()))?;
     let pending_value = worker
         .storage
         .load_active_chain(ChainId::root(1))
@@ -1190,7 +1195,7 @@ where
         .into_fast_proposal(&sender_key_pair);
 
     let (response, _actions) = worker.handle_block_proposal(block_proposal.clone()).await?;
-    response.check(ValidatorName(worker.key_pair.as_ref().unwrap().public()))?;
+    response.check(ValidatorName(worker.public_key()))?;
     let (replay_response, _actions) = worker.handle_block_proposal(block_proposal).await?;
     // Workaround lack of equality.
     assert_eq!(
@@ -3099,7 +3104,6 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         .unwrap();
 
     let helper = CrossChainUpdateHelper {
-        nickname: "test",
         allow_messages_from_deprecated_epochs: true,
         current_epoch: Some(Epoch::from(1)),
         committees: &committees,
@@ -3149,7 +3153,6 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     );
 
     let helper = CrossChainUpdateHelper {
-        nickname: "test",
         allow_messages_from_deprecated_epochs: false,
         current_epoch: Some(Epoch::from(1)),
         committees: &committees,
@@ -3679,7 +3682,7 @@ where
     // Now we are in fallback mode, and the validator is the leader.
     let (response, _) = worker.handle_chain_info_query(query.clone()).await?;
     let manager = response.info.manager;
-    let validator_key = worker.key_pair().unwrap().public();
+    let validator_key = worker.public_key();
     assert_eq!(manager.current_round, Round::Validator(0));
     assert_eq!(manager.leader, Some(Owner::from(validator_key)));
     Ok(())

@@ -30,6 +30,8 @@ use linera_views::{
     views::{CryptoHashView, RootView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
+#[cfg(with_testing)]
+use {linera_base::identifiers::BytecodeId, linera_execution::BytecodeLocation};
 
 use crate::{
     data_types::{
@@ -381,6 +383,23 @@ where
         Ok(response)
     }
 
+    /// Reads the [`BytecodeLocation`] for the requested [`BytecodeId`], if it is registered in
+    /// this chain's [`ApplicationRegistryView`][`linera_execution::ApplicationRegistryView`].
+    #[cfg(with_testing)]
+    pub async fn read_bytecode_location(
+        &mut self,
+        bytecode_id: BytecodeId,
+    ) -> Result<Option<BytecodeLocation>, ChainError> {
+        self.execution_state
+            .system
+            .registry
+            .bytecode_location_for(&bytecode_id)
+            .await
+            .map_err(|err| {
+                ChainError::ExecutionError(err.into(), ChainExecutionContext::ReadBytecodeLocation)
+            })
+    }
+
     pub async fn describe_application(
         &mut self,
         application_id: UserApplicationId,
@@ -397,10 +416,10 @@ where
 
     pub async fn mark_messages_as_received(
         &mut self,
-        target: Target,
+        target: &Target,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
-        let mut outbox = self.outboxes.try_load_entry_mut(&target).await?;
+        let mut outbox = self.outboxes.try_load_entry_mut(target).await?;
         let updates = outbox.mark_messages_as_received(height).await?;
         if updates.is_empty() {
             return Ok(false);
@@ -420,7 +439,7 @@ where
             }
         }
         if outbox.queue.count() == 0 {
-            self.outboxes.remove_entry(&target)?;
+            self.outboxes.remove_entry(target)?;
         }
         Ok(true)
     }
