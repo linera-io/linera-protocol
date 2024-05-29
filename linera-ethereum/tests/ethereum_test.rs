@@ -155,11 +155,19 @@ async fn test_simple_token_queries() -> anyhow::Result<()> {
     simple_token.transfer(&addr0, &addr1, value).await?;
 
     // Checking the balances
-    let balance0 = simple_token.balance_of(&addr0).await?;
+    let block1 = 1;
+    let balance0 = simple_token.balance_of(&addr0, block1).await?;
+    assert_eq!(balance0, U256::from(1000));
+    let balance1 = simple_token.balance_of(&addr1, block1).await?;
+    assert_eq!(balance1, U256::from(0));
+
+    // Checking the balances
+    let block2 = 2;
+    let balance0 = simple_token.balance_of(&addr0, block2).await?;
     assert_eq!(balance0, U256::from(990));
-    let balance1 = simple_token.balance_of(&addr1).await?;
+    let balance1 = simple_token.balance_of(&addr1, block2).await?;
     assert_eq!(balance1, U256::from(10));
-    let balance_contract = simple_token.balance_of(&contract_address).await?;
+    let balance_contract = simple_token.balance_of(&contract_address, block2).await?;
     assert_eq!(balance_contract, U256::from(0));
     Ok(())
 }
