@@ -180,6 +180,7 @@ impl Runnable for Job {
                 chain_id,
                 balance,
                 ownership_config,
+                application_permissions_config,
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(storage, chain_id).into_arc();
@@ -189,12 +190,15 @@ impl Runnable for Job {
                 );
                 let time_start = Instant::now();
                 let ownership = ChainOwnership::try_from(ownership_config)?;
+                let application_permissions =
+                    ApplicationPermissions::from(application_permissions_config);
                 let (message_id, certificate) = context
                     .apply_client_command(&chain_client, |mut chain_client| {
                         let ownership = ownership.clone();
+                        let application_permissions = application_permissions.clone();
                         async move {
                             chain_client
-                                .open_chain(ownership, ApplicationPermissions::default(), balance)
+                                .open_chain(ownership, application_permissions, balance)
                                 .await
                         }
                     })
@@ -231,24 +235,20 @@ impl Runnable for Job {
 
             ChangeApplicationPermissions {
                 chain_id,
-                execute_operations,
-                mandatory_applications,
-                close_chain,
+                application_permissions_config,
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(storage, chain_id).into_arc();
                 info!("Changing application permissions for chain {}", chain_id);
                 let time_start = Instant::now();
+                let application_permissions =
+                    ApplicationPermissions::from(application_permissions_config);
                 let certificate = context
                     .apply_client_command(&chain_client, |mut chain_client| {
-                        let permissions = ApplicationPermissions {
-                            execute_operations: execute_operations.clone(),
-                            mandatory_applications: mandatory_applications.clone(),
-                            close_chain: close_chain.clone(),
-                        };
+                        let application_permissions = application_permissions.clone();
                         async move {
                             chain_client
-                                .change_application_permissions(permissions)
+                                .change_application_permissions(application_permissions)
                                 .await
                         }
                     })

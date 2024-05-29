@@ -232,6 +232,9 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds
 
   Default value: `86400000`
+* `--execute-operations <EXECUTE_OPERATIONS>` — If this is `None`, all system operations and application operations are allowed. If it is `Some`, only operations from the specified applications are allowed, and no system operations
+* `--mandatory-applications <MANDATORY_APPLICATIONS>` — At least one operation or incoming message from each of these applications must occur in every block
+* `--close-chain <CLOSE_CHAIN>` — These applications are allowed to close the current chain using the system API
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
@@ -275,7 +278,7 @@ Changes the application permissions configuration
 ###### **Options:**
 
 * `--chain-id <CHAIN_ID>` — The ID of the chain to which the new permissions will be applied
-* `--execute-operations <EXECUTE_OPERATIONS>` — If this is not set, all system operations and application operations are allowed. If it is set, only operations from the specified applications are allowed, and no system operations
+* `--execute-operations <EXECUTE_OPERATIONS>` — If this is `None`, all system operations and application operations are allowed. If it is `Some`, only operations from the specified applications are allowed, and no system operations
 * `--mandatory-applications <MANDATORY_APPLICATIONS>` — At least one operation or incoming message from each of these applications must occur in every block
 * `--close-chain <CLOSE_CHAIN>` — These applications are allowed to close the current chain using the system API
 
