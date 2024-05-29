@@ -193,7 +193,7 @@ where
         contract_address: &str,
         data: Bytes,
         from: &str,
-        block: u64
+        block: u64,
     ) -> Result<Bytes, Self::Error> {
         let contract_address = contract_address.parse::<Address>()?;
         let from = from.parse::<Address>()?;
@@ -203,6 +203,6 @@ where
             .to(contract_address)
             .input(input);
         let tag = get_block_id(Some(block));
-        Ok(self.request::<_, Bytes>("eth_call", (tx,tag)).await?)
+        Ok(self.request::<_, Bytes>("eth_call", (tx, tag)).await?)
     }
 }

@@ -131,8 +131,7 @@ impl EthereumQueries for EthereumClient<HttpProvider> {
             .to(contract_address)
             .input(input);
         let block_id = get_block_id(Some(block));
-        let eth_call = self.provider.call(&tx)
-            .block(block_id);
+        let eth_call = self.provider.call(&tx).block(block_id);
         Ok(eth_call.await?)
     }
 }
