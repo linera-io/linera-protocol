@@ -224,6 +224,7 @@ impl Runnable for Job {
             ChangeApplicationPermissions {
                 chain_id,
                 execute_operations,
+                mandatory_applications,
                 close_chain,
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
@@ -234,6 +235,7 @@ impl Runnable for Job {
                     .apply_client_command(&chain_client, |mut chain_client| {
                         let permissions = ApplicationPermissions {
                             execute_operations: execute_operations.clone(),
+                            mandatory_applications: mandatory_applications.clone(),
                             close_chain: close_chain.clone(),
                         };
                         async move {

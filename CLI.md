@@ -276,6 +276,7 @@ Changes the application permissions configuration
 
 * `--chain-id <CHAIN_ID>` — The ID of the chain to which the new permissions will be applied
 * `--execute-operations <EXECUTE_OPERATIONS>` — If this is not set, all system operations and application operations are allowed. If it is set, only operations from the specified applications are allowed, and no system operations
+* `--mandatory-applications <MANDATORY_APPLICATIONS>` — At least one operation or incoming message from each of these applications must occur in every block
 * `--close-chain <CLOSE_CHAIN>` — These applications are allowed to close the current chain using the system API
 
 
