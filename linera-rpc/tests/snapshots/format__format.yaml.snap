@@ -223,9 +223,6 @@ ChainInfo:
     - requested_hashed_certificate_value:
         OPTION:
           TYPENAME: CertificateValue
-    - requested_blob:
-        OPTION:
-          TYPENAME: Blob
 ChainInfoQuery:
   STRUCT:
     - chain_id:
@@ -249,9 +246,6 @@ ChainInfoQuery:
     - request_hashed_certificate_value:
         OPTION:
           TYPENAME: CryptoHash
-    - request_blob:
-        OPTION:
-          TYPENAME: BlobId
 ChainInfoResponse:
   STRUCT:
     - info:
