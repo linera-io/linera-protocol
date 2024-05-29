@@ -7,7 +7,7 @@
 use std::fmt;
 
 use anyhow::Context as _;
-use async_graphql::SimpleObject;
+use async_graphql::{InputObject, SimpleObject};
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -653,7 +653,18 @@ impl Amount {
 
 /// Permissions for applications on a chain.
 #[derive(
-    Default, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, WitType, WitLoad, WitStore,
+    Default,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Clone,
+    Serialize,
+    Deserialize,
+    WitType,
+    WitLoad,
+    WitStore,
+    InputObject,
 )]
 pub struct ApplicationPermissions {
     /// If this is `None`, all system operations and application operations are allowed.

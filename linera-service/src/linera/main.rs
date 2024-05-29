@@ -150,7 +150,11 @@ impl Runnable for Job {
                 let (message_id, certificate) = context
                     .apply_client_command(&chain_client, |mut chain_client| {
                         let ownership = ChainOwnership::single(new_public_key);
-                        async move { chain_client.open_chain(ownership, balance).await }
+                        async move {
+                            chain_client
+                                .open_chain(ownership, ApplicationPermissions::default(), balance)
+                                .await
+                        }
                     })
                     .await
                     .context("Failed to open chain")?;
@@ -188,7 +192,11 @@ impl Runnable for Job {
                 let (message_id, certificate) = context
                     .apply_client_command(&chain_client, |mut chain_client| {
                         let ownership = ownership.clone();
-                        async move { chain_client.open_chain(ownership, balance).await }
+                        async move {
+                            chain_client
+                                .open_chain(ownership, ApplicationPermissions::default(), balance)
+                                .await
+                        }
                     })
                     .await
                     .context("Failed to open chain")?;

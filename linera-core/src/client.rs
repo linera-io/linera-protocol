@@ -1864,6 +1864,7 @@ where
     pub async fn open_chain(
         &mut self,
         ownership: ChainOwnership,
+        application_permissions: ApplicationPermissions,
         balance: Amount,
     ) -> Result<ClientOutcome<(MessageId, Certificate)>, ChainClientError> {
         self.prepare_chain().await?;
@@ -1877,7 +1878,7 @@ where
                 admin_id: self.admin_id,
                 epoch,
                 balance,
-                application_permissions: Default::default(),
+                application_permissions: application_permissions.clone(),
             };
             let operation = Operation::System(SystemOperation::OpenChain(config));
             let certificate = match self.execute_block(messages, vec![operation]).await? {

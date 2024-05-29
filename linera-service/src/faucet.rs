@@ -9,7 +9,7 @@ use axum::{http::StatusCode, response, response::IntoResponse, Extension, Router
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ChainId, MessageId},
     ownership::ChainOwnership,
 };
@@ -161,7 +161,9 @@ where
         }
 
         let ownership = ChainOwnership::single(public_key);
-        let result = client.open_chain(ownership, self.amount).await;
+        let result = client
+            .open_chain(ownership, ApplicationPermissions::default(), self.amount)
+            .await;
         self.context.lock().await.update_wallet(&mut *client).await;
         let (message_id, certificate) = match result? {
             ClientOutcome::Committed(result) => result,
