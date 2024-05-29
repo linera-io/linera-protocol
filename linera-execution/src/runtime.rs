@@ -1194,17 +1194,16 @@ impl ContractRuntime for ContractSyncRuntime {
     fn open_chain(
         &mut self,
         ownership: ChainOwnership,
+        application_permissions: ApplicationPermissions,
         balance: Amount,
     ) -> Result<ChainId, ExecutionError> {
         let mut this = self.inner();
-        let id = this.current_application().id;
         let next_message_id = MessageId {
             chain_id: this.chain_id,
             height: this.height,
             index: this.next_message_index()?,
         };
         let chain_id = ChainId::child(next_message_id);
-        let application_permissions = ApplicationPermissions::new_single(id);
         let [open_chain_message, subscribe_message] = this
             .execution_state_sender
             .send_request(|callback| Request::OpenChain {

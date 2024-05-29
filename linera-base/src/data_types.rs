@@ -652,7 +652,9 @@ impl Amount {
 }
 
 /// Permissions for applications on a chain.
-#[derive(Default, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(
+    Default, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, WitType, WitLoad, WitStore,
+)]
 pub struct ApplicationPermissions {
     /// If this is `None`, all system operations and application operations are allowed.
     /// If it is `Some`, only operations from the specified applications are allowed, and

@@ -27,7 +27,10 @@ use derive_more::Display;
 use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
-    data_types::{Amount, ArithmeticError, BlockHeight, Resources, SendMessageRequest, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Resources,
+        SendMessageRequest, Timestamp,
+    },
     doc_scalar, hex_debug,
     identifiers::{
         Account, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
@@ -505,6 +508,7 @@ pub trait ContractRuntime: BaseRuntime {
     fn open_chain(
         &mut self,
         ownership: ChainOwnership,
+        application_permissions: ApplicationPermissions,
         balance: Amount,
     ) -> Result<ChainId, ExecutionError>;
 
