@@ -673,8 +673,10 @@ pub struct ApplicationPermissions {
     pub execute_operations: Option<Vec<ApplicationId>>,
     /// At least one operation or incoming message from each of these applications must occur in
     /// every block.
+    #[graphql(default)]
     pub mandatory_applications: Vec<ApplicationId>,
     /// These applications are allowed to close the current chain using the system API.
+    #[graphql(default)]
     pub close_chain: Vec<ApplicationId>,
 }
 

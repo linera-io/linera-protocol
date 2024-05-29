@@ -33,11 +33,11 @@ input ApplicationPermissions {
 	At least one operation or incoming message from each of these applications must occur in
 	every block.
 	"""
-	mandatoryApplications: [ApplicationId!]!
+	mandatoryApplications: [ApplicationId!]! = []
 	"""
 	These applications are allowed to close the current chain using the system API.
 	"""
-	closeChain: [ApplicationId!]!
+	closeChain: [ApplicationId!]! = []
 }
 
 """
