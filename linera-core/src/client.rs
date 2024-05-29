@@ -767,14 +767,9 @@ where
         &self,
         locations: &[BytecodeLocation],
         nodes: &[(ValidatorName, <P as LocalValidatorNodeProvider>::Node)],
-        chain_id: ChainId,
     ) -> Vec<HashedCertificateValue> {
         future::join_all(locations.iter().map(|location| {
-            LocalNodeClient::<S>::download_hashed_certificate_value(
-                nodes.to_owned(),
-                chain_id,
-                *location,
-            )
+            LocalNodeClient::<S>::download_hashed_certificate_value(nodes.to_owned(), *location)
         }))
         .await
         .into_iter()
@@ -845,7 +840,7 @@ where
                     locations,
                 )) => {
                     let values = self
-                        .find_missing_application_bytecodes(locations, &nodes, block.chain_id)
+                        .find_missing_application_bytecodes(locations, &nodes)
                         .await;
 
                     ensure!(values.len() == locations.len(), err);
@@ -864,7 +859,7 @@ where
                     blob_ids,
                 )) => {
                     let values = self
-                        .find_missing_application_bytecodes(locations, &nodes, block.chain_id)
+                        .find_missing_application_bytecodes(locations, &nodes)
                         .await;
                     let blobs = self.find_missing_blobs(blob_ids, &nodes).await;
 
@@ -1307,8 +1302,9 @@ where
         };
         // Collect the hashed certificate values required for execution.
         let committee = self.local_committee().await?;
-        let nodes: Vec<(ValidatorName, P::Node)> =
-            self.validator_node_provider.make_nodes(&committee)?;
+        let nodes = self
+            .validator_node_provider
+            .make_nodes::<Vec<_>>(&committee)?;
         let values = self
             .client
             .local_node

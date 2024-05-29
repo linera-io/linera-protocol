@@ -10,9 +10,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Owner},
 };
 use linera_chain::{
-    data_types::{
-        Certificate, ChainAndHeight, HashedCertificateValue, IncomingMessage, Medium, MessageBundle,
-    },
+    data_types::{Certificate, ChainAndHeight, IncomingMessage, Medium, MessageBundle},
     manager::ChainManagerInfo,
     ChainStateView,
 };
@@ -68,8 +66,6 @@ pub struct ChainInfoQuery {
     pub request_leader_timeout: bool,
     /// Include a vote to switch to fallback mode, if appropriate.
     pub request_fallback: bool,
-    /// Query a certificate value that contains a binary blob (e.g. bytecode) required by this chain.
-    pub request_hashed_certificate_value: Option<CryptoHash>,
 }
 
 impl ChainInfoQuery {
@@ -85,7 +81,6 @@ impl ChainInfoQuery {
             request_manager_values: false,
             request_leader_timeout: false,
             request_fallback: false,
-            request_hashed_certificate_value: None,
         }
     }
 
@@ -133,11 +128,6 @@ impl ChainInfoQuery {
         self.request_fallback = true;
         self
     }
-
-    pub fn with_hashed_certificate_value(mut self, hash: CryptoHash) -> Self {
-        self.request_hashed_certificate_value = Some(hash);
-        self
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -173,8 +163,6 @@ pub struct ChainInfo {
     pub count_received_log: usize,
     /// The response to `request_received_certificates_excluding_first_nth`
     pub requested_received_log: Vec<ChainAndHeight>,
-    /// The requested hashed certificate value, if any.
-    pub requested_hashed_certificate_value: Option<HashedCertificateValue>,
 }
 
 /// The response to an `ChainInfoQuery`
@@ -253,7 +241,6 @@ where
             requested_sent_certificates: Vec::new(),
             count_received_log: view.received_log.count(),
             requested_received_log: Vec::new(),
-            requested_hashed_certificate_value: None,
         }
     }
 }

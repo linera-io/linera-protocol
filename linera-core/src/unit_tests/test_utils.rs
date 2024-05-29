@@ -361,7 +361,6 @@ where
             .storage_client()
             .read_hashed_certificate_value(hash)
             .await
-            .map(Into::into)
             .map_err(Into::into);
         sender.send(certificate_value)
     }

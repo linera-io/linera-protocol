@@ -175,7 +175,6 @@ where
 
     async fn find_missing_application_bytecodes<A>(
         &self,
-        chain_id: ChainId,
         locations: &[BytecodeLocation],
         node: &mut A,
         name: ValidatorName,
@@ -186,10 +185,7 @@ where
         future::join_all(locations.iter().map(|location| {
             let mut node = node.clone();
             async move {
-                Self::try_download_hashed_certificate_value_from(
-                    name, &mut node, chain_id, *location,
-                )
-                .await
+                Self::try_download_hashed_certificate_value_from(&mut node, name, *location).await
             }
         }))
         .await
@@ -245,12 +241,7 @@ where
                     locations,
                 ))) => {
                     let values = self
-                        .find_missing_application_bytecodes(
-                            certificate.value().chain_id(),
-                            locations,
-                            node,
-                            name,
-                        )
+                        .find_missing_application_bytecodes(locations, node, name)
                         .await;
 
                     if values.len() != locations.len() {
@@ -272,9 +263,8 @@ where
                 Err(LocalNodeError::WorkerError(
                     WorkerError::ApplicationBytecodesAndBlobsNotFound(locations, blob_ids),
                 )) => {
-                    let chain_id = certificate.value().chain_id();
                     let values = self
-                        .find_missing_application_bytecodes(chain_id, locations, node, name)
+                        .find_missing_application_bytecodes(locations, node, name)
                         .await;
                     let blobs = self.find_missing_blobs(blob_ids, node, name).await;
                     if values.len() != locations.len() || blobs.len() != blob_ids.len() {
@@ -405,7 +395,7 @@ where
     pub async fn read_or_download_hashed_certificate_values<A>(
         &self,
         validators: Vec<(ValidatorName, A)>,
-        hashed_certificate_value_locations: impl IntoIterator<Item = (BytecodeLocation, ChainId)>,
+        hashed_certificate_value_locations: impl IntoIterator<Item = BytecodeLocation>,
     ) -> Result<Vec<HashedCertificateValue>, LocalNodeError>
     where
         A: LocalValidatorNode + Clone + 'static,
@@ -413,7 +403,7 @@ where
         let mut values = vec![];
         let mut tasks = vec![];
         let mut node = self.node.lock().await;
-        for (location, chain_id) in hashed_certificate_value_locations {
+        for location in hashed_certificate_value_locations {
             if let Some(value) = node
                 .state
                 .recent_hashed_certificate_value(&location.certificate_hash)
@@ -424,7 +414,7 @@ where
                 let validators = validators.clone();
                 let storage = node.state.storage_client().clone();
                 tasks.push(Self::read_or_download_hashed_certificate_value(
-                    storage, validators, chain_id, location,
+                    storage, validators, location,
                 ));
             }
         }
@@ -448,7 +438,6 @@ where
     pub async fn read_or_download_hashed_certificate_value<A>(
         storage: S,
         validators: Vec<(ValidatorName, A)>,
-        chain_id: ChainId,
         location: BytecodeLocation,
     ) -> Result<Option<HashedCertificateValue>, LocalNodeError>
     where
@@ -462,7 +451,7 @@ where
             Err(ViewError::NotFound(..)) => {}
             Err(err) => Err(err)?,
         }
-        match Self::download_hashed_certificate_value(validators, chain_id, location).await {
+        match Self::download_hashed_certificate_value(validators, location).await {
             Some(hashed_certificate_value) => {
                 storage
                     .write_hashed_certificate_value(&hashed_certificate_value)
@@ -661,19 +650,16 @@ where
 
     pub async fn download_hashed_certificate_value<A>(
         mut validators: Vec<(ValidatorName, A)>,
-        chain_id: ChainId,
         location: BytecodeLocation,
     ) -> Option<HashedCertificateValue>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
-        // Sequentially try each validator in random order.
+        // Sequentially try each validator in random order, to improve efficiency.
         validators.shuffle(&mut rand::thread_rng());
         for (name, mut node) in validators {
-            if let Some(value) = Self::try_download_hashed_certificate_value_from(
-                name, &mut node, chain_id, location,
-            )
-            .await
+            if let Some(value) =
+                Self::try_download_hashed_certificate_value_from(&mut node, name, location).await
             {
                 return Some(value);
             }
@@ -720,21 +706,24 @@ where
     }
 
     async fn try_download_hashed_certificate_value_from<A>(
-        name: ValidatorName,
         node: &mut A,
-        chain_id: ChainId,
+        name: ValidatorName,
         location: BytecodeLocation,
     ) -> Option<HashedCertificateValue>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
-        let query =
-            ChainInfoQuery::new(chain_id).with_hashed_certificate_value(location.certificate_hash);
-        if let Ok(response) = node.handle_chain_info_query(query).await {
-            if response.check(name).is_ok() {
-                return response.info.requested_hashed_certificate_value;
+        match node
+            .download_certificate_value(location.certificate_hash)
+            .await
+        {
+            Ok(hashed_certificate_value) => Some(hashed_certificate_value),
+            Err(error) => {
+                tracing::debug!(
+                    "Failed to fetch certificate value {location:?} from validator {name}: {error}"
+                );
+                None
             }
         }
-        None
     }
 }

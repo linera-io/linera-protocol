@@ -2,10 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
-};
+use std::{borrow::Cow, collections::HashSet};
 
 use async_graphql::{Object, SimpleObject};
 use linera_base::{
@@ -62,17 +59,12 @@ pub struct Block {
 }
 
 impl Block {
-    /// Returns all bytecode locations referred to in this block's incoming messages, with the
-    /// sender chain ID.
-    pub fn bytecode_locations(&self) -> HashMap<BytecodeLocation, ChainId> {
-        let mut locations = HashMap::new();
+    /// Returns all bytecode locations referred to in this block's incoming messages.
+    pub fn bytecode_locations(&self) -> HashSet<BytecodeLocation> {
+        let mut locations = HashSet::new();
         for message in &self.incoming_messages {
             if let Message::System(sys_message) = &message.event.message {
-                locations.extend(
-                    sys_message
-                        .bytecode_locations(message.event.certificate_hash)
-                        .map(|location| (location, message.origin.sender)),
-                );
+                locations.extend(sys_message.bytecode_locations(message.event.certificate_hash));
             }
         }
         locations
