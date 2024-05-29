@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, BlockHeight, OracleRecord},
+    data_types::{Amount, BlockHeight, OracleRecord, Timestamp},
     identifiers::{Account, ChainDescription, ChainId},
 };
 use linera_execution::{
@@ -92,6 +92,7 @@ async fn test_fuel_for_counter_wasm_application(
         let (outcomes, _) = view
             .execute_operation(
                 context,
+                Timestamp::from(0),
                 Operation::user(app_id, increment).unwrap(),
                 Some(OracleRecord::default()),
                 &mut controller,
@@ -129,7 +130,11 @@ async fn test_fuel_for_counter_wasm_application(
     );
     let request = async_graphql::Request::new("query { value }");
     let Response::User(serialized_value) = view
-        .query_application(context, Query::user(app_id, &request).unwrap())
+        .query_application(
+            context,
+            Timestamp::from(0),
+            Query::user(app_id, &request).unwrap(),
+        )
         .await?
     else {
         panic!("unexpected response")

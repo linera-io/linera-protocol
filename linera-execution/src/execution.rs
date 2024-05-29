@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use futures::{stream::FuturesUnordered, StreamExt, TryStreamExt};
 use linera_base::{
-    data_types::{Amount, BlockHeight, OracleRecord},
+    data_types::{Amount, BlockHeight, OracleRecord, Timestamp},
     identifiers::{Account, ChainId, Destination, Owner},
 };
 use linera_views::{
@@ -52,6 +52,7 @@ where
     pub async fn simulate_instantiation(
         &mut self,
         contract: UserContractCode,
+        local_time: Timestamp,
         application_description: UserApplicationDescription,
         instantiation_argument: Vec<u8>,
     ) -> Result<(), ExecutionError> {
@@ -88,6 +89,7 @@ where
         self.run_user_action(
             application_id,
             chain_id,
+            local_time,
             action,
             context.refund_grant_to(),
             None,
@@ -144,6 +146,7 @@ where
         &mut self,
         application_id: UserApplicationId,
         chain_id: ChainId,
+        local_time: Timestamp,
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
@@ -156,6 +159,7 @@ where
                     self.run_user_action_with_synchronous_runtime(
                         application_id,
                         chain_id,
+                        local_time,
                         action,
                         refund_grant_to,
                         grant,
@@ -176,6 +180,7 @@ where
         &mut self,
         application_id: UserApplicationId,
         chain_id: ChainId,
+        local_time: Timestamp,
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
@@ -199,6 +204,7 @@ where
                 execution_state_sender,
                 application_id,
                 chain_id,
+                local_time,
                 refund_grant_to,
                 controller,
                 action,
@@ -282,6 +288,7 @@ where
     pub async fn execute_operation(
         &mut self,
         context: OperationContext,
+        local_time: Timestamp,
         operation: Operation,
         oracle_record: Option<OracleRecord>,
         resource_controller: &mut ResourceController<Option<Owner>>,
@@ -300,6 +307,7 @@ where
                         .run_user_action(
                             application_id,
                             context.chain_id,
+                            local_time,
                             user_action,
                             context.refund_grant_to(),
                             None,
@@ -319,6 +327,7 @@ where
                 self.run_user_action(
                     application_id,
                     context.chain_id,
+                    local_time,
                     UserAction::Operation(context, bytes),
                     context.refund_grant_to(),
                     None,
@@ -333,6 +342,7 @@ where
     pub async fn execute_message(
         &mut self,
         context: MessageContext,
+        local_time: Timestamp,
         message: Message,
         grant: Option<&mut Amount>,
         oracle_record: Option<OracleRecord>,
@@ -354,6 +364,7 @@ where
                 self.run_user_action(
                     application_id,
                     context.chain_id,
+                    local_time,
                     UserAction::Message(context, bytes),
                     context.refund_grant_to,
                     grant,
@@ -436,6 +447,7 @@ where
     pub async fn query_application(
         &mut self,
         context: QueryContext,
+        local_time: Timestamp,
         query: Query,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
@@ -450,8 +462,13 @@ where
             } => {
                 let response = match self.context().extra().execution_runtime_config() {
                     ExecutionRuntimeConfig::Synchronous => {
-                        self.query_application_with_sync_runtime(application_id, context, bytes)
-                            .await?
+                        self.query_application_with_sync_runtime(
+                            application_id,
+                            context,
+                            local_time,
+                            bytes,
+                        )
+                        .await?
                     }
                 };
                 Ok(Response::User(response))
@@ -463,12 +480,19 @@ where
         &mut self,
         application_id: UserApplicationId,
         context: QueryContext,
+        local_time: Timestamp,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let query_result_future = tokio::task::spawn_blocking(move || {
-            ServiceSyncRuntime::run_query(execution_state_sender, application_id, context, query)
+            ServiceSyncRuntime::run_query(
+                execution_state_sender,
+                application_id,
+                context,
+                local_time,
+                query,
+            )
         });
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;

@@ -327,6 +327,16 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Panics if the current time at block validation is `>= timestamp`. Note that block
+    /// validation happens at or after the block timestamp, but isn't necessarily the same.
+    fn assert_before(caller: &mut Caller, timestamp: Timestamp) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .assert_before(timestamp)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Logs a `message` with the provided information `level`.
     fn log(_caller: &mut Caller, message: String, level: log::Level) -> Result<(), RuntimeError> {
         match level {
@@ -489,6 +499,16 @@ where
             .user_data_mut()
             .runtime
             .http_post(&query, content_type, payload)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Panics if the current time at block validation is `>= timestamp`. Note that block
+    /// validation happens at or after the block timestamp, but isn't necessarily the same.
+    fn assert_before(caller: &mut Caller, timestamp: Timestamp) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .assert_before(timestamp)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

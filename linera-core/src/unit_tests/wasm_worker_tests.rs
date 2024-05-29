@@ -429,6 +429,7 @@ where
     creator_state
         .simulate_instantiation(
             contract,
+            Timestamp::from(4),
             application_description,
             initial_value_bytes.clone(),
         )
@@ -484,6 +485,7 @@ where
     creator_state
         .execute_operation(
             operation_context,
+            Timestamp::from(5),
             Operation::User {
                 application_id,
                 bytes: user_operation,

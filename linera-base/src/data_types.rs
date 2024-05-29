@@ -720,6 +720,8 @@ pub enum OracleResponse {
     Service(Vec<u8>),
     /// The response from an HTTP POST request.
     Post(Vec<u8>),
+    /// An assertion oracle that passed.
+    Assert,
 }
 
 impl fmt::Display for OracleResponse {
@@ -729,6 +731,7 @@ impl fmt::Display for OracleResponse {
                 write!(f, "Service:{}", STANDARD_NO_PAD.encode(bytes))?
             }
             OracleResponse::Post(bytes) => write!(f, "Post:{}", STANDARD_NO_PAD.encode(bytes))?,
+            OracleResponse::Assert => write!(f, "Assert")?,
         };
 
         Ok(())
