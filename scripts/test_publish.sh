@@ -2,9 +2,11 @@
 
 set -x -e
 
+# Requirements:
+#   cargo-local-registry
+#   cargo-index
+#   jq
 # Usage:
-#   cargo install cargo-local-registry
-#   cargo install cargo-index
 #   scripts/test_publish.sh packages.txt REGISTRY
 
 # Where to store the registry.
@@ -35,5 +37,6 @@ git init "$REGISTRY"/index || true
 grep -v '^#' "$1" | while read LINE; do
     ARGS=($LINE)
     CRATE="${ARGS[0]}"
-    cargo index add --index "$REGISTRY"/index --upload "$REGISTRY" --index-url local --manifest-path "$CRATE"/Cargo.toml -- -p $LINE
+    MANIFEST_PATH=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "'$CRATE'") | .manifest_path')
+    cargo index add --index "$REGISTRY"/index --upload "$REGISTRY" --index-url local --manifest-path "$MANIFEST_PATH" -- -p $LINE
 done
