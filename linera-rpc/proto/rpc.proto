@@ -23,7 +23,7 @@ service ValidatorWorker {
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
   // Process a certificate.
-  rpc HandleCertificate(Certificate) returns (ChainInfoResult);
+  rpc HandleCertificate(HandleCertificateRequest) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
   rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
@@ -41,7 +41,7 @@ service ValidatorNode {
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
   // Process a certificate.
-  rpc HandleCertificate(Certificate) returns (ChainInfoResult);
+  rpc HandleCertificate(HandleCertificateRequest) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
   rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
@@ -197,18 +197,9 @@ message LiteCertificate {
 
 // A certified statement from the committee, together with other certificates
 // required for execution.
-message Certificate {
+message HandleCertificateRequest {
   // The ID of the chain (used for routing).
   ChainId chain_id = 1;
-
-  // The certified value
-  bytes value = 2;
-
-  // The round in which the value was certified.
-  bytes round = 3;
-
-  // Signatures on the value hash and round
-  bytes signatures = 4;
 
   // Other certificates containing bytecode required by the first one
   bytes hashed_certificate_values = 5;
@@ -219,6 +210,21 @@ message Certificate {
 
   // Blobs required by this certificate
   bytes blobs = 7;
+
+  // A certified statement from the committee.
+  Certificate certificate = 8;
+}
+
+// A certified statement from the committee.
+message Certificate {
+  // The certified value
+  bytes value = 1;
+
+  // The round in which the value was certified.
+  bytes round = 2;
+
+  // Signatures on the value hash and round
+  bytes signatures = 3;
 }
 
 message CertificateValue {
