@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use alloy::{
+use linera_alloy::{
     primitives::{Address, U256},
     providers::{Provider, ProviderBuilder, RootProvider},
     rpc::types::eth::{
@@ -17,7 +17,7 @@ use url::Url;
 
 use crate::client::{EthereumQueries, JsonRpcClient};
 
-pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
+pub type HttpProvider = RootProvider<linera_alloy::transports::http::Http<Client>>;
 
 use crate::{
     client::get_block_id,
