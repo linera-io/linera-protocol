@@ -24,7 +24,7 @@ use thiserror::Error;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::{
-    aggregation::*,
+    aggregation::{AggregateExt, TryAggregateExt, DistributeExt, ResultWith},
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{LocalValidatorNode, NotificationStream},
     worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
@@ -245,7 +245,7 @@ where
                 .handle_certificate(certificate.clone(), vec![], vec![])
                 .await;
 
-            let result = match result.factor().aggregate(&mut notifications) {
+            let result = match result.aggregate(&mut notifications) {
                 Err(LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
                     locations,
                 ))) => {
@@ -263,7 +263,7 @@ where
                             locations,
                         )))
                     } else {
-                        self.handle_certificate(certificate, values, vec![]).await.factor().aggregate(&mut notifications)
+                        self.handle_certificate(certificate, values, vec![]).await.aggregate(&mut notifications)
                     }
                 }
                 Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids))) => {
@@ -274,7 +274,7 @@ where
                     if blobs.len() != blob_ids.len() {
                         Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)))
                     } else {
-                        self.handle_certificate(certificate, vec![], blobs).await.factor().aggregate(&mut notifications)
+                        self.handle_certificate(certificate, vec![], blobs).await.aggregate(&mut notifications)
                     }
                 }
                 Err(LocalNodeError::WorkerError(
@@ -293,7 +293,7 @@ where
                             WorkerError::ApplicationBytecodesAndBlobsNotFound(locations, blob_ids),
                         ))
                     } else {
-                        self.handle_certificate(certificate, values, blobs).await.factor().aggregate(&mut notifications)
+                        self.handle_certificate(certificate, values, blobs).await.aggregate(&mut notifications)
                     }
                 }
                 result => result,
@@ -638,7 +638,7 @@ where
         if let Some(cert) = info.manager.requested_locked {
             if cert.value().is_validated() && cert.value().chain_id() == chain_id {
                 let hash = cert.hash();
-                if let Err(error) = self.handle_certificate(*cert, vec![], vec![]).await.factor().aggregate(&mut notifications) {
+                if let Err(error) = self.handle_certificate(*cert, vec![], vec![]).await.aggregate(&mut notifications) {
                     tracing::warn!("Skipping certificate {}: {}", hash, error);
                 }
             }

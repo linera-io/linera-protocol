@@ -19,6 +19,15 @@ impl<R, Xs: IntoIterator> AggregateExt for (R, Xs) {
     }
 }
 
+impl<Xs: IntoIterator, T, E> AggregateExt for ResultWith<Xs, T, E> {
+    type Item = Xs::Item;
+    type Output = Result<T, E>;
+
+    fn aggregate(self, target: &mut impl Extend<Self::Item>) -> Self::Output {
+        self.factor().aggregate(target)
+    }
+}
+
 pub trait TryAggregateExt: AggregateExt {
     type Ok;
     type Err;
@@ -31,11 +40,20 @@ impl<Xs: IntoIterator, T, E> TryAggregateExt for (Result<T, E>, Xs) {
     type Err = E;
 
     fn try_aggregate<Target: Default + Extend<Self::Item>>(self, target: &mut Target) -> Result<Self::Ok, (Self::Err, Target)> {
-        target.extend(self.1);
-        match self.0 {
+        match self.aggregate(target) {
             Ok(x) => Ok(x),
             Err(e) => Err((e, std::mem::replace(target, Default::default()))),
         }
+    }
+}
+
+impl<Xs: IntoIterator, T, E> TryAggregateExt for ResultWith<Xs, T, E> {
+    type Ok = T;
+    type Err = E;
+
+    fn try_aggregate<Target: Default + Extend<Self::Item>>(self, target: &mut Target)
+    -> Result<<Self as TryAggregateExt>::Ok, (<Self as TryAggregateExt>::Err, Target)> {
+        self.factor().try_aggregate(target)
     }
 }
 

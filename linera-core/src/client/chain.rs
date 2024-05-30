@@ -54,6 +54,7 @@ use tracing::{debug, error, info};
 
 
 use crate::{
+    aggregation::FactorExt,
     data_types::{
         BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout,
     },
@@ -1099,19 +1100,24 @@ where
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
     ) -> Result<(), LocalNodeError> {
-        let info = self
+        let (info, notifications) = self
             .client
             .local_node
             .handle_certificate(certificate, hashed_certificate_values, hashed_blobs)
-            .await?
-            .info;
-        self.update_from_info(&info);
+            .await
+            .factor();
+
+        for notification in notifications {
+            self.client.dispatch_notification(notification);
+        }
+
+        self.update_from_info(&info?.info);
         Ok(())
     }
 
     /// Updates the latest block and next block height and round information from the chain info.
     fn update_from_info(&self, info: &ChainInfo) {
-        let state = self.state_mut();
+        let mut state = self.state_mut();
         if info.chain_id == self.chain_id && info.next_block_height > state.next_block_height {
             state.next_block_height = info.next_block_height;
             state.block_hash = info.block_hash;
