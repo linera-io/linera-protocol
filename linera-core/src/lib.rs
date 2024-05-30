@@ -7,6 +7,7 @@
 pub mod chain_worker;
 pub mod client;
 pub mod data_types;
+mod join_set_ext;
 pub mod local_node;
 pub mod node;
 pub mod notifier;
@@ -17,3 +18,5 @@ pub mod worker;
 
 pub(crate) mod updater;
 pub(crate) mod value_cache;
+
+pub use crate::join_set_ext::JoinSetExt;
