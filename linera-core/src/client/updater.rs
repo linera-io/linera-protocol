@@ -32,8 +32,10 @@ use tracing::{error, warn};
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    node::{CrossChainMessageDelivery, LocalValidatorNode, NodeError},
+    node::{CrossChainMessageDelivery, LocalValidatorNode, LocalValidatorNodeProvider, NodeError},
 };
+
+use super::ChainClient;
 
 cfg_if::cfg_if! {
     if #[cfg(web)] {
@@ -67,12 +69,10 @@ pub enum CommunicateAction {
     },
 }
 
-pub struct ValidatorUpdater<A, S> {
+pub struct ValidatorUpdater<'client, VNP: LocalValidatorNodeProvider, Storage> {
     pub name: ValidatorName,
-    pub node: A,
-    pub storage: S,
-    pub local_node_recent_hashed_blobs: Arc<Mutex<LruCache<BlobId, HashedBlob>>>,
-    pub local_node_chain_managers_pending_blobs: BTreeMap<BlobId, HashedBlob>,
+    pub node: VNP::Node,
+    pub chain_client: &'client ChainClient<'client, VNP, Storage>,
 }
 
 /// An error result for [`communicate_with_quorum`].
@@ -179,9 +179,9 @@ where
     Err(CommunicationError::Sample(sample))
 }
 
-impl<A, S> ValidatorUpdater<A, S>
+impl<P, S> ValidatorUpdater<'_, P, S>
 where
-    A: LocalValidatorNode + Clone + 'static,
+    P: LocalValidatorNodeProvider + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
@@ -239,7 +239,7 @@ where
         }
         Ok(
             future::join_all(unique_locations.into_iter().map(|location| {
-                self.storage
+                self.chain_client.client.storage
                     .read_hashed_certificate_value(location.certificate_hash)
             }))
             .await
@@ -279,8 +279,10 @@ where
         let mut missing_blobs = Vec::new();
         for blob_id in blob_ids {
             if let Some(blob) = self
-                .local_node_recent_hashed_blobs
-                .lock()
+                .chain_client
+                .client
+                .local_node
+                .recent_hashed_blobs()
                 .await
                 .get(blob_id)
                 .cloned()
@@ -288,7 +290,9 @@ where
                 missing_blobs.push(blob);
                 unique_blob_ids_to_find.remove(blob_id);
             } else if let Some(blob) = self
-                .local_node_chain_managers_pending_blobs
+                .chain_client
+                .chain
+                .pending_blobs
                 .get(blob_id)
                 .cloned()
             {
@@ -301,7 +305,7 @@ where
             future::join_all(
                 unique_blob_ids_to_find
                     .into_iter()
-                    .map(|blob_id| self.storage.read_hashed_blob(blob_id)),
+                    .map(|blob_id| self.chain_client.client.storage.read_hashed_blob(blob_id)),
             )
             .await
             .into_iter()
@@ -402,7 +406,7 @@ where
         let range: Range<usize> =
             initial_block_height.try_into()?..target_block_height.try_into()?;
         let (keys, manager) = {
-            let mut chain = self.storage.load_chain(chain_id).await?;
+            let mut chain = self.chain_client.client.storage.load_chain(chain_id).await?;
             (
                 chain.confirmed_log.read(range).await?,
                 std::mem::take(chain.manager.get_mut()),
@@ -410,7 +414,7 @@ where
         };
         if !keys.is_empty() {
             // Send the requested certificates in order.
-            let certs = self.storage.read_certificates(keys.into_iter()).await?;
+            let certs = self.chain_client.client.storage.read_certificates(keys.into_iter()).await?;
             for cert in certs {
                 self.send_certificate(cert, delivery).await?;
             }
@@ -436,7 +440,7 @@ where
     ) -> Result<(), NodeError> {
         let mut sender_heights = BTreeMap::new();
         {
-            let chain = self.storage.load_chain(chain_id).await?;
+            let chain = self.chain_client.client.storage.load_chain(chain_id).await?;
             let origins = chain.inboxes.indices().await?;
             let inboxes = chain.inboxes.try_load_entries(&origins).await?;
             for (origin, inbox) in origins.into_iter().zip(inboxes) {

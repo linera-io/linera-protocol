@@ -271,7 +271,6 @@ impl From<linera_chain::ChainError> for WorkerError {
 }
 
 /// State of a worker in a validator or a local node.
-#[derive(Clone)]
 pub struct WorkerState<StorageClient> {
     /// A name used for logging
     nickname: String,
@@ -288,12 +287,12 @@ pub struct WorkerState<StorageClient> {
     /// will wait until that timestamp before voting.
     grace_period: Duration,
     /// Cached hashed certificate values by hash.
-    recent_hashed_certificate_values: Arc<CertificateValueCache>,
+    recent_hashed_certificate_values: CertificateValueCache,
     /// Cached hashed blobs by `BlobId`.
-    recent_hashed_blobs: Arc<Mutex<LruCache<BlobId, HashedBlob>>>,
+    recent_hashed_blobs: LruCache<BlobId, HashedBlob>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
-    delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
+    delivery_notifiers: DeliveryNotifiers,
 }
 
 pub(crate) type DeliveryNotifiers =
@@ -301,9 +300,6 @@ pub(crate) type DeliveryNotifiers =
 
 impl<StorageClient> WorkerState<StorageClient> {
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
-        let recent_hashed_blobs = Arc::new(Mutex::new(LruCache::new(
-            NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
-        )));
         WorkerState {
             nickname,
             key_pair: key_pair.map(Arc::new),
@@ -311,30 +307,17 @@ impl<StorageClient> WorkerState<StorageClient> {
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
             grace_period: Duration::ZERO,
-            recent_hashed_certificate_values: Arc::new(CertificateValueCache::default()),
-            recent_hashed_blobs,
-            delivery_notifiers: Arc::default(),
+            recent_hashed_certificate_values: CertificateValueCache::default(),
+            recent_hashed_blobs: LruCache::new(NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap()),
+            delivery_notifiers: Default::default(),
         }
     }
 
     pub fn new_for_client(
         nickname: String,
         storage: StorageClient,
-        recent_hashed_certificate_values: Arc<CertificateValueCache>,
-        recent_hashed_blobs: Arc<Mutex<LruCache<BlobId, HashedBlob>>>,
-        delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     ) -> Self {
-        WorkerState {
-            nickname,
-            key_pair: None,
-            storage,
-            allow_inactive_chains: false,
-            allow_messages_from_deprecated_epochs: false,
-            grace_period: Duration::ZERO,
-            recent_hashed_certificate_values,
-            recent_hashed_blobs,
-            delivery_notifiers,
-        }
+        Self::new(nickname, None, storage)
     }
 
     pub fn with_allow_inactive_chains(mut self, value: bool) -> Self {
@@ -360,8 +343,8 @@ impl<StorageClient> WorkerState<StorageClient> {
         &self.nickname
     }
 
-    pub fn recent_hashed_blobs(&self) -> Arc<Mutex<LruCache<BlobId, HashedBlob>>> {
-        self.recent_hashed_blobs.clone()
+    pub fn recent_hashed_blobs_mut(&mut self) -> &mut LruCache<BlobId, HashedBlob> {
+        &mut self.recent_hashed_blobs
     }
 
     /// Returns the storage client so that it can be manipulated or queried.
@@ -400,7 +383,7 @@ impl<StorageClient> WorkerState<StorageClient> {
     }
 
     pub(crate) async fn recent_blob(&mut self, blob_id: &BlobId) -> Option<HashedBlob> {
-        self.recent_hashed_blobs.lock().await.get(blob_id).cloned()
+        self.recent_hashed_blobs.get(blob_id).cloned()
     }
 }
 
@@ -487,8 +470,6 @@ where
                 .any(|request| request.has_messages_lower_or_equal_than(height))
             {
                 self.delivery_notifiers
-                    .lock()
-                    .await
                     .entry(chain_id)
                     .or_default()
                     .entry(height)
@@ -819,24 +800,22 @@ where
             );
         }
 
-        let recent_blobs = self.recent_hashed_blobs.lock().await;
         Ok(required_blob_ids
             .into_iter()
             .filter(|blob_id| {
-                !recent_blobs.contains(blob_id) && !pending_blobs.contains_key(blob_id)
+                !self.recent_hashed_blobs.contains(blob_id) && !pending_blobs.contains_key(blob_id)
             })
             .collect::<Vec<_>>())
     }
 
     async fn get_blobs(
-        &self,
+        &mut self,
         blob_ids: HashSet<BlobId>,
         pending_blobs: &BTreeMap<BlobId, HashedBlob>,
     ) -> Result<Vec<HashedBlob>, WorkerError> {
         let mut blobs = Vec::new();
-        let mut recent_blobs = self.recent_hashed_blobs.lock().await;
         for blob_id in blob_ids {
-            if let Some(blob) = recent_blobs.get(&blob_id) {
+            if let Some(blob) = self.recent_hashed_blobs.get(&blob_id) {
                 blobs.push(blob.clone());
             } else if let Some(blob) = pending_blobs.get(&blob_id) {
                 blobs.push(blob.clone());
@@ -1058,12 +1037,11 @@ where
     }
 
     pub async fn cache_recent_blob<'a>(&mut self, hashed_blob: Cow<'a, HashedBlob>) -> bool {
-        let mut recent_blobs = self.recent_hashed_blobs.lock().await;
-        if recent_blobs.contains(&hashed_blob.id()) {
+        if self.recent_hashed_blobs.contains(&hashed_blob.id()) {
             return false;
         }
         // Cache the blob so that clients don't have to send it again.
-        recent_blobs.push(hashed_blob.id(), hashed_blob.into_owned());
+        self.recent_hashed_blobs.push(hashed_blob.id(), hashed_blob.into_owned());
         true
     }
 
@@ -1573,7 +1551,7 @@ where
 
                 // Handle delivery notifiers for this chain, if any.
                 if let hash_map::Entry::Occupied(mut map) =
-                    self.delivery_notifiers.lock().await.entry(sender)
+                    self.delivery_notifiers.entry(sender)
                 {
                     while let Some(entry) = map.get_mut().first_entry() {
                         if entry.key() > &height_with_fully_delivered_messages {

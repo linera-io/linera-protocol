@@ -419,9 +419,8 @@ where
 
     pub async fn recent_hashed_blobs(
         &self,
-    ) -> Arc<tokio::sync::Mutex<LruCache<BlobId, HashedBlob>>> {
-        let node = self.node.lock().await;
-        node.state.recent_hashed_blobs()
+    ) -> futures::lock::MappedMutexGuard<LocalNode<S>, LruCache<BlobId, HashedBlob>> {
+        futures::lock::MutexGuard::map(self.node.lock().await, |node: &mut LocalNode<S>| node.state.recent_hashed_blobs_mut())
     }
 
     pub async fn cache_recent_blob(&self, hashed_blob: &HashedBlob) -> bool {

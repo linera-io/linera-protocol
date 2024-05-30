@@ -36,14 +36,12 @@ use crate::test_utils::ScyllaDbStorageBuilder;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
-    client::{ArcChainClient, ChainClientError, ClientOutcome, MessageAction, MessagePolicy},
-    local_node::LocalNodeError,
+    client::{ArcChainClient, ChainClientError, ClientOutcome, LocalNodeError, CommunicationError, MessageAction, MessagePolicy},
     node::{
         CrossChainMessageDelivery,
         NodeError::{self, ClientIoError},
     },
     test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder},
-    updater::CommunicationError,
     worker::{Notification, Reason, WorkerError},
 };
 
