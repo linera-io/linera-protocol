@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_alloy::{
-    primitives::{Address, U256},
+    primitives::{Address, Bytes, U256},
     providers::{Provider, ProviderBuilder, RootProvider},
     rpc::types::eth::{
         request::{TransactionInput, TransactionRequest},
@@ -10,7 +10,6 @@ use linera_alloy::{
     },
     transports::http::reqwest::{header::CONTENT_TYPE, Client},
 };
-use alloy_primitives::Bytes;
 use async_lock::Mutex;
 use async_trait::async_trait;
 use url::Url;
