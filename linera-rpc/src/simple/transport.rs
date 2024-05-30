@@ -399,7 +399,7 @@ where
         loop {
             tokio::select! { biased;
                 _ = shutdown_signal.cancelled() => {
-                    while join_set.join_next().await.is_some() {}
+                    join_set.await_all_tasks().await;
                     return Ok(());
                 }
                 maybe_socket = accept_stream.next() => match maybe_socket {
@@ -409,10 +409,10 @@ where
                             handler.clone(),
                             connection_shutdown_signal.clone(),
                         );
-                        join_set.spawn(server.serve());
+                        join_set.spawn_task(server.serve());
                     }
                     Some(Err(error)) => {
-                        while join_set.join_next().await.is_some() {}
+                        join_set.await_all_tasks().await;
                         return Err(error);
                     }
                     None => unreachable!(
@@ -421,8 +421,7 @@ where
                 },
             }
 
-            // Reap finished tasks
-            while join_set.try_join_next().is_some() {}
+            join_set.reap_finished_tasks();
         }
     }
 
