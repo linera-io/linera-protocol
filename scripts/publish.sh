@@ -1,8 +1,10 @@
 #!/bin/bash
 
-set -x -e
-
+# Publish crates from the current workspace.
+#
 # Usage: scripts/publish.sh packages.txt
+
+set -x -e
 
 # Publish the given packages.
 grep -v '^#' "$1" | while read LINE; do

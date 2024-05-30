@@ -1,13 +1,16 @@
 #!/bin/bash
 
-set -x -e
-
-# Requirements:
-#   cargo-local-registry
-#   cargo-index
-#   jq
+# Use a local registry to simulate publishing crates from the current workspace.
+#
+# Requirements (MacOS):
+#   cargo install cargo-local-registry
+#   cargo install cargo-index
+#   brew install jq
+#
 # Usage:
 #   scripts/test_publish.sh packages.txt REGISTRY
+
+set -x -e
 
 # Where to store the registry.
 mkdir -p "$2"
@@ -33,7 +36,7 @@ trap 'cd "$LINERA_DIR"; git checkout -f HEAD .cargo/config.toml' EXIT
 git init "$REGISTRY"/index || true
 (cd "$REGISTRY"/index; git add .; git commit -m 'update registry')
 
-# Build the packages in order.
+# Build the packages in order and add them to the local registry.
 grep -v '^#' "$1" | while read LINE; do
     ARGS=($LINE)
     CRATE="${ARGS[0]}"
