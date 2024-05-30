@@ -17,7 +17,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt};
 use linera_base::identifiers::ChainId;
-use linera_core::notifier::Notifier;
+use linera_core::{notifier::Notifier, JoinSetExt as _};
 use linera_rpc::{
     config::{
         ShardConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
@@ -36,7 +36,7 @@ use linera_rpc::{
 };
 use linera_storage::Storage;
 use rcgen::generate_simple_self_signed;
-use tokio::select;
+use tokio::{select, task::JoinSet};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::{
@@ -227,6 +227,7 @@ where
     #[instrument(skip_all, fields(public_address = %self.public_address(), internal_address = %self.internal_address(), metrics_address = %self.metrics_address()), err)]
     pub async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
         info!("Starting gRPC server");
+        let mut join_set = JoinSet::new();
 
         #[cfg(with_metrics)]
         prometheus_server::start_metrics(self.metrics_address(), shutdown_signal.clone());
@@ -235,28 +236,31 @@ where
         health_reporter
             .set_serving::<ValidatorNodeServer<GrpcProxy<S>>>()
             .await;
-        let internal_server = Server::builder()
-            .add_service(self.as_notifier_service())
-            .serve(self.internal_address());
+        let internal_server = join_set.spawn_task(
+            Server::builder()
+                .add_service(self.as_notifier_service())
+                .serve(self.internal_address()),
+        );
         let reflection_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(linera_rpc::FILE_DESCRIPTOR_SET)
             .build()?;
-        let public_server = self
-            .public_server()?
-            .layer(
-                ServiceBuilder::new()
-                    .layer(PrometheusMetricsMiddlewareLayer)
-                    .into_inner(),
-            )
-            .accept_http1(true)
-            .add_service(health_service)
-            .add_service(tonic_web::enable(self.as_validator_node()))
-            .add_service(tonic_web::enable(reflection_service))
-            .serve_with_shutdown(self.public_address(), shutdown_signal.cancelled_owned());
+        let public_server = join_set.spawn_task(
+            self.public_server()?
+                .layer(
+                    ServiceBuilder::new()
+                        .layer(PrometheusMetricsMiddlewareLayer)
+                        .into_inner(),
+                )
+                .accept_http1(true)
+                .add_service(health_service)
+                .add_service(tonic_web::enable(self.as_validator_node()))
+                .add_service(tonic_web::enable(reflection_service))
+                .serve_with_shutdown(self.public_address(), shutdown_signal.cancelled_owned()),
+        );
 
         select! {
-            internal_res = internal_server => internal_res?,
-            public_res = public_server => public_res?,
+            internal_res = internal_server => internal_res??,
+            public_res = public_server => public_res??,
         }
         Ok(())
     }
