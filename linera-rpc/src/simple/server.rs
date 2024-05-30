@@ -8,11 +8,12 @@ use futures::{channel::mpsc, stream::StreamExt};
 use linera_core::{
     node::NodeError,
     worker::{NetworkActions, ValidatorWorker, WorkerError, WorkerState},
+    JoinSetExt as _,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::Rng;
-use tokio::sync::oneshot;
+use tokio::{sync::oneshot, task::JoinSet};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -145,7 +146,8 @@ where
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(self.cross_chain_config.queue_size);
 
-        tokio::spawn(Self::forward_cross_chain_queries(
+        let mut join_set = JoinSet::new();
+        join_set.spawn_task(Self::forward_cross_chain_queries(
             self.state.nickname().to_string(),
             self.network.clone(),
             self.cross_chain_config.max_retries,
@@ -162,7 +164,7 @@ where
             cross_chain_sender,
         };
         // Launch server for the appropriate protocol.
-        protocol.spawn_server(address, state, shutdown_signal)
+        protocol.spawn_server(address, state, shutdown_signal, join_set)
     }
 }
 

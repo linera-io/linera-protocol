@@ -25,6 +25,7 @@ use linera_service::{
 };
 use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 
@@ -242,7 +243,7 @@ where
 
         self.public_config
             .protocol
-            .spawn_server(address, self, shutdown_signal)
+            .spawn_server(address, self, shutdown_signal, JoinSet::new())
             .join()
             .await?;
         Ok(())

@@ -159,11 +159,11 @@ impl TransportProtocol {
         address: impl ToSocketAddrs + Send + 'static,
         state: S,
         shutdown_signal: CancellationToken,
+        mut join_set: JoinSet<()>,
     ) -> ServerHandle
     where
         S: MessageHandler + Send + 'static,
     {
-        let mut join_set = JoinSet::new();
         let handle = match self {
             Self::Udp => join_set.spawn_task(UdpServer::run(address, state, shutdown_signal)),
             Self::Tcp => join_set.spawn_task(TcpServer::run(address, state, shutdown_signal)),
