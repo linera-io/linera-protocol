@@ -24,6 +24,7 @@ use thiserror::Error;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::{
+    aggregation::*,
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{LocalValidatorNode, NotificationStream},
     worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
@@ -74,70 +75,7 @@ pub enum LocalNodeError {
     InvalidChainInfoResponse,
 }
 
-// TODO can we generalize this to `NetworkActions` and other collectables?
 type Notifications = Vec<Notification>;
-
-type ResultWithNotifications<T, E> = Result<WithNotifications<T>, WithNotifications<E>>;
-
-struct WithNotifications<T> {
-    value: T,
-    notifications: Vec<Notification>,
-}
-
-impl<T> WithNotifications<T> {
-    fn new(value: T, notifications: Notifications) -> Self {
-        Self { value, notifications }
-    }
-
-    fn extend(self, sink: &mut impl Extend<Notification>) -> T {
-        sink.extend(self.notifications);
-        self.value
-    }
-}
-
-impl<T, E> WithNotifications<Result<T, E>> {
-    fn distribute<E_: From<E>>(self) -> Result<WithNotifications<T>, WithNotifications<E_>> {
-        match self.value {
-            Ok(x) => Ok(WithNotifications::new(x, self.notifications)),
-            Err(e) => Err(WithNotifications::new(e.into(), self.notifications)),
-        }
-    }
-}
-
-impl<T> From<T> for WithNotifications<T> {
-    fn from(value: T) -> Self {
-        Self { value, notifications: Default::default() }
-    }
-}
-
-trait ResultWithNotificationsExt {
-    type Ok;
-    type Err;
-    fn try_extend(self, sink: &mut impl Extend<Notification>) -> Result<Self::Ok, WithNotifications<Self::Err>>;
-    fn factor(self, sink: &mut impl Extend<Notification>) -> Result<Self::Ok, Self::Err>;
-}
-
-impl<T, E> ResultWithNotificationsExt for ResultWithNotifications<T, E> {
-    type Ok = T;
-    type Err = E;
-
-    fn try_extend(self, sink: &mut impl Extend<Notification>) -> Result<T, WithNotifications<E>> {
-        match self {
-            Ok(x) => {
-                sink.extend(x.notifications);
-                Ok(x.value)
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    fn factor(self, sink: &mut impl Extend<Notification>) -> Result<T, E> {
-        match self {
-            Ok(x) => Ok(x.extend(sink)),
-            Err(e) => Err(e.extend(sink)),
-        }
-    }
-}
 
 impl<S> LocalNodeClient<S>
 where
@@ -157,10 +95,10 @@ where
     pub async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
-    ) -> ResultWithNotifications<ChainInfoResponse, LocalNodeError> {
+    ) -> ResultWith<Notifications, ChainInfoResponse, LocalNodeError> {
         let mut node = self.node.lock().await;
         let mut notifications = Vec::new();
-        let full_cert = node.state.full_certificate(certificate).await.map_err(LocalNodeError::from)?;
+        let full_cert = (node.state.full_certificate(certificate).await, vec![]).distribute()?.0;
         let response = node
             .state
             .fully_handle_certificate_with_notifications(
@@ -170,7 +108,7 @@ where
                 Some(&mut notifications),
             )
             .await;
-        WithNotifications::new(response, notifications).distribute()
+        (response, notifications).distribute()
     }
 
     pub async fn handle_certificate(
@@ -178,7 +116,7 @@ where
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
-    ) -> ResultWithNotifications<ChainInfoResponse, LocalNodeError> {
+    ) -> ResultWith<Notifications, ChainInfoResponse, LocalNodeError> {
         let mut node = self.node.lock().await;
         let mut notifications = Vec::new();
         let response = node
@@ -190,7 +128,7 @@ where
                 Some(&mut notifications),
             )
             .await;
-        WithNotifications::new(response, notifications).distribute()
+        (response, notifications).distribute()
     }
 
     pub async fn handle_chain_info_query(
@@ -289,7 +227,7 @@ where
         node: &mut A,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
-    ) -> WithNotifications<Option<Box<ChainInfo>>>
+    ) -> (Option<Box<ChainInfo>>, Notifications)
     where
         A: LocalValidatorNode + Clone + 'static,
     {
@@ -301,13 +239,13 @@ where
             if !certificate.value().is_confirmed() || certificate.value().chain_id() != chain_id {
                 // The certificate is not as expected. Give up.
                 tracing::warn!("Failed to process network certificate {}", hash);
-                return WithNotifications::new(info, notifications);
+                return (info, notifications);
             }
             let result = self
                 .handle_certificate(certificate.clone(), vec![], vec![])
                 .await;
 
-            let result = match result.factor(&mut notifications) {
+            let result = match notifications.aggregate(result.factor()) {
                 Err(LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
                     locations,
                 ))) => {
@@ -325,7 +263,7 @@ where
                             locations,
                         )))
                     } else {
-                        self.handle_certificate(certificate, values, vec![]).await.factor(&mut notifications)
+                        notifications.aggregate(self.handle_certificate(certificate, values, vec![]).await.factor())
                     }
                 }
                 Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids))) => {
@@ -336,7 +274,7 @@ where
                     if blobs.len() != blob_ids.len() {
                         Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)))
                     } else {
-                        self.handle_certificate(certificate, vec![], blobs).await.factor(&mut notifications)
+                        notifications.aggregate(self.handle_certificate(certificate, vec![], blobs).await.factor())
                     }
                 }
                 Err(LocalNodeError::WorkerError(
@@ -355,7 +293,7 @@ where
                             WorkerError::ApplicationBytecodesAndBlobsNotFound(locations, blob_ids),
                         ))
                     } else {
-                        self.handle_certificate(certificate, values, blobs).await.factor(&mut notifications)
+                        notifications.aggregate(self.handle_certificate(certificate, values, blobs).await.factor())
                     }
                 }
                 result => result,
@@ -366,13 +304,13 @@ where
                 Err(error) => {
                     // The certificate is not as expected. Give up.
                     tracing::warn!("Failed to process network certificate {}: {}", hash, error);
-                    return WithNotifications::new(info, notifications);
+                    break;
                 }
             };
         }
 
         // Done with all certificates.
-        WithNotifications::new(info, notifications)
+        (info, notifications)
     }
 
     pub(crate) async fn local_chain_info(
@@ -577,13 +515,13 @@ where
                 else {
                     break;
                 };
-            let Some(info) = self
-                .try_process_certificates(name, &mut node, chain_id, certificates)
-                .await
-                .extend(&mut notifications)
-                else {
-                    break;
-                };
+            let Some(info) = notifications.aggregate(
+                self
+                    .try_process_certificates(name, &mut node, chain_id, certificates)
+                    .await
+            ) else {
+                break;
+            };
             assert!(info.next_block_height > start);
             start = info.next_block_height;
         }
@@ -650,7 +588,7 @@ where
         name: ValidatorName,
         mut node: A,
         chain_id: ChainId,
-    ) -> ResultWithNotifications<(), LocalNodeError>
+    ) -> ResultWith<Notifications, (), LocalNodeError>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
@@ -668,11 +606,11 @@ where
             Ok(_) => {
                 tracing::warn!("Ignoring invalid response from validator");
                 // Give up on this validator.
-                return Ok(WithNotifications::new((), notifications));
+                return Ok(((), notifications));
             }
             Err(err) => {
                 tracing::warn!("Ignoring error from validator: {}", err);
-                return Ok(WithNotifications::new((), notifications));
+                return Ok(((), notifications));
             }
         };
         if !info.requested_sent_certificates.is_empty()
@@ -687,7 +625,7 @@ where
                 .extend(&mut notifications)
                 .is_none()
         {
-            return Ok(WithNotifications::new((), notifications));
+            return Ok(((), notifications));
         };
         if let Some(proposal) = info.manager.requested_proposed {
             if proposal.content.block.chain_id == chain_id {
@@ -705,7 +643,7 @@ where
                 }
             }
         }
-        Ok(WithNotifications::new((), notifications))
+        Ok(((), notifications))
     }
 
     pub async fn download_hashed_certificate_value<A>(

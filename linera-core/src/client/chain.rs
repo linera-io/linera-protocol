@@ -1124,7 +1124,7 @@ where
     pub async fn request_leader_timeout(&self) -> Result<Certificate, Error> {
         let chain_id = self.chain_id;
         let query = ChainInfoQuery::new(chain_id).with_committees();
-        let info = self.local_node.handle_chain_info_query(query).await?.info;
+        let info = self.client.local_node.handle_chain_info_query(query).await?.info;
         let epoch = info.epoch.ok_or(LocalNodeError::InactiveChain(chain_id))?;
         let committee = info
             .requested_committees
