@@ -166,4 +166,13 @@ impl ValidatorNode for Client {
             Client::Simple(simple_client) => simple_client.download_certificate_value(hash).await?,
         })
     }
+
+    async fn download_certificate(&mut self, hash: CryptoHash) -> Result<Certificate, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.download_certificate(hash).await?,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.download_certificate(hash).await?,
+        })
+    }
 }

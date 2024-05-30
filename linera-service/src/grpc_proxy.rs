@@ -27,9 +27,9 @@ use linera_rpc::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
-            Blob, BlobId, BlockProposal, CertificateRequest, CertificateValue, ChainInfoQuery,
-            ChainInfoResult, CryptoHash, LiteCertificate, Notification, SubscriptionRequest,
-            VersionInfo,
+            Blob, BlobId, BlockProposal, Certificate, CertificateRequest, CertificateValue,
+            ChainInfoQuery, ChainInfoResult, CryptoHash, LiteCertificate, Notification,
+            SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProxyable, GRPC_MAX_MESSAGE_SIZE,
@@ -417,6 +417,21 @@ where
             .0
             .storage
             .read_hashed_certificate_value(hash)
+            .await
+            .map_err(|err| Status::from_error(Box::new(err)))?;
+        Ok(Response::new(certificate.try_into()?))
+    }
+
+    #[instrument(skip_all, err(Display))]
+    async fn download_certificate(
+        &self,
+        request: Request<CryptoHash>,
+    ) -> Result<Response<Certificate>, Status> {
+        let hash = request.into_inner().try_into()?;
+        let certificate = self
+            .0
+            .storage
+            .read_certificate(hash)
             .await
             .map_err(|err| Status::from_error(Box::new(err)))?;
         Ok(Response::new(certificate.try_into()?))
