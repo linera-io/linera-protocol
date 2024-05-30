@@ -29,6 +29,9 @@ use crate::{
 /// Suggested buffer size
 pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
 
+/// Number of tasks to spawn before attempting to reap some finished tasks to prevent memory leaks.
+const REAP_TASKS_THRESHOLD: usize = 100;
+
 // Supported transport protocols.
 #[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransportProtocol {
@@ -280,7 +283,7 @@ where
 
         self.active_handlers.insert(peer, new_task);
 
-        if self.active_handlers.len() >= 100 {
+        if self.active_handlers.len() >= REAP_TASKS_THRESHOLD {
             // Collect finished tasks to avoid leaking memory.
             self.active_handlers.retain(|_, task| task.is_running());
             self.join_set.reap_finished_tasks();
