@@ -3577,24 +3577,6 @@ dependencies = [
 [[package]]
 name = "linera-alloy"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
-dependencies = [
- "linera-alloy-contract",
- "linera-alloy-core 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
- "linera-alloy-json-rpc",
- "linera-alloy-network",
- "linera-alloy-node-bindings",
- "linera-alloy-provider",
- "linera-alloy-rpc-types 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
- "linera-alloy-signer",
- "linera-alloy-signer-wallet",
- "linera-alloy-transport",
- "linera-alloy-transport-http",
-]
-
-[[package]]
-name = "linera-alloy"
-version = "0.1.0"
 source = "git+https://github.com/MathieuDutSik/alloy?rev=d16674c395a2b126a66f4e79392168f49f8e2264#d16674c395a2b126a66f4e79392168f49f8e2264"
 dependencies = [
  "linera-alloy-core 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=bd87215914c8f9665a229253f596a0f133687c88)",
@@ -3602,16 +3584,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "linera-alloy-consensus"
+name = "linera-alloy"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
- "alloy-rlp",
- "c-kzg",
- "linera-alloy-eips 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
- "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
- "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
- "serde",
+ "linera-alloy-contract",
+ "linera-alloy-core 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
+ "linera-alloy-json-rpc",
+ "linera-alloy-network",
+ "linera-alloy-node-bindings",
+ "linera-alloy-provider",
+ "linera-alloy-rpc-types 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
+ "linera-alloy-signer",
+ "linera-alloy-signer-wallet",
+ "linera-alloy-transport",
+ "linera-alloy-transport-http",
 ]
 
 [[package]]
@@ -3628,9 +3615,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-alloy-consensus"
+version = "0.1.0"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
+dependencies = [
+ "alloy-rlp",
+ "c-kzg",
+ "linera-alloy-eips 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
+ "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
+ "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
+ "serde",
+]
+
+[[package]]
 name = "linera-alloy-contract"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
  "futures",
  "futures-util",
@@ -3639,7 +3639,7 @@ dependencies = [
  "linera-alloy-network",
  "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
  "linera-alloy-provider",
- "linera-alloy-rpc-types 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
+ "linera-alloy-rpc-types 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
  "linera-alloy-sol-types 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
  "linera-alloy-transport",
  "thiserror",
@@ -3683,12 +3683,12 @@ dependencies = [
 [[package]]
 name = "linera-alloy-eips"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=d16674c395a2b126a66f4e79392168f49f8e2264#d16674c395a2b126a66f4e79392168f49f8e2264"
 dependencies = [
  "alloy-rlp",
  "c-kzg",
- "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
- "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
+ "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=bd87215914c8f9665a229253f596a0f133687c88)",
+ "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=d16674c395a2b126a66f4e79392168f49f8e2264)",
  "once_cell",
  "serde",
  "sha2 0.10.8",
@@ -3697,12 +3697,12 @@ dependencies = [
 [[package]]
 name = "linera-alloy-eips"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=d16674c395a2b126a66f4e79392168f49f8e2264#d16674c395a2b126a66f4e79392168f49f8e2264"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
  "alloy-rlp",
  "c-kzg",
- "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=bd87215914c8f9665a229253f596a0f133687c88)",
- "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=d16674c395a2b126a66f4e79392168f49f8e2264)",
+ "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
+ "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
  "once_cell",
  "serde",
  "sha2 0.10.8",
@@ -3711,10 +3711,10 @@ dependencies = [
 [[package]]
 name = "linera-alloy-genesis"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=d16674c395a2b126a66f4e79392168f49f8e2264#d16674c395a2b126a66f4e79392168f49f8e2264"
 dependencies = [
- "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
- "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
+ "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=bd87215914c8f9665a229253f596a0f133687c88)",
+ "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=d16674c395a2b126a66f4e79392168f49f8e2264)",
  "serde",
  "serde_json",
 ]
@@ -3722,10 +3722,10 @@ dependencies = [
 [[package]]
 name = "linera-alloy-genesis"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=d16674c395a2b126a66f4e79392168f49f8e2264#d16674c395a2b126a66f4e79392168f49f8e2264"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
- "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=bd87215914c8f9665a229253f596a0f133687c88)",
- "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=d16674c395a2b126a66f4e79392168f49f8e2264)",
+ "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
+ "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
  "serde",
  "serde_json",
 ]
@@ -3744,7 +3744,7 @@ dependencies = [
 [[package]]
 name = "linera-alloy-json-rpc"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
  "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
  "serde",
@@ -3756,16 +3756,16 @@ dependencies = [
 [[package]]
 name = "linera-alloy-network"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
  "async-trait",
  "auto_impl",
  "futures-utils-wasm",
- "linera-alloy-consensus 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
- "linera-alloy-eips 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
+ "linera-alloy-consensus 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
+ "linera-alloy-eips 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
  "linera-alloy-json-rpc",
  "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
- "linera-alloy-rpc-types 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
+ "linera-alloy-rpc-types 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
  "linera-alloy-signer",
  "linera-alloy-sol-types 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
  "thiserror",
@@ -3774,10 +3774,10 @@ dependencies = [
 [[package]]
 name = "linera-alloy-node-bindings"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
  "k256",
- "linera-alloy-genesis 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
+ "linera-alloy-genesis 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
  "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
  "serde_json",
  "tempfile",
@@ -3831,7 +3831,7 @@ dependencies = [
 [[package]]
 name = "linera-alloy-provider"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
  "alloy-chains",
  "async-stream",
@@ -3840,14 +3840,14 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-utils-wasm",
- "linera-alloy-consensus 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
- "linera-alloy-eips 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
+ "linera-alloy-consensus 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
+ "linera-alloy-eips 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
  "linera-alloy-json-rpc",
  "linera-alloy-network",
  "linera-alloy-node-bindings",
  "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
  "linera-alloy-rpc-client",
- "linera-alloy-rpc-types 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
+ "linera-alloy-rpc-types 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
  "linera-alloy-rpc-types-trace",
  "linera-alloy-signer-wallet",
  "linera-alloy-transport",
@@ -3865,7 +3865,7 @@ dependencies = [
 [[package]]
 name = "linera-alloy-rpc-client"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
  "futures",
  "linera-alloy-json-rpc",
@@ -3880,24 +3880,6 @@ dependencies = [
  "tower",
  "tracing",
  "url",
-]
-
-[[package]]
-name = "linera-alloy-rpc-types"
-version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
-dependencies = [
- "alloy-rlp",
- "itertools 0.12.1",
- "linera-alloy-consensus 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
- "linera-alloy-eips 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
- "linera-alloy-genesis 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
- "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
- "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
- "linera-alloy-sol-types 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
- "serde",
- "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -3919,23 +3901,31 @@ dependencies = [
 ]
 
 [[package]]
-name = "linera-alloy-rpc-types-trace"
+name = "linera-alloy-rpc-types"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
+ "alloy-rlp",
+ "itertools 0.12.1",
+ "linera-alloy-consensus 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
+ "linera-alloy-eips 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
+ "linera-alloy-genesis 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
  "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
- "linera-alloy-rpc-types 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
- "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
+ "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
+ "linera-alloy-sol-types 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
-name = "linera-alloy-serde"
+name = "linera-alloy-rpc-types-trace"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
  "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
+ "linera-alloy-rpc-types 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
+ "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
  "serde",
  "serde_json",
 ]
@@ -3951,9 +3941,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-alloy-serde"
+version = "0.1.0"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
+dependencies = [
+ "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "linera-alloy-signer"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -3966,11 +3966,11 @@ dependencies = [
 [[package]]
 name = "linera-alloy-signer-wallet"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
  "async-trait",
  "k256",
- "linera-alloy-consensus 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
+ "linera-alloy-consensus 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
  "linera-alloy-network",
  "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=d649bb71a003adf88a4fb7de5c2c8a17e7b2569f)",
  "linera-alloy-signer",
@@ -4102,7 +4102,7 @@ dependencies = [
 [[package]]
 name = "linera-alloy-transport"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
  "base64 0.22.0",
  "futures-util",
@@ -4120,7 +4120,7 @@ dependencies = [
 [[package]]
 name = "linera-alloy-transport-http"
 version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6#b8e426977a40c07edd32a6bf39e126eebed463d6"
+source = "git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971#dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971"
 dependencies = [
  "linera-alloy-json-rpc",
  "linera-alloy-transport",
@@ -4244,7 +4244,7 @@ dependencies = [
  "async-lock",
  "async-trait",
  "cfg_aliases",
- "linera-alloy 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
+ "linera-alloy 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
  "linera-base",
  "linera-storage-service",
  "num-bigint",
@@ -4531,7 +4531,7 @@ dependencies = [
  "http 1.1.0",
  "k8s-openapi",
  "kube",
- "linera-alloy 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=b8e426977a40c07edd32a6bf39e126eebed463d6)",
+ "linera-alloy 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971)",
  "linera-base",
  "linera-chain",
  "linera-core",
