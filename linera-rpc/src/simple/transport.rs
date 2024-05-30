@@ -10,6 +10,7 @@ use futures::{
     stream::{self, FuturesUnordered, SplitSink, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryStreamExt,
 };
+use linera_core::{JoinSetExt as _, TaskHandle};
 use serde::{Deserialize, Serialize};
 use tokio::{
     io::AsyncWriteExt,
@@ -77,15 +78,21 @@ pub trait MessageHandler: Clone {
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage>;
 }
 
-/// The result of spawning a server is a handle to track completion.
+/// The result of spawning a server is oneshot channel to track completion, and the set of
+/// executing tasks.
 pub struct ServerHandle {
-    pub handle: tokio::task::JoinHandle<Result<(), std::io::Error>>,
+    pub handle: TaskHandle<Result<(), std::io::Error>>,
+    _join_set: JoinSet<()>,
 }
 
 impl ServerHandle {
     pub async fn join(self) -> Result<(), std::io::Error> {
-        self.handle.await??;
-        Ok(())
+        self.handle.await.map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "Server task did not finish successfully",
+            )
+        })?
     }
 }
 
@@ -156,12 +163,16 @@ impl TransportProtocol {
     where
         S: MessageHandler + Send + 'static,
     {
+        let mut join_set = JoinSet::new();
         let handle = match self {
-            Self::Udp => tokio::spawn(UdpServer::run(address, state, shutdown_signal)),
-            Self::Tcp => tokio::spawn(TcpServer::run(address, state, shutdown_signal)),
+            Self::Udp => join_set.spawn_task(UdpServer::run(address, state, shutdown_signal)),
+            Self::Tcp => join_set.spawn_task(TcpServer::run(address, state, shutdown_signal)),
         };
 
-        ServerHandle { handle }
+        ServerHandle {
+            handle,
+            _join_set: join_set,
+        }
     }
 }
 
@@ -378,12 +389,12 @@ where
         let mut accept_stream = pin!(accept_stream);
 
         let connection_shutdown_signal = shutdown_signal.child_token();
-        let mut tasks = JoinSet::new();
+        let mut join_set = JoinSet::new();
 
         loop {
             tokio::select! { biased;
                 _ = shutdown_signal.cancelled() => {
-                    while tasks.join_next().await.is_some() {}
+                    while join_set.join_next().await.is_some() {}
                     return Ok(());
                 }
                 maybe_socket = accept_stream.next() => match maybe_socket {
@@ -393,10 +404,10 @@ where
                             handler.clone(),
                             connection_shutdown_signal.clone(),
                         );
-                        tasks.spawn(server.serve());
+                        join_set.spawn(server.serve());
                     }
                     Some(Err(error)) => {
-                        while tasks.join_next().await.is_some() {}
+                        while join_set.join_next().await.is_some() {}
                         return Err(error);
                     }
                     None => unreachable!(
@@ -406,7 +417,7 @@ where
             }
 
             // Reap finished tasks
-            while tasks.try_join_next().is_some() {}
+            while join_set.try_join_next().is_some() {}
         }
     }
 
