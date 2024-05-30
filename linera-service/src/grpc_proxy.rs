@@ -27,7 +27,7 @@ use linera_rpc::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
-            Blob, BlobId, BlockProposal, Certificate, CertificateValue, ChainInfoQuery,
+            Blob, BlobId, BlockProposal, CertificateRequest, CertificateValue, ChainInfoQuery,
             ChainInfoResult, CryptoHash, LiteCertificate, Notification, SubscriptionRequest,
             VersionInfo,
         },
@@ -350,7 +350,7 @@ where
     #[instrument(skip_all, err(Display))]
     async fn handle_certificate(
         &self,
-        request: Request<Certificate>,
+        request: Request<CertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.client_for_proxy_worker(request).await?;
         Self::log_and_return_proxy_request_outcome(
