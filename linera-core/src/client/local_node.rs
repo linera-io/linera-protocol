@@ -245,7 +245,7 @@ where
                 .handle_certificate(certificate.clone(), vec![], vec![])
                 .await;
 
-            let result = match notifications.aggregate(result.factor()) {
+            let result = match result.factor().aggregate(&mut notifications) {
                 Err(LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
                     locations,
                 ))) => {
@@ -263,7 +263,7 @@ where
                             locations,
                         )))
                     } else {
-                        notifications.aggregate(self.handle_certificate(certificate, values, vec![]).await.factor())
+                        self.handle_certificate(certificate, values, vec![]).await.factor().aggregate(&mut notifications)
                     }
                 }
                 Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids))) => {
@@ -274,7 +274,7 @@ where
                     if blobs.len() != blob_ids.len() {
                         Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)))
                     } else {
-                        notifications.aggregate(self.handle_certificate(certificate, vec![], blobs).await.factor())
+                        self.handle_certificate(certificate, vec![], blobs).await.factor().aggregate(&mut notifications)
                     }
                 }
                 Err(LocalNodeError::WorkerError(
@@ -293,7 +293,7 @@ where
                             WorkerError::ApplicationBytecodesAndBlobsNotFound(locations, blob_ids),
                         ))
                     } else {
-                        notifications.aggregate(self.handle_certificate(certificate, values, blobs).await.factor())
+                        self.handle_certificate(certificate, values, blobs).await.factor().aggregate(&mut notifications)
                     }
                 }
                 result => result,
@@ -515,11 +515,11 @@ where
                 else {
                     break;
                 };
-            let Some(info) = notifications.aggregate(
-                self
-                    .try_process_certificates(name, &mut node, chain_id, certificates)
-                    .await
-            ) else {
+            let Some(info) = self
+                .try_process_certificates(name, &mut node, chain_id, certificates)
+                .await
+                .aggregate(&mut notifications)
+            else {
                 break;
             };
             assert!(info.next_block_height > start);
@@ -593,7 +593,7 @@ where
         A: LocalValidatorNode + Clone + 'static,
     {
         let mut notifications = vec![];
-        let local_info = self.local_chain_info(chain_id).await?;
+        let local_info = (self.local_chain_info(chain_id).await, vec![]).try_aggregate(&mut notifications)?;
         let range = BlockHeightRange {
             start: local_info.next_block_height,
             limit: None,
@@ -622,7 +622,7 @@ where
                     info.requested_sent_certificates,
                 )
                 .await
-                .extend(&mut notifications)
+                .aggregate(&mut notifications)
                 .is_none()
         {
             return Ok(((), notifications));
@@ -638,8 +638,8 @@ where
         if let Some(cert) = info.manager.requested_locked {
             if cert.value().is_validated() && cert.value().chain_id() == chain_id {
                 let hash = cert.hash();
-                if let Err(error) = self.handle_certificate(*cert, vec![], vec![]).await {
-                    tracing::warn!("Skipping certificate {}: {}", hash, error.value);
+                if let Err(error) = self.handle_certificate(*cert, vec![], vec![]).await.factor().aggregate(&mut notifications) {
+                    tracing::warn!("Skipping certificate {}: {}", hash, error);
                 }
             }
         }

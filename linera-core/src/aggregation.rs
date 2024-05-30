@@ -2,22 +2,42 @@ use std::iter::IntoIterator;
 
 pub type ResultWith<X, T, E> = Result<(T, X), (E, X)>;
 
-pub trait AggregateExt: IntoIterator {
-    fn aggregate<Ts: IntoIterator<Item = T>, R>(&mut self, (output, items): (R, Ts)) -> R {
-        self.extend(items);
-        output
-    }
+pub trait AggregateExt {
+    type Item;
+    type Output;
 
-    fn try_aggregate<Ts: IntoIterator<Item = T>, R, E>(&mut self, (output, items): (Result<R, E>, Ts)) -> Result<R, (E, Self)> where Self: Sized + Default {
-        self.extend(items);
-        match output {
-            Ok(x) => Ok(x),
-            Err(e) => Err((e, std::mem::replace(self, Default::default()))),
-        }
+    fn aggregate(self, target: &mut impl Extend<Self::Item>) -> Self::Output;
+}
+
+impl<R, Xs: IntoIterator> AggregateExt for (R, Xs) {
+    type Item = Xs::Item;
+    type Output = R;
+
+    fn aggregate(self, target: &mut impl Extend<Self::Item>) -> Self::Output {
+        target.extend(self.1);
+        self.0
     }
 }
 
-impl<U, T: Extend<U>> AggregateExt<U> for T { }
+pub trait TryAggregateExt: AggregateExt {
+    type Ok;
+    type Err;
+
+    fn try_aggregate<Target: Default + Extend<Self::Item>>(self, target: &mut Target) -> Result<Self::Ok, (Self::Err, Target)>;
+}
+
+impl<Xs: IntoIterator, T, E> TryAggregateExt for (Result<T, E>, Xs) {
+    type Ok = T;
+    type Err = E;
+
+    fn try_aggregate<Target: Default + Extend<Self::Item>>(self, target: &mut Target) -> Result<Self::Ok, (Self::Err, Target)> {
+        target.extend(self.1);
+        match self.0 {
+            Ok(x) => Ok(x),
+            Err(e) => Err((e, std::mem::replace(target, Default::default()))),
+        }
+    }
+}
 
 
 pub trait DistributeExt {
