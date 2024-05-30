@@ -37,8 +37,7 @@ use super::{
         notifier_service_client::NotifierServiceClient,
         validator_worker_client::ValidatorWorkerClient,
         validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
-        BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
-        LiteCertificate,
+        BlockProposal, ChainInfoQuery, ChainInfoResult, CrossChainRequest, LiteCertificate,
     },
     pool::GrpcConnectionPool,
     GrpcError, GRPC_MAX_MESSAGE_SIZE,
@@ -510,7 +509,7 @@ where
     #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
     async fn handle_certificate(
         &self,
-        request: Request<Certificate>,
+        request: Request<api::CertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
         let HandleCertificateRequest {
@@ -622,7 +621,7 @@ impl GrpcProxyable for LiteCertificate {
     }
 }
 
-impl GrpcProxyable for Certificate {
+impl GrpcProxyable for api::CertificateRequest {
     fn chain_id(&self) -> Option<ChainId> {
         self.chain_id.clone()?.try_into().ok()
     }

@@ -310,21 +310,22 @@ impl<'a> TryFrom<HandleLiteCertRequest<'a>> for api::LiteCertificate {
     }
 }
 
-impl TryFrom<api::Certificate> for HandleCertificateRequest {
+impl TryFrom<api::CertificateRequest> for HandleCertificateRequest {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(cert_request: api::Certificate) -> Result<Self, Self::Error> {
-        let value: HashedCertificateValue = bincode::deserialize(&cert_request.value)?;
+    fn try_from(cert_request: api::CertificateRequest) -> Result<Self, Self::Error> {
+        let certificate = cert_request
+            .certificate
+            .ok_or(GrpcProtoConversionError::MissingField)?;
+        let value: HashedCertificateValue = bincode::deserialize(&certificate.value)?;
         ensure!(
             Some(value.inner().chain_id().into()) == cert_request.chain_id,
             GrpcProtoConversionError::InconsistentChainId
         );
-        let signatures = bincode::deserialize(&cert_request.signatures)?;
         let values = bincode::deserialize(&cert_request.hashed_certificate_values)?;
         let blobs = bincode::deserialize(&cert_request.blobs)?;
-        let round = bincode::deserialize(&cert_request.round)?;
         Ok(HandleCertificateRequest {
-            certificate: Certificate::new(value, round, signatures),
+            certificate: certificate.try_into()?,
             wait_for_outgoing_messages: cert_request.wait_for_outgoing_messages,
             hashed_certificate_values: values,
             hashed_blobs: blobs,
@@ -332,18 +333,40 @@ impl TryFrom<api::Certificate> for HandleCertificateRequest {
     }
 }
 
-impl TryFrom<HandleCertificateRequest> for api::Certificate {
+impl TryFrom<HandleCertificateRequest> for api::CertificateRequest {
     type Error = GrpcProtoConversionError;
 
     fn try_from(request: HandleCertificateRequest) -> Result<Self, Self::Error> {
         Ok(Self {
             chain_id: Some(request.certificate.value().chain_id().into()),
-            value: bincode::serialize(&request.certificate.value)?,
-            round: bincode::serialize(&request.certificate.round)?,
-            signatures: bincode::serialize(request.certificate.signatures())?,
+            certificate: Some(request.certificate.try_into()?),
             hashed_certificate_values: bincode::serialize(&request.hashed_certificate_values)?,
             blobs: bincode::serialize(&request.hashed_blobs)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
+        })
+    }
+}
+
+impl TryFrom<api::Certificate> for Certificate {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: api::Certificate) -> Result<Self, Self::Error> {
+        Ok(Certificate::new(
+            bincode::deserialize(&certificate.value)?,
+            bincode::deserialize(&certificate.round)?,
+            bincode::deserialize(&certificate.signatures)?,
+        ))
+    }
+}
+
+impl TryFrom<Certificate> for api::Certificate {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: Certificate) -> Result<Self, Self::Error> {
+        Ok(Self {
+            value: bincode::serialize(&certificate.value)?,
+            round: bincode::serialize(&certificate.round)?,
+            signatures: bincode::serialize(certificate.signatures())?,
         })
     }
 }
@@ -840,7 +863,7 @@ pub mod tests {
             wait_for_outgoing_messages: false,
         };
 
-        round_trip_check::<_, api::Certificate>(request);
+        round_trip_check::<_, api::CertificateRequest>(request);
     }
 
     #[test]
