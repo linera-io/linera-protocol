@@ -16,6 +16,7 @@ use futures::{
     lock::Mutex,
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
+use dashmap::DashMap;
 use linera_base::{
     abi::Abi,
     crypto::{CryptoHash, KeyPair, PublicKey},
@@ -80,8 +81,8 @@ pub(crate) use self::{
 #[path = "unit_tests/client_tests.rs"]
 mod client_tests;
 
-/// The client options and policies.
-pub struct Options {
+/// The chain options and policies.
+pub struct ChainOptions {
     /// Maximum number of pending messages processed at a time in a block.
     max_pending_messages: usize,
     /// The policy for automatically handling incoming messages.
@@ -91,31 +92,46 @@ pub struct Options {
 }
 
 /// Per-chain information.
-pub struct Chain {
+// TODO: can this be deduplicated with `data_types::ChainInfo`?
+pub struct ChainState {
     /// The off-chain chain ID.
-    id: ChainId,
+    pub id: ChainId,
     /// Latest block hash, if any.
-    block_hash: Option<CryptoHash>,
+    pub block_hash: Option<CryptoHash>,
     /// The earliest possible timestamp for the next block.
-    timestamp: Timestamp,
+    pub timestamp: Timestamp,
     /// Sequence number that we plan to use for the next block.
     /// We track this value outside local storage mainly for security reasons.
-    next_block_height: BlockHeight,
+    pub next_block_height: BlockHeight,
     /// Pending block.
-    pending_block: Option<Block>,
+    pub pending_block: Option<Block>,
     /// The chain's view of the current committee, built from messages received from the
     /// admin chain.
-    committee: Committee,
+    pub committee: Committee,
 
     /// Support synchronization of received certificates.
-    received_certificate_trackers: HashMap<ValidatorName, u64>,
+    pub received_certificate_trackers: HashMap<ValidatorName, u64>,
     /// This contains blobs belonging to our `pending_block` that may not even have
     /// been processed by (i.e. been proposed to) our own local chain manager yet.
-    pending_blobs: BTreeMap<BlobId, HashedBlob>,
+    pub pending_blobs: BTreeMap<BlobId, HashedBlob>,
+}
+
+pub struct Chain {
+    /// The current state of the chain.
+    state: ChainState,
 
     /// A [`tokio::sync::broadcast::Sender`] to notify clients of notifications on this
     /// chain.
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
+}
+
+impl From<ChainState> for Chain {
+    fn from(state: ChainState) -> Self {
+        Self {
+            state,
+            notification_sender: tokio::sync::broadcast::Sender::new(NOTIFICATION_QUEUE_SIZE),
+        }
+    }
 }
 
 /*
@@ -156,16 +172,14 @@ pub struct ChainClient<ValidatorNodeProvider, Storage> {
 }
 */
 
-type ChainMap = BTreeMap<ChainId, Chain>;
+const NOTIFICATION_QUEUE_SIZE: usize = 4096;
 
 /// A client to the Linera protocol.
 pub struct Client<ValidatorNodeProvider, Storage> {
-    /// The client options and policies.
-    options: Options,
     /// How to talk to the validators.
     validator_node_provider: ValidatorNodeProvider,
     /// Per-chain information.
-    chains: BTreeMap<ChainId, Chain>,
+    chains: DashMap<ChainId, Chain>,
 
     /// Client storage (used by the updater).
     storage: Storage,
@@ -174,7 +188,7 @@ pub struct Client<ValidatorNodeProvider, Storage> {
     /// tracking.
     local_node: LocalNodeClient<Storage>,
     /// Known key pairs from present and past identities.
-    known_key_pairs: BTreeMap<Owner, KeyPair>,
+    known_key_pairs: DashMap<Owner, KeyPair>,
 }
 
 impl<ValidatorNodeProvider, Storage: Clone> Client<ValidatorNodeProvider, Storage> {
@@ -196,6 +210,42 @@ impl<ValidatorNodeProvider, Storage: Clone> Client<ValidatorNodeProvider, Storag
             ),
             known_key_pairs: Default::default(),
         }
+    }
+
+    fn chain(&self, id: ChainId) -> Option<ChainClient<ValidatorNodeProvider, Storage>> {
+        Some(ChainClient {
+            client: self,
+            chain_id: id,
+        }).filter(|_| self.chains.contains_key(&id))
+    }
+
+    fn create_chain(&self, state: ChainState) -> Option<ChainState> {
+        use dashmap::mapref::entry::Entry::*;
+        match self.chains.entry(state.id) {
+            Occupied(_) => Some(state),
+            Vacant(entry) => {
+                entry.insert(state.into());
+                None
+            }
+        }
+    }
+
+    fn chain_or_create(&self, state: ChainState) -> ChainClient<ValidatorNodeProvider, Storage> {
+        ChainClient {
+            client: self,
+            chain_id: self.chains.entry(state.id.clone()).or_insert_with(|| {
+                Chain {
+                    state,
+                    notification_sender: tokio::sync::broadcast::Sender::new(NOTIFICATION_QUEUE_SIZE),
+                }
+            }).key().clone(),
+        }
+    }
+}
+
+impl<ValidatorNodeProvider, Storage> ChainClient<'_, ValidatorNodeProvider, Storage> {
+    pub fn chain(&self) -> impl std::ops::Deref<Target = Chain> + '_ {
+        self.client.chains.get(&self.chain_id).expect("Chain must not be deleted from client state")
     }
 }
 
@@ -273,6 +323,11 @@ impl<ValidatorNodeProvider, Storage: Clone> Client<ValidatorNodeProvider, Storag
 //     }
 // }
 
+struct ChainClientBuilder {
+    message_policy: MessagePolicy,
+    cross_chain_message_delivery: CrossChainMessageDelivery,
+}
+
 /// Policies for automatically handling incoming messages.
 ///
 /// These apply to all messages except for the initial `OpenChain`, which is always accepted.
@@ -307,8 +362,9 @@ impl MessagePolicy {
 pub struct ChainClient<'client, ValidatorNodeProvider, Storage> {
     /// The protocol [`Client`].
     pub client: &'client Client<ValidatorNodeProvider, Storage>,
-    /// The specific chain represented by this [`ChainClient`].
-    pub chain: &'client Chain,
+    /// The specific chain represented by this [`ChainClient`].  Invariant: this chain
+    /// exists in the `Client`.
+    pub chain_id: ChainId,
 
     // /// Latest block hash, if any.
     // block_hash: Option<CryptoHash>,
@@ -415,13 +471,12 @@ where
     /// Obtains a `ChainStateView` for a given `ChainId`.
     pub async fn chain_state_view(
         &self,
-    ) -> Result<Arc<ChainStateView<S::Context>>, LocalNodeError> {
-        let chain_state_view = self
+    ) -> Result<ChainStateView<S::Context>, LocalNodeError> {
+        Ok(self
             .storage_client()
             .await
-            .load_chain(self.chain.id)
-            .await?;
-        Ok(Arc::new(chain_state_view))
+            .load_chain(self.chain_id)
+            .await?)
     }
 
     // /// Subscribes to notifications from this client's chain.
@@ -436,7 +491,7 @@ where
 
     /// Obtains the basic `ChainInfo` data for the local chain.
     pub async fn chain_info(&mut self) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(self.chain.id);
+        let query = ChainInfoQuery::new(self.chain_id);
         let response = self.client.local_node.handle_chain_info_query(query).await?;
         Ok(response.info)
     }
@@ -445,85 +500,85 @@ where
     pub async fn chain_info_with_manager_values(
         &mut self,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(self.chain.id).with_manager_values();
+        let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
         let response = self.client.local_node.handle_chain_info_query(query).await?;
         Ok(response.info)
     }
 
-//     /// Obtains up to `self.max_pending_messages` pending messages for the local chain.
-//     ///
-//     /// Messages known to be redundant are filtered out: A `RegisterApplications` message whose
-//     /// entries are already known never needs to be included in a block.
-//     async fn pending_messages(&mut self) -> Result<Vec<IncomingMessage>, ChainClientError> {
-//         if self.next_block_height != BlockHeight::ZERO && self.message_policy.is_ignore() {
-//             return Ok(Vec::new()); // OpenChain is already received, other are ignored.
-//         }
-//         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
-//         let info = self.client.local_node.handle_chain_info_query(query).await?.info;
-//         ensure!(
-//             info.next_block_height == self.next_block_height,
-//             ChainClientError::WalletSynchronizationError
-//         );
-//         let mut requested_pending_messages = info.requested_pending_messages;
-//         let mut pending_messages = vec![];
-//         // The first incoming message of any child chain must be `OpenChain`. We must have it in
-//         // our inbox, and include it before all other messages.
-//         if info.next_block_height == BlockHeight::ZERO
-//             && info
-//                 .description
-//                 .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
-//             .is_child()
-//         {
-//             let Some(index) = requested_pending_messages.iter().position(|message| {
-//                 matches!(
-//                     message.event.message,
-//                     Message::System(SystemMessage::OpenChain(_))
-//                 )
-//             }) else {
-//                 return Err(LocalNodeError::InactiveChain(self.chain_id).into());
-//             };
-//             let open_chain_message = requested_pending_messages.remove(index);
-//             pending_messages.push(open_chain_message);
-//         }
-//         if self.message_policy.is_ignore() {
-//             return Ok(pending_messages); // Ignore messages other than OpenChain.
-//         }
-//         for mut message in requested_pending_messages {
-//             if pending_messages.len() >= self.max_pending_messages {
-//                 tracing::warn!(
-//                     "Limiting block to {} incoming messages",
-//                     self.max_pending_messages
-//                 );
-//                 break;
-//             }
-//             if self.message_policy.is_reject() {
-//                 if message.event.is_skippable() {
-//                     continue;
-//                 } else if message.event.is_tracked() {
-//                     message.action = MessageAction::Reject;
-//                 }
-//             }
-//             if let Message::System(SystemMessage::RegisterApplications { applications }) =
-//                 &message.event.message
-//             {
-//                 let chain_id = self.chain_id;
-//                 if applications
-//                     .iter()
-//                     .map(|application| {
-//                         self.local_node
-//                             .describe_application(chain_id, application.into())
-//                     })
-//                     .collect::<FuturesUnordered<_>>()
-//                     .all(|result| async move { result.is_ok() })
-//                     .await
-//                 {
-//                     continue; // These applications are already registered; skip register message.
-//                 }
-//             }
-//             pending_messages.push(message);
-//         }
-//         Ok(pending_messages)
-//     }
+    /// Obtains up to `self.max_pending_messages` pending messages for the local chain.
+    ///
+    /// Messages known to be redundant are filtered out: A `RegisterApplications` message whose
+    /// entries are already known never needs to be included in a block.
+    async fn pending_messages(&self) -> Result<Vec<IncomingMessage>, ChainClientError> {
+        if self.chain().next_block_height != BlockHeight::ZERO && self.message_policy.is_ignore() {
+            return Ok(Vec::new()); // OpenChain is already received, other are ignored.
+        }
+        let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
+        let info = self.client.local_node.handle_chain_info_query(query).await?.info;
+        ensure!(
+            info.next_block_height == self.chain().next_block_height,
+            ChainClientError::WalletSynchronizationError
+        );
+        let mut requested_pending_messages = info.requested_pending_messages;
+        let mut pending_messages = vec![];
+        // The first incoming message of any child chain must be `OpenChain`. We must have it in
+        // our inbox, and include it before all other messages.
+        if info.next_block_height == BlockHeight::ZERO
+            && info
+                .description
+                .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
+            .is_child()
+        {
+            let Some(index) = requested_pending_messages.iter().position(|message| {
+                matches!(
+                    message.event.message,
+                    Message::System(SystemMessage::OpenChain(_))
+                )
+            }) else {
+                return Err(LocalNodeError::InactiveChain(self.chain_id).into());
+            };
+            let open_chain_message = requested_pending_messages.remove(index);
+            pending_messages.push(open_chain_message);
+        }
+        if self.chain().message_policy.is_ignore() {
+            return Ok(pending_messages); // Ignore messages other than OpenChain.
+        }
+        for mut message in requested_pending_messages {
+            if pending_messages.len() >= self.max_pending_messages {
+                tracing::warn!(
+                    "Limiting block to {} incoming messages",
+                    self.max_pending_messages
+                );
+                break;
+            }
+            if self.message_policy.is_reject() {
+                if message.event.is_skippable() {
+                    continue;
+                } else if message.event.is_tracked() {
+                    message.action = MessageAction::Reject;
+                }
+            }
+            if let Message::System(SystemMessage::RegisterApplications { applications }) =
+                &message.event.message
+            {
+                let chain_id = self.chain_id;
+                if applications
+                    .iter()
+                    .map(|application| {
+                        self.local_node
+                            .describe_application(chain_id, application.into())
+                    })
+                    .collect::<FuturesUnordered<_>>()
+                    .all(|result| async move { result.is_ok() })
+                    .await
+                {
+                    continue; // These applications are already registered; skip register message.
+                }
+            }
+            pending_messages.push(message);
+        }
+        Ok(pending_messages)
+    }
 
 //     /// Obtains the set of committees trusted by the local chain.
 //     async fn committees(&mut self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError> {

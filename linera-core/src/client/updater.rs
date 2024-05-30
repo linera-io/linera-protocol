@@ -291,7 +291,8 @@ where
                 unique_blob_ids_to_find.remove(blob_id);
             } else if let Some(blob) = self
                 .chain_client
-                .chain
+                .chain()
+                .state
                 .pending_blobs
                 .get(blob_id)
                 .cloned()

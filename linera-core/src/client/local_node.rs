@@ -37,6 +37,9 @@ pub struct LocalNode<S> {
 /// A client to a local node.
 #[derive(Clone)]
 pub struct LocalNodeClient<S> {
+    // TODO this should probably be a RwLock — a lot of operations here are read-only, so
+    // using a full Mutex is wasteful
+    // Alternatively we could push the locks down further
     node: Arc<Mutex<LocalNode<S>>>,
 }
 
@@ -199,15 +202,6 @@ where
         let (response, _actions) = node.state.handle_chain_info_query(query).await?;
         Ok(response)
     }
-
-    // pub async fn subscribe(
-    //     &mut self,
-    //     chains: Vec<ChainId>,
-    // ) -> Result<NotificationStream, LocalNodeError> {
-    //     let node = self.node.lock().await;
-    //     let rx = node.notifier.subscribe(chains);
-    //     Ok(Box::pin(UnboundedReceiverStream::new(rx)))
-    // }
 }
 
 impl<S> LocalNodeClient<S> {
