@@ -3,7 +3,7 @@
 
 #[cfg(feature = "ethereum")]
 use {
-    alloy_primitives::U256,
+    linera_alloy::primitives::U256,
     linera_ethereum::{
         client::EthereumQueries,
         common::{EthereumDataType, EthereumEvent},

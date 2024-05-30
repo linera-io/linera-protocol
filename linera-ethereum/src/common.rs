@@ -6,7 +6,7 @@ use std::num::ParseIntError;
 #[cfg(not(target_arch = "wasm32"))]
 use linera_alloy::rpc::json_rpc;
 use linera_alloy::{
-    primitives::{Address, U256, B256},
+    primitives::{Address, B256, U256},
     rpc::types::eth::Log,
 };
 use num_bigint::{BigInt, BigUint};
@@ -61,7 +61,7 @@ pub enum EthereumServiceError {
 
     /// Hex parsing error
     #[error(transparent)]
-    FromHexError(#[from] alloy_primitives::hex::FromHexError),
+    FromHexError(#[from] linera_alloy::primitives::hex::FromHexError),
 
     /// `serde_json` error
     #[error(transparent)]

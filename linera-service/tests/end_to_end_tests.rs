@@ -44,8 +44,11 @@ fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
 struct EthereumTrackerApp(ApplicationWrapper<ethereum_tracker::EthereumTrackerAbi>);
 
 #[cfg(feature = "ethereum")]
+use linera_alloy::primitives::U256;
+
+#[cfg(feature = "ethereum")]
 impl EthereumTrackerApp {
-    async fn get_amount(&self, account_owner: &str) -> alloy::primitives::U256 {
+    async fn get_amount(&self, account_owner: &str) -> U256 {
         use ethereum_tracker::U256Cont;
         let query = format!(
             "accounts {{ entry(key: \"{}\") {{ value }} }}",
@@ -57,7 +60,7 @@ impl EthereumTrackerApp {
         )
         .unwrap();
         match amount_option {
-            None => alloy::primitives::U256::from(0),
+            None => U256::from(0),
             Some(value) => {
                 let U256Cont { value } = value;
                 value
@@ -65,10 +68,7 @@ impl EthereumTrackerApp {
         }
     }
 
-    async fn assert_balances(
-        &self,
-        accounts: impl IntoIterator<Item = (String, alloy::primitives::U256)>,
-    ) {
+    async fn assert_balances(&self, accounts: impl IntoIterator<Item = (String, U256)>) {
         for (account_owner, amount) in accounts {
             let value = self.get_amount(&account_owner).await;
             assert_eq!(value, amount);
@@ -363,7 +363,6 @@ async fn test_wallet_lock() -> Result<()> {
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> Result<()> {
-    use alloy::primitives::U256;
     use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
     use linera_ethereum::{
         client::EthereumQueries,

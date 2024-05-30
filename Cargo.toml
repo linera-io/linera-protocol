@@ -36,8 +36,7 @@ edition = "2021"
 
 [workspace.dependencies]
 heck = "0.4.1"
-linera-alloy = { git = "https://github.com/MathieuDutSik/alloy", rev = "dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971", default-features = false }
-alloy-primitives = "0.7.2"
+linera-alloy = { git = "https://github.com/MathieuDutSik/alloy", rev = "40785f5552962c98d36a636e543b378ac787486f", default-features = false }
 anyhow = "1.0.80"
 assert_matches = "1.5.0"
 async-graphql = "=7.0.2"
