@@ -1,5 +1,5 @@
 # List of packages to be published on `crates.io`, in this order.
-# - Specific arguments for cargo publish or cargo package may be added on the same line.
+# - Specific arguments for cargo publish or cargo package may be added at the end, on the same line.
 # - See scripts/publish.sh and scripts/test_publish.sh for usage.
 linera-version --no-verify
 linera-witty-macros

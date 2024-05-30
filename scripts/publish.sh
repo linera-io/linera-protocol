@@ -2,9 +2,9 @@
 
 set -x -e
 
-# Usage: grep -v '^#' packages.txt | scripts/publish.sh
+# Usage: scripts/publish.sh packages.txt
 
 # Publish the given packages.
-while read LINE; do
+grep -v '^#' "$1" | while read LINE; do
     cargo publish -p $LINE
 done
