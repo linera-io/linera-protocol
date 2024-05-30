@@ -54,7 +54,7 @@ use tracing::{debug, error, info};
 
 
 use crate::{
-    aggregation::FactorExt,
+    accumulation::FactorExt,
     data_types::{
         BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout,
     },

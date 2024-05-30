@@ -4,7 +4,7 @@
 
 //! This module defines the core Linera protocol.
 
-pub mod aggregation;
+pub mod accumulation;
 pub mod client;
 pub mod data_types;
 pub mod node;
