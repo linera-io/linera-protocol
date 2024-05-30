@@ -17,7 +17,7 @@ members = [
 ]
 
 [workspace.dependencies]
-linera-alloy = { git = "https://github.com/MathieuDutSik/alloy", rev = "d16674c395a2b126a66f4e79392168f49f8e2264", default-features = false }
+linera-alloy = { git = "https://github.com/MathieuDutSik/alloy", rev = "dddbe6a60d563c1ed378e9a426aa6fc8c4cd5971", default-features = false }
 assert_matches = "1.5.0"
 async-graphql = { version = "=7.0.2", default-features = false }
 base64 = "0.22.0"
