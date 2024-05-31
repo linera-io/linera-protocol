@@ -75,21 +75,14 @@ pub trait MessageHandler: Clone {
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage>;
 }
 
-/// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
+/// The result of spawning a server is a handle to track completion.
 pub struct ServerHandle {
-    pub abort: AbortHandle,
     pub handle: tokio::task::JoinHandle<Result<(), std::io::Error>>,
 }
 
 impl ServerHandle {
     pub async fn join(self) -> Result<(), std::io::Error> {
         // Note that dropping `self.complete` would terminate the server.
-        self.handle.await??;
-        Ok(())
-    }
-
-    pub async fn kill(self) -> Result<(), std::io::Error> {
-        self.abort.abort();
         self.handle.await??;
         Ok(())
     }
@@ -172,7 +165,7 @@ impl TransportProtocol {
                 tokio::spawn(Self::run_tcp_server(listener, state, registration))
             }
         };
-        Ok(ServerHandle { abort, handle })
+        Ok(ServerHandle { handle })
     }
 }
 
