@@ -248,6 +248,7 @@ impl<ValidatorNodeProvider, Storage> Client<'_, ValidatorNodeProvider, Storage> 
 /// they succeeded in gathering a quorum of responses.
 pub struct Client<'client, ValidatorNodeProvider, Storage> {
     // TODO: use getters here
+    // TODO allow setting these on the client
     /// The options for this chain client (not chain).
     pub options: Options,
 
@@ -257,35 +258,6 @@ pub struct Client<'client, ValidatorNodeProvider, Storage> {
     /// The specific chain represented by this [`Client`].  Invariant: this chain
     /// exists in the `Client`.
     pub chain_id: ChainId,
-
-    // /// Latest block hash, if any.
-    // block_hash: Option<CryptoHash>,
-    // /// The earliest possible timestamp for the next block.
-    // timestamp: Timestamp,
-    // /// Sequence number that we plan to use for the next block.
-    // /// We track this value outside local storage mainly for security reasons.
-    // next_block_height: BlockHeight,
-    // /// Pending block.
-    // pending_block: Option<Block>,
-    // /// Known key pairs from present and past identities.
-    // known_key_pairs: BTreeMap<Owner, KeyPair>,
-    // /// The ID of the admin chain.
-    // admin_id: ChainId,
-
-    // /// Maximum number of pending messages processed at a time in a block.
-    // max_pending_messages: usize,
-    // /// The policy for automatically handling incoming messages.
-    // message_policy: MessagePolicy,
-    // /// Whether to block on cross-chain message delivery.
-    // cross_chain_message_delivery: CrossChainMessageDelivery,
-    // /// Support synchronization of received certificates.
-    // received_certificate_trackers: HashMap<ValidatorName, u64>,
-    // /// Local node to manage the execution state and the local storage of the chains that we are
-    // /// tracking.
-    // local_node: LocalNodeClient<Storage>,
-    // /// This contains blobs belonging to our `pending_block` that may not even have
-    // /// been processed by (i.e. been proposed to) our own local chain manager yet.
-    // pending_blobs: BTreeMap<BlobId, HashedBlob>,
 }
 
 /// Error type for [`Client`].
@@ -390,7 +362,7 @@ where
 
     /// Obtains the basic `ChainInfo` data for the local chain, with chain manager values.
     pub async fn chain_info_with_manager_values(
-        &mut self,
+        &self,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
         let response = self.client.local_node.handle_chain_info_query(query).await?;
@@ -647,7 +619,7 @@ where
     /// Submits a block proposal to the validators. If it is a slow round, also submits the
     /// validated block for finalization. Returns the confirmed block certificate.
     async fn submit_block_proposal(
-        &mut self,
+        &self,
         committee: &Committee,
         proposal: BlockProposal,
         value: HashedCertificateValue,
@@ -893,7 +865,7 @@ where
         committees: BTreeMap<Epoch, Committee>,
         max_epoch: Epoch,
         mut node: A,
-        mut local_node: LocalNodeClient<S>,
+        local_node: LocalNodeClient<S>,
     ) -> Result<(ValidatorName, u64, Vec<Certificate>), NodeError>
     where
         A: LocalValidatorNode + Clone + 'static,
@@ -964,135 +936,136 @@ where
         Ok((name, new_tracker, certificates))
     }
 
-//     /// Processes the result of [`synchronize_received_certificates_from_validator`].
-//     async fn receive_certificates_from_validator(
-//         &mut self,
-//         name: ValidatorName,
-//         tracker: u64,
-//         certificates: Vec<Certificate>,
-//     ) {
-//         for certificate in certificates {
-//             let hash = certificate.hash();
-//             if let Err(e) = self
-//                 .receive_certificate_internal(certificate, ReceiveCertificateMode::AlreadyChecked)
-//                 .await
-//             {
-//                 tracing::warn!("Received invalid certificate {hash} from {name}: {e}");
-//                 // Do not update the validator's tracker in case of error.
-//                 // Move on to the next validator.
-//                 return;
-//             }
-//         }
-//         // Update tracker.
-//         self.received_certificate_trackers
-//             .entry(name)
-//             .and_modify(|t| {
-//                 // Because several synchronizations could happen in parallel, we need to make
-//                 // sure to never go backward.
-//                 if tracker > *t {
-//                     *t = tracker;
-//                 }
-//             })
-//             .or_insert(tracker);
-//     }
+    /// Processes the result of [`synchronize_received_certificates_from_validator`].
+    async fn receive_certificates_from_validator(
+        &self,
+        name: ValidatorName,
+        tracker: u64,
+        certificates: Vec<Certificate>,
+    ) {
+        for certificate in certificates {
+            let hash = certificate.hash();
+            if let Err(e) = self
+                .receive_certificate_internal(certificate, ReceiveCertificateMode::AlreadyChecked)
+                .await
+            {
+                tracing::warn!("Received invalid certificate {hash} from {name}: {e}");
+                // Do not update the validator's tracker in case of error.
+                // Move on to the next validator.
+                return;
+            }
+        }
+        // Update tracker.
+        self.state_mut().received_certificate_trackers
+            .entry(name)
+            .and_modify(|t| {
+                // Because several synchronizations could happen in parallel, we need to make
+                // sure to never go backward.
+                if tracker > *t {
+                    *t = tracker;
+                }
+            })
+            .or_insert(tracker);
+    }
 
-//     /// Attempts to download new received certificates.
-//     ///
-//     /// This is a best effort: it will only find certificates that have been confirmed
-//     /// amongst sufficiently many validators of the current committee of the target
-//     /// chain.
-//     ///
-//     /// However, this should be the case whenever a sender's chain is still in use and
-//     /// is regularly upgraded to new committees.
-//     async fn find_received_certificates(&mut self) -> Result<(), Error> {
-//         // Use network information from the local chain.
-//         let chain_id = self.chain_id;
-//         let local_committee = self.local_committee().await?;
-//         let nodes: Vec<_> = self.validator_node_provider.make_nodes(&local_committee)?;
-//         // Synchronize the state of the admin chain from the network.
-//         self.local_node
-//             .synchronize_chain_state(nodes.clone(), self.admin_id)
-//             .await?;
-//         let local_node = self.local_node.clone();
-//         // Now we should have a complete view of all committees in the system.
-//         let (committees, max_epoch) = self.known_committees().await?;
-//         // Proceed to downloading received certificates.
-//         let trackers = &self.received_certificate_trackers;
-//         let result = communicate_with_quorum(
-//             &nodes,
-//             &local_committee,
-//             |_| (),
-//             |name, node| {
-//                 let tracker = *trackers.get(&name).unwrap_or(&0);
-//                 let committees = committees.clone();
-//                 let local_node = local_node.clone();
-//                 Box::pin(Self::synchronize_received_certificates_from_validator(
-//                     chain_id,
-//                     name,
-//                     tracker,
-//                     committees,
-//                     max_epoch,
-//                     node,
-//                     local_node,
-//                 ))
-//             },
-//         )
-//             .await;
-//         let responses = match result {
-//             Ok(((), responses)) => responses,
-//             Err(CommunicationError::Trusted(NodeError::InactiveChain(id))) if id == chain_id => {
-//                 // The chain is visibly not active (yet or any more) so there is no need
-//                 // to synchronize received certificates.
-//                 return Ok(());
-//             }
-//             Err(error) => {
-//                 return Err(error.into());
-//             }
-//         };
-//         for (name, tracker, certificates) in responses {
-//             // Process received certificates.
-//             self.receive_certificates_from_validator(name, tracker, certificates)
-//                 .await;
-//         }
-//         Ok(())
-//     }
+    /// Attempts to download new received certificates.
+    ///
+    /// This is a best effort: it will only find certificates that have been confirmed
+    /// amongst sufficiently many validators of the current committee of the target
+    /// chain.
+    ///
+    /// However, this should be the case whenever a sender's chain is still in use and
+    /// is regularly upgraded to new committees.
+    async fn find_received_certificates(&self) -> Result<(), Error> {
+        // Use network information from the local chain.
+        let chain_id = self.chain_id;
+        let local_committee = self.local_committee().await?;
+        let nodes: Vec<_> = self.client.validator_node_provider.make_nodes(&local_committee)?;
+        // Synchronize the state of the admin chain from the network.
+        self.client
+            .local_node
+            .synchronize_chain_state(nodes.clone(), self.client.admin_chain_id)
+            .await?;
+        let local_node = self.client.local_node.clone();
+        // Now we should have a complete view of all committees in the system.
+        let (committees, max_epoch) = self.known_committees().await?;
+        // Proceed to downloading received certificates.
+        let trackers = &self.state().received_certificate_trackers;
+        let result = communicate_with_quorum(
+            &nodes,
+            &local_committee,
+            |_| (),
+            |name, node| {
+                let tracker = *trackers.get(&name).unwrap_or(&0);
+                let committees = committees.clone();
+                let local_node = local_node.clone();
+                Box::pin(Self::synchronize_received_certificates_from_validator(
+                    chain_id,
+                    name,
+                    tracker,
+                    committees,
+                    max_epoch,
+                    node,
+                    local_node,
+                ))
+            },
+        )
+            .await;
+        let responses = match result {
+            Ok(((), responses)) => responses,
+            Err(CommunicationError::Trusted(NodeError::InactiveChain(id))) if id == chain_id => {
+                // The chain is visibly not active (yet or any more) so there is no need
+                // to synchronize received certificates.
+                return Ok(());
+            }
+            Err(error) => {
+                return Err(error.into());
+            }
+        };
+        for (name, tracker, certificates) in responses {
+            // Process received certificates.
+            self.receive_certificates_from_validator(name, tracker, certificates)
+                .await;
+        }
+        Ok(())
+    }
 
-//     /// Sends money.
-//     pub async fn transfer(
-//         &mut self,
-//         owner: Option<Owner>,
-//         amount: Amount,
-//         recipient: Recipient,
-//         user_data: UserData,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         // TODO(#467): check the balance of `owner` before signing any block proposal.
-//         self.execute_operation(Operation::System(SystemOperation::Transfer {
-//             owner,
-//             recipient,
-//             amount,
-//             user_data,
-//         }))
-//             .await
-//     }
+    /// Sends money.
+    pub async fn transfer(
+        &self,
+        owner: Option<Owner>,
+        amount: Amount,
+        recipient: Recipient,
+        user_data: UserData,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        // TODO(#467): check the balance of `owner` before signing any block proposal.
+        self.execute_operation(Operation::System(SystemOperation::Transfer {
+            owner,
+            recipient,
+            amount,
+            user_data,
+        }))
+            .await
+    }
 
-//     /// Claims money in a remote chain.
-//     pub async fn claim(
-//         &mut self,
-//         owner: Owner,
-//         target_id: ChainId,
-//         recipient: Recipient,
-//         amount: Amount,
-//         user_data: UserData,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.execute_operation(Operation::System(SystemOperation::Claim {
-//             owner,
-//             target_id,
-//             recipient,
-//             amount,
-//             user_data,
-//         }))
-//             .await
-//     }
+    /// Claims money in a remote chain.
+    pub async fn claim(
+        &self,
+        owner: Owner,
+        target_id: ChainId,
+        recipient: Recipient,
+        amount: Amount,
+        user_data: UserData,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        self.execute_operation(Operation::System(SystemOperation::Claim {
+            owner,
+            target_id,
+            recipient,
+            amount,
+            user_data,
+        }))
+            .await
+    }
 
     async fn process_certificate(
         &self,
@@ -1161,1067 +1134,1081 @@ where
         Ok(certificate)
     }
 
-//     async fn stage_block_execution_and_discard_failing_messages(
-//         &mut self,
-//         mut block: Block,
-//     ) -> Result<(ExecutedBlock, ChainInfoResponse), Error> {
-//         loop {
-//             let result = self.local_node.stage_block_execution(block.clone()).await;
-//             if let Err(LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))) = &result
-//             {
-//                 if let ChainError::ExecutionError(
-//                     error,
-//                     ChainExecutionContext::IncomingMessage(index),
-//                 ) = &**chain_error
-//                 {
-//                     let message = block
-//                         .incoming_messages
-//                         .get_mut(*index as usize)
-//                         .expect("Message at given index should exist");
-//                     if message.event.is_protected() {
-//                         error!("Protected incoming message failed to execute locally: {message:?}");
-//                     } else {
-//                         // Reject the faulty message from the block and continue.
-//                         // TODO(#1420): This is potentially a bit heavy-handed for
-//                         // retryable errors.
-//                         info!(
-//                             %error, origin = ?message.origin,
-//                             "Message failed to execute locally and will be rejected."
-//                         );
-//                         message.action = MessageAction::Reject;
-//                         continue;
-//                     }
-//                 }
-//             }
-//             return Ok(result?);
-//         }
-//     }
+    async fn stage_block_execution_and_discard_failing_messages(
+        &self,
+        mut block: Block,
+    ) -> Result<(ExecutedBlock, ChainInfoResponse), Error> {
+        loop {
+            let result = self.client.local_node.stage_block_execution(block.clone()).await;
+            if let Err(LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))) = &result
+            {
+                if let ChainError::ExecutionError(
+                    error,
+                    ChainExecutionContext::IncomingMessage(index),
+                ) = &**chain_error
+                {
+                    let message = block
+                        .incoming_messages
+                        .get_mut(*index as usize)
+                        .expect("Message at given index should exist");
+                    if message.event.is_protected() {
+                        error!("Protected incoming message failed to execute locally: {message:?}");
+                    } else {
+                        // Reject the faulty message from the block and continue.
+                        // TODO(#1420): This is potentially a bit heavy-handed for
+                        // retryable errors.
+                        info!(
+                            %error, origin = ?message.origin,
+                            "Message failed to execute locally and will be rejected."
+                        );
+                        message.action = MessageAction::Reject;
+                        continue;
+                    }
+                }
+            }
+            return Ok(result?);
+        }
+    }
 
-//     /// Tries to read blobs from either the pending blobs or the local node's cache, or
-//     /// the chain manager's pending blobs
-//     async fn read_local_blobs(
-//         &mut self,
-//         blob_ids: impl IntoIterator<Item = BlobId>,
-//     ) -> Result<Vec<HashedBlob>, LocalNodeError> {
-//         let mut blobs = Vec::new();
-//         for blob_id in blob_ids {
-//             if let Some(blob) = self.local_node.recent_blob(&blob_id).await {
-//                 blobs.push(blob);
-//             } else if let Some(blob) = self.pending_blobs.get(&blob_id) {
-//                 self.local_node.cache_recent_blob(blob).await;
-//                 blobs.push(blob.to_owned());
-//             } else {
-//                 return Err(LocalNodeError::CannotReadLocalBlob {
-//                     chain_id: self.chain_id,
-//                     blob_id,
-//                 });
-//             }
-//         }
+    /// Tries to read blobs from either the pending blobs or the local node's cache, or
+    /// the chain manager's pending blobs
+    async fn read_local_blobs(
+        &self,
+        blob_ids: impl IntoIterator<Item = BlobId>,
+    ) -> Result<Vec<HashedBlob>, LocalNodeError> {
+        let mut blobs = Vec::new();
+        for blob_id in blob_ids {
+            if let Some(blob) = self.client.local_node.recent_blob(&blob_id).await {
+                blobs.push(blob);
+            } else if let Some(blob) = self.state().pending_blobs.get(&blob_id) {
+                self.client.local_node.cache_recent_blob(blob).await;
+                blobs.push(blob.to_owned());
+            } else {
+                return Err(LocalNodeError::CannotReadLocalBlob {
+                    chain_id: self.chain_id,
+                    blob_id,
+                });
+            }
+        }
 
-//         Ok(blobs)
-//     }
+        Ok(blobs)
+    }
 
-//     /// Executes (or retries) a regular block proposal. Updates local balance.
-//     async fn propose_block(
-//         &mut self,
-//         block: Block,
-//         round: Round,
-//     ) -> Result<Certificate, Error> {
-//         ensure!(
-//             block.height == self.next_block_height,
-//             Error::BlockProposalError("Unexpected block height")
-//         );
-//         ensure!(
-//             block.previous_block_hash == self.block_hash,
-//             Error::BlockProposalError("Unexpected previous block hash")
-//         );
-//         // Gather information on the current local state.
-//         let manager = self.chain_info_with_manager_values().await?.manager;
-//         // In the fast round, we must never make any conflicting proposals.
-//         if round.is_fast() {
-//             if let Some(pending) = &self.pending_block {
-//                 ensure!(
-//                     pending == &block,
-//                     Error::BlockProposalError(
-//                         "Client state has a different pending block; \
-//                          use the `linera retry-pending-block` command to commit that first"
-//                     )
-//                 );
-//             }
-//         }
-//         // Make sure that we follow the steps in the multi-round protocol.
-//         let validated = manager.highest_validated().cloned();
-//         if let Some(validated) = &validated {
-//             ensure!(
-//                 validated.value().block() == Some(&block),
-//                 Error::BlockProposalError(
-//                     "A different block has already been validated at this height"
-//                 )
-//             );
-//         } else if let Some(proposal) = &manager.requested_proposed {
-//             if proposal.content.round.is_fast() {
-//                 ensure!(
-//                     proposal.content.block == block,
-//                     Error::BlockProposalError(
-//                         "Chain manager has a different pending block in the fast round"
-//                     )
-//                 );
-//             }
-//         }
-//         // Make sure every incoming message succeeds and otherwise remove them.
-//         // Also, compute the final certified hash while we're at it.
-//         let (executed_block, _) = self
-//             .stage_block_execution_and_discard_failing_messages(block)
-//             .await?;
-//         let block = executed_block.block.clone();
-//         let hashed_value = if round.is_fast() {
-//             HashedCertificateValue::new_confirmed(executed_block)
-//         } else {
-//             HashedCertificateValue::new_validated(executed_block)
-//         };
-//         // Collect the hashed certificate values required for execution.
-//         let committee = self.local_committee().await?;
-//         let nodes: Vec<(ValidatorName, P::Node)> =
-//             self.validator_node_provider.make_nodes(&committee)?;
-//         let values = self
-//             .local_node
-//             .read_or_download_hashed_certificate_values(nodes.clone(), block.bytecode_locations())
-//             .await?;
-//         let hashed_blobs = self.read_local_blobs(block.blob_ids()).await?;
-//         // Create the final block proposal.
-//         let key_pair = self.key_pair().await?;
-//         let proposal = BlockProposal::new(
-//             BlockAndRound {
-//                 block: block.clone(),
-//                 round,
-//             },
-//             key_pair,
-//             values,
-//             hashed_blobs,
-//             validated,
-//         );
-//         // Check the final block proposal. This will be cheaper after #1401.
-//         self.local_node
-//             .handle_block_proposal(proposal.clone())
-//             .await?;
-//         // Remember what we are trying to do before sending the proposal to the validators.
-//         self.pending_block = Some(block);
-//         // Send the query to validators.
-//         let certificate = self
-//             .submit_block_proposal(&committee, proposal, hashed_value)
-//             .await?;
-//         self.pending_block = None;
-//         self.pending_blobs.clear();
-//         // Communicate the new certificate now.
-//         self.communicate_chain_updates(
-//             &committee,
-//             self.chain_id,
-//             self.next_block_height,
-//             self.cross_chain_message_delivery,
-//         )
-//             .await?;
-//         if let Ok(new_committee) = self.local_committee().await {
-//             if new_committee != committee {
-//                 // If the configuration just changed, communicate to the new committee as well.
-//                 // (This is actually more important that updating the previous committee.)
-//                 self.communicate_chain_updates(
-//                     &new_committee,
-//                     self.chain_id,
-//                     self.next_block_height,
-//                     self.cross_chain_message_delivery,
-//                 )
-//                     .await?;
-//             }
-//         }
-//         Ok(certificate)
-//     }
+    /// Executes (or retries) a regular block proposal. Updates local balance.
+    async fn propose_block(
+        &self,
+        block: Block,
+        round: Round,
+    ) -> Result<Certificate, Error> {
+        ensure!(
+            block.height == self.state().next_block_height,
+            Error::BlockProposalError("Unexpected block height")
+        );
+        ensure!(
+            block.previous_block_hash == self.state().block_hash,
+            Error::BlockProposalError("Unexpected previous block hash")
+        );
+        // Gather information on the current local state.
+        let manager = self.chain_info_with_manager_values().await?.manager;
+        // In the fast round, we must never make any conflicting proposals.
+        if round.is_fast() {
+            if let Some(pending) = &self.state().pending_block {
+                ensure!(
+                    pending == &block,
+                    Error::BlockProposalError(
+                        "Client state has a different pending block; \
+                         use the `linera retry-pending-block` command to commit that first"
+                    )
+                );
+            }
+        }
+        // Make sure that we follow the steps in the multi-round protocol.
+        let validated = manager.highest_validated().cloned();
+        if let Some(validated) = &validated {
+            ensure!(
+                validated.value().block() == Some(&block),
+                Error::BlockProposalError(
+                    "A different block has already been validated at this height"
+                )
+            );
+        } else if let Some(proposal) = &manager.requested_proposed {
+            if proposal.content.round.is_fast() {
+                ensure!(
+                    proposal.content.block == block,
+                    Error::BlockProposalError(
+                        "Chain manager has a different pending block in the fast round"
+                    )
+                );
+            }
+        }
+        // Make sure every incoming message succeeds and otherwise remove them.
+        // Also, compute the final certified hash while we're at it.
+        let (executed_block, _) = self
+            .stage_block_execution_and_discard_failing_messages(block)
+            .await?;
+        let block = executed_block.block.clone();
+        let hashed_value = if round.is_fast() {
+            HashedCertificateValue::new_confirmed(executed_block)
+        } else {
+            HashedCertificateValue::new_validated(executed_block)
+        };
+        // Collect the hashed certificate values required for execution.
+        let committee = self.local_committee().await?;
+        let nodes: Vec<(ValidatorName, P::Node)> =
+            self.client.validator_node_provider.make_nodes(&committee)?;
+        let values = self
+            .client
+            .local_node
+            .read_or_download_hashed_certificate_values(nodes.clone(), block.bytecode_locations())
+            .await?;
+        let hashed_blobs = self.read_local_blobs(block.blob_ids()).await?;
+        // Create the final block proposal.
+        let key_pair = self.key_pair().await?;
+        let proposal = BlockProposal::new(
+            BlockAndRound {
+                block: block.clone(),
+                round,
+            },
+            &*key_pair,
+            values,
+            hashed_blobs,
+            validated,
+        );
+        // Check the final block proposal. This will be cheaper after #1401.
+        self.client
+            .local_node
+            .handle_block_proposal(proposal.clone())
+            .await?;
+        // Remember what we are trying to do before sending the proposal to the validators.
+        self.state_mut().pending_block = Some(block);
+        // Send the query to validators.
+        let certificate = self
+            .submit_block_proposal(&committee, proposal, hashed_value)
+            .await?;
+        {
+            let mut state = self.state_mut();
+            state.pending_block = None;
+            state.pending_blobs.clear();
+        }
+        // Communicate the new certificate now.
+        self.communicate_chain_updates(
+            &committee,
+            self.chain_id,
+            self.state().next_block_height,
+            self.options.cross_chain_message_delivery,
+        )
+            .await?;
+        if let Ok(new_committee) = self.local_committee().await {
+            if new_committee != committee {
+                // If the configuration just changed, communicate to the new committee as well.
+                // (This is actually more important that updating the previous committee.)
+                self.communicate_chain_updates(
+                    &new_committee,
+                    self.chain_id,
+                    self.state().next_block_height,
+                    self.options.cross_chain_message_delivery,
+                )
+                    .await?;
+            }
+        }
+        Ok(certificate)
+    }
 
-//     /// Executes a list of operations.
-//     pub async fn execute_operations(
-//         &mut self,
-//         operations: Vec<Operation>,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.prepare_chain().await?;
-//         self.execute_with_messages(operations).await
-//     }
+    /// Executes a list of operations.
+    pub async fn execute_operations(
+        &self,
+        operations: Vec<Operation>,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        self.prepare_chain().await?;
+        self.execute_with_messages(operations).await
+    }
 
-//     /// Executes a list of operations, without calling `prepare_chain`.
-//     pub async fn execute_with_messages(
-//         &mut self,
-//         operations: Vec<Operation>,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         loop {
-//             let messages = self.pending_messages().await?;
-//             match self.execute_block(messages, operations.clone()).await? {
-//                 ExecuteBlockOutcome::Executed(certificate) => {
-//                     return Ok(ClientOutcome::Committed(certificate));
-//                 }
-//                 ExecuteBlockOutcome::Conflict(certificate) => {
-//                     info!(
-//                         height = %certificate.value().height(),
-//                         "Another block was committed; retrying."
-//                     );
-//                 }
-//                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-//                     return Ok(ClientOutcome::WaitForTimeout(timeout));
-//                 }
-//             };
-//         }
-//     }
+    /// Executes a list of operations, without calling `prepare_chain`.
+    pub async fn execute_with_messages(
+        &self,
+        operations: Vec<Operation>,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        loop {
+            let messages = self.pending_messages().await?;
+            match self.execute_block(messages, operations.clone()).await? {
+                ExecuteBlockOutcome::Executed(certificate) => {
+                    return Ok(ClientOutcome::Committed(certificate));
+                }
+                ExecuteBlockOutcome::Conflict(certificate) => {
+                    info!(
+                        height = %certificate.value().height(),
+                        "Another block was committed; retrying."
+                    );
+                }
+                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
+            };
+        }
+    }
 
-//     /// Executes an operation.
-//     pub async fn execute_operation(
-//         &mut self,
-//         operation: Operation,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.execute_operations(vec![operation]).await
-//     }
+    /// Executes an operation.
+    pub async fn execute_operation(
+        &self,
+        operation: Operation,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        self.execute_operations(vec![operation]).await
+    }
 
-//     /// Executes a new block.
-//     ///
-//     /// This must be preceded by a call to `prepare_chain()`.
-//     async fn execute_block(
-//         &mut self,
-//         incoming_messages: Vec<IncomingMessage>,
-//         operations: Vec<Operation>,
-//     ) -> Result<ExecuteBlockOutcome, Error> {
-//         match self.process_pending_block_without_prepare().await? {
-//             ClientOutcome::Committed(Some(certificate)) => {
-//                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
-//             }
-//             ClientOutcome::Committed(None) => {}
-//             ClientOutcome::WaitForTimeout(timeout) => {
-//                 return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
-//             }
-//         }
-//         let confirmed_value = self
-//             .set_pending_block(incoming_messages, operations)
-//             .await?;
-//         match self.process_pending_block_without_prepare().await? {
-//             ClientOutcome::Committed(Some(certificate))
-//                 if certificate.hash() == confirmed_value.hash() =>
-//             {
-//                 Ok(ExecuteBlockOutcome::Executed(certificate))
-//             }
-//             ClientOutcome::Committed(Some(certificate)) => {
-//                 Ok(ExecuteBlockOutcome::Conflict(certificate))
-//             }
-//             // Should be unreachable: We did set a pending block.
-//             ClientOutcome::Committed(None) => Err(Error::BlockProposalError(
-//                 "Unexpected block proposal error",
-//             )),
-//             ClientOutcome::WaitForTimeout(timeout) => {
-//                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
-//             }
-//         }
-//     }
+    /// Executes a new block.
+    ///
+    /// This must be preceded by a call to `prepare_chain()`.
+    async fn execute_block(
+        &self,
+        incoming_messages: Vec<IncomingMessage>,
+        operations: Vec<Operation>,
+    ) -> Result<ExecuteBlockOutcome, Error> {
+        match self.process_pending_block_without_prepare().await? {
+            ClientOutcome::Committed(Some(certificate)) => {
+                return Ok(ExecuteBlockOutcome::Conflict(certificate))
+            }
+            ClientOutcome::Committed(None) => {}
+            ClientOutcome::WaitForTimeout(timeout) => {
+                return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
+            }
+        }
+        let confirmed_value = self
+            .set_pending_block(incoming_messages, operations)
+            .await?;
+        match self.process_pending_block_without_prepare().await? {
+            ClientOutcome::Committed(Some(certificate))
+                if certificate.hash() == confirmed_value.hash() =>
+            {
+                Ok(ExecuteBlockOutcome::Executed(certificate))
+            }
+            ClientOutcome::Committed(Some(certificate)) => {
+                Ok(ExecuteBlockOutcome::Conflict(certificate))
+            }
+            // Should be unreachable: We did set a pending block.
+            ClientOutcome::Committed(None) => Err(Error::BlockProposalError(
+                "Unexpected block proposal error",
+            )),
+            ClientOutcome::WaitForTimeout(timeout) => {
+                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
+            }
+        }
+    }
 
-//     async fn set_pending_block(
-//         &mut self,
-//         incoming_messages: Vec<IncomingMessage>,
-//         operations: Vec<Operation>,
-//     ) -> Result<HashedCertificateValue, Error> {
-//         let timestamp = self.next_timestamp(&incoming_messages).await;
-//         let block = Block {
-//             epoch: self.epoch().await?,
-//             chain_id: self.chain_id,
-//             incoming_messages,
-//             operations,
-//             previous_block_hash: self.block_hash,
-//             height: self.next_block_height,
-//             authenticated_signer: Some(self.identity().await?),
-//             timestamp,
-//         };
-//         // Make sure every incoming message succeeds and otherwise remove them.
-//         // Also, compute the final certified hash while we're at it.
-//         let (executed_block, _) = self
-//             .stage_block_execution_and_discard_failing_messages(block)
-//             .await?;
-//         self.pending_block = Some(executed_block.block.clone());
-//         Ok(HashedCertificateValue::new_confirmed(executed_block))
-//     }
+    async fn set_pending_block(
+        &self,
+        incoming_messages: Vec<IncomingMessage>,
+        operations: Vec<Operation>,
+    ) -> Result<HashedCertificateValue, Error> {
+        let timestamp = self.next_timestamp(&incoming_messages).await;
+        let block = Block {
+            epoch: self.epoch().await?,
+            chain_id: self.chain_id,
+            incoming_messages,
+            operations,
+            previous_block_hash: self.state().block_hash,
+            height: self.state().next_block_height,
+            authenticated_signer: Some(self.identity().await?),
+            timestamp,
+        };
+        // Make sure every incoming message succeeds and otherwise remove them.
+        // Also, compute the final certified hash while we're at it.
+        let (executed_block, _) = self
+            .stage_block_execution_and_discard_failing_messages(block)
+            .await?;
+        self.state_mut().pending_block = Some(executed_block.block.clone());
+        Ok(HashedCertificateValue::new_confirmed(executed_block))
+    }
 
-//     /// Returns a suitable timestamp for the next block.
-//     ///
-//     /// This will usually be the current time according to the local clock, but may be slightly
-//     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
-//     async fn next_timestamp(&self, incoming_messages: &[IncomingMessage]) -> Timestamp {
-//         let local_time = self.storage_client().await.clock().current_time();
-//         incoming_messages
-//             .iter()
-//             .map(|msg| msg.event.timestamp)
-//             .max()
-//             .map_or(local_time, |timestamp| timestamp.max(local_time))
-//             .max(self.timestamp)
-//     }
+    /// Returns a suitable timestamp for the next block.
+    ///
+    /// This will usually be the current time according to the local clock, but may be slightly
+    /// ahead to make sure it's not earlier than the incoming messages or the previous block.
+    async fn next_timestamp(&self, incoming_messages: &[IncomingMessage]) -> Timestamp {
+        let local_time = self.storage_client().await.clock().current_time();
+        incoming_messages
+            .iter()
+            .map(|msg| msg.event.timestamp)
+            .max()
+            .map_or(local_time, |timestamp| timestamp.max(local_time))
+            .max(self.state().timestamp)
+    }
 
-//     /// Queries an application.
-//     pub async fn query_application(&self, query: Query) -> Result<Response, Error> {
-//         let response = self
-//             .local_node
-//             .query_application(self.chain_id, query)
-//             .await?;
-//         Ok(response)
-//     }
+    /// Queries an application.
+    pub async fn query_application(&self, query: Query) -> Result<Response, Error> {
+        let response = self
+            .client
+            .local_node
+            .query_application(self.chain_id, query)
+            .await?;
+        Ok(response)
+    }
 
-//     /// Queries a system application.
-//     pub async fn query_system_application(
-//         &mut self,
-//         query: SystemQuery,
-//     ) -> Result<SystemResponse, Error> {
-//         let response = self
-//             .local_node
-//             .query_application(self.chain_id, Query::System(query))
-//             .await?;
-//         match response {
-//             Response::System(response) => Ok(response),
-//             _ => Err(Error::InternalError(
-//                 "Unexpected response for system query",
-//             )),
-//         }
-//     }
+    /// Queries a system application.
+    pub async fn query_system_application(
+        &self,
+        query: SystemQuery,
+    ) -> Result<SystemResponse, Error> {
+        let response = self
+            .client
+            .local_node
+            .query_application(self.chain_id, Query::System(query))
+            .await?;
+        match response {
+            Response::System(response) => Ok(response),
+            _ => Err(Error::InternalError(
+                "Unexpected response for system query",
+            )),
+        }
+    }
 
-//     /// Queries a user application.
-//     pub async fn query_user_application<A: Abi>(
-//         &mut self,
-//         application_id: UserApplicationId<A>,
-//         query: &A::Query,
-//     ) -> Result<A::QueryResponse, Error> {
-//         let query = Query::user(application_id, query)?;
-//         let response = self
-//             .local_node
-//             .query_application(self.chain_id, query)
-//             .await?;
-//         match response {
-//             Response::User(response) => Ok(serde_json::from_slice(&response)?),
-//             _ => Err(Error::InternalError(
-//                 "Unexpected response for user query",
-//             )),
-//         }
-//     }
+    /// Queries a user application.
+    pub async fn query_user_application<A: Abi>(
+        &self,
+        application_id: UserApplicationId<A>,
+        query: &A::Query,
+    ) -> Result<A::QueryResponse, Error> {
+        let query = Query::user(application_id, query)?;
+        let response = self
+            .client
+            .local_node
+            .query_application(self.chain_id, query)
+            .await?;
+        match response {
+            Response::User(response) => Ok(serde_json::from_slice(&response)?),
+            _ => Err(Error::InternalError(
+                "Unexpected response for user query",
+            )),
+        }
+    }
 
-//     /// Obtains the local balance of the chain account after staging the execution of
-//     /// incoming messages in a new block.
-//     ///
-//     /// Does not attempt to synchronize with validators. The result will reflect up to
-//     /// `max_pending_messages` incoming messages and the execution fees for a single
-//     /// block.
-//     pub async fn query_balance(&mut self) -> Result<Amount, Error> {
-//         let (balance, _) = self.query_balances_with_owner(None).await?;
-//         Ok(balance)
-//     }
+    /// Obtains the local balance of the chain account after staging the execution of
+    /// incoming messages in a new block.
+    ///
+    /// Does not attempt to synchronize with validators. The result will reflect up to
+    /// `max_pending_messages` incoming messages and the execution fees for a single
+    /// block.
+    pub async fn query_balance(&self) -> Result<Amount, Error> {
+        let (balance, _) = self.query_balances_with_owner(None).await?;
+        Ok(balance)
+    }
 
-//     /// Obtains the local balance of a user account after staging the execution of
-//     /// incoming messages in a new block.
-//     ///
-//     /// Does not attempt to synchronize with validators. The result will reflect up to
-//     /// `max_pending_messages` incoming messages and the execution fees for a single
-//     /// block.
-//     pub async fn query_owner_balance(&mut self, owner: Owner) -> Result<Amount, Error> {
-//         Ok(self
-//             .query_balances_with_owner(Some(owner))
-//             .await?
-//             .1
-//             .unwrap_or(Amount::ZERO))
-//     }
+    /// Obtains the local balance of a user account after staging the execution of
+    /// incoming messages in a new block.
+    ///
+    /// Does not attempt to synchronize with validators. The result will reflect up to
+    /// `max_pending_messages` incoming messages and the execution fees for a single
+    /// block.
+    pub async fn query_owner_balance(&self, owner: Owner) -> Result<Amount, Error> {
+        Ok(self
+            .query_balances_with_owner(Some(owner))
+            .await?
+            .1
+            .unwrap_or(Amount::ZERO))
+    }
 
-//     /// Obtains the local balance of the chain account and optionally another user after
-//     /// staging the execution of incoming messages in a new block.
-//     ///
-//     /// Does not attempt to synchronize with validators. The result will reflect up to
-//     /// `max_pending_messages` incoming messages and the execution fees for a single
-//     /// block.
-//     async fn query_balances_with_owner(
-//         &mut self,
-//         owner: Option<Owner>,
-//     ) -> Result<(Amount, Option<Amount>), Error> {
-//         let incoming_messages = self.pending_messages().await?;
-//         let timestamp = self.next_timestamp(&incoming_messages).await;
-//         let block = Block {
-//             epoch: self.epoch().await?,
-//             chain_id: self.chain_id,
-//             incoming_messages,
-//             operations: Vec::new(),
-//             previous_block_hash: self.block_hash,
-//             height: self.next_block_height,
-//             authenticated_signer: owner,
-//             timestamp,
-//         };
-//         match self
-//             .stage_block_execution_and_discard_failing_messages(block)
-//             .await
-//         {
-//             Ok((_, response)) => Ok((
-//                 response.info.chain_balance,
-//                 response.info.requested_owner_balance,
-//             )),
-//             Err(Error::LocalNodeError(LocalNodeError::WorkerError(
-//                 WorkerError::ChainError(error),
-//             ))) if matches!(
-//                 *error,
-//                 ChainError::ExecutionError(
-//                     ExecutionError::SystemError(
-//                         SystemExecutionError::InsufficientFundingForFees { .. }
-//                     ),
-//                     ChainExecutionContext::Block
-//                 )
-//             ) =>
-//             {
-//                 // We can't even pay for the execution of one empty block. Let's return zero.
-//                 Ok((Amount::ZERO, Some(Amount::ZERO)))
-//             }
-//             Err(error) => Err(error),
-//         }
-//     }
+    /// Obtains the local balance of the chain account and optionally another user after
+    /// staging the execution of incoming messages in a new block.
+    ///
+    /// Does not attempt to synchronize with validators. The result will reflect up to
+    /// `max_pending_messages` incoming messages and the execution fees for a single
+    /// block.
+    async fn query_balances_with_owner(
+        &self,
+        owner: Option<Owner>,
+    ) -> Result<(Amount, Option<Amount>), Error> {
+        let incoming_messages = self.pending_messages().await?;
+        let timestamp = self.next_timestamp(&incoming_messages).await;
+        let block = Block {
+            epoch: self.epoch().await?,
+            chain_id: self.chain_id,
+            incoming_messages,
+            operations: Vec::new(),
+            previous_block_hash: self.state().block_hash,
+            height: self.state().next_block_height,
+            authenticated_signer: owner,
+            timestamp,
+        };
+        match self
+            .stage_block_execution_and_discard_failing_messages(block)
+            .await
+        {
+            Ok((_, response)) => Ok((
+                response.info.chain_balance,
+                response.info.requested_owner_balance,
+            )),
+            Err(Error::LocalNodeError(LocalNodeError::WorkerError(
+                WorkerError::ChainError(error),
+            ))) if matches!(
+                *error,
+                ChainError::ExecutionError(
+                    ExecutionError::SystemError(
+                        SystemExecutionError::InsufficientFundingForFees { .. }
+                    ),
+                    ChainExecutionContext::Block
+                )
+            ) =>
+            {
+                // We can't even pay for the execution of one empty block. Let's return zero.
+                Ok((Amount::ZERO, Some(Amount::ZERO)))
+            }
+            Err(error) => Err(error),
+        }
+    }
 
-//     /// Reads the local balance of the chain account.
-//     ///
-//     /// Does not process the inbox or attempt to synchronize with validators.
-//     pub async fn local_balance(&mut self) -> Result<Amount, Error> {
-//         let (balance, _) = self.local_balances_with_owner(None).await?;
-//         Ok(balance)
-//     }
+    /// Reads the local balance of the chain account.
+    ///
+    /// Does not process the inbox or attempt to synchronize with validators.
+    pub async fn local_balance(&self) -> Result<Amount, Error> {
+        let (balance, _) = self.local_balances_with_owner(None).await?;
+        Ok(balance)
+    }
 
-//     /// Reads the local balance of a user account.
-//     ///
-//     /// Does not process the inbox or attempt to synchronize with validators.
-//     pub async fn local_owner_balance(&mut self, owner: Owner) -> Result<Amount, Error> {
-//         Ok(self
-//             .local_balances_with_owner(Some(owner))
-//             .await?
-//             .1
-//             .unwrap_or(Amount::ZERO))
-//     }
+    /// Reads the local balance of a user account.
+    ///
+    /// Does not process the inbox or attempt to synchronize with validators.
+    pub async fn local_owner_balance(&self, owner: Owner) -> Result<Amount, Error> {
+        Ok(self
+            .local_balances_with_owner(Some(owner))
+            .await?
+            .1
+            .unwrap_or(Amount::ZERO))
+    }
 
-//     /// Reads the local balance of the chain account and optionally another user.
-//     ///
-//     /// Does not process the inbox or attempt to synchronize with validators.
-//     async fn local_balances_with_owner(
-//         &mut self,
-//         owner: Option<Owner>,
-//     ) -> Result<(Amount, Option<Amount>), Error> {
-//         ensure!(
-//             self.chain_info().await?.next_block_height == self.next_block_height,
-//             Error::WalletSynchronizationError
-//         );
-//         let mut query = ChainInfoQuery::new(self.chain_id);
-//         query.request_owner_balance = owner;
-//         let response = self.local_node.handle_chain_info_query(query).await?;
-//         Ok((
-//             response.info.chain_balance,
-//             response.info.requested_owner_balance,
-//         ))
-//     }
+    /// Reads the local balance of the chain account and optionally another user.
+    ///
+    /// Does not process the inbox or attempt to synchronize with validators.
+    async fn local_balances_with_owner(
+        &self,
+        owner: Option<Owner>,
+    ) -> Result<(Amount, Option<Amount>), Error> {
+        ensure!(
+            self.chain_info().await?.next_block_height == self.state().next_block_height,
+            Error::WalletSynchronizationError
+        );
+        let mut query = ChainInfoQuery::new(self.chain_id);
+        query.request_owner_balance = owner;
+        let response = self.client.local_node.handle_chain_info_query(query).await?;
+        Ok((
+            response.info.chain_balance,
+            response.info.requested_owner_balance,
+        ))
+    }
 
-//     /// Attempts to update all validators about the local chain.
-//     pub async fn update_validators(&mut self) -> Result<(), Error> {
-//         let committee = self.local_committee().await?;
-//         self.communicate_chain_updates(
-//             &committee,
-//             self.chain_id,
-//             self.next_block_height,
-//             CrossChainMessageDelivery::NonBlocking,
-//         )
-//             .await?;
-//         Ok(())
-//     }
+    /// Attempts to update all validators about the local chain.
+    pub async fn update_validators(&self) -> Result<(), Error> {
+        let committee = self.local_committee().await?;
+        self.communicate_chain_updates(
+            &committee,
+            self.chain_id,
+            self.state().next_block_height,
+            CrossChainMessageDelivery::NonBlocking,
+        )
+            .await?;
+        Ok(())
+    }
 
-//     /// Requests a `RegisterApplications` message from another chain so the application can be used
-//     /// on this one.
-//     pub async fn request_application(
-//         &mut self,
-//         application_id: UserApplicationId,
-//         chain_id: Option<ChainId>,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         let chain_id = chain_id.unwrap_or(application_id.creation.chain_id);
-//         self.execute_operation(Operation::System(SystemOperation::RequestApplication {
-//             application_id,
-//             chain_id,
-//         }))
-//             .await
-//     }
+    /// Requests a `RegisterApplications` message from another chain so the application can be used
+    /// on this one.
+    pub async fn request_application(
+        &self,
+        application_id: UserApplicationId,
+        chain_id: Option<ChainId>,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        let chain_id = chain_id.unwrap_or(application_id.creation.chain_id);
+        self.execute_operation(Operation::System(SystemOperation::RequestApplication {
+            application_id,
+            chain_id,
+        }))
+            .await
+    }
 
-//     /// Sends tokens to a chain.
-//     pub async fn transfer_to_account(
-//         &mut self,
-//         owner: Option<Owner>,
-//         amount: Amount,
-//         account: Account,
-//         user_data: UserData,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.transfer(owner, amount, Recipient::Account(account), user_data)
-//             .await
-//     }
+    /// Sends tokens to a chain.
+    pub async fn transfer_to_account(
+        &self,
+        owner: Option<Owner>,
+        amount: Amount,
+        account: Account,
+        user_data: UserData,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        self.transfer(owner, amount, Recipient::Account(account), user_data)
+            .await
+    }
 
-//     /// Burns tokens.
-//     pub async fn burn(
-//         &mut self,
-//         owner: Option<Owner>,
-//         amount: Amount,
-//         user_data: UserData,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.transfer(owner, amount, Recipient::Burn, user_data)
-//             .await
-//     }
+    /// Burns tokens.
+    pub async fn burn(
+        &self,
+        owner: Option<Owner>,
+        amount: Amount,
+        user_data: UserData,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        self.transfer(owner, amount, Recipient::Burn, user_data)
+            .await
+    }
 
-//     /// Attempts to synchronize chains that have sent us messages and populate our local
-//     /// inbox.
-//     ///
-//     /// To create a block that actually executes the messages in the inbox,
-//     /// `process_inbox` must be called separately.
-//     pub async fn synchronize_from_validators(
-//         &mut self,
-//     ) -> Result<Box<ChainInfo>, Error> {
-//         self.find_received_certificates().await?;
-//         self.prepare_chain().await
-//     }
+    /// Attempts to synchronize chains that have sent us messages and populate our local
+    /// inbox.
+    ///
+    /// To create a block that actually executes the messages in the inbox,
+    /// `process_inbox` must be called separately.
+    pub async fn synchronize_from_validators(
+        &self,
+    ) -> Result<Box<ChainInfo>, Error> {
+        self.find_received_certificates().await?;
+        self.prepare_chain().await
+    }
 
-//     /// Processes the last pending block
-//     pub async fn process_pending_block(
-//         &mut self,
-//     ) -> Result<ClientOutcome<Option<Certificate>>, Error> {
-//         self.find_received_certificates().await?;
-//         self.prepare_chain().await?;
-//         self.process_pending_block_without_prepare().await
-//     }
+    /// Processes the last pending block
+    pub async fn process_pending_block(
+        &self,
+    ) -> Result<ClientOutcome<Option<Certificate>>, Error> {
+        self.find_received_certificates().await?;
+        self.prepare_chain().await?;
+        self.process_pending_block_without_prepare().await
+    }
 
-//     /// Processes the last pending block. Assumes that the local chain is up to date.
-//     async fn process_pending_block_without_prepare(
-//         &mut self,
-//     ) -> Result<ClientOutcome<Option<Certificate>>, Error> {
-//         let identity = self.identity().await?;
-//         let mut info = self.chain_info_with_manager_values().await?;
-//         // If the current round has timed out, we request a timeout certificate and retry in
-//         // the next round.
-//         if let Some(round_timeout) = info.manager.round_timeout {
-//             if round_timeout <= self.storage_client().await.clock().current_time() {
-//                 self.request_leader_timeout().await?;
-//                 info = self.chain_info_with_manager_values().await?;
-//             }
-//         }
-//         let manager = *info.manager;
-//         // Drop the pending block if it is outdated.
-//         if let Some(block) = &self.pending_block {
-//             if block.height != info.next_block_height {
-//                 self.pending_block = None;
-//                 self.pending_blobs.clear();
-//             }
-//         }
-//         // If there is a validated block in the current round, finalize it.
-//         if let Some(certificate) = &manager.requested_locked {
-//             if certificate.round == manager.current_round {
-//                 let committee = self.local_committee().await?;
-//                 match self.finalize_block(&committee, *certificate.clone()).await {
-//                     Ok(certificate) => return Ok(ClientOutcome::Committed(Some(certificate))),
-//                     Err(Error::CommunicationError(_)) => {
-//                         // Communication errors in this case often mean that someone else already
-//                         // finalized the block.
-//                         let timestamp = manager.round_timeout.ok_or_else(|| {
-//                             Error::BlockProposalError(
-//                                 "Cannot propose in the current round.",
-//                             )
-//                         })?;
-//                         return Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
-//                             timestamp,
-//                             current_round: manager.current_round,
-//                             next_block_height: info.next_block_height,
-//                         }));
-//                     }
-//                     Err(error) => return Err(error),
-//                 }
-//             }
-//         }
-//         // The block we want to propose is either the highest validated, or our pending one.
-//         let maybe_block = manager
-//             .highest_validated()
-//             .and_then(|certificate| certificate.value().block())
-//             .or(manager
-//                 .requested_proposed
-//                 .as_ref()
-//                 .filter(|proposal| proposal.content.round.is_fast())
-//                 .map(|proposal| &proposal.content.block))
-//             .or(self.pending_block.as_ref());
-//         let Some(block) = maybe_block else {
-//             return Ok(ClientOutcome::Committed(None)); // Nothing to propose.
-//         };
-//         // If there is a conflicting proposal in the current round, we can only propose if the
-//         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
-//         let conflicting_proposal = manager
-//             .requested_proposed
-//             .as_ref()
-//             .map_or(false, |proposal| {
-//                 proposal.content.round == manager.current_round && proposal.content.block != *block
-//             });
-//         let round = if !conflicting_proposal {
-//             manager.current_round
-//         } else if let Some(round) = manager
-//             .ownership
-//             .next_round(manager.current_round)
-//             .filter(|_| manager.current_round.is_multi_leader())
-//         {
-//             round
-//         } else if let Some(timestamp) = manager.round_timeout {
-//             return Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
-//                 timestamp,
-//                 current_round: manager.current_round,
-//                 next_block_height: info.next_block_height,
-//             }));
-//         } else {
-//             return Err(Error::BlockProposalError(
-//                 "Conflicting proposal in the current round.",
-//             ));
-//         };
-//         let can_propose = match round {
-//             Round::Fast => manager.ownership.super_owners.contains_key(&identity),
-//             Round::MultiLeader(_) => true,
-//             Round::SingleLeader(_) | Round::Validator(_) => manager.leader == Some(identity),
-//         };
-//         if can_propose {
-//             let certificate = self.propose_block(block.clone(), round).await?;
-//             Ok(ClientOutcome::Committed(Some(certificate)))
-//         } else {
-//             // TODO(#1424): Local timeout might not match validators' exactly.
-//             let timestamp = manager.round_timeout.ok_or_else(|| {
-//                 Error::BlockProposalError("Cannot propose in the current round.")
-//             })?;
-//             Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
-//                 timestamp,
-//                 current_round: manager.current_round,
-//                 next_block_height: info.next_block_height,
-//             }))
-//         }
-//     }
+    /// Processes the last pending block. Assumes that the local chain is up to date.
+    async fn process_pending_block_without_prepare(
+        &self,
+    ) -> Result<ClientOutcome<Option<Certificate>>, Error> {
+        let identity = self.identity().await?;
+        let mut info = self.chain_info_with_manager_values().await?;
+        // If the current round has timed out, we request a timeout certificate and retry in
+        // the next round.
+        if let Some(round_timeout) = info.manager.round_timeout {
+            if round_timeout <= self.storage_client().await.clock().current_time() {
+                self.request_leader_timeout().await?;
+                info = self.chain_info_with_manager_values().await?;
+            }
+        }
+        let manager = *info.manager;
 
-//     /// Clears the information on any operation that previously failed.
-//     pub fn clear_pending_block(&mut self) {
-//         self.pending_block = None;
-//         self.pending_blobs.clear();
-//     }
+        {
+            // Drop the pending block if it is outdated.
+            let mut state = self.state_mut();
+            if let Some(block) = &state.pending_block {
+                if block.height != info.next_block_height {
+                    state.pending_block = None;
+                    state.pending_blobs.clear();
+                }
+            }
+        }
+        // If there is a validated block in the current round, finalize it.
+        if let Some(certificate) = &manager.requested_locked {
+            if certificate.round == manager.current_round {
+                let committee = self.local_committee().await?;
+                match self.finalize_block(&committee, *certificate.clone()).await {
+                    Ok(certificate) => return Ok(ClientOutcome::Committed(Some(certificate))),
+                    Err(Error::CommunicationError(_)) => {
+                        // Communication errors in this case often mean that someone else already
+                        // finalized the block.
+                        let timestamp = manager.round_timeout.ok_or_else(|| {
+                            Error::BlockProposalError(
+                                "Cannot propose in the current round.",
+                            )
+                        })?;
+                        return Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
+                            timestamp,
+                            current_round: manager.current_round,
+                            next_block_height: info.next_block_height,
+                        }));
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+        }
+        // The block we want to propose is either the highest validated, or our pending one.
+        let maybe_block = manager
+            .highest_validated()
+            .and_then(|certificate| certificate.value().block())
+            .or(manager
+                .requested_proposed
+                .as_ref()
+                .filter(|proposal| proposal.content.round.is_fast())
+                .map(|proposal| &proposal.content.block))
+            .cloned()
+            .or_else(|| self.state().pending_block.as_ref().cloned());
+        let Some(block) = maybe_block else {
+            return Ok(ClientOutcome::Committed(None)); // Nothing to propose.
+        };
+        // If there is a conflicting proposal in the current round, we can only propose if the
+        // next round can be started without a timeout, i.e. if we are in a multi-leader round.
+        let conflicting_proposal = manager
+            .requested_proposed
+            .as_ref()
+            .map_or(false, |proposal| {
+                proposal.content.round == manager.current_round && proposal.content.block != block
+            });
+        let round = if !conflicting_proposal {
+            manager.current_round
+        } else if let Some(round) = manager
+            .ownership
+            .next_round(manager.current_round)
+            .filter(|_| manager.current_round.is_multi_leader())
+        {
+            round
+        } else if let Some(timestamp) = manager.round_timeout {
+            return Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
+                timestamp,
+                current_round: manager.current_round,
+                next_block_height: info.next_block_height,
+            }));
+        } else {
+            return Err(Error::BlockProposalError(
+                "Conflicting proposal in the current round.",
+            ));
+        };
+        let can_propose = match round {
+            Round::Fast => manager.ownership.super_owners.contains_key(&identity),
+            Round::MultiLeader(_) => true,
+            Round::SingleLeader(_) | Round::Validator(_) => manager.leader == Some(identity),
+        };
+        if can_propose {
+            let certificate = self.propose_block(block.clone(), round).await?;
+            Ok(ClientOutcome::Committed(Some(certificate)))
+        } else {
+            // TODO(#1424): Local timeout might not match validators' exactly.
+            let timestamp = manager.round_timeout.ok_or_else(|| {
+                Error::BlockProposalError("Cannot propose in the current round.")
+            })?;
+            Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
+                timestamp,
+                current_round: manager.current_round,
+                next_block_height: info.next_block_height,
+            }))
+        }
+    }
 
-//     /// Processes confirmed operation for which this chain is a recipient.
-//     pub async fn receive_certificate(
-//         &mut self,
-//         certificate: Certificate,
-//     ) -> Result<(), Error> {
-//         self.receive_certificate_internal(certificate, ReceiveCertificateMode::NeedsCheck)
-//             .await
-//     }
+    /// Clears the information on any operation that previously failed.
+    pub fn clear_pending_block(&self) {
+        let mut state = self.state_mut();
+        state.pending_block = None;
+        state.pending_blobs.clear();
+    }
 
-//     /// Rotates the key of the chain.
-//     pub async fn rotate_key_pair(
-//         &mut self,
-//         key_pair: KeyPair,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         let new_public_key = key_pair.public();
-//         self.known_key_pairs.insert(new_public_key.into(), key_pair);
-//         self.transfer_ownership(new_public_key).await
-//     }
+    /// Processes confirmed operation for which this chain is a recipient.
+    pub async fn receive_certificate(
+        &self,
+        certificate: Certificate,
+    ) -> Result<(), Error> {
+        self.receive_certificate_internal(certificate, ReceiveCertificateMode::NeedsCheck)
+            .await
+    }
 
-//     /// Transfers ownership of the chain to a single super owner.
-//     pub async fn transfer_ownership(
-//         &mut self,
-//         new_public_key: PublicKey,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
-//             super_owners: vec![new_public_key],
-//             owners: Vec::new(),
-//             multi_leader_rounds: 2,
-//             timeout_config: TimeoutConfig::default(),
-//         }))
-//             .await
-//     }
+    /// Rotates the key of the chain.
+    pub async fn rotate_key_pair(
+        &self,
+        key_pair: KeyPair,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        let new_public_key = key_pair.public();
+        self.client.known_key_pairs.insert(new_public_key.into(), key_pair);
+        self.transfer_ownership(new_public_key).await
+    }
 
-//     /// Adds another owner to the chain, and turns existing super owners into regular owners.
-//     pub async fn share_ownership(
-//         &mut self,
-//         new_public_key: PublicKey,
-//         new_weight: u64,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         loop {
-//             let ownership = self.prepare_chain().await?.manager.ownership;
-//             ensure!(
-//                 ownership.is_active(),
-//                 ChainError::InactiveChain(self.chain_id)
-//             );
-//             let messages = self.pending_messages().await?;
-//             let mut owners = ownership.owners.values().copied().collect::<Vec<_>>();
-//             owners.extend(
-//                 ownership
-//                     .super_owners
-//                     .values()
-//                     .copied()
-//                     .zip(iter::repeat(100)),
-//             );
-//             owners.push((new_public_key, new_weight));
-//             let operations = vec![Operation::System(SystemOperation::ChangeOwnership {
-//                 super_owners: Vec::new(),
-//                 owners,
-//                 multi_leader_rounds: ownership.multi_leader_rounds,
-//                 timeout_config: ownership.timeout_config,
-//             })];
-//             match self.execute_block(messages, operations).await? {
-//                 ExecuteBlockOutcome::Executed(certificate) => {
-//                     return Ok(ClientOutcome::Committed(certificate));
-//                 }
-//                 ExecuteBlockOutcome::Conflict(certificate) => {
-//                     info!(
-//                         height = %certificate.value().height(),
-//                         "Another block was committed; retrying."
-//                     );
-//                 }
-//                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-//                     return Ok(ClientOutcome::WaitForTimeout(timeout));
-//                 }
-//             };
-//         }
-//     }
+    /// Transfers ownership of the chain to a single super owner.
+    pub async fn transfer_ownership(
+        &self,
+        new_public_key: PublicKey,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
+            super_owners: vec![new_public_key],
+            owners: Vec::new(),
+            multi_leader_rounds: 2,
+            timeout_config: TimeoutConfig::default(),
+        }))
+            .await
+    }
 
-//     /// Changes the ownership of this chain. Fails if it would remove existing owners, unless
-//     /// `remove_owners` is `true`.
-//     pub async fn change_ownership(
-//         &mut self,
-//         ownership: ChainOwnership,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
-//             super_owners: ownership.super_owners.values().cloned().collect(),
-//             owners: ownership.owners.values().cloned().collect(),
-//             multi_leader_rounds: ownership.multi_leader_rounds,
-//             timeout_config: ownership.timeout_config.clone(),
-//         }))
-//             .await
-//     }
+    /// Adds another owner to the chain, and turns existing super owners into regular owners.
+    pub async fn share_ownership(
+        &self,
+        new_public_key: PublicKey,
+        new_weight: u64,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        loop {
+            let ownership = self.prepare_chain().await?.manager.ownership;
+            ensure!(
+                ownership.is_active(),
+                ChainError::InactiveChain(self.chain_id)
+            );
+            let messages = self.pending_messages().await?;
+            let mut owners = ownership.owners.values().copied().collect::<Vec<_>>();
+            owners.extend(
+                ownership
+                    .super_owners
+                    .values()
+                    .copied()
+                    .zip(iter::repeat(100)),
+            );
+            owners.push((new_public_key, new_weight));
+            let operations = vec![Operation::System(SystemOperation::ChangeOwnership {
+                super_owners: Vec::new(),
+                owners,
+                multi_leader_rounds: ownership.multi_leader_rounds,
+                timeout_config: ownership.timeout_config,
+            })];
+            match self.execute_block(messages, operations).await? {
+                ExecuteBlockOutcome::Executed(certificate) => {
+                    return Ok(ClientOutcome::Committed(certificate));
+                }
+                ExecuteBlockOutcome::Conflict(certificate) => {
+                    info!(
+                        height = %certificate.value().height(),
+                        "Another block was committed; retrying."
+                    );
+                }
+                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
+            };
+        }
+    }
 
-//     /// Changes the application permissions configuration on this chain.
-//     pub async fn change_application_permissions(
-//         &mut self,
-//         application_permissions: ApplicationPermissions,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         let operation = SystemOperation::ChangeApplicationPermissions(application_permissions);
-//         self.execute_operation(operation.into()).await
-//     }
+    /// Changes the ownership of this chain. Fails if it would remove existing owners, unless
+    /// `remove_owners` is `true`.
+    pub async fn change_ownership(
+        &self,
+        ownership: ChainOwnership,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
+            super_owners: ownership.super_owners.values().cloned().collect(),
+            owners: ownership.owners.values().cloned().collect(),
+            multi_leader_rounds: ownership.multi_leader_rounds,
+            timeout_config: ownership.timeout_config.clone(),
+        }))
+            .await
+    }
 
-//     /// Opens a new chain with a derived UID.
-//     pub async fn open_chain(
-//         &mut self,
-//         ownership: ChainOwnership,
-//         balance: Amount,
-//     ) -> Result<ClientOutcome<(MessageId, Certificate)>, Error> {
-//         self.prepare_chain().await?;
-//         loop {
-//             let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
-//             let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
-//             let messages = self.pending_messages().await?;
-//             let config = OpenChainConfig {
-//                 ownership: ownership.clone(),
-//                 committees,
-//                 admin_id: self.admin_id,
-//                 epoch,
-//                 balance,
-//                 application_permissions: Default::default(),
-//             };
-//             let operation = Operation::System(SystemOperation::OpenChain(config));
-//             let certificate = match self.execute_block(messages, vec![operation]).await? {
-//                 ExecuteBlockOutcome::Executed(certificate) => certificate,
-//                 ExecuteBlockOutcome::Conflict(_) => continue,
-//                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-//                     return Ok(ClientOutcome::WaitForTimeout(timeout));
-//                 }
-//             };
-//             // The first message of the only operation created the new chain.
-//             let message_id = certificate
-//                 .value()
-//                 .executed_block()
-//                 .and_then(|executed_block| {
-//                     executed_block.message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
-//                 })
-//                 .ok_or_else(|| Error::InternalError("Failed to create new chain"))?;
-//             return Ok(ClientOutcome::Committed((message_id, certificate)));
-//         }
-//     }
+    /// Changes the application permissions configuration on this chain.
+    pub async fn change_application_permissions(
+        &self,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        let operation = SystemOperation::ChangeApplicationPermissions(application_permissions);
+        self.execute_operation(operation.into()).await
+    }
 
-//     /// Closes the chain (and loses everything in it!!).
-//     pub async fn close_chain(&mut self) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.execute_operation(Operation::System(SystemOperation::CloseChain))
-//             .await
-//     }
+    /// Opens a new chain with a derived UID.
+    pub async fn open_chain(
+        &self,
+        ownership: ChainOwnership,
+        balance: Amount,
+    ) -> Result<ClientOutcome<(MessageId, Certificate)>, Error> {
+        self.prepare_chain().await?;
+        loop {
+            let (epoch, committees) = self.epoch_and_committees().await?;
+            let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
+            let messages = self.pending_messages().await?;
+            let config = OpenChainConfig {
+                ownership: ownership.clone(),
+                committees,
+                admin_id: self.client.admin_chain_id,
+                epoch,
+                balance,
+                application_permissions: Default::default(),
+            };
+            let operation = Operation::System(SystemOperation::OpenChain(config));
+            let certificate = match self.execute_block(messages, vec![operation]).await? {
+                ExecuteBlockOutcome::Executed(certificate) => certificate,
+                ExecuteBlockOutcome::Conflict(_) => continue,
+                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
+            };
+            // The first message of the only operation created the new chain.
+            let message_id = certificate
+                .value()
+                .executed_block()
+                .and_then(|executed_block| {
+                    executed_block.message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
+                })
+                .ok_or_else(|| Error::InternalError("Failed to create new chain"))?;
+            return Ok(ClientOutcome::Committed((message_id, certificate)));
+        }
+    }
 
-//     /// Publishes some bytecode.
-//     pub async fn publish_bytecode(
-//         &mut self,
-//         contract: Bytecode,
-//         service: Bytecode,
-//     ) -> Result<ClientOutcome<(BytecodeId, Certificate)>, Error> {
-//         self.execute_operation(Operation::System(SystemOperation::PublishBytecode {
-//             contract: contract.clone(),
-//             service: service.clone(),
-//         }))
-//             .await?
-//             .try_map(|certificate| {
-//                 // The first message of the only operation published the bytecode.
-//                 let message_id = certificate
-//                     .value()
-//                     .executed_block()
-//                     .and_then(|executed_block| {
-//                         executed_block.message_id_for_operation(0, PUBLISH_BYTECODE_MESSAGE_INDEX)
-//                     })
-//                     .ok_or_else(|| Error::InternalError("Failed to publish bytecode"))?;
-//                 Ok((BytecodeId::new(message_id), certificate))
-//             })
-//     }
+    /// Closes the chain (and loses everything in it!!).
+    pub async fn close_chain(&self) -> Result<ClientOutcome<Certificate>, Error> {
+        self.execute_operation(Operation::System(SystemOperation::CloseChain))
+            .await
+    }
 
-//     /// Publishes some blob.
-//     pub async fn publish_blob(
-//         &mut self,
-//         hashed_blob: HashedBlob,
-//     ) -> Result<ClientOutcome<(BlobId, Certificate)>, Error> {
-//         self.local_node.cache_recent_blob(&hashed_blob).await;
-//         self.pending_blobs
-//             .insert(hashed_blob.id(), hashed_blob.clone());
-//         self.execute_operation(Operation::System(SystemOperation::PublishBlob {
-//             blob_id: hashed_blob.id(),
-//         }))
-//             .await?
-//             .try_map(|certificate| Ok((hashed_blob.id(), certificate)))
-//     }
+    /// Publishes some bytecode.
+    pub async fn publish_bytecode(
+        &self,
+        contract: Bytecode,
+        service: Bytecode,
+    ) -> Result<ClientOutcome<(BytecodeId, Certificate)>, Error> {
+        self.execute_operation(Operation::System(SystemOperation::PublishBytecode {
+            contract: contract.clone(),
+            service: service.clone(),
+        }))
+            .await?
+            .try_map(|certificate| {
+                // The first message of the only operation published the bytecode.
+                let message_id = certificate
+                    .value()
+                    .executed_block()
+                    .and_then(|executed_block| {
+                        executed_block.message_id_for_operation(0, PUBLISH_BYTECODE_MESSAGE_INDEX)
+                    })
+                    .ok_or_else(|| Error::InternalError("Failed to publish bytecode"))?;
+                Ok((BytecodeId::new(message_id), certificate))
+            })
+    }
 
-//     /// Creates an application by instantiating some bytecode.
-//     pub async fn create_application<
-//         A: Abi,
-//         Parameters: Serialize,
-//         InstantiationArgument: Serialize,
-//         >(
-//             &mut self,
-//             bytecode_id: BytecodeId<A, Parameters, InstantiationArgument>,
-//             parameters: &Parameters,
-//             instantiation_argument: &InstantiationArgument,
-//             required_application_ids: Vec<UserApplicationId>,
-//         ) -> Result<ClientOutcome<(UserApplicationId<A>, Certificate)>, Error> {
-//             let instantiation_argument = serde_json::to_vec(instantiation_argument)?;
-//             let parameters = serde_json::to_vec(parameters)?;
-//             Ok(self
-//                 .create_application_untyped(
-//                     bytecode_id.forget_abi(),
-//                     parameters,
-//                     instantiation_argument,
-//                     required_application_ids,
-//                 )
-//                 .await?
-//                 .map(|(app_id, cert)| (app_id.with_abi(), cert)))
-//         }
+    /// Publishes some blob.
+    pub async fn publish_blob(
+        &self,
+        hashed_blob: HashedBlob,
+    ) -> Result<ClientOutcome<(BlobId, Certificate)>, Error> {
+        self.client.local_node.cache_recent_blob(&hashed_blob).await;
+        self.state_mut().pending_blobs
+            .insert(hashed_blob.id(), hashed_blob.clone());
+        self.execute_operation(Operation::System(SystemOperation::PublishBlob {
+            blob_id: hashed_blob.id(),
+        }))
+            .await?
+            .try_map(|certificate| Ok((hashed_blob.id(), certificate)))
+    }
 
-//     /// Creates an application by instantiating some bytecode.
-//     pub async fn create_application_untyped(
-//         &mut self,
-//         bytecode_id: BytecodeId,
-//         parameters: Vec<u8>,
-//         instantiation_argument: Vec<u8>,
-//         required_application_ids: Vec<UserApplicationId>,
-//     ) -> Result<ClientOutcome<(UserApplicationId, Certificate)>, Error> {
-//         self.execute_operation(Operation::System(SystemOperation::CreateApplication {
-//             bytecode_id,
-//             parameters,
-//             instantiation_argument,
-//             required_application_ids,
-//         }))
-//             .await?
-//             .try_map(|certificate| {
-//                 // The first message of the only operation created the application.
-//                 let creation = certificate
-//                     .value()
-//                     .executed_block()
-//                     .and_then(|executed_block| {
-//                         executed_block.message_id_for_operation(0, CREATE_APPLICATION_MESSAGE_INDEX)
-//                     })
-//                     .ok_or_else(|| Error::InternalError("Failed to create application"))?;
-//                 let id = ApplicationId {
-//                     creation,
-//                     bytecode_id,
-//                 };
-//                 Ok((id, certificate))
-//             })
-//     }
+    /// Creates an application by instantiating some bytecode.
+    pub async fn create_application<
+        A: Abi,
+        Parameters: Serialize,
+        InstantiationArgument: Serialize,
+        >(
+            &self,
+            bytecode_id: BytecodeId<A, Parameters, InstantiationArgument>,
+            parameters: &Parameters,
+            instantiation_argument: &InstantiationArgument,
+            required_application_ids: Vec<UserApplicationId>,
+        ) -> Result<ClientOutcome<(UserApplicationId<A>, Certificate)>, Error> {
+            let instantiation_argument = serde_json::to_vec(instantiation_argument)?;
+            let parameters = serde_json::to_vec(parameters)?;
+            Ok(self
+                .create_application_untyped(
+                    bytecode_id.forget_abi(),
+                    parameters,
+                    instantiation_argument,
+                    required_application_ids,
+                )
+                .await?
+                .map(|(app_id, cert)| (app_id.with_abi(), cert)))
+        }
 
-//     /// Creates a new committee and starts using it (admin chains only).
-//     pub async fn stage_new_committee(
-//         &mut self,
-//         committee: Committee,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         loop {
-//             self.prepare_chain().await?;
-//             let epoch = self.epoch().await?;
-//             let messages = self.pending_messages().await?;
-//             match self
-//                 .execute_block(
-//                     messages,
-//                     vec![Operation::System(SystemOperation::Admin(
-//                         AdminOperation::CreateCommittee {
-//                             epoch: epoch.try_add_one()?,
-//                             committee: committee.clone(),
-//                         },
-//                     ))],
-//                 )
-//                 .await?
-//             {
-//                 ExecuteBlockOutcome::Executed(certificate) => {
-//                     return Ok(ClientOutcome::Committed(certificate))
-//                 }
-//                 ExecuteBlockOutcome::Conflict(_) => continue,
-//                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-//                     return Ok(ClientOutcome::WaitForTimeout(timeout));
-//                 }
-//             };
-//         }
-//     }
+    /// Creates an application by instantiating some bytecode.
+    pub async fn create_application_untyped(
+        &self,
+        bytecode_id: BytecodeId,
+        parameters: Vec<u8>,
+        instantiation_argument: Vec<u8>,
+        required_application_ids: Vec<UserApplicationId>,
+    ) -> Result<ClientOutcome<(UserApplicationId, Certificate)>, Error> {
+        self.execute_operation(Operation::System(SystemOperation::CreateApplication {
+            bytecode_id,
+            parameters,
+            instantiation_argument,
+            required_application_ids,
+        }))
+            .await?
+            .try_map(|certificate| {
+                // The first message of the only operation created the application.
+                let creation = certificate
+                    .value()
+                    .executed_block()
+                    .and_then(|executed_block| {
+                        executed_block.message_id_for_operation(0, CREATE_APPLICATION_MESSAGE_INDEX)
+                    })
+                    .ok_or_else(|| Error::InternalError("Failed to create application"))?;
+                let id = ApplicationId {
+                    creation,
+                    bytecode_id,
+                };
+                Ok((id, certificate))
+            })
+    }
 
-//     /// Creates an empty block to process all incoming messages. This may require several blocks.
-//     ///
-//     /// If not all certificates could be processed due to a timeout, the timestamp for when to retry
-//     /// is returned, too.
-//     pub async fn process_inbox(
-//         &mut self,
-//     ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), Error> {
-//         self.prepare_chain().await?;
-//         let mut certificates = Vec::new();
-//         loop {
-//             let incoming_messages = self.pending_messages().await?;
-//             if incoming_messages.is_empty() {
-//                 return Ok((certificates, None));
-//             }
-//             match self.execute_block(incoming_messages, vec![]).await {
-//                 Ok(ExecuteBlockOutcome::Executed(certificate))
-//                 | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
-//                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
-//                     return Ok((certificates, Some(timeout)));
-//                 }
-//                 Err(error) => return Err(error),
-//             };
-//         }
-//     }
+    /// Creates a new committee and starts using it (admin chains only).
+    pub async fn stage_new_committee(
+        &self,
+        committee: Committee,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        loop {
+            self.prepare_chain().await?;
+            let epoch = self.epoch().await?;
+            let messages = self.pending_messages().await?;
+            match self
+                .execute_block(
+                    messages,
+                    vec![Operation::System(SystemOperation::Admin(
+                        AdminOperation::CreateCommittee {
+                            epoch: epoch.try_add_one()?,
+                            committee: committee.clone(),
+                        },
+                    ))],
+                )
+                .await?
+            {
+                ExecuteBlockOutcome::Executed(certificate) => {
+                    return Ok(ClientOutcome::Committed(certificate))
+                }
+                ExecuteBlockOutcome::Conflict(_) => continue,
+                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
+            };
+        }
+    }
 
-//     /// Creates an empty block to process all incoming messages. This may require several blocks.
-//     /// If we are not a chain owner, this doesn't fail, and just returns an empty list.
-//     pub async fn process_inbox_if_owned(
-//         &mut self,
-//     ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), Error> {
-//         match self.process_inbox().await {
-//             Ok(result) => Ok(result),
-//             Err(Error::CannotFindKeyForChain(_)) => Ok((Vec::new(), None)),
-//             Err(error) => Err(error),
-//         }
-//     }
+    /// Creates an empty block to process all incoming messages. This may require several blocks.
+    ///
+    /// If not all certificates could be processed due to a timeout, the timestamp for when to retry
+    /// is returned, too.
+    pub async fn process_inbox(
+        &self,
+    ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), Error> {
+        self.prepare_chain().await?;
+        let mut certificates = Vec::new();
+        loop {
+            let incoming_messages = self.pending_messages().await?;
+            if incoming_messages.is_empty() {
+                return Ok((certificates, None));
+            }
+            match self.execute_block(incoming_messages, vec![]).await {
+                Ok(ExecuteBlockOutcome::Executed(certificate))
+                | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
+                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
+                    return Ok((certificates, Some(timeout)));
+                }
+                Err(error) => return Err(error),
+            };
+        }
+    }
 
-//     /// Starts listening to the admin chain for new committees. (This is only useful for
-//     /// other genesis chains or for testing.)
-//     pub async fn subscribe_to_new_committees(
-//         &mut self,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.execute_operation(Operation::System(SystemOperation::Subscribe {
-//             chain_id: self.admin_id,
-//             channel: SystemChannel::Admin,
-//         }))
-//             .await
-//     }
+    /// Creates an empty block to process all incoming messages. This may require several blocks.
+    /// If we are not a chain owner, this doesn't fail, and just returns an empty list.
+    pub async fn process_inbox_if_owned(
+        &self,
+    ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), Error> {
+        match self.process_inbox().await {
+            Ok(result) => Ok(result),
+            Err(Error::CannotFindKeyForChain(_)) => Ok((Vec::new(), None)),
+            Err(error) => Err(error),
+        }
+    }
 
-//     /// Stops listening to the admin chain for new committees. (This is only useful for
-//     /// testing.)
-//     pub async fn unsubscribe_from_new_committees(
-//         &mut self,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
-//             chain_id: self.admin_id,
-//             channel: SystemChannel::Admin,
-//         }))
-//             .await
-//     }
+    /// Starts listening to the admin chain for new committees. (This is only useful for
+    /// other genesis chains or for testing.)
+    pub async fn subscribe_to_new_committees(
+        &self,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        self.execute_operation(Operation::System(SystemOperation::Subscribe {
+            chain_id: self.client.admin_chain_id,
+            channel: SystemChannel::Admin,
+        }))
+            .await
+    }
 
-//     /// Starts listening to the given chain for published bytecodes.
-//     pub async fn subscribe_to_published_bytecodes(
-//         &mut self,
-//         chain_id: ChainId,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.execute_operation(Operation::System(SystemOperation::Subscribe {
-//             chain_id,
-//             channel: SystemChannel::PublishedBytecodes,
-//         }))
-//             .await
-//     }
+    /// Stops listening to the admin chain for new committees. (This is only useful for
+    /// testing.)
+    pub async fn unsubscribe_from_new_committees(
+        &self,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
+            chain_id: self.client.admin_chain_id,
+            channel: SystemChannel::Admin,
+        }))
+            .await
+    }
 
-//     /// Stops listening to the given chain for published bytecodes.
-//     pub async fn unsubscribe_from_published_bytecodes(
-//         &mut self,
-//         chain_id: ChainId,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
-//             chain_id,
-//             channel: SystemChannel::PublishedBytecodes,
-//         }))
-//             .await
-//     }
+    /// Starts listening to the given chain for published bytecodes.
+    pub async fn subscribe_to_published_bytecodes(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        self.execute_operation(Operation::System(SystemOperation::Subscribe {
+            chain_id,
+            channel: SystemChannel::PublishedBytecodes,
+        }))
+            .await
+    }
 
-//     /// Deprecates all the configurations of voting rights but the last one (admin chains
-//     /// only). Currently, each individual chain is still entitled to wait before accepting
-//     /// this command. However, it is expected that deprecated validators stop functioning
-//     /// shortly after such command is issued.
-//     pub async fn finalize_committee(
-//         &mut self,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.prepare_chain().await?;
-//         let (current_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
-//         let current_epoch = current_epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
-//         let operations = committees
-//             .keys()
-//             .filter_map(|epoch| {
-//                 if *epoch != current_epoch {
-//                     Some(Operation::System(SystemOperation::Admin(
-//                         AdminOperation::RemoveCommittee { epoch: *epoch },
-//                     )))
-//                 } else {
-//                     None
-//                 }
-//             })
-//             .collect();
-//         self.execute_with_messages(operations).await
-//     }
+    /// Stops listening to the given chain for published bytecodes.
+    pub async fn unsubscribe_from_published_bytecodes(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
+            chain_id,
+            channel: SystemChannel::PublishedBytecodes,
+        }))
+            .await
+    }
 
-//     /// Sends money to a chain.
-//     /// Do not check balance. (This may block the client)
-//     /// Do not confirm the transaction.
-//     pub async fn transfer_to_account_unsafe_unconfirmed(
-//         &mut self,
-//         owner: Option<Owner>,
-//         amount: Amount,
-//         account: Account,
-//         user_data: UserData,
-//     ) -> Result<ClientOutcome<Certificate>, Error> {
-//         self.execute_operation(Operation::System(SystemOperation::Transfer {
-//             owner,
-//             recipient: Recipient::Account(account),
-//             amount,
-//             user_data,
-//         }))
-//             .await
-//     }
+    /// Deprecates all the configurations of voting rights but the last one (admin chains
+    /// only). Currently, each individual chain is still entitled to wait before accepting
+    /// this command. However, it is expected that deprecated validators stop functioning
+    /// shortly after such command is issued.
+    pub async fn finalize_committee(
+        &self,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        self.prepare_chain().await?;
+        let (current_epoch, committees) = self.epoch_and_committees().await?;
+        let current_epoch = current_epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
+        let operations = committees
+            .keys()
+            .filter_map(|epoch| {
+                if *epoch != current_epoch {
+                    Some(Operation::System(SystemOperation::Admin(
+                        AdminOperation::RemoveCommittee { epoch: *epoch },
+                    )))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        self.execute_with_messages(operations).await
+    }
 
-//     pub async fn read_hashed_certificate_value(
-//         &self,
-//         hash: CryptoHash,
-//     ) -> Result<HashedCertificateValue, ViewError> {
-//         self.storage_client()
-//             .await
-//             .read_hashed_certificate_value(hash)
-//             .await
-//     }
+    /// Sends money to a chain.
+    /// Do not check balance. (This may block the client)
+    /// Do not confirm the transaction.
+    pub async fn transfer_to_account_unsafe_unconfirmed(
+        &self,
+        owner: Option<Owner>,
+        amount: Amount,
+        account: Account,
+        user_data: UserData,
+    ) -> Result<ClientOutcome<Certificate>, Error> {
+        self.execute_operation(Operation::System(SystemOperation::Transfer {
+            owner,
+            recipient: Recipient::Account(account),
+            amount,
+            user_data,
+        }))
+            .await
+    }
 
-//     pub async fn read_hashed_certificate_values_downward(
-//         &self,
-//         from: CryptoHash,
-//         limit: u32,
-//     ) -> Result<Vec<HashedCertificateValue>, ViewError> {
-//         self.storage_client()
-//             .await
-//             .read_hashed_certificate_values_downward(from, limit)
-//             .await
-//     }
+    pub async fn read_hashed_certificate_value(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<HashedCertificateValue, ViewError> {
+        self.storage_client()
+            .await
+            .read_hashed_certificate_value(hash)
+            .await
+    }
+
+    pub async fn read_hashed_certificate_values_downward(
+        &self,
+        from: CryptoHash,
+        limit: u32,
+    ) -> Result<Vec<HashedCertificateValue>, ViewError> {
+        self.storage_client()
+            .await
+            .read_hashed_certificate_values_downward(from, limit)
+            .await
+    }
 
 //     ///// Wraps this chain client into an `Arc<Mutex<_>>`.
 //     // pub fn into_arc(self) -> ArcChainClient<P, S> {
@@ -2241,30 +2228,6 @@ enum ExecuteBlockOutcome {
     /// or whenever the round or block height changes.
     WaitForTimeout(RoundTimeout),
 }
-
-// /// A chain client in an `Arc<Mutex<_>>`, so it can be used by different tasks and threads.
-// #[derive(Debug)]
-// pub struct ArcChainClient<P, S>(pub Arc<Mutex<ChainClient<P, S>>>);
-
-// impl<P, S> Deref for ArcChainClient<P, S> {
-//     type Target = Arc<Mutex<ChainClient<P, S>>>;
-
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
-
-// impl<P, S> Clone for ArcChainClient<P, S> {
-//     fn clone(&self) -> Self {
-//         Self(self.0.clone())
-//     }
-// }
-
-// impl<P, S> ArcChainClient<P, S> {
-//     pub fn new(client: ChainClient<P, S>) -> Self {
-//         Self(Arc::new(Mutex::new(client)))
-//     }
-// }
 
 // impl<P, S> ArcChainClient<P, S>
 // where
