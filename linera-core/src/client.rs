@@ -911,22 +911,29 @@ where
         let mut new_tracker = tracker;
         for entry in response.info.requested_received_log {
             let query = ChainInfoQuery::new(entry.chain_id)
-                .with_sent_certificates_in_range(BlockHeightRange::single(entry.height));
+                .with_sent_certificate_hashes_in_range(BlockHeightRange::single(entry.height));
             let local_response = node_client
                 .handle_chain_info_query(query.clone())
                 .await
                 .map_err(|error| NodeError::LocalNodeQuery {
                     error: error.to_string(),
                 })?;
-            if !local_response.info.requested_sent_certificates.is_empty() {
+            if !local_response
+                .info
+                .requested_sent_certificate_hashes
+                .is_empty()
+            {
                 new_tracker += 1;
                 continue;
             }
 
             let mut response = node.handle_chain_info_query(query).await?;
-            let Some(certificate) = response.info.requested_sent_certificates.pop() else {
+            let Some(certificate_hash) = response.info.requested_sent_certificate_hashes.pop()
+            else {
                 break;
             };
+
+            let certificate = node.download_certificate(certificate_hash).await?;
             let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value()
             else {
                 return Err(NodeError::InvalidChainInfoResponse);

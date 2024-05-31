@@ -704,7 +704,7 @@ where
         target_count: usize,
     ) -> Option<Certificate> {
         let query =
-            ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(BlockHeightRange {
+            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(BlockHeightRange {
                 start: block_height,
                 limit: Some(1),
             });
@@ -714,17 +714,19 @@ where
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
                 if response.check(validator.name).is_ok() {
                     let ChainInfo {
-                        mut requested_sent_certificates,
+                        mut requested_sent_certificate_hashes,
                         ..
                     } = *response.info;
-                    if let Some(cert) = requested_sent_certificates.pop() {
-                        if cert.value().is_confirmed()
-                            && cert.value().chain_id() == chain_id
-                            && cert.value().height() == block_height
-                        {
-                            cert.check(&self.initial_committee).unwrap();
-                            count += 1;
-                            certificate = Some(cert);
+                    if let Some(cert_hash) = requested_sent_certificate_hashes.pop() {
+                        if let Ok(cert) = validator.download_certificate(cert_hash).await {
+                            if cert.value().is_confirmed()
+                                && cert.value().chain_id() == chain_id
+                                && cert.value().height() == block_height
+                            {
+                                cert.check(&self.initial_committee).unwrap();
+                                count += 1;
+                                certificate = Some(cert);
+                            }
                         }
                     }
                 }
