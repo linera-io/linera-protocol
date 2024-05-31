@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, io, net::ToSocketAddrs, sync::Arc};
+use std::{collections::HashMap, io, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{
@@ -12,7 +12,7 @@ use futures::{
 };
 use serde::{Deserialize, Serialize};
 use tokio::{
-    net::{TcpListener, TcpStream, UdpSocket},
+    net::{lookup_host, TcpListener, TcpStream, ToSocketAddrs, UdpSocket},
     sync::Mutex,
 };
 use tokio_util::{codec::Framed, udp::UdpFramed};
@@ -111,9 +111,12 @@ impl<T> Transport for T where
 
 impl TransportProtocol {
     /// Creates a transport for this protocol.
-    pub async fn connect(self, address: String) -> Result<impl Transport, std::io::Error> {
-        let mut addresses = address
-            .to_socket_addrs()
+    pub async fn connect(
+        self,
+        address: impl ToSocketAddrs,
+    ) -> Result<impl Transport, std::io::Error> {
+        let mut addresses = lookup_host(address)
+            .await
             .expect("Invalid address to connect to");
         let address = addresses
             .next()
@@ -152,7 +155,7 @@ impl TransportProtocol {
     /// Runs a server for this protocol and the given message handler.
     pub async fn spawn_server<S>(
         self,
-        address: &str,
+        address: impl ToSocketAddrs,
         state: S,
     ) -> Result<ServerHandle, std::io::Error>
     where
@@ -161,7 +164,7 @@ impl TransportProtocol {
         let (abort, registration) = AbortHandle::new_pair();
         let handle = match self {
             Self::Udp => {
-                let socket = UdpSocket::bind(&address).await?;
+                let socket = UdpSocket::bind(address).await?;
                 tokio::spawn(Self::run_udp_server(socket, state, registration))
             }
             Self::Tcp => {
