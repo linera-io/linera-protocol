@@ -17,6 +17,8 @@ use linera_rpc::{
     },
     grpc, simple,
 };
+#[cfg(with_metrics)]
+use linera_service::prometheus_server;
 use linera_service::{
     config::{
         CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
@@ -28,8 +30,6 @@ use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde::Deserialize;
 use tracing::{error, info};
-#[cfg(with_metrics)]
-use {linera_service::prometheus_server, std::net::SocketAddr};
 
 struct ServerContext {
     server_config: ValidatorServerConfig,
@@ -160,10 +160,7 @@ impl ServerContext {
 
     #[cfg(with_metrics)]
     fn start_metrics(host: &str, port: u16) {
-        match format!("{}:{}", host, port).parse::<SocketAddr>() {
-            Err(err) => panic!("Invalid metrics address for {host}:{port}: {err}"),
-            Ok(address) => prometheus_server::start_metrics(address),
-        }
+        prometheus_server::start_metrics((host.to_owned(), port));
     }
 
     fn get_listen_address(&self) -> String {

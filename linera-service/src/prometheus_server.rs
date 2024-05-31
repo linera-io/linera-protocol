@@ -1,12 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
+use std::fmt::Debug;
 
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
+use tokio::net::ToSocketAddrs;
 use tracing::info;
 
-pub fn start_metrics(address: SocketAddr) {
+pub fn start_metrics(address: impl ToSocketAddrs + Debug + Send + 'static) {
     info!("Starting to serve metrics on {:?}", address);
     let prometheus_router = Router::new().route("/metrics", get(serve_metrics));
 
