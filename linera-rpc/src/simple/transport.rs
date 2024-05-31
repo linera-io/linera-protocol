@@ -155,7 +155,7 @@ impl TransportProtocol {
     /// Runs a server for this protocol and the given message handler.
     pub async fn spawn_server<S>(
         self,
-        address: &str,
+        address: impl ToSocketAddrs,
         state: S,
     ) -> Result<ServerHandle, std::io::Error>
     where
@@ -164,7 +164,7 @@ impl TransportProtocol {
         let (abort, registration) = AbortHandle::new_pair();
         let handle = match self {
             Self::Udp => {
-                let socket = UdpSocket::bind(&address).await?;
+                let socket = UdpSocket::bind(address).await?;
                 tokio::spawn(Self::run_udp_server(socket, state, registration))
             }
             Self::Tcp => {
