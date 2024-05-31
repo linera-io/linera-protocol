@@ -139,7 +139,7 @@ where
             "Listening to {:?} traffic on {}:{}",
             self.network.protocol, self.host, self.port
         );
-        let address = format!("{}:{}", self.host, self.port);
+        let address = (self.host.clone(), self.port);
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(self.cross_chain_config.queue_size);
@@ -161,7 +161,7 @@ where
             cross_chain_sender,
         };
         // Launch server for the appropriate protocol.
-        protocol.spawn_server(&address, state).await
+        protocol.spawn_server(address, state).await
     }
 }
 
