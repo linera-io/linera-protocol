@@ -173,6 +173,16 @@ where
         })
         .await
     }
+
+    async fn download_certificates(
+        &mut self,
+        hashes: Vec<CryptoHash>,
+    ) -> Result<Vec<Certificate>, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_download_certificates(hashes, sender)
+        })
+        .await
+    }
 }
 
 impl<S> LocalValidatorClient<S>
@@ -369,6 +379,23 @@ where
             .map(Into::into)
             .map_err(Into::into);
         sender.send(certificate)
+    }
+
+    async fn do_download_certificates(
+        self,
+        hashes: Vec<CryptoHash>,
+        sender: oneshot::Sender<Result<Vec<Certificate>, NodeError>>,
+    ) -> Result<(), Result<Vec<Certificate>, NodeError>> {
+        let validator = self.client.lock().await;
+        let certificates = validator
+            .state
+            .storage_client()
+            .read_certificates(hashes)
+            .await
+            .map(Into::into)
+            .map_err(Into::into);
+
+        sender.send(certificates)
     }
 }
 

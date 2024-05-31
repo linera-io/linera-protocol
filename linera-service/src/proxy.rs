@@ -290,6 +290,9 @@ where
                     .into_inner()
                     .into(),
             )),
+            DownloadCertificates(hashes) => {
+                Ok(Some(self.storage.read_certificates(*hashes).await?.into()))
+            }
             BlockProposal(_)
             | LiteCertificate(_)
             | Certificate(_)
@@ -300,7 +303,8 @@ where
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
             | DownloadBlobResponse(_)
-            | DownloadCertificateValueResponse(_) => {
+            | DownloadCertificateValueResponse(_)
+            | DownloadCertificatesResponse(_) => {
                 Err(anyhow::Error::from(NodeError::UnexpectedMessage))
             }
         }

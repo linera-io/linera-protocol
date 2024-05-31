@@ -87,6 +87,13 @@ impl ValidatorNode for DummyValidatorNode {
     ) -> Result<CertificateValue, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
+
+    async fn download_certificates(
+        &mut self,
+        _: Vec<CryptoHash>,
+    ) -> Result<Vec<Certificate>, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
 }
 
 struct DummyValidatorNodeProvider;

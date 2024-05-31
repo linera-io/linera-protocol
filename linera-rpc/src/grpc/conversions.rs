@@ -359,6 +359,18 @@ impl TryFrom<api::Certificate> for Certificate {
     }
 }
 
+impl TryFrom<api::Certificates> for Vec<Certificate> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certs: api::Certificates) -> Result<Self, Self::Error> {
+        let mut certificates = Vec::new();
+        for cert in certs.certificates {
+            certificates.push(cert.try_into()?);
+        }
+        Ok(certificates)
+    }
+}
+
 impl TryFrom<Certificate> for api::Certificate {
     type Error = GrpcProtoConversionError;
 
@@ -368,6 +380,18 @@ impl TryFrom<Certificate> for api::Certificate {
             round: bincode::serialize(&certificate.round)?,
             signatures: bincode::serialize(certificate.signatures())?,
         })
+    }
+}
+
+impl TryFrom<Vec<Certificate>> for api::Certificates {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certs: Vec<Certificate>) -> Result<Self, Self::Error> {
+        let mut certificates = Vec::new();
+        for cert in certs {
+            certificates.push(cert.try_into()?);
+        }
+        Ok(Self { certificates })
     }
 }
 
@@ -578,6 +602,19 @@ impl TryFrom<api::CryptoHash> for CryptoHash {
     }
 }
 
+impl TryFrom<api::CryptoHashes> for Vec<CryptoHash> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(hashes: api::CryptoHashes) -> Result<Self, Self::Error> {
+        let mut crypto_hashes = Vec::new();
+        for hash in hashes.hashes {
+            crypto_hashes.push(hash.try_into()?);
+        }
+
+        Ok(crypto_hashes)
+    }
+}
+
 impl From<Blob> for api::Blob {
     fn from(blob: Blob) -> Self {
         Self { bytes: blob.bytes }
@@ -669,6 +706,14 @@ impl From<CryptoHash> for api::CryptoHash {
     fn from(hash: CryptoHash) -> Self {
         Self {
             bytes: hash.as_bytes().to_vec(),
+        }
+    }
+}
+
+impl From<Vec<CryptoHash>> for api::CryptoHashes {
+    fn from(hashes: Vec<CryptoHash>) -> Self {
+        Self {
+            hashes: hashes.into_iter().map(|hash| hash.into()).collect(),
         }
     }
 }

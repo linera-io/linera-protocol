@@ -57,6 +57,9 @@ service ValidatorNode {
 
   // Downloads a certificate value.
   rpc DownloadCertificateValue(CryptoHash) returns (CertificateValue);
+
+  // Downloads certificates.
+  rpc DownloadCertificates(CryptoHashes) returns (Certificates);
 }
 
 // Information about the Linera crate version the validator is running
@@ -227,6 +230,10 @@ message Certificate {
   bytes signatures = 3;
 }
 
+message Certificates {
+  repeated Certificate certificates = 1;
+}
+
 message CertificateValue {
   oneof inner {
     ValidatedBlock validated_block = 1;
@@ -259,6 +266,10 @@ message PublicKey {
 
 message CryptoHash {
   bytes bytes = 1;
+}
+
+message CryptoHashes {
+  repeated CryptoHash hashes = 1;
 }
 
 message Owner {
