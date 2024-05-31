@@ -9,7 +9,7 @@ use linera_base::{
     data_types::{Blob, HashedBlob},
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types::{self, CertificateValue, HashedCertificateValue};
+use linera_chain::data_types::{self, Certificate, CertificateValue, HashedCertificateValue};
 #[cfg(web)]
 use linera_core::node::{
     LocalNotificationStream as NotificationStream, LocalValidatorNode as ValidatorNode,
@@ -165,7 +165,7 @@ impl ValidatorNode for GrpcClient {
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn handle_certificate(
         &mut self,
-        certificate: data_types::Certificate,
+        certificate: Certificate,
         hashed_certificate_values: Vec<data_types::HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
         delivery: CrossChainMessageDelivery,
@@ -288,6 +288,16 @@ impl ValidatorNode for GrpcClient {
             .into_inner()
             .try_into()?;
         Ok(certificate_value.with_hash_checked(hash)?)
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn download_certificate(&mut self, hash: CryptoHash) -> Result<Certificate, NodeError> {
+        Ok(self
+            .client
+            .download_certificate(<CryptoHash as Into<api::CryptoHash>>::into(hash))
+            .await?
+            .into_inner()
+            .try_into()?)
     }
 }
 

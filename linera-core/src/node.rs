@@ -87,6 +87,8 @@ pub trait LocalValidatorNode {
         &mut self,
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, NodeError>;
+
+    async fn download_certificate(&mut self, hash: CryptoHash) -> Result<Certificate, NodeError>;
 }
 
 /// Turn an address into a validator node.

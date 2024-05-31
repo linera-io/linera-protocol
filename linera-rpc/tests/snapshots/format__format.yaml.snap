@@ -766,32 +766,40 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: CryptoHash
     6:
-      VersionInfoQuery: UNIT
+      DownloadCertificate:
+        NEWTYPE:
+          TYPENAME: CryptoHash
     7:
+      VersionInfoQuery: UNIT
+    8:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    8:
+    9:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    9:
+    10:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    10:
+    11:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    11:
+    12:
       DownloadBlobResponse:
         NEWTYPE:
           TYPENAME: Blob
-    12:
+    13:
       DownloadCertificateValueResponse:
         NEWTYPE:
           TYPENAME: CertificateValue
-    13:
+    14:
+      DownloadCertificateResponse:
+        NEWTYPE:
+          TYPENAME: Certificate
+    15:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest

@@ -168,6 +168,13 @@ where
         })
         .await
     }
+
+    async fn download_certificate(&mut self, hash: CryptoHash) -> Result<Certificate, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_download_certificate(hash, sender)
+        })
+        .await
+    }
 }
 
 impl<S> LocalValidatorClient<S>
@@ -363,6 +370,23 @@ where
             .await
             .map_err(Into::into);
         sender.send(certificate_value)
+    }
+
+    async fn do_download_certificate(
+        self,
+        hash: CryptoHash,
+        sender: oneshot::Sender<Result<Certificate, NodeError>>,
+    ) -> Result<(), Result<Certificate, NodeError>> {
+        let validator = self.client.lock().await;
+        let certificate = validator
+            .state
+            .storage_client()
+            .read_certificate(hash)
+            .await
+            .map(Into::into)
+            .map_err(Into::into);
+
+        sender.send(certificate)
     }
 }
 
