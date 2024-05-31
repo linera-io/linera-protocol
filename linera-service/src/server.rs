@@ -114,9 +114,6 @@ impl ServerContext {
     {
         let mut handles = Vec::new();
         for (state, shard_id, shard) in states {
-            let cross_chain_config = self.cross_chain_config.clone();
-            let notification_config = self.notification_config.clone();
-
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
                 Self::start_metrics(listen_address, port);
@@ -129,8 +126,8 @@ impl ServerContext {
                     state,
                     shard_id,
                     self.server_config.internal_network.clone(),
-                    cross_chain_config,
-                    notification_config,
+                    self.cross_chain_config.clone(),
+                    self.notification_config.clone(),
                 );
                 if let Err(err) = spawned_server.join().await {
                     error!("Server ended with an error: {}", err);
