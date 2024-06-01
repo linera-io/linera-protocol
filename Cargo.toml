@@ -36,8 +36,6 @@ edition = "2021"
 
 [workspace.dependencies]
 heck = "0.4.1"
-alloy = { git = "https://github.com/alloy-rs/alloy", rev = "aed6de2c4a0e901c4aa71e4b67c2ed628285d270", default-features = false }
-alloy-primitives = "0.7.2"
 anyhow = "1.0.80"
 assert_matches = "1.5.0"
 async-graphql = "=7.0.2"
@@ -87,6 +85,7 @@ http = "1.1.0"
 glob = "0.3.1"
 indexed_db_futures = "0.4.1"
 insta = "1.36.1"
+linera-alloy = { version = "0.1.0", default-features = false }
 log = "0.4.21"
 lru = "0.12.3"
 linked-hash-map = "0.5.6"

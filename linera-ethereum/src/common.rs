@@ -4,12 +4,11 @@
 use std::num::ParseIntError;
 
 #[cfg(not(target_arch = "wasm32"))]
-use alloy::rpc::json_rpc;
-use alloy::{
-    primitives::{Address, U256},
+use linera_alloy::rpc::json_rpc;
+use linera_alloy::{
+    primitives::{Address, B256, U256},
     rpc::types::eth::Log,
 };
-use alloy_primitives::B256;
 use num_bigint::{BigInt, BigUint};
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -62,7 +61,7 @@ pub enum EthereumServiceError {
 
     /// Hex parsing error
     #[error(transparent)]
-    FromHexError(#[from] alloy_primitives::hex::FromHexError),
+    FromHexError(#[from] linera_alloy::primitives::hex::FromHexError),
 
     /// `serde_json` error
     #[error(transparent)]
@@ -71,7 +70,7 @@ pub enum EthereumServiceError {
     /// RPC error
     #[error(transparent)]
     #[cfg(not(target_arch = "wasm32"))]
-    RpcError(#[from] json_rpc::RpcError<alloy::transports::TransportErrorKind>),
+    RpcError(#[from] json_rpc::RpcError<linera_alloy::transports::TransportErrorKind>),
 
     /// URL parsing error
     #[error(transparent)]
@@ -81,7 +80,7 @@ pub enum EthereumServiceError {
     /// Alloy Reqwest error
     #[error(transparent)]
     #[cfg(not(target_arch = "wasm32"))]
-    AlloyReqwestError(#[from] alloy::transports::http::reqwest::Error),
+    AlloyReqwestError(#[from] linera_alloy::transports::http::reqwest::Error),
 }
 
 /// A single primitive data type. This is used for example for the

@@ -3,15 +3,14 @@
 
 use std::fmt::Debug;
 
-use alloy::{
-    primitives::{Address, U256},
+use async_trait::async_trait;
+use linera_alloy::{
+    primitives::{Address, Bytes, U256, U64},
     rpc::types::eth::{
         request::{TransactionInput, TransactionRequest},
         BlockId, BlockNumberOrTag, Filter, Log,
     },
 };
-use alloy_primitives::{Bytes, U64};
-use async_trait::async_trait;
 use linera_base::ensure;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::value::RawValue;

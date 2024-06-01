@@ -17,7 +17,6 @@ members = [
 ]
 
 [workspace.dependencies]
-alloy = { git = "https://github.com/alloy-rs/alloy", rev = "b79db21734cffddc11753fe62ba571565c896f42", default-features = false }
 assert_matches = "1.5.0"
 async-graphql = { version = "=7.0.2", default-features = false }
 base64 = "0.22.0"
@@ -28,6 +27,7 @@ futures = "0.3.24"
 futures-util = "0.3.26"
 getrandom = { version = "0.2.12", default-features = false, features = ["custom"] }
 hex = "0.4.3"
+linera-alloy = { version = "0.1.0", default-features = false }
 linera-sdk = { path = "../linera-sdk" }
 linera-views = { path = "../linera-views", default-features = false }
 log = "0.4.20"
