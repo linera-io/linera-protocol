@@ -94,15 +94,8 @@ impl ServerContext {
                     shard_id,
                     cross_chain_config,
                 );
-                let spawned_server = match server.spawn().await {
-                    Ok(server) => server,
-                    Err(err) => {
-                        error!("Failed to start server: {}", err);
-                        return;
-                    }
-                };
-                if let Err(err) = spawned_server.join().await {
-                    error!("Server ended with an error: {}", err);
+                if let Err(err) = server.spawn().join().await {
+                    error!("Error while running server: {}", err);
                 }
             });
         }

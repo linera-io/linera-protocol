@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{io, time::Duration};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use futures::{channel::mpsc, stream::StreamExt};
@@ -134,7 +134,7 @@ where
         }
     }
 
-    pub async fn spawn(self) -> Result<ServerHandle, io::Error> {
+    pub fn spawn(self) -> ServerHandle {
         info!(
             "Listening to {:?} traffic on {}:{}",
             self.network.protocol, self.host, self.port
@@ -161,7 +161,7 @@ where
             cross_chain_sender,
         };
         // Launch server for the appropriate protocol.
-        protocol.spawn_server(address, state).await
+        protocol.spawn_server(address, state)
     }
 }
 
