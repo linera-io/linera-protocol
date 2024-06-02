@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-
+use std::ops::DerefMut;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
 use linera_base::{
@@ -47,9 +47,8 @@ use crate::{
 #[cfg(with_testing)]
 trait LocalServerInternal: Sized {
     type Config;
-    type Input;
 
-    async fn new_test(input: Self::Input) -> Result<Self>;
+    async fn new_test() -> Result<Self>;
 
     fn get_config(&self) -> Self::Config;
 }
@@ -63,9 +62,8 @@ struct LocalServerServiceInternal {
 #[cfg(with_testing)]
 impl LocalServerInternal for LocalServerServiceInternal {
     type Config = String;
-    type Input = ();
 
-    async fn new_test(_input: Self::Input) -> Result<Self> {
+    async fn new_test() -> Result<Self> {
         let service_endpoint = get_free_endpoint().await.unwrap();
         let binary = get_service_storage_binary().await?.display().to_string();
         let service = StorageService::new(&service_endpoint, binary);
@@ -90,9 +88,8 @@ struct LocalServerRocksDbInternal {
 #[cfg(all(feature = "rocksdb", with_testing))]
 impl LocalServerInternal for LocalServerRocksDbInternal {
     type Config = PathBuf;
-    type Input = ();
 
-    async fn new_test(_input: Self::Input) -> Result<Self> {
+    async fn new_test() -> Result<Self> {
         let (rocks_db_path, temp_dir) = create_rocks_db_test_path();
         let _temp_dir = Some(temp_dir);
         Ok(Self {
@@ -132,10 +129,10 @@ where
         }
     }
 
-    pub async fn get_config(&self, input: L::Input) -> L::Config {
+    pub async fn get_config(&self) -> L::Config {
         let mut server = self.internal_server.write().await;
         if server.is_none() {
-            *server = Some(L::new_test(input).await.expect("local server"));
+            *server = Some(L::new_test().await.expect("local server"));
         }
         let Some(internal_server) = server.deref() else {
             unreachable!();
@@ -157,13 +154,13 @@ static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> =
 async fn make_testing_config(database: Database) -> StorageConfig {
     match database {
         Database::Service => {
-            let endpoint = LOCAL_SERVER_SERVICE.get_config(()).await;
+            let endpoint = LOCAL_SERVER_SERVICE.get_config().await;
             StorageConfig::Service { endpoint }
         }
         Database::RocksDb => {
             #[cfg(feature = "rocksdb")]
             {
-                let path = LOCAL_SERVER_ROCKS_DB.get_config(()).await;
+                let path = LOCAL_SERVER_ROCKS_DB.get_config().await;
                 StorageConfig::RocksDb { path }
             }
             #[cfg(not(feature = "rocksdb"))]
@@ -741,16 +738,10 @@ impl LocalNet {
     }
 }
 
-struct SharedLocalNetConfig {
-    local_net_config: LocalNetConfig,
-}
+//
+// The Shared stuff
+//
 
-impl SharedLocalNetConfig {
-    pub fn new_test(database: Database, network: Network) -> Self {
-        let local_net_config = LocalNetConfig::new_test(database, network);
-        Self { local_net_config }
-    }
-}
 
 /// The number of simultaneous sets of validators
 const N_SIMULTANEOUS_RUNS: usize = 2;
@@ -769,52 +760,85 @@ impl ValidatorNumber {
         Self { semaphore }
     }
 
-    pub async fn get_guard(&self) -> Option<ValidatorNumberGuard> {
+    pub async fn get_guard(&self) -> ValidatorNumberGuard {
         let _semaphore_guard = self.semaphore.clone().acquire_owned().await.unwrap();
-        Some(ValidatorNumberGuard { _semaphore_guard })
+        ValidatorNumberGuard { _semaphore_guard }
     }
 }
 
 static VALIDATOR_INDEX: Lazy<ValidatorNumber> = Lazy::new(|| ValidatorNumber::new(N_SIMULTANEOUS_RUNS));
 
-struct NetClient {
-    local_net: LocalNet,
-    client: ClientWrapper,
+
+struct SharedLocalNetConfig {
+    local_net_config: LocalNetConfig,
 }
 
-/*
-impl Drop for NetClient {
-    fn drop(&mut self) {
-        tokio::task::spawn(async move {
-            self.local_net.terminate().await.expect("successful termination");
-        });
+impl SharedLocalNetConfig {
+    pub fn new_test(database: Database, network: Network) -> Self {
+        let local_net_config = LocalNetConfig::new_test(database, network);
+        Self { local_net_config }
     }
 }
-*/
 
-static SHARED_LOCAL_NET: Lazy<Option<NetClient>> = Lazy::new(|| None);
+#[async_trait]
+impl LineraNetConfig for SharedLocalNetConfig {
+    type Net = SharedLocalNet;
 
-struct SharedLocalNet {
+    async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
+        let _guard = VALIDATOR_INDEX.get_guard().await;
+        let mut net_client = SHARED_LOCAL_NET.write().await;
+        if net_client.is_none() {
+            let (local_net, client) = self.local_net_config.instantiate().await?;
+            *net_client = Some(NetClientInternal { local_net, _client: client });
+        }
+        let Some(NetClientInternal { local_net, _client }) = net_client.deref_mut() else {
+            unreachable!();
+        };
+        let client = local_net.make_client().await;
+        let shared_local_net = SharedLocalNet { _guard };
+        Ok((shared_local_net, client))
+    }
+
+    async fn policy(&self) -> ResourceControlPolicy {
+        self.local_net_config.policy.clone()
+    }
 }
 
-/*
+struct NetClientInternal {
+    local_net: LocalNet,
+    _client: ClientWrapper,
+}
+
+
+
+static SHARED_LOCAL_NET: Lazy<RwLock<Option<NetClientInternal>>> = Lazy::new(|| RwLock::new(None));
+
+
+struct SharedLocalNet {
+    _guard: ValidatorNumberGuard,
+}
+
 #[async_trait]
 impl LineraNet for SharedLocalNet {
-    
     async fn ensure_is_running(&mut self) -> Result<()> {
-        SHARED_LOCAL_NET.
-        for validator in self.running_validators.values_mut() {
-            validator.ensure_is_running().context("in local network")?;
-        }
+        let mut net_client = SHARED_LOCAL_NET.write().await;
+        let Some(NetClientInternal { local_net, _client}) = net_client.deref_mut() else {
+            unreachable!();
+        };
+        local_net.ensure_is_running().await?;
         Ok(())
     }
 
     async fn make_client(&mut self) -> ClientWrapper {
-        
+        let mut net_client = SHARED_LOCAL_NET.write().await;
+        let Some(NetClientInternal { local_net, _client }) = net_client.deref_mut() else {
+            unreachable!();
+        };
+        local_net.make_client().await
     }
 
     async fn terminate(&mut self) -> Result<()> {
         Ok(())
     }
 }
-*/
+
