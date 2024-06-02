@@ -47,8 +47,9 @@ use crate::{
 #[cfg(with_testing)]
 trait LocalServerInternal: Sized {
     type Config;
+    type Input;
 
-    async fn new_test() -> Result<Self>;
+    async fn new_test(input: Self::Input) -> Result<Self>;
 
     fn get_config(&self) -> Self::Config;
 }
@@ -62,8 +63,9 @@ struct LocalServerServiceInternal {
 #[cfg(with_testing)]
 impl LocalServerInternal for LocalServerServiceInternal {
     type Config = String;
+    type Input = ();
 
-    async fn new_test() -> Result<Self> {
+    async fn new_test(_input: Self::Input) -> Result<Self> {
         let service_endpoint = get_free_endpoint().await.unwrap();
         let binary = get_service_storage_binary().await?.display().to_string();
         let service = StorageService::new(&service_endpoint, binary);
@@ -88,8 +90,9 @@ struct LocalServerRocksDbInternal {
 #[cfg(all(feature = "rocksdb", with_testing))]
 impl LocalServerInternal for LocalServerRocksDbInternal {
     type Config = PathBuf;
+    type Input = ();
 
-    async fn new_test() -> Result<Self> {
+    async fn new_test(_input: Self::Input) -> Result<Self> {
         let (rocks_db_path, temp_dir) = create_rocks_db_test_path();
         let _temp_dir = Some(temp_dir);
         Ok(Self {
@@ -129,10 +132,10 @@ where
         }
     }
 
-    pub async fn get_config(&self) -> L::Config {
+    pub async fn get_config(&self, input: L::Input) -> L::Config {
         let mut server = self.internal_server.write().await;
         if server.is_none() {
-            *server = Some(L::new_test().await.expect("local server"));
+            *server = Some(L::new_test(input).await.expect("local server"));
         }
         let Some(internal_server) = server.deref() else {
             unreachable!();
@@ -154,13 +157,13 @@ static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> =
 async fn make_testing_config(database: Database) -> StorageConfig {
     match database {
         Database::Service => {
-            let endpoint = LOCAL_SERVER_SERVICE.get_config().await;
+            let endpoint = LOCAL_SERVER_SERVICE.get_config(()).await;
             StorageConfig::Service { endpoint }
         }
         Database::RocksDb => {
             #[cfg(feature = "rocksdb")]
             {
-                let path = LOCAL_SERVER_ROCKS_DB.get_config().await;
+                let path = LOCAL_SERVER_ROCKS_DB.get_config(()).await;
                 StorageConfig::RocksDb { path }
             }
             #[cfg(not(feature = "rocksdb"))]
@@ -774,5 +777,44 @@ impl ValidatorNumber {
 
 static VALIDATOR_INDEX: Lazy<ValidatorNumber> = Lazy::new(|| ValidatorNumber::new(N_SIMULTANEOUS_RUNS));
 
+struct NetClient {
+    local_net: LocalNet,
+    client: ClientWrapper,
+}
+
+/*
+impl Drop for NetClient {
+    fn drop(&mut self) {
+        tokio::task::spawn(async move {
+            self.local_net.terminate().await.expect("successful termination");
+        });
+    }
+}
+*/
+
+static SHARED_LOCAL_NET: Lazy<Option<NetClient>> = Lazy::new(|| None);
+
 struct SharedLocalNet {
 }
+
+/*
+#[async_trait]
+impl LineraNet for SharedLocalNet {
+    
+    async fn ensure_is_running(&mut self) -> Result<()> {
+        SHARED_LOCAL_NET.
+        for validator in self.running_validators.values_mut() {
+            validator.ensure_is_running().context("in local network")?;
+        }
+        Ok(())
+    }
+
+    async fn make_client(&mut self) -> ClientWrapper {
+        
+    }
+
+    async fn terminate(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
+*/
