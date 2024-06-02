@@ -21,7 +21,10 @@ use linera_views::rocks_db::create_rocks_db_test_path;
 #[cfg(all(feature = "scylladb", with_testing))]
 use linera_views::scylla_db::create_scylla_db_test_uri;
 use tempfile::{tempdir, TempDir};
-use tokio::process::{Child, Command};
+use tokio::{
+    process::{Child, Command},
+    sync::{OwnedSemaphorePermit, Semaphore},
+};
 use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
@@ -733,4 +736,43 @@ impl LocalNet {
             .add_server(server);
         Ok(())
     }
+}
+
+struct SharedLocalNetConfig {
+    local_net_config: LocalNetConfig,
+}
+
+impl SharedLocalNetConfig {
+    pub fn new_test(database: Database, network: Network) -> Self {
+        let local_net_config = LocalNetConfig::new_test(database, network);
+        Self { local_net_config }
+    }
+}
+
+/// The number of simultaneous sets of validators
+const N_SIMULTANEOUS_RUNS: usize = 2;
+
+struct ValidatorNumber {
+    semaphore: Arc<Semaphore>,
+}
+
+struct ValidatorNumberGuard {
+    _semaphore_guard: OwnedSemaphorePermit,
+}
+
+impl ValidatorNumber {
+    pub fn new(n_ports: usize) -> Self {
+        let semaphore = Arc::new(Semaphore::new(n_ports));
+        Self { semaphore }
+    }
+
+    pub async fn get_guard(&self) -> Option<ValidatorNumberGuard> {
+        let _semaphore_guard = self.semaphore.clone().acquire_owned().await.unwrap();
+        Some(ValidatorNumberGuard { _semaphore_guard })
+    }
+}
+
+static VALIDATOR_INDEX: Lazy<ValidatorNumber> = Lazy::new(|| ValidatorNumber::new(N_SIMULTANEOUS_RUNS));
+
+struct SharedLocalNet {
 }
