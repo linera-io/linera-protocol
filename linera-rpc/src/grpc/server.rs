@@ -110,12 +110,12 @@ pub struct GrpcServer<S> {
 
 pub struct GrpcServerHandle {
     _complete: Sender<()>,
-    handle: JoinHandle<Result<(), tonic::transport::Error>>,
+    handle: JoinHandle<Result<(), GrpcError>>,
 }
 
 impl GrpcServerHandle {
     pub async fn join(self) -> Result<(), GrpcError> {
-        Ok(self.handle.await??)
+        self.handle.await?
     }
 }
 
@@ -185,13 +185,11 @@ where
         internal_network: ValidatorInternalNetworkConfig,
         cross_chain_config: CrossChainConfig,
         notification_config: NotificationConfig,
-    ) -> Result<GrpcServerHandle, GrpcError> {
+    ) -> GrpcServerHandle {
         info!(
             "spawning gRPC server on {}:{} for shard {}",
             host, port, shard_id
         );
-
-        let server_address = SocketAddr::from((IpAddr::from_str(&host)?, port));
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(cross_chain_config.queue_size);
@@ -245,11 +243,13 @@ where
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
 
-        let reflection_service = tonic_reflection::server::Builder::configure()
-            .register_encoded_file_descriptor_set(crate::FILE_DESCRIPTOR_SET)
-            .build()?;
-
         let handle = tokio::spawn(async move {
+            let server_address = SocketAddr::from((IpAddr::from_str(&host)?, port));
+
+            let reflection_service = tonic_reflection::server::Builder::configure()
+                .register_encoded_file_descriptor_set(crate::FILE_DESCRIPTOR_SET)
+                .build()?;
+
             health_reporter
                 .set_serving::<ValidatorWorkerServer<Self>>()
                 .await;
@@ -264,13 +264,15 @@ where
                 .add_service(reflection_service)
                 .add_service(worker_node)
                 .serve_with_shutdown(server_address, receiver.map(|_| ()))
-                .await
+                .await?;
+
+            Ok(())
         });
 
-        Ok(GrpcServerHandle {
+        GrpcServerHandle {
             _complete: complete,
             handle,
-        })
+        }
     }
 
     /// Continuously waits for receiver to receive a notification which is then sent to

@@ -123,7 +123,7 @@ impl ServerContext {
                 if let Some(port) = shard.metrics_port {
                     Self::start_metrics(listen_address, port);
                 }
-                let spawned_server = match grpc::GrpcServer::spawn(
+                let spawned_server = grpc::GrpcServer::spawn(
                     listen_address.to_string(),
                     shard.port,
                     state,
@@ -131,13 +131,7 @@ impl ServerContext {
                     self.server_config.internal_network.clone(),
                     cross_chain_config,
                     notification_config,
-                ) {
-                    Ok(spawned_server) => spawned_server,
-                    Err(err) => {
-                        error!("Failed to start server: {:?}", err);
-                        return;
-                    }
-                };
+                );
                 if let Err(err) = spawned_server.join().await {
                     error!("Server ended with an error: {}", err);
                 }
