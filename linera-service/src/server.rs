@@ -131,9 +131,7 @@ impl ServerContext {
                     self.server_config.internal_network.clone(),
                     cross_chain_config,
                     notification_config,
-                )
-                .await
-                {
+                ) {
                     Ok(spawned_server) => spawned_server,
                     Err(err) => {
                         error!("Failed to start server: {:?}", err);

@@ -177,7 +177,7 @@ where
     ViewError: From<S::ContextError>,
 {
     #[allow(clippy::too_many_arguments)]
-    pub async fn spawn(
+    pub fn spawn(
         host: String,
         port: u16,
         state: WorkerState<S>,
@@ -232,9 +232,6 @@ where
         let (complete, receiver) = futures::channel::oneshot::channel();
 
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
-        health_reporter
-            .set_serving::<ValidatorWorkerServer<Self>>()
-            .await;
 
         let grpc_server = GrpcServer {
             state,
@@ -252,7 +249,11 @@ where
             .register_encoded_file_descriptor_set(crate::FILE_DESCRIPTOR_SET)
             .build()?;
 
-        let handle = tokio::spawn(
+        let handle = tokio::spawn(async move {
+            health_reporter
+                .set_serving::<ValidatorWorkerServer<Self>>()
+                .await;
+
             tonic::transport::Server::builder()
                 .layer(
                     ServiceBuilder::new()
@@ -262,8 +263,9 @@ where
                 .add_service(health_service)
                 .add_service(reflection_service)
                 .add_service(worker_node)
-                .serve_with_shutdown(server_address, receiver.map(|_| ())),
-        );
+                .serve_with_shutdown(server_address, receiver.map(|_| ()))
+                .await
+        });
 
         Ok(GrpcServerHandle {
             _complete: complete,
