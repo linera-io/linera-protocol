@@ -28,6 +28,7 @@ use tracing::{info, warn};
 #[cfg(with_testing)]
 use {
     async_lock::RwLock,
+    crate::cli_wrappers::FaucetOption,
     linera_base::sync::Lazy,
     linera_storage_service::child::{get_free_endpoint, StorageService, StorageServiceGuard},
     linera_storage_service::common::get_service_storage_binary,
@@ -794,15 +795,24 @@ impl LineraNetConfig for SharedLocalNetConfig {
         let _guard = VALIDATOR_INDEX.get_guard().await;
         let mut net_client = SHARED_LOCAL_NET.write().await;
         if net_client.0.is_none() {
-            let (local_net, client) = self.local_net_config.instantiate().await?;
-            *net_client = (Some(NetClientInternal { local_net, _client: client }), 1);
+            let (local_net, initial_client) = self.local_net_config.instantiate().await?;
+            *net_client = (Some(NetClientInternal { local_net, initial_client }), 1);
         } else {
             (*net_client).1 += 1;
         }
-        let (Some(NetClientInternal { local_net, _client }), _) = net_client.deref_mut() else {
+        let (Some(NetClientInternal { local_net, initial_client }), _) = net_client.deref_mut() else {
             unreachable!();
         };
         let client = local_net.make_client().await;
+        // The tests assume we've created a genesis config with 10
+        // chains with 10 tokens each.
+        client.wallet_init(&[], FaucetOption::None).await.unwrap();
+        for _ in 0..10 {
+            initial_client
+                .open_and_assign(&client, Amount::from_tokens(10))
+                .await
+                .unwrap();
+        }
         let shared_local_net = SharedLocalNet { _guard };
         Ok((shared_local_net, client))
     }
@@ -815,7 +825,7 @@ impl LineraNetConfig for SharedLocalNetConfig {
 #[cfg(with_testing)]
 struct NetClientInternal {
     local_net: LocalNet,
-    _client: ClientWrapper,
+    initial_client: ClientWrapper,
 }
 
 #[cfg(with_testing)]
@@ -832,16 +842,15 @@ pub struct SharedLocalNet {
 impl LineraNet for SharedLocalNet {
     async fn ensure_is_running(&mut self) -> Result<()> {
         let mut net_client = SHARED_LOCAL_NET.write().await;
-        let (Some(NetClientInternal { local_net, _client}), _) = net_client.deref_mut() else {
+        let (Some(NetClientInternal { local_net, initial_client: _ }), _) = net_client.deref_mut() else {
             unreachable!();
         };
-        local_net.ensure_is_running().await?;
-        Ok(())
+        local_net.ensure_is_running().await
     }
 
     async fn make_client(&mut self) -> ClientWrapper {
         let mut net_client = SHARED_LOCAL_NET.write().await;
-        let (Some(NetClientInternal { local_net, _client }), _) = net_client.deref_mut() else {
+        let (Some(NetClientInternal { local_net, initial_client: _ }), _) = net_client.deref_mut() else {
             unreachable!();
         };
         local_net.make_client().await
