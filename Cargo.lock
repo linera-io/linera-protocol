@@ -2318,7 +2318,7 @@ name = "ethereum-tracker"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "linera-alloy 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f)",
+ "linera-alloy",
  "linera-sdk",
  "serde",
 ]
@@ -3559,25 +3559,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c86062ad4871675f735327e040e48d290fbab18d0579c90ab7b10e3419348a7c"
 dependencies = [
  "linera-alloy-contract",
- "linera-alloy-core 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-core",
  "linera-alloy-json-rpc",
  "linera-alloy-network",
  "linera-alloy-node-bindings",
  "linera-alloy-provider",
- "linera-alloy-rpc-types 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-rpc-types",
  "linera-alloy-signer",
  "linera-alloy-signer-wallet",
  "linera-alloy-transport",
  "linera-alloy-transport-http",
-]
-
-[[package]]
-name = "linera-alloy"
-version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f#40785f5552962c98d36a636e543b378ac787486f"
-dependencies = [
- "linera-alloy-core 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
- "linera-alloy-rpc-types 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f)",
 ]
 
 [[package]]
@@ -3588,22 +3579,9 @@ checksum = "06ec54925c92c736a19e2facb93dad23326d29c006918018ee4eaccbe6af6508"
 dependencies = [
  "alloy-rlp",
  "c-kzg",
- "linera-alloy-eips 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-serde 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde",
-]
-
-[[package]]
-name = "linera-alloy-consensus"
-version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f#40785f5552962c98d36a636e543b378ac787486f"
-dependencies = [
- "alloy-rlp",
- "c-kzg",
- "linera-alloy-eips 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f)",
- "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
- "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f)",
+ "linera-alloy-eips",
+ "linera-alloy-primitives",
+ "linera-alloy-serde",
  "serde",
 ]
 
@@ -3618,10 +3596,10 @@ dependencies = [
  "linera-alloy-dyn-abi",
  "linera-alloy-json-abi",
  "linera-alloy-network",
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-primitives",
  "linera-alloy-provider",
- "linera-alloy-rpc-types 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-sol-types 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-rpc-types",
+ "linera-alloy-sol-types",
  "linera-alloy-transport",
  "thiserror",
 ]
@@ -3634,16 +3612,8 @@ checksum = "73604cc602e6a79f9c2ac18ce52eff932a239a7ffeba6ee34ad907cdcf74fdb6"
 dependencies = [
  "linera-alloy-dyn-abi",
  "linera-alloy-json-abi",
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-sol-types 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "linera-alloy-core"
-version = "0.7.4"
-source = "git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0#a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0"
-dependencies = [
- "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
+ "linera-alloy-primitives",
+ "linera-alloy-sol-types",
 ]
 
 [[package]]
@@ -3655,9 +3625,9 @@ dependencies = [
  "const-hex",
  "itoa",
  "linera-alloy-json-abi",
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-primitives",
  "linera-alloy-sol-type-parser",
- "linera-alloy-sol-types 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-sol-types",
  "serde",
  "serde_json",
  "winnow 0.6.5",
@@ -3671,22 +3641,8 @@ checksum = "0d378c6cb478965b7e3e029e4d9a7951d09122ff3889715c79ce5b7f4877323e"
 dependencies = [
  "alloy-rlp",
  "c-kzg",
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-serde 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "once_cell",
- "serde",
- "sha2 0.10.8",
-]
-
-[[package]]
-name = "linera-alloy-eips"
-version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f#40785f5552962c98d36a636e543b378ac787486f"
-dependencies = [
- "alloy-rlp",
- "c-kzg",
- "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
- "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f)",
+ "linera-alloy-primitives",
+ "linera-alloy-serde",
  "once_cell",
  "serde",
  "sha2 0.10.8",
@@ -3698,19 +3654,8 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e24f1eb7a1b33c582f3b69d920decb94dd91c459aa52639af38c3ce169efab7"
 dependencies = [
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-serde 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "linera-alloy-genesis"
-version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f#40785f5552962c98d36a636e543b378ac787486f"
-dependencies = [
- "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
- "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f)",
+ "linera-alloy-primitives",
+ "linera-alloy-serde",
  "serde",
  "serde_json",
 ]
@@ -3721,7 +3666,7 @@ version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "418cb29fde9774908ed1854c3b449abe50e5c81c1384dad4c7a2286b22018e84"
 dependencies = [
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-primitives",
  "linera-alloy-sol-type-parser",
  "serde",
  "serde_json",
@@ -3733,7 +3678,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5efeb9057fbf066112c99712d409b7b8beefc9fb3e94907f1254c75205c8f766"
 dependencies = [
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-primitives",
  "serde",
  "serde_json",
  "thiserror",
@@ -3749,13 +3694,13 @@ dependencies = [
  "async-trait",
  "auto_impl",
  "futures-utils-wasm",
- "linera-alloy-consensus 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-eips 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-consensus",
+ "linera-alloy-eips",
  "linera-alloy-json-rpc",
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-rpc-types 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-primitives",
+ "linera-alloy-rpc-types",
  "linera-alloy-signer",
- "linera-alloy-sol-types 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-sol-types",
  "thiserror",
 ]
 
@@ -3766,8 +3711,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "035a241611b7405f754ab170634332224fa20dbbecf10aaf5583eca1dfd83ab6"
 dependencies = [
  "k256",
- "linera-alloy-genesis 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-genesis",
+ "linera-alloy-primitives",
  "serde_json",
  "tempfile",
  "thiserror",
@@ -3798,27 +3743,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "linera-alloy-primitives"
-version = "0.7.4"
-source = "git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0#a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0"
-dependencies = [
- "alloy-rlp",
- "bytes",
- "cfg-if",
- "const-hex",
- "derive_more",
- "hex-literal",
- "itoa",
- "k256",
- "keccak-asm",
- "proptest",
- "rand",
- "ruint",
- "serde",
- "tiny-keccak",
-]
-
-[[package]]
 name = "linera-alloy-provider"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3831,14 +3755,14 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-utils-wasm",
- "linera-alloy-consensus 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-eips 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-consensus",
+ "linera-alloy-eips",
  "linera-alloy-json-rpc",
  "linera-alloy-network",
  "linera-alloy-node-bindings",
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-primitives",
  "linera-alloy-rpc-client",
- "linera-alloy-rpc-types 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-rpc-types",
  "linera-alloy-rpc-types-trace",
  "linera-alloy-signer-wallet",
  "linera-alloy-transport",
@@ -3882,30 +3806,12 @@ checksum = "e164083712bcd2cc43ad98ea1cefd39c7b08023fdfc6092b670d8df20f8f3d76"
 dependencies = [
  "alloy-rlp",
  "itertools 0.12.1",
- "linera-alloy-consensus 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-eips 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-genesis 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-serde 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-sol-types 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "linera-alloy-rpc-types"
-version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f#40785f5552962c98d36a636e543b378ac787486f"
-dependencies = [
- "alloy-rlp",
- "itertools 0.12.1",
- "linera-alloy-consensus 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f)",
- "linera-alloy-eips 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f)",
- "linera-alloy-genesis 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f)",
- "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
- "linera-alloy-serde 0.1.0 (git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f)",
- "linera-alloy-sol-types 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
+ "linera-alloy-consensus",
+ "linera-alloy-eips",
+ "linera-alloy-genesis",
+ "linera-alloy-primitives",
+ "linera-alloy-serde",
+ "linera-alloy-sol-types",
  "serde",
  "serde_json",
  "thiserror",
@@ -3917,9 +3823,9 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "529bc1de162064f03fb608aa0fe6ce75c16fb1d9f110b6047e9073e2880d99cf"
 dependencies = [
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-rpc-types 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-serde 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-primitives",
+ "linera-alloy-rpc-types",
+ "linera-alloy-serde",
  "serde",
  "serde_json",
 ]
@@ -3930,17 +3836,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f2f6a155d0148c33bc519c1acbc34e96c71f3cf0c716e67c751109ba4cada42"
 dependencies = [
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "linera-alloy-serde"
-version = "0.1.0"
-source = "git+https://github.com/MathieuDutSik/alloy?rev=40785f5552962c98d36a636e543b378ac787486f#40785f5552962c98d36a636e543b378ac787486f"
-dependencies = [
- "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
+ "linera-alloy-primitives",
  "serde",
  "serde_json",
 ]
@@ -3955,7 +3851,7 @@ dependencies = [
  "auto_impl",
  "elliptic-curve",
  "k256",
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-primitives",
  "thiserror",
 ]
 
@@ -3967,9 +3863,9 @@ checksum = "c696220b3eab314379152a669b8c6d7dec25c8cda2ca3cd9409d8c4abc016143"
 dependencies = [
  "async-trait",
  "k256",
- "linera-alloy-consensus 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-consensus",
  "linera-alloy-network",
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-primitives",
  "linera-alloy-signer",
  "rand",
  "thiserror",
@@ -3981,21 +3877,8 @@ version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7566618c507c34318ba409c72729bf756e89019ae1c2bb9b45b9292e9ad0087e"
 dependencies = [
- "linera-alloy-sol-macro-expander 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-sol-macro-input 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "proc-macro-error 1.0.4",
- "proc-macro2",
- "quote",
- "syn 2.0.52",
-]
-
-[[package]]
-name = "linera-alloy-sol-macro"
-version = "0.7.4"
-source = "git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0#a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0"
-dependencies = [
- "linera-alloy-sol-macro-expander 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
- "linera-alloy-sol-macro-input 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
+ "linera-alloy-sol-macro-expander",
+ "linera-alloy-sol-macro-input",
  "proc-macro-error 1.0.4",
  "proc-macro2",
  "quote",
@@ -4012,25 +3895,8 @@ dependencies = [
  "heck 0.4.1",
  "indexmap 2.2.5",
  "linera-alloy-json-abi",
- "linera-alloy-sol-macro-input 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-syn-solidity 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "proc-macro-error 1.0.4",
- "proc-macro2",
- "quote",
- "syn 2.0.52",
- "tiny-keccak",
-]
-
-[[package]]
-name = "linera-alloy-sol-macro-expander"
-version = "0.7.4"
-source = "git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0#a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0"
-dependencies = [
- "const-hex",
- "heck 0.4.1",
- "indexmap 2.2.5",
- "linera-alloy-sol-macro-input 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
- "linera-alloy-syn-solidity 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
+ "linera-alloy-sol-macro-input",
+ "linera-alloy-syn-solidity",
  "proc-macro-error 1.0.4",
  "proc-macro2",
  "quote",
@@ -4048,24 +3914,10 @@ dependencies = [
  "dunce",
  "heck 0.5.0",
  "linera-alloy-json-abi",
- "linera-alloy-syn-solidity 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-syn-solidity",
  "proc-macro2",
  "quote",
  "serde_json",
- "syn 2.0.52",
-]
-
-[[package]]
-name = "linera-alloy-sol-macro-input"
-version = "0.7.4"
-source = "git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0#a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0"
-dependencies = [
- "const-hex",
- "dunce",
- "heck 0.5.0",
- "linera-alloy-syn-solidity 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
- "proc-macro2",
- "quote",
  "syn 2.0.52",
 ]
 
@@ -4086,19 +3938,9 @@ checksum = "fd247864069c2ed5388077e2e18bedf660ec0cdff5adf19bf74cfc72e96d7c57"
 dependencies = [
  "const-hex",
  "linera-alloy-json-abi",
- "linera-alloy-primitives 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "linera-alloy-sol-macro 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy-primitives",
+ "linera-alloy-sol-macro",
  "serde",
-]
-
-[[package]]
-name = "linera-alloy-sol-types"
-version = "0.7.4"
-source = "git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0#a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0"
-dependencies = [
- "const-hex",
- "linera-alloy-primitives 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
- "linera-alloy-sol-macro 0.7.4 (git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0)",
 ]
 
 [[package]]
@@ -4106,17 +3948,6 @@ name = "linera-alloy-syn-solidity"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "241f9d0a0096ec6b3c5828ee920efc004b8972740adc7ac89fd05be21df95191"
-dependencies = [
- "paste",
- "proc-macro2",
- "quote",
- "syn 2.0.52",
-]
-
-[[package]]
-name = "linera-alloy-syn-solidity"
-version = "0.7.4"
-source = "git+https://github.com/MathieuDutSik/ethreum_core/?rev=a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0#a8c8718e9b75a7fa4d28ed4f46c36206e1d1e6b0"
 dependencies = [
  "paste",
  "proc-macro2",
@@ -4270,7 +4101,7 @@ dependencies = [
  "async-lock",
  "async-trait",
  "cfg_aliases",
- "linera-alloy 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy",
  "linera-base",
  "linera-storage-service",
  "num-bigint",
@@ -4557,7 +4388,7 @@ dependencies = [
  "http 1.1.0",
  "k8s-openapi",
  "kube",
- "linera-alloy 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linera-alloy",
  "linera-base",
  "linera-chain",
  "linera-core",
