@@ -4,7 +4,7 @@
 
 mod common;
 
-use std::{collections::BTreeMap, env, mem, path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, env, time::Duration};
 
 use anyhow::Result;
 use assert_matches::assert_matches;
@@ -13,9 +13,9 @@ use common::INTEGRATION_TEST_GUARD;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 use linera_base::{
     command::resolve_binary,
-    crypto::{KeyPair, PublicKey},
+    crypto::PublicKey,
     data_types::{Amount, Timestamp},
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, Owner},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
 };
 #[cfg(feature = "remote_net")]
 use linera_service::cli_wrappers::remote_net::RemoteNetTestingConfig;
@@ -25,10 +25,9 @@ use linera_service::cli_wrappers::{
 };
 use linera_service::{
     cli_wrappers::{
-        local_net::{Database, LocalNet, LocalNetConfig, PathProvider},
+        local_net::{Database, LocalNetConfig},
         ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
-    config::WalletState,
 };
 use serde_json::{json, Value};
 use test_case::test_case;
@@ -335,26 +334,6 @@ impl AmmApp {
         let mutation = format!("removeAllAddedLiquidity(owner: {})", owner.to_value(),);
         self.0.mutate(mutation).await
     }
-}
-
-/// Test if the wallet file is correctly locked when used.
-#[test_log::test(tokio::test)]
-async fn test_wallet_lock() -> Result<()> {
-    let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
-    let (_net, client) = config.instantiate().await?;
-
-    let wallet_state = WalletState::from_file(client.wallet_path().as_path())?;
-    let chain_id = wallet_state.inner().default_chain().unwrap();
-
-    let lock = wallet_state;
-    assert!(client.process_inbox(chain_id).await.is_err());
-
-    mem::drop(lock);
-    assert!(client.process_inbox(chain_id).await.is_ok());
-
-    Ok(())
 }
 
 #[cfg(feature = "ethereum")]
@@ -2324,123 +2303,6 @@ async fn test_resolve_binary() -> Result<()> {
     Ok(())
 }
 
-// TODO(#1655): Make the scylladb_udp / rocksdb_udp test work.
-// TODO(#2051): Enable the `test_end_to_end_reconfiguration::scylladb_grpc` that is sometimes failing due to runtime exhaustion.
-//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
-//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "service_tcp")]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
-#[test_log::test(tokio::test)]
-async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let network = config.network;
-    let (mut net, client) = config.instantiate().await?;
-
-    let client_2 = net.make_client().await;
-    client_2.wallet_init(&[], FaucetOption::None).await?;
-    let chain_1 = ChainId::root(0);
-
-    let chain_2 = client
-        .open_and_assign(&client_2, Amount::from_tokens(3))
-        .await?;
-    let node_service_2 = match network {
-        Network::Grpc => Some(client_2.run_node_service(8081).await?),
-        Network::Tcp | Network::Udp => None,
-    };
-
-    client.query_validators(None).await?;
-
-    // Restart the first shard for the 4th validator.
-    net.terminate_server(3, 0).await?;
-    net.start_server(3, 0).await?;
-
-    // Create configurations for two more validators
-    net.generate_validator_config(4).await?;
-    net.generate_validator_config(5).await?;
-
-    // Start the validators
-    net.start_validator(4).await?;
-    net.start_validator(5).await?;
-
-    // Add 5th validator
-    client
-        .set_validator(net.validator_name(4).unwrap(), LocalNet::proxy_port(4), 100)
-        .await?;
-
-    client.query_validators(None).await?;
-    client.query_validators(Some(chain_1)).await?;
-
-    // Add 6th validator
-    client
-        .set_validator(net.validator_name(5).unwrap(), LocalNet::proxy_port(5), 100)
-        .await?;
-
-    // Remove 5th validator
-    client
-        .remove_validator(net.validator_name(4).unwrap())
-        .await?;
-    net.remove_validator(4)?;
-
-    client.query_validators(None).await?;
-    client.query_validators(Some(chain_1)).await?;
-
-    // Remove the first 4 validators, so only the last one remains.
-    for i in 0..4 {
-        let name = net.validator_name(i).unwrap();
-        client.remove_validator(name).await?;
-        net.remove_validator(i)?;
-        if node_service_2.is_none() {
-            client_2.process_inbox(chain_2).await?;
-        }
-    }
-
-    let recipient = Owner::from(KeyPair::generate().public());
-    client
-        .transfer_with_accounts(
-            Amount::from_tokens(5),
-            Account::chain(chain_1),
-            Account::owner(chain_2, recipient),
-        )
-        .await?;
-
-    if let Some(node_service_2) = node_service_2 {
-        let query = format!(
-            "query {{ chain(chainId:\"{chain_2}\") {{
-                executionState {{ system {{ balances {{
-                    entry(key:\"{recipient}\") {{ value }}
-                }} }} }}
-            }} }}"
-        );
-        for i in 0.. {
-            tokio::time::sleep(Duration::from_secs(i)).await;
-            let response = node_service_2.query_node(query.clone()).await?;
-            let balances = &response["chain"]["executionState"]["system"]["balances"];
-            if balances["entry"]["value"].as_str() == Some("5.") {
-                break;
-            }
-            assert!(i < 3, "Failed to receive new block");
-        }
-    } else {
-        client_2.sync(chain_2).await?;
-        client_2.process_inbox(chain_2).await?;
-        assert_eq!(
-            client_2
-                .local_balance(Account::owner(chain_2, recipient))
-                .await?,
-            Amount::from_tokens(5),
-        );
-    }
-
-    net.ensure_is_running().await?;
-    net.terminate().await?;
-
-    Ok(())
-}
-
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -2556,65 +2418,6 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[test_log::test(tokio::test)]
-async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
-    let (mut net, client1) = config.instantiate().await?;
-
-    let client2 = net.make_client().await;
-    let chain = ChainId::root(0);
-    let mut height = 0;
-    client2.wallet_init(&[chain], FaucetOption::None).await?;
-
-    // Listen for updates on root chain 0. There are no blocks on that chain yet.
-    let mut node_service2 = client2.run_node_service(8081).await?;
-    let response = node_service2
-        .query_node(format!(
-            "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
-        ))
-        .await?;
-    assert_eq!(
-        response["chain"]["tipState"]["nextBlockHeight"].as_u64(),
-        Some(height)
-    );
-
-    // Oh no! The first validator has an outage and gets restarted!
-    net.remove_validator(0)?;
-    net.start_validator(0).await?;
-
-    // The node service should try to reconnect.
-    'success: {
-        for i in 0..10 {
-            // Add a new block on the chain, triggering a notification.
-            client1
-                .transfer(Amount::from_tokens(1), chain, ChainId::root(9))
-                .await?;
-            tokio::time::sleep(Duration::from_secs(i)).await;
-            height += 1;
-            let response = node_service2
-                .query_node(format!(
-                    "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
-                ))
-                .await?;
-            if response["chain"]["tipState"]["nextBlockHeight"].as_u64() == Some(height) {
-                break 'success;
-            }
-        }
-        panic!("Failed to re-establish notification stream");
-    }
-
-    node_service2.ensure_is_running()?;
-
-    net.ensure_is_running().await?;
-    net.terminate().await?;
-
-    Ok(())
-}
-
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -2649,153 +2452,6 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Resul
     client2.sync(chain2).await?;
     client2.process_inbox(chain2).await?;
     assert!(client2.local_balance(account2).await? > Amount::ZERO);
-
-    net.ensure_is_running().await?;
-    net.terminate().await?;
-
-    Ok(())
-}
-
-#[test_log::test(tokio::test)]
-async fn test_project_new() -> Result<()> {
-    let _rustflags_override = override_disable_warnings_as_errors();
-    let path_provider = PathProvider::create_temporary_directory()?;
-    let client = ClientWrapper::new(path_provider, Network::Grpc, None, 0);
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let linera_root = manifest_dir
-        .parent()
-        .expect("CARGO_MANIFEST_DIR should not be at the root");
-    let tmp_dir = client.project_new("init-test", linera_root).await?;
-    let project_dir = tmp_dir.path().join("init-test");
-    client
-        .build_application(project_dir.as_path(), "init-test", false)
-        .await?;
-
-    Ok(())
-}
-
-#[test_log::test(tokio::test)]
-async fn test_project_test() -> Result<()> {
-    let path_provider = PathProvider::create_temporary_directory()?;
-    let client = ClientWrapper::new(path_provider, Network::Grpc, None, 0);
-    client
-        .project_test(&ClientWrapper::example_path("counter")?)
-        .await?;
-
-    Ok(())
-}
-
-#[test_case(Database::Service, Network::Grpc ; "service_grpc")]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
-#[test_log::test(tokio::test)]
-async fn test_project_publish(database: Database, network: Network) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let _rustflags_override = override_disable_warnings_as_errors();
-    let config = LocalNetConfig {
-        num_initial_validators: 1,
-        num_shards: 1,
-        ..LocalNetConfig::new_test(database, network)
-    };
-
-    let (mut net, client) = config.instantiate().await?;
-
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let linera_root = manifest_dir
-        .parent()
-        .expect("CARGO_MANIFEST_DIR should not be at the root");
-    let tmp_dir = client.project_new("init-test", linera_root).await?;
-    let project_dir = tmp_dir.path().join("init-test");
-
-    client
-        .project_publish(project_dir, vec![], None, &())
-        .await?;
-    let chain = client.load_wallet()?.default_chain().unwrap();
-
-    let node_service = client.run_node_service(None).await?;
-
-    assert_eq!(
-        node_service.try_get_applications_uri(&chain).await?.len(),
-        1
-    );
-
-    net.ensure_is_running().await?;
-    net.terminate().await?;
-
-    Ok(())
-}
-
-#[test_log::test(tokio::test)]
-async fn test_linera_net_up_simple() -> Result<()> {
-    use std::{
-        io::{BufRead, BufReader},
-        process::{Command, Stdio},
-    };
-
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
-    let mut command = Command::new(env!("CARGO_BIN_EXE_linera"));
-    command.args(["net", "up"]);
-    let mut child = command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-
-    let stdout = BufReader::new(child.stdout.take().unwrap());
-    let stderr = BufReader::new(child.stderr.take().unwrap());
-
-    for line in stderr.lines() {
-        let line = line?;
-        if line.starts_with("READY!") {
-            let mut exports = stdout.lines();
-            assert!(exports
-                .next()
-                .unwrap()?
-                .starts_with("export LINERA_WALLET="));
-            assert!(exports
-                .next()
-                .unwrap()?
-                .starts_with("export LINERA_STORAGE="));
-            assert_eq!(exports.next().unwrap()?, "");
-
-            // Send SIGINT to the child process.
-            Command::new("kill")
-                .args(["-s", "INT", &child.id().to_string()])
-                .output()?;
-
-            assert!(exports.next().is_none());
-            assert!(child.wait()?.success());
-            return Ok(());
-        }
-    }
-    panic!("Unexpected EOF for stderr");
-}
-
-#[test_case(Database::Service, Network::Grpc ; "service_grpc")]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
-#[test_log::test(tokio::test)]
-async fn test_example_publish(database: Database, network: Network) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let config = LocalNetConfig {
-        num_initial_validators: 1,
-        num_shards: 1,
-        ..LocalNetConfig::new_test(database, network)
-    };
-    let (mut net, client) = config.instantiate().await?;
-
-    let example_dir = ClientWrapper::example_path("counter")?;
-    client
-        .project_publish(example_dir, vec![], None, &0)
-        .await?;
-    let chain = client.load_wallet()?.default_chain().unwrap();
-
-    let node_service = client.run_node_service(None).await?;
-
-    assert_eq!(
-        node_service.try_get_applications_uri(&chain).await?.len(),
-        1
-    );
 
     net.ensure_is_running().await?;
     net.terminate().await?;
@@ -3074,113 +2730,6 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) -> Res
     net.terminate().await?;
 
     Ok(())
-}
-
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[test_log::test(tokio::test)]
-async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    // Create runner and client.
-    let (mut net, client) = config.instantiate().await?;
-    let chain_id = client.load_wallet()?.default_chain().unwrap();
-    let account = Account::chain(chain_id);
-    let balance = client.local_balance(account).await?;
-    // Stop validators.
-    for i in 0..4 {
-        net.remove_validator(i)?;
-    }
-    let result = client
-        .transfer_with_silent_logs(Amount::from_tokens(2), chain_id, ChainId::root(5))
-        .await;
-    assert!(result.is_err());
-    // The transfer didn't get confirmed.
-    assert_eq!(client.local_balance(account).await?, balance);
-    // Restart validators.
-    for i in 0..4 {
-        net.start_validator(i).await?;
-    }
-    let result = client.retry_pending_block(Some(chain_id)).await;
-    assert!(result?.is_some());
-    client.sync(chain_id).await?;
-    // After retrying, the transfer got confirmed.
-    assert!(client.local_balance(account).await? <= balance - Amount::from_tokens(2));
-    let result = client.retry_pending_block(Some(chain_id)).await;
-    assert!(result?.is_none());
-
-    net.ensure_is_running().await?;
-    net.terminate().await?;
-
-    Ok(())
-}
-
-#[cfg(feature = "benchmark")]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "service_tcp")]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
-#[test_log::test(tokio::test)]
-async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
-    use fungible::{FungibleTokenAbi, InitialState, Parameters};
-
-    config.num_other_initial_chains = 2;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let (mut net, client) = config.instantiate().await?;
-
-    assert_eq!(client.load_wallet()?.num_chains(), 2);
-    // Launch local benchmark using all user chains and creating additional ones.
-    client.benchmark(2, 4, 10, None).await?;
-    assert_eq!(client.load_wallet()?.num_chains(), 4);
-
-    // Now we run the benchmark again, with the fungible token application instead of the
-    // native token.
-    let account_owner = get_fungible_account_owner(&client);
-    let accounts = BTreeMap::from([(account_owner, Amount::from_tokens(1_000_000))]);
-    let state = InitialState { accounts };
-    let (contract, service) = client.build_example("fungible").await?;
-    let params = Parameters::new("FUN");
-    let application_id = client
-        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
-            contract,
-            service,
-            &params,
-            &state,
-            &[],
-            None,
-        )
-        .await?;
-    client.benchmark(2, 5, 10, Some(application_id)).await?;
-
-    net.ensure_is_running().await?;
-    net.terminate().await?;
-
-    Ok(())
-}
-
-/// Clears the `RUSTFLAGS` environment variable, if it was configured to make warnings fail as
-/// errors.
-///
-/// The returned [`RestoreVarOnDrop`] restores the environment variable to its original value when
-/// it is dropped.
-fn override_disable_warnings_as_errors() -> Option<RestoreVarOnDrop> {
-    if matches!(env::var("RUSTFLAGS"), Ok(value) if value == "-D warnings") {
-        env::set_var("RUSTFLAGS", "");
-        Some(RestoreVarOnDrop)
-    } else {
-        None
-    }
-}
-
-/// Restores the `RUSTFLAGS` environment variable to make warnings fail as errors.
-struct RestoreVarOnDrop;
-
-impl Drop for RestoreVarOnDrop {
-    fn drop(&mut self) {
-        env::set_var("RUSTFLAGS", "-D warnings");
-    }
 }
 
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
