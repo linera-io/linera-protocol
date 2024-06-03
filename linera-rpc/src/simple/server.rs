@@ -136,7 +136,11 @@ where
         }
     }
 
-    pub fn spawn(self, shutdown_signal: CancellationToken) -> ServerHandle {
+    pub fn spawn(
+        self,
+        shutdown_signal: CancellationToken,
+        join_set: &mut JoinSet<()>,
+    ) -> ServerHandle {
         info!(
             "Listening to {:?} traffic on {}:{}",
             self.network.protocol, self.host, self.port
@@ -146,7 +150,6 @@ where
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(self.cross_chain_config.queue_size);
 
-        let mut join_set = JoinSet::new();
         join_set.spawn_task(Self::forward_cross_chain_queries(
             self.state.nickname().to_string(),
             self.network.clone(),

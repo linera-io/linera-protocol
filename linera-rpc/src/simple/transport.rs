@@ -85,7 +85,6 @@ pub trait MessageHandler: Clone {
 /// executing tasks.
 pub struct ServerHandle {
     pub handle: TaskHandle<Result<(), std::io::Error>>,
-    _join_set: JoinSet<()>,
 }
 
 impl ServerHandle {
@@ -162,7 +161,7 @@ impl TransportProtocol {
         address: impl ToSocketAddrs + Send + 'static,
         state: S,
         shutdown_signal: CancellationToken,
-        mut join_set: JoinSet<()>,
+        join_set: &mut JoinSet<()>,
     ) -> ServerHandle
     where
         S: MessageHandler + Send + 'static,
@@ -171,11 +170,7 @@ impl TransportProtocol {
             Self::Udp => join_set.spawn_task(UdpServer::run(address, state, shutdown_signal)),
             Self::Tcp => join_set.spawn_task(TcpServer::run(address, state, shutdown_signal)),
         };
-
-        ServerHandle {
-            handle,
-            _join_set: join_set,
-        }
+        ServerHandle { handle }
     }
 }
 
