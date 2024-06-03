@@ -9,7 +9,6 @@ use std::{collections::BTreeMap, env, time::Duration};
 use anyhow::Result;
 use assert_matches::assert_matches;
 use async_graphql::InputType;
-use common::INTEGRATION_TEST_GUARD;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 use linera_base::{
     command::resolve_binary,
@@ -347,7 +346,6 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
         client::EthereumQueries,
         test_utils::{get_anvil, SimpleTokenContractFunction},
     };
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Setting up the Ethereum smart contract
     let anvil_test = get_anvil().await?;
@@ -439,7 +437,6 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use counter::CounterAbi;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client) = config.instantiate().await?;
 
@@ -491,8 +488,6 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfig) -> Result<()> {
     use counter::CounterAbi;
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let (mut net, client) = config.instantiate().await?;
 
     let original_counter_value = 35;
@@ -538,7 +533,6 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) -> Result<()> {
     use social::SocialAbi;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client1) = config.instantiate().await?;
 
@@ -634,8 +628,6 @@ async fn test_wasm_end_to_end_fungible(
     example_name: &str,
 ) -> Result<()> {
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
-
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client1) = config.instantiate().await?;
 
@@ -792,7 +784,6 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 ) -> Result<()> {
     use fungible::{Account, FungibleTokenAbi, InitialState, Parameters};
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client1) = config.instantiate().await?;
 
     let chain1 = client1.load_wallet()?.default_chain().unwrap();
@@ -911,8 +902,6 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Result<()> {
     use non_fungible::{NftOutput, NonFungibleTokenAbi};
-
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client1) = config.instantiate().await?;
 
@@ -1172,8 +1161,6 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     use crowd_funding::{CrowdFundingAbi, InstantiationArgument};
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let (mut net, client1) = config.instantiate().await?;
 
     let client2 = net.make_client().await;
@@ -1297,8 +1284,6 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> Result<()> {
     use matching_engine::{MatchingEngineAbi, OrderNature, Parameters, Price};
-
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client_admin) = config.instantiate().await?;
 
@@ -1585,7 +1570,6 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     use amm::{AmmAbi, Parameters};
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client_amm) = config.instantiate().await?;
 
@@ -2310,7 +2294,6 @@ async fn test_resolve_binary() -> Result<()> {
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client) = config.instantiate().await?;
 
     let chain1 = client.load_wallet()?.default_chain().unwrap();
@@ -2422,8 +2405,6 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     // Create net and two clients.
     let (mut net, client1) = config.instantiate().await?;
 
@@ -2466,8 +2447,6 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Resul
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await?;
 
@@ -2534,8 +2513,6 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     // Create runner and client.
     let (mut net, client) = config.instantiate().await?;
 
@@ -2574,8 +2551,6 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await?;
 
@@ -2619,8 +2594,6 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await?;
 
@@ -2698,8 +2671,6 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) -> Res
     use linera_base::command::CommandExt;
     use tokio::process::Command;
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await?;
 
@@ -2739,8 +2710,6 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) -> Res
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await?;
     let client2 = net.make_client().await;

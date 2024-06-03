@@ -8,7 +8,6 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use std::ops::DerefMut;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
 use linera_base::{
@@ -21,10 +20,7 @@ use linera_views::rocks_db::create_rocks_db_test_path;
 #[cfg(all(feature = "scylladb", with_testing))]
 use linera_views::scylla_db::create_scylla_db_test_uri;
 use tempfile::{tempdir, TempDir};
-use tokio::{
-    process::{Child, Command},
-    sync::{OwnedSemaphorePermit, Semaphore},
-};
+use tokio::process::{Child, Command};
 use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
@@ -35,7 +31,8 @@ use {
     linera_base::sync::Lazy,
     linera_storage_service::child::{get_free_endpoint, StorageService, StorageServiceGuard},
     linera_storage_service::common::get_service_storage_binary,
-    std::ops::Deref,
+    std::ops::{Deref, DerefMut},
+    tokio::sync::{OwnedSemaphorePermit, Semaphore},
 };
 
 use crate::{
@@ -744,16 +741,20 @@ impl LocalNet {
 
 
 /// The number of simultaneous sets of validators
+#[cfg(with_testing)]
 const N_SIMULTANEOUS_RUNS: usize = 2;
 
+#[cfg(with_testing)]
 struct ValidatorNumber {
     semaphore: Arc<Semaphore>,
 }
 
+#[cfg(with_testing)]
 struct ValidatorNumberGuard {
     _semaphore_guard: OwnedSemaphorePermit,
 }
 
+#[cfg(with_testing)]
 impl ValidatorNumber {
     pub fn new(n_ports: usize) -> Self {
         let semaphore = Arc::new(Semaphore::new(n_ports));
@@ -766,14 +767,17 @@ impl ValidatorNumber {
     }
 }
 
+#[cfg(with_testing)]
 static VALIDATOR_INDEX: Lazy<ValidatorNumber> = Lazy::new(|| ValidatorNumber::new(N_SIMULTANEOUS_RUNS));
 
 
 /// A `LocalNetConfig` that can be shared between tests.
+#[cfg(with_testing)]
 pub struct SharedLocalNetConfig {
     local_net_config: LocalNetConfig,
 }
 
+#[cfg(with_testing)]
 impl SharedLocalNetConfig {
     pub fn new_test(database: Database, network: Network) -> Self {
         let local_net_config = LocalNetConfig::new_test(database, network);
@@ -781,6 +785,7 @@ impl SharedLocalNetConfig {
     }
 }
 
+#[cfg(with_testing)]
 #[async_trait]
 impl LineraNetConfig for SharedLocalNetConfig {
     type Net = SharedLocalNet;
@@ -807,18 +812,22 @@ impl LineraNetConfig for SharedLocalNetConfig {
     }
 }
 
+#[cfg(with_testing)]
 struct NetClientInternal {
     local_net: LocalNet,
     _client: ClientWrapper,
 }
 
+#[cfg(with_testing)]
 static SHARED_LOCAL_NET: Lazy<RwLock<(Option<NetClientInternal>, usize)>> = Lazy::new(|| RwLock::new((None, 0)));
 
 /// A `LocalNet` that is shared between test instances
+#[cfg(with_testing)]
 pub struct SharedLocalNet {
     _guard: ValidatorNumberGuard,
 }
 
+#[cfg(with_testing)]
 #[async_trait]
 impl LineraNet for SharedLocalNet {
     async fn ensure_is_running(&mut self) -> Result<()> {
