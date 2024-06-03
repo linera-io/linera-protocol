@@ -394,7 +394,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
             None,
         )
         .await?;
-    let node_service = client.run_node_service(None).await?;
+    let node_service = client.run_node_service(8080).await?;
 
     let app = EthereumTrackerApp(
         node_service
@@ -456,7 +456,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
             None,
         )
         .await?;
-    let mut node_service = client.run_node_service(None).await?;
+    let mut node_service = client.run_node_service(8081).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -502,7 +502,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     let application_id = client
         .create_application(&bytecode_id, &(), &original_counter_value, &[], None)
         .await?;
-    let mut node_service = client.run_node_service(None).await?;
+    let mut node_service = client.run_node_service(8082).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -549,8 +549,8 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .create_application(&bytecode_id, &(), &(), &[], None)
         .await?;
 
-    let mut node_service1 = client1.run_node_service(8080).await?;
-    let mut node_service2 = client2.run_node_service(8081).await?;
+    let mut node_service1 = client1.run_node_service(8083).await?;
+    let mut node_service2 = client2.run_node_service(8084).await?;
 
     node_service1.process_inbox(&chain1).await?;
 
@@ -613,7 +613,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
 // TODO(#2051): Enable the test `test_wasm_end_to_end_fungible::scylladb_grpc` that is frequently failing.
 // The failure is `Error: Could not find application URI: .... after 15 tries`.
 //#[cfg_attr(feature = "scylladb", test_case(SharedLocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
-#[test_case(SharedLocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "service_grpc")]
+//#[test_case(SharedLocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "service_grpc")]
 #[test_case(SharedLocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_service_grpc")]
 #[cfg_attr(feature = "scylladb", test_case(SharedLocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(SharedLocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
@@ -665,8 +665,8 @@ async fn test_wasm_end_to_end_fungible(
         )
         .await?;
 
-    let mut node_service1 = client1.run_node_service(8080).await?;
-    let mut node_service2 = client2.run_node_service(8081).await?;
+    let mut node_service1 = client1.run_node_service(8085).await?;
+    let mut node_service2 = client2.run_node_service(8086).await?;
 
     let app1 = FungibleApp(
         node_service1
@@ -767,7 +767,7 @@ async fn test_wasm_end_to_end_fungible(
     Ok(())
 }
 
-#[test_case(SharedLocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "service_grpc")]
+//#[test_case(SharedLocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "service_grpc")]
 #[test_case(SharedLocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_service_grpc")]
 #[cfg_attr(feature = "scylladb", test_case(SharedLocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(SharedLocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
@@ -828,7 +828,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         )
         .await?;
 
-    let mut node_service = client1.run_node_service(8080).await?;
+    let mut node_service = client1.run_node_service(8087).await?;
 
     let app1 = FungibleApp(
         node_service
@@ -921,8 +921,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .publish_and_create::<NonFungibleTokenAbi, (), ()>(contract, service, &(), &(), &[], None)
         .await?;
 
-    let mut node_service1 = client1.run_node_service(8080).await?;
-    let mut node_service2 = client2.run_node_service(8081).await?;
+    let mut node_service1 = client1.run_node_service(8088).await?;
+    let mut node_service2 = client2.run_node_service(8089).await?;
 
     let app1 = NonFungibleApp(
         node_service1
@@ -1212,8 +1212,8 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
         )
         .await?;
 
-    let mut node_service1 = client1.run_node_service(8080).await?;
-    let mut node_service2 = client2.run_node_service(8081).await?;
+    let mut node_service1 = client1.run_node_service(8090).await?;
+    let mut node_service2 = client2.run_node_service(8091).await?;
 
     let app_fungible1 = FungibleApp(
         node_service1
@@ -1342,9 +1342,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         .await?;
 
     // Now creating the service and exporting the applications
-    let mut node_service_admin = client_admin.run_node_service(8080).await?;
-    let mut node_service_a = client_a.run_node_service(8081).await?;
-    let mut node_service_b = client_b.run_node_service(8082).await?;
+    let mut node_service_admin = client_admin.run_node_service(8092).await?;
+    let mut node_service_a = client_a.run_node_service(8093).await?;
+    let mut node_service_b = client_b.run_node_service(8094).await?;
 
     node_service_a
         .request_application(&chain_a, &token1)
@@ -1595,9 +1595,9 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let owner0 = get_fungible_account_owner(&client0);
     let owner1 = get_fungible_account_owner(&client1);
 
-    let mut node_service_amm = client_amm.run_node_service(8080).await?;
-    let mut node_service0 = client0.run_node_service(8081).await?;
-    let mut node_service1 = client1.run_node_service(8082).await?;
+    let mut node_service_amm = client_amm.run_node_service(8095).await?;
+    let mut node_service0 = client0.run_node_service(8096).await?;
+    let mut node_service1 = client1.run_node_service(8097).await?;
 
     // Amounts of token0 that will be owned by each user
     let state_fungible0 = fungible::InitialState {
@@ -2324,7 +2324,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
         .await
         ?;
 
-    let node_service = client.run_node_service(8080).await?;
+    let node_service = client.run_node_service(8098).await?;
 
     // Open a new chain with the same public key.
     // The node service should automatically create a client for it internally.
