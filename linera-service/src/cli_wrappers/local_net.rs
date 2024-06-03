@@ -743,7 +743,7 @@ impl LocalNet {
 
 /// The number of simultaneous sets of validators
 #[cfg(with_testing)]
-const N_SIMULTANEOUS_RUNS: usize = 2;
+const N_SIMULTANEOUS_RUNS: usize = 5;
 
 #[cfg(with_testing)]
 struct ValidatorNumber {
