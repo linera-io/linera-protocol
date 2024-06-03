@@ -769,7 +769,8 @@ impl ValidatorNumber {
 static VALIDATOR_INDEX: Lazy<ValidatorNumber> = Lazy::new(|| ValidatorNumber::new(N_SIMULTANEOUS_RUNS));
 
 
-struct SharedLocalNetConfig {
+/// A `LocalNetConfig` that can be shared between tests.
+pub struct SharedLocalNetConfig {
     local_net_config: LocalNetConfig,
 }
 
@@ -814,7 +815,8 @@ struct NetClientInternal {
 static SHARED_LOCAL_NET: Lazy<RwLock<Option<NetClientInternal>>> = Lazy::new(|| RwLock::new(None));
 
 
-struct SharedLocalNet {
+/// A `LocalNet` that is shared between test instances
+pub struct SharedLocalNet {
     _guard: ValidatorNumberGuard,
 }
 
