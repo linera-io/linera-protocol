@@ -788,11 +788,13 @@ impl LineraNetConfig for SharedLocalNetConfig {
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
         let _guard = VALIDATOR_INDEX.get_guard().await;
         let mut net_client = SHARED_LOCAL_NET.write().await;
-        if net_client.is_none() {
+        if net_client.0.is_none() {
             let (local_net, client) = self.local_net_config.instantiate().await?;
-            *net_client = Some(NetClientInternal { local_net, _client: client });
+            *net_client = (Some(NetClientInternal { local_net, _client: client }), 1);
+        } else {
+            (*net_client).1 += 1;
         }
-        let Some(NetClientInternal { local_net, _client }) = net_client.deref_mut() else {
+        let (Some(NetClientInternal { local_net, _client }), _) = net_client.deref_mut() else {
             unreachable!();
         };
         let client = local_net.make_client().await;
@@ -810,10 +812,7 @@ struct NetClientInternal {
     _client: ClientWrapper,
 }
 
-
-
-static SHARED_LOCAL_NET: Lazy<RwLock<Option<NetClientInternal>>> = Lazy::new(|| RwLock::new(None));
-
+static SHARED_LOCAL_NET: Lazy<RwLock<(Option<NetClientInternal>, usize)>> = Lazy::new(|| RwLock::new((None, 0)));
 
 /// A `LocalNet` that is shared between test instances
 pub struct SharedLocalNet {
@@ -824,7 +823,7 @@ pub struct SharedLocalNet {
 impl LineraNet for SharedLocalNet {
     async fn ensure_is_running(&mut self) -> Result<()> {
         let mut net_client = SHARED_LOCAL_NET.write().await;
-        let Some(NetClientInternal { local_net, _client}) = net_client.deref_mut() else {
+        let (Some(NetClientInternal { local_net, _client}), _) = net_client.deref_mut() else {
             unreachable!();
         };
         local_net.ensure_is_running().await?;
@@ -833,13 +832,20 @@ impl LineraNet for SharedLocalNet {
 
     async fn make_client(&mut self) -> ClientWrapper {
         let mut net_client = SHARED_LOCAL_NET.write().await;
-        let Some(NetClientInternal { local_net, _client }) = net_client.deref_mut() else {
+        let (Some(NetClientInternal { local_net, _client }), _) = net_client.deref_mut() else {
             unreachable!();
         };
         local_net.make_client().await
     }
 
     async fn terminate(&mut self) -> Result<()> {
+        let mut net_client = SHARED_LOCAL_NET.write().await;
+        let entry = net_client.deref_mut();
+        entry.1 -= 1;
+        if entry.1 == 0 {
+            entry.0.as_mut().unwrap().local_net.terminate().await?;
+            entry.0 = None;
+        }
         Ok(())
     }
 }
