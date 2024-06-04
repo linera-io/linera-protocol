@@ -16,7 +16,7 @@ use tokio::{
     sync::Mutex,
     task::JoinHandle,
 };
-use tokio_util::{codec::Framed, udp::UdpFramed};
+use tokio_util::{codec::Framed, sync::CancellationToken, udp::UdpFramed};
 use tracing::{error, warn};
 
 use crate::{
@@ -83,7 +83,6 @@ pub struct ServerHandle {
 
 impl ServerHandle {
     pub async fn join(self) -> Result<(), std::io::Error> {
-        // Note that dropping `self.complete` would terminate the server.
         self.handle.await??;
         Ok(())
     }
@@ -151,14 +150,16 @@ impl TransportProtocol {
         self,
         address: impl ToSocketAddrs + Send + 'static,
         state: S,
+        shutdown_signal: CancellationToken,
     ) -> ServerHandle
     where
         S: MessageHandler + Send + 'static,
     {
         let handle = match self {
-            Self::Udp => tokio::spawn(UdpServer::run(address, state)),
+            Self::Udp => tokio::spawn(UdpServer::run(address, state, shutdown_signal)),
             Self::Tcp => tokio::spawn(Self::run_tcp_server(address, state)),
         };
+
         ServerHandle { handle }
     }
 }
@@ -207,14 +208,24 @@ where
     State: MessageHandler + Send + 'static,
 {
     /// Runs the UDP server implementation.
-    pub async fn run(address: impl ToSocketAddrs, state: State) -> Result<(), std::io::Error> {
+    pub async fn run(
+        address: impl ToSocketAddrs,
+        state: State,
+        shutdown_signal: CancellationToken,
+    ) -> Result<(), std::io::Error> {
         let mut server = Self::bind(address, state).await?;
 
         loop {
-            match server.udp_stream.next().await {
-                Some(Ok((message, peer))) => server.handle_message(message, peer),
-                Some(Err(error)) => server.handle_error(error).await?,
-                None => unreachable!("`UdpFramed` should never return `None`"),
+            tokio::select! { biased;
+                _ = shutdown_signal.cancelled() => {
+                    server.shutdown().await;
+                    return Ok(());
+                }
+                result = server.udp_stream.next() => match result {
+                    Some(Ok((message, peer))) => server.handle_message(message, peer),
+                    Some(Err(error)) => server.handle_error(error).await?,
+                    None => unreachable!("`UdpFramed` should never return `None`"),
+                },
             }
         }
     }

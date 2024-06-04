@@ -25,6 +25,7 @@ use linera_service::{
 };
 use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 
 /// Options for running the proxy.
@@ -236,7 +237,7 @@ where
 
         self.public_config
             .protocol
-            .spawn_server(address, self)
+            .spawn_server(address, self, CancellationToken::new())
             .join()
             .await?;
         Ok(())

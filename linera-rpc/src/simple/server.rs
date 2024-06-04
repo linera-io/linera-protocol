@@ -13,6 +13,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::Rng;
 use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
 use super::transport::{MessageHandler, ServerHandle, TransportProtocol};
@@ -134,7 +135,7 @@ where
         }
     }
 
-    pub fn spawn(self) -> ServerHandle {
+    pub fn spawn(self, shutdown_signal: CancellationToken) -> ServerHandle {
         info!(
             "Listening to {:?} traffic on {}:{}",
             self.network.protocol, self.host, self.port
@@ -161,7 +162,7 @@ where
             cross_chain_sender,
         };
         // Launch server for the appropriate protocol.
-        protocol.spawn_server(address, state)
+        protocol.spawn_server(address, state, shutdown_signal)
     }
 }
 

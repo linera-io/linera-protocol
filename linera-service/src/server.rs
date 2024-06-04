@@ -29,6 +29,7 @@ use linera_service::{
 use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde::Deserialize;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 struct ServerContext {
@@ -72,6 +73,7 @@ impl ServerContext {
         ViewError: From<S::ContextError>,
     {
         let handles = FuturesUnordered::new();
+        let shutdown_signal = CancellationToken::new();
 
         let internal_network = self
             .server_config
@@ -96,7 +98,7 @@ impl ServerContext {
                 shard_id,
                 cross_chain_config,
             )
-            .spawn();
+            .spawn(shutdown_signal.clone());
 
             handles.push(
                 server_handle
