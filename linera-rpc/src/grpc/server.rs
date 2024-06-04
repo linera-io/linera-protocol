@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     str::FromStr,
     task::{Context, Poll},
     time::{Duration, Instant},
@@ -191,7 +191,7 @@ where
             host, port, shard_id
         );
 
-        let server_address = SocketAddr::from_str(&format!("{}:{}", host, port))?;
+        let server_address = SocketAddr::from((IpAddr::from_str(&host)?, port));
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(cross_chain_config.queue_size);
