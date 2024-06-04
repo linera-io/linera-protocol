@@ -142,25 +142,19 @@ impl TransportProtocol {
     }
 
     /// Runs a server for this protocol and the given message handler.
-    pub async fn spawn_server<S>(
+    pub fn spawn_server<S>(
         self,
-        address: impl ToSocketAddrs,
+        address: impl ToSocketAddrs + Send + 'static,
         state: S,
-    ) -> Result<ServerHandle, std::io::Error>
+    ) -> ServerHandle
     where
         S: MessageHandler + Send + 'static,
     {
         let handle = match self {
-            Self::Udp => {
-                let socket = UdpSocket::bind(address).await?;
-                tokio::spawn(Self::run_udp_server(socket, state))
-            }
-            Self::Tcp => {
-                let listener = TcpListener::bind(address).await?;
-                tokio::spawn(Self::run_tcp_server(listener, state))
-            }
+            Self::Udp => tokio::spawn(Self::run_udp_server(address, state)),
+            Self::Tcp => tokio::spawn(Self::run_tcp_server(address, state)),
         };
-        Ok(ServerHandle { handle })
+        ServerHandle { handle }
     }
 }
 
@@ -194,10 +188,11 @@ impl ConnectionPool for UdpConnectionPool {
 
 // Server implementation for UDP.
 impl TransportProtocol {
-    async fn run_udp_server<S>(socket: UdpSocket, state: S) -> Result<(), std::io::Error>
+    async fn run_udp_server<S>(address: impl ToSocketAddrs, state: S) -> Result<(), std::io::Error>
     where
         S: MessageHandler + Send + 'static,
     {
+        let socket = UdpSocket::bind(address).await?;
         let (udp_sink, mut udp_stream) = UdpFramed::new(socket, Codec).split();
         let udp_sink = Arc::new(Mutex::new(udp_sink));
         // Track the latest tasks for a given peer. This is used to return answers in the
@@ -290,10 +285,11 @@ impl ConnectionPool for TcpConnectionPool {
 
 // Server implementation for TCP.
 impl TransportProtocol {
-    async fn run_tcp_server<S>(listener: TcpListener, state: S) -> Result<(), std::io::Error>
+    async fn run_tcp_server<S>(address: impl ToSocketAddrs, state: S) -> Result<(), std::io::Error>
     where
         S: MessageHandler + Send + 'static,
     {
+        let listener = TcpListener::bind(address).await?;
         let mut accept_stream = stream::try_unfold(listener, |listener| async move {
             let (socket, _) = listener.accept().await?;
             Ok::<_, io::Error>(Some((socket, listener)))

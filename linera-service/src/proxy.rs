@@ -236,8 +236,7 @@ where
 
         self.public_config
             .protocol
-            .spawn_server(&address, self)
-            .await?
+            .spawn_server(address, self)
             .join()
             .await?;
         Ok(())
