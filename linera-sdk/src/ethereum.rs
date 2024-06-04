@@ -1,6 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Ethereum support is disabled on SDK v0.11
+#![cfg(not(target_arch = "wasm32"))]
+
 //! Support for Linera applications that interact with Ethereum or other EVM contracts.
 
 use std::fmt::Debug;
@@ -17,8 +20,7 @@ pub struct EthereumClient {
     pub url: String,
 }
 
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[async_trait::async_trait]
 impl JsonRpcClient for EthereumClient {
     type Error = ProviderError;
 
