@@ -214,11 +214,9 @@ where
             match server.udp_stream.next().await {
                 Some(Ok((message, peer))) => server.handle_message(message, peer),
                 Some(Err(error)) => server.handle_error(error).await?,
-                None => break,
+                None => unreachable!("`UdpFramed` should never return `None`"),
             }
         }
-
-        Ok(())
     }
 
     /// Creates a [`UpdServer`] bound to the provided `address`, handling messages using the
