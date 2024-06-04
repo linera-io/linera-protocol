@@ -2,12 +2,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, io, net::SocketAddr, pin::pin, sync::Arc};
+use std::{collections::HashMap, io, mem, net::SocketAddr, pin::pin, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{
     future,
-    stream::{self, SplitSink, SplitStream},
+    stream::{self, FuturesUnordered, SplitSink, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryStreamExt,
 };
 use serde::{Deserialize, Serialize};
@@ -264,10 +264,25 @@ where
     /// Handles an error while receiving a message.
     async fn handle_error(&mut self, error: codec::Error) -> Result<(), std::io::Error> {
         match error {
-            codec::Error::Io(io_error) => Err(io_error),
+            codec::Error::Io(io_error) => {
+                self.shutdown().await;
+                Err(io_error)
+            }
             other_error => {
                 warn!("Received an invalid message: {other_error}");
                 Ok(())
+            }
+        }
+    }
+
+    /// Gracefully shuts down the server, waiting for existing tasks to finish.
+    async fn shutdown(&mut self) {
+        let handlers = mem::take(&mut self.active_handlers);
+        let mut handler_results = FuturesUnordered::from_iter(handlers.into_values());
+
+        while let Some(result) = handler_results.next().await {
+            if let Err(error) = result {
+                warn!("Message handler panicked: {}", error);
             }
         }
     }
