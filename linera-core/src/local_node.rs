@@ -6,8 +6,7 @@ use std::{borrow::Cow, sync::Arc};
 
 use futures::{future, lock::Mutex};
 use linera_base::{
-    data_types::{ArithmeticError, BlockHeight, HashedBlob},
-    ensure,
+    data_types::{ArithmeticError, Blob, BlockHeight, HashedBlob},
     identifiers::{BlobId, ChainId, MessageId},
 };
 use linera_chain::data_types::{
@@ -72,9 +71,6 @@ pub enum LocalNodeError {
 
     #[error("The chain info response received from the local node is invalid")]
     InvalidChainInfoResponse,
-
-    #[error("Got different blob id from downloaded blob when trying to download {blob_id:?}")]
-    BlobIdMismatch { blob_id: BlobId },
 }
 
 impl<S> LocalNodeClient<S>
@@ -212,17 +208,21 @@ where
         .collect::<Vec<_>>()
     }
 
-    async fn find_missing_blobs<A>(&self, blob_ids: &[BlobId], node: &mut A) -> Vec<HashedBlob>
+    async fn find_missing_blobs<A>(
+        &self,
+        blob_ids: &[BlobId],
+        node: &mut A,
+        name: ValidatorName,
+    ) -> Vec<HashedBlob>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
         future::join_all(blob_ids.iter().map(|blob_id| {
             let mut node = node.clone();
-            async move { Self::try_download_blob_from(&mut node, *blob_id).await }
+            async move { Self::try_download_blob_from(name, &mut node, *blob_id).await }
         }))
         .await
         .into_iter()
-        .flatten()
         .flatten()
         .collect::<Vec<_>>()
     }
@@ -269,7 +269,7 @@ where
                     }
                 }
                 Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids))) => {
-                    let blobs = self.find_missing_blobs(blob_ids, node).await;
+                    let blobs = self.find_missing_blobs(blob_ids, node, name).await;
                     if blobs.len() != blob_ids.len() {
                         result
                     } else {
@@ -283,7 +283,7 @@ where
                     let values = self
                         .find_missing_application_bytecodes(chain_id, locations, node, name)
                         .await;
-                    let blobs = self.find_missing_blobs(blob_ids, node).await;
+                    let blobs = self.find_missing_blobs(blob_ids, node, name).await;
                     if values.len() != locations.len() || blobs.len() != blob_ids.len() {
                         result
                     } else {
@@ -655,39 +655,42 @@ where
         None
     }
 
-    pub async fn try_download_blob<A>(
-        mut validators: Vec<A>,
+    pub async fn download_blob<A>(
+        mut validators: Vec<(ValidatorName, A)>,
         blob_id: BlobId,
-    ) -> Result<Option<HashedBlob>, LocalNodeError>
+    ) -> Option<HashedBlob>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
         // Sequentially try each validator in random order.
         validators.shuffle(&mut rand::thread_rng());
-        for mut node in validators {
-            if let Some(blob) = Self::try_download_blob_from(&mut node, blob_id).await? {
-                return Ok(Some(blob));
+        for (name, mut node) in validators {
+            if let Some(blob) = Self::try_download_blob_from(name, &mut node, blob_id).await {
+                return Some(blob);
             }
         }
-        Ok(None)
+        None
     }
 
     async fn try_download_blob_from<A>(
+        name: ValidatorName,
         node: &mut A,
         blob_id: BlobId,
-    ) -> Result<Option<HashedBlob>, LocalNodeError>
+    ) -> Option<HashedBlob>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
-        if let Ok(blob) = node.download_blob(blob_id).await {
-            let hashed_blob = blob.into_hashed();
-            ensure!(
-                hashed_blob.id() == blob_id,
-                LocalNodeError::BlobIdMismatch { blob_id }
-            );
-            return Ok(Some(hashed_blob));
+        match node.download_blob(blob_id).await.map(Blob::into_hashed) {
+            Ok(hashed_blob) if hashed_blob.id() == blob_id => Some(hashed_blob),
+            Ok(_) => {
+                tracing::info!("Validator {name} sent an invalid blob {blob_id}.");
+                None
+            }
+            Err(error) => {
+                tracing::debug!("Validator {name} failed to send blob {blob_id}: {error}");
+                None
+            }
         }
-        Ok(None)
     }
 
     async fn try_download_hashed_certificate_value_from<A>(

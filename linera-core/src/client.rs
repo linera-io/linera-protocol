@@ -748,16 +748,15 @@ where
     async fn find_missing_blobs(
         &self,
         blob_ids: &[BlobId],
-        nodes: &[<P as LocalValidatorNodeProvider>::Node],
+        nodes: &[(ValidatorName, <P as LocalValidatorNodeProvider>::Node)],
     ) -> Vec<HashedBlob> {
         future::join_all(
             blob_ids
                 .iter()
-                .map(|blob_id| LocalNodeClient::<S>::try_download_blob(nodes.to_owned(), *blob_id)),
+                .map(|blob_id| LocalNodeClient::<S>::download_blob(nodes.to_owned(), *blob_id)),
         )
         .await
         .into_iter()
-        .flatten()
         .flatten()
         .collect::<Vec<_>>()
     }
@@ -809,15 +808,7 @@ where
                         .await?;
                 }
                 LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
-                    let blobs = self
-                        .find_missing_blobs(
-                            blob_ids,
-                            &nodes
-                                .into_iter()
-                                .map(|(_name, node)| node)
-                                .collect::<Vec<_>>(),
-                        )
-                        .await;
+                    let blobs = self.find_missing_blobs(blob_ids, &nodes).await;
 
                     ensure!(blobs.len() == blob_ids.len(), err);
                     self.process_certificate(certificate.clone(), vec![], blobs)
@@ -830,15 +821,7 @@ where
                     let values = self
                         .find_missing_application_bytecodes(locations, &nodes, block.chain_id)
                         .await;
-                    let blobs = self
-                        .find_missing_blobs(
-                            blob_ids,
-                            &nodes
-                                .into_iter()
-                                .map(|(_name, node)| node)
-                                .collect::<Vec<_>>(),
-                        )
-                        .await;
+                    let blobs = self.find_missing_blobs(blob_ids, &nodes).await;
 
                     ensure!(
                         blobs.len() == blob_ids.len() && values.len() == locations.len(),
