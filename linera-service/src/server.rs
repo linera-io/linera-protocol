@@ -6,7 +6,7 @@ use std::{path::PathBuf, time::Duration};
 
 use anyhow::bail;
 use async_trait::async_trait;
-use futures::{future::join_all, FutureExt, TryFutureExt};
+use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
 use linera_base::crypto::{CryptoRng, KeyPair};
 use linera_core::worker::WorkerState;
 use linera_execution::{committee::ValidatorName, WasmRuntime, WithWasmDefault};
@@ -71,12 +71,13 @@ impl ServerContext {
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
+        let handles = FuturesUnordered::new();
+
         let internal_network = self
             .server_config
             .internal_network
             .clone_with_protocol(protocol);
 
-        let mut handles = Vec::new();
         for (state, shard_id, shard) in states {
             let internal_network = internal_network.clone();
             let cross_chain_config = self.cross_chain_config.clone();
@@ -107,7 +108,7 @@ impl ServerContext {
             );
         }
 
-        join_all(handles).await;
+        handles.collect::<()>().await;
     }
 
     async fn spawn_grpc<S>(
@@ -118,7 +119,7 @@ impl ServerContext {
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
-        let mut handles = Vec::new();
+        let handles = FuturesUnordered::new();
         for (state, shard_id, shard) in states {
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
@@ -145,7 +146,7 @@ impl ServerContext {
             );
         }
 
-        join_all(handles).await;
+        handles.collect::<()>().await;
     }
 
     #[cfg(with_metrics)]
