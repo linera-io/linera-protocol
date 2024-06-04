@@ -351,10 +351,6 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             .request_hashed_certificate_value
             .map(|bytes| bincode::deserialize(&bytes))
             .transpose()?;
-        let request_blob = chain_info_query
-            .request_blob
-            .map(|bytes| bincode::deserialize(&bytes))
-            .transpose()?;
 
         Ok(Self {
             request_committees: chain_info_query.request_committees,
@@ -372,7 +368,6 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             request_leader_timeout: chain_info_query.request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
             request_hashed_certificate_value,
-            request_blob,
         })
     }
 }
@@ -389,10 +384,6 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             .request_hashed_certificate_value
             .map(|hash| bincode::serialize(&hash))
             .transpose()?;
-        let request_blob = chain_info_query
-            .request_blob
-            .map(|blob_id| bincode::serialize(&blob_id))
-            .transpose()?;
 
         Ok(Self {
             chain_id: Some(chain_info_query.chain_id.into()),
@@ -407,7 +398,6 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             request_leader_timeout: chain_info_query.request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
             request_hashed_certificate_value,
-            request_blob,
         })
     }
 }
@@ -656,7 +646,6 @@ pub mod tests {
             count_received_log: 0,
             requested_received_log: vec![],
             requested_hashed_certificate_value: None,
-            requested_blob: None,
         });
 
         let chain_info_response_none = ChainInfoResponse {
@@ -694,7 +683,6 @@ pub mod tests {
             request_leader_timeout: false,
             request_fallback: true,
             request_hashed_certificate_value: None,
-            request_blob: None,
         };
         round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);
     }

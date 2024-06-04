@@ -6,7 +6,7 @@ use std::{borrow::Cow, sync::Arc};
 
 use futures::{future, lock::Mutex};
 use linera_base::{
-    data_types::{ArithmeticError, BlockHeight, HashedBlob},
+    data_types::{ArithmeticError, Blob, BlockHeight, HashedBlob},
     identifiers::{BlobId, ChainId, MessageId},
 };
 use linera_chain::data_types::{
@@ -210,7 +210,6 @@ where
 
     async fn find_missing_blobs<A>(
         &self,
-        chain_id: ChainId,
         blob_ids: &[BlobId],
         node: &mut A,
         name: ValidatorName,
@@ -220,7 +219,7 @@ where
     {
         future::join_all(blob_ids.iter().map(|blob_id| {
             let mut node = node.clone();
-            async move { Self::try_download_blob_from(name, &mut node, chain_id, *blob_id).await }
+            async move { Self::try_download_blob_from(name, &mut node, *blob_id).await }
         }))
         .await
         .into_iter()
@@ -270,10 +269,7 @@ where
                     }
                 }
                 Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids))) => {
-                    let blobs = self
-                        .find_missing_blobs(certificate.value().chain_id(), blob_ids, node, name)
-                        .await;
-
+                    let blobs = self.find_missing_blobs(blob_ids, node, name).await;
                     if blobs.len() != blob_ids.len() {
                         result
                     } else {
@@ -287,10 +283,7 @@ where
                     let values = self
                         .find_missing_application_bytecodes(chain_id, locations, node, name)
                         .await;
-                    let blobs = self
-                        .find_missing_blobs(chain_id, blob_ids, node, name)
-                        .await;
-
+                    let blobs = self.find_missing_blobs(blob_ids, node, name).await;
                     if values.len() != locations.len() || blobs.len() != blob_ids.len() {
                         result
                     } else {
@@ -664,7 +657,6 @@ where
 
     pub async fn download_blob<A>(
         mut validators: Vec<(ValidatorName, A)>,
-        chain_id: ChainId,
         blob_id: BlobId,
     ) -> Option<HashedBlob>
     where
@@ -673,9 +665,7 @@ where
         // Sequentially try each validator in random order.
         validators.shuffle(&mut rand::thread_rng());
         for (name, mut node) in validators {
-            if let Some(blob) =
-                Self::try_download_blob_from(name, &mut node, chain_id, blob_id).await
-            {
+            if let Some(blob) = Self::try_download_blob_from(name, &mut node, blob_id).await {
                 return Some(blob);
             }
         }
@@ -685,19 +675,22 @@ where
     async fn try_download_blob_from<A>(
         name: ValidatorName,
         node: &mut A,
-        chain_id: ChainId,
         blob_id: BlobId,
     ) -> Option<HashedBlob>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
-        let query = ChainInfoQuery::new(chain_id).with_blob(blob_id);
-        if let Ok(response) = node.handle_chain_info_query(query).await {
-            if response.check(name).is_ok() {
-                return response.info.requested_blob;
+        match node.download_blob(blob_id).await.map(Blob::into_hashed) {
+            Ok(hashed_blob) if hashed_blob.id() == blob_id => Some(hashed_blob),
+            Ok(_) => {
+                tracing::info!("Validator {name} sent an invalid blob {blob_id}.");
+                None
+            }
+            Err(error) => {
+                tracing::debug!("Failed to fetch blob {blob_id} from validator {name}: {error}");
+                None
             }
         }
-        None
     }
 
     async fn try_download_hashed_certificate_value_from<A>(

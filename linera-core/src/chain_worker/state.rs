@@ -713,9 +713,6 @@ where
             info.requested_hashed_certificate_value =
                 Some(self.storage.read_hashed_certificate_value(hash).await?);
         }
-        if let Some(blob_id) = query.request_blob {
-            info.requested_blob = Some(self.storage.read_hashed_blob(blob_id).await?);
-        }
         if query.request_manager_values {
             info.manager.add_values(self.chain.manager.get());
         }

@@ -100,7 +100,7 @@ pub trait Storage: Sized {
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, ViewError>;
 
-    /// Reads the blob with the given blob id.
+    /// Reads the blob with the given blob ID.
     async fn read_hashed_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ViewError>;
 
     /// Reads the hashed certificate values in descending order from the given hash.
