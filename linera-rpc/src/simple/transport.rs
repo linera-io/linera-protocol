@@ -245,7 +245,7 @@ where
             if let Some(reply) = state.handle_message(message).await {
                 if let Some(task) = previous_task {
                     if let Err(error) = task.await {
-                        warn!("Previous task cannot be joined: {}", error);
+                        warn!("Message handler task panicked: {}", error);
                     }
                 }
                 let status = udp_sink.lock().await.send((reply, peer)).await;
