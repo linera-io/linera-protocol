@@ -114,9 +114,10 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
     let context = QueryContext {
         chain_id: ChainId::root(0),
         next_block_height: BlockHeight(0),
+        local_time: Timestamp::from(0),
     };
     let response = view
-        .query_application(context, Timestamp::from(0), Query::System(SystemQuery))
+        .query_application(context, Query::System(SystemQuery))
         .await
         .unwrap();
     assert_eq!(

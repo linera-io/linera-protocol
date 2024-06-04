@@ -378,10 +378,11 @@ where
         let context = QueryContext {
             chain_id: self.chain_id(),
             next_block_height: self.tip_state.get().next_block_height,
+            local_time,
         };
         let response = self
             .execution_state
-            .query_application(context, local_time, query)
+            .query_application(context, query)
             .await
             .map_err(|error| ChainError::ExecutionError(error, ChainExecutionContext::Query))?;
         Ok(response)

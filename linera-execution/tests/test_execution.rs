@@ -206,11 +206,11 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let context = QueryContext {
         chain_id: ChainId::root(0),
         next_block_height: BlockHeight(0),
+        local_time: Timestamp::from(0),
     };
     assert_eq!(
         view.query_application(
             context,
-            Timestamp::from(0),
             Query::User {
                 application_id: caller_id,
                 bytes: vec![]

@@ -296,6 +296,8 @@ pub struct QueryContext {
     pub chain_id: ChainId,
     /// The height of the next block on this chain.
     pub next_block_height: BlockHeight,
+    /// The local time in the node executing the query.
+    pub local_time: Timestamp,
 }
 
 pub trait BaseRuntime {

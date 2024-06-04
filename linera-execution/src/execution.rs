@@ -447,7 +447,6 @@ where
     pub async fn query_application(
         &mut self,
         context: QueryContext,
-        local_time: Timestamp,
         query: Query,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
@@ -462,13 +461,8 @@ where
             } => {
                 let response = match self.context().extra().execution_runtime_config() {
                     ExecutionRuntimeConfig::Synchronous => {
-                        self.query_application_with_sync_runtime(
-                            application_id,
-                            context,
-                            local_time,
-                            bytes,
-                        )
-                        .await?
+                        self.query_application_with_sync_runtime(application_id, context, bytes)
+                            .await?
                     }
                 };
                 Ok(Response::User(response))
@@ -480,19 +474,12 @@ where
         &mut self,
         application_id: UserApplicationId,
         context: QueryContext,
-        local_time: Timestamp,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let query_result_future = tokio::task::spawn_blocking(move || {
-            ServiceSyncRuntime::run_query(
-                execution_state_sender,
-                application_id,
-                context,
-                local_time,
-                query,
-            )
+            ServiceSyncRuntime::run_query(execution_state_sender, application_id, context, query)
         });
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;

@@ -871,10 +871,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let context = crate::QueryContext {
             chain_id: self.chain_id,
             next_block_height: self.height,
+            local_time: self.local_time,
         };
         let sender = self.execution_state_sender.clone();
-        let response =
-            ServiceSyncRuntime::run_query(sender, application_id, context, self.local_time, query)?;
+        let response = ServiceSyncRuntime::run_query(sender, application_id, context, query)?;
         if let OracleResponses::Record(responses) = &mut self.oracle_responses {
             responses.push(OracleResponse::Service(response.clone()));
         }
@@ -1294,13 +1294,12 @@ impl ServiceSyncRuntime {
         execution_state_sender: ExecutionStateSender,
         application_id: UserApplicationId,
         context: crate::QueryContext,
-        local_time: Timestamp,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let runtime_internal = SyncRuntimeInternal::new(
             context.chain_id,
             context.next_block_height,
-            local_time,
+            context.local_time,
             None,
             0,
             None,
@@ -1337,6 +1336,7 @@ impl ServiceRuntime for ServiceSyncRuntime {
             let query_context = crate::QueryContext {
                 chain_id: this.chain_id,
                 next_block_height: this.height,
+                local_time: this.local_time,
             };
             this.push_application(ApplicationStatus {
                 caller_id: None,
