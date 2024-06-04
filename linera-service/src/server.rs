@@ -6,7 +6,7 @@ use std::{path::PathBuf, time::Duration};
 
 use anyhow::bail;
 use async_trait::async_trait;
-use futures::future::join_all;
+use futures::{future::join_all, FutureExt, TryFutureExt};
 use linera_base::crypto::{CryptoRng, KeyPair};
 use linera_core::worker::WorkerState;
 use linera_execution::{committee::ValidatorName, WasmRuntime, WithWasmDefault};
@@ -80,25 +80,31 @@ impl ServerContext {
         for (state, shard_id, shard) in states {
             let internal_network = internal_network.clone();
             let cross_chain_config = self.cross_chain_config.clone();
+            let listen_address = listen_address.to_owned();
 
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
-                Self::start_metrics(listen_address, port);
+                Self::start_metrics(&listen_address, port);
             }
 
-            handles.push(async move {
-                let server = simple::Server::new(
-                    internal_network,
-                    listen_address.to_string(),
-                    shard.port,
-                    state,
-                    shard_id,
-                    cross_chain_config,
-                );
-                if let Err(err) = server.spawn().join().await {
-                    error!("Error while running server: {}", err);
-                }
-            });
+            let server_handle = simple::Server::new(
+                internal_network,
+                listen_address,
+                shard.port,
+                state,
+                shard_id,
+                cross_chain_config,
+            )
+            .spawn();
+
+            handles.push(
+                server_handle
+                    .join()
+                    .inspect_err(move |error| {
+                        error!("Error running server for shard {shard_id}: {error:?}")
+                    })
+                    .map(|_| ()),
+            );
         }
 
         join_all(handles).await;
@@ -119,20 +125,24 @@ impl ServerContext {
                 Self::start_metrics(listen_address, port);
             }
 
-            handles.push(async move {
-                let spawned_server = grpc::GrpcServer::spawn(
-                    listen_address.to_string(),
-                    shard.port,
-                    state,
-                    shard_id,
-                    self.server_config.internal_network.clone(),
-                    self.cross_chain_config.clone(),
-                    self.notification_config.clone(),
-                );
-                if let Err(err) = spawned_server.join().await {
-                    error!("Server ended with an error: {}", err);
-                }
-            });
+            let server_handle = grpc::GrpcServer::spawn(
+                listen_address.to_string(),
+                shard.port,
+                state,
+                shard_id,
+                self.server_config.internal_network.clone(),
+                self.cross_chain_config.clone(),
+                self.notification_config.clone(),
+            );
+
+            handles.push(
+                server_handle
+                    .join()
+                    .inspect_err(move |error| {
+                        error!("Error running server for shard {shard_id}: {error:?}")
+                    })
+                    .map(|_| ()),
+            );
         }
 
         join_all(handles).await;
