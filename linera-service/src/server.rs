@@ -67,8 +67,7 @@ impl ServerContext {
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
         protocol: simple::TransportProtocol,
-    ) -> Result<(), anyhow::Error>
-    where
+    ) where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
@@ -103,16 +102,13 @@ impl ServerContext {
         }
 
         join_all(handles).await;
-
-        Ok(())
     }
 
     async fn spawn_grpc<S>(
         &self,
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
-    ) -> Result<(), anyhow::Error>
-    where
+    ) where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
@@ -143,8 +139,6 @@ impl ServerContext {
         }
 
         join_all(handles).await;
-
-        Ok(())
     }
 
     #[cfg(with_metrics)]
@@ -186,10 +180,10 @@ impl Runnable for ServerContext {
 
         match self.server_config.internal_network.protocol {
             NetworkProtocol::Simple(protocol) => {
-                self.spawn_simple(&listen_address, states, protocol).await?
+                self.spawn_simple(&listen_address, states, protocol).await
             }
             NetworkProtocol::Grpc(tls_config) => match tls_config {
-                TlsConfig::ClearText => self.spawn_grpc(&listen_address, states).await?,
+                TlsConfig::ClearText => self.spawn_grpc(&listen_address, states).await,
                 TlsConfig::Tls => bail!("TLS not supported between proxy and shards."),
             },
         };
