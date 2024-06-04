@@ -397,7 +397,7 @@ where
             certificate,
             hashed_certificate_values,
             hashed_blobs,
-            None,
+            None::<&mut Vec<Notification>>,
         )
         .await
     }
@@ -408,19 +408,19 @@ where
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
-        mut notifications: Option<&mut Vec<Notification>>,
+        mut notifications: Option<&mut impl Extend<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (response, actions) = self
             .handle_certificate(certificate, hashed_certificate_values, hashed_blobs, None)
             .await?;
-        if let Some(notifications) = notifications.as_mut() {
+        if let Some(ref mut notifications) = notifications {
             notifications.extend(actions.notifications);
         }
         let mut requests = VecDeque::from(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {
             let actions = self.handle_cross_chain_request(request).await?;
             requests.extend(actions.cross_chain_requests);
-            if let Some(notifications) = notifications.as_mut() {
+            if let Some(ref mut notifications) = notifications {
                 notifications.extend(actions.notifications);
             }
         }

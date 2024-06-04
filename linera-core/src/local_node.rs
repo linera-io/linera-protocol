@@ -20,12 +20,10 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;
 use thiserror::Error;
-use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    node::{LocalValidatorNode, NotificationStream},
-    notifier::Notifier,
+    node::LocalValidatorNode,
     value_cache::ValueCache,
     worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
 };
@@ -33,7 +31,6 @@ use crate::{
 /// A local node with a single worker, typically used by clients.
 pub struct LocalNode<S> {
     state: WorkerState<S>,
-    notifier: Arc<Notifier<Notification>>,
 }
 
 /// A client to a local node.
@@ -91,9 +88,9 @@ where
     pub async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
+        notifications: &mut impl Extend<Notification>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let mut node = self.node.lock().await;
-        let mut notifications = Vec::new();
         let full_cert = node.state.full_certificate(certificate).await?;
         let response = node
             .state
@@ -101,10 +98,9 @@ where
                 full_cert,
                 vec![],
                 vec![],
-                Some(&mut notifications),
+                Some(notifications),
             )
             .await?;
-        node.notifier.handle_notifications(&notifications);
         Ok(response)
     }
 
@@ -113,19 +109,18 @@ where
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
+        notifications: &mut impl Extend<Notification>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let mut node = self.node.lock().await;
-        let mut notifications = Vec::new();
         let response = node
             .state
             .fully_handle_certificate_with_notifications(
                 certificate,
                 hashed_certificate_values,
                 hashed_blobs,
-                Some(&mut notifications),
+                Some(notifications),
             )
             .await?;
-        node.notifier.handle_notifications(&notifications);
         Ok(response)
     }
 
@@ -138,20 +133,11 @@ where
         let (response, _actions) = node.state.handle_chain_info_query(query).await?;
         Ok(response)
     }
-
-    pub async fn subscribe(
-        &mut self,
-        chains: Vec<ChainId>,
-    ) -> Result<NotificationStream, LocalNodeError> {
-        let node = self.node.lock().await;
-        let rx = node.notifier.subscribe(chains);
-        Ok(Box::pin(UnboundedReceiverStream::new(rx)))
-    }
 }
 
 impl<S> LocalNodeClient<S> {
-    pub fn new(state: WorkerState<S>, notifier: Arc<Notifier<Notification>>) -> Self {
-        let node = LocalNode { state, notifier };
+    pub fn new(state: WorkerState<S>) -> Self {
+        let node = LocalNode { state };
 
         Self {
             node: Arc::new(Mutex::new(node)),
@@ -234,6 +220,7 @@ where
         node: &mut A,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
+        notifications: &mut impl Extend<Notification>,
     ) -> Option<Box<ChainInfo>>
     where
         A: LocalValidatorNode + Clone + 'static,
@@ -247,7 +234,7 @@ where
                 return info;
             }
             let mut result = self
-                .handle_certificate(certificate.clone(), vec![], vec![])
+                .handle_certificate(certificate.clone(), vec![], vec![], notifications)
                 .await;
 
             result = match &result {
@@ -266,7 +253,8 @@ where
                     if values.len() != locations.len() {
                         result
                     } else {
-                        self.handle_certificate(certificate, values, vec![]).await
+                        self.handle_certificate(certificate, values, vec![], notifications)
+                            .await
                     }
                 }
                 Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids))) => {
@@ -277,7 +265,8 @@ where
                     if blobs.len() != blob_ids.len() {
                         result
                     } else {
-                        self.handle_certificate(certificate, vec![], blobs).await
+                        self.handle_certificate(certificate, vec![], blobs, notifications)
+                            .await
                     }
                 }
                 Err(LocalNodeError::WorkerError(
@@ -294,7 +283,8 @@ where
                     if values.len() != locations.len() || blobs.len() != blob_ids.len() {
                         result
                     } else {
-                        self.handle_certificate(certificate, values, blobs).await
+                        self.handle_certificate(certificate, values, blobs, notifications)
+                            .await
                     }
                 }
                 _ => result,
@@ -366,6 +356,7 @@ where
         mut validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
+        notifications: &mut impl Extend<Notification>,
     ) -> Result<Box<ChainInfo>, LocalNodeError>
     where
         A: LocalValidatorNode + Clone + 'static,
@@ -383,6 +374,7 @@ where
                 chain_id,
                 info.next_block_height,
                 target_next_block_height,
+                notifications,
             )
             .await?;
         }
@@ -496,6 +488,7 @@ where
         chain_id: ChainId,
         mut start: BlockHeight,
         stop: BlockHeight,
+        notifications: &mut impl Extend<Notification>,
     ) -> Result<(), LocalNodeError>
     where
         A: LocalValidatorNode + Clone + 'static,
@@ -513,7 +506,7 @@ where
                 break;
             };
             let Some(info) = self
-                .try_process_certificates(name, &mut node, chain_id, certificates)
+                .try_process_certificates(name, &mut node, chain_id, certificates, notifications)
                 .await
             else {
                 break;
@@ -559,24 +552,35 @@ where
         &mut self,
         validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
+        notifications: &mut impl Extend<Notification>,
     ) -> Result<Box<ChainInfo>, LocalNodeError>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
-        let futures = validators
-            .into_iter()
-            .map(|(name, node)| {
-                let mut client = self.clone();
-                async move {
+        let mut futures = vec![];
+
+        for (name, node) in validators {
+            let mut client = self.clone();
+            let mut notifications = vec![];
+            futures.push(async move {
+                (
                     client
-                        .try_synchronize_chain_state_from(name, node, chain_id)
-                        .await
-                }
-            })
-            .collect::<Vec<_>>();
-        futures::future::join_all(futures).await;
-        let info = self.local_chain_info(chain_id).await?;
-        Ok(info)
+                        .try_synchronize_chain_state_from(name, node, chain_id, &mut notifications)
+                        .await,
+                    notifications,
+                )
+            });
+        }
+
+        for (result, notifications_) in futures::future::join_all(futures).await {
+            if let Err(e) = result {
+                tracing::error!(?e, "Error synchronizing chain state");
+            }
+
+            notifications.extend(notifications_);
+        }
+
+        self.local_chain_info(chain_id).await
     }
 
     pub async fn try_synchronize_chain_state_from<A>(
@@ -584,6 +588,7 @@ where
         name: ValidatorName,
         mut node: A,
         chain_id: ChainId,
+        notifications: &mut impl Extend<Notification>,
     ) -> Result<(), LocalNodeError>
     where
         A: LocalValidatorNode + Clone + 'static,
@@ -615,6 +620,7 @@ where
                     &mut node,
                     chain_id,
                     info.requested_sent_certificates,
+                    notifications,
                 )
                 .await
                 .is_none()
@@ -632,7 +638,10 @@ where
         if let Some(cert) = info.manager.requested_locked {
             if cert.value().is_validated() && cert.value().chain_id() == chain_id {
                 let hash = cert.hash();
-                if let Err(error) = self.handle_certificate(*cert, vec![], vec![]).await {
+                if let Err(error) = self
+                    .handle_certificate(*cert, vec![], vec![], notifications)
+                    .await
+                {
                     tracing::warn!("Skipping certificate {}: {}", hash, error);
                 }
             }
