@@ -687,7 +687,7 @@ where
                 None
             }
             Err(error) => {
-                tracing::debug!("Validator {name} failed to send blob {blob_id}: {error}");
+                tracing::debug!("Failed to fetch blob {blob_id} from validator {name}: {error}");
                 None
             }
         }
