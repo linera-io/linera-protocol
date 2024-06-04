@@ -81,11 +81,13 @@ impl ServerContext {
         for (state, shard_id, shard) in states {
             let internal_network = internal_network.clone();
             let cross_chain_config = self.cross_chain_config.clone();
+
+            #[cfg(with_metrics)]
+            if let Some(port) = shard.metrics_port {
+                Self::start_metrics(listen_address, port);
+            }
+
             handles.push(async move {
-                #[cfg(with_metrics)]
-                if let Some(port) = shard.metrics_port {
-                    Self::start_metrics(listen_address, port);
-                }
                 let server = simple::Server::new(
                     internal_network,
                     listen_address.to_string(),
@@ -118,11 +120,13 @@ impl ServerContext {
         for (state, shard_id, shard) in states {
             let cross_chain_config = self.cross_chain_config.clone();
             let notification_config = self.notification_config.clone();
+
+            #[cfg(with_metrics)]
+            if let Some(port) = shard.metrics_port {
+                Self::start_metrics(listen_address, port);
+            }
+
             handles.push(async move {
-                #[cfg(with_metrics)]
-                if let Some(port) = shard.metrics_port {
-                    Self::start_metrics(listen_address, port);
-                }
                 let spawned_server = grpc::GrpcServer::spawn(
                     listen_address.to_string(),
                     shard.port,
