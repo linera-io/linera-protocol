@@ -196,7 +196,7 @@ pub struct UdpServer<State> {
     handler: State,
     udp_sink: SharedUdpSink,
     udp_stream: SplitStream<UdpFramed<Codec>>,
-    previous_tasks: HashMap<SocketAddr, JoinHandle<()>>,
+    active_handlers: HashMap<SocketAddr, JoinHandle<()>>,
 }
 
 /// Type alias for the outgoing endpoint of UDP messages.
@@ -229,13 +229,13 @@ where
             handler,
             udp_sink: Arc::new(Mutex::new(udp_sink)),
             udp_stream,
-            previous_tasks: HashMap::new(),
+            active_handlers: HashMap::new(),
         })
     }
 
     /// Spawns a task to handle a single incoming message.
     fn handle_message(&mut self, message: RpcMessage, peer: SocketAddr) {
-        let previous_task = self.previous_tasks.remove(&peer);
+        let previous_task = self.active_handlers.remove(&peer);
         let mut state = self.handler.clone();
         let udp_sink = self.udp_sink.clone();
 
@@ -253,11 +253,11 @@ where
             }
         });
 
-        self.previous_tasks.insert(peer, new_task);
+        self.active_handlers.insert(peer, new_task);
 
-        if self.previous_tasks.len() >= 100 {
+        if self.active_handlers.len() >= 100 {
             // Collect finished tasks to avoid leaking memory.
-            self.previous_tasks.retain(|_, task| !task.is_finished());
+            self.active_handlers.retain(|_, task| !task.is_finished());
         }
     }
 
