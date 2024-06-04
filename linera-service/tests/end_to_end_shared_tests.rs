@@ -2,8 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod common;
-
 use std::{collections::BTreeMap, env, time::Duration};
 
 use anyhow::Result;
@@ -22,11 +20,9 @@ use linera_service::cli_wrappers::remote_net::RemoteNetTestingConfig;
 use linera_service::cli_wrappers::{
     docker::BuildArg, local_kubernetes_net::SharedLocalKubernetesNetTestingConfig,
 };
-use linera_service::{
-    cli_wrappers::{
-        local_net::{Database, SharedLocalNetConfig},
-        ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
-    },
+use linera_service::cli_wrappers::{
+    local_net::{Database, SharedLocalNetConfig},
+    ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
 };
 use serde_json::{json, Value};
 use test_case::test_case;

@@ -8,6 +8,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
 use linera_base::{
@@ -27,8 +28,8 @@ use tonic_health::pb::{
 use tracing::{info, warn};
 #[cfg(with_testing)]
 use {
-    async_lock::RwLock,
     crate::cli_wrappers::FaucetOption,
+    async_lock::RwLock,
     linera_base::sync::Lazy,
     linera_storage_service::child::{get_free_endpoint, StorageService, StorageServiceGuard},
     linera_storage_service::common::get_service_storage_binary,
@@ -740,7 +741,6 @@ impl LocalNet {
 // The Shared stuff
 //
 
-
 /// The number of simultaneous sets of validators
 #[cfg(with_testing)]
 const N_SIMULTANEOUS_RUNS: usize = 5;
@@ -769,8 +769,8 @@ impl ValidatorNumber {
 }
 
 #[cfg(with_testing)]
-static VALIDATOR_INDEX: Lazy<ValidatorNumber> = Lazy::new(|| ValidatorNumber::new(N_SIMULTANEOUS_RUNS));
-
+static VALIDATOR_INDEX: Lazy<ValidatorNumber> =
+    Lazy::new(|| ValidatorNumber::new(N_SIMULTANEOUS_RUNS));
 
 /// A `LocalNetConfig` that can be shared between tests.
 #[cfg(with_testing)]
@@ -796,11 +796,24 @@ impl LineraNetConfig for SharedLocalNetConfig {
         let mut net_client = SHARED_LOCAL_NET.write().await;
         if net_client.0.is_none() {
             let (local_net, initial_client) = self.local_net_config.instantiate().await?;
-            *net_client = (Some(NetClientInternal { local_net, initial_client }), 1);
+            *net_client = (
+                Some(NetClientInternal {
+                    local_net,
+                    initial_client,
+                }),
+                1,
+            );
         } else {
-            (*net_client).1 += 1;
+            net_client.1 += 1;
         }
-        let (Some(NetClientInternal { local_net, initial_client }), _) = net_client.deref_mut() else {
+        let (
+            Some(NetClientInternal {
+                local_net,
+                initial_client,
+            }),
+            _,
+        ) = net_client.deref_mut()
+        else {
             unreachable!();
         };
         let client = local_net.make_client().await;
@@ -829,7 +842,8 @@ struct NetClientInternal {
 }
 
 #[cfg(with_testing)]
-static SHARED_LOCAL_NET: Lazy<RwLock<(Option<NetClientInternal>, usize)>> = Lazy::new(|| RwLock::new((None, 0)));
+static SHARED_LOCAL_NET: Lazy<RwLock<(Option<NetClientInternal>, usize)>> =
+    Lazy::new(|| RwLock::new((None, 0)));
 
 /// A `LocalNet` that is shared between test instances
 #[cfg(with_testing)]
@@ -842,7 +856,14 @@ pub struct SharedLocalNet {
 impl LineraNet for SharedLocalNet {
     async fn ensure_is_running(&mut self) -> Result<()> {
         let mut net_client = SHARED_LOCAL_NET.write().await;
-        let (Some(NetClientInternal { local_net, initial_client: _ }), _) = net_client.deref_mut() else {
+        let (
+            Some(NetClientInternal {
+                local_net,
+                initial_client: _,
+            }),
+            _,
+        ) = net_client.deref_mut()
+        else {
             unreachable!();
         };
         local_net.ensure_is_running().await
@@ -850,7 +871,14 @@ impl LineraNet for SharedLocalNet {
 
     async fn make_client(&mut self) -> ClientWrapper {
         let mut net_client = SHARED_LOCAL_NET.write().await;
-        let (Some(NetClientInternal { local_net, initial_client: _ }), _) = net_client.deref_mut() else {
+        let (
+            Some(NetClientInternal {
+                local_net,
+                initial_client: _,
+            }),
+            _,
+        ) = net_client.deref_mut()
+        else {
             unreachable!();
         };
         local_net.make_client().await
@@ -867,4 +895,3 @@ impl LineraNet for SharedLocalNet {
         Ok(())
     }
 }
-

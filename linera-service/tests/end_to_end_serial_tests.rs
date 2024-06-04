@@ -8,16 +8,12 @@ use std::{env, mem, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use common::INTEGRATION_TEST_GUARD;
+#[cfg(feature = "benchmark")]
+use linera_base::identifiers::AccountOwner;
 use linera_base::{
     crypto::KeyPair,
     data_types::Amount,
     identifiers::{Account, ChainId, Owner},
-};
-#[cfg(feature = "remote_net")]
-use linera_service::cli_wrappers::remote_net::RemoteNetTestingConfig;
-#[cfg(feature = "kubernetes")]
-use linera_service::cli_wrappers::{
-    docker::BuildArg, local_kubernetes_net::SharedLocalKubernetesNetTestingConfig,
 };
 use linera_service::{
     cli_wrappers::{
@@ -434,6 +430,12 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
 }
 
 #[cfg(feature = "benchmark")]
+fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
+    let owner = client.get_owner().unwrap();
+    AccountOwner::User(owner)
+}
+
+#[cfg(feature = "benchmark")]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "service_tcp")]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
@@ -442,6 +444,8 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
+    use std::collections::BTreeMap;
+
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
     config.num_other_initial_chains = 2;
