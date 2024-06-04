@@ -1,0 +1,22 @@
+# This is the configuration file for running
+# a single validator in Docker Compose.
+# In Docker Compose, the hostname of a service
+# is the name of the service.
+
+server_config_path = "server.json"
+host = "127.0.0.1"
+port = 19100
+metrics_host = "proxy"
+metrics_port = 21100
+internal_host = "proxy"
+internal_port = 20100
+[external_protocol]
+Grpc = "ClearText"
+[internal_protocol]
+Grpc = "ClearText"
+
+[[shards]]
+host = "shard"
+port = 19100
+metrics_host = "shard"
+metrics_port = 21100
