@@ -2,14 +2,19 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, io, pin::pin, sync::Arc};
+use std::{collections::HashMap, io, net::SocketAddr, pin::pin, sync::Arc};
 
 use async_trait::async_trait;
-use futures::{future, stream, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
+use futures::{
+    future,
+    stream::{self, SplitSink, SplitStream},
+    Sink, SinkExt, Stream, StreamExt, TryStreamExt,
+};
 use serde::{Deserialize, Serialize};
 use tokio::{
     net::{lookup_host, TcpListener, TcpStream, ToSocketAddrs, UdpSocket},
     sync::Mutex,
+    task::JoinHandle,
 };
 use tokio_util::{codec::Framed, udp::UdpFramed};
 use tracing::{error, warn};
@@ -151,7 +156,7 @@ impl TransportProtocol {
         S: MessageHandler + Send + 'static,
     {
         let handle = match self {
-            Self::Udp => tokio::spawn(Self::run_udp_server(address, state)),
+            Self::Udp => tokio::spawn(UdpServer::run(address, state)),
             Self::Tcp => tokio::spawn(Self::run_tcp_server(address, state)),
         };
         ServerHandle { handle }
@@ -186,52 +191,87 @@ impl ConnectionPool for UdpConnectionPool {
     }
 }
 
-// Server implementation for UDP.
-impl TransportProtocol {
-    async fn run_udp_server<S>(address: impl ToSocketAddrs, state: S) -> Result<(), std::io::Error>
-    where
-        S: MessageHandler + Send + 'static,
-    {
-        let socket = UdpSocket::bind(address).await?;
-        let (udp_sink, mut udp_stream) = UdpFramed::new(socket, Codec).split();
-        let udp_sink = Arc::new(Mutex::new(udp_sink));
-        // Track the latest tasks for a given peer. This is used to return answers in the
-        // same order as the queries.
-        let mut previous_tasks = HashMap::new();
+/// Server implementation for UDP.
+pub struct UdpServer<State> {
+    handler: State,
+    udp_sink: SharedUdpSink,
+    udp_stream: SplitStream<UdpFramed<Codec>>,
+    previous_tasks: HashMap<SocketAddr, JoinHandle<()>>,
+}
 
-        while let Some(value) = udp_stream.next().await {
-            let (message, peer) = match value {
-                Ok(value) => value,
-                Err(codec::Error::Io(io_error)) => return Err(io_error),
-                Err(other_error) => {
-                    warn!("Received an invalid message: {other_error}");
-                    continue;
-                }
-            };
+/// Type alias for the outgoing endpoint of UDP messages.
+type SharedUdpSink = Arc<Mutex<SplitSink<UdpFramed<Codec>, (RpcMessage, SocketAddr)>>>;
 
-            let previous_task = previous_tasks.remove(&peer);
-            let mut state = state.clone();
-            let udp_sink = udp_sink.clone();
-            let new_task = tokio::spawn(async move {
-                if let Some(reply) = state.handle_message(message).await {
-                    if let Some(task) = previous_task {
-                        if let Err(error) = task.await {
-                            warn!("Previous task cannot be joined: {}", error);
-                        }
-                    }
-                    let status = udp_sink.lock().await.send((reply, peer)).await;
-                    if let Err(error) = status {
-                        error!("Failed to send query response: {}", error);
-                    }
-                }
-            });
-            previous_tasks.insert(peer, new_task);
-            if previous_tasks.len() >= 100 {
-                // Collect finished tasks to avoid leaking memory.
-                previous_tasks.retain(|_, task| !task.is_finished());
+impl<State> UdpServer<State>
+where
+    State: MessageHandler + Send + 'static,
+{
+    /// Runs the UDP server implementation.
+    pub async fn run(address: impl ToSocketAddrs, state: State) -> Result<(), std::io::Error> {
+        let mut server = Self::bind(address, state).await?;
+
+        loop {
+            match server.udp_stream.next().await {
+                Some(Ok((message, peer))) => server.handle_message(message, peer),
+                Some(Err(error)) => server.handle_error(error).await?,
+                None => break,
             }
         }
+
         Ok(())
+    }
+
+    /// Creates a [`UpdServer`] bound to the provided `address`, handling messages using the
+    /// provided `handler`.
+    async fn bind(address: impl ToSocketAddrs, handler: State) -> Result<Self, std::io::Error> {
+        let socket = UdpSocket::bind(address).await?;
+        let (udp_sink, udp_stream) = UdpFramed::new(socket, Codec).split();
+
+        Ok(UdpServer {
+            handler,
+            udp_sink: Arc::new(Mutex::new(udp_sink)),
+            udp_stream,
+            previous_tasks: HashMap::new(),
+        })
+    }
+
+    /// Spawns a task to handle a single incoming message.
+    fn handle_message(&mut self, message: RpcMessage, peer: SocketAddr) {
+        let previous_task = self.previous_tasks.remove(&peer);
+        let mut state = self.handler.clone();
+        let udp_sink = self.udp_sink.clone();
+
+        let new_task = tokio::spawn(async move {
+            if let Some(reply) = state.handle_message(message).await {
+                if let Some(task) = previous_task {
+                    if let Err(error) = task.await {
+                        warn!("Previous task cannot be joined: {}", error);
+                    }
+                }
+                let status = udp_sink.lock().await.send((reply, peer)).await;
+                if let Err(error) = status {
+                    error!("Failed to send query response: {}", error);
+                }
+            }
+        });
+
+        self.previous_tasks.insert(peer, new_task);
+
+        if self.previous_tasks.len() >= 100 {
+            // Collect finished tasks to avoid leaking memory.
+            self.previous_tasks.retain(|_, task| !task.is_finished());
+        }
+    }
+
+    /// Handles an error while receiving a message.
+    async fn handle_error(&mut self, error: codec::Error) -> Result<(), std::io::Error> {
+        match error {
+            codec::Error::Io(io_error) => Err(io_error),
+            other_error => {
+                warn!("Received an invalid message: {other_error}");
+                Ok(())
+            }
+        }
     }
 }
 
