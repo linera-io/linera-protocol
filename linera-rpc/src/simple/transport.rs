@@ -157,7 +157,7 @@ impl TransportProtocol {
     {
         let handle = match self {
             Self::Udp => tokio::spawn(UdpServer::run(address, state, shutdown_signal)),
-            Self::Tcp => tokio::spawn(TcpServer::run(address, state)),
+            Self::Tcp => tokio::spawn(TcpServer::run(address, state, shutdown_signal)),
         };
 
         ServerHandle { handle }
@@ -362,7 +362,11 @@ where
     ///
     /// Listens for connections and spawns a task with a new [`TcpServer`] instance to serve that
     /// client.
-    pub async fn run(address: impl ToSocketAddrs, handler: State) -> Result<(), std::io::Error> {
+    pub async fn run(
+        address: impl ToSocketAddrs,
+        handler: State,
+        shutdown_signal: CancellationToken,
+    ) -> Result<(), std::io::Error> {
         let listener = TcpListener::bind(address).await?;
 
         let mut accept_stream = stream::try_unfold(listener, |listener| async move {
@@ -372,15 +376,18 @@ where
         let mut accept_stream = pin!(accept_stream);
 
         loop {
-            match accept_stream.next().await {
-                Some(Ok(socket)) => {
-                    let server = TcpServer::new_connection(socket, handler.clone());
-                    tokio::spawn(server.serve());
-                }
-                Some(Err(error)) => return Err(error),
-                None => {
-                    unreachable!("The `accept_stream` should never finish unless there's an error")
-                }
+            tokio::select! { biased;
+                _ = shutdown_signal.cancelled() => return Ok(()),
+                maybe_socket = accept_stream.next() => match maybe_socket {
+                    Some(Ok(socket)) => {
+                        let server = TcpServer::new_connection(socket, handler.clone());
+                        tokio::spawn(server.serve());
+                    }
+                    Some(Err(error)) => return Err(error),
+                    None => unreachable!(
+                        "The `accept_stream` should never finish unless there's an error",
+                    ),
+                },
             }
         }
     }
