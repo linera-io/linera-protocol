@@ -149,7 +149,7 @@ wasm-bindgen = "0.2.92"
 wasm-bindgen-test = "0.3.42"
 wasm-encoder = "0.24.1"
 wasm-instrument = "0.4.0"
-wasmer = { version = "4.3.0-alpha.1", default-features = false }
+wasmer = { version = "4.3.1", default-features = false }
 wasmer-compiler-singlepass = "4.3.0-alpha.1"
 wasmparser = "0.101.1"
 wasmtime = "1.0"
@@ -220,6 +220,5 @@ git = "https://github.com/Twey/rust-indexed-db"
 branch = "no-uuid-wasm-bindgen"
 
 [patch.crates-io.wasmer]
-version = "4.3.0-alpha.1"
 git = "https://github.com/Twey/wasmer"
 branch = "non-send-environments"
