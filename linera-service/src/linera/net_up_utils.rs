@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{future::Future, time::Duration};
+use std::time::Duration;
 
 use colored::Colorize as _;
 use linera_base::data_types::Amount;
@@ -12,12 +12,13 @@ use linera_service::{
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     storage::StorageConfig,
+    util::listen_for_shutdown_signals,
 };
 use linera_storage_service::{
     child::{get_free_endpoint, StorageService},
     common::get_service_storage_binary,
 };
-use tokio::signal::unix;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 #[cfg(feature = "kubernetes")]
 use {
@@ -42,7 +43,8 @@ pub async fn handle_net_up_kubernetes(
         panic!("The local test network must have at least one shard per validator.");
     }
 
-    let shutdown_receiver = handle_signals();
+    let shutdown_notifier = CancellationToken::new();
+    tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
     let config = LocalKubernetesNetConfig {
         network: Network::Grpc,
@@ -56,7 +58,7 @@ pub async fn handle_net_up_kubernetes(
     };
     let (mut net, client1) = config.instantiate().await?;
     net_up(extra_wallets, &mut net, client1).await?;
-    wait_for_shutdown(shutdown_receiver, &mut net).await
+    wait_for_shutdown(shutdown_notifier, &mut net).await
 }
 
 pub async fn handle_net_up_service(
@@ -75,7 +77,8 @@ pub async fn handle_net_up_service(
         panic!("The local test network must have at least one shard per validator.");
     }
 
-    let shutdown_receiver = handle_signals();
+    let shutdown_notifier = CancellationToken::new();
+    tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
     let tmp_dir = tempfile::tempdir()?;
     let path = tmp_dir.path();
@@ -105,34 +108,14 @@ pub async fn handle_net_up_service(
     };
     let (mut net, client1) = config.instantiate().await?;
     net_up(extra_wallets, &mut net, client1).await?;
-    wait_for_shutdown(shutdown_receiver, &mut net).await
-}
-
-fn handle_signals() -> impl Future<Output = ()> {
-    let mut sigint =
-        unix::signal(unix::SignalKind::interrupt()).expect("Failed to set up SIGINT handler");
-    let mut sigterm =
-        unix::signal(unix::SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
-    let mut sigpipe =
-        unix::signal(unix::SignalKind::pipe()).expect("Failed to set up SIGPIPE handler");
-    let mut sighup =
-        unix::signal(unix::SignalKind::hangup()).expect("Failed to set up SIGHUP handler");
-
-    async move {
-        tokio::select! {
-            _ = sigint.recv() => (),
-            _ = sigterm.recv() => (),
-            _ = sigpipe.recv() => (),
-            _ = sighup.recv() => (),
-        }
-    }
+    wait_for_shutdown(shutdown_notifier, &mut net).await
 }
 
 async fn wait_for_shutdown(
-    shutdown_receiver: impl Future<Output = ()>,
+    shutdown_notifier: CancellationToken,
     net: &mut impl LineraNet,
 ) -> anyhow::Result<()> {
-    shutdown_receiver.await;
+    shutdown_notifier.cancelled().await;
     eprintln!("\nTerminating the local test network");
     net.terminate().await?;
     eprintln!("\nDone.");
