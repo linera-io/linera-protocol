@@ -56,7 +56,7 @@ pub async fn handle_net_up_kubernetes(
     };
     let (mut net, client1) = config.instantiate().await?;
     net_up(extra_wallets, &mut net, client1).await?;
-    listen_for_signals(shutdown_receiver, &mut net).await
+    wait_for_shutdown(shutdown_receiver, &mut net).await
 }
 
 pub async fn handle_net_up_service(
@@ -105,7 +105,7 @@ pub async fn handle_net_up_service(
     };
     let (mut net, client1) = config.instantiate().await?;
     net_up(extra_wallets, &mut net, client1).await?;
-    listen_for_signals(shutdown_receiver, &mut net).await
+    wait_for_shutdown(shutdown_receiver, &mut net).await
 }
 
 fn handle_signals() -> impl Future<Output = ()> {
@@ -128,7 +128,7 @@ fn handle_signals() -> impl Future<Output = ()> {
     }
 }
 
-async fn listen_for_signals(
+async fn wait_for_shutdown(
     shutdown_receiver: impl Future<Output = ()>,
     net: &mut impl LineraNet,
 ) -> anyhow::Result<()> {
