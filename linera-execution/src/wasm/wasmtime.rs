@@ -46,7 +46,7 @@ static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::defaul
 /// system API.
 pub(crate) struct WasmtimeContractInstance<Runtime>
 where
-    Runtime: ContractRuntime + Send + Sync + 'static,
+    Runtime: ContractRuntime + 'static,
 {
     /// The Wasm module instance.
     instance: EntrypointInstance<SystemApiData<Runtime>>,
@@ -59,7 +59,7 @@ where
 // dependency is updated
 impl<Runtime> WasmtimeContractInstance<Runtime>
 where
-    Runtime: ContractRuntime + Send + Sync,
+    Runtime: ContractRuntime,
 {
     fn configure_initial_fuel(&mut self) -> Result<(), ExecutionError> {
         let runtime = &mut self.instance.user_data_mut().runtime_mut();
@@ -124,7 +124,7 @@ impl WasmContractModule {
 
 impl<Runtime> WasmtimeContractInstance<Runtime>
 where
-    Runtime: ContractRuntime + WriteBatch + Send + Sync + 'static,
+    Runtime: ContractRuntime + WriteBatch + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare(contract_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
@@ -161,7 +161,7 @@ impl WasmServiceModule {
 
 impl<Runtime> WasmtimeServiceInstance<Runtime>
 where
-    Runtime: ServiceRuntime + WriteBatch + Send + Sync + 'static,
+    Runtime: ServiceRuntime + WriteBatch + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare(service_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
@@ -184,7 +184,7 @@ where
 
 impl<Runtime> crate::UserContract for WasmtimeContractInstance<Runtime>
 where
-    Runtime: ContractRuntime + Send + Sync + 'static,
+    Runtime: ContractRuntime + 'static,
 {
     fn instantiate(
         &mut self,
@@ -232,7 +232,7 @@ where
 
 impl<Runtime> crate::UserService for WasmtimeServiceInstance<Runtime>
 where
-    Runtime: ServiceRuntime + Send + Sync + 'static,
+    Runtime: ServiceRuntime + 'static,
 {
     fn handle_query(
         &mut self,
