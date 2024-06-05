@@ -4,7 +4,12 @@
 
 mod common;
 
-use std::{collections::BTreeMap, env, mem, path::PathBuf, time::Duration};
+use std::{
+    collections::BTreeMap,
+    env, mem,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
 use anyhow::Result;
 use assert_matches::assert_matches;
@@ -597,6 +602,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     let query = format!("query {{ chain(chainId: \"{chain2}\") {{ tipState {{ blockHash }} }} }}");
     let response = node_service2.query_node(&query).await?;
     assert_eq!(hash, response["chain"]["tipState"]["blockHash"]);
+    let mut notifications = Box::pin(node_service2.notifications(chain2).await?);
 
     let app1 = node_service1
         .make_application(&chain1, &application_id)
@@ -604,8 +610,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     app1.mutate("post(text: \"Linera Social is the new Mastodon!\")")
         .await?;
 
-    // Instead of retrying, we could call `node_service1.process_inbox(chain1).await` here.
-    // However, we prefer to test the notification system for a change.
+    let query = "receivedPosts { keys { author, index } }";
     let expected_response = json!({
         "receivedPosts": {
             "keys": [
@@ -613,19 +618,16 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
             ]
         }
     });
-    'success: {
-        for i in 0..10 {
-            tokio::time::sleep(Duration::from_secs(i)).await;
-            let response = app2
-                .query("receivedPosts { keys { author, index } }")
-                .await?;
-            if response == expected_response {
-                info!("Confirmed post");
-                break 'success;
-            }
-            warn!("Waiting to confirm post: {}", response);
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let result = tokio::time::timeout(deadline - Instant::now(), notifications.next()).await?;
+        anyhow::ensure!(result.transpose()?.is_some(), "Failed to confirm post");
+        let response = app2.query(query).await?;
+        if response == expected_response {
+            info!("Confirmed post");
+            break;
         }
-        panic!("Failed to confirm post");
+        warn!("Waiting to confirm post: {}", response);
     }
 
     node_service1.ensure_is_running()?;

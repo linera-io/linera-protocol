@@ -11,8 +11,10 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use async_graphql::InputType;
+use async_tungstenite::tungstenite::{client::IntoClientRequest as _, http::HeaderValue};
+use futures::{SinkExt as _, Stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
@@ -20,6 +22,7 @@ use linera_base::{
     data_types::Amount,
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
+use linera_core::worker::Notification;
 use linera_execution::{
     committee::ValidatorName, system::SystemChannel, Bytecode, ResourceControlPolicy,
 };
@@ -1077,6 +1080,56 @@ impl NodeService {
         );
 
         Ok(())
+    }
+
+    /// Subscribes to the node service and returns a stream of notifications about a chain.
+    pub async fn notifications(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<impl Stream<Item = Result<Notification>>> {
+        let query = format!("subscription {{ notifications(chainId: \"{chain_id}\") }}",);
+        let url = format!("ws://localhost:{}/ws", self.port);
+        let mut request = url.into_client_request()?;
+        request.headers_mut().insert(
+            "Sec-WebSocket-Protocol",
+            HeaderValue::from_str("graphql-transport-ws")?,
+        );
+        let (mut websocket, _) = async_tungstenite::tokio::connect_async(request).await?;
+        let init_json = json!({
+          "type": "connection_init",
+          "payload": {}
+        });
+        websocket.send(init_json.to_string().into()).await?;
+        let text = websocket
+            .next()
+            .await
+            .context("Failed to establish connection")??
+            .into_text()?;
+        ensure!(
+            text == "{\"type\":\"connection_ack\"}",
+            "Unexpected response: {text}"
+        );
+        let query_json = json!({
+          "id": "1",
+          "type": "start",
+          "payload": {
+            "query": query,
+            "variables": {},
+            "operationName": null
+          }
+        });
+        websocket.send(query_json.to_string().into()).await?;
+        Ok(websocket
+            .map_err(anyhow::Error::from)
+            .and_then(|message| async {
+                let text = message.into_text()?;
+                let value: Value = serde_json::from_str(&text).context("invalid JSON")?;
+                if let Some(errors) = value["payload"].get("errors") {
+                    bail!("Notification subscription failed: {errors:?}");
+                }
+                serde_json::from_value(value["payload"]["data"]["notifications"].clone())
+                    .context("Failed to deserialize notification")
+            }))
     }
 }
 
