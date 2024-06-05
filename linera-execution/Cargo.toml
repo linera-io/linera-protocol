@@ -29,7 +29,7 @@ wasmtime = [
     "wasm-encoder",
     "wasmparser",
 ]
-web = ["linera-base/web", "linera-views/web", "wasmer?/js-default"]
+web = ["linera-base/web", "linera-views/web"]
 
 [dependencies]
 anyhow.workspace = true
@@ -59,16 +59,16 @@ thiserror.workspace = true
 tracing = { workspace = true, features = ["log"] }
 wasm-encoder = { workspace = true, optional = true }
 wasm-instrument = { workspace = true, optional = true, features = ["sign_ext"] }
-wasmer = { workspace = true, optional = true }
 wasmparser = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }
-wasmer = { workspace = true, features = ["sys-default", "singlepass"] }
+wasmer = { workspace = true, optional = true, features = ["sys-default", "singlepass"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt"] }
+wasmer = { workspace = true, optional = true, features = ["js-default"] }
 
 [dev-dependencies]
 anyhow.workspace = true
