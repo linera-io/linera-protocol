@@ -157,7 +157,7 @@ impl TransportProtocol {
     {
         let handle = match self {
             Self::Udp => tokio::spawn(UdpServer::run(address, state, shutdown_signal)),
-            Self::Tcp => tokio::spawn(Self::run_tcp_server(address, state)),
+            Self::Tcp => tokio::spawn(TcpServer::run(address, state)),
         };
 
         ServerHandle { handle }
@@ -348,49 +348,85 @@ impl ConnectionPool for TcpConnectionPool {
     }
 }
 
-// Server implementation for TCP.
-impl TransportProtocol {
-    async fn run_tcp_server<S>(address: impl ToSocketAddrs, state: S) -> Result<(), std::io::Error>
-    where
-        S: MessageHandler + Send + 'static,
-    {
+/// Server implementation for TCP.
+pub struct TcpServer<State> {
+    connection: Framed<TcpStream, Codec>,
+    handler: State,
+}
+
+impl<State> TcpServer<State>
+where
+    State: MessageHandler + Send + 'static,
+{
+    /// Runs the TCP server implementation.
+    ///
+    /// Listens for connections and spawns a task with a new [`TcpServer`] instance to serve that
+    /// client.
+    pub async fn run(address: impl ToSocketAddrs, handler: State) -> Result<(), std::io::Error> {
         let listener = TcpListener::bind(address).await?;
+
         let mut accept_stream = stream::try_unfold(listener, |listener| async move {
             let (socket, _) = listener.accept().await?;
             Ok::<_, io::Error>(Some((socket, listener)))
         });
         let mut accept_stream = pin!(accept_stream);
-        while let Some(value) = accept_stream.next().await {
-            let socket = value?;
-            let mut handler = state.clone();
-            tokio::spawn(async move {
-                let mut transport = Framed::new(socket, Codec);
-                while let Some(maybe_message) = transport.next().await {
-                    let message = match maybe_message {
-                        Ok(message) => message,
-                        Err(error) => {
-                            // We expect some EOF or disconnect error at the end.
-                            if !matches!(
-                                &error,
-                                codec::Error::Io(error)
-                                    if error.kind() == io::ErrorKind::UnexpectedEof
-                                    || error.kind() == io::ErrorKind::ConnectionReset
-                            ) {
-                                error!("Error while reading TCP stream: {}", error);
-                            }
 
-                            break;
-                        }
-                    };
-
-                    if let Some(reply) = handler.handle_message(message).await {
-                        if let Err(error) = transport.send(reply).await {
-                            error!("Failed to send query response: {}", error);
-                        }
-                    }
+        loop {
+            match accept_stream.next().await {
+                Some(Ok(socket)) => {
+                    let server = TcpServer::new_connection(socket, handler.clone());
+                    tokio::spawn(server.serve());
                 }
-            });
+                Some(Err(error)) => return Err(error),
+                None => return Ok(()),
+            }
         }
-        Ok(())
+    }
+
+    /// Creates a new [`TcpServer`] to serve a single connection established on the provided
+    /// [`TcpStream`].
+    fn new_connection(tcp_stream: TcpStream, handler: State) -> Self {
+        TcpServer {
+            connection: Framed::new(tcp_stream, Codec),
+            handler,
+        }
+    }
+
+    /// Serves a client through a single connection.
+    async fn serve(mut self) {
+        loop {
+            match self.connection.next().await {
+                Some(Ok(message)) => self.handle_message(message).await,
+                Some(Err(error)) => {
+                    self.handle_error(error);
+                    return;
+                }
+                None => break,
+            }
+        }
+    }
+
+    /// Handles a single request message from a client.
+    async fn handle_message(&mut self, message: RpcMessage) {
+        if let Some(reply) = self.handler.handle_message(message).await {
+            if let Err(error) = self.connection.send(reply).await {
+                error!("Failed to send query response: {error}");
+            }
+        }
+    }
+
+    /// Handles an error received while attempting to receive from the connection.
+    ///
+    /// Ignores a successful connection termination, while logging an unexpected connection
+    /// termination or any other error.
+    fn handle_error(&self, error: codec::Error) {
+        if !matches!(
+            &error,
+            codec::Error::Io(error)
+                if error.kind() == io::ErrorKind::UnexpectedEof
+                || error.kind() == io::ErrorKind::ConnectionReset
+        ) {
+            error!("Error while reading TCP stream: {error}");
+        }
     }
 }
