@@ -12,6 +12,8 @@ use http::Uri;
 #[cfg(test)]
 use linera_base::command::parse_version_message;
 use linera_base::data_types::TimeDelta;
+use tokio::signal::unix;
+use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
 /// Extension trait for [`tokio::process::Child`].
@@ -31,6 +33,28 @@ impl ChildExt for tokio::process::Child {
         debug!("Child process {:?} is running as expected.", self);
         Ok(())
     }
+}
+
+/// Listens for shutdown signals, and notifies the [`CancellationToken`] if one is
+/// received.
+pub async fn listen_for_shutdown_signals(shutdown_sender: CancellationToken) {
+    let mut sigint =
+        unix::signal(unix::SignalKind::interrupt()).expect("Failed to set up SIGINT handler");
+    let mut sigterm =
+        unix::signal(unix::SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
+    let mut sigpipe =
+        unix::signal(unix::SignalKind::pipe()).expect("Failed to set up SIGPIPE handler");
+    let mut sighup =
+        unix::signal(unix::SignalKind::hangup()).expect("Failed to set up SIGHUP handler");
+
+    tokio::select! {
+        _ = sigint.recv() => (),
+        _ = sigterm.recv() => (),
+        _ = sigpipe.recv() => (),
+        _ = sighup.recv() => (),
+    }
+
+    shutdown_sender.cancel();
 }
 
 #[cfg(with_testing)]
