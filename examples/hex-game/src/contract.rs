@@ -5,9 +5,9 @@
 
 mod state;
 
-use hex_game::{Board, HexAbi, MoveOutcome, Operation};
+use hex_game::{Board, Clock, HexAbi, InstantiationArgument, MoveOutcome, Operation};
 use linera_sdk::{
-    base::{Owner, WithContractAbi},
+    base::WithContractAbi,
     views::{RootView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
@@ -26,7 +26,7 @@ impl WithContractAbi for HexContract {
 
 impl Contract for HexContract {
     type Message = ();
-    type InstantiationArgument = ([Owner; 2], u16);
+    type InstantiationArgument = InstantiationArgument;
     type Parameters = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
@@ -36,10 +36,13 @@ impl Contract for HexContract {
         HexContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, (owners, size): Self::InstantiationArgument) {
+    async fn instantiate(&mut self, arg: Self::InstantiationArgument) {
         self.runtime.application_parameters(); // Verifies that these are empty.
-        self.state.owners.set(Some(owners));
-        self.state.board.set(Board::new(size));
+        self.state
+            .clock
+            .set(Clock::new(self.runtime.system_time(), &arg));
+        self.state.owners.set(Some(arg.players));
+        self.state.board.set(Board::new(arg.board_size));
     }
 
     async fn execute_operation(&mut self, operation: Operation) -> MoveOutcome {
@@ -50,6 +53,11 @@ impl Contract for HexContract {
             Some(self.state.owners.get().unwrap()[active.index()]),
             "Move must be signed by the player whose turn it is."
         );
+        let block_time = self.runtime.system_time();
+        let clock = self.state.clock.get_mut();
+        self.runtime
+            .assert_before(block_time.saturating_add(clock.block_delay));
+        clock.make_move(block_time, active);
         self.state.board.get_mut().make_move(x, y)
     }
 

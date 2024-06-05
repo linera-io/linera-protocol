@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::SimpleObject;
-use hex_game::Board;
+use hex_game::{Board, Clock};
 use linera_sdk::{
     base::Owner,
     views::{linera_views, RegisterView, RootView, ViewStorageContext},
@@ -16,4 +16,6 @@ pub struct HexState {
     pub owners: RegisterView<Option<[Owner; 2]>>,
     /// The current game state.
     pub board: RegisterView<Board>,
+    /// The game clock.
+    pub clock: RegisterView<Clock>,
 }

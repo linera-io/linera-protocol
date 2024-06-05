@@ -637,6 +637,15 @@ where
         assert_eq!(payload, expected_payload);
         response
     }
+
+    /// Panics if the current time at block validation is `>= timestamp`. Note that block
+    /// validation happens at or after the block timestamp, but isn't necessarily the same.
+    ///
+    /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
+    /// owner, not a super owner.
+    pub fn assert_before(&mut self, timestamp: Timestamp) {
+        assert!(self.timestamp.is_some_and(|t| t < timestamp.into()))
+    }
 }
 
 /// A type alias for the handler for cross-application calls.

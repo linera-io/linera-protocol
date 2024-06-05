@@ -5,9 +5,9 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use hex_game::{HexAbi, Operation};
+use hex_game::{HexAbi, InstantiationArgument, Operation};
 use linera_sdk::{
-    base::{KeyPair, Owner},
+    base::{KeyPair, Owner, TimeDelta},
     test::TestValidator,
 };
 
@@ -17,8 +17,15 @@ async fn hex_game() {
     let key_pair2 = KeyPair::generate();
     let owner1 = Owner::from(key_pair1.public());
     let owner2 = Owner::from(key_pair2.public());
+    let arg = InstantiationArgument {
+        players: [owner1, owner2],
+        board_size: 2u16,
+        start_time: TimeDelta::from_secs(60),
+        increment: TimeDelta::from_secs(30),
+        block_delay: TimeDelta::from_secs(5),
+    };
     let (_, app_id, mut chain) =
-        TestValidator::with_current_application::<HexAbi, _, _>((), ([owner1, owner2], 2u16)).await;
+        TestValidator::with_current_application::<HexAbi, _, _>((), arg).await;
 
     chain
         .add_block(|block| {

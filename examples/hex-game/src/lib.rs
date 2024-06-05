@@ -27,7 +27,7 @@ use std::iter;
 
 use async_graphql::{Enum, Request, Response, SimpleObject};
 use linera_sdk::{
-    base::{ContractAbi, ServiceAbi},
+    base::{ContractAbi, Owner, ServiceAbi, TimeDelta, Timestamp},
     graphql::GraphQLMutationRoot,
 };
 use serde::{Deserialize, Serialize};
@@ -48,6 +48,59 @@ impl ContractAbi for HexAbi {
 impl ServiceAbi for HexAbi {
     type Query = Request;
     type QueryResponse = Response;
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]
+pub struct InstantiationArgument {
+    /// The `Owner` controlling player 1 and 2, respectively.
+    pub players: [Owner; 2],
+    /// The side length of the board. A typical size is 11.
+    pub board_size: u16,
+    /// The initial time each player has to think about their turns.
+    pub start_time: TimeDelta,
+    /// The duration that is added to the clock after each turn.
+    pub increment: TimeDelta,
+    /// The maximum time that is allowed to pass between a block proposal and validation.
+    /// This should be long enough to confirm a block, but short enough for the block timestamp
+    /// to accurately reflect the current time.
+    pub block_delay: TimeDelta,
+}
+
+/// A clock to track both players' time.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, SimpleObject)]
+pub struct Clock {
+    time_left: [TimeDelta; 2],
+    increment: TimeDelta,
+    current_turn_start: Timestamp,
+    pub block_delay: TimeDelta,
+}
+
+impl Clock {
+    /// Initializes the clock.
+    pub fn new(block_time: Timestamp, arg: &InstantiationArgument) -> Self {
+        Self {
+            time_left: [arg.start_time, arg.start_time],
+            increment: arg.increment,
+            current_turn_start: block_time,
+            block_delay: arg.block_delay,
+        }
+    }
+
+    /// Records a player making a move in the current block.
+    pub fn make_move(&mut self, block_time: Timestamp, player: Player) {
+        let duration = block_time.delta_since(self.current_turn_start);
+        let i = player.index();
+        assert!(self.time_left[i] >= duration);
+        self.time_left[i] = self.time_left[i]
+            .saturating_sub(duration)
+            .saturating_add(self.increment);
+        self.current_turn_start = block_time;
+    }
+
+    /// Returns whether the given player has timed out.
+    pub fn timed_out(&self, block_time: Timestamp, player: Player) -> bool {
+        self.time_left[player.index()] < block_time.delta_since(self.current_turn_start)
+    }
 }
 
 /// The outcome of a valid move.
