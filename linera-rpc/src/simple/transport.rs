@@ -352,6 +352,7 @@ impl ConnectionPool for TcpConnectionPool {
 pub struct TcpServer<State> {
     connection: Framed<TcpStream, Codec>,
     handler: State,
+    shutdown_signal: CancellationToken,
 }
 
 impl<State> TcpServer<State>
@@ -375,12 +376,18 @@ where
         });
         let mut accept_stream = pin!(accept_stream);
 
+        let connection_shutdown_signal = shutdown_signal.child_token();
+
         loop {
             tokio::select! { biased;
                 _ = shutdown_signal.cancelled() => return Ok(()),
                 maybe_socket = accept_stream.next() => match maybe_socket {
                     Some(Ok(socket)) => {
-                        let server = TcpServer::new_connection(socket, handler.clone());
+                        let server = TcpServer::new_connection(
+                            socket,
+                            handler.clone(),
+                            connection_shutdown_signal.clone(),
+                        );
                         tokio::spawn(server.serve());
                     }
                     Some(Err(error)) => return Err(error),
@@ -394,23 +401,31 @@ where
 
     /// Creates a new [`TcpServer`] to serve a single connection established on the provided
     /// [`TcpStream`].
-    fn new_connection(tcp_stream: TcpStream, handler: State) -> Self {
+    fn new_connection(
+        tcp_stream: TcpStream,
+        handler: State,
+        shutdown_signal: CancellationToken,
+    ) -> Self {
         TcpServer {
             connection: Framed::new(tcp_stream, Codec),
             handler,
+            shutdown_signal,
         }
     }
 
     /// Serves a client through a single connection.
     async fn serve(mut self) {
         loop {
-            match self.connection.next().await {
-                Some(Ok(message)) => self.handle_message(message).await,
-                Some(Err(error)) => {
-                    self.handle_error(error);
-                    return;
-                }
-                None => break,
+            tokio::select! { biased;
+                _ = self.shutdown_signal.cancelled() => return,
+                result = self.connection.next() => match result {
+                    Some(Ok(message)) => self.handle_message(message).await,
+                    Some(Err(error)) => {
+                        self.handle_error(error);
+                        return;
+                    }
+                    None => break,
+                },
             }
         }
     }
