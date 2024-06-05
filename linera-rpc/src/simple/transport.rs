@@ -378,7 +378,9 @@ where
                     tokio::spawn(server.serve());
                 }
                 Some(Err(error)) => return Err(error),
-                None => return Ok(()),
+                None => {
+                    unreachable!("The `accept_stream` should never finish unless there's an error")
+                }
             }
         }
     }
