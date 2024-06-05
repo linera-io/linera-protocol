@@ -2,43 +2,45 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service",
+    feature = "kubernetes",
+    feature = "remote_net"
+))]
+
 mod common;
 
-use std::{
-    collections::BTreeMap,
-    env, mem,
-    path::PathBuf,
-    time::{Duration, Instant},
-};
+use std::{env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
-use assert_matches::assert_matches;
 use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 use linera_base::{
     command::resolve_binary,
-    crypto::{KeyPair, PublicKey},
-    data_types::{Amount, Timestamp},
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, Owner},
+    data_types::Amount,
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
 };
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service",
+))]
+use linera_service::cli_wrappers::local_net::{Database, LocalNetConfig};
 #[cfg(feature = "remote_net")]
 use linera_service::cli_wrappers::remote_net::RemoteNetTestingConfig;
 #[cfg(feature = "kubernetes")]
 use linera_service::cli_wrappers::{
     docker::BuildArg, local_kubernetes_net::SharedLocalKubernetesNetTestingConfig,
 };
-use linera_service::{
-    cli_wrappers::{
-        local_net::{Database, LocalNet, LocalNetConfig, PathProvider},
-        ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
-    },
-    config::WalletState,
+use linera_service::cli_wrappers::{
+    local_net::PathProvider, ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet,
+    LineraNetConfig, Network,
 };
 use serde_json::{json, Value};
 use test_case::test_case;
-use tokio::task::JoinHandle;
-use tracing::{info, warn};
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     let owner = client.get_owner().unwrap();
@@ -46,12 +48,27 @@ fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
 }
 
 #[cfg(feature = "ethereum")]
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service"
+))]
 struct EthereumTrackerApp(ApplicationWrapper<ethereum_tracker::EthereumTrackerAbi>);
 
 #[cfg(feature = "ethereum")]
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service"
+))]
 use linera_alloy::primitives::U256;
 
 #[cfg(feature = "ethereum")]
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service"
+))]
 impl EthereumTrackerApp {
     async fn get_amount(&self, account_owner: &str) -> U256 {
         use ethereum_tracker::U256Cont;
@@ -117,7 +134,7 @@ impl FungibleApp {
     }
 
     async fn assert_entries(&self, accounts: impl IntoIterator<Item = (AccountOwner, Amount)>) {
-        let entries: BTreeMap<AccountOwner, Amount> = self
+        let entries: std::collections::BTreeMap<AccountOwner, Amount> = self
             .entries()
             .await
             .into_iter()
@@ -266,8 +283,10 @@ impl NonFungibleApp {
     }
 }
 
+#[cfg(feature = "storage_service")]
 struct MatchingEngineApp(ApplicationWrapper<matching_engine::MatchingEngineAbi>);
 
+#[cfg(feature = "storage_service")]
 impl MatchingEngineApp {
     async fn get_account_info(
         &self,
@@ -343,8 +362,12 @@ impl AmmApp {
 }
 
 /// Test if the wallet file is correctly locked when used.
+#[cfg(feature = "storage_service")]
 #[test_log::test(tokio::test)]
-async fn test_wallet_lock() -> Result<()> {
+async fn test_storage_service_wallet_lock() -> Result<()> {
+    use std::mem::drop;
+
+    use linera_service::config::WalletState;
     let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -356,14 +379,19 @@ async fn test_wallet_lock() -> Result<()> {
     let lock = wallet_state;
     assert!(client.process_inbox(chain_id).await.is_err());
 
-    mem::drop(lock);
+    drop(lock);
     assert!(client.process_inbox(chain_id).await.is_ok());
 
     Ok(())
 }
 
 #[cfg(feature = "ethereum")]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service"
+))]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
@@ -457,7 +485,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
@@ -508,7 +536,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
@@ -556,13 +584,15 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) -> Result<()> {
+    use std::time::Instant;
+
     use social::SocialAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -624,10 +654,10 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         anyhow::ensure!(result.transpose()?.is_some(), "Failed to confirm post");
         let response = app2.query(query).await?;
         if response == expected_response {
-            info!("Confirmed post");
+            tracing::info!("Confirmed post");
             break;
         }
-        warn!("Waiting to confirm post: {}", response);
+        tracing::warn!("Waiting to confirm post: {}", response);
     }
 
     node_service1.ensure_is_running()?;
@@ -642,8 +672,8 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
 // TODO(#2051): Enable the test `test_wasm_end_to_end_fungible::scylladb_grpc` that is frequently failing.
 // The failure is `Error: Could not find application URI: .... after 15 tries`.
 //#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "service_grpc")]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "storage_service_grpc"))]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
@@ -656,6 +686,8 @@ async fn test_wasm_end_to_end_fungible(
     config: impl LineraNetConfig,
     example_name: &str,
 ) -> Result<()> {
+    use std::collections::BTreeMap;
+
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -798,8 +830,8 @@ async fn test_wasm_end_to_end_fungible(
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "service_grpc")]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "storage_service_grpc"))]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
@@ -813,6 +845,8 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     config: impl LineraNetConfig,
     example_name: &str,
 ) -> Result<()> {
+    use std::collections::BTreeMap;
+
     use fungible::{Account, FungibleTokenAbi, InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -920,7 +954,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 
 // TODO(#2051): The test `test_wasm_end_to_end_non_fungible::service_grpc` is frequently failing
 // with the error `Error: Could not find application URI: .... after 15 tries`.
-//#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+//#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg(any(
     feature = "scylladb",
     feature = "dynamodb",
@@ -1185,15 +1219,18 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Result<()> {
+    use std::collections::BTreeMap;
+
     use crowd_funding::{CrowdFundingAbi, InstantiationArgument};
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
+    use linera_base::data_types::Timestamp;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -1315,10 +1352,13 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
 // #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 // #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 // #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg(feature = "storage_service")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 // #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> Result<()> {
+    use std::collections::BTreeMap;
+
     use matching_engine::{MatchingEngineAbi, OrderNature, Parameters, Price};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1600,13 +1640,15 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
+    use std::collections::BTreeMap;
+
     use amm::{AmmAbi, Parameters};
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -2330,14 +2372,21 @@ async fn test_resolve_binary() -> Result<()> {
 // TODO(#2051): Enable the `test_end_to_end_reconfiguration::scylladb_grpc` that is sometimes failing due to runtime exhaustion.
 //#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
 //#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "service_tcp")]
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service"
+))]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
+    use linera_base::{crypto::KeyPair, identifiers::Owner};
+    use linera_service::cli_wrappers::local_net::LocalNet;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = config.network;
     let (mut net, client) = config.instantiate().await?;
@@ -2443,13 +2492,14 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()> {
+    use std::collections::BTreeMap;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client) = config.instantiate().await?;
 
@@ -2555,7 +2605,12 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     panic!("Failed to receive new block");
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service"
+))]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
@@ -2614,7 +2669,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
@@ -2687,7 +2742,12 @@ async fn test_project_test() -> Result<()> {
     Ok(())
 }
 
-#[test_case(Database::Service, Network::Grpc ; "service_grpc")]
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service"
+))]
+#[cfg_attr(feature = "storage_service", test_case(Database::Service, Network::Grpc ; "service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
@@ -2728,7 +2788,8 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
 }
 
 #[test_log::test(tokio::test)]
-async fn test_linera_net_up_simple() -> Result<()> {
+#[cfg(feature = "storage_service")]
+async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     use std::{
         io::{BufRead, BufReader},
         process::{Command, Stdio},
@@ -2773,7 +2834,12 @@ async fn test_linera_net_up_simple() -> Result<()> {
     panic!("Unexpected EOF for stderr");
 }
 
-#[test_case(Database::Service, Network::Grpc ; "service_grpc")]
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service"
+))]
+#[cfg_attr(feature = "storage_service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
@@ -2805,7 +2871,7 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
@@ -2873,13 +2939,14 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Result<()> {
+    use linera_base::crypto::PublicKey;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and client.
@@ -2905,7 +2972,7 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
 
     // Now we're not the owner anymore.
     let result = client.change_ownership(chain, vec![], vec![pub_key1]).await;
-    assert_matches!(result, Err(_));
+    assert_matches::assert_matches!(result, Err(_));
 
     net.ensure_is_running().await?;
     net.terminate().await?;
@@ -2913,7 +2980,7 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
@@ -2958,7 +3025,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
@@ -3034,7 +3101,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
 }
 
 #[cfg(feature = "benchmark")]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
@@ -3078,7 +3145,12 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) -> Res
     Ok(())
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service"
+))]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
@@ -3118,14 +3190,21 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
 }
 
 #[cfg(feature = "benchmark")]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "service_tcp")]
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service"
+))]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
+    use std::collections::BTreeMap;
+
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
     config.num_other_initial_chains = 2;
@@ -3185,7 +3264,7 @@ impl Drop for RestoreVarOnDrop {
     }
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
@@ -3193,6 +3272,7 @@ impl Drop for RestoreVarOnDrop {
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    use tokio::task::JoinHandle;
 
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await?;

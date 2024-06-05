@@ -1,8 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(feature = "storage_service")]
+
+use anyhow::Result;
 use linera_storage_service::{
     client::{create_service_test_store, service_config_from_endpoint, ServiceStoreClient},
+    storage_service_test_endpoint,
 };
 use linera_views::{
     batch::Batch,
@@ -14,34 +18,43 @@ use linera_views::{
 };
 
 #[tokio::test]
-async fn test_reads_service_store() {
+async fn test_storage_service_reads() -> Result<()> {
+    let endpoint = storage_service_test_endpoint()?;
     for scenario in get_random_test_scenarios() {
-        let key_value_store = create_service_test_store("127.0.0.1:1235").await.unwrap();
+        let key_value_store = create_service_test_store(&endpoint).await?;
         run_reads(key_value_store, scenario).await;
     }
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_service_store_writes_from_blank() {
-    let key_value_store = create_service_test_store("127.0.0.1:1235").await.unwrap();
+async fn test_storage_service_writes_from_blank() -> Result<()> {
+    let endpoint = storage_service_test_endpoint()?;
+    let key_value_store = create_service_test_store(&endpoint).await?;
     run_writes_from_blank(&key_value_store).await;
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_service_store_writes_from_state() {
-    let key_value_store = create_service_test_store("127.0.0.1:1235").await.unwrap();
+async fn test_storage_service_writes_from_state() -> Result<()> {
+    let endpoint = storage_service_test_endpoint()?;
+    let key_value_store = create_service_test_store(&endpoint).await?;
     run_writes_from_state(&key_value_store).await;
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_service_admin() {
-    let config = service_config_from_endpoint("127.0.0.1:1235").expect("config");
+async fn test_storage_service_admin() -> Result<()> {
+    let endpoint = storage_service_test_endpoint()?;
+    let config = service_config_from_endpoint(&endpoint)?;
     admin_test::<ServiceStoreClient>(&config).await;
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_service_big_raw_write() {
-    let key_value_store = create_service_test_store("127.0.0.1:1235").await.unwrap();
+async fn test_storage_service_big_raw_write() -> Result<()> {
+    let endpoint = storage_service_test_endpoint()?;
+    let key_value_store = create_service_test_store(&endpoint).await?;
     let n = 5000000;
     let mut rng = test_utils::make_deterministic_rng();
     let vector = get_random_byte_vector(&mut rng, &[], n);
@@ -49,4 +62,5 @@ async fn test_service_big_raw_write() {
     let key_prefix = vec![43];
     batch.put_key_value_bytes(vec![43, 57], vector);
     run_test_batch_from_blank(&key_value_store, key_prefix, batch).await;
+    Ok(())
 }

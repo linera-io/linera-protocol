@@ -17,6 +17,7 @@ rocksdb = ["linera-views/rocksdb"]
 dynamodb = ["linera-views/dynamodb"]
 scylladb = ["linera-views/scylladb"]
 test = ["linera-views/test"]
+storage_service = []
 
 [[bin]]
 name = "storage_service_server"

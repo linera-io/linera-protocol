@@ -16,8 +16,8 @@ use linera_base::{
     data_types::Amount,
 };
 use linera_execution::ResourceControlPolicy;
-#[cfg(all(feature = "rocksdb", with_testing))]
-use linera_views::rocks_db::create_rocks_db_test_path;
+#[cfg(all(feature = "storage_service", with_testing))]
+use linera_storage_service::storage_service_test_endpoint;
 #[cfg(all(feature = "scylladb", with_testing))]
 use linera_views::scylla_db::create_scylla_db_test_uri;
 use tempfile::{tempdir, TempDir};
@@ -26,12 +26,9 @@ use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
 use tracing::{info, warn};
-#[cfg(with_testing)]
+#[cfg(all(feature = "rocksdb", with_testing))]
 use {
-    async_lock::RwLock,
-    linera_base::sync::Lazy,
-    linera_storage_service::child::{get_free_endpoint, StorageService, StorageServiceGuard},
-    linera_storage_service::common::get_service_storage_binary,
+    async_lock::RwLock, linera_base::sync::Lazy, linera_views::rocks_db::create_rocks_db_test_path,
     std::ops::Deref,
 };
 
@@ -41,39 +38,13 @@ use crate::{
     util::ChildExt,
 };
 
-#[cfg(with_testing)]
+#[cfg(all(feature = "rocksdb", with_testing))]
 trait LocalServerInternal: Sized {
     type Config;
 
     async fn new_test() -> Result<Self>;
 
     fn get_config(&self) -> Self::Config;
-}
-
-#[cfg(with_testing)]
-struct LocalServerServiceInternal {
-    service_endpoint: String,
-    _service_guard: StorageServiceGuard,
-}
-
-#[cfg(with_testing)]
-impl LocalServerInternal for LocalServerServiceInternal {
-    type Config = String;
-
-    async fn new_test() -> Result<Self> {
-        let service_endpoint = get_free_endpoint().await.unwrap();
-        let binary = get_service_storage_binary().await?.display().to_string();
-        let service = StorageService::new(&service_endpoint, binary);
-        let _service_guard = service.run().await?;
-        Ok(Self {
-            service_endpoint,
-            _service_guard,
-        })
-    }
-
-    fn get_config(&self) -> Self::Config {
-        self.service_endpoint.clone()
-    }
 }
 
 #[cfg(all(feature = "rocksdb", with_testing))]
@@ -100,12 +71,12 @@ impl LocalServerInternal for LocalServerRocksDbInternal {
     }
 }
 
-#[cfg(with_testing)]
+#[cfg(all(feature = "rocksdb", with_testing))]
 struct LocalServer<L> {
     internal_server: RwLock<Option<L>>,
 }
 
-#[cfg(with_testing)]
+#[cfg(all(feature = "rocksdb", with_testing))]
 impl<L> Default for LocalServer<L>
 where
     L: LocalServerInternal,
@@ -115,7 +86,7 @@ where
     }
 }
 
-#[cfg(with_testing)]
+#[cfg(all(feature = "rocksdb", with_testing))]
 impl<L> LocalServer<L>
 where
     L: LocalServerInternal,
@@ -138,11 +109,6 @@ where
     }
 }
 
-// A static data to store the integration test server
-#[cfg(with_testing)]
-static LOCAL_SERVER_SERVICE: Lazy<LocalServer<LocalServerServiceInternal>> =
-    Lazy::new(LocalServer::new);
-
 #[cfg(all(feature = "rocksdb", with_testing))]
 static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> =
     Lazy::new(LocalServer::new);
@@ -151,8 +117,14 @@ static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> =
 async fn make_testing_config(database: Database) -> StorageConfig {
     match database {
         Database::Service => {
-            let endpoint = LOCAL_SERVER_SERVICE.get_config().await;
-            StorageConfig::Service { endpoint }
+            #[cfg(feature = "storage_service")]
+            {
+                let endpoint = storage_service_test_endpoint()
+                    .expect("Reading LINERA_STORAGE_SERVICE environment variable");
+                StorageConfig::Service { endpoint }
+            }
+            #[cfg(not(feature = "storage_service"))]
+            panic!("Database::Service is selected without the feature storage_service");
         }
         Database::RocksDb => {
             #[cfg(feature = "rocksdb")]

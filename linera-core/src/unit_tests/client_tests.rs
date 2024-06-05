@@ -33,7 +33,7 @@ use crate::test_utils::DynamoDbStorageBuilder;
 use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
 use crate::test_utils::ScyllaDbStorageBuilder;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "storage_service")]
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
     client::{ArcChainClient, ChainClientError, ClientOutcome, MessageAction, MessagePolicy},
@@ -48,7 +48,7 @@ use crate::{
 };
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -109,7 +109,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -236,7 +236,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -285,7 +285,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -343,7 +343,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -488,7 +488,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -532,7 +532,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -636,7 +636,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -726,7 +726,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -800,7 +800,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -916,7 +916,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -955,7 +955,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -1058,7 +1058,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -1107,7 +1107,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -1211,7 +1211,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -1343,7 +1343,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[test_log::test(tokio::test)]
 async fn test_insufficient_balance<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -1396,7 +1396,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -1478,7 +1478,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -1604,7 +1604,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -1715,7 +1715,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -1760,7 +1760,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(not(target_arch = "wasm32"), test_case(ServiceStorageBuilder::new().await; "service"))]
+#[cfg_attr(feature = "storage_service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[test_log::test(tokio::test)]
 async fn test_message_policy<B>(storage_builder: B) -> anyhow::Result<()>
 where

@@ -62,11 +62,10 @@ jobs:
       uses: jetli/wasm-pack-action@v0.4.0
       with:
         version: 'latest'
-
-    - name: Run Ethereum tests
+    - name: Set environment variables
       run: |
-        cargo test -p linera-ethereum --features ethereum
-        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum
+        echo "LINERA_STORAGE_SERVICE=127.0.0.1:1235" >> "$GITHUB_ENV"
+
     - name: Build example applications
       run: |
         cd examples
@@ -84,6 +83,14 @@ jobs:
     - name: Compile the workspace with the default features (build)
       run: |
         cargo build --locked
+    - name: Run Storage Service
+      run: |
+        ./target/debug/storage_service_server memory --endpoint $LINERA_STORAGE_SERVICE &
+        cargo test --features storage_service -- storage_service
+    - name: Run Ethereum tests
+      run: |
+        cargo test -p linera-ethereum --features ethereum
+        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage_service
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown

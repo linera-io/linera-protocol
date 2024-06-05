@@ -38,9 +38,9 @@ use crate::client::client_tests::DynamoDbStorageBuilder;
 use crate::client::client_tests::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
 use crate::client::client_tests::ScyllaDbStorageBuilder;
-use crate::client::client_tests::{
-    MemoryStorageBuilder, ServiceStorageBuilder, StorageBuilder, TestBuilder,
-};
+#[cfg(feature = "storage_service")]
+use crate::client::client_tests::ServiceStorageBuilder;
+use crate::client::client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder};
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -50,6 +50,7 @@ async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> anyhow::Re
 }
 
 #[ignore]
+#[cfg(feature = "storage_service")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -194,6 +195,7 @@ async fn test_memory_run_application_with_dependency(
 }
 
 #[ignore]
+#[cfg(feature = "storage_service")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -452,6 +454,7 @@ async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow::R
 }
 
 #[ignore]
+#[cfg(feature = "storage_service")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -659,6 +662,7 @@ async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow:
 }
 
 #[ignore]
+#[cfg(feature = "storage_service")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]

@@ -32,6 +32,7 @@ scylladb = [
 kubernetes = ["dep:k8s-openapi", "dep:kube", "dep:pathdiff", "dep:fs_extra"]
 remote_net = ["dep:k8s-openapi", "dep:kube"]
 metrics = ["prometheus", "linera-base/metrics"]
+storage_service = []
 
 [dependencies]
 anyhow.workspace = true

@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(feature = "rocksdb")]
+#![cfg(feature = "storage_service")]
 
 mod common;
 
@@ -22,7 +22,7 @@ use tokio::{process::Command, time::Duration};
 #[test_case::test_case("../examples/meta-counter" ; "meta counter")]
 #[test_case::test_case("../examples/social" ; "social")]
 #[test_log::test(tokio::test)]
-async fn test_script_in_readme(path: &str) -> std::io::Result<()> {
+async fn test_script_in_readme_with_storage_service(path: &str) -> std::io::Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let script = QuotedBashAndGraphQlScript::from_markdown(
         format!("{path}/README.md"),
