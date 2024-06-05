@@ -2779,7 +2779,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09cdf7b487d864c2939b23902291a5041bc4a84418268f25fda1c8d4e15ad8fa"
 dependencies = [
  "graphql_query_derive",
- "reqwest 0.11.24",
+ "reqwest 0.11.27",
  "serde",
  "serde_json",
 ]
@@ -4140,7 +4140,7 @@ dependencies = [
  "once_cell",
  "oneshot",
  "prometheus",
- "reqwest 0.11.24",
+ "reqwest 0.11.27",
  "serde",
  "serde_bytes",
  "serde_json",
@@ -4171,7 +4171,7 @@ dependencies = [
  "linera-indexer-graphql-client",
  "linera-service-graphql-client",
  "once_cell",
- "reqwest 0.11.24",
+ "reqwest 0.11.27",
  "serde",
  "serde-wasm-bindgen 0.6.5",
  "serde_json",
@@ -4204,7 +4204,7 @@ dependencies = [
  "linera-service-graphql-client",
  "linera-version",
  "linera-views",
- "reqwest 0.11.24",
+ "reqwest 0.11.27",
  "thiserror",
  "tokio",
  "tower-http 0.5.2",
@@ -4223,7 +4223,7 @@ dependencies = [
  "linera-indexer-plugins",
  "linera-service",
  "linera-service-graphql-client",
- "reqwest 0.11.24",
+ "reqwest 0.11.27",
  "serde",
  "serde_json",
  "tempfile",
@@ -4364,6 +4364,7 @@ dependencies = [
  "async-graphql-axum",
  "async-lock",
  "async-trait",
+ "async-tungstenite",
  "axum 0.7.4",
  "base64 0.22.0",
  "bcs",
@@ -4410,7 +4411,7 @@ dependencies = [
  "proptest",
  "rand",
  "rcgen",
- "reqwest 0.11.24",
+ "reqwest 0.11.27",
  "serde",
  "serde_json",
  "social",
@@ -4443,7 +4444,7 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-service",
- "reqwest 0.11.24",
+ "reqwest 0.11.27",
  "serde",
  "serde_json",
  "tempfile",
@@ -5867,9 +5868,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.11.24"
+version = "0.11.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6920094eb85afde5e4a138be3f2de8bbdf28000f0029e72c45025a56b042251"
+checksum = "dd67538700a17451e7cba03ac727fb961abb7607553461627b97de0b89cf4a62"
 dependencies = [
  "base64 0.21.7",
  "bytes",
