@@ -30,7 +30,7 @@ metrics = [
     "linera-views/metrics",
 ]
 
-server = ["tonic-health", "tonic-reflection"]
+server = ["tokio-util", "tonic-health", "tonic-reflection"]
 simple-network = ["tokio-util/net"]
 
 web = [

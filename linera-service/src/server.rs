@@ -121,6 +121,7 @@ impl ServerContext {
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
+        let shutdown_signal = CancellationToken::new();
         let handles = FuturesUnordered::new();
         for (state, shard_id, shard) in states {
             #[cfg(with_metrics)]
@@ -136,6 +137,7 @@ impl ServerContext {
                 self.server_config.internal_network.clone(),
                 self.cross_chain_config.clone(),
                 self.notification_config.clone(),
+                shutdown_signal.clone(),
             );
 
             handles.push(
