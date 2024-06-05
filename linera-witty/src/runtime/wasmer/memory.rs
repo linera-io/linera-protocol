@@ -12,10 +12,7 @@ use crate::{GuestPointer, RuntimeError, RuntimeMemory};
 
 macro_rules! impl_memory_traits {
     ($instance:ty) => {
-        impl<UserData> InstanceWithMemory for $instance
-        where
-            UserData: Send + 'static,
-        {
+        impl<UserData: 'static> InstanceWithMemory for $instance {
             fn memory_from_export(&self, export: Extern) -> Result<Option<Memory>, RuntimeError> {
                 Ok(match export {
                     Extern::Memory(memory) => Some(memory),
@@ -24,10 +21,7 @@ macro_rules! impl_memory_traits {
             }
         }
 
-        impl<UserData> RuntimeMemory<$instance> for Memory
-        where
-            UserData: Send + 'static,
-        {
+        impl<UserData: 'static> RuntimeMemory<$instance> for Memory {
             fn read<'instance>(
                 &self,
                 instance: &'instance $instance,

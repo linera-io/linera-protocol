@@ -72,10 +72,10 @@ pub type UserContractCode = Arc<dyn UserContractModule + Send + Sync + 'static>;
 pub type UserServiceCode = Arc<dyn UserServiceModule + Send + Sync + 'static>;
 
 /// An implementation of [`UserContract`].
-pub type UserContractInstance = Box<dyn UserContract + Send + Sync + 'static>;
+pub type UserContractInstance = Box<dyn UserContract + 'static>;
 
 /// An implementation of [`UserService`].
-pub type UserServiceInstance = Box<dyn UserService + Send + Sync + 'static>;
+pub type UserServiceInstance = Box<dyn UserService + 'static>;
 
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
 pub trait UserContractModule {

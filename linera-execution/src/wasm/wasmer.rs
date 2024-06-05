@@ -13,7 +13,7 @@ use linera_witty::{
 };
 use tokio::sync::Mutex;
 use wasm_instrument::{gas_metering, parity_wasm};
-use wasmer::{sys::EngineBuilder, Cranelift, Engine, Module, Singlepass, Store};
+use wasmer::{Engine, Module, Store};
 
 use super::{
     module_cache::ModuleCache,
@@ -28,8 +28,15 @@ use crate::{
 
 /// An [`Engine`] instance configured to run application services.
 static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(|| {
-    let compiler_config = Cranelift::new();
-    EngineBuilder::new(compiler_config).into()
+    #[cfg(web)]
+    {
+        wasmer::Engine::default()
+    }
+
+    #[cfg(not(web))]
+    {
+        wasmer::sys::EngineBuilder::new(wasmer::Cranelift::new()).into()
+    }
 });
 
 /// A cache of compiled contract modules, with their respective [`Engine`] instances.
@@ -65,7 +72,7 @@ impl WasmContractModule {
 
 impl<Runtime> WasmerContractInstance<Runtime>
 where
-    Runtime: ContractRuntime + WriteBatch + Clone + Send + Sync + Unpin + 'static,
+    Runtime: ContractRuntime + WriteBatch + Clone + Unpin + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare(
@@ -100,7 +107,7 @@ impl WasmServiceModule {
 
 impl<Runtime> WasmerServiceInstance<Runtime>
 where
-    Runtime: ServiceRuntime + WriteBatch + Clone + Send + Sync + Unpin + 'static,
+    Runtime: ServiceRuntime + WriteBatch + Clone + Unpin + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare(service_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
@@ -118,7 +125,7 @@ where
 
 impl<Runtime> crate::UserContract for WasmerContractInstance<Runtime>
 where
-    Runtime: ContractRuntime + Send + Unpin + 'static,
+    Runtime: ContractRuntime + Unpin + 'static,
 {
     fn instantiate(
         &mut self,
@@ -160,10 +167,7 @@ where
     }
 }
 
-impl<Runtime> crate::UserService for WasmerServiceInstance<Runtime>
-where
-    Runtime: Send + 'static,
-{
+impl<Runtime: 'static> crate::UserService for WasmerServiceInstance<Runtime> {
     fn handle_query(
         &mut self,
         _context: QueryContext,
@@ -253,17 +257,21 @@ impl CachedContractModule {
 
     /// Creates a new [`Engine`] to compile a contract bytecode.
     fn create_compilation_engine() -> Engine {
-        let mut compiler_config = Singlepass::default();
-        compiler_config.canonicalize_nans(true);
+        #[cfg(not(web))]
+        {
+            let mut compiler_config = wasmer::Singlepass::default();
+            compiler_config.canonicalize_nans(true);
 
-        EngineBuilder::new(compiler_config).into()
+            wasmer::sys::EngineBuilder::new(compiler_config).into()
+        }
+
+        #[cfg(web)]
+        wasmer::Engine::default()
     }
 
     /// Creates a [`Module`] from a compiled contract using a headless [`Engine`].
     pub fn create_execution_instance(&self) -> Result<(Engine, Module), anyhow::Error> {
-        use wasmer::NativeEngineExt;
-
-        let engine = Engine::headless();
+        let engine = Engine::default();
         let store = Store::new(engine.clone());
         let module = unsafe { Module::deserialize(&store, &*self.compiled_bytecode) }?;
         Ok((engine, module))

@@ -59,15 +59,16 @@ thiserror.workspace = true
 tracing = { workspace = true, features = ["log"] }
 wasm-encoder = { workspace = true, optional = true }
 wasm-instrument = { workspace = true, optional = true, features = ["sign_ext"] }
-wasmer = { workspace = true, optional = true }
 wasmparser = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }
+wasmer = { workspace = true, optional = true, features = ["sys-default", "singlepass"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt"] }
+wasmer = { workspace = true, optional = true, features = ["js-default"] }
 
 [dev-dependencies]
 anyhow.workspace = true
@@ -87,3 +88,8 @@ cfg_aliases.workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["serde_bytes"]
+
+[patch.crates-io.wasmer]
+version = "4.3.0-alpha.1"
+git = "https://github.com/Twey/wasmer"
+branch = "non-send-environments"

@@ -79,7 +79,7 @@ pub struct ContractSystemApi<Caller>(PhantomData<Caller>);
 impl<Caller, Runtime> ContractSystemApi<Caller>
 where
     Caller: Instance<UserData = SystemApiData<Runtime>>,
-    Runtime: ContractRuntime + Send + 'static,
+    Runtime: ContractRuntime + 'static,
 {
     /// Returns the ID of the current chain.
     fn get_chain_id(caller: &mut Caller) -> Result<ChainId, RuntimeError> {
@@ -360,7 +360,7 @@ pub struct ServiceSystemApi<Caller>(PhantomData<Caller>);
 impl<Caller, Runtime> ServiceSystemApi<Caller>
 where
     Caller: Instance<UserData = SystemApiData<Runtime>>,
-    Runtime: ServiceRuntime + Send + 'static,
+    Runtime: ServiceRuntime + 'static,
 {
     /// Returns the ID of the current chain.
     fn get_chain_id(caller: &mut Caller) -> Result<ChainId, RuntimeError> {
@@ -514,7 +514,7 @@ pub struct ViewSystemApi<Caller>(PhantomData<Caller>);
 impl<Caller, Runtime> ViewSystemApi<Caller>
 where
     Caller: Instance<UserData = SystemApiData<Runtime>>,
-    Runtime: BaseRuntime + WriteBatch + Send + 'static,
+    Runtime: BaseRuntime + WriteBatch + 'static,
 {
     /// Creates a new promise to check if the `key` is in storage.
     fn contains_key_new(caller: &mut Caller, key: Vec<u8>) -> Result<u32, RuntimeError> {

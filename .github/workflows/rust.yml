@@ -80,7 +80,7 @@ jobs:
           --locked \
           --target wasm32-unknown-unknown \
           --no-default-features \
-          --features web
+          --features web,wasmer
     - name: Compile the workspace with the default features (build)
       run: |
         cargo build --locked
