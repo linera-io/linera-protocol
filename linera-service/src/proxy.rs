@@ -235,7 +235,10 @@ where
         let address = self.get_listen_address(self.public_config.port);
 
         #[cfg(with_metrics)]
-        Self::start_metrics(self.get_listen_address(self.internal_config.metrics_port));
+        Self::start_metrics(
+            self.get_listen_address(self.internal_config.metrics_port),
+            shutdown_signal.clone(),
+        );
 
         self.public_config
             .protocol
@@ -246,8 +249,8 @@ where
     }
 
     #[cfg(with_metrics)]
-    pub fn start_metrics(address: SocketAddr) {
-        prometheus_server::start_metrics(address)
+    pub fn start_metrics(address: SocketAddr, shutdown_signal: CancellationToken) {
+        prometheus_server::start_metrics(address, shutdown_signal)
     }
 
     fn get_listen_address(&self, port: u16) -> SocketAddr {

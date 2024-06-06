@@ -87,7 +87,7 @@ impl ServerContext {
 
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
-                Self::start_metrics(&listen_address, port);
+                Self::start_metrics(&listen_address, port, shutdown_signal.clone());
             }
 
             let server_handle = simple::Server::new(
@@ -126,7 +126,7 @@ impl ServerContext {
         for (state, shard_id, shard) in states {
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
-                Self::start_metrics(listen_address, port);
+                Self::start_metrics(listen_address, port, shutdown_signal.clone());
             }
 
             let server_handle = grpc::GrpcServer::spawn(
@@ -154,8 +154,8 @@ impl ServerContext {
     }
 
     #[cfg(with_metrics)]
-    fn start_metrics(host: &str, port: u16) {
-        prometheus_server::start_metrics((host.to_owned(), port));
+    fn start_metrics(host: &str, port: u16, shutdown_signal: CancellationToken) {
+        prometheus_server::start_metrics((host.to_owned(), port), shutdown_signal);
     }
 
     fn get_listen_address(&self) -> String {

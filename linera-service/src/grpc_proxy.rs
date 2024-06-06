@@ -229,7 +229,7 @@ where
         info!("Starting gRPC server");
 
         #[cfg(with_metrics)]
-        prometheus_server::start_metrics(self.metrics_address());
+        prometheus_server::start_metrics(self.metrics_address(), shutdown_signal.clone());
 
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
         health_reporter
