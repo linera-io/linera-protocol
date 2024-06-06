@@ -38,6 +38,7 @@ use linera_storage::Storage;
 use rcgen::generate_simple_self_signed;
 use tokio::select;
 use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio_util::sync::CancellationToken;
 use tonic::{
     transport::{Body, Channel, Identity, Server, ServerTlsConfig},
     Request, Response, Status,
@@ -224,7 +225,7 @@ where
     /// Runs the proxy. If either the public server or private server dies for whatever
     /// reason we'll kill the proxy.
     #[instrument(skip_all, fields(public_address = %self.public_address(), internal_address = %self.internal_address(), metrics_address = %self.metrics_address()), err)]
-    pub async fn run(self) -> Result<()> {
+    pub async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
         info!("Starting gRPC server");
 
         #[cfg(with_metrics)]
@@ -251,7 +252,7 @@ where
             .add_service(health_service)
             .add_service(tonic_web::enable(self.as_validator_node()))
             .add_service(tonic_web::enable(reflection_service))
-            .serve(self.public_address());
+            .serve_with_shutdown(self.public_address(), shutdown_signal.cancelled_owned());
 
         select! {
             internal_res = internal_server => internal_res?,

@@ -109,10 +109,12 @@ impl Runnable for ProxyContext {
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
+        let shutdown_notifier = CancellationToken::new();
+        tokio::spawn(util::listen_for_shutdown_signals(shutdown_notifier.clone()));
         let proxy = Proxy::from_context(self, storage).await?;
         match proxy {
-            Proxy::Simple(simple_proxy) => simple_proxy.run().await,
-            Proxy::Grpc(grpc_proxy) => grpc_proxy.run().await,
+            Proxy::Simple(simple_proxy) => simple_proxy.run(shutdown_notifier).await,
+            Proxy::Grpc(grpc_proxy) => grpc_proxy.run(shutdown_notifier).await,
         }
     }
 }
@@ -228,7 +230,7 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     #[instrument(skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port), err)]
-    async fn run(self) -> Result<()> {
+    async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
         info!("Starting simple server");
         let address = self.get_listen_address(self.public_config.port);
 
@@ -237,7 +239,7 @@ where
 
         self.public_config
             .protocol
-            .spawn_server(address, self, CancellationToken::new())
+            .spawn_server(address, self, shutdown_signal)
             .join()
             .await?;
         Ok(())
