@@ -91,4 +91,4 @@ ignored = ["serde_bytes"]
 
 [patch.crates-io.wasmer]
 git = "https://github.com/Twey/wasmer"
-branch = "non-send-environments"
+tag = "4.3.1-linera"

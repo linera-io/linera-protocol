@@ -8221,7 +8221,7 @@ dependencies = [
 [[package]]
 name = "wasmer"
 version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
+source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
 dependencies = [
  "bytes",
  "cfg-if",
@@ -8251,7 +8251,7 @@ dependencies = [
 [[package]]
 name = "wasmer-compiler"
 version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
+source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
 dependencies = [
  "backtrace",
  "bytes",
@@ -8278,7 +8278,7 @@ dependencies = [
 [[package]]
 name = "wasmer-compiler-cranelift"
 version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
+source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
 dependencies = [
  "cranelift-codegen 0.91.1",
  "cranelift-entity 0.91.1",
@@ -8296,7 +8296,7 @@ dependencies = [
 [[package]]
 name = "wasmer-compiler-singlepass"
 version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
+source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
 dependencies = [
  "byteorder",
  "dynasm",
@@ -8336,7 +8336,7 @@ dependencies = [
 [[package]]
 name = "wasmer-derive"
 version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
+source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -8347,7 +8347,7 @@ dependencies = [
 [[package]]
 name = "wasmer-types"
 version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
+source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
 dependencies = [
  "bytecheck",
  "enum-iterator",
@@ -8367,7 +8367,7 @@ dependencies = [
 [[package]]
 name = "wasmer-vm"
 version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?branch=non-send-environments#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
+source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
 dependencies = [
  "backtrace",
  "cc",
