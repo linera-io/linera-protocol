@@ -46,9 +46,9 @@ pub async fn listen_for_shutdown_signals(shutdown_sender: CancellationToken) {
         unix::signal(unix::SignalKind::hangup()).expect("Failed to set up SIGHUP handler");
 
     tokio::select! {
-        _ = sigint.recv() => (),
-        _ = sigterm.recv() => (),
-        _ = sighup.recv() => (),
+        _ = sigint.recv() => debug!("Received SIGINT"),
+        _ = sigterm.recv() => debug!("Received SIGTERM"),
+        _ = sighup.recv() => debug!("Received SIGHUP"),
     }
 
     shutdown_sender.cancel();
