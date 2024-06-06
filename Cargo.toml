@@ -219,7 +219,6 @@ version = "0.4.1"
 git = "https://github.com/Twey/rust-indexed-db"
 branch = "no-uuid-wasm-bindgen"
 
-
 [patch.crates-io.wasmer]
 git = "https://github.com/Twey/wasmer"
 tag = "4.3.1-linera"
