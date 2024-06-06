@@ -19,7 +19,7 @@ use linera_base::{
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
-    client::{ArcChainClient, ChainClient, ChainClientBuilder},
+    client::{ArcChainClient, ChainClient, Client},
     data_types::ClientOutcome,
     node::{CrossChainMessageDelivery, ValidatorNodeProvider},
 };
@@ -66,7 +66,7 @@ use crate::{client_options::ChainOwnershipConfig, ClientOptions};
 
 pub struct ClientContext {
     wallet_state: WalletState,
-    chain_client_builder: ChainClientBuilder<NodeProvider>,
+    chain_client_builder: Client<NodeProvider>,
     send_timeout: Duration,
     recv_timeout: Duration,
     notification_retry_delay: Duration,
@@ -159,7 +159,7 @@ impl ClientContext {
         let node_provider = NodeProvider::new(node_options);
         let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
         let chain_client_builder =
-            ChainClientBuilder::new(node_provider, options.max_pending_messages, delivery);
+            Client::new(node_provider, options.max_pending_messages, delivery);
         ClientContext {
             chain_client_builder,
             wallet_state,

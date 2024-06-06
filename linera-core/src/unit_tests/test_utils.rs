@@ -51,7 +51,7 @@ use {
 };
 
 use crate::{
-    client::{ChainClient, ChainClientBuilder},
+    client::{ChainClient, Client},
     data_types::*,
     node::{
         CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
@@ -625,7 +625,7 @@ where
         let storage = self.make_storage().await?;
         self.chain_client_storages.push(storage.clone());
         let provider = self.make_node_provider();
-        let builder = ChainClientBuilder::new(provider, 10, CrossChainMessageDelivery::NonBlocking);
+        let builder = Client::new(provider, 10, CrossChainMessageDelivery::NonBlocking);
         Ok(builder.build(
             chain_id,
             vec![key_pair],

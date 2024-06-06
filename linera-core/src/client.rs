@@ -68,7 +68,7 @@ use crate::{
 mod client_tests;
 
 /// A builder that creates `ChainClients` which share the cache and notifiers.
-pub struct ChainClientBuilder<ValidatorNodeProvider> {
+pub struct Client<ValidatorNodeProvider> {
     /// How to talk to the validators.
     validator_node_provider: ValidatorNodeProvider,
     /// Maximum number of pending messages processed at a time in a block.
@@ -88,8 +88,8 @@ pub struct ChainClientBuilder<ValidatorNodeProvider> {
     notifier: Arc<Notifier<Notification>>,
 }
 
-impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
-    /// Creates a new `ChainClientBuilder` with a new cache and notifiers.
+impl<ValidatorNodeProvider: Clone> Client<ValidatorNodeProvider> {
+    /// Creates a new `Client` with a new cache and notifiers.
     pub fn new(
         validator_node_provider: ValidatorNodeProvider,
         max_pending_messages: usize,
