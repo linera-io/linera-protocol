@@ -869,7 +869,7 @@ impl ClientContext {
         let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
             .with_allow_inactive_chains(true)
             .with_allow_messages_from_deprecated_epochs(true);
-        let mut node = LocalNodeClient::new(worker);
+        let node = LocalNodeClient::new(worker);
         // Second replay the certificates locally.
         for certificate in certificates {
             // No required certificates from other chains: This is only used with benchmark.
