@@ -42,15 +42,12 @@ pub async fn listen_for_shutdown_signals(shutdown_sender: CancellationToken) {
         unix::signal(unix::SignalKind::interrupt()).expect("Failed to set up SIGINT handler");
     let mut sigterm =
         unix::signal(unix::SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
-    let mut sigpipe =
-        unix::signal(unix::SignalKind::pipe()).expect("Failed to set up SIGPIPE handler");
     let mut sighup =
         unix::signal(unix::SignalKind::hangup()).expect("Failed to set up SIGHUP handler");
 
     tokio::select! {
         _ = sigint.recv() => (),
         _ = sigterm.recv() => (),
-        _ = sigpipe.recv() => (),
         _ = sighup.recv() => (),
     }
 
