@@ -258,8 +258,7 @@ where
         send_timeout: Duration,
         recv_timeout: Duration,
     ) -> Result<Option<RpcMessage>> {
-        let shard_address = format!("{}:{}", shard.host, shard.port);
-        let mut connection = protocol.connect(shard_address).await?;
+        let mut connection = protocol.connect((shard.host, shard.port)).await?;
         tokio::time::timeout(send_timeout, connection.send(message)).await??;
         let message = tokio::time::timeout(recv_timeout, connection.next())
             .await?
