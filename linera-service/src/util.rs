@@ -38,6 +38,8 @@ impl ChildExt for tokio::process::Child {
 /// Listens for shutdown signals, and notifies the [`CancellationToken`] if one is
 /// received.
 pub async fn listen_for_shutdown_signals(shutdown_sender: CancellationToken) {
+    let _shutdown_guard = shutdown_sender.drop_guard();
+
     let mut sigint =
         unix::signal(unix::SignalKind::interrupt()).expect("Failed to set up SIGINT handler");
     let mut sigterm =
@@ -50,8 +52,6 @@ pub async fn listen_for_shutdown_signals(shutdown_sender: CancellationToken) {
         _ = sigterm.recv() => debug!("Received SIGTERM"),
         _ = sighup.recv() => debug!("Received SIGHUP"),
     }
-
-    shutdown_sender.cancel();
 }
 
 #[cfg(with_testing)]
