@@ -68,12 +68,12 @@ impl ServerContext {
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
         protocol: simple::TransportProtocol,
+        shutdown_signal: CancellationToken,
     ) where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         let handles = FuturesUnordered::new();
-        let shutdown_signal = CancellationToken::new();
 
         let internal_network = self
             .server_config
@@ -117,11 +117,11 @@ impl ServerContext {
         &self,
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
+        shutdown_signal: CancellationToken,
     ) where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
-        let shutdown_signal = CancellationToken::new();
         let handles = FuturesUnordered::new();
         for (state, shard_id, shard) in states {
             #[cfg(with_metrics)]
@@ -173,7 +173,10 @@ impl Runnable for ServerContext {
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
+        let shutdown_notifier = CancellationToken::new();
         let listen_address = self.get_listen_address();
+
+        tokio::spawn(util::listen_for_shutdown_signals(shutdown_notifier.clone()));
 
         // Run the server
         let states = match self.shard {
@@ -192,10 +195,14 @@ impl Runnable for ServerContext {
 
         match self.server_config.internal_network.protocol {
             NetworkProtocol::Simple(protocol) => {
-                self.spawn_simple(&listen_address, states, protocol).await
+                self.spawn_simple(&listen_address, states, protocol, shutdown_notifier)
+                    .await
             }
             NetworkProtocol::Grpc(tls_config) => match tls_config {
-                TlsConfig::ClearText => self.spawn_grpc(&listen_address, states).await,
+                TlsConfig::ClearText => {
+                    self.spawn_grpc(&listen_address, states, shutdown_notifier)
+                        .await
+                }
                 TlsConfig::Tls => bail!("TLS not supported between proxy and shards."),
             },
         };
