@@ -88,7 +88,3 @@ cfg_aliases.workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["serde_bytes"]
-
-[patch.crates-io.wasmer]
-git = "https://github.com/Twey/wasmer"
-tag = "4.3.1-linera"

@@ -149,8 +149,8 @@ wasm-bindgen = "0.2.92"
 wasm-bindgen-test = "0.3.42"
 wasm-encoder = "0.24.1"
 wasm-instrument = "0.4.0"
-wasmer = { version = "4.3.1", default-features = false }
-wasmer-compiler-singlepass = "4.3.0-alpha.1"
+wasmer = { package = "linera-wasmer", version = "4.3.1-linera.1", default-features = false }
+wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.3.1-linera.1" }
 wasmparser = "0.101.1"
 wasmtime = "1.0"
 wasmtimer = "0.2.0"
@@ -205,7 +205,7 @@ skip_optional_dependencies = true
 max_combination_size = 1
 
 # Make sure to compile VMs with high optimization level
-[profile.dev.package.wasmer]
+[profile.dev.package.linera-wasmer]
 opt-level = 3
 
 [profile.dev.package.wasmparser]
@@ -218,7 +218,3 @@ opt-level = 3
 version = "0.4.1"
 git = "https://github.com/Twey/rust-indexed-db"
 branch = "no-uuid-wasm-bindgen"
-
-[patch.crates-io.wasmer]
-git = "https://github.com/Twey/wasmer"
-tag = "4.3.1-linera"
