@@ -12,9 +12,10 @@ use futures::{
 };
 use serde::{Deserialize, Serialize};
 use tokio::{
+    io::AsyncWriteExt,
     net::{lookup_host, TcpListener, TcpStream, ToSocketAddrs, UdpSocket},
     sync::Mutex,
-    task::JoinHandle,
+    task::{JoinHandle, JoinSet},
 };
 use tokio_util::{codec::Framed, sync::CancellationToken, udp::UdpFramed};
 use tracing::{error, warn};
@@ -377,10 +378,14 @@ where
         let mut accept_stream = pin!(accept_stream);
 
         let connection_shutdown_signal = shutdown_signal.child_token();
+        let mut tasks = JoinSet::new();
 
         loop {
             tokio::select! { biased;
-                _ = shutdown_signal.cancelled() => return Ok(()),
+                _ = shutdown_signal.cancelled() => {
+                    while tasks.join_next().await.is_some() {}
+                    return Ok(());
+                }
                 maybe_socket = accept_stream.next() => match maybe_socket {
                     Some(Ok(socket)) => {
                         let server = TcpServer::new_connection(
@@ -388,14 +393,20 @@ where
                             handler.clone(),
                             connection_shutdown_signal.clone(),
                         );
-                        tokio::spawn(server.serve());
+                        tasks.spawn(server.serve());
                     }
-                    Some(Err(error)) => return Err(error),
+                    Some(Err(error)) => {
+                        while tasks.join_next().await.is_some() {}
+                        return Err(error);
+                    }
                     None => unreachable!(
                         "The `accept_stream` should never finish unless there's an error",
                     ),
                 },
             }
+
+            // Reap finished tasks
+            while tasks.try_join_next().is_some() {}
         }
     }
 
@@ -417,7 +428,17 @@ where
     async fn serve(mut self) {
         loop {
             tokio::select! { biased;
-                _ = self.shutdown_signal.cancelled() => return,
+                _ = self.shutdown_signal.cancelled() => {
+                    let mut tcp_stream = self.connection.into_inner();
+                    if let Err(error) = tcp_stream.shutdown().await {
+                        let peer = tcp_stream
+                            .peer_addr()
+                            .map(|address| address.to_string())
+                            .unwrap_or_else(|_| "an unknown peer".to_owned());
+                        warn!("Failed to close connection to {peer}: {error:?}");
+                    }
+                    return;
+                }
                 result = self.connection.next() => match result {
                     Some(Ok(message)) => self.handle_message(message).await,
                     Some(Err(error)) => {
