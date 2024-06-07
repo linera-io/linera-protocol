@@ -37,7 +37,25 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build client binary
+        run: |
+          cargo install --path linera-service --bin linera --bin linera-server --debug
       - name: Build Docker image
-        run: docker build . -f docker/Dockerfile
+        run: docker build . -f docker/Dockerfile -t linera-test
+      - name: Run Compose
+        run: cd docker && ./compose.sh &
+      - name: Sync
+        uses: nick-fields/retry@v2
+        with:
+          # Docker compose can take some time to start
+          max_attempts: 5
+          timeout_minutes: 2
+          command: sleep 60 && linera --wallet docker/wallet.json --storage rocksdb:docker/linera.db sync-balance
