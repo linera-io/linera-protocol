@@ -4247,6 +4247,7 @@ dependencies = [
  "linera-execution",
  "linera-views",
  "linera-views-derive",
+ "linera-wasmer",
  "linera-witty",
  "lru",
  "once_cell",
@@ -4264,7 +4265,6 @@ dependencies = [
  "tracing-subscriber",
  "wasm-encoder 0.24.1",
  "wasm-instrument",
- "wasmer",
  "wasmparser 0.101.1",
  "wasmtime",
 ]
@@ -4691,6 +4691,131 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-wasmer"
+version = "4.3.1-linera.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a12f3c1d71a582182b284ff82e2082d588f38176e76b056e842f498dbc0bf9f"
+dependencies = [
+ "bytes",
+ "cfg-if",
+ "derivative",
+ "indexmap 1.9.3",
+ "js-sys",
+ "linera-wasmer-compiler",
+ "linera-wasmer-compiler-cranelift",
+ "linera-wasmer-compiler-singlepass",
+ "linera-wasmer-vm",
+ "more-asserts",
+ "rustc-demangle",
+ "serde",
+ "serde-wasm-bindgen 0.4.5",
+ "shared-buffer",
+ "target-lexicon",
+ "thiserror",
+ "tracing",
+ "wasm-bindgen",
+ "wasmer-derive",
+ "wasmer-types",
+ "wasmparser 0.121.2",
+ "wat",
+ "winapi",
+]
+
+[[package]]
+name = "linera-wasmer-compiler"
+version = "4.3.1-linera.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd9abc53ac2abb2d55781153c8b404b6238601010a171f68c3ed1ea824d3ecda"
+dependencies = [
+ "backtrace",
+ "bytes",
+ "cfg-if",
+ "enum-iterator",
+ "enumset",
+ "lazy_static",
+ "leb128",
+ "linera-wasmer-vm",
+ "memmap2 0.5.10",
+ "more-asserts",
+ "region",
+ "rkyv",
+ "self_cell",
+ "shared-buffer",
+ "smallvec",
+ "thiserror",
+ "wasmer-types",
+ "wasmparser 0.121.2",
+ "winapi",
+ "xxhash-rust",
+]
+
+[[package]]
+name = "linera-wasmer-compiler-cranelift"
+version = "4.3.1-linera.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcc6524f05447d77a74c7eb3b80a0d44513d50ec03d0a589a1e4dbdb531dafe4"
+dependencies = [
+ "cranelift-codegen 0.91.1",
+ "cranelift-entity 0.91.1",
+ "cranelift-frontend 0.91.1",
+ "gimli 0.26.2",
+ "linera-wasmer-compiler",
+ "more-asserts",
+ "rayon",
+ "smallvec",
+ "target-lexicon",
+ "tracing",
+ "wasmer-types",
+]
+
+[[package]]
+name = "linera-wasmer-compiler-singlepass"
+version = "4.3.1-linera.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c43d9334826f4da269b17e43a731cf4615cdb4ed4274f11f3da9d0e14dc381ba"
+dependencies = [
+ "byteorder",
+ "dynasm",
+ "dynasmrt",
+ "enumset",
+ "gimli 0.26.2",
+ "lazy_static",
+ "linera-wasmer-compiler",
+ "more-asserts",
+ "rayon",
+ "smallvec",
+ "wasmer-types",
+]
+
+[[package]]
+name = "linera-wasmer-vm"
+version = "4.3.1-linera.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66b5ecc8c748319b1d7c6cb5d796a84349bc88add4919cddb82ff8414a9ab753"
+dependencies = [
+ "backtrace",
+ "cc",
+ "cfg-if",
+ "corosensei",
+ "crossbeam-queue",
+ "dashmap",
+ "derivative",
+ "enum-iterator",
+ "fnv",
+ "indexmap 1.9.3",
+ "lazy_static",
+ "libc",
+ "mach",
+ "memoffset 0.9.0",
+ "more-asserts",
+ "region",
+ "scopeguard",
+ "thiserror",
+ "wasmer-types",
+ "winapi",
+]
+
+[[package]]
 name = "linera-witty"
 version = "0.12.0"
 dependencies = [
@@ -4701,13 +4826,13 @@ dependencies = [
  "frunk",
  "genawaiter",
  "insta",
+ "linera-wasmer",
  "linera-witty",
  "linera-witty-macros",
  "log",
  "test-case",
  "thiserror",
  "tracing",
- "wasmer",
  "wasmtime",
 ]
 
@@ -8219,99 +8344,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasmer"
-version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
-dependencies = [
- "bytes",
- "cfg-if",
- "derivative",
- "indexmap 1.9.3",
- "js-sys",
- "more-asserts",
- "rustc-demangle",
- "serde",
- "serde-wasm-bindgen 0.4.5",
- "shared-buffer",
- "target-lexicon",
- "thiserror",
- "tracing",
- "wasm-bindgen",
- "wasmer-compiler",
- "wasmer-compiler-cranelift",
- "wasmer-compiler-singlepass",
- "wasmer-derive",
- "wasmer-types",
- "wasmer-vm",
- "wasmparser 0.121.2",
- "wat",
- "winapi",
-]
-
-[[package]]
-name = "wasmer-compiler"
-version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
-dependencies = [
- "backtrace",
- "bytes",
- "cfg-if",
- "enum-iterator",
- "enumset",
- "lazy_static",
- "leb128",
- "memmap2 0.5.10",
- "more-asserts",
- "region",
- "rkyv",
- "self_cell",
- "shared-buffer",
- "smallvec",
- "thiserror",
- "wasmer-types",
- "wasmer-vm",
- "wasmparser 0.121.2",
- "winapi",
- "xxhash-rust",
-]
-
-[[package]]
-name = "wasmer-compiler-cranelift"
-version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
-dependencies = [
- "cranelift-codegen 0.91.1",
- "cranelift-entity 0.91.1",
- "cranelift-frontend 0.91.1",
- "gimli 0.26.2",
- "more-asserts",
- "rayon",
- "smallvec",
- "target-lexicon",
- "tracing",
- "wasmer-compiler",
- "wasmer-types",
-]
-
-[[package]]
-name = "wasmer-compiler-singlepass"
-version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
-dependencies = [
- "byteorder",
- "dynasm",
- "dynasmrt",
- "enumset",
- "gimli 0.26.2",
- "lazy_static",
- "more-asserts",
- "rayon",
- "smallvec",
- "wasmer-compiler",
- "wasmer-types",
-]
-
-[[package]]
 name = "wasmer-config"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8336,7 +8368,8 @@ dependencies = [
 [[package]]
 name = "wasmer-derive"
 version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e48f36aeeecb655f15fdd358bdf6e4cec27df181468fa4226084157e8462bd5e"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -8347,7 +8380,8 @@ dependencies = [
 [[package]]
 name = "wasmer-types"
 version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83cb97b6b20084757a2a8d548dc0d4179c3fe9e2d711740423a1e6aa3f8b9091"
 dependencies = [
  "bytecheck",
  "enum-iterator",
@@ -8362,33 +8396,6 @@ dependencies = [
  "thiserror",
  "webc",
  "xxhash-rust",
-]
-
-[[package]]
-name = "wasmer-vm"
-version = "4.3.1"
-source = "git+https://github.com/Twey/wasmer?tag=4.3.1-linera#1906b166f73b1318ddfc2de1deeab5f55617ee4e"
-dependencies = [
- "backtrace",
- "cc",
- "cfg-if",
- "corosensei",
- "crossbeam-queue",
- "dashmap",
- "derivative",
- "enum-iterator",
- "fnv",
- "indexmap 1.9.3",
- "lazy_static",
- "libc",
- "mach",
- "memoffset 0.9.0",
- "more-asserts",
- "region",
- "scopeguard",
- "thiserror",
- "wasmer-types",
- "winapi",
 ]
 
 [[package]]
