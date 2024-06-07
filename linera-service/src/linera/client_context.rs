@@ -44,10 +44,7 @@ use {
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
     linera_chain::data_types::{Block, BlockAndRound, BlockProposal, SignatureAggregator, Vote},
-    linera_core::{
-        data_types::ChainInfoQuery, local_node::LocalNodeClient, notifier::Notifier,
-        worker::WorkerState,
-    },
+    linera_core::{data_types::ChainInfoQuery, local_node::LocalNodeClient, worker::WorkerState},
     linera_execution::{
         committee::Epoch,
         system::{OpenChainConfig, Recipient, SystemOperation, UserData, OPEN_CHAIN_MESSAGE_INDEX},
@@ -61,7 +58,6 @@ use {
     std::{
         collections::{HashMap, HashSet},
         iter,
-        sync::Arc,
     },
     tracing::{error, trace},
 };
@@ -873,11 +869,11 @@ impl ClientContext {
         let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
             .with_allow_inactive_chains(true)
             .with_allow_messages_from_deprecated_epochs(true);
-        let mut node = LocalNodeClient::new(worker, Arc::new(Notifier::default()));
+        let mut node = LocalNodeClient::new(worker);
         // Second replay the certificates locally.
         for certificate in certificates {
             // No required certificates from other chains: This is only used with benchmark.
-            node.handle_certificate(certificate, vec![], vec![])
+            node.handle_certificate(certificate, vec![], vec![], &mut vec![])
                 .await
                 .unwrap();
         }

@@ -23,7 +23,6 @@ use linera_core::{
     data_types::{ChainInfoQuery, ClientOutcome},
     local_node::LocalNodeClient,
     node::LocalValidatorNodeProvider,
-    notifier::Notifier,
     worker::{Reason, WorkerState},
 };
 use linera_execution::{
@@ -1088,7 +1087,7 @@ impl Job {
         let state = WorkerState::new("Local node".to_string(), None, storage)
             .with_allow_inactive_chains(true)
             .with_allow_messages_from_deprecated_epochs(true);
-        let mut node_client = LocalNodeClient::new(state, Arc::new(Notifier::default()));
+        let mut node_client = LocalNodeClient::new(state);
 
         // Take the latest committee we know of.
         let admin_chain_id = context.wallet().genesis_admin_chain();
@@ -1108,7 +1107,7 @@ impl Job {
         // Download the parent chain.
         let target_height = message_id.height.try_add_one()?;
         node_client
-            .download_certificates(nodes, message_id.chain_id, target_height)
+            .download_certificates(nodes, message_id.chain_id, target_height, &mut vec![])
             .await
             .context("Failed to download parent chain")?;
 

@@ -45,6 +45,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::Serialize;
 use thiserror::Error;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, info};
 
 use crate::{
@@ -139,7 +140,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
         )
         .with_allow_inactive_chains(true)
         .with_allow_messages_from_deprecated_epochs(true);
-        let node_client = LocalNodeClient::new(state, self.notifier.clone());
+        let node_client = LocalNodeClient::new(state);
         ChainClient {
             chain_id,
             known_key_pairs,
@@ -155,6 +156,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
             pending_block,
             node_client,
             pending_blobs,
+            notifier: self.notifier.clone(),
         }
     }
 }
@@ -222,6 +224,9 @@ pub struct ChainClient<ValidatorNodeProvider, Storage> {
     /// This contains blobs belonging to our `pending_block` that may not even have
     /// been processed by (i.e. been proposed to) our own local chain manager yet.
     pending_blobs: BTreeMap<BlobId, HashedBlob>,
+
+    /// A notifier to receive notifications for this chain.
+    notifier: Arc<Notifier<Notification>>,
 }
 
 /// Error type for [`ChainClient`].
@@ -338,7 +343,9 @@ where
 
     /// Subscribes to notifications from this client's chain.
     pub async fn subscribe(&mut self) -> Result<NotificationStream, LocalNodeError> {
-        self.node_client.subscribe(vec![self.chain_id]).await
+        Ok(Box::pin(UnboundedReceiverStream::new(
+            self.notifier.subscribe(vec![self.chain_id]),
+        )))
     }
 
     /// Returns the storage client used by this client's local node.
@@ -552,10 +559,17 @@ where
         // expected block height. Otherwise, download the missing history from the
         // network.
         let nodes = self.validator_nodes().await?;
+        let mut notifications = vec![];
         let mut info = self
             .node_client
-            .download_certificates(nodes, self.chain_id, self.next_block_height)
+            .download_certificates(
+                nodes,
+                self.chain_id,
+                self.next_block_height,
+                &mut notifications,
+            )
             .await?;
+        self.notifier.handle_notifications(&notifications);
         if info.next_block_height == self.next_block_height {
             // Check that our local node has the expected block hash.
             ensure!(
@@ -574,7 +588,7 @@ where
             let nodes = self.validator_nodes().await?;
             info = self
                 .node_client
-                .synchronize_chain_state(nodes, self.chain_id)
+                .synchronize_chain_state(nodes, self.chain_id, &mut notifications)
                 .await?;
         }
         self.update_from_info(&info);
@@ -787,9 +801,16 @@ where
         // Recover history from the network. We assume that the committee that signed the
         // certificate is still active.
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(remote_committee)?;
+        let mut notifications = vec![];
         self.node_client
-            .download_certificates(nodes.clone(), block.chain_id, block.height)
+            .download_certificates(
+                nodes.clone(),
+                block.chain_id,
+                block.height,
+                &mut notifications,
+            )
             .await?;
+        self.notifier.handle_notifications(&notifications);
         // Process the received operations. Download required hashed certificate values if necessary.
         if let Err(err) = self
             .process_certificate(certificate.clone(), vec![], vec![])
@@ -973,10 +994,12 @@ where
         let chain_id = self.chain_id;
         let local_committee = self.local_committee().await?;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(&local_committee)?;
+        let mut notifications = vec![];
         // Synchronize the state of the admin chain from the network.
         self.node_client
-            .synchronize_chain_state(nodes.clone(), self.admin_id)
+            .synchronize_chain_state(nodes.clone(), self.admin_id, &mut notifications)
             .await?;
+        self.notifier.handle_notifications(&notifications);
         let node_client = self.node_client.clone();
         // Now we should have a complete view of all committees in the system.
         let (committees, max_epoch) = self.known_committees().await?;
@@ -1064,11 +1087,18 @@ where
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
     ) -> Result<(), LocalNodeError> {
+        let mut notifications = vec![];
         let info = self
             .node_client
-            .handle_certificate(certificate, hashed_certificate_values, hashed_blobs)
+            .handle_certificate(
+                certificate,
+                hashed_certificate_values,
+                hashed_blobs,
+                &mut notifications,
+            )
             .await?
             .info;
+        self.notifier.handle_notifications(&notifications);
         self.update_from_info(&info);
         Ok(())
     }
@@ -2287,6 +2317,7 @@ where
                 }
             }
             Reason::NewBlock { height, .. } => {
+                let mut notifications = vec![];
                 let chain_id = notification.chain_id;
                 if self
                     .local_next_block_height(chain_id, &mut local_node)
@@ -2295,25 +2326,26 @@ where
                 {
                     debug!("Accepting redundant notification for new block");
                 }
-                match local_node
-                    .try_synchronize_chain_state_from(name, node, chain_id)
+                local_node
+                    .try_synchronize_chain_state_from(name, node, chain_id, &mut notifications)
                     .await
-                {
-                    Ok(()) => {
-                        if self
-                            .local_next_block_height(chain_id, &mut local_node)
-                            .await
-                            <= Some(height)
-                        {
-                            error!("Fail to synchronize new block after notification");
-                        }
-                    }
-                    Err(e) => {
+                    .unwrap_or_else(|e| {
                         error!("Fail to process notification: {e}");
-                    }
+                    });
+                self.0
+                    .lock()
+                    .await
+                    .notifier
+                    .handle_notifications(&notifications);
+                let local_height = self
+                    .local_next_block_height(chain_id, &mut local_node)
+                    .await;
+                if local_height <= Some(height) {
+                    error!("Fail to synchronize new block after notification");
                 }
             }
             Reason::NewRound { height, round } => {
+                let mut notifications = vec![];
                 let chain_id = notification.chain_id;
                 if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
@@ -2321,11 +2353,16 @@ where
                     }
                 }
                 if let Err(error) = local_node
-                    .try_synchronize_chain_state_from(name, node, chain_id)
+                    .try_synchronize_chain_state_from(name, node, chain_id, &mut notifications)
                     .await
                 {
                     error!("Fail to process notification: {error}");
                 }
+                self.0
+                    .lock()
+                    .await
+                    .notifier
+                    .handle_notifications(&notifications);
                 let Some(info) = self.local_chain_info(chain_id, &mut local_node).await else {
                     error!("Fail to read local chain info for {chain_id}");
                     return;
