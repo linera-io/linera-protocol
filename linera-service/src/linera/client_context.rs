@@ -4,6 +4,7 @@
 use std::{
     collections::BTreeMap,
     path::PathBuf,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -67,7 +68,7 @@ use crate::{client_options::ChainOwnershipConfig, ClientOptions};
 
 pub struct ClientContext {
     pub(crate) wallet_state: WalletState,
-    pub(crate) chain_client_builder: Client<NodeProvider>,
+    pub(crate) chain_client_builder: Arc<Client<NodeProvider>>,
     pub(crate) send_timeout: Duration,
     pub(crate) recv_timeout: Duration,
     pub(crate) notification_retry_delay: Duration,
@@ -125,7 +126,7 @@ impl ClientContext {
         let node_provider = NodeProvider::new(node_options);
         let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
         let chain_client_builder =
-            Client::new(node_provider, options.max_pending_messages, delivery);
+            Arc::new(Client::new(node_provider, options.max_pending_messages, delivery));
         ClientContext {
             chain_client_builder,
             wallet_state,

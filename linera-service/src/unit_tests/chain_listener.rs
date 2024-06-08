@@ -36,7 +36,7 @@ use crate::{
 
 struct ClientContext {
     wallet: Wallet,
-    chain_client_builder: Client<NodeProvider<MemoryStorage<TestClock>>>,
+    chain_client_builder: Arc<Client<NodeProvider<MemoryStorage<TestClock>>>>,
 }
 
 #[async_trait]
@@ -149,7 +149,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let delivery = CrossChainMessageDelivery::NonBlocking;
     let mut context = ClientContext {
         wallet: Wallet::new(genesis_config, Some(37)),
-        chain_client_builder: Client::new(builder.make_node_provider(), 10, delivery),
+        chain_client_builder: Arc::new(Client::new(builder.make_node_provider(), 10, delivery)),
     };
     let key_pair = KeyPair::generate_from(&mut rng);
     let public_key = key_pair.public();

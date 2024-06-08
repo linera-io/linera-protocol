@@ -117,7 +117,7 @@ impl<ValidatorNodeProvider: Clone> Client<ValidatorNodeProvider> {
     /// Creates a new `ChainClient`.
     #[allow(clippy::too_many_arguments)]
     pub fn build<Storage>(
-        &self,
+        self: &Arc<Self>,
         chain_id: ChainId,
         known_key_pairs: Vec<KeyPair>,
         storage: Storage,
@@ -143,6 +143,7 @@ impl<ValidatorNodeProvider: Clone> Client<ValidatorNodeProvider> {
         .with_allow_messages_from_deprecated_epochs(true);
         let node_client = LocalNodeClient::new(state);
         ChainClient {
+            client: self.clone(),
             chain_id,
             known_key_pairs,
             validator_node_provider: self.validator_node_provider.clone(),
@@ -193,6 +194,8 @@ impl MessagePolicy {
 /// * As a rule, operations are considered successful (and communication may stop) when
 /// they succeeded in gathering a quorum of responses.
 pub struct ChainClient<ValidatorNodeProvider, Storage> {
+    /// The Linera [`Client`] that manages operations on this chain.
+    client: Arc<Client<ValidatorNodeProvider>>,
     /// The off-chain chain ID.
     chain_id: ChainId,
     /// How to talk to the validators.
