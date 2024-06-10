@@ -33,7 +33,7 @@ use linera_execution::{
 use linera_service::{
     chain_listener::ClientContext as _,
     cli_wrappers,
-    config::{CommitteeConfig, Export, GenesisConfig, Import},
+    config::{CommitteeConfig, Export, GenesisConfig, Import, WalletState},
     faucet::FaucetService,
     node_service::NodeService,
     project::{self, Project},
@@ -75,7 +75,7 @@ fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
     }
 }
 
-struct Job(ClientContext, ClientCommand);
+struct Job(ClientOptions, WalletState);
 
 fn read_json(string: Option<String>, path: Option<PathBuf>) -> anyhow::Result<Vec<u8>> {
     let value = match (string, path) {
@@ -99,7 +99,10 @@ impl Runnable for Job {
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
-        let Job(mut context, command) = self;
+        let Job(options, wallet) = self;
+        let mut context = ClientContext::new(&options, wallet);
+        let command = options.command;
+
         use ClientCommand::*;
         match command {
             Transfer {

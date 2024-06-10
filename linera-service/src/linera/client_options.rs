@@ -13,17 +13,17 @@ use linera_base::{
 use linera_core::client::MessagePolicy;
 use linera_execution::{
     committee::ValidatorName, system::SystemChannel, UserApplicationId, WasmRuntime,
-    WithWasmDefault,
+    WithWasmDefault as _,
 };
 use linera_service::{
-    chain_listener::{ChainListenerConfig, ClientContext as _},
+    chain_listener::ChainListenerConfig,
     config::WalletState,
-    storage::{full_initialize_storage, run_with_storage},
+    storage::{full_initialize_storage, run_with_storage, StorageConfigNamespace},
     util,
 };
 use linera_views::common::CommonStoreConfig;
 
-use crate::{ClientContext, GenesisConfig, Job};
+use crate::{GenesisConfig, Job};
 
 #[derive(clap::Parser)]
 #[command(
@@ -121,44 +121,56 @@ impl ClientOptions {
         Ok(options)
     }
 
+    fn common_config(&self) -> CommonStoreConfig {
+        CommonStoreConfig {
+            max_concurrent_queries: self.max_concurrent_queries,
+            max_stream_queries: self.max_stream_queries,
+            cache_size: self.cache_size,
+        }
+    }
+
     pub async fn run_command_with_storage(self) -> anyhow::Result<()> {
-        let context = ClientContext::from_options(&self)?;
-        let genesis_config = context.wallet().genesis_config().clone();
-        let wasm_runtime = self.wasm_runtime.with_wasm_default();
-        let max_concurrent_queries = self.max_concurrent_queries;
-        let max_stream_queries = self.max_stream_queries;
-        let cache_size = self.cache_size;
-        let storage_config = ClientContext::storage_config(&self)?;
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        };
-        let full_storage_config = storage_config.add_common_config(common_config).await?;
+        let wallet = self.wallet()?;
         run_with_storage(
-            full_storage_config,
-            &genesis_config,
-            wasm_runtime,
-            Job(context, self.command),
+            self.storage_config()?
+                .add_common_config(self.common_config())
+                .await?,
+            &wallet.inner().genesis_config().clone(),
+            self.wasm_runtime.with_wasm_default(),
+            Job(self, wallet),
         )
         .await?;
         Ok(())
     }
 
+    pub fn storage_config(&self) -> Result<StorageConfigNamespace, anyhow::Error> {
+        match &self.storage_config {
+            Some(config) => config.parse(),
+            #[cfg(feature = "rocksdb")]
+            None => {
+                let storage_config = linera_service::storage::StorageConfig::RocksDb {
+                    path: self.config_path()?.join("wallet.db"),
+                };
+                let namespace = "default".to_string();
+                Ok(StorageConfigNamespace {
+                    storage_config,
+                    namespace,
+                })
+            }
+            #[cfg(not(feature = "rocksdb"))]
+            None => anyhow::bail!("A storage option must be provided"),
+        }
+    }
+
     pub async fn initialize_storage(&self) -> anyhow::Result<()> {
-        let context = ClientContext::from_options(self)?;
-        let genesis_config = context.wallet().genesis_config().clone();
-        let max_concurrent_queries = self.max_concurrent_queries;
-        let max_stream_queries = self.max_stream_queries;
-        let cache_size = self.cache_size;
-        let storage_config = ClientContext::storage_config(self)?;
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        };
-        let full_storage_config = storage_config.add_common_config(common_config).await?;
-        full_initialize_storage(full_storage_config, &genesis_config).await?;
+        let wallet = self.wallet()?;
+        full_initialize_storage(
+            self.storage_config()?
+                .add_common_config(self.common_config())
+                .await?,
+            wallet.inner().genesis_config(),
+        )
+        .await?;
         Ok(())
     }
 
