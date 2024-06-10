@@ -349,6 +349,11 @@ impl TestClock {
         guard.set(time);
     }
 
+    /// Returns the current time according to the test clock.
+    pub fn current_time(&self) -> Timestamp {
+        self.lock().time
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<TestClockInner> {
         self.0.lock().expect("poisoned TestClock mutex")
     }

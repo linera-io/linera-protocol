@@ -188,9 +188,9 @@ impl BlockBuilder {
         self
     }
 
-    /// Signs the prepared [`Block`] with the [`TestValidator`]'s keys and returns the resulting
-    /// [`Certificate`].
-    pub(crate) async fn sign(mut self) -> (Certificate, Vec<MessageId>) {
+    /// Tries to sign the prepared [`Block`] with the [`TestValidator`]'s keys and return the
+    /// resulting [`Certificate`]. Returns an error if block execution fails.
+    pub(crate) async fn try_sign(mut self) -> anyhow::Result<(Certificate, Vec<MessageId>)> {
         self.collect_incoming_messages().await;
 
         let (executed_block, _) = self
@@ -198,8 +198,7 @@ impl BlockBuilder {
             .worker()
             .await
             .stage_block_execution(self.block)
-            .await
-            .expect("Failed to execute block");
+            .await?;
 
         let message_ids = (0..executed_block.messages().len() as u32)
             .map(|index| MessageId {
@@ -217,7 +216,7 @@ impl BlockBuilder {
             .expect("Failed to sign block")
             .expect("Committee has more than one test validator");
 
-        (certificate, message_ids)
+        Ok((certificate, message_ids))
     }
 
     /// Collects and adds the previously requested messages to this block.

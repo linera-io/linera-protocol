@@ -644,7 +644,7 @@ where
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
     pub fn assert_before(&mut self, timestamp: Timestamp) {
-        assert!(self.timestamp.is_some_and(|t| t < timestamp.into()))
+        assert!(self.timestamp.is_some_and(|t| t < timestamp))
     }
 }
 
