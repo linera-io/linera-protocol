@@ -9,7 +9,7 @@ use std::{
 };
 
 use futures::{
-    channel::{mpsc, mpsc::Receiver, oneshot::Sender},
+    channel::{mpsc, mpsc::Receiver},
     future::BoxFuture,
     FutureExt, StreamExt,
 };
@@ -22,6 +22,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::Rng;
 use tokio::{sync::oneshot, task::JoinHandle};
+use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, error, info, instrument, warn};
@@ -109,7 +110,6 @@ pub struct GrpcServer<S> {
 }
 
 pub struct GrpcServerHandle {
-    _complete: Sender<()>,
     handle: JoinHandle<Result<(), GrpcError>>,
 }
 
@@ -185,6 +185,7 @@ where
         internal_network: ValidatorInternalNetworkConfig,
         cross_chain_config: CrossChainConfig,
         notification_config: NotificationConfig,
+        shutdown_signal: CancellationToken,
     ) -> GrpcServerHandle {
         info!(
             "spawning gRPC server on {}:{} for shard {}",
@@ -227,8 +228,6 @@ where
             )
         });
 
-        let (complete, receiver) = futures::channel::oneshot::channel();
-
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
 
         let grpc_server = GrpcServer {
@@ -263,16 +262,13 @@ where
                 .add_service(health_service)
                 .add_service(reflection_service)
                 .add_service(worker_node)
-                .serve_with_shutdown(server_address, receiver.map(|_| ()))
+                .serve_with_shutdown(server_address, shutdown_signal.cancelled_owned())
                 .await?;
 
             Ok(())
         });
 
-        GrpcServerHandle {
-            _complete: complete,
-            handle,
-        }
+        GrpcServerHandle { handle }
     }
 
     /// Continuously waits for receiver to receive a notification which is then sent to

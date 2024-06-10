@@ -4534,6 +4534,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "toml 0.8.10",
  "tonic",
  "tonic-health",

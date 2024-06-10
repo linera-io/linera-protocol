@@ -29,6 +29,7 @@ use linera_service::{
 use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde::Deserialize;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 struct ServerContext {
@@ -67,6 +68,7 @@ impl ServerContext {
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
         protocol: simple::TransportProtocol,
+        shutdown_signal: CancellationToken,
     ) where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
@@ -85,7 +87,7 @@ impl ServerContext {
 
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
-                Self::start_metrics(&listen_address, port);
+                Self::start_metrics(&listen_address, port, shutdown_signal.clone());
             }
 
             let server_handle = simple::Server::new(
@@ -96,7 +98,7 @@ impl ServerContext {
                 shard_id,
                 cross_chain_config,
             )
-            .spawn();
+            .spawn(shutdown_signal.clone());
 
             handles.push(
                 server_handle
@@ -115,6 +117,7 @@ impl ServerContext {
         &self,
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
+        shutdown_signal: CancellationToken,
     ) where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
@@ -123,7 +126,7 @@ impl ServerContext {
         for (state, shard_id, shard) in states {
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
-                Self::start_metrics(listen_address, port);
+                Self::start_metrics(listen_address, port, shutdown_signal.clone());
             }
 
             let server_handle = grpc::GrpcServer::spawn(
@@ -134,6 +137,7 @@ impl ServerContext {
                 self.server_config.internal_network.clone(),
                 self.cross_chain_config.clone(),
                 self.notification_config.clone(),
+                shutdown_signal.clone(),
             );
 
             handles.push(
@@ -150,8 +154,8 @@ impl ServerContext {
     }
 
     #[cfg(with_metrics)]
-    fn start_metrics(host: &str, port: u16) {
-        prometheus_server::start_metrics((host.to_owned(), port));
+    fn start_metrics(host: &str, port: u16, shutdown_signal: CancellationToken) {
+        prometheus_server::start_metrics((host.to_owned(), port), shutdown_signal);
     }
 
     fn get_listen_address(&self) -> String {
@@ -169,7 +173,10 @@ impl Runnable for ServerContext {
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
+        let shutdown_notifier = CancellationToken::new();
         let listen_address = self.get_listen_address();
+
+        tokio::spawn(util::listen_for_shutdown_signals(shutdown_notifier.clone()));
 
         // Run the server
         let states = match self.shard {
@@ -188,10 +195,14 @@ impl Runnable for ServerContext {
 
         match self.server_config.internal_network.protocol {
             NetworkProtocol::Simple(protocol) => {
-                self.spawn_simple(&listen_address, states, protocol).await
+                self.spawn_simple(&listen_address, states, protocol, shutdown_notifier)
+                    .await
             }
             NetworkProtocol::Grpc(tls_config) => match tls_config {
-                TlsConfig::ClearText => self.spawn_grpc(&listen_address, states).await,
+                TlsConfig::ClearText => {
+                    self.spawn_grpc(&listen_address, states, shutdown_notifier)
+                        .await
+                }
                 TlsConfig::Tls => bail!("TLS not supported between proxy and shards."),
             },
         };

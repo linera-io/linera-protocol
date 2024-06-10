@@ -2,16 +2,22 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, io, pin::pin, sync::Arc};
+use std::{collections::HashMap, io, mem, net::SocketAddr, pin::pin, sync::Arc};
 
 use async_trait::async_trait;
-use futures::{future, stream, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
+use futures::{
+    future,
+    stream::{self, FuturesUnordered, SplitSink, SplitStream},
+    Sink, SinkExt, Stream, StreamExt, TryStreamExt,
+};
 use serde::{Deserialize, Serialize};
 use tokio::{
+    io::AsyncWriteExt,
     net::{lookup_host, TcpListener, TcpStream, ToSocketAddrs, UdpSocket},
     sync::Mutex,
+    task::{JoinHandle, JoinSet},
 };
-use tokio_util::{codec::Framed, udp::UdpFramed};
+use tokio_util::{codec::Framed, sync::CancellationToken, udp::UdpFramed};
 use tracing::{error, warn};
 
 use crate::{
@@ -78,7 +84,6 @@ pub struct ServerHandle {
 
 impl ServerHandle {
     pub async fn join(self) -> Result<(), std::io::Error> {
-        // Note that dropping `self.complete` would terminate the server.
         self.handle.await??;
         Ok(())
     }
@@ -146,14 +151,16 @@ impl TransportProtocol {
         self,
         address: impl ToSocketAddrs + Send + 'static,
         state: S,
+        shutdown_signal: CancellationToken,
     ) -> ServerHandle
     where
         S: MessageHandler + Send + 'static,
     {
         let handle = match self {
-            Self::Udp => tokio::spawn(Self::run_udp_server(address, state)),
-            Self::Tcp => tokio::spawn(Self::run_tcp_server(address, state)),
+            Self::Udp => tokio::spawn(UdpServer::run(address, state, shutdown_signal)),
+            Self::Tcp => tokio::spawn(TcpServer::run(address, state, shutdown_signal)),
         };
+
         ServerHandle { handle }
     }
 }
@@ -186,52 +193,111 @@ impl ConnectionPool for UdpConnectionPool {
     }
 }
 
-// Server implementation for UDP.
-impl TransportProtocol {
-    async fn run_udp_server<S>(address: impl ToSocketAddrs, state: S) -> Result<(), std::io::Error>
-    where
-        S: MessageHandler + Send + 'static,
-    {
-        let socket = UdpSocket::bind(address).await?;
-        let (udp_sink, mut udp_stream) = UdpFramed::new(socket, Codec).split();
-        let udp_sink = Arc::new(Mutex::new(udp_sink));
-        // Track the latest tasks for a given peer. This is used to return answers in the
-        // same order as the queries.
-        let mut previous_tasks = HashMap::new();
+/// Server implementation for UDP.
+pub struct UdpServer<State> {
+    handler: State,
+    udp_sink: SharedUdpSink,
+    udp_stream: SplitStream<UdpFramed<Codec>>,
+    active_handlers: HashMap<SocketAddr, JoinHandle<()>>,
+}
 
-        while let Some(value) = udp_stream.next().await {
-            let (message, peer) = match value {
-                Ok(value) => value,
-                Err(codec::Error::Io(io_error)) => return Err(io_error),
-                Err(other_error) => {
-                    warn!("Received an invalid message: {other_error}");
-                    continue;
-                }
-            };
+/// Type alias for the outgoing endpoint of UDP messages.
+type SharedUdpSink = Arc<Mutex<SplitSink<UdpFramed<Codec>, (RpcMessage, SocketAddr)>>>;
 
-            let previous_task = previous_tasks.remove(&peer);
-            let mut state = state.clone();
-            let udp_sink = udp_sink.clone();
-            let new_task = tokio::spawn(async move {
-                if let Some(reply) = state.handle_message(message).await {
-                    if let Some(task) = previous_task {
-                        if let Err(error) = task.await {
-                            warn!("Previous task cannot be joined: {}", error);
-                        }
-                    }
-                    let status = udp_sink.lock().await.send((reply, peer)).await;
-                    if let Err(error) = status {
-                        error!("Failed to send query response: {}", error);
-                    }
+impl<State> UdpServer<State>
+where
+    State: MessageHandler + Send + 'static,
+{
+    /// Runs the UDP server implementation.
+    pub async fn run(
+        address: impl ToSocketAddrs,
+        state: State,
+        shutdown_signal: CancellationToken,
+    ) -> Result<(), std::io::Error> {
+        let mut server = Self::bind(address, state).await?;
+
+        loop {
+            tokio::select! { biased;
+                _ = shutdown_signal.cancelled() => {
+                    server.shutdown().await;
+                    return Ok(());
                 }
-            });
-            previous_tasks.insert(peer, new_task);
-            if previous_tasks.len() >= 100 {
-                // Collect finished tasks to avoid leaking memory.
-                previous_tasks.retain(|_, task| !task.is_finished());
+                result = server.udp_stream.next() => match result {
+                    Some(Ok((message, peer))) => server.handle_message(message, peer),
+                    Some(Err(error)) => server.handle_error(error).await?,
+                    None => unreachable!("`UdpFramed` should never return `None`"),
+                },
             }
         }
-        Ok(())
+    }
+
+    /// Creates a [`UpdServer`] bound to the provided `address`, handling messages using the
+    /// provided `handler`.
+    async fn bind(address: impl ToSocketAddrs, handler: State) -> Result<Self, std::io::Error> {
+        let socket = UdpSocket::bind(address).await?;
+        let (udp_sink, udp_stream) = UdpFramed::new(socket, Codec).split();
+
+        Ok(UdpServer {
+            handler,
+            udp_sink: Arc::new(Mutex::new(udp_sink)),
+            udp_stream,
+            active_handlers: HashMap::new(),
+        })
+    }
+
+    /// Spawns a task to handle a single incoming message.
+    fn handle_message(&mut self, message: RpcMessage, peer: SocketAddr) {
+        let previous_task = self.active_handlers.remove(&peer);
+        let mut state = self.handler.clone();
+        let udp_sink = self.udp_sink.clone();
+
+        let new_task = tokio::spawn(async move {
+            if let Some(reply) = state.handle_message(message).await {
+                if let Some(task) = previous_task {
+                    if let Err(error) = task.await {
+                        warn!("Message handler task panicked: {}", error);
+                    }
+                }
+                let status = udp_sink.lock().await.send((reply, peer)).await;
+                if let Err(error) = status {
+                    error!("Failed to send query response: {}", error);
+                }
+            }
+        });
+
+        self.active_handlers.insert(peer, new_task);
+
+        if self.active_handlers.len() >= 100 {
+            // Collect finished tasks to avoid leaking memory.
+            self.active_handlers.retain(|_, task| !task.is_finished());
+        }
+    }
+
+    /// Handles an error while receiving a message.
+    async fn handle_error(&mut self, error: codec::Error) -> Result<(), std::io::Error> {
+        match error {
+            codec::Error::Io(io_error) => {
+                error!("IO error in UDP server: {io_error}");
+                self.shutdown().await;
+                Err(io_error)
+            }
+            other_error => {
+                warn!("Received an invalid message: {other_error}");
+                Ok(())
+            }
+        }
+    }
+
+    /// Gracefully shuts down the server, waiting for existing tasks to finish.
+    async fn shutdown(&mut self) {
+        let handlers = mem::take(&mut self.active_handlers);
+        let mut handler_results = FuturesUnordered::from_iter(handlers.into_values());
+
+        while let Some(result) = handler_results.next().await {
+            if let Err(error) = result {
+                warn!("Message handler panicked: {}", error);
+            }
+        }
     }
 }
 
@@ -283,49 +349,129 @@ impl ConnectionPool for TcpConnectionPool {
     }
 }
 
-// Server implementation for TCP.
-impl TransportProtocol {
-    async fn run_tcp_server<S>(address: impl ToSocketAddrs, state: S) -> Result<(), std::io::Error>
-    where
-        S: MessageHandler + Send + 'static,
-    {
+/// Server implementation for TCP.
+pub struct TcpServer<State> {
+    connection: Framed<TcpStream, Codec>,
+    handler: State,
+    shutdown_signal: CancellationToken,
+}
+
+impl<State> TcpServer<State>
+where
+    State: MessageHandler + Send + 'static,
+{
+    /// Runs the TCP server implementation.
+    ///
+    /// Listens for connections and spawns a task with a new [`TcpServer`] instance to serve that
+    /// client.
+    pub async fn run(
+        address: impl ToSocketAddrs,
+        handler: State,
+        shutdown_signal: CancellationToken,
+    ) -> Result<(), std::io::Error> {
         let listener = TcpListener::bind(address).await?;
+
         let mut accept_stream = stream::try_unfold(listener, |listener| async move {
             let (socket, _) = listener.accept().await?;
             Ok::<_, io::Error>(Some((socket, listener)))
         });
         let mut accept_stream = pin!(accept_stream);
-        while let Some(value) = accept_stream.next().await {
-            let socket = value?;
-            let mut handler = state.clone();
-            tokio::spawn(async move {
-                let mut transport = Framed::new(socket, Codec);
-                while let Some(maybe_message) = transport.next().await {
-                    let message = match maybe_message {
-                        Ok(message) => message,
-                        Err(error) => {
-                            // We expect some EOF or disconnect error at the end.
-                            if !matches!(
-                                &error,
-                                codec::Error::Io(error)
-                                    if error.kind() == io::ErrorKind::UnexpectedEof
-                                    || error.kind() == io::ErrorKind::ConnectionReset
-                            ) {
-                                error!("Error while reading TCP stream: {}", error);
-                            }
 
-                            break;
-                        }
-                    };
+        let connection_shutdown_signal = shutdown_signal.child_token();
+        let mut tasks = JoinSet::new();
 
-                    if let Some(reply) = handler.handle_message(message).await {
-                        if let Err(error) = transport.send(reply).await {
-                            error!("Failed to send query response: {}", error);
-                        }
-                    }
+        loop {
+            tokio::select! { biased;
+                _ = shutdown_signal.cancelled() => {
+                    while tasks.join_next().await.is_some() {}
+                    return Ok(());
                 }
-            });
+                maybe_socket = accept_stream.next() => match maybe_socket {
+                    Some(Ok(socket)) => {
+                        let server = TcpServer::new_connection(
+                            socket,
+                            handler.clone(),
+                            connection_shutdown_signal.clone(),
+                        );
+                        tasks.spawn(server.serve());
+                    }
+                    Some(Err(error)) => {
+                        while tasks.join_next().await.is_some() {}
+                        return Err(error);
+                    }
+                    None => unreachable!(
+                        "The `accept_stream` should never finish unless there's an error",
+                    ),
+                },
+            }
+
+            // Reap finished tasks
+            while tasks.try_join_next().is_some() {}
         }
-        Ok(())
+    }
+
+    /// Creates a new [`TcpServer`] to serve a single connection established on the provided
+    /// [`TcpStream`].
+    fn new_connection(
+        tcp_stream: TcpStream,
+        handler: State,
+        shutdown_signal: CancellationToken,
+    ) -> Self {
+        TcpServer {
+            connection: Framed::new(tcp_stream, Codec),
+            handler,
+            shutdown_signal,
+        }
+    }
+
+    /// Serves a client through a single connection.
+    async fn serve(mut self) {
+        loop {
+            tokio::select! { biased;
+                _ = self.shutdown_signal.cancelled() => {
+                    let mut tcp_stream = self.connection.into_inner();
+                    if let Err(error) = tcp_stream.shutdown().await {
+                        let peer = tcp_stream
+                            .peer_addr()
+                            .map(|address| address.to_string())
+                            .unwrap_or_else(|_| "an unknown peer".to_owned());
+                        warn!("Failed to close connection to {peer}: {error:?}");
+                    }
+                    return;
+                }
+                result = self.connection.next() => match result {
+                    Some(Ok(message)) => self.handle_message(message).await,
+                    Some(Err(error)) => {
+                        self.handle_error(error);
+                        return;
+                    }
+                    None => break,
+                },
+            }
+        }
+    }
+
+    /// Handles a single request message from a client.
+    async fn handle_message(&mut self, message: RpcMessage) {
+        if let Some(reply) = self.handler.handle_message(message).await {
+            if let Err(error) = self.connection.send(reply).await {
+                error!("Failed to send query response: {error}");
+            }
+        }
+    }
+
+    /// Handles an error received while attempting to receive from the connection.
+    ///
+    /// Ignores a successful connection termination, while logging an unexpected connection
+    /// termination or any other error.
+    fn handle_error(&self, error: codec::Error) {
+        if !matches!(
+            &error,
+            codec::Error::Io(error)
+                if error.kind() == io::ErrorKind::UnexpectedEof
+                || error.kind() == io::ErrorKind::ConnectionReset
+        ) {
+            error!("Error while reading TCP stream: {error}");
+        }
     }
 }
