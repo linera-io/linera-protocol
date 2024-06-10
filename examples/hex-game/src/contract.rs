@@ -46,15 +46,33 @@ impl Contract for HexContract {
     }
 
     async fn execute_operation(&mut self, operation: Operation) -> MoveOutcome {
-        let Operation::MakeMove { x, y } = operation;
         let active = self.state.board.get().active_player();
+        let block_time = self.runtime.system_time();
+        let clock = self.state.clock.get_mut();
+        let (x, y) = match operation {
+            Operation::MakeMove { x, y } => (x, y),
+            Operation::ClaimVictory => {
+                assert_eq!(
+                    self.runtime.authenticated_signer(),
+                    Some(self.state.owners.get().unwrap()[active.other().index()]),
+                    "Victory can only be claimed by the player whose turn it is not."
+                );
+                assert!(
+                    clock.timed_out(block_time, active),
+                    "Player has not timed out yet."
+                );
+                assert!(
+                    self.state.board.get().winner().is_none(),
+                    "The game has already ended."
+                );
+                return MoveOutcome::Winner(active.other());
+            }
+        };
         assert_eq!(
             self.runtime.authenticated_signer(),
             Some(self.state.owners.get().unwrap()[active.index()]),
             "Move must be signed by the player whose turn it is."
         );
-        let block_time = self.runtime.system_time();
-        let clock = self.state.clock.get_mut();
         self.runtime
             .assert_before(block_time.saturating_add(clock.block_delay));
         clock.make_move(block_time, active);

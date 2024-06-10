@@ -139,4 +139,16 @@ async fn hex_game_clock() {
         })
         .await
         .is_err());
+
+    chain.set_key_pair(key_pair1.copy());
+    chain
+        .add_block(|block| {
+            block
+                .with_operation(app_id, Operation::ClaimVictory)
+                .with_timestamp(time);
+        })
+        .await;
+
+    let response = chain.graphql_query(app_id, "query { winner }").await;
+    assert_eq!(Some("ONE"), response["winner"].as_str());
 }

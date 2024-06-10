@@ -38,6 +38,8 @@ pub struct HexAbi;
 pub enum Operation {
     /// Make a move, and place a stone onto cell `(x, y)`.
     MakeMove { x: u16, y: u16 },
+    /// Claim victory if the opponent has timed out.
+    ClaimVictory,
 }
 
 impl ContractAbi for HexAbi {
@@ -127,7 +129,7 @@ pub enum Player {
 
 impl Player {
     /// Returns the opponent of `self`.
-    fn other(&self) -> Self {
+    pub fn other(&self) -> Self {
         match self {
             Player::One => Player::Two,
             Player::Two => Player::One,

@@ -5,7 +5,7 @@
 
 mod state;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use hex_game::{Board, Operation, Player};
@@ -20,6 +20,7 @@ use self::state::HexState;
 
 #[derive(Clone)]
 pub struct HexService {
+    runtime: Arc<Mutex<ServiceRuntime<HexService>>>,
     state: Arc<HexState>,
 }
 
@@ -37,6 +38,7 @@ impl Service for HexService {
             .await
             .expect("Failed to load state");
         HexService {
+            runtime: Arc::new(Mutex::new(runtime)),
             state: Arc::new(state),
         }
     }
@@ -51,7 +53,15 @@ impl Service for HexService {
 #[Object]
 impl HexService {
     async fn winner(&self) -> Option<Player> {
-        self.state.board.get().winner()
+        if let Some(winner) = self.state.board.get().winner() {
+            return Some(winner);
+        }
+        let active = self.state.board.get().active_player();
+        let block_time = self.runtime.lock().unwrap().system_time();
+        if self.state.clock.get().timed_out(block_time, active) {
+            return Some(active.other());
+        }
+        None
     }
 
     async fn owners(&self) -> [Owner; 2] {
