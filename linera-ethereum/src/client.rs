@@ -94,11 +94,7 @@ pub trait EthereumQueries {
     /// Gets the balance of the specified address at the specified block number.
     /// if no block number is specified then the balance of the latest block is
     /// returned.
-    async fn get_balance(
-        &self,
-        address: &str,
-        block_number: u64,
-    ) -> Result<U256, Self::Error>;
+    async fn get_balance(&self, address: &str, block_number: u64) -> Result<U256, Self::Error>;
 
     /// Reads the events of the smart contract.
     ///
@@ -151,11 +147,7 @@ where
         Ok(result.to::<u64>())
     }
 
-    async fn get_balance(
-        &self,
-        address: &str,
-        block_number: u64,
-    ) -> Result<U256, Self::Error> {
+    async fn get_balance(&self, address: &str, block_number: u64) -> Result<U256, Self::Error> {
         let address = address.parse::<Address>()?;
         let tag = get_block_id(block_number);
         Ok(self.request("eth_getBalance", (address, tag)).await?)
