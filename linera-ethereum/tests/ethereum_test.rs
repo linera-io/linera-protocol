@@ -36,10 +36,10 @@ async fn test_get_accounts_balance() -> anyhow::Result<()> {
     let target_balance = U256::from_str("10000000000000000000000")?;
     for address in addresses {
         let balance = ethereum_client
-            .get_balance(&address, Some(block_number))
+            .get_balance(&address, block_number)
             .await?;
         let balance_simp = ethereum_client_simp
-            .get_balance(&address, Some(block_number))
+            .get_balance(&address, block_number)
             .await?;
         assert_eq!(balance, balance_simp);
         assert_eq!(balance, target_balance);
