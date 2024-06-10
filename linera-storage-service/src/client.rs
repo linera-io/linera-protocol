@@ -550,7 +550,7 @@ impl AdminKeyValueStore for ServiceStoreClient {
         let store = ServiceStoreClientInternal::connect(config, namespace).await?;
         let store = LruCachingStore::new(store, cache_size);
         #[cfg(with_metrics)]
-        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
+        let store = MeteredStore::new(&STORAGE_SERVICE_METRICS, store);
         Ok(Self { store })
     }
 

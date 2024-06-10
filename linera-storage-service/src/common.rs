@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 use linera_base::command::resolve_binary;
 #[cfg(with_metrics)]
+use linera_base::sync::Lazy;
+#[cfg(with_metrics)]
 use linera_views::metering::KeyValueStoreMetrics;
 use linera_views::{
     common::{CommonStoreConfig, MIN_VIEW_TAG},
