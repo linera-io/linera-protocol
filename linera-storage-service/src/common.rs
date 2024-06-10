@@ -4,6 +4,8 @@
 use std::path::PathBuf;
 
 use linera_base::command::resolve_binary;
+#[cfg(with_metrics)]
+use linera_views::metering::KeyValueStoreMetrics;
 use linera_views::{
     common::{CommonStoreConfig, MIN_VIEW_TAG},
     value_splitting::DatabaseConsistencyError,
@@ -87,6 +89,10 @@ pub fn create_shared_store_common_config() -> CommonStoreConfig {
         cache_size: usize::MAX,
     }
 }
+
+#[cfg(with_metrics)]
+pub(crate) static STORAGE_SERVICE_METRICS: Lazy<KeyValueStoreMetrics> =
+    Lazy::new(|| KeyValueStoreMetrics::new("storage service".to_string()));
 
 #[derive(Debug, Clone)]
 pub struct ServiceStoreConfig {
