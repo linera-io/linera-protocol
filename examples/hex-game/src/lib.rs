@@ -129,7 +129,7 @@ pub enum Player {
 
 impl Player {
     /// Returns the opponent of `self`.
-    pub fn other(&self) -> Self {
+    pub fn other(self) -> Self {
         match self {
             Player::One => Player::Two,
             Player::Two => Player::One,
