@@ -24,7 +24,7 @@ use linera_rpc::{
     config::{NetworkProtocol, ValidatorPublicNetworkPreConfig},
     simple::TransportProtocol,
 };
-use linera_storage::{Clock, MemoryStorage, Storage, TestClock};
+use linera_storage::{MemoryStorage, Storage, TestClock};
 use linera_views::views::ViewError;
 use rand::SeedableRng as _;
 

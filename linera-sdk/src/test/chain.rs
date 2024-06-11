@@ -91,6 +91,19 @@ impl ActiveChain {
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
     /// to provide the block's contents.
     pub async fn add_block(&self, block_builder: impl FnOnce(&mut BlockBuilder)) -> Vec<MessageId> {
+        self.try_add_block(block_builder)
+            .await
+            .expect("Failed to execute block.")
+    }
+
+    /// Tries to add a block to this microchain.
+    ///
+    /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
+    /// to provide the block's contents.
+    pub async fn try_add_block(
+        &self,
+        block_builder: impl FnOnce(&mut BlockBuilder),
+    ) -> anyhow::Result<Vec<MessageId>> {
         let mut tip = self.tip.lock().await;
         let mut block = BlockBuilder::new(
             self.description.into(),
@@ -102,7 +115,7 @@ impl ActiveChain {
         block_builder(&mut block);
 
         // TODO(#2066): Remove boxing once call-stack is shallower
-        let (certificate, message_ids) = Box::pin(block.sign()).await;
+        let (certificate, message_ids) = Box::pin(block.try_sign()).await?;
 
         self.validator
             .worker()
@@ -113,7 +126,7 @@ impl ActiveChain {
 
         *tip = Some(certificate);
 
-        message_ids
+        Ok(message_ids)
     }
 
     /// Receives all queued messages in all inboxes of this microchain.

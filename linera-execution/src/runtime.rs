@@ -60,6 +60,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// The height of the next block that will be added to this chain. During operations
     /// and messages, this is the current block height.
     height: BlockHeight,
+    /// The current local time.
+    local_time: Timestamp,
     /// The authenticated signer of the operation or message, if any.
     authenticated_signer: Option<Owner>,
     /// The current message being executed, if there is one.
@@ -268,6 +270,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     fn new(
         chain_id: ChainId,
         height: BlockHeight,
+        local_time: Timestamp,
         authenticated_signer: Option<Owner>,
         next_message_index: u32,
         executing_message: Option<ExecutingMessage>,
@@ -279,6 +282,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         Self {
             chain_id,
             height,
+            local_time,
             authenticated_signer,
             next_message_index,
             executing_message,
@@ -647,6 +651,10 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
     ) -> Result<Vec<u8>, ExecutionError> {
         self.inner().http_post(url, content_type, payload)
     }
+
+    fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
+        self.inner().assert_before(timestamp)
+    }
 }
 
 impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
@@ -863,6 +871,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let context = crate::QueryContext {
             chain_id: self.chain_id,
             next_block_height: self.height,
+            local_time: self.local_time,
         };
         let sender = self.execution_state_sender.clone();
         let response = ServiceSyncRuntime::run_query(sender, application_id, context, query)?;
@@ -900,6 +909,27 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         }
         Ok(bytes)
     }
+
+    fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
+        if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
+            return match responses.next() {
+                Some(OracleResponse::Assert) => Ok(()),
+                Some(_) => Err(ExecutionError::OracleResponseMismatch),
+                None => Err(ExecutionError::MissingOracleResponse),
+            };
+        }
+        ensure!(
+            self.local_time < timestamp,
+            ExecutionError::AssertBefore {
+                timestamp,
+                local_time: self.local_time,
+            }
+        );
+        if let OracleResponses::Record(responses) = &mut self.oracle_responses {
+            responses.push(OracleResponse::Assert);
+        }
+        Ok(())
+    }
 }
 
 impl<UserInstance> Clone for SyncRuntime<UserInstance> {
@@ -910,11 +940,12 @@ impl<UserInstance> Clone for SyncRuntime<UserInstance> {
 
 impl ContractSyncRuntime {
     /// Main entry point to start executing a user action.
-    #[allow(clippy::type_complexity)]
+    #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     pub(crate) fn run_action(
         execution_state_sender: ExecutionStateSender,
         application_id: UserApplicationId,
         chain_id: ChainId,
+        local_time: Timestamp,
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: UserAction,
@@ -935,6 +966,7 @@ impl ContractSyncRuntime {
         let mut runtime = ContractSyncRuntime::new(SyncRuntimeInternal::new(
             chain_id,
             height,
+            local_time,
             signer,
             next_message_index,
             executing_message,
@@ -1267,6 +1299,7 @@ impl ServiceSyncRuntime {
         let runtime_internal = SyncRuntimeInternal::new(
             context.chain_id,
             context.next_block_height,
+            context.local_time,
             None,
             0,
             None,
@@ -1303,6 +1336,7 @@ impl ServiceRuntime for ServiceSyncRuntime {
             let query_context = crate::QueryContext {
                 chain_id: this.chain_id,
                 next_block_height: this.height,
+                local_time: this.local_time,
             };
             this.push_application(ApplicationStatus {
                 caller_id: None,

@@ -54,6 +54,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let result = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: *app_id,
                 bytes: vec![],
@@ -149,6 +150,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let (outcomes, _) = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: dummy_operation.clone(),
@@ -204,6 +206,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let context = QueryContext {
         chain_id: ChainId::root(0),
         next_block_height: BlockHeight(0),
+        local_time: Timestamp::from(0),
     };
     assert_eq!(
         view.query_application(
@@ -301,6 +304,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
     let (outcomes, _) = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
@@ -401,6 +405,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
     let result = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
@@ -441,6 +446,7 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
     let result = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: id,
                 bytes: vec![],
@@ -511,6 +517,7 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
     let result = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: first_id,
                 bytes: vec![],
@@ -627,6 +634,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     let (outcomes, _) = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: first_id,
                 bytes: vec![],
@@ -733,6 +741,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
     let result = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
@@ -792,6 +801,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
     let result = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
@@ -850,6 +860,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
     let result = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
@@ -906,6 +917,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     assert_matches!(
         view.execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
@@ -959,6 +971,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     let (outcomes, _) = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id,
                 bytes: vec![],
@@ -1060,6 +1073,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     let (outcomes, _) = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
@@ -1175,6 +1189,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     let (outcomes, _) = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
@@ -1335,6 +1350,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let (outcomes, _) = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
@@ -1478,6 +1494,7 @@ async fn test_open_chain() {
     let (outcomes, _) = view
         .execute_operation(
             context,
+            Timestamp::from(0),
             operation,
             Some(OracleRecord::default()),
             &mut controller,
@@ -1559,6 +1576,7 @@ async fn test_close_chain() {
     };
     view.execute_operation(
         context,
+        Timestamp::from(0),
         operation,
         Some(OracleRecord::default()),
         &mut controller,
@@ -1572,6 +1590,7 @@ async fn test_close_chain() {
     let operation = SystemOperation::ChangeApplicationPermissions(permissions);
     view.execute_operation(
         context,
+        Timestamp::from(0),
         operation.into(),
         Some(OracleRecord::default()),
         &mut controller,
@@ -1593,6 +1612,7 @@ async fn test_close_chain() {
     };
     view.execute_operation(
         context,
+        Timestamp::from(0),
         operation,
         Some(OracleRecord::default()),
         &mut controller,

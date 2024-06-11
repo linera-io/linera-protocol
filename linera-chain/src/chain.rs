@@ -370,10 +370,15 @@ where
         self.context().extra().chain_id()
     }
 
-    pub async fn query_application(&mut self, query: Query) -> Result<Response, ChainError> {
+    pub async fn query_application(
+        &mut self,
+        local_time: Timestamp,
+        query: Query,
+    ) -> Result<Response, ChainError> {
         let context = QueryContext {
             chain_id: self.chain_id(),
             next_block_height: self.tip_state.get().next_block_height,
+            local_time,
         };
         let response = self
             .execution_state
@@ -823,6 +828,7 @@ where
                         .execution_state
                         .execute_message(
                             context,
+                            local_time,
                             message.event.message.clone(),
                             (grant > Amount::ZERO).then_some(&mut grant),
                             match &mut oracle_records {
@@ -937,6 +943,7 @@ where
                 .execution_state
                 .execute_operation(
                     context,
+                    local_time,
                     operation.clone(),
                     match &mut oracle_records {
                         Some(records) => Some(

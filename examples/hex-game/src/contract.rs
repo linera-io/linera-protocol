@@ -5,9 +5,9 @@
 
 mod state;
 
-use hex_game::{Board, HexAbi, MoveOutcome, Operation};
+use hex_game::{Board, Clock, HexAbi, InstantiationArgument, MoveOutcome, Operation};
 use linera_sdk::{
-    base::{Owner, WithContractAbi},
+    base::WithContractAbi,
     views::{RootView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
@@ -26,7 +26,7 @@ impl WithContractAbi for HexContract {
 
 impl Contract for HexContract {
     type Message = ();
-    type InstantiationArgument = ([Owner; 2], u16);
+    type InstantiationArgument = InstantiationArgument;
     type Parameters = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
@@ -36,20 +36,46 @@ impl Contract for HexContract {
         HexContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, (owners, size): Self::InstantiationArgument) {
+    async fn instantiate(&mut self, arg: Self::InstantiationArgument) {
         self.runtime.application_parameters(); // Verifies that these are empty.
-        self.state.owners.set(Some(owners));
-        self.state.board.set(Board::new(size));
+        self.state
+            .clock
+            .set(Clock::new(self.runtime.system_time(), &arg));
+        self.state.owners.set(Some(arg.players));
+        self.state.board.set(Board::new(arg.board_size));
     }
 
     async fn execute_operation(&mut self, operation: Operation) -> MoveOutcome {
-        let Operation::MakeMove { x, y } = operation;
         let active = self.state.board.get().active_player();
+        let block_time = self.runtime.system_time();
+        let clock = self.state.clock.get_mut();
+        let (x, y) = match operation {
+            Operation::MakeMove { x, y } => (x, y),
+            Operation::ClaimVictory => {
+                assert_eq!(
+                    self.runtime.authenticated_signer(),
+                    Some(self.state.owners.get().unwrap()[active.other().index()]),
+                    "Victory can only be claimed by the player whose turn it is not."
+                );
+                assert!(
+                    clock.timed_out(block_time, active),
+                    "Player has not timed out yet."
+                );
+                assert!(
+                    self.state.board.get().winner().is_none(),
+                    "The game has already ended."
+                );
+                return MoveOutcome::Winner(active.other());
+            }
+        };
         assert_eq!(
             self.runtime.authenticated_signer(),
             Some(self.state.owners.get().unwrap()[active.index()]),
             "Move must be signed by the player whose turn it is."
         );
+        self.runtime
+            .assert_before(block_time.saturating_add(clock.block_delay));
+        clock.make_move(block_time, active);
         self.state.board.get_mut().make_move(x, y)
     }
 

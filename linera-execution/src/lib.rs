@@ -149,6 +149,11 @@ pub enum ExecutionError {
     Json(#[from] serde_json::Error),
     #[error("Recorded response for oracle query has the wrong type")]
     OracleResponseMismatch,
+    #[error("Assertion failed: local time {local_time} is not earlier than {timestamp}")]
+    AssertBefore {
+        timestamp: Timestamp,
+        local_time: Timestamp,
+    },
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -291,6 +296,8 @@ pub struct QueryContext {
     pub chain_id: ChainId,
     /// The height of the next block on this chain.
     pub next_block_height: BlockHeight,
+    /// The local time in the node executing the query.
+    pub local_time: Timestamp,
 }
 
 pub trait BaseRuntime {
@@ -435,6 +442,13 @@ pub trait BaseRuntime {
         content_type: String,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
+
+    /// Ensures that the current time at block validation is `< timestamp`. Note that block
+    /// validation happens at or after the block timestamp, but isn't necessarily the same.
+    ///
+    /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
+    /// owner, not a super owner.
+    fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {

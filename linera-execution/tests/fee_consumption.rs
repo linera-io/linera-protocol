@@ -9,7 +9,7 @@ use std::{sync::Arc, vec};
 
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, OracleRecord},
+    data_types::{Amount, BlockHeight, OracleRecord, Timestamp},
     identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_execution::{
@@ -196,6 +196,7 @@ async fn test_fee_consumption(
     let (outcomes, _) = view
         .execute_message(
             context,
+            Timestamp::from(0),
             Message::User {
                 application_id,
                 bytes: vec![],

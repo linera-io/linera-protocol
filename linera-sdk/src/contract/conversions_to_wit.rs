@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, BlockHeight, Resources, SendMessageRequest},
+    data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{
         Account, ApplicationId, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner,
     },
@@ -96,6 +96,14 @@ impl From<MessageId> for wit_system_api::MessageId {
             chain_id: message_id.chain_id.into(),
             height: message_id.height.into(),
             index: message_id.index,
+        }
+    }
+}
+
+impl From<Timestamp> for wit_system_api::Timestamp {
+    fn from(timestamp: Timestamp) -> Self {
+        Self {
+            inner0: timestamp.micros(),
         }
     }
 }

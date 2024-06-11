@@ -129,7 +129,8 @@ where
     /// Queries an application's state on the chain.
     pub async fn query_application(&mut self, query: Query) -> Result<Response, WorkerError> {
         self.ensure_is_active()?;
-        let response = self.chain.query_application(query).await?;
+        let local_time = self.storage.clock().current_time();
+        let response = self.chain.query_application(local_time, query).await?;
         Ok(response)
     }
 

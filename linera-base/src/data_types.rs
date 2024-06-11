@@ -200,6 +200,11 @@ impl Timestamp {
         Timestamp(self.0.saturating_add(duration.0))
     }
 
+    /// Returns the timestamp that is `duration` earlier than `self`.
+    pub fn saturating_sub(&self, duration: TimeDelta) -> Timestamp {
+        Timestamp(self.0.saturating_sub(duration.0))
+    }
+
     /// Returns a timestamp `micros` microseconds later than `self`, or the highest possible value
     /// if it would overflow.
     pub fn saturating_add_micros(&self, micros: u64) -> Timestamp {
@@ -720,6 +725,8 @@ pub enum OracleResponse {
     Service(Vec<u8>),
     /// The response from an HTTP POST request.
     Post(Vec<u8>),
+    /// An assertion oracle that passed.
+    Assert,
 }
 
 impl fmt::Display for OracleResponse {
@@ -729,6 +736,7 @@ impl fmt::Display for OracleResponse {
                 write!(f, "Service:{}", STANDARD_NO_PAD.encode(bytes))?
             }
             OracleResponse::Post(bytes) => write!(f, "Post:{}", STANDARD_NO_PAD.encode(bytes))?,
+            OracleResponse::Assert => write!(f, "Assert")?,
         };
 
         Ok(())
@@ -850,6 +858,7 @@ doc_scalar!(
     Timestamp,
     "A timestamp, in microseconds since the Unix epoch"
 );
+doc_scalar!(TimeDelta, "A duration in microseconds");
 doc_scalar!(
     Round,
     "A number to identify successive attempts to decide a value in a consensus protocol."

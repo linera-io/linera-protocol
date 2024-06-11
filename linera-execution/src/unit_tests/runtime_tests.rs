@@ -7,7 +7,7 @@
 
 use futures::{channel::mpsc, StreamExt};
 use linera_base::{
-    data_types::BlockHeight,
+    data_types::{BlockHeight, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, MessageId},
 };
 use linera_views::batch::Batch;
@@ -93,6 +93,7 @@ fn create_contract_runtime() -> (
     let mut runtime = SyncRuntimeInternal::new(
         chain_id,
         BlockHeight(0),
+        Timestamp::from(0),
         None,
         0,
         None,

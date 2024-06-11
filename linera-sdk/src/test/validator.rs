@@ -23,8 +23,7 @@ use linera_execution::{
     committee::{Committee, ValidatorName},
     WasmRuntime,
 };
-use linera_storage::{MemoryStorage, Storage, WallClock};
-use linera_views::memory::{MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES};
+use linera_storage::{MemoryStorage, Storage, TestClock};
 use serde::Serialize;
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -44,7 +43,8 @@ use crate::ContractAbi;
 pub struct TestValidator {
     key_pair: KeyPair,
     committee: Committee,
-    worker: Arc<Mutex<WorkerState<MemoryStorage<WallClock>>>>,
+    worker: Arc<Mutex<WorkerState<MemoryStorage<TestClock>>>>,
+    clock: TestClock,
     root_chain_counter: Arc<AtomicU32>,
     chains: Arc<DashMap<ChainId, ActiveChain>>,
 }
@@ -53,14 +53,11 @@ impl Default for TestValidator {
     fn default() -> Self {
         let key_pair = KeyPair::generate();
         let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
-        let store_config = MemoryStoreConfig::new(TEST_MEMORY_MAX_STREAM_QUERIES);
-        let namespace = "validator";
         let wasm_runtime = Some(WasmRuntime::default());
-        let storage = MemoryStorage::new(store_config, namespace, wasm_runtime)
+        let storage = MemoryStorage::make_test_storage(wasm_runtime)
             .now_or_never()
-            .expect("execution of MemoryStorage::new should not await anything")
-            .expect("storage");
-
+            .expect("execution of MemoryStorage::new should not await anything");
+        let clock = storage.clock.clone();
         let worker = WorkerState::new(
             "Single validator node".to_string(),
             Some(key_pair.copy()),
@@ -71,6 +68,7 @@ impl Default for TestValidator {
             key_pair,
             committee,
             worker: Arc::new(Mutex::new(worker)),
+            clock,
             root_chain_counter: Arc::default(),
             chains: Arc::default(),
         }
@@ -83,6 +81,7 @@ impl Clone for TestValidator {
             key_pair: self.key_pair.copy(),
             committee: self.committee.clone(),
             worker: self.worker.clone(),
+            clock: self.clock.clone(),
             root_chain_counter: self.root_chain_counter.clone(),
             chains: self.chains.clone(),
         }
@@ -136,8 +135,13 @@ impl TestValidator {
     }
 
     /// Returns the locked [`WorkerState`] of this validator.
-    pub(crate) async fn worker(&self) -> MutexGuard<WorkerState<MemoryStorage<WallClock>>> {
+    pub(crate) async fn worker(&self) -> MutexGuard<WorkerState<MemoryStorage<TestClock>>> {
         self.worker.lock().await
+    }
+
+    /// Returns the [`TestClock`] of this validator.
+    pub fn clock(&self) -> &TestClock {
+        &self.clock
     }
 
     /// Returns the keys this test validator uses for signing certificates.
