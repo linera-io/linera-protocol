@@ -45,6 +45,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::Serialize;
 use thiserror::Error;
+use tokio::sync::OwnedRwLockReadGuard;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, info};
 
@@ -332,13 +333,8 @@ where
     /// Obtains a `ChainStateView` for a given `ChainId`.
     pub async fn chain_state_view(
         &self,
-    ) -> Result<Arc<ChainStateView<S::Context>>, LocalNodeError> {
-        let chain_state_view = self
-            .storage_client()
-            .await
-            .load_chain(self.chain_id)
-            .await?;
-        Ok(Arc::new(chain_state_view))
+    ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, LocalNodeError> {
+        Ok(self.node_client.chain_state_view(self.chain_id).await?)
     }
 
     /// Subscribes to notifications from this client's chain.

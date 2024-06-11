@@ -801,7 +801,7 @@ impl ChainStateViewExtension {
 }
 
 #[derive(MergedObject)]
-struct ChainStateExtendedView<C>(ChainStateViewExtension, Arc<ChainStateView<C>>)
+struct ChainStateExtendedView<C>(ChainStateViewExtension, ReadOnlyChainStateView<C>)
 where
     C: linera_views::common::Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
@@ -855,8 +855,11 @@ where
     ViewError: From<C::Error>,
     C::Extra: linera_execution::ExecutionRuntimeContext,
 {
-    fn new(view: Arc<ChainStateView<C>>) -> Self {
-        Self(ChainStateViewExtension(view.chain_id()), view)
+    fn new(view: OwnedRwLockReadGuard<ChainStateView<C>>) -> Self {
+        Self(
+            ChainStateViewExtension(view.chain_id()),
+            ReadOnlyChainStateView(view),
+        )
     }
 }
 
