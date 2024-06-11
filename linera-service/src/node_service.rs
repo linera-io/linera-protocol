@@ -1,13 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{borrow::Cow, collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{
     futures_util::Stream,
     parser::types::{DocumentOperations, ExecutableDocument, OperationType},
-    Error, MergedObject, Object, Request, ScalarType, Schema, ServerError, SimpleObject,
-    Subscription,
+    resolver_utils::ContainerType,
+    Error, MergedObject, Object, OutputType, Request, ScalarType, Schema, ServerError,
+    SimpleObject, Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
@@ -41,6 +42,7 @@ use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error as ThisError;
+use tokio::sync::OwnedRwLockReadGuard;
 use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
@@ -804,6 +806,48 @@ where
     C: linera_views::common::Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
     C::Extra: linera_execution::ExecutionRuntimeContext;
+
+/// A wrapper type that allows proxying GraphQL queries to a [`ChainStateView`] that's behind an
+/// [`OwnedRwLockReadGuard`].
+pub struct ReadOnlyChainStateView<C>(OwnedRwLockReadGuard<ChainStateView<C>>)
+where
+    C: linera_views::common::Context + Clone + Send + Sync + 'static,
+    ViewError: From<C::Error>;
+
+impl<C> ContainerType for ReadOnlyChainStateView<C>
+where
+    C: linera_views::common::Context + Clone + Send + Sync + 'static,
+    ViewError: From<C::Error>,
+{
+    async fn resolve_field(
+        &self,
+        context: &async_graphql::Context<'_>,
+    ) -> async_graphql::ServerResult<Option<async_graphql::Value>> {
+        self.0.resolve_field(context).await
+    }
+}
+
+impl<C> OutputType for ReadOnlyChainStateView<C>
+where
+    C: linera_views::common::Context + Clone + Send + Sync + 'static,
+    ViewError: From<C::Error>,
+{
+    fn type_name() -> Cow<'static, str> {
+        ChainStateView::<C>::type_name()
+    }
+
+    fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+        ChainStateView::<C>::create_type_info(registry)
+    }
+
+    async fn resolve(
+        &self,
+        context: &async_graphql::ContextSelectionSet<'_>,
+        field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+    ) -> async_graphql::ServerResult<async_graphql::Value> {
+        self.0.resolve(context, field).await
+    }
+}
 
 impl<C> ChainStateExtendedView<C>
 where
