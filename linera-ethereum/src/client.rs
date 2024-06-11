@@ -94,11 +94,7 @@ pub trait EthereumQueries {
     /// Gets the balance of the specified address at the specified block number.
     /// if no block number is specified then the balance of the latest block is
     /// returned.
-    async fn get_balance(
-        &self,
-        address: &str,
-        block_number: Option<u64>,
-    ) -> Result<U256, Self::Error>;
+    async fn get_balance(&self, address: &str, block_number: u64) -> Result<U256, Self::Error>;
 
     /// Reads the events of the smart contract.
     ///
@@ -129,11 +125,8 @@ pub trait EthereumQueries {
     ) -> Result<Bytes, Self::Error>;
 }
 
-pub(crate) fn get_block_id(block_number: Option<u64>) -> BlockId {
-    let number = match block_number {
-        None => BlockNumberOrTag::Latest,
-        Some(val) => BlockNumberOrTag::Number(val),
-    };
+pub(crate) fn get_block_id(block_number: u64) -> BlockId {
+    let number = BlockNumberOrTag::Number(block_number);
     BlockId::Number(number)
 }
 
@@ -154,11 +147,7 @@ where
         Ok(result.to::<u64>())
     }
 
-    async fn get_balance(
-        &self,
-        address: &str,
-        block_number: Option<u64>,
-    ) -> Result<U256, Self::Error> {
+    async fn get_balance(&self, address: &str, block_number: u64) -> Result<U256, Self::Error> {
         let address = address.parse::<Address>()?;
         let tag = get_block_id(block_number);
         Ok(self.request("eth_getBalance", (address, tag)).await?)
@@ -201,7 +190,7 @@ where
             .from(from)
             .to(contract_address)
             .input(input);
-        let tag = get_block_id(Some(block));
+        let tag = get_block_id(block);
         Ok(self.request::<_, Bytes>("eth_call", (tx, tag)).await?)
     }
 }
