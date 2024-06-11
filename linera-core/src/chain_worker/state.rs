@@ -266,9 +266,6 @@ where
             .current_committee()
             .expect("chain is active");
         Self::check_block_epoch(epoch, block)?;
-        if let Some(validated) = validated {
-            validated.check(committee)?;
-        }
         // Check the authentication of the block.
         let public_key = self
             .chain
@@ -277,8 +274,11 @@ where
             .verify_owner(&proposal)
             .ok_or(WorkerError::InvalidOwner)?;
         proposal.check_signature(public_key)?;
-        // Check the authentication of the operations in the block.
-        if let Some(signer) = block.authenticated_signer {
+        if let Some(validated) = validated {
+            // Verify that this block has been validated by a quorum before.
+            validated.check(committee)?;
+        } else if let Some(signer) = block.authenticated_signer {
+            // Check the authentication of the operations in the new block.
             ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
         }
         // Check if the chain is ready for this new block proposal.

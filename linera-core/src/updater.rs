@@ -414,12 +414,6 @@ where
                 self.send_certificate(cert, delivery).await?;
             }
         }
-        if let Some(cert) = manager.locked {
-            if cert.value().is_validated() && cert.value().chain_id() == chain_id {
-                self.send_certificate(cert, CrossChainMessageDelivery::NonBlocking)
-                    .await?;
-            }
-        }
         if let Some(cert) = manager.timeout {
             if cert.value().is_timeout() && cert.value().chain_id() == chain_id {
                 self.send_certificate(cert, CrossChainMessageDelivery::NonBlocking)
