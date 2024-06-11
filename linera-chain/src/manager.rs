@@ -218,17 +218,17 @@ impl ChainManager {
         let new_round = proposal.content.round;
         let new_block = &proposal.content.block;
         let owner = &proposal.owner;
-        let validated = proposal.validated.as_ref();
+        let validated_block_certificate = proposal.validated_block_certificate.as_ref();
 
         // When a block is certified, incrementing its height must succeed.
         ensure!(
             new_block.height < BlockHeight::MAX,
             ChainError::InvalidBlockHeight
         );
-        if let Some(validated) = validated {
+        if let Some(validated_block_certificate) = validated_block_certificate {
             ensure!(
-                validated.value().is_validated()
-                    && validated
+                validated_block_certificate.value().is_validated()
+                    && validated_block_certificate
                         .value()
                         .executed_block()
                         .map(|executed_block| &executed_block.block)
@@ -236,7 +236,7 @@ impl ChainManager {
                 ChainError::InvalidBlockProposal
             );
         }
-        let expected_round = match validated {
+        let expected_round = match validated_block_certificate {
             None => self.current_round,
             Some(cert) => self
                 .ownership
@@ -270,7 +270,7 @@ impl ChainManager {
             );
             // Any proposal in the fast round is considered locked, because validators vote to
             // confirm it immediately.
-            if old_proposal.content.round.is_fast() && validated.is_none() {
+            if old_proposal.content.round.is_fast() && validated_block_certificate.is_none() {
                 ensure!(
                     old_proposal.content.block == *new_block,
                     ChainError::HasLockedBlock(new_block.height, Round::Fast)
@@ -279,7 +279,7 @@ impl ChainManager {
         }
         // If we have a locked block, it must either match the proposal, or the proposal must
         // include a higher certificate that validates the proposed block.
-        if let Some(locked) = validated
+        if let Some(locked) = validated_block_certificate
             .into_iter()
             .chain(&self.locked)
             .max_by_key(|cert| cert.round)
@@ -398,13 +398,11 @@ impl ChainManager {
         self.proposed = Some(proposal.clone());
         self.update_current_round(local_time);
         // If the validated block certificate is more recent, update our locked block.
-        if let Some(validated) = &proposal.validated {
-            if self
-                .locked
-                .as_ref()
-                .map_or(true, |locked| locked.round < validated.round)
-            {
-                self.locked = Some(validated.clone());
+        if let Some(validated_block_certificate) = &proposal.validated_block_certificate {
+            if self.locked.as_ref().map_or(true, |locked| {
+                locked.round < validated_block_certificate.round
+            }) {
+                self.locked = Some(validated_block_certificate.clone());
             }
         }
 
@@ -635,7 +633,7 @@ impl ChainManagerInfo {
             .chain(
                 self.requested_proposed
                     .as_ref()
-                    .and_then(|proposal| proposal.validated.as_ref()),
+                    .and_then(|proposal| proposal.validated_block_certificate.as_ref()),
             )
             .max_by_key(|cert| cert.round)
     }

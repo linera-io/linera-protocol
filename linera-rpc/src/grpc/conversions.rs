@@ -175,7 +175,7 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
             )?,
             blobs: bincode::serialize(&block_proposal.hashed_blobs)?,
             validated: block_proposal
-                .validated
+                .validated_block_certificate
                 .map(|cert| bincode::serialize(&cert))
                 .transpose()?,
         })
@@ -199,7 +199,7 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
                 &block_proposal.hashed_certificate_values,
             )?,
             hashed_blobs: bincode::deserialize(&block_proposal.blobs)?,
-            validated: block_proposal
+            validated_block_certificate: block_proposal
                 .validated
                 .map(|bytes| bincode::deserialize(&bytes))
                 .transpose()?,
@@ -784,7 +784,7 @@ pub mod tests {
                 .with(get_block()),
             )],
             hashed_blobs: vec![],
-            validated: Some(Certificate::new(
+            validated_block_certificate: Some(Certificate::new(
                 HashedCertificateValue::new_validated(
                     BlockExecutionOutcome {
                         state_hash: CryptoHash::new(&Foo("validated".into())),

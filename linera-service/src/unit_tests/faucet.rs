@@ -89,7 +89,7 @@ async fn test_faucet_rate_limiting() {
     assert!(root.do_claim(KeyPair::generate().public()).await.is_err());
     // If a validator is offline, it will create a pending block and then fail.
     clock.set(Timestamp::from(6000));
-    builder.set_fault_type(0..2, FaultType::Offline).await;
+    builder.set_fault_type([0, 1], FaultType::Offline).await;
     assert!(root.do_claim(KeyPair::generate().public()).await.is_err());
     assert_eq!(context.lock().await.update_calls, 4); // Also called in the last error case.
 }

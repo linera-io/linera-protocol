@@ -234,7 +234,7 @@ pub struct BlockProposal {
     pub signature: Signature,
     pub hashed_certificate_values: Vec<HashedCertificateValue>,
     pub hashed_blobs: Vec<HashedBlob>,
-    pub validated: Option<Certificate>,
+    pub validated_block_certificate: Option<Certificate>,
 }
 
 /// A message together with routing information.
@@ -814,9 +814,9 @@ impl BlockProposal {
         secret: &KeyPair,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
-        validated: Option<Certificate>,
+        validated_block_certificate: Option<Certificate>,
     ) -> Self {
-        let outcome = validated
+        let outcome = validated_block_certificate
             .as_ref()
             .and_then(|certificate| certificate.value().executed_block())
             .map(|executed_block| Cow::Borrowed(&executed_block.outcome));
@@ -833,13 +833,13 @@ impl BlockProposal {
             signature,
             hashed_certificate_values,
             hashed_blobs,
-            validated,
+            validated_block_certificate,
         }
     }
 
     pub fn check_signature(&self, public_key: PublicKey) -> Result<(), CryptoError> {
         let outcome = self
-            .validated
+            .validated_block_certificate
             .as_ref()
             .and_then(|certificate| certificate.value().executed_block())
             .map(|executed_block| Cow::Borrowed(&executed_block.outcome));

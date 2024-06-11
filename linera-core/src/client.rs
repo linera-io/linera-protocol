@@ -1237,10 +1237,10 @@ where
             }
         }
         // Make sure that we follow the steps in the multi-round protocol.
-        let validated = manager.highest_validated().cloned();
-        if let Some(validated) = &validated {
+        let validated_block_certificate = manager.highest_validated().cloned();
+        if let Some(validated_block_certificate) = &validated_block_certificate {
             ensure!(
-                validated.value().block() == Some(&block),
+                validated_block_certificate.value().block() == Some(&block),
                 ChainClientError::BlockProposalError(
                     "A different block has already been validated at this height"
                 )
@@ -1285,7 +1285,7 @@ where
             key_pair,
             values,
             hashed_blobs,
-            validated,
+            validated_block_certificate,
         );
         // Check the final block proposal. This will be cheaper after #1401.
         self.node_client

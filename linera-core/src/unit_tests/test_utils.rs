@@ -3,7 +3,6 @@
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    slice::SliceIndex,
     sync::Arc,
 };
 
@@ -514,15 +513,10 @@ where
         self
     }
 
-    pub async fn set_fault_type<I>(&mut self, range: I, fault_type: FaultType)
-    where
-        I: SliceIndex<
-            [LocalValidatorClient<B::Storage>],
-            Output = [LocalValidatorClient<B::Storage>],
-        >,
-    {
+    pub async fn set_fault_type(&mut self, indexes: impl AsRef<[usize]>, fault_type: FaultType) {
         let mut faulty_validators = vec![];
-        for validator in &mut self.validator_clients[range] {
+        for index in indexes.as_ref() {
+            let validator = &mut self.validator_clients[*index];
             validator.set_fault_type(fault_type).await;
             faulty_validators.push(validator.name);
         }
