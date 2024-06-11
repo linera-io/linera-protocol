@@ -15,7 +15,6 @@ use linera_views::{
         AdminKeyValueStore, CommonStoreConfig, KeyValueStore, ReadableKeyValueStore,
         WritableKeyValueStore,
     },
-    lru_caching::LruCachingStore,
 };
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
@@ -481,9 +480,9 @@ pub async fn create_service_test_store(
 #[derive(Clone)]
 pub struct ServiceStoreClient {
     #[cfg(with_metrics)]
-    store: MeteredStore<LruCachingStore<ServiceStoreClientInternal>>,
+    store: MeteredStore<ServiceStoreClientInternal>,
     #[cfg(not(with_metrics))]
-    store: LruCachingStore<ServiceStoreClientInternal>,
+    store: ServiceStoreClientInternal,
 }
 
 impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
@@ -546,9 +545,7 @@ impl AdminKeyValueStore for ServiceStoreClient {
     type Config = ServiceStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ServiceContextError> {
-        let cache_size = config.common_config.cache_size;
         let store = ServiceStoreClientInternal::connect(config, namespace).await?;
-        let store = LruCachingStore::new(store, cache_size);
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&STORAGE_SERVICE_METRICS, store);
         Ok(Self { store })
