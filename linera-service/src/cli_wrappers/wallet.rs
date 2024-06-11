@@ -926,7 +926,7 @@ impl NodeService {
                 .json(&json!({ "query": query }))
                 .send()
                 .await
-                .context("failed to post query")?;
+                .with_context(|| format!("query_node: failed to post query={}", query))?;
             anyhow::ensure!(
                 response.status().is_success(),
                 "Query \"{}\" failed: {}",
@@ -1183,7 +1183,7 @@ impl Faucet {
             .json(&json!({ "query": query }))
             .send()
             .await
-            .context("failed to post query")?;
+            .context("genesis_config: failed to post query")?;
         anyhow::ensure!(
             response.status().is_success(),
             "Query \"{}\" failed: {}",
@@ -1210,7 +1210,7 @@ impl Faucet {
             .json(&json!({ "query": query }))
             .send()
             .await
-            .context("failed to post query")?;
+            .context("version_info: failed to post query")?;
         anyhow::ensure!(
             response.status().is_success(),
             "Query \"{}\" failed: {}",
@@ -1258,7 +1258,7 @@ impl Faucet {
             .json(&json!({ "query": &query }))
             .send()
             .await
-            .context("failed to post query")?;
+            .with_context(|| format!("claim: failed to post query={}", query))?;
         anyhow::ensure!(
             response.status().is_success(),
             "Query \"{}\" failed: {}",
@@ -1304,7 +1304,7 @@ impl Faucet {
             .json(&json!({ "query": query }))
             .send()
             .await
-            .context("failed to post query")?;
+            .context("current_validators: failed to post query")?;
         anyhow::ensure!(
             response.status().is_success(),
             "Query \"{}\" failed: {}",
@@ -1352,7 +1352,7 @@ impl<A> ApplicationWrapper<A> {
             .json(&json!({ "query": query }))
             .send()
             .await
-            .context("failed to post query")?;
+            .with_context(|| format!("raw_query: failed to post query={}", query))?;
         anyhow::ensure!(
             response.status().is_success(),
             "Query \"{}\" failed: {}",
