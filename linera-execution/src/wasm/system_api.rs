@@ -503,7 +503,7 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Panics if the current time at block validation is `>= timestamp`. Note that block
+    /// Aborts the query if the current time at block validation is `>= timestamp`. Note that block
     /// validation happens at or after the block timestamp, but isn't necessarily the same.
     fn assert_before(caller: &mut Caller, timestamp: Timestamp) -> Result<(), RuntimeError> {
         caller
