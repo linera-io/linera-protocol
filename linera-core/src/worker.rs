@@ -16,9 +16,12 @@ use linera_base::{
     doc_scalar, ensure,
     identifiers::{BlobId, ChainId, Owner},
 };
-use linera_chain::data_types::{
-    Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
-    LiteCertificate, MessageBundle, Origin, OutgoingMessage, Target,
+use linera_chain::{
+    data_types::{
+        Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
+        LiteCertificate, MessageBundle, Origin, OutgoingMessage, Target,
+    },
+    ChainStateView,
 };
 use linera_execution::{
     committee::Epoch, BytecodeLocation, Query, Response, UserApplicationDescription,
@@ -28,7 +31,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{oneshot, Mutex, OwnedRwLockReadGuard};
 use tracing::{error, instrument, trace, warn};
 #[cfg(with_testing)]
 use {
@@ -660,6 +663,21 @@ where
             event,
             action: MessageAction::Accept,
         }))
+    }
+
+    /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
+    /// [`ChainId`].
+    ///
+    /// The returned view holds a lock on the chain state, which prevents the worker from changing
+    /// the state of that chain.
+    pub async fn chain_state_view(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<OwnedRwLockReadGuard<ChainStateView<StorageClient::Context>>, WorkerError> {
+        self.create_chain_worker(chain_id)
+            .await?
+            .chain_state_view()
+            .await
     }
 
     /// Creates a [`ChainWorkerState`] instance for a specific chain.
