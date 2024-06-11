@@ -4,6 +4,7 @@
 
 use std::{
     io::{BufRead, BufReader, BufWriter, Write},
+    iter::IntoIterator,
     path::{Path, PathBuf},
 };
 
@@ -11,7 +12,7 @@ use anyhow::{bail, Context as _};
 use fs4::FileExt as _;
 use fs_err::{self, File, OpenOptions};
 use linera_base::{
-    crypto::{BcsSignable, KeyPair, PublicKey},
+    crypto::{BcsSignable, CryptoRng, KeyPair, PublicKey},
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
@@ -24,7 +25,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::wallet::Wallet;
+use crate::wallet::{UserChain, Wallet};
 
 pub trait Import: DeserializeOwned {
     fn read(path: &Path) -> Result<Self, std::io::Error> {
@@ -125,8 +126,15 @@ impl Drop for FileLock {
 /// two processes accessing it at the same time.
 pub struct WalletState {
     inner: Wallet,
+    prng: Box<dyn CryptoRng>,
     wallet_path: PathBuf,
     _lock: FileLock,
+}
+
+impl Extend<UserChain> for WalletState {
+    fn extend<Chains: IntoIterator<Item = UserChain>>(&mut self, chains: Chains) {
+        self.inner.extend(chains);
+    }
 }
 
 impl WalletState {
@@ -145,8 +153,9 @@ impl WalletState {
     pub fn from_file(path: &Path) -> Result<Self, anyhow::Error> {
         let file = OpenOptions::new().read(true).write(true).open(path)?;
         let file_lock = FileLock::new(file, path)?;
-        let inner = serde_json::from_reader(BufReader::new(&file_lock.file))?;
+        let inner: Wallet = serde_json::from_reader(BufReader::new(&file_lock.file))?;
         Ok(Self {
+            prng: inner.make_prng(),
             inner,
             wallet_path: path.into(),
             _lock: file_lock,
@@ -161,20 +170,18 @@ impl WalletState {
         let file = Self::open_options().read(true).open(path)?;
         let file_lock = FileLock::new(file, path)?;
         let mut reader = BufReader::new(&file_lock.file);
-        if reader.fill_buf()?.is_empty() {
-            Ok(Self {
-                inner: Wallet::new(genesis_config, testing_prng_seed),
-                wallet_path: path.into(),
-                _lock: file_lock,
-            })
+        let inner = if reader.fill_buf()?.is_empty() {
+            Wallet::new(genesis_config, testing_prng_seed)
         } else {
-            let inner = serde_json::from_reader(reader)?;
-            Ok(Self {
-                inner,
-                wallet_path: path.into(),
-                _lock: file_lock,
-            })
-        }
+            serde_json::from_reader(reader)?
+        };
+
+        Ok(Self {
+            prng: inner.make_prng(),
+            inner,
+            wallet_path: path.into(),
+            _lock: file_lock,
+        })
     }
 
     /// Writes the wallet to disk.
@@ -201,6 +208,21 @@ impl WalletState {
         }
         fs_err::rename(&temp_file_path, &self.wallet_path)?;
         Ok(())
+    }
+
+    pub fn generate_key_pair(&mut self) -> KeyPair {
+        KeyPair::generate_from(&mut self.prng)
+    }
+
+    pub fn save(&mut self) -> anyhow::Result<()> {
+        self.inner.refresh_prng_seed(&mut self.prng);
+        self.write()?;
+        tracing::info!("Saved user chain states");
+        Ok(())
+    }
+
+    pub fn refresh_prng_seed(&mut self) {
+        self.inner.refresh_prng_seed(&mut self.prng)
     }
 
     /// Returns options for opening and writing to the wallet file, creating it if it doesn't

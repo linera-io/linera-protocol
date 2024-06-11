@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use colored::Colorize;
 use futures::{lock::OwnedMutexGuard, Future};
 use linera_base::{
-    crypto::{CryptoRng, KeyPair},
+    crypto::KeyPair,
     data_types::{BlockHeight, HashedBlob, Timestamp},
     identifiers::{Account, BlobId, BytecodeId, ChainId},
     ownership::ChainOwnership,
@@ -27,7 +27,7 @@ use linera_execution::Bytecode;
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
     chain_listener,
-    config::{GenesisConfig, WalletState},
+    config::WalletState,
     node_service::wait_for_next_round,
     storage::StorageConfigNamespace,
     wallet::{UserChain, Wallet},
@@ -65,13 +65,12 @@ use {
 use crate::{client_options::ChainOwnershipConfig, ClientOptions};
 
 pub struct ClientContext {
-    wallet_state: WalletState,
-    chain_client_builder: Client<NodeProvider>,
-    send_timeout: Duration,
-    recv_timeout: Duration,
-    notification_retry_delay: Duration,
-    notification_retries: u32,
-    prng: Box<dyn CryptoRng>,
+    pub(crate) wallet_state: WalletState,
+    pub(crate) chain_client_builder: Client<NodeProvider>,
+    pub(crate) send_timeout: Duration,
+    pub(crate) recv_timeout: Duration,
+    pub(crate) notification_retry_delay: Duration,
+    pub(crate) notification_retries: u32,
 }
 
 #[async_trait]
@@ -104,36 +103,8 @@ impl chain_listener::ClientContext<NodeProvider> for ClientContext {
 }
 
 impl ClientContext {
-    pub fn create(
-        options: &ClientOptions,
-        genesis_config: GenesisConfig,
-        testing_prng_seed: Option<u64>,
-        chains: Vec<UserChain>,
-    ) -> Result<Self, anyhow::Error> {
-        let wallet_state_path = match &options.wallet_state_path {
-            Some(path) => path.clone(),
-            None => Self::create_default_wallet_path()?,
-        };
-        anyhow::ensure!(
-            !wallet_state_path.exists(),
-            "Wallet already exists at {}. Aborting",
-            wallet_state_path.display()
-        );
-        let mut wallet_state =
-            WalletState::create(&wallet_state_path, genesis_config, testing_prng_seed)
-                .with_context(|| format!("Unable to create wallet at {:?}", &wallet_state_path))?;
-        chains
-            .into_iter()
-            .for_each(|chain| wallet_state.inner_mut().insert(chain));
-        Ok(Self::configure(options, wallet_state))
-    }
-
     pub fn from_options(options: &ClientOptions) -> Result<Self, anyhow::Error> {
-        let wallet_state_path = match &options.wallet_state_path {
-            Some(path) => path.clone(),
-            None => Self::create_default_wallet_path()?,
-        };
-        let wallet_state = WalletState::from_file(&wallet_state_path)?;
+        let wallet_state = WalletState::from_file(&options.wallet_path()?)?;
         Ok(Self::configure(options, wallet_state))
     }
 
@@ -148,8 +119,6 @@ impl ClientContext {
     }
 
     fn configure(options: &ClientOptions, wallet_state: WalletState) -> Self {
-        let prng = wallet_state.inner().make_prng();
-
         let node_options = NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
@@ -167,24 +136,7 @@ impl ClientContext {
             recv_timeout: options.recv_timeout,
             notification_retry_delay: options.notification_retry_delay,
             notification_retries: options.notification_retries,
-            prng,
         }
-    }
-
-    fn create_default_config_path() -> Result<PathBuf, anyhow::Error> {
-        let mut config_dir = dirs::config_dir()
-            .context("Default configuration directory not supported. Please specify a path.")?;
-        config_dir.push("linera");
-        if !config_dir.exists() {
-            debug!("{} does not exist, creating", config_dir.display());
-            fs_err::create_dir(&config_dir)?;
-            debug!("{} created.", config_dir.display());
-        }
-        Ok(config_dir)
-    }
-
-    fn create_default_wallet_path() -> Result<PathBuf, anyhow::Error> {
-        Ok(Self::create_default_config_path()?.join("wallet.json"))
     }
 
     pub fn storage_config(
@@ -195,7 +147,7 @@ impl ClientContext {
             #[cfg(feature = "rocksdb")]
             None => {
                 let storage_config = linera_service::storage::StorageConfig::RocksDb {
-                    path: Self::create_default_config_path()?.join("wallet.db"),
+                    path: options.config_path()?.join("wallet.db"),
                 };
                 let namespace = "default".to_string();
                 Ok(StorageConfigNamespace {
@@ -259,9 +211,7 @@ impl ClientContext {
     }
 
     pub fn save_wallet(&mut self) {
-        self.wallet_state
-            .inner_mut()
-            .refresh_prng_seed(&mut self.prng);
+        self.wallet_state.refresh_prng_seed();
         self.wallet_state
             .write()
             .expect("Unable to write user chains");
@@ -435,10 +385,6 @@ impl ClientContext {
         Ok(blob_id)
     }
 
-    pub fn generate_key_pair(&mut self) -> KeyPair {
-        KeyPair::generate_from(&mut self.prng)
-    }
-
     /// Applies the given function to the chain client.
     ///
     /// Updates the wallet regardless of the outcome. As long as the function returns a round
@@ -565,7 +511,7 @@ impl ClientContext {
             .context("should have default chain")?;
         let mut chain_client = self.make_chain_client(storage.clone(), default_chain_id);
         while key_pairs.len() < num_chains {
-            let key_pair = self.generate_key_pair();
+            let key_pair = self.wallet_state.generate_key_pair();
             let public_key = key_pair.public();
             let (epoch, committees) = chain_client.epoch_and_committees(default_chain_id).await?;
             let epoch = epoch.context("missing epoch on the default chain")?;
