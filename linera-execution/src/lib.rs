@@ -443,7 +443,7 @@ pub trait BaseRuntime {
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
-    /// Panics if the current time at block validation is `>= timestamp`. Note that block
+    /// Ensures that the current time at block validation is `< timestamp`. Note that block
     /// validation happens at or after the block timestamp, but isn't necessarily the same.
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
