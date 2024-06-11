@@ -1,7 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(feature = "rocksdb", feature = "dynamodb", feature = "scylladb"))]
+#![cfg(any(
+    feature = "storage_service",
+    feature = "dynamodb",
+    feature = "scylladb"
+))]
 
 use std::{collections::BTreeMap, io::Read, str::FromStr, time::Duration};
 
@@ -40,7 +44,7 @@ async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: ChainI
         .unwrap();
 }
 
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "service_grpc")]
+#[cfg_attr(feature = "storage_service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]

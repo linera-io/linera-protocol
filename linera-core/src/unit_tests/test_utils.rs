@@ -47,11 +47,7 @@ use {
 #[cfg(not(target_arch = "wasm32"))]
 use {
     linera_storage::ServiceStorage,
-    linera_storage_service::{
-        child::{get_free_endpoint, StorageService, StorageServiceGuard},
-        client::service_config_from_endpoint,
-        common::get_service_storage_binary,
-    },
+    linera_storage_service::{client::service_config_from_endpoint, storage_service_test_endpoint},
     linera_views::test_utils::generate_test_namespace,
 };
 
@@ -814,10 +810,8 @@ impl StorageBuilder for RocksDbStorageBuilder {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub struct ServiceStorageBuilder {
-    _guard: Option<StorageServiceGuard>,
     endpoint: String,
     namespace: String,
-    use_child: bool,
     instance_counter: usize,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
@@ -832,16 +826,12 @@ impl ServiceStorageBuilder {
 
     /// Creates a `ServiceStorage` with the given Wasm runtime.
     pub async fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        let _guard = None;
-        let endpoint = get_free_endpoint().await.unwrap();
+        let endpoint = storage_service_test_endpoint().unwrap();
         let clock = TestClock::default();
         let namespace = generate_test_namespace();
-        let use_child = true;
         Self {
-            _guard,
             endpoint,
             namespace,
-            use_child,
             instance_counter: 0,
             wasm_runtime: wasm_runtime.into(),
             clock,
@@ -855,11 +845,6 @@ impl StorageBuilder for ServiceStorageBuilder {
     type Storage = ServiceStorage<TestClock>;
 
     async fn build(&mut self) -> anyhow::Result<Self::Storage> {
-        if self._guard.is_none() && self.use_child {
-            let binary = get_service_storage_binary().await?.display().to_string();
-            let service = StorageService::new(&self.endpoint, binary);
-            self._guard = Some(service.run().await.expect("child"));
-        }
         let store_config = service_config_from_endpoint(&self.endpoint)?;
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         self.instance_counter += 1;
