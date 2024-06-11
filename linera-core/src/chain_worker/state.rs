@@ -254,7 +254,7 @@ where
             owner,
             hashed_certificate_values,
             hashed_blobs,
-            validated,
+            validated_block_certificate,
             signature: _,
         } = &proposal;
         self.ensure_is_active()?;
@@ -274,9 +274,9 @@ where
             .verify_owner(&proposal)
             .ok_or(WorkerError::InvalidOwner)?;
         proposal.check_signature(public_key)?;
-        if let Some(validated) = validated {
+        if let Some(validated_block_certificate) = validated_block_certificate {
             // Verify that this block has been validated by a quorum before.
-            validated.check(committee)?;
+            validated_block_certificate.check(committee)?;
         } else if let Some(signer) = block.authenticated_signer {
             // Check the authentication of the operations in the new block.
             ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
@@ -310,8 +310,8 @@ where
         );
         self.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.storage.clock().current_time();
-        let outcome = if let Some(validated) = validated {
-            validated
+        let outcome = if let Some(validated_block_certificate) = validated_block_certificate {
+            validated_block_certificate
                 .value()
                 .executed_block()
                 .ok_or_else(|| WorkerError::MissingExecutedBlockInProposal)?

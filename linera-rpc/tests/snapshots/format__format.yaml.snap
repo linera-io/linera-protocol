@@ -111,7 +111,7 @@ BlockProposal:
     - hashed_blobs:
         SEQ:
           TYPENAME: Blob
-    - validated:
+    - validated_block_certificate:
         OPTION:
           TYPENAME: Certificate
 Bytecode:
