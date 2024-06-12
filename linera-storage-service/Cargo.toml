@@ -13,11 +13,10 @@ version.workspace = true
 
 [features]
 default = ["rocksdb"]
+metrics = ["linera-views/metrics"]
 rocksdb = ["linera-views/rocksdb"]
-dynamodb = ["linera-views/dynamodb"]
-scylladb = ["linera-views/scylladb"]
-test = ["linera-views/test"]
 storage_service = []
+test = ["linera-views/test"]
 
 [[bin]]
 name = "storage_service_server"
