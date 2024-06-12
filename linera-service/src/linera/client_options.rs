@@ -3,7 +3,6 @@
 
 use std::{env, iter, num::NonZeroU16, path::PathBuf, time::Duration};
 
-use anyhow::Error;
 use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::PublicKey,
@@ -18,12 +17,13 @@ use linera_execution::{
 };
 use linera_service::{
     chain_listener::{ChainListenerConfig, ClientContext as _},
+    config::WalletState,
     storage::{full_initialize_storage, run_with_storage},
     util,
 };
 use linera_views::common::CommonStoreConfig;
 
-use crate::{ClientContext, Job};
+use crate::{ClientContext, GenesisConfig, Job};
 
 #[derive(clap::Parser)]
 #[command(
@@ -104,7 +104,7 @@ pub struct ClientOptions {
 }
 
 impl ClientOptions {
-    pub fn init() -> Result<Self, anyhow::Error> {
+    pub fn init() -> anyhow::Result<Self> {
         let mut options = <ClientOptions as clap::Parser>::parse();
         let suffix = match options.with_wallet {
             None => String::new(),
@@ -121,7 +121,7 @@ impl ClientOptions {
         Ok(options)
     }
 
-    pub async fn run_command_with_storage(self) -> Result<(), Error> {
+    pub async fn run_command_with_storage(self) -> anyhow::Result<()> {
         let context = ClientContext::from_options(&self)?;
         let genesis_config = context.wallet().genesis_config().clone();
         let wasm_runtime = self.wasm_runtime.with_wasm_default();
@@ -145,7 +145,7 @@ impl ClientOptions {
         Ok(())
     }
 
-    pub async fn initialize_storage(&self) -> Result<(), Error> {
+    pub async fn initialize_storage(&self) -> anyhow::Result<()> {
         let context = ClientContext::from_options(self)?;
         let genesis_config = context.wallet().genesis_config().clone();
         let max_concurrent_queries = self.max_concurrent_queries;
@@ -160,6 +160,44 @@ impl ClientOptions {
         let full_storage_config = storage_config.add_common_config(common_config).await?;
         full_initialize_storage(full_storage_config, &genesis_config).await?;
         Ok(())
+    }
+
+    pub fn wallet(&self) -> anyhow::Result<WalletState> {
+        WalletState::from_file(&self.wallet_path()?)
+    }
+
+    pub fn wallet_path(&self) -> anyhow::Result<PathBuf> {
+        self.wallet_state_path
+            .clone()
+            .map(Ok)
+            .unwrap_or_else(|| Ok(self.config_path()?.join("wallet.json")))
+    }
+
+    pub fn config_path(&self) -> anyhow::Result<PathBuf> {
+        let mut config_dir = dirs::config_dir().ok_or(anyhow::anyhow!(
+            "Default configuration directory not supported. Please specify a path."
+        ))?;
+        config_dir.push("linera");
+        if !config_dir.exists() {
+            tracing::debug!("{} does not exist, creating", config_dir.display());
+            fs_err::create_dir(&config_dir)?;
+            tracing::debug!("{} created.", config_dir.display());
+        }
+        Ok(config_dir)
+    }
+
+    pub fn create_wallet(
+        &self,
+        genesis_config: GenesisConfig,
+        testing_prng_seed: Option<u64>,
+    ) -> anyhow::Result<WalletState> {
+        let wallet_path = self.wallet_path()?;
+        anyhow::ensure!(
+            !wallet_path.exists(),
+            "Wallet already exists at {}. Aborting",
+            wallet_path.display()
+        );
+        WalletState::create(&wallet_path, genesis_config, testing_prng_seed)
     }
 }
 
@@ -912,9 +950,9 @@ pub struct ChainOwnershipConfig {
 }
 
 impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
-    type Error = Error;
+    type Error = anyhow::Error;
 
-    fn try_from(config: ChainOwnershipConfig) -> Result<ChainOwnership, Error> {
+    fn try_from(config: ChainOwnershipConfig) -> anyhow::Result<ChainOwnership> {
         let ChainOwnershipConfig {
             super_owner_public_keys,
             owner_public_keys,

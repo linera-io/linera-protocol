@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    iter::IntoIterator,
+};
 
 use anyhow::Context as _;
 use comfy_table::{
@@ -31,6 +34,20 @@ pub struct Wallet {
     testing_prng_seed: Option<u64>,
 }
 
+impl Extend<UserChain> for Wallet {
+    fn extend<Chains: IntoIterator<Item = UserChain>>(&mut self, chains: Chains) {
+        let mut chains = chains.into_iter();
+        if let Some(chain) = chains.next() {
+            // Ensures that the default chain gets set appropriately to the first chain,
+            // if it isn't already set.
+            self.insert(chain);
+
+            self.chains
+                .extend(chains.map(|chain| (chain.chain_id, chain)));
+        }
+    }
+}
+
 impl Wallet {
     pub fn new(genesis_config: GenesisConfig, testing_prng_seed: Option<u64>) -> Self {
         Wallet {
@@ -47,9 +64,10 @@ impl Wallet {
     }
 
     pub fn insert(&mut self, chain: UserChain) {
-        if self.chains.is_empty() {
+        if self.default.is_none() {
             self.default = Some(chain.chain_id);
         }
+
         self.chains.insert(chain.chain_id, chain);
     }
 
