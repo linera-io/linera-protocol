@@ -29,7 +29,6 @@ use linera_service::{
     chain_listener,
     config::WalletState,
     node_service::wait_for_next_round,
-    storage::StorageConfigNamespace,
     wallet::{UserChain, Wallet},
 };
 use linera_storage::Storage;
@@ -103,11 +102,6 @@ impl chain_listener::ClientContext<NodeProvider> for ClientContext {
 }
 
 impl ClientContext {
-    pub fn from_options(options: &ClientOptions) -> Result<Self, anyhow::Error> {
-        let wallet_state = WalletState::from_file(&options.wallet_path()?)?;
-        Ok(Self::configure(options, wallet_state))
-    }
-
     /// Returns the [`Wallet`] as an immutable reference.
     fn wallet(&self) -> &Wallet {
         self.wallet_state.inner()
@@ -118,7 +112,7 @@ impl ClientContext {
         self.wallet_state.inner_mut()
     }
 
-    fn configure(options: &ClientOptions, wallet_state: WalletState) -> Self {
+    pub fn new(options: &ClientOptions, wallet_state: WalletState) -> Self {
         let node_options = NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
@@ -136,27 +130,6 @@ impl ClientContext {
             recv_timeout: options.recv_timeout,
             notification_retry_delay: options.notification_retry_delay,
             notification_retries: options.notification_retries,
-        }
-    }
-
-    pub fn storage_config(
-        options: &ClientOptions,
-    ) -> Result<StorageConfigNamespace, anyhow::Error> {
-        match &options.storage_config {
-            Some(config) => config.parse(),
-            #[cfg(feature = "rocksdb")]
-            None => {
-                let storage_config = linera_service::storage::StorageConfig::RocksDb {
-                    path: options.config_path()?.join("wallet.db"),
-                };
-                let namespace = "default".to_string();
-                Ok(StorageConfigNamespace {
-                    storage_config,
-                    namespace,
-                })
-            }
-            #[cfg(not(feature = "rocksdb"))]
-            None => anyhow::bail!("A storage option must be provided"),
         }
     }
 
