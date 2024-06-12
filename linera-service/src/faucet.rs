@@ -116,7 +116,7 @@ where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     <P as ValidatorNodeProvider>::Node: Sync,
     S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<P> + Send + 'static,
+    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
@@ -130,7 +130,7 @@ where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     <P as ValidatorNodeProvider>::Node: Sync,
     S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<P> + Send + 'static,
+    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
     async fn do_claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
@@ -227,7 +227,7 @@ impl<P, S, C> FaucetService<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<P> + Send + 'static,
+    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
     /// Creates a new instance of the faucet service.

@@ -216,7 +216,7 @@ impl<P, S, C> MutationRoot<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<P> + Send + 'static,
+    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
     async fn execute_system_operation(
@@ -276,7 +276,7 @@ impl<P, S, C> MutationRoot<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<P> + Send + 'static,
+    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
     /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
@@ -969,7 +969,7 @@ where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<P> + Send + 'static,
+    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
     /// Creates a new instance of the node service given a client chain and a port.

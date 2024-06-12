@@ -100,8 +100,8 @@ impl<P: Clone, S: Storage> Client<P, S> {
             Arc::new(ValueCache::default()),
             Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
         )
-            .with_allow_inactive_chains(true)
-            .with_allow_messages_from_deprecated_epochs(true);
+        .with_allow_inactive_chains(true)
+        .with_allow_messages_from_deprecated_epochs(true);
         let local_node = LocalNodeClient::new(state);
 
         Self {
@@ -346,7 +346,11 @@ where
     /// Obtains the basic `ChainInfo` data for the local chain.
     pub async fn chain_info(&mut self) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id);
-        let response = self.client.local_node.handle_chain_info_query(query).await?;
+        let response = self
+            .client
+            .local_node
+            .handle_chain_info_query(query)
+            .await?;
         Ok(response.info)
     }
 
@@ -355,7 +359,11 @@ where
         &mut self,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
-        let response = self.client.local_node.handle_chain_info_query(query).await?;
+        let response = self
+            .client
+            .local_node
+            .handle_chain_info_query(query)
+            .await?;
         Ok(response.info)
     }
 
@@ -368,7 +376,12 @@ where
             return Ok(Vec::new()); // OpenChain is already received, other are ignored.
         }
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
-        let info = self.client.local_node.handle_chain_info_query(query).await?.info;
+        let info = self
+            .client
+            .local_node
+            .handle_chain_info_query(query)
+            .await?
+            .info;
         ensure!(
             info.next_block_height == self.next_block_height,
             ChainClientError::WalletSynchronizationError
@@ -419,7 +432,8 @@ where
                 if applications
                     .iter()
                     .map(|application| {
-                        self.client.local_node
+                        self.client
+                            .local_node
                             .describe_application(chain_id, application.into())
                     })
                     .collect::<FuturesUnordered<_>>()
@@ -446,7 +460,12 @@ where
         chain_id: ChainId,
     ) -> Result<(Option<Epoch>, BTreeMap<Epoch, Committee>), LocalNodeError> {
         let query = ChainInfoQuery::new(chain_id).with_committees();
-        let info = self.client.local_node.handle_chain_info_query(query).await?.info;
+        let info = self
+            .client
+            .local_node
+            .handle_chain_info_query(query)
+            .await?
+            .info;
         let epoch = info.epoch;
         let committees = info
             .requested_committees
@@ -551,7 +570,8 @@ where
         let nodes = self.validator_nodes().await?;
         let mut notifications = vec![];
         let mut info = self
-            .client.local_node
+            .client
+            .local_node
             .download_certificates(
                 nodes,
                 self.chain_id,
@@ -577,7 +597,8 @@ where
             // This is a best-effort that depends on network conditions.
             let nodes = self.validator_nodes().await?;
             info = self
-                .client.local_node
+                .client
+                .local_node
                 .synchronize_chain_state(nodes, self.chain_id, &mut notifications)
                 .await?;
         }
@@ -788,7 +809,8 @@ where
         // certificate is still active.
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(remote_committee)?;
         let mut notifications = vec![];
-        self.client.local_node
+        self.client
+            .local_node
             .download_certificates(
                 nodes.clone(),
                 block.chain_id,
@@ -982,7 +1004,8 @@ where
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(&local_committee)?;
         let mut notifications = vec![];
         // Synchronize the state of the admin chain from the network.
-        self.client.local_node
+        self.client
+            .local_node
             .synchronize_chain_state(nodes.clone(), self.admin_id, &mut notifications)
             .await?;
         self.notifier.handle_notifications(&notifications);
@@ -1075,7 +1098,8 @@ where
     ) -> Result<(), LocalNodeError> {
         let mut notifications = vec![];
         let info = self
-            .client.local_node
+            .client
+            .local_node
             .handle_certificate(
                 certificate,
                 hashed_certificate_values,
@@ -1103,7 +1127,12 @@ where
     pub async fn request_leader_timeout(&mut self) -> Result<Certificate, ChainClientError> {
         let chain_id = self.chain_id;
         let query = ChainInfoQuery::new(chain_id).with_committees();
-        let info = self.client.local_node.handle_chain_info_query(query).await?.info;
+        let info = self
+            .client
+            .local_node
+            .handle_chain_info_query(query)
+            .await?
+            .info;
         let epoch = info.epoch.ok_or(LocalNodeError::InactiveChain(chain_id))?;
         let committee = info
             .requested_committees
@@ -1139,7 +1168,11 @@ where
         mut block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
-            let result = self.client.local_node.stage_block_execution(block.clone()).await;
+            let result = self
+                .client
+                .local_node
+                .stage_block_execution(block.clone())
+                .await;
             if let Err(LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))) = &result
             {
                 if let ChainError::ExecutionError(
@@ -1261,7 +1294,8 @@ where
         let nodes: Vec<(ValidatorName, P::Node)> =
             self.validator_node_provider.make_nodes(&committee)?;
         let values = self
-            .client.local_node
+            .client
+            .local_node
             .read_or_download_hashed_certificate_values(nodes.clone(), block.bytecode_locations())
             .await?;
         let hashed_blobs = self.read_local_blobs(block.blob_ids()).await?;
@@ -1273,7 +1307,8 @@ where
             BlockProposal::new_initial(round, block.clone(), key_pair, values, hashed_blobs)
         };
         // Check the final block proposal. This will be cheaper after #1401.
-        self.client.local_node
+        self.client
+            .local_node
             .handle_block_proposal(proposal.clone())
             .await?;
         // Remember what we are trying to do before sending the proposal to the validators.
@@ -1431,7 +1466,8 @@ where
     /// Queries an application.
     pub async fn query_application(&self, query: Query) -> Result<Response, ChainClientError> {
         let response = self
-            .client.local_node
+            .client
+            .local_node
             .query_application(self.chain_id, query)
             .await?;
         Ok(response)
@@ -1443,7 +1479,8 @@ where
         query: SystemQuery,
     ) -> Result<SystemResponse, ChainClientError> {
         let response = self
-            .client.local_node
+            .client
+            .local_node
             .query_application(self.chain_id, Query::System(query))
             .await?;
         match response {
@@ -1462,7 +1499,8 @@ where
     ) -> Result<A::QueryResponse, ChainClientError> {
         let query = Query::user(application_id, query)?;
         let response = self
-            .client.local_node
+            .client
+            .local_node
             .query_application(self.chain_id, query)
             .await?;
         match response {
@@ -1579,7 +1617,11 @@ where
         );
         let mut query = ChainInfoQuery::new(self.chain_id);
         query.request_owner_balance = owner;
-        let response = self.client.local_node.handle_chain_info_query(query).await?;
+        let response = self
+            .client
+            .local_node
+            .handle_chain_info_query(query)
+            .await?;
         Ok((
             response.info.chain_balance,
             response.info.requested_owner_balance,

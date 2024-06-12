@@ -22,7 +22,7 @@ use linera_chain::data_types::Certificate;
 use linera_core::{
     client::{ArcChainClient, ChainClient, Client},
     data_types::ClientOutcome,
-    node::{CrossChainMessageDelivery, ValidatorNodeProvider},
+    node::CrossChainMessageDelivery,
     JoinSetExt as _,
 };
 use linera_execution::Bytecode;
@@ -66,9 +66,9 @@ use {
 
 use crate::{client_options::ChainOwnershipConfig, ClientOptions};
 
-pub struct ClientContext {
+pub struct ClientContext<Storage> {
     pub(crate) wallet_state: WalletState,
-    pub(crate) chain_client_builder: Arc<Client<NodeProvider>>,
+    pub(crate) client: Arc<Client<NodeProvider, Storage>>,
     pub(crate) send_timeout: Duration,
     pub(crate) recv_timeout: Duration,
     pub(crate) notification_retry_delay: Duration,
@@ -77,13 +77,20 @@ pub struct ClientContext {
 }
 
 #[async_trait]
-impl chain_listener::ClientContext<NodeProvider> for ClientContext {
+impl<S> chain_listener::ClientContext for ClientContext<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<<S as Storage>::ContextError>,
+{
+    type ValidatorNodeProvider = NodeProvider;
+    type Storage = S;
+
     fn wallet(&self) -> &Wallet {
         self.wallet_state.inner()
     }
 
-    fn make_chain_client<S>(&self, storage: S, chain_id: ChainId) -> ChainClient<NodeProvider, S> {
-        self.make_chain_client(storage, chain_id)
+    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<NodeProvider, S> {
+        self.make_chain_client(chain_id)
     }
 
     fn update_wallet_for_new_chain(
@@ -96,16 +103,16 @@ impl chain_listener::ClientContext<NodeProvider> for ClientContext {
         self.save_wallet();
     }
 
-    async fn update_wallet<'a, S>(&'a mut self, client: &'a mut ChainClient<NodeProvider, S>)
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
+    async fn update_wallet<'a>(&'a mut self, client: &'a mut ChainClient<NodeProvider, S>) {
         self.update_and_save_wallet(client).await;
     }
 }
 
-impl ClientContext {
+impl<S> ClientContext<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
     /// Returns the [`Wallet`] as an immutable reference.
     fn wallet(&self) -> &Wallet {
         self.wallet_state.inner()
@@ -116,7 +123,7 @@ impl ClientContext {
         self.wallet_state.inner_mut()
     }
 
-    pub fn new(options: &ClientOptions, wallet_state: WalletState) -> Self {
+    pub fn new(storage: S, options: &ClientOptions, wallet_state: WalletState) -> Self {
         let node_options = NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
@@ -125,10 +132,14 @@ impl ClientContext {
         };
         let node_provider = NodeProvider::new(node_options);
         let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
-        let chain_client_builder =
-            Arc::new(Client::new(node_provider, options.max_pending_messages, delivery));
+        let client = Arc::new(Client::new(
+            node_provider,
+            storage,
+            options.max_pending_messages,
+            delivery,
+        ));
         ClientContext {
-            chain_client_builder,
+            client,
             wallet_state,
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
@@ -151,7 +162,7 @@ impl ClientContext {
             .expect("No chain specified in wallet with no default chain")
     }
 
-    fn make_chain_client<S>(&self, storage: S, chain_id: ChainId) -> ChainClient<NodeProvider, S> {
+    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<NodeProvider, S> {
         let chain = self
             .wallet()
             .get(chain_id)
@@ -162,10 +173,9 @@ impl ClientContext {
             .map(|kp| kp.copy())
             .into_iter()
             .collect();
-        self.chain_client_builder.build(
+        self.client.build(
             chain_id,
             known_key_pairs,
-            storage,
             self.wallet().genesis_admin_chain(),
             chain.block_hash,
             chain.timestamp,
@@ -196,21 +206,11 @@ impl ClientContext {
         info!("Saved user chain states");
     }
 
-    async fn update_wallet_from_client<P, S>(&mut self, state: &mut ChainClient<P, S>)
-    where
-        P: ValidatorNodeProvider + Sync + 'static,
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
+    async fn update_wallet_from_client(&mut self, state: &mut ChainClient<NodeProvider, S>) {
         self.wallet_mut().update_from_state(state).await
     }
 
-    pub async fn update_and_save_wallet<P, S>(&mut self, state: &mut ChainClient<P, S>)
-    where
-        P: ValidatorNodeProvider + Sync + 'static,
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
+    pub async fn update_and_save_wallet(&mut self, state: &mut ChainClient<NodeProvider, S>) {
         self.update_wallet_from_client(state).await;
         self.save_wallet()
     }
@@ -235,14 +235,10 @@ impl ClientContext {
         }
     }
 
-    pub async fn process_inbox<S>(
+    pub async fn process_inbox(
         &mut self,
         chain_client: &ArcChainClient<NodeProvider, S>,
-    ) -> anyhow::Result<Vec<Certificate>>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
+    ) -> anyhow::Result<Vec<Certificate>> {
         let mut certificates = Vec::new();
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {
@@ -286,16 +282,12 @@ impl ClientContext {
         }
     }
 
-    pub async fn publish_bytecode<S>(
+    pub async fn publish_bytecode(
         &mut self,
         chain_client: &ArcChainClient<NodeProvider, S>,
         contract: PathBuf,
         service: PathBuf,
-    ) -> anyhow::Result<BytecodeId>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
+    ) -> anyhow::Result<BytecodeId> {
         info!("Loading bytecode files");
         let contract_bytecode = Bytecode::load_from_file(&contract).await.context(format!(
             "failed to load contract bytecode from {:?}",
@@ -332,15 +324,11 @@ impl ClientContext {
         Ok(bytecode_id)
     }
 
-    pub async fn publish_blob<S>(
+    pub async fn publish_blob(
         &mut self,
         chain_client: &ArcChainClient<NodeProvider, S>,
         blob_path: PathBuf,
-    ) -> anyhow::Result<BlobId>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
+    ) -> anyhow::Result<BlobId> {
         info!("Loading blob file");
         let blob = HashedBlob::load_from_file(&blob_path)
             .await
@@ -367,14 +355,12 @@ impl ClientContext {
     ///
     /// Updates the wallet regardless of the outcome. As long as the function returns a round
     /// timeout, it will wait and retry.
-    pub async fn apply_client_command<S, E, F, Fut, T>(
+    pub async fn apply_client_command<E, F, Fut, T>(
         &mut self,
         client: &ArcChainClient<NodeProvider, S>,
         mut f: F,
     ) -> anyhow::Result<T>
     where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
         F: FnMut(OwnedMutexGuard<ChainClient<NodeProvider, S>>) -> Fut,
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         anyhow::Error: From<E>,
@@ -403,18 +389,13 @@ impl ClientContext {
         }
     }
 
-    pub async fn change_ownership<S>(
+    pub async fn change_ownership(
         &mut self,
         chain_id: Option<ChainId>,
         ownership_config: ChainOwnershipConfig,
-        storage: S,
-    ) -> anyhow::Result<()>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
+    ) -> anyhow::Result<()> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let chain_client = self.make_chain_client(storage, chain_id).into_arc();
+        let chain_client = self.make_chain_client(chain_id).into_arc();
         info!("Changing ownership for chain {}", chain_id);
         let time_start = Instant::now();
         let ownership = ChainOwnership::try_from(ownership_config)?;
@@ -438,14 +419,10 @@ impl ClientContext {
 }
 
 #[cfg(feature = "benchmark")]
-impl ClientContext {
-    pub async fn process_inboxes_and_force_validator_updates<S>(&mut self, storage: &S)
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
+impl<S> ClientContext<S> {
+    pub async fn process_inboxes_and_force_validator_updates(&mut self) {
         for chain_id in self.wallet().own_chain_ids() {
-            let chain_client = self.make_chain_client(storage.clone(), chain_id).into_arc();
+            let chain_client = self.make_chain_client(chain_id).into_arc();
             self.process_inbox(&chain_client).await.unwrap();
             chain_client.lock().await.update_validators().await.unwrap();
         }
@@ -457,12 +434,7 @@ impl ClientContext {
         &mut self,
         num_chains: usize,
         balance: Amount,
-        storage: &S,
-    ) -> anyhow::Result<HashMap<ChainId, KeyPair>>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
+    ) -> anyhow::Result<HashMap<ChainId, KeyPair>> {
         let mut key_pairs = HashMap::new();
         for chain_id in self.wallet().own_chain_ids() {
             if key_pairs.len() == num_chains {
@@ -475,7 +447,7 @@ impl ClientContext {
             else {
                 continue;
             };
-            let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
+            let mut chain_client = self.make_chain_client(chain_id);
             let ownership = chain_client.chain_info().await?.manager.ownership;
             if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
                 continue;
@@ -487,7 +459,7 @@ impl ClientContext {
             .wallet()
             .default_chain()
             .context("should have default chain")?;
-        let mut chain_client = self.make_chain_client(storage.clone(), default_chain_id);
+        let mut chain_client = self.make_chain_client(default_chain_id);
         while key_pairs.len() < num_chains {
             let key_pair = self.wallet_state.generate_key_pair();
             let public_key = key_pair.public();
@@ -526,7 +498,7 @@ impl ClientContext {
         }
 
         for chain_id in key_pairs.keys() {
-            let mut child_client = self.make_chain_client(storage.clone(), *chain_id);
+            let mut child_client = self.make_chain_client(*chain_id);
             child_client.process_inbox().await?;
             self.wallet_mut().update_from_state(&mut child_client).await;
         }
@@ -535,17 +507,12 @@ impl ClientContext {
 
     /// Creates chains if necessary, and returns a map of exactly `num_chains` chain IDs
     /// with key pairs.
-    pub async fn supply_fungible_tokens<S>(
+    pub async fn supply_fungible_tokens(
         &mut self,
         key_pairs: &HashMap<ChainId, KeyPair>,
         application_id: ApplicationId,
         max_in_flight: usize,
-        storage: &S,
-    ) -> anyhow::Result<()>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
+    ) -> anyhow::Result<()> {
         let default_chain_id = self
             .wallet()
             .default_chain()
@@ -571,7 +538,7 @@ impl ClientContext {
                 )
             })
             .collect();
-        let mut chain_client = self.make_chain_client(storage.clone(), default_chain_id);
+        let mut chain_client = self.make_chain_client(default_chain_id);
         // Put at most 1000 fungible token operations in each block.
         for operations in operations.chunks(1000) {
             chain_client
@@ -584,7 +551,7 @@ impl ClientContext {
         let futures = key_pairs
             .keys()
             .map(|&chain_id| {
-                let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
+                let mut chain_client = self.make_chain_client(chain_id);
                 async move {
                     for i in 0..5 {
                         tokio::time::sleep(Duration::from_secs(i)).await;
@@ -780,18 +747,15 @@ impl ClientContext {
         validator_clients
     }
 
-    pub async fn update_wallet_from_certificates<S>(
-        &mut self,
-        storage: S,
-        certificates: Vec<Certificate>,
-    ) where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
+    pub async fn update_wallet_from_certificates(&mut self, certificates: Vec<Certificate>) {
         // First instantiate a local node on top of storage.
-        let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
-            .with_allow_inactive_chains(true)
-            .with_allow_messages_from_deprecated_epochs(true);
+        let worker = WorkerState::new(
+            "Temporary client node".to_string(),
+            None,
+            self.client.storage_client().await,
+        )
+        .with_allow_inactive_chains(true)
+        .with_allow_messages_from_deprecated_epochs(true);
         let node = LocalNodeClient::new(worker);
         // Second replay the certificates locally.
         for certificate in certificates {
