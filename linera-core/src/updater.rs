@@ -7,7 +7,6 @@ use std::{
     fmt,
     hash::Hash,
     ops::Range,
-    sync::Arc,
 };
 
 use futures::{future, Future, StreamExt};
@@ -30,8 +29,8 @@ use tracing::{error, warn};
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
+    local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, LocalValidatorNode, NodeError},
-    value_cache::ValueCache,
 };
 
 cfg_if::cfg_if! {
@@ -69,8 +68,7 @@ pub enum CommunicateAction {
 pub struct ValidatorUpdater<A, S> {
     pub name: ValidatorName,
     pub node: A,
-    pub storage: S,
-    pub local_node_recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
+    pub local_node: LocalNodeClient<S>,
     pub local_node_chain_managers_pending_blobs: BTreeMap<BlobId, HashedBlob>,
 }
 
@@ -236,15 +234,15 @@ where
             warn!("locations requested by validator contain duplicates");
             return Err(NodeError::InvalidChainInfoResponse);
         }
-        Ok(
-            future::join_all(unique_locations.into_iter().map(|location| {
-                self.storage
-                    .read_hashed_certificate_value(location.certificate_hash)
-            }))
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?,
+        let storage = self.local_node.storage_client().await;
+        Ok(future::join_all(
+            unique_locations
+                .into_iter()
+                .map(|location| storage.read_hashed_certificate_value(location.certificate_hash)),
         )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?)
     }
 
     async fn find_missing_blobs(
@@ -276,7 +274,9 @@ where
         }
 
         let (found_blobs, not_found_blobs): (HashMap<BlobId, HashedBlob>, Vec<BlobId>) = self
-            .local_node_recent_hashed_blobs
+            .local_node
+            .recent_hashed_blobs()
+            .await
             .try_get_many(blob_ids.clone())
             .await;
         let mut missing_blobs = found_blobs.clone().into_values().collect::<Vec<_>>();
@@ -296,11 +296,12 @@ where
             }
         }
 
+        let storage = self.local_node.storage_client().await;
         missing_blobs.extend(
             future::join_all(
                 unique_blob_ids_to_find
                     .into_iter()
-                    .map(|blob_id| self.storage.read_hashed_blob(blob_id)),
+                    .map(|blob_id| storage.read_hashed_blob(blob_id)),
             )
             .await
             .into_iter()
@@ -400,8 +401,9 @@ where
         // Obtain the missing blocks and the manager state from the local node.
         let range: Range<usize> =
             initial_block_height.try_into()?..target_block_height.try_into()?;
+        let storage = self.local_node.storage_client().await;
         let (keys, manager) = {
-            let mut chain = self.storage.load_chain(chain_id).await?;
+            let mut chain = storage.load_chain(chain_id).await?;
             (
                 chain.confirmed_log.read(range).await?,
                 std::mem::take(chain.manager.get_mut()),
@@ -409,7 +411,7 @@ where
         };
         if !keys.is_empty() {
             // Send the requested certificates in order.
-            let certs = self.storage.read_certificates(keys.into_iter()).await?;
+            let certs = storage.read_certificates(keys.into_iter()).await?;
             for cert in certs {
                 self.send_certificate(cert, delivery).await?;
             }
@@ -429,7 +431,8 @@ where
     ) -> Result<(), NodeError> {
         let mut sender_heights = BTreeMap::new();
         {
-            let chain = self.storage.load_chain(chain_id).await?;
+            let storage = self.local_node.storage_client().await;
+            let chain = storage.load_chain(chain_id).await?;
             let origins = chain.inboxes.indices().await?;
             let inboxes = chain.inboxes.try_load_entries(&origins).await?;
             for (origin, inbox) in origins.into_iter().zip(inboxes) {

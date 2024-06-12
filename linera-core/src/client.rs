@@ -653,8 +653,7 @@ where
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
-        let storage_client = self.storage_client().await;
-        let recent_hashed_blobs = self.node_client.recent_hashed_blobs().await;
+        let local_node = self.node_client.clone();
         let chain_manager_pending_blobs = self.chain_managers_pending_blobs().await?;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
         communicate_with_quorum(
@@ -665,8 +664,7 @@ where
                 let mut updater = ValidatorUpdater {
                     name,
                     node,
-                    storage: storage_client.clone(),
-                    local_node_recent_hashed_blobs: recent_hashed_blobs.clone(),
+                    local_node: local_node.clone(),
                     local_node_chain_managers_pending_blobs: chain_manager_pending_blobs.clone(),
                 };
                 Box::pin(async move {
@@ -691,8 +689,7 @@ where
         action: CommunicateAction,
         value: HashedCertificateValue,
     ) -> Result<Certificate, ChainClientError> {
-        let storage_client = self.storage_client().await;
-        let recent_hashed_blobs = self.node_client.recent_hashed_blobs().await;
+        let local_node = self.node_client.clone();
         let chain_manager_pending_blobs = self.chain_managers_pending_blobs().await?;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
@@ -703,8 +700,7 @@ where
                 let mut updater = ValidatorUpdater {
                     name,
                     node,
-                    storage: storage_client.clone(),
-                    local_node_recent_hashed_blobs: recent_hashed_blobs.clone(),
+                    local_node: local_node.clone(),
                     local_node_chain_managers_pending_blobs: chain_manager_pending_blobs.clone(),
                 };
                 let action = action.clone();
