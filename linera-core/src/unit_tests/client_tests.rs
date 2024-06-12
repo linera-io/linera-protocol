@@ -1682,7 +1682,7 @@ where
         .unwrap()
         .manager;
     assert_eq!(
-        manager.highest_validated().unwrap().round,
+        manager.requested_locked.unwrap().round,
         Round::MultiLeader(1)
     );
     assert!(client0.pending_block.is_some());
@@ -1819,7 +1819,7 @@ where
     // Validator 0 may or may not have processed the validated block before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 1 can download and re-propose it later.
-    let validated_block_certificate = manager.highest_validated().unwrap().clone();
+    let validated_block_certificate = *manager.requested_locked.unwrap();
     builder
         .node(0)
         .handle_certificate(
@@ -1845,7 +1845,7 @@ where
         .unwrap()
         .manager;
     assert!(manager.requested_proposed.is_some());
-    assert!(manager.highest_validated().is_none());
+    assert!(manager.requested_locked.is_none());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
     let result = client1
         .burn(None, Amount::from_tokens(2), UserData::default())
@@ -1863,7 +1863,7 @@ where
         .unwrap()
         .manager;
     assert_eq!(
-        manager.highest_validated().unwrap().round,
+        manager.requested_locked.unwrap().round,
         Round::MultiLeader(0)
     );
     assert_eq!(manager.current_round, Round::MultiLeader(1));

@@ -169,8 +169,8 @@ message BlockProposal {
   // Required bytecode
   bytes hashed_certificate_values = 5;
 
-  // A certificate for a validated block that justifies the proposal in this round.
-  optional bytes validated = 6;
+  // A lite certificate for a validated block that justifies the proposal in this round.
+  optional bytes validated_block_certificate = 6;
 
   // Required blob
   bytes blobs = 7;

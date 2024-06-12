@@ -27,8 +27,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
-        HashedCertificateValue, IncomingMessage, LiteCertificate, LiteVote, MessageAction,
+        Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
+        IncomingMessage, LiteCertificate, LiteVote, MessageAction,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -1223,7 +1223,7 @@ where
             ChainClientError::BlockProposalError("Unexpected previous block hash")
         );
         // Gather information on the current local state.
-        let manager = self.chain_info_with_manager_values().await?.manager;
+        let manager = *self.chain_info_with_manager_values().await?.manager;
         // In the fast round, we must never make any conflicting proposals.
         if round.is_fast() {
             if let Some(pending) = &self.pending_block {
@@ -1237,15 +1237,25 @@ where
             }
         }
         // Make sure that we follow the steps in the multi-round protocol.
-        let validated_block_certificate = manager.highest_validated().cloned();
-        if let Some(validated_block_certificate) = &validated_block_certificate {
+        let executed_block = if let Some(validated_block_certificate) = &manager.requested_locked {
             ensure!(
                 validated_block_certificate.value().block() == Some(&block),
                 ChainClientError::BlockProposalError(
                     "A different block has already been validated at this height"
                 )
             );
-        } else if let Some(proposal) = &manager.requested_proposed {
+            validated_block_certificate
+                .value()
+                .executed_block()
+                .unwrap()
+                .clone()
+        } else {
+            self.stage_block_execution_and_discard_failing_messages(block)
+                .await?
+                .0
+        };
+        let block = executed_block.block.clone();
+        if let Some(proposal) = manager.requested_proposed {
             if proposal.content.round.is_fast() {
                 ensure!(
                     proposal.content.block == block,
@@ -1255,12 +1265,6 @@ where
                 );
             }
         }
-        // Make sure every incoming message succeeds and otherwise remove them.
-        // Also, compute the final certified hash while we're at it.
-        let (executed_block, _) = self
-            .stage_block_execution_and_discard_failing_messages(block)
-            .await?;
-        let block = executed_block.block.clone();
         let hashed_value = if round.is_fast() {
             HashedCertificateValue::new_confirmed(executed_block)
         } else {
@@ -1277,16 +1281,11 @@ where
         let hashed_blobs = self.read_local_blobs(block.blob_ids()).await?;
         // Create the final block proposal.
         let key_pair = self.key_pair().await?;
-        let proposal = BlockProposal::new(
-            BlockAndRound {
-                block: block.clone(),
-                round,
-            },
-            key_pair,
-            values,
-            hashed_blobs,
-            validated_block_certificate,
-        );
+        let proposal = if let Some(cert) = manager.requested_locked {
+            BlockProposal::new_retry(round, *cert, key_pair, values, hashed_blobs)
+        } else {
+            BlockProposal::new(round, block.clone(), key_pair, values, hashed_blobs)
+        };
         // Check the final block proposal. This will be cheaper after #1401.
         self.node_client
             .handle_block_proposal(proposal.clone())
@@ -1721,7 +1720,8 @@ where
         }
         // The block we want to propose is either the highest validated, or our pending one.
         let maybe_block = manager
-            .highest_validated()
+            .requested_locked
+            .as_ref()
             .and_then(|certificate| certificate.value().block())
             .or(manager
                 .requested_proposed

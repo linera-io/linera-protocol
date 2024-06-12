@@ -42,7 +42,7 @@ use {
         data_types::Amount,
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
-    linera_chain::data_types::{Block, BlockAndRound, BlockProposal, SignatureAggregator, Vote},
+    linera_chain::data_types::{Block, BlockProposal, SignatureAggregator, Vote},
     linera_core::{data_types::ChainInfoQuery, local_node::LocalNodeClient, worker::WorkerState},
     linera_execution::{
         committee::Epoch,
@@ -656,14 +656,11 @@ impl ClientContext {
             };
             trace!("Preparing block proposal: {:?}", block);
             let proposal = BlockProposal::new(
-                BlockAndRound {
-                    block: block.clone(),
-                    round: linera_base::data_types::Round::Fast,
-                },
+                linera_base::data_types::Round::Fast,
+                block.clone(),
                 key_pair,
                 vec![],
                 vec![],
-                None,
             );
             proposals.push(proposal.into());
             next_recipient = chain.chain_id;

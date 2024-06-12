@@ -6,7 +6,6 @@
 mod wasm;
 
 use std::{
-    borrow::Cow,
     collections::{BTreeMap, BTreeSet},
     iter,
     time::Duration,
@@ -26,7 +25,7 @@ use linera_chain::{
     data_types::{
         Block, BlockExecutionOutcome, BlockProposal, Certificate, ChainAndHeight, ChannelFullName,
         Event, HashedCertificateValue, IncomingMessage, LiteVote, Medium, MessageAction, Origin,
-        OutgoingMessage, ProposalPayload, SignatureAggregator,
+        OutgoingMessage, SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt, VoteTestExt},
     ChainError, ChainExecutionContext,
@@ -398,13 +397,8 @@ where
         .into_fast_proposal(&sender_key_pair);
     let unknown_key_pair = KeyPair::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
-    bad_signature_block_proposal.signature = Signature::new(
-        &ProposalPayload {
-            content: Cow::Borrowed(&block_proposal.content),
-            outcome: None,
-        },
-        &unknown_key_pair,
-    );
+    bad_signature_block_proposal.signature =
+        Signature::new(&block_proposal.content, &unknown_key_pair);
     assert_matches!(
         worker
             .handle_block_proposal(bad_signature_block_proposal)
@@ -576,13 +570,10 @@ where
         ],
     )
     .await;
-    let block_proposal = make_first_block(ChainId::root(1))
-        .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
-        .into_fast_proposal(&sender_key_pair);
     let unknown_key = KeyPair::generate();
-
-    let unknown_sender_block_proposal =
-        BlockProposal::new(block_proposal.content, &unknown_key, vec![], vec![], None);
+    let unknown_sender_block_proposal = make_first_block(ChainId::root(1))
+        .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
+        .into_fast_proposal(&unknown_key);
     assert_matches!(
         worker
             .handle_block_proposal(unknown_sender_block_proposal)
@@ -3356,8 +3347,13 @@ where
     // But with the validated block certificate for block2, it is allowed.
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(4));
-    let proposal =
-        block2.into_justified_proposal(&key_pairs[1], Round::SingleLeader(5), certificate2.clone());
+    let proposal = BlockProposal::new_retry(
+        Round::SingleLeader(5),
+        certificate2.clone(),
+        &key_pairs[1],
+        Vec::new(),
+        Vec::new(),
+    );
     let lite_value2 = value2.lite();
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
@@ -3584,10 +3580,12 @@ where
     let value2 = HashedCertificateValue::new_validated(executed_block2.clone());
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
-    let proposal = block2.clone().into_justified_proposal(
-        &key_pairs[1],
+    let proposal = BlockProposal::new_retry(
         Round::MultiLeader(1),
         certificate2.clone(),
+        &key_pairs[1],
+        Vec::new(),
+        Vec::new(),
     );
     let lite_value2 = value2.lite();
     let (_, _) = worker.handle_block_proposal(proposal).await?;
@@ -3600,24 +3598,6 @@ where
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
     assert_eq!(vote.round, Round::MultiLeader(1));
-
-    // Re-proposing the locked block also works.
-    let proposal = block2.into_proposal_with_round(&key_pairs[1], Round::MultiLeader(2));
-    let (_, _) = worker.handle_block_proposal(proposal).await?;
-    let certificate3 =
-        make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(2));
-    worker
-        .handle_certificate(certificate3.clone(), vec![], vec![], None)
-        .await?;
-    let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = worker.handle_chain_info_query(query_values).await?;
-    assert_eq!(
-        response.info.manager.requested_locked,
-        Some(Box::new(certificate3))
-    );
-    let vote = response.info.manager.pending.as_ref().unwrap();
-    assert_eq!(vote.value, value2.validated_to_confirmed().unwrap().lite());
-    assert_eq!(vote.round, Round::MultiLeader(2));
     Ok(())
 }
 

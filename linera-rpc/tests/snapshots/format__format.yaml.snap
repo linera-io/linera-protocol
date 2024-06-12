@@ -71,12 +71,6 @@ Block:
     - previous_block_hash:
         OPTION:
           TYPENAME: CryptoHash
-BlockAndRound:
-  STRUCT:
-    - block:
-        TYPENAME: Block
-    - round:
-        TYPENAME: Round
 BlockExecutionOutcome:
   STRUCT:
     - messages:
@@ -100,7 +94,7 @@ BlockHeightRange:
 BlockProposal:
   STRUCT:
     - content:
-        TYPENAME: BlockAndRound
+        TYPENAME: ProposalContent
     - owner:
         TYPENAME: Owner
     - signature:
@@ -113,7 +107,7 @@ BlockProposal:
           TYPENAME: Blob
     - validated_block_certificate:
         OPTION:
-          TYPENAME: Certificate
+          TYPENAME: LiteCertificate
 Bytecode:
   STRUCT:
     - bytes: BYTES
@@ -690,6 +684,16 @@ OutgoingMessage:
 Owner:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
+ProposalContent:
+  STRUCT:
+    - block:
+        TYPENAME: Block
+    - round:
+        TYPENAME: Round
+    - oracle_records:
+        OPTION:
+          SEQ:
+            TYPENAME: OracleRecord
 PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

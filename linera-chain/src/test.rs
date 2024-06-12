@@ -15,8 +15,8 @@ use linera_execution::{
 };
 
 use crate::data_types::{
-    Block, BlockAndRound, BlockProposal, Certificate, Event, HashedCertificateValue,
-    IncomingMessage, MessageAction, Origin, SignatureAggregator, Vote,
+    Block, BlockProposal, Certificate, Event, HashedCertificateValue, IncomingMessage,
+    MessageAction, Origin, SignatureAggregator, Vote,
 };
 
 /// Creates a new child of the given block, with the same timestamp.
@@ -76,14 +76,6 @@ pub trait BlockTestExt: Sized {
 
     /// Returns a block proposal without any hashed certificate values or validated block.
     fn into_proposal_with_round(self, key_pair: &KeyPair, round: Round) -> BlockProposal;
-
-    /// Returns a block proposal including a validated block as justification.
-    fn into_justified_proposal(
-        self,
-        key_pair: &KeyPair,
-        round: Round,
-        validated: Certificate,
-    ) -> BlockProposal;
 }
 
 impl BlockTestExt for Block {
@@ -121,18 +113,7 @@ impl BlockTestExt for Block {
     }
 
     fn into_proposal_with_round(self, key_pair: &KeyPair, round: Round) -> BlockProposal {
-        let content = BlockAndRound { block: self, round };
-        BlockProposal::new(content, key_pair, vec![], vec![], None)
-    }
-
-    fn into_justified_proposal(
-        self,
-        key_pair: &KeyPair,
-        round: Round,
-        validated: Certificate,
-    ) -> BlockProposal {
-        let content = BlockAndRound { block: self, round };
-        BlockProposal::new(content, key_pair, vec![], vec![], Some(validated))
+        BlockProposal::new(round, self, key_pair, vec![], vec![])
     }
 }
 

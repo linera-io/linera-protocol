@@ -108,13 +108,6 @@ pub struct ChainAndHeight {
     pub height: BlockHeight,
 }
 
-/// A block with a round number.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct BlockAndRound {
-    pub block: Block,
-    pub round: Round,
-}
-
 /// A message received from a block of another chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct IncomingMessage {
@@ -229,12 +222,12 @@ pub enum Medium {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct BlockProposal {
-    pub content: BlockAndRound,
+    pub content: ProposalContent,
     pub owner: Owner,
     pub signature: Signature,
     pub hashed_certificate_values: Vec<HashedCertificateValue>,
     pub hashed_blobs: Vec<HashedBlob>,
-    pub validated_block_certificate: Option<Certificate>,
+    pub validated_block_certificate: Option<LiteCertificate<'static>>,
 }
 
 /// A message together with routing information.
@@ -474,9 +467,9 @@ impl<'a> LiteCertificate<'a> {
     }
 
     /// Verifies the certificate.
-    pub fn check(self, committee: &Committee) -> Result<LiteValue, ChainError> {
+    pub fn check(&self, committee: &Committee) -> Result<&LiteValue, ChainError> {
         check_signatures(&self.value, self.round, &self.signatures, committee)?;
-        Ok(self.value)
+        Ok(&self.value)
     }
 
     /// Returns the `Certificate` with the specified value, if it matches.
@@ -801,55 +794,70 @@ impl HashedCertificateValue {
     }
 }
 
-// TODO(#1987): Consider refactoring BlockProposal to make this unnecessary.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ProposalPayload<'a> {
-    pub content: Cow<'a, BlockAndRound>,
-    pub outcome: Option<Cow<'a, BlockExecutionOutcome>>,
+/// The data a block proposer signs: the round, the block, and, if it is a retry from an earlier
+/// consensus round, the oracle records.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ProposalContent {
+    pub block: Block,
+    pub round: Round,
+    pub oracle_records: Option<Vec<OracleRecord>>,
 }
 
 impl BlockProposal {
     pub fn new(
-        content: BlockAndRound,
+        round: Round,
+        block: Block,
         secret: &KeyPair,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
-        validated_block_certificate: Option<Certificate>,
     ) -> Self {
-        let outcome = validated_block_certificate
-            .as_ref()
-            .and_then(|certificate| certificate.value().executed_block())
-            .map(|executed_block| Cow::Borrowed(&executed_block.outcome));
-        let signature = Signature::new(
-            &ProposalPayload {
-                content: Cow::Borrowed(&content),
-                outcome,
-            },
-            secret,
-        );
+        let content = ProposalContent {
+            round,
+            block,
+            oracle_records: None,
+        };
+        let signature = Signature::new(&content, secret);
         Self {
             content,
             owner: secret.public().into(),
             signature,
             hashed_certificate_values,
             hashed_blobs,
-            validated_block_certificate,
+            validated_block_certificate: None,
+        }
+    }
+
+    pub fn new_retry(
+        round: Round,
+        validated_block_certificate: Certificate,
+        secret: &KeyPair,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
+    ) -> Self {
+        let lite_cert = validated_block_certificate.lite_certificate().cloned();
+        let CertificateValue::ValidatedBlock { executed_block } =
+            validated_block_certificate.value.into_inner()
+        else {
+            panic!("called new_retry with a certificate without a block");
+        };
+        let content = ProposalContent {
+            block: executed_block.block,
+            round,
+            oracle_records: Some(executed_block.outcome.oracle_records),
+        };
+        let signature = Signature::new(&content, secret);
+        Self {
+            content,
+            owner: secret.public().into(),
+            signature,
+            hashed_certificate_values,
+            hashed_blobs,
+            validated_block_certificate: Some(lite_cert),
         }
     }
 
     pub fn check_signature(&self, public_key: PublicKey) -> Result<(), CryptoError> {
-        let outcome = self
-            .validated_block_certificate
-            .as_ref()
-            .and_then(|certificate| certificate.value().executed_block())
-            .map(|executed_block| Cow::Borrowed(&executed_block.outcome));
-        self.signature.check(
-            &ProposalPayload {
-                content: Cow::Borrowed(&self.content),
-                outcome,
-            },
-            public_key,
-        )
+        self.signature.check(&self.content, public_key)
     }
 }
 
@@ -1006,7 +1014,7 @@ impl Certificate {
     }
 
     /// Returns the certificate without the full value.
-    pub fn lite_certificate(&self) -> LiteCertificate {
+    pub fn lite_certificate(&self) -> LiteCertificate<'_> {
         LiteCertificate {
             value: self.lite_value(),
             round: self.round,
@@ -1091,7 +1099,7 @@ fn check_signatures(
     Ok(())
 }
 
-impl<'a> BcsSignable for ProposalPayload<'a> {}
+impl BcsSignable for ProposalContent {}
 
 impl BcsSignable for ValueHashAndRound {}
 
