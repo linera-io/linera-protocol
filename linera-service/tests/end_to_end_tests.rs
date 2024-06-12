@@ -13,12 +13,24 @@
 // TODO(#2112): The end-to-end tests are taking a pair `(Database,Network)` which is
 // a relatively rigid structure. We should be able to have tests for mixes of validators.
 
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service",
+    feature = "remote_net"
+))]
 mod common;
 
 use std::{env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use async_graphql::InputType;
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage_service",
+    feature = "remote_net"
+))]
 use common::INTEGRATION_TEST_GUARD;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 use linera_base::{
