@@ -419,7 +419,11 @@ where
 }
 
 #[cfg(feature = "benchmark")]
-impl<S> ClientContext<S> {
+impl<S> ClientContext<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {
         for chain_id in self.wallet().own_chain_ids() {
             let chain_client = self.make_chain_client(chain_id).into_arc();
@@ -430,7 +434,7 @@ impl<S> ClientContext<S> {
 
     /// Creates chains if necessary, and returns a map of exactly `num_chains` chain IDs
     /// with key pairs.
-    pub async fn make_benchmark_chains<S>(
+    pub async fn make_benchmark_chains(
         &mut self,
         num_chains: usize,
         balance: Amount,

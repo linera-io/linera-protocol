@@ -642,17 +642,15 @@ impl Runnable for Job {
                 // Below all block proposals are supposed to succeed without retries, we
                 // must make sure that all incoming payments have been accepted on-chain
                 // and that no validator is missing user certificates.
-                context
-                    .process_inboxes_and_force_validator_updates(&storage)
-                    .await;
+                context.process_inboxes_and_force_validator_updates().await;
 
                 let key_pairs = context
-                    .make_benchmark_chains(num_chains, tokens_per_chain, &storage)
+                    .make_benchmark_chains(num_chains, tokens_per_chain)
                     .await?;
 
                 if let Some(id) = fungible_application_id {
                     context
-                        .supply_fungible_tokens(&key_pairs, id, max_in_flight, &storage)
+                        .supply_fungible_tokens(&key_pairs, id, max_in_flight)
                         .await?;
                 }
 
@@ -734,9 +732,7 @@ impl Runnable for Job {
                 );
 
                 info!("Updating local state of user chains");
-                context
-                    .update_wallet_from_certificates(storage, certificates)
-                    .await;
+                context.update_wallet_from_certificates(certificates).await;
                 context.save_wallet();
             }
 

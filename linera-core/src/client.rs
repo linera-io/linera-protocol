@@ -85,7 +85,7 @@ pub struct Client<ValidatorNodeProvider, Storage> {
     notifier: Arc<Notifier<Notification>>,
 }
 
-impl<P: Clone, S: Storage> Client<P, S> {
+impl<P, S: Storage + Clone> Client<P, S> {
     /// Creates a new `Client` with a new cache and notifiers.
     pub fn new(
         validator_node_provider: P,
@@ -120,6 +120,11 @@ impl<P: Clone, S: Storage> Client<P, S> {
         self
     }
 
+    /// Returns the storage client used by this client's local node.
+    pub async fn storage_client(&self) -> S {
+        self.local_node.storage_client().await
+    }
+
     /// Creates a new `ChainClient`.
     #[allow(clippy::too_many_arguments)]
     pub fn build(
@@ -132,7 +137,10 @@ impl<P: Clone, S: Storage> Client<P, S> {
         next_block_height: BlockHeight,
         pending_block: Option<Block>,
         pending_blobs: BTreeMap<BlobId, HashedBlob>,
-    ) -> ChainClient<P, S> {
+    ) -> ChainClient<P, S>
+    where
+        P: Clone,
+    {
         let known_key_pairs = known_key_pairs
             .into_iter()
             .map(|kp| (Owner::from(kp.public()), kp))
@@ -328,7 +336,7 @@ where
     pub async fn chain_state_view(
         &self,
     ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, LocalNodeError> {
-        Ok(self.node_client.chain_state_view(self.chain_id).await?)
+        Ok(self.client.local_node.chain_state_view(self.chain_id).await?)
     }
 
     /// Subscribes to notifications from this client's chain.
@@ -340,7 +348,7 @@ where
 
     /// Returns the storage client used by this client's local node.
     pub async fn storage_client(&self) -> S {
-        self.client.local_node.storage_client().await
+        self.client.storage_client().await
     }
 
     /// Obtains the basic `ChainInfo` data for the local chain.
