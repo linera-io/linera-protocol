@@ -1436,6 +1436,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     node_service_admin
         .request_application(&chain_admin, &token1)
         .await?;
+    node_service_admin.process_inbox(&chain_admin).await?;
+    node_service_a.process_inbox(&chain_a).await?;
+    node_service_b.process_inbox(&chain_b).await?;
 
     let app_fungible0_a = FungibleApp(node_service_a.make_application(&chain_a, &token0).await?);
     let app_fungible1_a = FungibleApp(node_service_a.make_application(&chain_a, &token1).await?);
@@ -1500,6 +1503,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             &[token0.forget_abi(), token1.forget_abi()],
         )
         .await?;
+    node_service_admin.process_inbox(&chain_admin).await?;
+    node_service_a.process_inbox(&chain_a).await?;
+    node_service_b.process_inbox(&chain_b).await?;
     let app_matching_admin = MatchingEngineApp(
         node_service_admin
             .make_application(&chain_admin, &application_id_matching)
