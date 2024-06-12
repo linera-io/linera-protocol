@@ -8,8 +8,13 @@
 //! not possible when compiling for `wasm32-unknown-unknown`. In that case, the task is
 //! spawned in a [`LocalSet`][`tokio::tast::LocalSet`].
 
-use std::future::Future;
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
+use futures::FutureExt;
 use tokio::{
     sync::oneshot,
     task::{AbortHandle, JoinSet},
@@ -22,7 +27,7 @@ pub trait JoinSetExt: Sized {
     ///
     /// Returns a [`oneshot::Receiver`] to receive the `future`'s output, and an
     /// [`AbortHandle`] to cancel execution of the task.
-    fn spawn_task<F>(&mut self, future: F) -> (oneshot::Receiver<F::Output>, AbortHandle)
+    fn spawn_task<F>(&mut self, future: F) -> TaskHandle<F::Output>
     where
         F: Future + Send + 'static,
         F::Output: Send;
@@ -41,7 +46,7 @@ pub trait JoinSetExt: Sized {
     ///
     /// Returns a [`oneshot::Receiver`] to receive the `future`'s output, and an
     /// [`AbortHandle`] to cancel execution of the task.
-    fn spawn_task<F>(&mut self, future: F) -> (oneshot::Receiver<F::Output>, AbortHandle)
+    fn spawn_task<F>(&mut self, future: F) -> TaskHandle<F::Output>
     where
         F: Future + 'static;
 
@@ -54,7 +59,7 @@ pub trait JoinSetExt: Sized {
 
 #[cfg(not(web))]
 impl JoinSetExt for JoinSet<()> {
-    fn spawn_task<F>(&mut self, future: F) -> (oneshot::Receiver<F::Output>, AbortHandle)
+    fn spawn_task<F>(&mut self, future: F) -> TaskHandle<F::Output>
     where
         F: Future + Send + 'static,
         F::Output: Send,
@@ -65,7 +70,10 @@ impl JoinSetExt for JoinSet<()> {
             let _ = output_sender.send(future.await);
         });
 
-        (output_receiver, abort_handle)
+        TaskHandle {
+            output_receiver,
+            abort_handle,
+        }
     }
 
     async fn await_all_tasks(&mut self) {
@@ -79,7 +87,7 @@ impl JoinSetExt for JoinSet<()> {
 
 #[cfg(web)]
 impl JoinSetExt for JoinSet<()> {
-    fn spawn_task<F>(&mut self, future: F) -> (oneshot::Receiver<F::Output>, AbortHandle)
+    fn spawn_task<F>(&mut self, future: F) -> TaskHandle<F::Output>
     where
         F: Future + 'static,
     {
@@ -89,7 +97,10 @@ impl JoinSetExt for JoinSet<()> {
             let _ = output_sender.send(future.await);
         });
 
-        (output_receiver, abort_handle)
+        TaskHandle {
+            output_receiver,
+            abort_handle,
+        }
     }
 
     async fn await_all_tasks(&mut self) {
@@ -98,5 +109,36 @@ impl JoinSetExt for JoinSet<()> {
 
     fn reap_finished_tasks(&mut self) {
         while self.try_join_next().is_some() {}
+    }
+}
+
+/// A handle to a task spawned with [`JoinSetExt`].
+///
+/// Dropping a handle aborts its respective task.
+pub struct TaskHandle<Output> {
+    output_receiver: oneshot::Receiver<Output>,
+    abort_handle: AbortHandle,
+}
+
+impl<Output> Future for TaskHandle<Output> {
+    type Output = Result<Output, oneshot::error::RecvError>;
+
+    fn poll(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
+        self.as_mut().output_receiver.poll_unpin(context)
+    }
+}
+
+impl<Output> TaskHandle<Output> {
+    /// Aborts the task.
+    pub fn abort(&self) {
+        self.abort_handle.abort();
+    }
+
+    /// Returns [`true`] if the task is still running.
+    pub fn is_running(&mut self) -> bool {
+        matches!(
+            self.output_receiver.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        )
     }
 }

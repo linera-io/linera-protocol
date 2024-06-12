@@ -19,4 +19,4 @@ pub mod worker;
 pub(crate) mod updater;
 pub(crate) mod value_cache;
 
-pub use crate::join_set_ext::JoinSetExt;
+pub use crate::join_set_ext::{JoinSetExt, TaskHandle};
