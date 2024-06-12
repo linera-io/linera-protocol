@@ -878,7 +878,7 @@ where
         committees: BTreeMap<Epoch, Committee>,
         max_epoch: Epoch,
         mut node: A,
-        mut node_client: LocalNodeClient<S>,
+        node_client: LocalNodeClient<S>,
     ) -> Result<(ValidatorName, u64, Vec<Certificate>), NodeError>
     where
         A: LocalValidatorNode + Clone + 'static,

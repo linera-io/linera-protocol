@@ -76,7 +76,7 @@ where
     ViewError: From<S::ContextError>,
 {
     pub async fn handle_block_proposal(
-        &mut self,
+        &self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let mut node = self.node.lock().await;
@@ -86,7 +86,7 @@ where
     }
 
     pub async fn handle_lite_certificate(
-        &mut self,
+        &self,
         certificate: LiteCertificate<'_>,
         notifications: &mut impl Extend<Notification>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
@@ -105,7 +105,7 @@ where
     }
 
     pub async fn handle_certificate(
-        &mut self,
+        &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
@@ -125,7 +125,7 @@ where
     }
 
     pub async fn handle_chain_info_query(
-        &mut self,
+        &self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let node = self.node.lock().await;
@@ -214,7 +214,7 @@ where
     }
 
     async fn try_process_certificates<A>(
-        &mut self,
+        &self,
         name: ValidatorName,
         node: &mut A,
         chain_id: ChainId,
@@ -297,7 +297,7 @@ where
     }
 
     pub(crate) async fn local_chain_info(
-        &mut self,
+        &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(chain_id);
@@ -345,7 +345,7 @@ where
     }
 
     pub async fn download_certificates<A>(
-        &mut self,
+        &self,
         mut validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
@@ -386,7 +386,7 @@ where
     ///
     /// Does not fail if a hashed certificate value can't be downloaded; it just gets omitted from the result.
     pub async fn read_or_download_hashed_certificate_values<A>(
-        &mut self,
+        &self,
         validators: Vec<(ValidatorName, A)>,
         hashed_certificate_value_locations: impl IntoIterator<Item = (BytecodeLocation, ChainId)>,
     ) -> Result<Vec<HashedCertificateValue>, LocalNodeError>
@@ -458,7 +458,7 @@ where
 
     /// Obtains the certificate containing the specified message.
     pub async fn certificate_for(
-        &mut self,
+        &self,
         message_id: &MessageId,
     ) -> Result<Certificate, LocalNodeError> {
         let query = ChainInfoQuery::new(message_id.chain_id)
@@ -475,7 +475,7 @@ where
     }
 
     async fn try_download_certificates_from<A>(
-        &mut self,
+        &self,
         name: ValidatorName,
         mut node: A,
         chain_id: ChainId,
@@ -511,7 +511,7 @@ where
     }
 
     async fn try_query_certificates_from<A>(
-        &mut self,
+        &self,
         name: ValidatorName,
         node: &mut A,
         chain_id: ChainId,
@@ -542,7 +542,7 @@ where
     }
 
     pub async fn synchronize_chain_state<A>(
-        &mut self,
+        &self,
         validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
         notifications: &mut impl Extend<Notification>,
@@ -553,7 +553,7 @@ where
         let mut futures = vec![];
 
         for (name, node) in validators {
-            let mut client = self.clone();
+            let client = self.clone();
             let mut notifications = vec![];
             futures.push(async move {
                 (
@@ -577,7 +577,7 @@ where
     }
 
     pub async fn try_synchronize_chain_state_from<A>(
-        &mut self,
+        &self,
         name: ValidatorName,
         mut node: A,
         chain_id: ChainId,

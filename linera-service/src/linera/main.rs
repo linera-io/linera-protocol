@@ -1087,7 +1087,7 @@ impl Job {
         let state = WorkerState::new("Local node".to_string(), None, storage)
             .with_allow_inactive_chains(true)
             .with_allow_messages_from_deprecated_epochs(true);
-        let mut node_client = LocalNodeClient::new(state);
+        let node_client = LocalNodeClient::new(state);
 
         // Take the latest committee we know of.
         let admin_chain_id = context.wallet().genesis_admin_chain();
