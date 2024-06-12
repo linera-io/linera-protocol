@@ -602,6 +602,10 @@ where
         self.validator_clients.iter().cloned().collect()
     }
 
+    pub fn node(&mut self, index: usize) -> &mut LocalValidatorClient<B::Storage> {
+        &mut self.validator_clients[index]
+    }
+
     pub async fn make_storage(&mut self) -> anyhow::Result<B::Storage> {
         Ok(self
             .genesis_storage_builder

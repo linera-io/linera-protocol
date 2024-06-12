@@ -41,6 +41,7 @@ use crate::{
     node::{
         CrossChainMessageDelivery,
         NodeError::{self, ClientIoError},
+        ValidatorNode,
     },
     test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder},
     updater::CommunicationError,
@@ -1810,6 +1811,25 @@ where
         .burn(None, Amount::from_tokens(3), UserData::default())
         .await;
     assert!(result.is_err());
+    let manager = client0
+        .chain_info_with_manager_values()
+        .await
+        .unwrap()
+        .manager;
+    // Validator 0 may or may not have processed the validated block before the update was
+    // canceled due to the errors from the faulty validators. Submit it again to make sure
+    // it's there, so that client 1 can download and re-propose it later.
+    let validated_block_certificate = manager.highest_validated().unwrap().clone();
+    builder
+        .node(0)
+        .handle_certificate(
+            validated_block_certificate,
+            Vec::new(),
+            Vec::new(),
+            CrossChainMessageDelivery::Blocking,
+        )
+        .await
+        .unwrap();
 
     // Client 1 wants to burn 2 tokens. They learn about the proposal in round 0, but now the
     // validator 0 is offline, so they don't learn about the validated block and make their own
