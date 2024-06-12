@@ -401,17 +401,17 @@ where
         // Obtain the missing blocks and the manager state from the local node.
         let range: Range<usize> =
             initial_block_height.try_into()?..target_block_height.try_into()?;
-        let storage = self.local_node.storage_client().await;
         let (keys, manager) = {
-            let mut chain = storage.load_chain(chain_id).await?;
+            let chain = self.local_node.chain_state_view(chain_id).await?;
             (
                 chain.confirmed_log.read(range).await?,
-                std::mem::take(chain.manager.get_mut()),
+                chain.manager.get().clone(),
             )
         };
         if !keys.is_empty() {
             // Send the requested certificates in order.
-            let certs = storage.read_certificates(keys.into_iter()).await?;
+            let storage = self.local_node.storage_client();
+            let certs = storage.await.read_certificates(keys.into_iter()).await?;
             for cert in certs {
                 self.send_certificate(cert, delivery).await?;
             }
@@ -431,8 +431,7 @@ where
     ) -> Result<(), NodeError> {
         let mut sender_heights = BTreeMap::new();
         {
-            let storage = self.local_node.storage_client().await;
-            let chain = storage.load_chain(chain_id).await?;
+            let chain = self.local_node.chain_state_view(chain_id).await?;
             let origins = chain.inboxes.indices().await?;
             let inboxes = chain.inboxes.try_load_entries(&origins).await?;
             for (origin, inbox) in origins.into_iter().zip(inboxes) {
