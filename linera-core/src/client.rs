@@ -633,9 +633,9 @@ where
         let certificate = self
             .communicate_chain_action(committee, submit_action, value)
             .await?;
+        self.process_certificate(certificate.clone(), vec![], vec![])
+            .await?;
         if certificate.value().is_confirmed() {
-            self.process_certificate(certificate.clone(), vec![], vec![])
-                .await?;
             Ok(certificate)
         } else {
             self.finalize_block(committee, certificate).await
