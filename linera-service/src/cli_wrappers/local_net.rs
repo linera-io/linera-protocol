@@ -26,11 +26,10 @@ use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
 use tracing::{info, warn};
+#[cfg(with_testing)]
+use {async_lock::RwLock, linera_base::sync::Lazy};
 #[cfg(all(feature = "rocksdb", with_testing))]
-use {
-    async_lock::RwLock, linera_base::sync::Lazy, linera_views::rocks_db::create_rocks_db_test_path,
-    std::ops::Deref,
-};
+use {linera_views::rocks_db::create_rocks_db_test_path, std::ops::Deref};
 
 use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
@@ -112,6 +111,20 @@ where
 #[cfg(all(feature = "rocksdb", with_testing))]
 static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> =
     Lazy::new(LocalServer::new);
+
+#[cfg(with_testing)]
+static PORT_PROVIDER: Lazy<RwLock<u16>> = Lazy::new(|| RwLock::new(7080));
+
+/// Provides a port for the node_service. Increment the port numbers.
+#[cfg(with_testing)]
+pub async fn get_node_port() -> u16 {
+    let mut port = PORT_PROVIDER.write().await;
+    let port_ret = *port;
+    *port += 1;
+    info!("get_node_port returning port_ret={}", port_ret);
+    assert!(port_selector::is_free(port_ret));
+    port_ret
+}
 
 #[cfg(with_testing)]
 async fn make_testing_config(database: Database) -> StorageConfig {
@@ -432,23 +445,23 @@ impl LocalNet {
     }
 
     pub fn proxy_port(validator: usize) -> usize {
-        9000 + validator * 100
-    }
-
-    fn shard_port(validator: usize, shard: usize) -> usize {
-        9000 + validator * 100 + shard + 1
-    }
-
-    fn internal_port(validator: usize) -> usize {
         10000 + validator * 100
     }
 
-    fn proxy_metrics_port(validator: usize) -> usize {
+    fn shard_port(validator: usize, shard: usize) -> usize {
+        10000 + validator * 100 + shard + 1
+    }
+
+    fn internal_port(validator: usize) -> usize {
         11000 + validator * 100
     }
 
+    fn proxy_metrics_port(validator: usize) -> usize {
+        12000 + validator * 100
+    }
+
     fn shard_metrics_port(validator: usize, shard: usize) -> usize {
-        11000 + validator * 100 + shard + 1
+        12000 + validator * 100 + shard + 1
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
