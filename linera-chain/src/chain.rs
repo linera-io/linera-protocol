@@ -918,7 +918,7 @@ where
                 }
             }
             next_message_index +=
-                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
+                u32::try_from(messages_out.len()).map_err(|_| ArithmeticError::Overflow)?;
             messages.push(messages_out);
         }
         // Second, execute the operations in the block and remember the recipients to notify.
@@ -970,7 +970,7 @@ where
                     .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             }
             next_message_index +=
-                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
+                u32::try_from(messages_out.len()).map_err(|_| ArithmeticError::Overflow)?;
             messages.push(messages_out);
         }
 

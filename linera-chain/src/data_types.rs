@@ -728,7 +728,7 @@ impl ExecutedBlock {
     }
 
     /// Returns the message ID belonging to the `index`th outgoing message in this block.
-    fn message_id(&self, index: u32) -> MessageId {
+    pub fn message_id(&self, index: u32) -> MessageId {
         MessageId {
             chain_id: self.block.chain_id,
             height: self.block.height,

@@ -200,12 +200,12 @@ impl BlockBuilder {
             .stage_block_execution(self.block)
             .await?;
 
-        let message_ids = (0..executed_block.messages().len() as u32)
-            .map(|index| MessageId {
-                chain_id: executed_block.block.chain_id,
-                height: executed_block.block.height,
-                index,
-            })
+        let message_ids = (0..executed_block
+            .messages()
+            .iter()
+            .map(Vec::len)
+            .sum::<usize>() as u32)
+            .map(|index| executed_block.message_id(index))
             .collect();
 
         let value = HashedCertificateValue::new_confirmed(executed_block);

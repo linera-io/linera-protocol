@@ -149,7 +149,10 @@ where
                 Either::Left((None, _)) => break,
                 Either::Right(((), _)) => {
                     match client.lock().await.process_inbox_if_owned().await {
-                        Err(error) => warn!(%error, "Failed to process inbox."),
+                        Err(error) => {
+                            warn!(%error, "Failed to process inbox.");
+                            timeout = Timestamp::from(u64::MAX);
+                        }
                         Ok((_, None)) => timeout = Timestamp::from(u64::MAX),
                         Ok((_, Some(new_timeout))) => timeout = new_timeout.timestamp,
                     }
