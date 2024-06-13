@@ -854,18 +854,31 @@ impl NodeService {
         application_id: &ApplicationId<A>,
     ) -> Result<ApplicationWrapper<A>> {
         let application_id = application_id.forget_abi().to_string();
-        let n_try = 15;
-        for i in 0..n_try {
-            tokio::time::sleep(Duration::from_secs(i)).await;
-            let values = self.try_get_applications_uri(chain_id).await?;
-            if let Some(link) = values.get(&application_id) {
-                return Ok(ApplicationWrapper::from(link.to_string()));
-            }
-            warn!("Waiting for application {application_id:?} to be visible on chain {chain_id:?}");
+        let query = format!("query {{ applications(chainId: \"{chain_id}\") {{ id link }}}}");
+        let data = self.query_node(query).await?;
+        let values = data["applications"]
+            .as_array()
+            .context("missing applications in response")?
+            .iter()
+            .map(|a| {
+                let id = a["id"]
+                    .as_str()
+                    .context("missing id field in response")?
+                    .to_string();
+                let link = a["link"]
+                    .as_str()
+                    .context("missing link field in response")?
+                    .to_string();
+                Ok((id, link))
+            })
+            .collect::<Result<HashMap<_,_>>>()?;
+        if let Some(link) = values.get(&application_id) {
+            return Ok(ApplicationWrapper::from(link.to_string()));
         }
-        bail!("Could not find application URI: {application_id} after {n_try} tries");
+        bail!("Could not find application URI: {application_id}");
     }
 
+    #[cfg(with_testing)]
     pub async fn try_get_applications_uri(
         &self,
         chain_id: &ChainId,
