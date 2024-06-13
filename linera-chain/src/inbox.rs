@@ -13,7 +13,7 @@ use linera_views::{
     common::Context,
     queue_view::QueueView,
     register_view::RegisterView,
-    views::{View, ViewError},
+    views::{ClonableView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -35,7 +35,7 @@ mod inbox_tests;
 /// * The cursors of added events (resp. removed events) must be increasing over time.
 /// * Reconciliation of added and removed events is allowed to skip some added events.
 /// However, the opposite is not true: every removed event must be eventually added.
-#[derive(Debug, View, async_graphql::SimpleObject)]
+#[derive(Debug, ClonableView, View, async_graphql::SimpleObject)]
 pub struct InboxStateView<C>
 where
     C: Clone + Context + Send + Sync,

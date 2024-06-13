@@ -12,7 +12,7 @@ use linera_views::{
     common::Context,
     key_value_store_view::KeyValueStoreView,
     reentrant_collection_view::HashedReentrantCollectionView,
-    views::{View, ViewError},
+    views::{ClonableView, View, ViewError},
 };
 use linera_views_derive::CryptoHashView;
 #[cfg(with_testing)]
@@ -33,7 +33,7 @@ use crate::{
 };
 
 /// A view accessing the execution state of a chain.
-#[derive(Debug, CryptoHashView)]
+#[derive(Debug, ClonableView, CryptoHashView)]
 pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,

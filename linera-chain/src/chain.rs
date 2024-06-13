@@ -27,7 +27,7 @@ use linera_views::{
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     set_view::SetView,
-    views::{CryptoHashView, RootView, View, ViewError},
+    views::{ClonableView, CryptoHashView, RootView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
@@ -231,7 +231,7 @@ impl InboxEntry {
 }
 
 /// A view accessing the state of a chain.
-#[derive(Debug, RootView, SimpleObject)]
+#[derive(Debug, RootView, ClonableView, SimpleObject)]
 pub struct ChainStateView<C>
 where
     C: Clone + Context + Send + Sync + 'static,
@@ -348,7 +348,7 @@ impl ChainTipState {
 }
 
 /// The state of a channel followed by subscribers.
-#[derive(Debug, View, SimpleObject)]
+#[derive(Debug, ClonableView, View, SimpleObject)]
 pub struct ChannelStateView<C>
 where
     C: Context + Send + Sync,

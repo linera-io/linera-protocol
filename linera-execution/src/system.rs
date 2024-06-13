@@ -22,7 +22,7 @@ use linera_views::{
     map_view::HashedMapView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
-    views::{HashableView, View, ViewError},
+    views::{ClonableView, HashableView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -62,7 +62,7 @@ static OPEN_CHAIN_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 /// A view accessing the execution state of the system of a chain.
-#[derive(Debug, HashableView)]
+#[derive(Debug, ClonableView, HashableView)]
 pub struct SystemExecutionStateView<C> {
     /// How the chain was created. May be unknown for inactive chains.
     pub description: HashedRegisterView<C, Option<ChainDescription>>,
