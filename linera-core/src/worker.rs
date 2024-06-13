@@ -5,6 +5,7 @@
 use std::{
     borrow::Cow,
     collections::{hash_map, BTreeMap, HashMap, VecDeque},
+    num::NonZeroUsize,
     sync::Arc,
     time::Duration,
 };
@@ -15,6 +16,7 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, HashedBlob, Round},
     doc_scalar, ensure,
     identifiers::{BlobId, ChainId, Owner},
+    sync::Lazy,
 };
 use linera_chain::{
     data_types::{
@@ -29,13 +31,19 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
+use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::{
-    sync::{oneshot, Mutex, OwnedRwLockReadGuard},
+    sync::{mpsc, oneshot, Mutex, OwnedRwLockReadGuard},
     task::JoinSet,
 };
 use tracing::{error, instrument, trace, warn};
+#[cfg(with_metrics)]
+use {
+    linera_base::prometheus_util,
+    prometheus::{HistogramVec, IntCounterVec},
+};
 #[cfg(with_testing)]
 use {
     linera_base::{
@@ -43,11 +51,6 @@ use {
         identifiers::{BytecodeId, Destination, MessageId},
     },
     linera_chain::data_types::{ChannelFullName, IncomingMessage, Medium, MessageAction},
-};
-#[cfg(with_metrics)]
-use {
-    linera_base::{prometheus_util, sync::Lazy},
-    prometheus::{HistogramVec, IntCounterVec},
 };
 
 use crate::{
@@ -59,6 +62,10 @@ use crate::{
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
+
+/// The maximum number of [`ChainWorkerActor`]s to keep running.
+static CHAIN_WORKER_LIMIT: Lazy<NonZeroUsize> =
+    Lazy::new(|| NonZeroUsize::new(1_000).expect("`CHAIN_WORKER_LIMIT` should not be zero"));
 
 #[cfg(with_metrics)]
 static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
@@ -286,7 +293,13 @@ where
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     /// The set of spawned [`ChainWorkerActor`] tasks.
     chain_worker_tasks: Arc<Mutex<JoinSet<()>>>,
+    /// The cache of running [`ChainWorkerActor`]s.
+    chain_workers: Arc<Mutex<LruCache<ChainId, ChainActorEndpoint<StorageClient>>>>,
 }
+
+/// The sender endpoint for [`ChainWorkerRequest`]s.
+type ChainActorEndpoint<StorageClient> =
+    mpsc::UnboundedSender<ChainWorkerRequest<<StorageClient as Storage>::Context>>;
 
 pub(crate) type DeliveryNotifiers =
     HashMap<ChainId, BTreeMap<BlockHeight, Vec<oneshot::Sender<()>>>>;
@@ -305,6 +318,7 @@ where
             recent_hashed_blobs: Arc::new(ValueCache::default()),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
+            chain_workers: Arc::new(Mutex::new(LruCache::new(*CHAIN_WORKER_LIMIT))),
         }
     }
 
@@ -323,6 +337,7 @@ where
             recent_hashed_blobs,
             delivery_notifiers,
             chain_worker_tasks: Arc::default(),
+            chain_workers: Arc::new(Mutex::new(LruCache::new(*CHAIN_WORKER_LIMIT))),
         }
     }
 
