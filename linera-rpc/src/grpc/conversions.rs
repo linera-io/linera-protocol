@@ -8,7 +8,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId, Owner},
 };
 use linera_chain::data_types::{
-    BlockAndRound, BlockProposal, Certificate, HashedCertificateValue, LiteCertificate, LiteValue,
+    BlockProposal, Certificate, HashedCertificateValue, LiteCertificate, LiteValue, ProposalContent,
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -174,7 +174,7 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
                 &block_proposal.hashed_certificate_values,
             )?,
             blobs: bincode::serialize(&block_proposal.hashed_blobs)?,
-            validated: block_proposal
+            validated_block_certificate: block_proposal
                 .validated_block_certificate
                 .map(|cert| bincode::serialize(&cert))
                 .transpose()?,
@@ -186,7 +186,7 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
     type Error = GrpcProtoConversionError;
 
     fn try_from(block_proposal: api::BlockProposal) -> Result<Self, Self::Error> {
-        let content: BlockAndRound = bincode::deserialize(&block_proposal.content)?;
+        let content: ProposalContent = bincode::deserialize(&block_proposal.content)?;
         ensure!(
             Some(content.block.chain_id.into()) == block_proposal.chain_id,
             GrpcProtoConversionError::InconsistentChainId
@@ -200,7 +200,7 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
             )?,
             hashed_blobs: bincode::deserialize(&block_proposal.blobs)?,
             validated_block_certificate: block_proposal
-                .validated
+                .validated_block_certificate
                 .map(|bytes| bincode::deserialize(&bytes))
                 .transpose()?,
         })
@@ -557,7 +557,7 @@ pub mod tests {
         data_types::{Amount, Round, Timestamp},
     };
     use linera_chain::{
-        data_types::{Block, BlockAndRound, BlockExecutionOutcome, HashedCertificateValue},
+        data_types::{Block, BlockExecutionOutcome, HashedCertificateValue},
         test::make_first_block,
     };
     use linera_core::data_types::ChainInfo;
@@ -769,10 +769,27 @@ pub mod tests {
     #[test]
     pub fn test_block_proposal() {
         let key_pair = KeyPair::generate();
+        let cert = Certificate::new(
+            HashedCertificateValue::new_validated(
+                BlockExecutionOutcome {
+                    state_hash: CryptoHash::new(&Foo("validated".into())),
+                    ..BlockExecutionOutcome::default()
+                }
+                .with(get_block()),
+            ),
+            Round::SingleLeader(2),
+            vec![(
+                ValidatorName::from(key_pair.public()),
+                Signature::new(&Foo("signed".into()), &key_pair),
+            )],
+        )
+        .lite_certificate()
+        .cloned();
         let block_proposal = BlockProposal {
-            content: BlockAndRound {
+            content: ProposalContent {
                 block: get_block(),
                 round: Round::SingleLeader(4),
+                forced_oracle_records: Some(Vec::new()),
             },
             owner: Owner::from(KeyPair::generate().public()),
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
@@ -784,20 +801,7 @@ pub mod tests {
                 .with(get_block()),
             )],
             hashed_blobs: vec![],
-            validated_block_certificate: Some(Certificate::new(
-                HashedCertificateValue::new_validated(
-                    BlockExecutionOutcome {
-                        state_hash: CryptoHash::new(&Foo("validated".into())),
-                        ..BlockExecutionOutcome::default()
-                    }
-                    .with(get_block()),
-                ),
-                Round::SingleLeader(2),
-                vec![(
-                    ValidatorName::from(key_pair.public()),
-                    Signature::new(&Foo("signed".into()), &key_pair),
-                )],
-            )),
+            validated_block_certificate: Some(cert),
         };
 
         round_trip_check::<_, api::BlockProposal>(block_proposal);

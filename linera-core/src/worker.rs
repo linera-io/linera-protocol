@@ -254,6 +254,8 @@ pub enum WorkerError {
     BlobsNotFound(Vec<BlobId>),
     #[error("The following values containing application bytecode are missing: {0:?} and the following blobs are missing: {1:?}.")]
     ApplicationBytecodesAndBlobsNotFound(Vec<BytecodeLocation>, Vec<BlobId>),
+    #[error("The block proposal is invalid: {0}")]
+    InvalidBlockProposal(String),
 }
 
 impl From<linera_chain::ChainError> for WorkerError {

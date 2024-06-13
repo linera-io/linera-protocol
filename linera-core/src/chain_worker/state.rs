@@ -18,9 +18,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
-        ExecutedBlock, HashedCertificateValue, IncomingMessage, Medium, MessageAction,
-        MessageBundle, Origin, Target,
+        Block, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
+        HashedCertificateValue, IncomingMessage, Medium, MessageAction, MessageBundle, Origin,
+        ProposalContent, Target,
     },
     manager, ChainError, ChainStateView,
 };
@@ -250,13 +250,24 @@ where
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let BlockProposal {
-            content: BlockAndRound { block, round },
+            content:
+                ProposalContent {
+                    block,
+                    round,
+                    forced_oracle_records: oracle_records,
+                },
             owner,
             hashed_certificate_values,
             hashed_blobs,
             validated_block_certificate,
             signature: _,
         } = &proposal;
+        ensure!(
+            validated_block_certificate.is_some() == oracle_records.is_some(),
+            WorkerError::InvalidBlockProposal(
+                "Must contain a certificate if and only if it contains oracle records".to_string()
+            )
+        );
         self.ensure_is_active()?;
         // Check the epoch.
         let (epoch, committee) = self
@@ -274,9 +285,9 @@ where
             .verify_owner(&proposal)
             .ok_or(WorkerError::InvalidOwner)?;
         proposal.check_signature(public_key)?;
-        if let Some(validated_block_certificate) = validated_block_certificate {
+        if let Some(lite_certificate) = validated_block_certificate {
             // Verify that this block has been validated by a quorum before.
-            validated_block_certificate.check(committee)?;
+            lite_certificate.check(committee)?;
         } else if let Some(signer) = block.authenticated_signer {
             // Check the authentication of the operations in the new block.
             ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
@@ -310,16 +321,17 @@ where
         );
         self.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.storage.clock().current_time();
-        let outcome = if let Some(validated_block_certificate) = validated_block_certificate {
-            validated_block_certificate
-                .value()
-                .executed_block()
-                .ok_or_else(|| WorkerError::MissingExecutedBlockInProposal)?
-                .outcome
+        let outcome = self
+            .chain
+            .execute_block(block, local_time, oracle_records.clone())
+            .await?;
+        if let Some(lite_certificate) = &validated_block_certificate {
+            let value = HashedCertificateValue::new_validated(outcome.clone().with(block.clone()));
+            lite_certificate
                 .clone()
-        } else {
-            self.chain.execute_block(block, local_time, None).await?
-        };
+                .with_value(value)
+                .ok_or_else(|| WorkerError::InvalidLiteCertificate)?;
+        }
         if round.is_fast() {
             let mut records = outcome.oracle_records.iter();
             ensure!(

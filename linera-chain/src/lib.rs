@@ -108,8 +108,6 @@ pub enum ChainError {
     InvalidBlockTimestamp,
     #[error("Cannot initiate a new block while the previous one is still pending confirmation")]
     PreviousBlockMustBeConfirmedFirst,
-    #[error("Invalid block proposal")]
-    InvalidBlockProposal,
     #[error("Round number should be at least {0:?}")]
     InsufficientRound(Round),
     #[error("Round number should greater than {0:?}")]
