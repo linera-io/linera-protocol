@@ -978,6 +978,9 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
             .await?,
     );
 
+    // Needed synchronization after the make_application
+    node_service1.process_inbox(&chain1).await?;
+
     let nft1_name = "nft1".to_string();
     let nft1_minter = account_owner1;
     let nft1_payload = "nft1_data".as_bytes().to_vec();
