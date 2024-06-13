@@ -125,7 +125,11 @@ fn make_certificate<S>(
     committee: &Committee,
     worker: &WorkerState<S>,
     value: HashedCertificateValue,
-) -> Certificate {
+) -> Certificate
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     make_certificate_with_round(committee, worker, value, Round::Fast)
 }
 
@@ -134,7 +138,11 @@ fn make_certificate_with_round<S>(
     worker: &WorkerState<S>,
     value: HashedCertificateValue,
     round: Round,
-) -> Certificate {
+) -> Certificate
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     let vote = LiteVote::new(
         value.lite(),
         round,
@@ -158,7 +166,11 @@ async fn make_simple_transfer_certificate<S>(
     balance: Amount,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&Certificate>,
-) -> Certificate {
+) -> Certificate
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     make_transfer_certificate_for_epoch(
         chain_description,
         key_pair,
@@ -189,7 +201,11 @@ async fn make_transfer_certificate<S>(
     balances: BTreeMap<Owner, Amount>,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&Certificate>,
-) -> Certificate {
+) -> Certificate
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     make_transfer_certificate_for_epoch(
         chain_description,
         key_pair,
@@ -221,7 +237,11 @@ async fn make_transfer_certificate_for_epoch<S>(
     balances: BTreeMap<Owner, Amount>,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&Certificate>,
-) -> Certificate {
+) -> Certificate
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     let chain_id = chain_description.into();
     let system_state = SystemExecutionState {
         committees: [(epoch, committee.clone())].into_iter().collect(),

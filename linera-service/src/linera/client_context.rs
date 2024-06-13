@@ -66,7 +66,11 @@ use {
 
 use crate::{client_options::ChainOwnershipConfig, ClientOptions};
 
-pub struct ClientContext<Storage> {
+pub struct ClientContext<Storage>
+where
+    Storage: linera_storage::Storage,
+    ViewError: From<Storage::ContextError>,
+{
     pub(crate) wallet_state: WalletState,
     pub(crate) client: Arc<Client<NodeProvider, Storage>>,
     pub(crate) send_timeout: Duration,

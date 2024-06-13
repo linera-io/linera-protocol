@@ -24,7 +24,11 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct Server<S> {
+pub struct Server<S>
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
     host: String,
     port: u16,
@@ -36,7 +40,11 @@ pub struct Server<S> {
     user_errors: u64,
 }
 
-impl<S> Server<S> {
+impl<S> Server<S>
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
@@ -172,7 +180,11 @@ where
 }
 
 #[derive(Clone)]
-struct RunningServerState<S> {
+struct RunningServerState<S>
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     server: Server<S>,
     cross_chain_sender: mpsc::Sender<(RpcMessage, ShardId)>,
 }
@@ -338,7 +350,8 @@ where
 
 impl<S> RunningServerState<S>
 where
-    S: Send,
+    S: Storage + Send,
+    ViewError: From<S::ContextError>,
 {
     fn handle_network_actions(&mut self, actions: NetworkActions) {
         for request in actions.cross_chain_requests {

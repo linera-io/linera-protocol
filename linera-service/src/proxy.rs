@@ -187,6 +187,7 @@ where
 impl<S> MessageHandler for SimpleProxy<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
 {
     #[instrument(skip_all, fields(chain_id = ?message.target_chain_id()))]
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage> {
@@ -231,6 +232,7 @@ where
 impl<S> SimpleProxy<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
 {
     #[instrument(skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port), err)]
     async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
