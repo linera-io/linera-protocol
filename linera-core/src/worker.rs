@@ -737,15 +737,7 @@ where
             oneshot::Sender<Result<Response, WorkerError>>,
         ) -> ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<Response, WorkerError> {
-        let chain_actor = ChainWorkerActor::spawn(
-            self.chain_worker_config.clone(),
-            self.storage.clone(),
-            self.recent_hashed_certificate_values.clone(),
-            self.recent_hashed_blobs.clone(),
-            chain_id,
-            &mut *self.chain_worker_tasks.lock().await,
-        )
-        .await?;
+        let chain_actor = self.get_chain_worker_endpoint(chain_id).await?;
         let (callback, response) = oneshot::channel();
 
         chain_actor
@@ -755,6 +747,37 @@ where
         response
             .await
             .expect("`ChainWorkerActor` stopped executing without responding")
+    }
+
+    /// Retrieves an endpoint to a [`ChainWorkerActor`] from the cache, creating one and adding it
+    /// to the cache if needed.
+    async fn get_chain_worker_endpoint(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainActorEndpoint<StorageClient>, WorkerError> {
+        let mut chain_workers = self.chain_workers.lock().await;
+
+        if !chain_workers.contains(&chain_id) {
+            chain_workers.push(
+                chain_id,
+                ChainWorkerActor::spawn(
+                    self.chain_worker_config.clone(),
+                    self.storage.clone(),
+                    self.recent_hashed_certificate_values.clone(),
+                    self.recent_hashed_blobs.clone(),
+                    chain_id,
+                    &mut *self.chain_worker_tasks.lock().await,
+                )
+                .await?,
+            );
+        }
+
+        Ok(chain_workers
+            .get(&chain_id)
+            .expect(
+                "Chain worker should have been inserted in the cache if it wasn't there already",
+            )
+            .clone())
     }
 }
 
