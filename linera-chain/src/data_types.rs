@@ -841,7 +841,7 @@ impl BlockProposal {
         let CertificateValue::ValidatedBlock { executed_block } =
             validated_block_certificate.value.into_inner()
         else {
-            panic!("called new_retry with a certificate without a block");
+            panic!("called new_retry with a certificate without a validated block");
         };
         let content = ProposalContent {
             block: executed_block.block,

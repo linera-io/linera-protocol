@@ -327,7 +327,7 @@ where
             .await?;
         if let Some(lite_certificate) = &validated_block_certificate {
             let value = HashedCertificateValue::new_validated(outcome.clone().with(block.clone()));
-            let _ = lite_certificate
+            lite_certificate
                 .clone()
                 .with_value(value)
                 .ok_or_else(|| WorkerError::InvalidLiteCertificate)?;
