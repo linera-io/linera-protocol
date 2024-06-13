@@ -1503,9 +1503,6 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             &[token0.forget_abi(), token1.forget_abi()],
         )
         .await?;
-    node_service_admin.process_inbox(&chain_admin).await?;
-    node_service_a.process_inbox(&chain_a).await?;
-    node_service_b.process_inbox(&chain_b).await?;
     let app_matching_admin = MatchingEngineApp(
         node_service_admin
             .make_application(&chain_admin, &application_id_matching)
@@ -1527,6 +1524,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             .make_application(&chain_b, &application_id_matching)
             .await?,
     );
+    node_service_admin.process_inbox(&chain_admin).await?;
+    node_service_a.process_inbox(&chain_a).await?;
+    node_service_b.process_inbox(&chain_b).await?;
 
     // Now creating orders
     for price in [1, 2] {
