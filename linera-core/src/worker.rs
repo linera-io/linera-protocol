@@ -704,8 +704,10 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<OwnedRwLockReadGuard<ChainStateView<StorageClient::Context>>, WorkerError> {
-        let mut worker = self.create_chain_worker(chain_id).await?;
-        worker.chain_state_view().await
+        self.query_chain_worker(chain_id, |callback| ChainWorkerRequest::GetChainStateView {
+            callback,
+        })
+        .await
     }
 
     /// Creates a [`ChainWorkerState`] instance for a specific chain.
