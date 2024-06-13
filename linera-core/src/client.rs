@@ -1284,7 +1284,7 @@ where
         let proposal = if let Some(cert) = manager.requested_locked {
             BlockProposal::new_retry(round, *cert, key_pair, values, hashed_blobs)
         } else {
-            BlockProposal::new(round, block.clone(), key_pair, values, hashed_blobs)
+            BlockProposal::new_initial(round, block.clone(), key_pair, values, hashed_blobs)
         };
         // Check the final block proposal. This will be cheaper after #1401.
         self.node_client

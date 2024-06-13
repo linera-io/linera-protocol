@@ -690,7 +690,7 @@ ProposalContent:
         TYPENAME: Block
     - round:
         TYPENAME: Round
-    - oracle_records:
+    - forced_oracle_records:
         OPTION:
           SEQ:
             TYPENAME: OracleRecord

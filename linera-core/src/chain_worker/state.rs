@@ -254,7 +254,7 @@ where
                 ProposalContent {
                     block,
                     round,
-                    oracle_records,
+                    forced_oracle_records: oracle_records,
                 },
             owner,
             hashed_certificate_values,

@@ -794,17 +794,20 @@ impl HashedCertificateValue {
     }
 }
 
-/// The data a block proposer signs: the round, the block, and, if it is a retry from an earlier
-/// consensus round, the oracle records.
+/// The data a block proposer signs.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ProposalContent {
+    /// The proposed block.
     pub block: Block,
+    /// The consensus round in which this proposal is made.
     pub round: Round,
-    pub oracle_records: Option<Vec<OracleRecord>>,
+    /// If this is a retry from an earlier round, the oracle records from when the block was
+    /// first validated. These are reused so the execution outcome remains the same.
+    pub forced_oracle_records: Option<Vec<OracleRecord>>,
 }
 
 impl BlockProposal {
-    pub fn new(
+    pub fn new_initial(
         round: Round,
         block: Block,
         secret: &KeyPair,
@@ -814,7 +817,7 @@ impl BlockProposal {
         let content = ProposalContent {
             round,
             block,
-            oracle_records: None,
+            forced_oracle_records: None,
         };
         let signature = Signature::new(&content, secret);
         Self {
@@ -843,7 +846,7 @@ impl BlockProposal {
         let content = ProposalContent {
             block: executed_block.block,
             round,
-            oracle_records: Some(executed_block.outcome.oracle_records),
+            forced_oracle_records: Some(executed_block.outcome.oracle_records),
         };
         let signature = Signature::new(&content, secret);
         Self {

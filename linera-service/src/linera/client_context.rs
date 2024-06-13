@@ -655,7 +655,7 @@ impl ClientContext {
                 timestamp: chain.timestamp.max(Timestamp::now()),
             };
             trace!("Preparing block proposal: {:?}", block);
-            let proposal = BlockProposal::new(
+            let proposal = BlockProposal::new_initial(
                 linera_base::data_types::Round::Fast,
                 block.clone(),
                 key_pair,

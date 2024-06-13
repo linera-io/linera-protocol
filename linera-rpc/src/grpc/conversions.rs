@@ -789,7 +789,7 @@ pub mod tests {
             content: ProposalContent {
                 block: get_block(),
                 round: Round::SingleLeader(4),
-                oracle_records: Some(Vec::new()),
+                forced_oracle_records: Some(Vec::new()),
             },
             owner: Owner::from(KeyPair::generate().public()),
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
