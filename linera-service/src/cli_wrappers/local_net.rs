@@ -121,7 +121,7 @@ pub async fn get_node_port() -> u16 {
     let mut port = PORT_PROVIDER.write().await;
     let port_ret = *port;
     *port += 1;
-    println!("get_node_port returning port_ret={}", port_ret);
+    info!("get_node_port returning port_ret={}", port_ret);
     assert!(port_selector::is_free(port_ret));
     port_ret
 }
