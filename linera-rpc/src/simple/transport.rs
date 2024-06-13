@@ -10,12 +10,13 @@ use futures::{
     stream::{self, FuturesUnordered, SplitSink, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryStreamExt,
 };
+use linera_core::{JoinSetExt as _, TaskHandle};
 use serde::{Deserialize, Serialize};
 use tokio::{
     io::AsyncWriteExt,
     net::{lookup_host, TcpListener, TcpStream, ToSocketAddrs, UdpSocket},
     sync::Mutex,
-    task::{JoinHandle, JoinSet},
+    task::JoinSet,
 };
 use tokio_util::{codec::Framed, sync::CancellationToken, udp::UdpFramed};
 use tracing::{error, warn};
@@ -27,6 +28,9 @@ use crate::{
 
 /// Suggested buffer size
 pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
+
+/// Number of tasks to spawn before attempting to reap some finished tasks to prevent memory leaks.
+const REAP_TASKS_THRESHOLD: usize = 100;
 
 // Supported transport protocols.
 #[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -77,15 +81,20 @@ pub trait MessageHandler: Clone {
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage>;
 }
 
-/// The result of spawning a server is a handle to track completion.
+/// The result of spawning a server is oneshot channel to track completion, and the set of
+/// executing tasks.
 pub struct ServerHandle {
-    pub handle: tokio::task::JoinHandle<Result<(), std::io::Error>>,
+    pub handle: TaskHandle<Result<(), std::io::Error>>,
 }
 
 impl ServerHandle {
     pub async fn join(self) -> Result<(), std::io::Error> {
-        self.handle.await??;
-        Ok(())
+        self.handle.await.map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "Server task did not finish successfully",
+            )
+        })?
     }
 }
 
@@ -152,15 +161,15 @@ impl TransportProtocol {
         address: impl ToSocketAddrs + Send + 'static,
         state: S,
         shutdown_signal: CancellationToken,
+        join_set: &mut JoinSet<()>,
     ) -> ServerHandle
     where
         S: MessageHandler + Send + 'static,
     {
         let handle = match self {
-            Self::Udp => tokio::spawn(UdpServer::run(address, state, shutdown_signal)),
-            Self::Tcp => tokio::spawn(TcpServer::run(address, state, shutdown_signal)),
+            Self::Udp => join_set.spawn_task(UdpServer::run(address, state, shutdown_signal)),
+            Self::Tcp => join_set.spawn_task(TcpServer::run(address, state, shutdown_signal)),
         };
-
         ServerHandle { handle }
     }
 }
@@ -198,7 +207,8 @@ pub struct UdpServer<State> {
     handler: State,
     udp_sink: SharedUdpSink,
     udp_stream: SplitStream<UdpFramed<Codec>>,
-    active_handlers: HashMap<SocketAddr, JoinHandle<()>>,
+    active_handlers: HashMap<SocketAddr, TaskHandle<()>>,
+    join_set: JoinSet<()>,
 }
 
 /// Type alias for the outgoing endpoint of UDP messages.
@@ -242,6 +252,7 @@ where
             udp_sink: Arc::new(Mutex::new(udp_sink)),
             udp_stream,
             active_handlers: HashMap::new(),
+            join_set: JoinSet::new(),
         })
     }
 
@@ -251,7 +262,7 @@ where
         let mut state = self.handler.clone();
         let udp_sink = self.udp_sink.clone();
 
-        let new_task = tokio::spawn(async move {
+        let new_task = self.join_set.spawn_task(async move {
             if let Some(reply) = state.handle_message(message).await {
                 if let Some(task) = previous_task {
                     if let Err(error) = task.await {
@@ -267,9 +278,10 @@ where
 
         self.active_handlers.insert(peer, new_task);
 
-        if self.active_handlers.len() >= 100 {
+        if self.active_handlers.len() >= REAP_TASKS_THRESHOLD {
             // Collect finished tasks to avoid leaking memory.
-            self.active_handlers.retain(|_, task| !task.is_finished());
+            self.active_handlers.retain(|_, task| task.is_running());
+            self.join_set.reap_finished_tasks();
         }
     }
 
@@ -298,6 +310,8 @@ where
                 warn!("Message handler panicked: {}", error);
             }
         }
+
+        self.join_set.await_all_tasks().await;
     }
 }
 
@@ -378,12 +392,13 @@ where
         let mut accept_stream = pin!(accept_stream);
 
         let connection_shutdown_signal = shutdown_signal.child_token();
-        let mut tasks = JoinSet::new();
+        let mut join_set = JoinSet::new();
+        let mut reap_countdown = REAP_TASKS_THRESHOLD;
 
         loop {
             tokio::select! { biased;
                 _ = shutdown_signal.cancelled() => {
-                    while tasks.join_next().await.is_some() {}
+                    join_set.await_all_tasks().await;
                     return Ok(());
                 }
                 maybe_socket = accept_stream.next() => match maybe_socket {
@@ -393,10 +408,11 @@ where
                             handler.clone(),
                             connection_shutdown_signal.clone(),
                         );
-                        tasks.spawn(server.serve());
+                        join_set.spawn_task(server.serve());
+                        reap_countdown -= 1;
                     }
                     Some(Err(error)) => {
-                        while tasks.join_next().await.is_some() {}
+                        join_set.await_all_tasks().await;
                         return Err(error);
                     }
                     None => unreachable!(
@@ -405,8 +421,10 @@ where
                 },
             }
 
-            // Reap finished tasks
-            while tasks.try_join_next().is_some() {}
+            if reap_countdown == 0 {
+                join_set.reap_finished_tasks();
+                reap_countdown = REAP_TASKS_THRESHOLD;
+            }
         }
     }
 

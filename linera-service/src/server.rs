@@ -8,7 +8,7 @@ use anyhow::bail;
 use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
 use linera_base::crypto::{CryptoRng, KeyPair};
-use linera_core::worker::WorkerState;
+use linera_core::{worker::WorkerState, JoinSetExt as _};
 use linera_execution::{committee::ValidatorName, WasmRuntime, WithWasmDefault};
 use linera_rpc::{
     config::{
@@ -29,6 +29,7 @@ use linera_service::{
 use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde::Deserialize;
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -63,16 +64,18 @@ impl ServerContext {
         (state, shard_id, shard.clone())
     }
 
-    async fn spawn_simple<S>(
+    fn spawn_simple<S>(
         &self,
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
         protocol: simple::TransportProtocol,
         shutdown_signal: CancellationToken,
-    ) where
+    ) -> JoinSet<()>
+    where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
+        let mut join_set = JoinSet::new();
         let handles = FuturesUnordered::new();
 
         let internal_network = self
@@ -98,7 +101,7 @@ impl ServerContext {
                 shard_id,
                 cross_chain_config,
             )
-            .spawn(shutdown_signal.clone());
+            .spawn(shutdown_signal.clone(), &mut join_set);
 
             handles.push(
                 server_handle
@@ -110,19 +113,24 @@ impl ServerContext {
             );
         }
 
-        handles.collect::<()>().await;
+        join_set.spawn_task(handles.collect::<()>());
+
+        join_set
     }
 
-    async fn spawn_grpc<S>(
+    fn spawn_grpc<S>(
         &self,
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
         shutdown_signal: CancellationToken,
-    ) where
+    ) -> JoinSet<()>
+    where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
+        let mut join_set = JoinSet::new();
         let handles = FuturesUnordered::new();
+
         for (state, shard_id, shard) in states {
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
@@ -138,6 +146,7 @@ impl ServerContext {
                 self.cross_chain_config.clone(),
                 self.notification_config.clone(),
                 shutdown_signal.clone(),
+                &mut join_set,
             );
 
             handles.push(
@@ -150,7 +159,9 @@ impl ServerContext {
             );
         }
 
-        handles.collect::<()>().await;
+        join_set.spawn_task(handles.collect::<()>());
+
+        join_set
     }
 
     #[cfg(with_metrics)]
@@ -193,19 +204,17 @@ impl Runnable for ServerContext {
             }
         };
 
-        match self.server_config.internal_network.protocol {
+        let mut join_set = match self.server_config.internal_network.protocol {
             NetworkProtocol::Simple(protocol) => {
                 self.spawn_simple(&listen_address, states, protocol, shutdown_notifier)
-                    .await
             }
             NetworkProtocol::Grpc(tls_config) => match tls_config {
-                TlsConfig::ClearText => {
-                    self.spawn_grpc(&listen_address, states, shutdown_notifier)
-                        .await
-                }
+                TlsConfig::ClearText => self.spawn_grpc(&listen_address, states, shutdown_notifier),
                 TlsConfig::Tls => bail!("TLS not supported between proxy and shards."),
             },
         };
+
+        join_set.await_all_tasks().await;
 
         Ok(())
     }

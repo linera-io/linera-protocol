@@ -30,7 +30,7 @@ pub enum GrpcError {
     CrossChain(#[from] tonic::Status),
 
     #[error("failed to execute task to completion: {0}")]
-    Join(#[from] tokio::task::JoinError),
+    Join(#[from] tokio::sync::oneshot::error::RecvError),
 
     #[error("failed to parse socket address: {0}")]
     SocketAddr(#[from] std::net::AddrParseError),

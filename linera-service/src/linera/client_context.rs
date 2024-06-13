@@ -22,6 +22,7 @@ use linera_core::{
     client::{ArcChainClient, ChainClient, Client},
     data_types::ClientOutcome,
     node::{CrossChainMessageDelivery, ValidatorNodeProvider},
+    JoinSetExt as _,
 };
 use linera_execution::Bytecode;
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
@@ -33,6 +34,7 @@ use linera_service::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
+use tokio::task::JoinSet;
 use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
 use {
@@ -70,6 +72,7 @@ pub struct ClientContext {
     pub(crate) recv_timeout: Duration,
     pub(crate) notification_retry_delay: Duration,
     pub(crate) notification_retries: u32,
+    chain_listeners: JoinSet<()>,
 }
 
 #[async_trait]
@@ -130,6 +133,7 @@ impl ClientContext {
             recv_timeout: options.recv_timeout,
             notification_retry_delay: options.notification_retry_delay,
             notification_retries: options.notification_retries,
+            chain_listeners: JoinSet::new(),
         }
     }
 
@@ -258,7 +262,7 @@ impl ClientContext {
 
         // Start listening for notifications, so we learn about new rounds and blocks.
         let (listener, _listen_handle, mut notification_stream) = chain_client.listen().await?;
-        tokio::spawn(listener);
+        self.chain_listeners.spawn_task(listener);
 
         loop {
             let (new_certificates, maybe_timeout) = {
@@ -383,7 +387,7 @@ impl ClientContext {
 
         // Start listening for notifications, so we learn about new rounds and blocks.
         let (listener, _listen_handle, mut notification_stream) = client.listen().await?;
-        tokio::spawn(listener);
+        self.chain_listeners.spawn_task(listener);
 
         loop {
             // Try applying f. Return if committed.
@@ -718,10 +722,11 @@ impl ClientContext {
     ) -> Vec<RpcMessage> {
         let time_start = Instant::now();
         info!("Broadcasting {} {}", proposals.len(), phase);
+        let mut join_set = JoinSet::new();
         let mut handles = Vec::new();
         for mut client in self.make_validator_mass_clients() {
             let proposals = proposals.clone();
-            handles.push(tokio::spawn(async move {
+            let handle = join_set.spawn_task(async move {
                 debug!("Sending {} requests", proposals.len());
                 let responses = client
                     .send(proposals, max_in_flight)
@@ -729,7 +734,8 @@ impl ClientContext {
                     .unwrap_or_default();
                 debug!("Done sending requests");
                 responses
-            }));
+            });
+            handles.push(handle);
         }
         let responses = futures::future::join_all(handles)
             .await

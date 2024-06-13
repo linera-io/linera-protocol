@@ -6,7 +6,7 @@ use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
-use linera_core::node::NodeError;
+use linera_core::{node::NodeError, JoinSetExt as _};
 use linera_rpc::{
     config::{
         NetworkProtocol, ShardConfig, ValidatorInternalNetworkPreConfig,
@@ -25,6 +25,7 @@ use linera_service::{
 };
 use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 
@@ -232,6 +233,7 @@ where
     #[instrument(skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port), err)]
     async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
         info!("Starting simple server");
+        let mut join_set = JoinSet::new();
         let address = self.get_listen_address(self.public_config.port);
 
         #[cfg(with_metrics)]
@@ -242,9 +244,12 @@ where
 
         self.public_config
             .protocol
-            .spawn_server(address, self, shutdown_signal)
+            .spawn_server(address, self, shutdown_signal, &mut join_set)
             .join()
             .await?;
+
+        join_set.await_all_tasks().await;
+
         Ok(())
     }
 

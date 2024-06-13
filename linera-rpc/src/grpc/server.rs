@@ -17,11 +17,12 @@ use linera_base::identifiers::ChainId;
 use linera_core::{
     node::NodeError,
     worker::{NetworkActions, Notification, ValidatorWorker, WorkerError, WorkerState},
+    JoinSetExt as _, TaskHandle,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::Rng;
-use tokio::{sync::oneshot, task::JoinHandle};
+use tokio::{sync::oneshot, task::JoinSet};
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
 use tower::{builder::ServiceBuilder, Layer, Service};
@@ -110,7 +111,7 @@ pub struct GrpcServer<S> {
 }
 
 pub struct GrpcServerHandle {
-    handle: JoinHandle<Result<(), GrpcError>>,
+    handle: TaskHandle<Result<(), GrpcError>>,
 }
 
 impl GrpcServerHandle {
@@ -186,6 +187,7 @@ where
         cross_chain_config: CrossChainConfig,
         notification_config: NotificationConfig,
         shutdown_signal: CancellationToken,
+        join_set: &mut JoinSet<()>,
     ) -> GrpcServerHandle {
         info!(
             "spawning gRPC server on {}:{} for shard {}",
@@ -198,7 +200,7 @@ where
         let (notification_sender, notification_receiver) =
             mpsc::channel(notification_config.notification_queue_size);
 
-        tokio::spawn({
+        join_set.spawn_task({
             info!(
                 nickname = state.nickname(),
                 "spawning cross-chain queries thread on {} for shard {}", host, shard_id
@@ -216,7 +218,7 @@ where
             )
         });
 
-        tokio::spawn({
+        join_set.spawn_task({
             info!(
                 nickname = state.nickname(),
                 "spawning notifications thread on {} for shard {}", host, shard_id
@@ -242,7 +244,7 @@ where
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
 
-        let handle = tokio::spawn(async move {
+        let handle = join_set.spawn_task(async move {
             let server_address = SocketAddr::from((IpAddr::from_str(&host)?, port));
 
             let reflection_service = tonic_reflection::server::Builder::configure()
