@@ -871,7 +871,7 @@ impl NodeService {
                     .to_string();
                 Ok((id, link))
             })
-            .collect::<Result<HashMap<_,_>>>()?;
+            .collect::<Result<HashMap<_, _>>>()?;
         if let Some(link) = values.get(&application_id) {
             return Ok(ApplicationWrapper::from(link.to_string()));
         }
