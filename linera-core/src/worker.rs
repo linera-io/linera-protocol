@@ -729,7 +729,7 @@ where
         chain_id: ChainId,
         request_builder: impl FnOnce(
             oneshot::Sender<Result<Response, WorkerError>>,
-        ) -> ChainWorkerRequest,
+        ) -> ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<Response, WorkerError> {
         let chain_actor = ChainWorkerActor::spawn(
             self.chain_worker_config.clone(),

@@ -10,15 +10,18 @@ use linera_base::{
     data_types::{BlockHeight, HashedBlob},
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types::{
-    Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, MessageBundle,
-    Origin, Target,
+use linera_chain::{
+    data_types::{
+        Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, MessageBundle,
+        Origin, Target,
+    },
+    ChainStateView,
 };
 use linera_execution::{Query, Response, UserApplicationDescription, UserApplicationId};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use tokio::{
-    sync::{mpsc, oneshot},
+    sync::{mpsc, oneshot, OwnedRwLockReadGuard},
     task::JoinSet,
 };
 use tracing::{instrument, trace};
@@ -37,7 +40,11 @@ use crate::{
 };
 
 /// A request for the [`ChainWorkerActor`].
-pub enum ChainWorkerRequest {
+pub enum ChainWorkerRequest<Context>
+where
+    Context: linera_views::common::Context + Clone + Send + Sync + 'static,
+    ViewError: From<Context::Error>,
+{
     /// Reads the certificate for a requested [`BlockHeight`].
     #[cfg(with_testing)]
     ReadCertificate {
@@ -53,6 +60,12 @@ pub enum ChainWorkerRequest {
         height: BlockHeight,
         index: u32,
         callback: oneshot::Sender<Result<Option<Event>, WorkerError>>,
+    },
+
+    /// Request a read-only view of the [`ChainStateView`].
+    GetChainStateView {
+        callback:
+            oneshot::Sender<Result<OwnedRwLockReadGuard<ChainStateView<Context>>, WorkerError>>,
     },
 
     /// Query an application's state.
@@ -133,7 +146,7 @@ where
     ViewError: From<StorageClient::ContextError>,
 {
     worker: ChainWorkerState<StorageClient>,
-    incoming_requests: mpsc::UnboundedReceiver<ChainWorkerRequest>,
+    incoming_requests: mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>,
 }
 
 impl<StorageClient> ChainWorkerActor<StorageClient>
@@ -150,7 +163,8 @@ where
         blob_cache: Arc<ValueCache<BlobId, HashedBlob>>,
         chain_id: ChainId,
         join_set: &mut JoinSet<()>,
-    ) -> Result<mpsc::UnboundedSender<ChainWorkerRequest>, WorkerError> {
+    ) -> Result<mpsc::UnboundedSender<ChainWorkerRequest<StorageClient::Context>>, WorkerError>
+    {
         let worker = ChainWorkerState::load(
             config,
             storage,
@@ -195,6 +209,9 @@ where
                             .find_event_in_inbox(inbox_id, certificate_hash, height, index)
                             .await,
                     );
+                }
+                ChainWorkerRequest::GetChainStateView { callback } => {
+                    let _ = callback.send(self.worker.chain_state_view().await);
                 }
                 ChainWorkerRequest::QueryApplication { query, callback } => {
                     let _ = callback.send(self.worker.query_application(query).await);
