@@ -232,6 +232,7 @@ impl InboxEntry {
 
 /// A view accessing the state of a chain.
 #[derive(Debug, RootView, ClonableView, SimpleObject)]
+#[graphql(cache_control(no_cache))]
 pub struct ChainStateView<C>
 where
     C: Clone + Context + Send + Sync + 'static,
