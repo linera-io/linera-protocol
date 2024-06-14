@@ -33,6 +33,7 @@ use linera_views::{
     common::Context,
     views::{RootView, View, ViewError},
 };
+use tokio::sync::RwLock;
 use tracing::{debug, warn};
 #[cfg(with_testing)]
 use {linera_base::identifiers::BytecodeId, linera_chain::data_types::Event};
@@ -53,6 +54,7 @@ where
     config: ChainWorkerConfig,
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
+    shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
     recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
     knows_chain_is_active: bool,
@@ -77,6 +79,7 @@ where
             config,
             storage,
             chain,
+            shared_chain_view: None,
             recent_hashed_certificate_values: certificate_value_cache,
             recent_hashed_blobs: blob_cache,
             knows_chain_is_active: false,
@@ -952,7 +955,20 @@ where
     }
 
     /// Stores the chain state in persistent storage.
+    ///
+    /// Waits until the [`ChainStateView`] is no longer shared before persisting the changes.
     async fn save(&mut self) -> Result<(), WorkerError> {
+        // SAFETY: this is the only place a write-lock is acquired, and read-locks are acquired in
+        // the `chain_state_view` method, which has a `&mut self` receiver like this `save` method.
+        // That means that when the write-lock is acquired, no readers will be waiting to acquire
+        // the lock. This is important because otherwise readers could have a stale view of the
+        // chain state.
+        let maybe_shared_chain_view = self.shared_chain_view.take();
+        let _maybe_write_guard = match &maybe_shared_chain_view {
+            Some(shared_chain_view) => Some(shared_chain_view.write().await),
+            None => None,
+        };
+
         Ok(self.chain.save().await?)
     }
 }
