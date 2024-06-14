@@ -8,7 +8,7 @@ use linera_views::{
     common::Context,
     queue_view::QueueView,
     register_view::RegisterView,
-    views::{View, ViewError},
+    views::{ClonableView, View, ViewError},
 };
 
 #[cfg(test)]
@@ -22,7 +22,7 @@ mod outbox_tests;
 /// we just send the certified blocks over and let the receivers figure out what were the
 /// messages for them.
 /// * When marking block heights as received, messages at lower heights are also marked (ie. dequeued).
-#[derive(Debug, View, async_graphql::SimpleObject)]
+#[derive(Debug, ClonableView, View, async_graphql::SimpleObject)]
 pub struct OutboxStateView<C>
 where
     C: Context + Send + Sync + 'static,

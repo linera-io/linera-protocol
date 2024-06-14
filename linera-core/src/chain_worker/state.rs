@@ -31,8 +31,9 @@ use linera_execution::{
 use linera_storage::Storage;
 use linera_views::{
     common::Context,
-    views::{RootView, View, ViewError},
+    views::{ClonableView, RootView, View, ViewError},
 };
+use tokio::sync::{OwnedRwLockReadGuard, RwLock};
 use tracing::{debug, warn};
 #[cfg(with_testing)]
 use {linera_base::identifiers::BytecodeId, linera_chain::data_types::Event};
@@ -53,6 +54,7 @@ where
     config: ChainWorkerConfig,
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
+    shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
     recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
     knows_chain_is_active: bool,
@@ -77,6 +79,7 @@ where
             config,
             storage,
             chain,
+            shared_chain_view: None,
             recent_hashed_certificate_values: certificate_value_cache,
             recent_hashed_blobs: blob_cache,
             knows_chain_is_active: false,
@@ -86,6 +89,26 @@ where
     /// Returns the [`ChainId`] of the chain handled by this worker.
     pub fn chain_id(&self) -> ChainId {
         self.chain.chain_id()
+    }
+
+    /// Returns a read-only view of the [`ChainStateView`].
+    ///
+    /// The returned view holds a lock on the chain state, which prevents the worker from changing
+    /// it.
+    pub async fn chain_state_view(
+        &mut self,
+    ) -> Result<OwnedRwLockReadGuard<ChainStateView<StorageClient::Context>>, WorkerError> {
+        if self.shared_chain_view.is_none() {
+            self.shared_chain_view = Some(Arc::new(RwLock::new(self.chain.clone_unchecked()?)));
+        }
+
+        Ok(self
+            .shared_chain_view
+            .as_ref()
+            .expect("`shared_chain_view` should be initialized above")
+            .clone()
+            .read_owned()
+            .await)
     }
 
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
@@ -240,7 +263,7 @@ where
             })
         }
         let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
-        self.chain.save().await?;
+        self.save().await?;
         Ok((info, actions))
     }
 
@@ -358,7 +381,7 @@ where
                 .await;
         }
         let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
-        self.chain.save().await?;
+        self.save().await?;
         // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
         let actions = self.create_network_actions().await?;
         Ok((info, actions))
@@ -414,7 +437,7 @@ where
             self.storage.clock().current_time(),
         );
         let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
-        self.chain.save().await?;
+        self.save().await?;
         let round = self.chain.manager.get().current_round;
         if round > old_round {
             actions.notifications.push(Notification {
@@ -545,7 +568,7 @@ where
             },
         });
         // Persist chain.
-        self.chain.save().await?;
+        self.save().await?;
         self.recent_hashed_certificate_values
             .insert(Cow::Owned(certificate.value))
             .await;
@@ -594,7 +617,7 @@ where
             return Ok(None);
         }
         // Save the chain.
-        self.chain.save().await?;
+        self.save().await?;
         Ok(Some(last_updated_height))
     }
 
@@ -617,7 +640,7 @@ where
             }
         }
 
-        self.chain.save().await?;
+        self.save().await?;
 
         Ok(height_with_fully_delivered_messages)
     }
@@ -635,7 +658,7 @@ where
                 let local_time = self.storage.clock().current_time();
                 let manager = self.chain.manager.get_mut();
                 if manager.vote_timeout(chain_id, height, *epoch, key_pair, local_time) {
-                    self.chain.save().await?;
+                    self.save().await?;
                 }
             }
         }
@@ -651,7 +674,7 @@ where
                     let key_pair = self.config.key_pair();
                     let manager = self.chain.manager.get_mut();
                     if manager.vote_fallback(chain_id, height, *epoch, key_pair) {
-                        self.chain.save().await?;
+                        self.save().await?;
                     }
                 }
             }
@@ -949,6 +972,24 @@ where
             recipient,
             bundle_vecs,
         })
+    }
+
+    /// Stores the chain state in persistent storage.
+    ///
+    /// Waits until the [`ChainStateView`] is no longer shared before persisting the changes.
+    async fn save(&mut self) -> Result<(), WorkerError> {
+        // SAFETY: this is the only place a write-lock is acquired, and read-locks are acquired in
+        // the `chain_state_view` method, which has a `&mut self` receiver like this `save` method.
+        // That means that when the write-lock is acquired, no readers will be waiting to acquire
+        // the lock. This is important because otherwise readers could have a stale view of the
+        // chain state.
+        let maybe_shared_chain_view = self.shared_chain_view.take();
+        let _maybe_write_guard = match &maybe_shared_chain_view {
+            Some(shared_chain_view) => Some(shared_chain_view.write().await),
+            None => None,
+        };
+
+        Ok(self.chain.save().await?)
     }
 }
 

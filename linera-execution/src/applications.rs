@@ -12,7 +12,7 @@ use linera_base::{
 use linera_views::{
     common::Context,
     map_view::HashedMapView,
-    views::{HashableView, ViewError},
+    views::{ClonableView, HashableView, ViewError},
 };
 use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
@@ -68,7 +68,7 @@ pub struct BytecodeLocation {
     pub operation_index: u32,
 }
 
-#[derive(Debug, HashableView)]
+#[derive(Debug, ClonableView, HashableView)]
 pub struct ApplicationRegistryView<C> {
     /// The application bytecodes that have been published.
     pub published_bytecodes: HashedMapView<C, BytecodeId, BytecodeLocation>,

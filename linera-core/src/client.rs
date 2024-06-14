@@ -45,6 +45,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::Serialize;
 use thiserror::Error;
+use tokio::sync::OwnedRwLockReadGuard;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, info};
 
@@ -332,13 +333,8 @@ where
     /// Obtains a `ChainStateView` for a given `ChainId`.
     pub async fn chain_state_view(
         &self,
-    ) -> Result<Arc<ChainStateView<S::Context>>, LocalNodeError> {
-        let chain_state_view = self
-            .storage_client()
-            .await
-            .load_chain(self.chain_id)
-            .await?;
-        Ok(Arc::new(chain_state_view))
+    ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, LocalNodeError> {
+        Ok(self.node_client.chain_state_view(self.chain_id).await?)
     }
 
     /// Subscribes to notifications from this client's chain.
@@ -657,8 +653,7 @@ where
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
-        let storage_client = self.storage_client().await;
-        let recent_hashed_blobs = self.node_client.recent_hashed_blobs().await;
+        let local_node = self.node_client.clone();
         let chain_manager_pending_blobs = self.chain_managers_pending_blobs().await?;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
         communicate_with_quorum(
@@ -669,8 +664,7 @@ where
                 let mut updater = ValidatorUpdater {
                     name,
                     node,
-                    storage: storage_client.clone(),
-                    local_node_recent_hashed_blobs: recent_hashed_blobs.clone(),
+                    local_node: local_node.clone(),
                     local_node_chain_managers_pending_blobs: chain_manager_pending_blobs.clone(),
                 };
                 Box::pin(async move {
@@ -695,8 +689,7 @@ where
         action: CommunicateAction,
         value: HashedCertificateValue,
     ) -> Result<Certificate, ChainClientError> {
-        let storage_client = self.storage_client().await;
-        let recent_hashed_blobs = self.node_client.recent_hashed_blobs().await;
+        let local_node = self.node_client.clone();
         let chain_manager_pending_blobs = self.chain_managers_pending_blobs().await?;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
@@ -707,8 +700,7 @@ where
                 let mut updater = ValidatorUpdater {
                     name,
                     node,
-                    storage: storage_client.clone(),
-                    local_node_recent_hashed_blobs: recent_hashed_blobs.clone(),
+                    local_node: local_node.clone(),
                     local_node_chain_managers_pending_blobs: chain_manager_pending_blobs.clone(),
                 };
                 let action = action.clone();

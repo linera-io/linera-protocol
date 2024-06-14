@@ -9,8 +9,11 @@ use linera_base::{
     data_types::{ArithmeticError, Blob, BlockHeight, HashedBlob},
     identifiers::{BlobId, ChainId, MessageId},
 };
-use linera_chain::data_types::{
-    Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, LiteCertificate,
+use linera_chain::{
+    data_types::{
+        Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, LiteCertificate,
+    },
+    ChainStateView,
 };
 use linera_execution::{
     committee::ValidatorName, BytecodeLocation, Query, Response, UserApplicationDescription,
@@ -20,6 +23,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;
 use thiserror::Error;
+use tokio::sync::OwnedRwLockReadGuard;
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
@@ -294,6 +298,19 @@ where
         }
         // Done with all certificates.
         info
+    }
+
+    /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
+    /// [`ChainId`].
+    ///
+    /// The returned view holds a lock on the chain state, which prevents the local node from
+    /// changing the state of that chain.
+    pub async fn chain_state_view(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, WorkerError> {
+        let node = self.node.lock().await;
+        node.state.chain_state_view(chain_id).await
     }
 
     pub(crate) async fn local_chain_info(
