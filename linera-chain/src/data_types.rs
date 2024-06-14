@@ -689,6 +689,11 @@ impl ExecutedBlock {
     ) -> Option<MessageId> {
         let block = &self.block;
         let transaction_index = block.incoming_messages.len().checked_add(operation_index)?;
+        if message_index
+            >= u32::try_from(self.outcome.messages.get(transaction_index)?.len()).ok()?
+        {
+            return None;
+        }
         let first_message_index = u32::try_from(
             self.outcome
                 .messages
@@ -699,13 +704,7 @@ impl ExecutedBlock {
         )
         .ok()?;
         let index = first_message_index.checked_add(message_index)?;
-        if message_index
-            < u32::try_from(self.outcome.messages.get(transaction_index)?.len()).ok()?
-        {
-            Some(self.message_id(index))
-        } else {
-            None
-        }
+        Some(self.message_id(index))
     }
 
     pub fn message_by_id(&self, message_id: &MessageId) -> Option<&OutgoingMessage> {
