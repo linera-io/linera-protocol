@@ -1265,7 +1265,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
         .await?;
 
     // Setting up the application crowd funding
-    let deadline = Timestamp::from(std::u64::MAX);
+    let deadline = Timestamp::from(u64::MAX);
     let target = Amount::ONE;
     let state_crowd = InstantiationArgument {
         owner: account_owner1,

@@ -73,7 +73,7 @@ async fn queue_view_mutability_check() {
             if choice == 4 {
                 // Doing the rollback
                 view.rollback();
-                new_vector = vector.clone();
+                new_vector.clone_from(&vector);
             }
             let new_elements = view.queue.elements().await.unwrap();
             let new_hash = view.crypto_hash().await.unwrap();
@@ -86,7 +86,7 @@ async fn queue_view_mutability_check() {
             assert_eq!(new_elements, new_vector);
         }
         if save {
-            vector = new_vector.clone();
+            vector.clone_from(&new_vector);
             view.save().await.unwrap();
         }
     }
