@@ -227,7 +227,7 @@ pub struct ChainClientOptions {
 /// * As a rule, operations are considered successful (and communication may stop) when
 /// they succeeded in gathering a quorum of responses.
 pub struct ChainClient<ValidatorNodeProvider, Storage> {
-    /// The Linera [`Client`] that manages operations for this chain client.
+    /// The Linera [`Client`] that manages operations on this chain.
     client: Arc<Client<ValidatorNodeProvider, Storage>>,
     /// The off-chain chain ID.
     chain_id: ChainId,
