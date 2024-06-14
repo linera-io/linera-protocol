@@ -166,7 +166,7 @@ impl Wallet {
         Ok(())
     }
 
-    pub async fn update_from_state<P, S>(&mut self, state: &mut ChainClient<P, S>)
+    pub async fn update_from_state<P, S>(&mut self, state: &ChainClient<P, S>)
     where
         P: ValidatorNodeProvider + Sync + 'static,
         S: Storage + Clone + Send + Sync + 'static,

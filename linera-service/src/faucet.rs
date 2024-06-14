@@ -105,7 +105,7 @@ where
 
     /// Returns the current committee's validators.
     async fn current_validators(&self) -> Result<Vec<Validator>, Error> {
-        let mut client = self.client.lock().await;
+        let client = self.client.lock().await;
         let committee = client.local_committee().await?;
         Ok(committee
             .validators()
@@ -253,7 +253,7 @@ where
     /// Creates a new instance of the faucet service.
     pub async fn new(
         port: NonZeroU16,
-        mut client: ChainClient<P, S>,
+        client: ChainClient<P, S>,
         context: C,
         amount: Amount,
         end_timestamp: Timestamp,

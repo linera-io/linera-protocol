@@ -234,7 +234,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.clients.try_client_lock(&chain_id).await?;
         Ok(client.subscribe().await?)
     }
 }
@@ -252,7 +252,7 @@ where
         chain_id: ChainId,
     ) -> Result<CryptoHash, Error> {
         let certificate = self
-            .apply_client_command(&chain_id, move |mut client| {
+            .apply_client_command(&chain_id, move |client| {
                 let operation = Operation::System(system_operation.clone());
                 async move {
                     let result = client
@@ -284,7 +284,7 @@ where
         >,
     {
         loop {
-            let mut client = self.clients.try_client_lock(chain_id).await?;
+            let client = self.clients.try_client_lock(chain_id).await?;
             let mut stream = client.subscribe().await?;
             let (result, mut client) = f(client).await;
             self.context.lock().await.update_wallet(&mut *client).await;
@@ -352,7 +352,7 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        self.apply_client_command(&chain_id, move |mut client| {
+        self.apply_client_command(&chain_id, move |client| {
             let user_data = user_data.clone();
             async move {
                 let result = client
@@ -379,7 +379,7 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        self.apply_client_command(&chain_id, move |mut client| {
+        self.apply_client_command(&chain_id, move |client| {
             let user_data = user_data.clone();
             async move {
                 let result = client
@@ -410,7 +410,7 @@ where
         let ownership = ChainOwnership::single(public_key);
         let balance = balance.unwrap_or(Amount::ZERO);
         let message_id = self
-            .apply_client_command(&chain_id, move |mut client| {
+            .apply_client_command(&chain_id, move |client| {
                 let ownership = ownership.clone();
                 async move {
                     let result = client
@@ -481,7 +481,7 @@ where
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds, timeout_config);
         let balance = balance.unwrap_or(Amount::ZERO);
         let message_id = self
-            .apply_client_command(&chain_id, move |mut client| {
+            .apply_client_command(&chain_id, move |client| {
                 let ownership = ownership.clone();
                 let application_permissions = application_permissions.clone().unwrap_or_default();
                 async move {
@@ -500,7 +500,7 @@ where
     /// Closes the chain.
     async fn close_chain(&self, chain_id: ChainId) -> Result<CryptoHash, Error> {
         let certificate = self
-            .apply_client_command(&chain_id, |mut client| async move {
+            .apply_client_command(&chain_id, |client| async move {
                 let result = client.close_chain().await.map_err(Error::from);
                 (result, client)
             })
@@ -640,7 +640,7 @@ where
         contract: Bytecode,
         service: Bytecode,
     ) -> Result<BytecodeId, Error> {
-        self.apply_client_command(&chain_id, move |mut client| {
+        self.apply_client_command(&chain_id, move |client| {
             let contract = contract.clone();
             let service = service.clone();
             async move {
@@ -657,7 +657,7 @@ where
 
     /// Publishes a new blob.
     async fn publish_blob(&self, chain_id: ChainId, blob: Blob) -> Result<BlobId, Error> {
-        self.apply_client_command(&chain_id, move |mut client| {
+        self.apply_client_command(&chain_id, move |client| {
             let blob = blob.clone();
             async move {
                 let result = client
@@ -680,7 +680,7 @@ where
         instantiation_argument: String,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ApplicationId, Error> {
-        self.apply_client_command(&chain_id, move |mut client| {
+        self.apply_client_command(&chain_id, move |client| {
             let parameters = parameters.as_bytes().to_vec();
             let instantiation_argument = instantiation_argument.as_bytes().to_vec();
             let required_application_ids = required_application_ids.clone();
@@ -710,11 +710,11 @@ where
         target_chain_id: Option<ChainId>,
     ) -> Result<CryptoHash, Error> {
         loop {
-            let mut client = self.clients.try_client_lock(&chain_id).await?;
+            let client = self.clients.try_client_lock(&chain_id).await?;
             let result = client
                 .request_application(application_id, target_chain_id)
                 .await;
-            self.context.lock().await.update_wallet(&mut *client).await;
+            self.context.lock().await.update_wallet(&*client).await;
             let timeout = match result? {
                 ClientOutcome::Committed(certificate) => return Ok(certificate.hash()),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -1135,7 +1135,7 @@ where
             .collect::<Vec<_>>();
 
         let hash = loop {
-            let Some(mut client) = self.clients.client_lock(&chain_id).await else {
+            let Some(client) = self.clients.client_lock(&chain_id).await else {
                 return Err(NodeServiceError::UnknownChainId {
                     chain_id: chain_id.to_string(),
                 });
