@@ -63,9 +63,9 @@ pub trait ClientContext {
         timestamp: Timestamp,
     );
 
-    async fn update_wallet<'a>(
-        &'a mut self,
-        client: &'a mut ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
+    async fn update_wallet(
+        &mut self,
+        client: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
     ) where
         ViewError: From<<Self::Storage as Storage>::ContextError>;
 }

@@ -73,7 +73,7 @@ where
     let (listener, _listen_handle, _) = sender.listen().await?;
     tokio::spawn(listener);
     {
-        let mut sender = sender.lock().await;
+        let sender = sender.lock().await;
         let certificate = sender
             .transfer_to_account(
                 None,
@@ -84,8 +84,8 @@ where
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(sender.next_block_height, BlockHeight::from(1));
-        assert!(sender.pending_block.is_none());
+        assert_eq!(sender.next_block_height(), BlockHeight::from(1));
+        assert!(sender.pending_block().is_none());
         assert_eq!(
             sender.local_balance().await.unwrap(),
             Amount::from_millis(999)
@@ -123,11 +123,11 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let owner = sender.identity().await?;
-    let mut receiver = builder
+    let receiver = builder
         .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
     let friend = receiver.identity().await?;
@@ -250,14 +250,14 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let new_key_pair = KeyPair::generate();
     let new_owner = Owner::from(new_key_pair.public());
     let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap().unwrap();
-    assert_eq!(sender.next_block_height, BlockHeight::from(1));
-    assert!(sender.pending_block.is_none());
+    assert_eq!(sender.next_block_height(), BlockHeight::from(1));
+    assert!(sender.pending_block().is_none());
     assert_eq!(sender.identity().await.unwrap(), new_owner);
     assert_eq!(
         builder
@@ -299,7 +299,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
 
@@ -309,10 +309,10 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(sender.next_block_height, BlockHeight::from(1));
-    assert!(sender.pending_block.is_none());
+    assert_eq!(sender.next_block_height(), BlockHeight::from(1));
+    assert!(sender.pending_block().is_none());
     assert_matches!(
-        sender.key_pair().await.map(KeyPair::public), // KeyPair isn't Debug; using PublicKey.
+        sender.key_pair().await.map(|kp| KeyPair::public(&kp)), // KeyPair isn't Debug; using PublicKey.
         Err(ChainClientError::CannotFindKeyForChain(_))
     );
     assert_eq!(
@@ -355,7 +355,7 @@ where
     ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let new_key_pair = KeyPair::generate();
@@ -364,8 +364,8 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(sender.next_block_height, BlockHeight::from(1));
-    assert!(sender.pending_block.is_none());
+    assert_eq!(sender.next_block_height(), BlockHeight::from(1));
+    assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
@@ -390,13 +390,13 @@ where
         )
         .await
         .unwrap();
-    assert_eq!(sender.next_block_height, BlockHeight::from(2));
+    assert_eq!(sender.next_block_height(), BlockHeight::from(2));
     // Make a client to try the new key.
-    let mut client = builder
+    let client = builder
         .make_client(
             sender.chain_id,
             new_key_pair,
-            sender.block_hash,
+            sender.block_hash(),
             BlockHeight::from(2),
         )
         .await?;
@@ -506,7 +506,7 @@ where
     builder
         .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
         .await?;
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let new_key_pair = KeyPair::generate();
@@ -520,12 +520,12 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(sender.next_block_height, BlockHeight::from(1));
-    assert!(sender.pending_block.is_none());
+    assert_eq!(sender.next_block_height(), BlockHeight::from(1));
+    assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new chain.
     let new_id = ChainId::child(message_id);
-    let mut client = builder
+    let client = builder
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     client.receive_certificate(certificate).await.unwrap();
@@ -550,10 +550,10 @@ where
     builder
         .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
         .await?;
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
-    let mut parent = builder
+    let parent = builder
         .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
     let new_key_pair = KeyPair::generate();
@@ -584,9 +584,9 @@ where
         .unwrap();
     let new_id2 = ChainId::child(open_chain_message_id);
     assert_eq!(new_id, new_id2);
-    assert_eq!(sender.next_block_height, BlockHeight::from(1));
-    assert_eq!(parent.next_block_height, BlockHeight::from(1));
-    assert!(sender.pending_block.is_none());
+    assert_eq!(sender.next_block_height(), BlockHeight::from(1));
+    assert_eq!(parent.next_block_height(), BlockHeight::from(1));
+    assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
@@ -605,7 +605,7 @@ where
         "Unexpected certificate value",
     );
     // Make a client to try the new chain.
-    let mut client = builder
+    let client = builder
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     client.receive_certificate(certificate).await.unwrap();
@@ -654,7 +654,7 @@ where
     builder
         .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
         .await?;
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let new_key_pair = KeyPair::generate();
@@ -685,8 +685,8 @@ where
         .unwrap();
     let new_id2 = ChainId::child(open_chain_message_id);
     assert_eq!(new_id, new_id2);
-    assert_eq!(sender.next_block_height, BlockHeight::from(2));
-    assert!(sender.pending_block.is_none());
+    assert_eq!(sender.next_block_height(), BlockHeight::from(2));
+    assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
@@ -705,7 +705,7 @@ where
         "Unexpected certificate value",
     );
     // Make a client to try the new chain.
-    let mut client = builder
+    let client = builder
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     client.receive_certificate(certificate).await.unwrap();
@@ -744,7 +744,7 @@ where
     builder
         .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
         .await?;
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let new_key_pair = KeyPair::generate();
@@ -768,11 +768,11 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(sender.next_block_height, BlockHeight::from(2));
-    assert!(sender.pending_block.is_none());
+    assert_eq!(sender.next_block_height(), BlockHeight::from(2));
+    assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new chain.
-    let mut client = builder
+    let client = builder
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     // Must process the creation certificate before using the new chain.
@@ -816,10 +816,10 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
-    let mut client1 = builder
+    let client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
-    let mut client2 = builder
+    let client2 = builder
         .add_initial_chain(ChainDescription::Root(2), Amount::from_tokens(4))
         .await?;
 
@@ -831,8 +831,8 @@ where
         ),
         "Unexpected certificate value",
     );
-    assert_eq!(client1.next_block_height, BlockHeight::from(1));
-    assert!(client1.pending_block.is_none());
+    assert_eq!(client1.next_block_height(), BlockHeight::from(1));
+    assert!(client1.pending_block().is_none());
     assert!(client1.key_pair().await.is_ok());
     assert_eq!(
         builder
@@ -930,7 +930,7 @@ where
     ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 2).await?;
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let result = sender
@@ -948,8 +948,8 @@ where
         )),
         "unexpected result"
     );
-    assert_eq!(sender.next_block_height, BlockHeight::ZERO);
-    assert!(sender.pending_block.is_some());
+    assert_eq!(sender.next_block_height(), BlockHeight::ZERO);
+    assert!(sender.pending_block().is_some());
     assert_eq!(
         sender.local_balance().await.unwrap(),
         Amount::from_tokens(4)
@@ -969,10 +969,10 @@ where
     ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let mut client1 = builder
+    let client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;
-    let mut client2 = builder
+    let client2 = builder
         .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
     assert_eq!(
@@ -997,8 +997,8 @@ where
         .unwrap()
         .unwrap();
 
-    assert_eq!(client1.next_block_height, BlockHeight::from(1));
-    assert!(client1.pending_block.is_none());
+    assert_eq!(client1.next_block_height(), BlockHeight::from(1));
+    assert!(client1.pending_block().is_none());
     assert_eq!(client1.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         client1.query_system_application(SystemQuery).await.unwrap(),
@@ -1030,7 +1030,7 @@ where
     );
 
     // Process the inbox and send back some money.
-    assert_eq!(client2.next_block_height, BlockHeight::ZERO);
+    assert_eq!(client2.next_block_height(), BlockHeight::ZERO);
     client2
         .transfer_to_account(
             None,
@@ -1040,8 +1040,8 @@ where
         )
         .await
         .unwrap();
-    assert_eq!(client2.next_block_height, BlockHeight::from(1));
-    assert!(client2.pending_block.is_none());
+    assert_eq!(client2.next_block_height(), BlockHeight::from(1));
+    assert!(client2.pending_block().is_none());
     assert_eq!(
         client2.local_balance().await.unwrap(),
         Amount::from_tokens(2)
@@ -1074,10 +1074,10 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
-    let mut client1 = builder
+    let client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;
-    let mut client2 = builder
+    let client2 = builder
         .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
     let certificate = client1
@@ -1095,8 +1095,8 @@ where
         client1.local_balance().await.unwrap(),
         Amount::from_millis(999)
     );
-    assert_eq!(client1.next_block_height, BlockHeight::from(1));
-    assert!(client1.pending_block.is_none());
+    assert_eq!(client1.next_block_height(), BlockHeight::from(1));
+    assert!(client1.pending_block().is_none());
     // The receiver doesn't know about the transfer.
     client2.process_inbox().await.unwrap();
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
@@ -1123,13 +1123,13 @@ where
     ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let mut client1 = builder
+    let client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;
-    let mut client2 = builder
+    let client2 = builder
         .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
-    let mut client3 = builder
+    let client3 = builder
         .add_initial_chain(ChainDescription::Root(3), Amount::ZERO)
         .await?;
 
@@ -1157,7 +1157,7 @@ where
         .communicate_chain_updates(
             &builder.initial_committee,
             client1.chain_id,
-            client1.next_block_height,
+            client1.next_block_height(),
             CrossChainMessageDelivery::NonBlocking,
         )
         .await
@@ -1197,11 +1197,11 @@ where
         .unwrap();
     // Blocks were executed locally.
     assert_eq!(client1.local_balance().await.unwrap(), Amount::ONE);
-    assert_eq!(client1.next_block_height, BlockHeight::from(2));
-    assert!(client1.pending_block.is_none());
+    assert_eq!(client1.next_block_height(), BlockHeight::from(2));
+    assert!(client1.pending_block().is_none());
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
-    assert_eq!(client2.next_block_height, BlockHeight::from(1));
-    assert!(client2.pending_block.is_none());
+    assert_eq!(client2.next_block_height(), BlockHeight::from(1));
+    assert!(client2.pending_block().is_none());
     // Last one was not confirmed remotely, hence a conservative balance.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
@@ -1225,10 +1225,10 @@ where
     ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let mut admin = builder
+    let admin = builder
         .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
         .await?;
-    let mut user = builder
+    let user = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::ZERO)
         .await?;
     let validators = builder.initial_committee.validators().clone();
@@ -1254,8 +1254,8 @@ where
     // Create a new committee.
     let committee = Committee::new(validators, ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
-    assert_eq!(admin.next_block_height, BlockHeight::from(4));
-    assert!(admin.pending_block.is_none());
+    assert_eq!(admin.next_block_height(), BlockHeight::from(4));
+    assert!(admin.pending_block().is_none());
     assert!(admin.key_pair().await.is_ok());
     assert_eq!(admin.epoch().await.unwrap(), Epoch::from(2));
 
@@ -1356,7 +1356,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;
     let obtained_error = sender
@@ -1413,7 +1413,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
     let description = ChainDescription::Root(1);
     let chain_id = ChainId::from(description);
-    let mut client_a = builder
+    let client_a = builder
         .add_initial_chain(description, Amount::from_tokens(10))
         .await?;
     let pub_key0 = client_a.public_key().await.unwrap();
@@ -1430,11 +1430,11 @@ where
     }
     .into();
     client_a.execute_operation(owner_change_op).await.unwrap();
-    let mut client_b = builder
+    let client_b = builder
         .make_client(
             chain_id,
             key_pair1,
-            client_a.block_hash,
+            client_a.block_hash(),
             BlockHeight::from(1),
         )
         .await?;
@@ -1447,7 +1447,7 @@ where
     client_a.synchronize_from_validators().await.unwrap();
     assert_eq!(expected_blob_id, blob_id);
     assert_eq!(certificate.round, Round::MultiLeader(0));
-    let previous_block_hash = client_a.block_hash.unwrap();
+    let previous_block_hash = client_a.block_hash().unwrap();
 
     // Validators goes back up
     builder.set_fault_type([0], FaultType::Honest).await;
@@ -1495,7 +1495,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let description = ChainDescription::Root(1);
     let chain_id = ChainId::from(description);
-    let mut client = builder
+    let client = builder
         .add_initial_chain(description, Amount::from_tokens(3))
         .await?;
     let pub_key0 = client.public_key().await.unwrap();
@@ -1621,7 +1621,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let description = ChainDescription::Root(1);
     let chain_id = ChainId::from(description);
-    let mut client0 = builder
+    let client0 = builder
         .add_initial_chain(description, Amount::from_tokens(10))
         .await?;
     let pub_key0 = client0.public_key().await.unwrap();
@@ -1638,11 +1638,11 @@ where
     }
     .into();
     client0.execute_operation(owner_change_op).await.unwrap();
-    let mut client1 = builder
+    let client1 = builder
         .make_client(
             chain_id,
             key_pair1,
-            client0.block_hash,
+            client0.block_hash(),
             BlockHeight::from(1),
         )
         .await?;
@@ -1670,8 +1670,8 @@ where
     assert_eq!(manager.current_round, Round::MultiLeader(0));
     let result = client1.publish_blob(HashedBlob::test_blob("blob1")).await;
     assert!(result.is_err());
-    assert!(client1.pending_block.is_some());
-    assert!(!client1.pending_blobs.is_empty());
+    assert!(client1.pending_block().is_some());
+    assert!(!client1.pending_blobs().is_empty());
 
     // Finally, the validators are online and honest again.
     builder.set_fault_type([1, 2], FaultType::Honest).await;
@@ -1685,7 +1685,7 @@ where
         manager.requested_locked.unwrap().round,
         Round::MultiLeader(1)
     );
-    assert!(client0.pending_block.is_some());
+    assert!(client0.pending_block().is_some());
 
     // Client 0 now only tries to burn 1 token. Before that, they automatically finalize the
     // pending block, which publishes the blob, leaving 10 - 1 = 9.
@@ -1699,7 +1699,7 @@ where
         client0.local_balance().await.unwrap(),
         Amount::from_tokens(9)
     );
-    assert!(client0.pending_block.is_none());
+    assert!(client0.pending_block().is_none());
 
     // Burn another token so Client 1 sees that the blob is already published
     client1
@@ -1712,8 +1712,8 @@ where
         client1.local_balance().await.unwrap(),
         Amount::from_tokens(8)
     );
-    assert!(client1.pending_block.is_none());
-    assert!(client1.pending_blobs.is_empty());
+    assert!(client1.pending_block().is_none());
+    assert!(client1.pending_blobs().is_empty());
     Ok(())
 }
 
@@ -1730,7 +1730,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let description = ChainDescription::Root(1);
-    let mut client = builder
+    let client = builder
         .add_initial_chain(description, Amount::from_tokens(10))
         .await?;
 
@@ -1777,7 +1777,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
     let description = ChainDescription::Root(1);
     let chain_id = ChainId::from(description);
-    let mut client0 = builder
+    let client0 = builder
         .add_initial_chain(description, Amount::from_tokens(10))
         .await?;
     let pub_key0 = client0.public_key().await.unwrap();
@@ -1794,11 +1794,11 @@ where
     }
     .into();
     client0.execute_operation(owner_change_op).await.unwrap();
-    let mut client1 = builder
+    let client1 = builder
         .make_client(
             chain_id,
             key_pair1,
-            client0.block_hash,
+            client0.block_hash(),
             BlockHeight::from(1),
         )
         .await?;
@@ -1867,7 +1867,7 @@ where
         Round::MultiLeader(0)
     );
     assert_eq!(manager.current_round, Round::MultiLeader(1));
-    assert!(client1.pending_block.is_some());
+    assert!(client1.pending_block().is_some());
     client1
         .burn(None, Amount::from_tokens(4), UserData::default())
         .await
@@ -1893,7 +1893,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let mut receiver = builder
@@ -1910,7 +1910,7 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.message_policy = MessagePolicy::Ignore;
+    receiver.options_mut().message_policy = MessagePolicy::Ignore;
     receiver.receive_certificate(cert).await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
@@ -1921,7 +1921,7 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.message_policy = MessagePolicy::Reject;
+    receiver.options_mut().message_policy = MessagePolicy::Reject;
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     sender

@@ -322,23 +322,8 @@ where
         }
     }
 
-    pub fn new_for_client(
-        nickname: String,
-        storage: StorageClient,
-        recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
-        recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
-        delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
-    ) -> Self {
-        WorkerState {
-            nickname,
-            storage,
-            chain_worker_config: ChainWorkerConfig::default(),
-            recent_hashed_certificate_values,
-            recent_hashed_blobs,
-            delivery_notifiers,
-            chain_worker_tasks: Arc::default(),
-            chain_workers: Arc::new(Mutex::new(LruCache::new(*CHAIN_WORKER_LIMIT))),
-        }
+    pub fn new_for_client(nickname: String, storage: StorageClient) -> Self {
+        Self::new(nickname, None, storage)
     }
 
     pub fn with_allow_inactive_chains(mut self, value: bool) -> Self {

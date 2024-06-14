@@ -107,7 +107,7 @@ where
         self.save_wallet();
     }
 
-    async fn update_wallet<'a>(&'a mut self, client: &'a mut ChainClient<NodeProvider, S>) {
+    async fn update_wallet(&mut self, client: &ChainClient<NodeProvider, S>) {
         self.update_and_save_wallet(client).await;
     }
 }
@@ -180,7 +180,7 @@ where
             .map(|kp| kp.copy())
             .into_iter()
             .collect();
-        self.client.build(
+        self.client.create_chain(
             chain_id,
             known_key_pairs,
             self.wallet().genesis_admin_chain(),
@@ -213,12 +213,12 @@ where
         info!("Saved user chain states");
     }
 
-    async fn update_wallet_from_client(&mut self, state: &mut ChainClient<NodeProvider, S>) {
-        self.wallet_mut().update_from_state(state).await
+    async fn update_wallet_from_client(&mut self, client: &ChainClient<NodeProvider, S>) {
+        self.wallet_mut().update_from_state(client).await
     }
 
-    pub async fn update_and_save_wallet(&mut self, state: &mut ChainClient<NodeProvider, S>) {
-        self.update_wallet_from_client(state).await;
+    pub async fn update_and_save_wallet(&mut self, client: &ChainClient<NodeProvider, S>) {
+        self.update_wallet_from_client(client).await;
         self.save_wallet()
     }
 
@@ -307,7 +307,7 @@ where
 
         info!("Publishing bytecode");
         let (bytecode_id, _) = self
-            .apply_client_command(chain_client, |mut chain_client| {
+            .apply_client_command(chain_client, |chain_client| {
                 let contract_bytecode = contract_bytecode.clone();
                 let service_bytecode = service_bytecode.clone();
                 async move {
@@ -343,7 +343,7 @@ where
         let blob_id = blob.id();
 
         info!("Publishing blob");
-        self.apply_client_command(chain_client, |mut chain_client| {
+        self.apply_client_command(chain_client, |chain_client| {
             let blob = blob.clone();
             async move {
                 chain_client
@@ -408,7 +408,7 @@ where
         let ownership = ChainOwnership::try_from(ownership_config)?;
 
         let certificate = self
-            .apply_client_command(&chain_client, |mut chain_client| {
+            .apply_client_command(&chain_client, |chain_client| {
                 let ownership = ownership.clone();
                 async move {
                     chain_client
@@ -458,7 +458,7 @@ where
             else {
                 continue;
             };
-            let mut chain_client = self.make_chain_client(chain_id);
+            let chain_client = self.make_chain_client(chain_id);
             let ownership = chain_client.chain_info().await?.manager.ownership;
             if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
                 continue;
@@ -470,7 +470,7 @@ where
             .wallet()
             .default_chain()
             .context("should have default chain")?;
-        let mut chain_client = self.make_chain_client(default_chain_id);
+        let chain_client = self.make_chain_client(default_chain_id);
         while key_pairs.len() < num_chains {
             let key_pair = self.wallet_state.generate_key_pair();
             let public_key = key_pair.public();
@@ -549,7 +549,7 @@ where
                 )
             })
             .collect();
-        let mut chain_client = self.make_chain_client(default_chain_id);
+        let chain_client = self.make_chain_client(default_chain_id);
         // Put at most 1000 fungible token operations in each block.
         for operations in operations.chunks(1000) {
             chain_client
@@ -557,12 +557,12 @@ where
                 .await?
                 .expect("should execute block with OpenChain operations");
         }
-        self.update_wallet_from_client(&mut chain_client).await;
+        self.update_wallet_from_client(&chain_client).await;
         // Make sure all chains have registered the application now.
         let futures = key_pairs
             .keys()
             .map(|&chain_id| {
-                let mut chain_client = self.make_chain_client(chain_id);
+                let chain_client = self.make_chain_client(chain_id);
                 async move {
                     for i in 0..5 {
                         tokio::time::sleep(Duration::from_secs(i)).await;
