@@ -402,7 +402,8 @@ where
     assert_eq!(incoming_messages[0].action, MessageAction::Reject);
     assert_eq!(incoming_messages[0].event.kind, MessageKind::Simple);
     let messages = cert.value().messages().unwrap();
-    assert_eq!(messages.len(), 0);
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].len(), 0);
 
     // Try again with a value that will make the (tracked) message fail.
     let mut operation = meta_counter::Operation::fail(receiver_id);
@@ -557,7 +558,7 @@ where
             destination,
             message,
             ..
-        } = &messages[0];
+        } = &messages[1][0];
         assert_matches!(
             message, Message::System(SystemMessage::RegisterApplications { applications })
             if applications.len() == 1 && matches!(

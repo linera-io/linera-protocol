@@ -278,11 +278,8 @@ pub struct ExecutedBlock {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct BlockExecutionOutcome {
-    pub messages: Vec<OutgoingMessage>,
-    /// For each transaction, the cumulative number of messages created by this and all previous
-    /// transactions, i.e. `message_counts[i]` is the index of the first message created by
-    /// transaction `i + 1` or later.
-    pub message_counts: Vec<u32>,
+    /// The list of outgoing messages for each transaction.
+    pub messages: Vec<Vec<OutgoingMessage>>,
     pub state_hash: CryptoHash,
     /// The record of oracle responses for each transaction.
     pub oracle_records: Vec<OracleRecord>,
@@ -630,7 +627,7 @@ impl CertificateValue {
     }
 
     #[cfg(with_testing)]
-    pub fn messages(&self) -> Option<&Vec<OutgoingMessage>> {
+    pub fn messages(&self) -> Option<&Vec<Vec<OutgoingMessage>>> {
         Some(self.executed_block()?.messages())
     }
 
@@ -679,7 +676,7 @@ impl Event {
 }
 
 impl ExecutedBlock {
-    pub fn messages(&self) -> &Vec<OutgoingMessage> {
+    pub fn messages(&self) -> &Vec<Vec<OutgoingMessage>> {
         &self.outcome.messages
     }
 
@@ -692,17 +689,22 @@ impl ExecutedBlock {
     ) -> Option<MessageId> {
         let block = &self.block;
         let transaction_index = block.incoming_messages.len().checked_add(operation_index)?;
-        let first_message_index = match transaction_index.checked_sub(1) {
-            None => 0,
-            Some(index) => *self.outcome.message_counts.get(index)?,
-        };
-        let index = first_message_index.checked_add(message_index)?;
-        let next_transaction_index = *self.outcome.message_counts.get(transaction_index)?;
-        if index < next_transaction_index {
-            Some(self.message_id(index))
-        } else {
-            None
+        if message_index
+            >= u32::try_from(self.outcome.messages.get(transaction_index)?.len()).ok()?
+        {
+            return None;
         }
+        let first_message_index = u32::try_from(
+            self.outcome
+                .messages
+                .iter()
+                .take(transaction_index)
+                .map(Vec::len)
+                .sum::<usize>(),
+        )
+        .ok()?;
+        let index = first_message_index.checked_add(message_index)?;
+        Some(self.message_id(index))
     }
 
     pub fn message_by_id(&self, message_id: &MessageId) -> Option<&OutgoingMessage> {
@@ -714,11 +716,18 @@ impl ExecutedBlock {
         if self.block.chain_id != *chain_id || self.block.height != *height {
             return None;
         }
-        self.messages().get(usize::try_from(*index).ok()?)
+        let mut index = usize::try_from(*index).ok()?;
+        for messages in self.messages() {
+            if let Some(message) = messages.get(index) {
+                return Some(message);
+            }
+            index -= messages.len();
+        }
+        None
     }
 
     /// Returns the message ID belonging to the `index`th outgoing message in this block.
-    fn message_id(&self, index: u32) -> MessageId {
+    pub fn message_id(&self, index: u32) -> MessageId {
         MessageId {
             chain_id: self.block.chain_id,
             height: self.block.height,
@@ -1056,7 +1065,7 @@ impl Certificate {
     pub fn message_bundle_for(&self, medium: &Medium, recipient: ChainId) -> Option<MessageBundle> {
         let executed_block = self.value().executed_block()?;
         let messages = (0u32..)
-            .zip(executed_block.messages())
+            .zip(executed_block.messages().iter().flatten())
             .filter(|(_, message)| message.has_destination(medium, recipient))
             .map(|(idx, message)| (idx, message.clone()))
             .collect();

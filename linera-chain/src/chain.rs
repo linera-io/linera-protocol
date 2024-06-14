@@ -736,7 +736,6 @@ where
             account: block.authenticated_signer,
         };
         let mut messages = Vec::new();
-        let mut message_counts = Vec::new();
 
         if self.is_closed() {
             ensure!(
@@ -799,13 +798,12 @@ where
         );
         let mut oracle_records = oracle_records.map(Vec::into_iter);
         let mut new_oracle_records = Vec::new();
+        let mut next_message_index = 0;
         for (index, message) in block.incoming_messages.iter().enumerate() {
             #[cfg(with_metrics)]
             let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
-            let next_message_index =
-                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
             // Execute the received message.
             let context = MessageContext {
                 chain_id,
@@ -907,7 +905,7 @@ where
                     }
                 }
             };
-            let mut messages_out = self
+            let messages_out = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
             if let MessageAction::Accept = message.action {
@@ -919,9 +917,9 @@ where
                         .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
                 }
             }
-            messages.append(&mut messages_out);
-            message_counts
-                .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
+            next_message_index +=
+                u32::try_from(messages_out.len()).map_err(|_| ArithmeticError::Overflow)?;
+            messages.push(messages_out);
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
@@ -929,8 +927,6 @@ where
             let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::Operation(index);
-            let next_message_index =
-                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
             let context = OperationContext {
                 chain_id,
                 height: block.height,
@@ -958,7 +954,7 @@ where
                 .await
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             new_oracle_records.push(oracle_record);
-            let mut messages_out = self
+            let messages_out = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
             resource_controller
@@ -973,9 +969,9 @@ where
                     .track_message(&message_out.message)
                     .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             }
-            messages.append(&mut messages_out);
-            message_counts
-                .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
+            next_message_index +=
+                u32::try_from(messages_out.len()).map_err(|_| ArithmeticError::Overflow)?;
+            messages.push(messages_out);
         }
 
         // Finally, charge for the block fee, except if the chain is closed. Closed chains should
@@ -1023,12 +1019,11 @@ where
         }
 
         assert_eq!(
-            message_counts.len(),
+            messages.len(),
             block.incoming_messages.len() + block.operations.len()
         );
         Ok(BlockExecutionOutcome {
             messages,
-            message_counts,
             state_hash,
             oracle_records: new_oracle_records,
         })

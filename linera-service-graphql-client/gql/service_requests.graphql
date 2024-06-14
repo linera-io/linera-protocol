@@ -180,7 +180,6 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
             kind
             message
           }
-          messageCounts
           stateHash
           oracleRecords {
             responses
@@ -220,7 +219,6 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
             kind
             message
           }
-          messageCounts
           stateHash
           oracleRecords {
             responses

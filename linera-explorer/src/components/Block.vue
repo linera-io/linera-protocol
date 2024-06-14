@@ -94,7 +94,7 @@ defineProps<{block: HashedCertificateValue, title: string}>()
           <ul class="list-group">
             <li v-for="(m, i) in block.value.executedBlock?.outcome.messages" class="list-group-item p-0" key="block.hash+'-outmessage-'+i">
               <div class="card">
-                <div class="card-header">Message {{ i+1 }}</div>
+                <div class="card-header">Messages for transaction {{ i+1 }}</div>
                 <div class="card-body">
                   <Json :data="m"/>
                 </div>
