@@ -2,6 +2,7 @@
 members = [
     "linera-base",
     "linera-chain",
+    "linera-client",
     "linera-core",
     "linera-ethereum",
     "linera-execution",
@@ -162,6 +163,7 @@ wit-bindgen = "0.24.0"
 
 linera-base = { version = "0.12.0", path = "./linera-base" }
 linera-chain = { version = "0.12.0", path = "./linera-chain" }
+linera-client = { version = "0.12.0", path = "./linera-client" }
 linera-core = { version = "0.12.0", path = "./linera-core", default-features = false }
 linera-ethereum = { version = "0.12.0", path = "./linera-ethereum", default-features = false }
 linera-execution = { version = "0.12.0", path = "./linera-execution", default-features = false }

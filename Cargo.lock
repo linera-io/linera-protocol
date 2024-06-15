@@ -4159,6 +4159,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-client"
+version = "0.12.0"
+
+[[package]]
 name = "linera-core"
 version = "0.12.0"
 dependencies = [
