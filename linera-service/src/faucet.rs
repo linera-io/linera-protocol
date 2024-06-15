@@ -142,7 +142,7 @@ where
     ViewError: From<S::ContextError>,
 {
     async fn do_claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
-        let mut client = self.client.lock().await;
+        let client = self.client.lock().await;
 
         if self.start_timestamp < self.end_timestamp {
             let local_time = client.storage_client().clock().current_time();
@@ -172,7 +172,7 @@ where
         let result = client
             .open_chain(ownership, ApplicationPermissions::default(), self.amount)
             .await;
-        self.context.lock().await.update_wallet(&mut *client).await;
+        self.context.lock().await.update_wallet(&*client).await;
         let (message_id, certificate) = match result? {
             ClientOutcome::Committed(result) => result,
             ClientOutcome::WaitForTimeout(timeout) => {
