@@ -35,8 +35,8 @@ use crate::ContractAbi;
 /// # use linera_sdk::test::*;
 /// # use linera_base::identifiers::ChainId;
 /// # tokio_test::block_on(async {
-/// let validator = TestValidator::default();
-/// assert_eq!(validator.new_chain().await.id(), ChainId::root(0));
+/// let validator = TestValidator::new().await;
+/// assert_eq!(validator.new_chain().await.get_tip_height(), BlockHeight(0));
 /// # });
 /// ```
 pub struct TestValidator {
