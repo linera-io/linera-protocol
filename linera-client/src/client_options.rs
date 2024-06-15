@@ -16,16 +16,14 @@ use linera_execution::{
     committee::ValidatorName, system::SystemChannel, ResourceControlPolicy, UserApplicationId,
     WasmRuntime, WithWasmDefault as _,
 };
-use linera_service::{
+use crate::{
     chain_listener::ChainListenerConfig,
-    config::WalletState,
-    storage::{full_initialize_storage, run_with_storage, StorageConfigNamespace},
+    config::{GenesisConfig, WalletState},
+    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
     util,
     wallet::Wallet,
 };
 use linera_views::common::CommonStoreConfig;
-
-use crate::{GenesisConfig, Job};
 
 #[derive(Clone, clap::Parser)]
 #[command(
@@ -131,19 +129,19 @@ impl ClientOptions {
         }
     }
 
-    pub async fn run_command_with_storage(self) -> anyhow::Result<()> {
+    pub async fn run_command_with_storage<R: Runnable>(self, job: R) -> anyhow::Result<R::Output> {
         let wallet = self.wallet()?;
-        run_with_storage(
+        let output = run_with_storage(
             self.storage_config()?
                 .add_common_config(self.common_config())
                 .await?,
             &wallet.genesis_config().clone(),
             self.wasm_runtime.with_wasm_default(),
-            Job(self, wallet),
+            job,
         )
         .boxed()
         .await?;
-        Ok(())
+        Ok(output)
     }
 
     pub fn storage_config(&self) -> Result<StorageConfigNamespace, anyhow::Error> {
@@ -151,7 +149,7 @@ impl ClientOptions {
             Some(config) => config.parse(),
             #[cfg(feature = "rocksdb")]
             None => {
-                let storage_config = linera_service::storage::StorageConfig::RocksDb {
+                let storage_config = crate::storage::StorageConfig::RocksDb {
                     path: self.config_path()?.join("wallet.db"),
                 };
                 let namespace = "default".to_string();

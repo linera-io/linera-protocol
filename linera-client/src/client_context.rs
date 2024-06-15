@@ -27,10 +27,10 @@ use linera_core::{
 };
 use linera_execution::Bytecode;
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
-use linera_service::{
+use crate::{
     chain_listener,
     config::WalletState,
-    node_service::wait_for_next_round,
+    util::wait_for_next_round,
     wallet::{UserChain, Wallet},
 };
 use linera_storage::Storage;

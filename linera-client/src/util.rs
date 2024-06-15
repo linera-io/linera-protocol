@@ -8,11 +8,18 @@ use std::{num::ParseIntError, time::Duration};
 use anyhow::{bail, Context as _, Result};
 use async_graphql::http::GraphiQLSource;
 use axum::response::{self, IntoResponse};
+use futures::future;
 use http::Uri;
 #[cfg(test)]
 use linera_base::command::parse_version_message;
-use linera_base::data_types::TimeDelta;
+use linera_base::data_types::{TimeDelta, Timestamp};
+use linera_core::{
+    data_types::RoundTimeout,
+    node::NotificationStream,
+    worker::Reason,
+};
 use tokio::signal::unix;
+use tokio_stream::StreamExt as _;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
@@ -185,6 +192,22 @@ pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
 
 pub fn read_json<T: serde::de::DeserializeOwned>(path: &std::path::Path) -> anyhow::Result<T> {
     Ok(serde_json::from_reader(fs_err::File::open(path)?)?)
+}
+
+/// Returns after the specified time or if we receive a notification that a new round has started.
+pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: RoundTimeout) {
+    let mut stream = stream.filter(|notification| match &notification.reason {
+        Reason::NewBlock { height, .. } => *height >= timeout.next_block_height,
+        Reason::NewRound { round, .. } => *round > timeout.current_round,
+        Reason::NewIncomingMessage { .. } => false,
+    });
+    future::select(
+        Box::pin(stream.next()),
+        Box::pin(tokio::time::sleep(
+            timeout.timestamp.duration_since(Timestamp::now()),
+        )),
+    )
+        .await;
 }
 
 #[test]
