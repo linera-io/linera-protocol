@@ -83,6 +83,9 @@ pub struct Client<ValidatorNodeProvider, Storage> {
     cross_chain_message_delivery: CrossChainMessageDelivery,
     /// References to clients waiting for chain notifications.
     notifier: Arc<Notifier<Notification>>,
+    /// A copy of the storage client so that we don't have to lock the local node client
+    /// to retrieve it.
+    storage: Storage,
 }
 
 impl<P, S: Storage + Clone> Client<P, S> {
@@ -95,7 +98,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
     ) -> Self {
         let state = WorkerState::new_for_client(
             "Client node".to_string(),
-            storage,
+            storage.clone(),
             Arc::new(ValueCache::default()),
             Arc::new(ValueCache::default()),
             Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
@@ -111,6 +114,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             message_policy: MessagePolicy::Accept,
             cross_chain_message_delivery,
             notifier: Arc::new(Notifier::default()),
+            storage,
         }
     }
 
@@ -121,8 +125,8 @@ impl<P, S: Storage + Clone> Client<P, S> {
     }
 
     /// Returns the storage client used by this client's local node.
-    pub async fn storage_client(&self) -> S {
-        self.local_node.storage_client().await
+    pub fn storage_client(&self) -> &S {
+        &self.storage
     }
 
     /// Creates a new `ChainClient`.
@@ -336,7 +340,11 @@ where
     pub async fn chain_state_view(
         &self,
     ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, LocalNodeError> {
-        Ok(self.client.local_node.chain_state_view(self.chain_id).await?)
+        Ok(self
+            .client
+            .local_node
+            .chain_state_view(self.chain_id)
+            .await?)
     }
 
     /// Subscribes to notifications from this client's chain.
@@ -347,8 +355,8 @@ where
     }
 
     /// Returns the storage client used by this client's local node.
-    pub async fn storage_client(&self) -> S {
-        self.client.storage_client().await
+    pub fn storage_client(&self) -> S {
+        self.client.storage_client().clone()
     }
 
     /// Obtains the basic `ChainInfo` data for the local chain.
@@ -1462,7 +1470,7 @@ where
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
     async fn next_timestamp(&self, incoming_messages: &[IncomingMessage]) -> Timestamp {
-        let local_time = self.storage_client().await.clock().current_time();
+        let local_time = self.storage_client().clock().current_time();
         incoming_messages
             .iter()
             .map(|msg| msg.event.timestamp)
@@ -1717,7 +1725,7 @@ where
         // If the current round has timed out, we request a timeout certificate and retry in
         // the next round.
         if let Some(round_timeout) = info.manager.round_timeout {
-            if round_timeout <= self.storage_client().await.clock().current_time() {
+            if round_timeout <= self.storage_client().clock().current_time() {
                 self.request_leader_timeout().await?;
                 info = self.chain_info_with_manager_values().await?;
             }
@@ -2231,8 +2239,8 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, ViewError> {
-        self.storage_client()
-            .await
+        self.client
+            .storage_client()
             .read_hashed_certificate_value(hash)
             .await
     }
@@ -2242,8 +2250,8 @@ where
         from: CryptoHash,
         limit: u32,
     ) -> Result<Vec<HashedCertificateValue>, ViewError> {
-        self.storage_client()
-            .await
+        self.client
+            .storage_client()
             .read_hashed_certificate_values_downward(from, limit)
             .await
     }

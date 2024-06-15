@@ -756,7 +756,7 @@ where
         let worker = WorkerState::new(
             "Temporary client node".to_string(),
             None,
-            self.client.storage_client().await,
+            self.client.storage_client().clone(),
         )
         .with_allow_inactive_chains(true)
         .with_allow_messages_from_deprecated_epochs(true);

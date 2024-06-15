@@ -137,7 +137,7 @@ where
         let mut client = self.client.lock().await;
 
         if self.start_timestamp < self.end_timestamp {
-            let local_time = client.storage_client().await.clock().current_time();
+            let local_time = client.storage_client().clock().current_time();
             if local_time < self.end_timestamp {
                 let full_duration = self
                     .end_timestamp
@@ -239,7 +239,7 @@ where
         end_timestamp: Timestamp,
         genesis_config: Arc<GenesisConfig>,
     ) -> anyhow::Result<Self> {
-        let start_timestamp = client.storage_client().await.clock().current_time();
+        let start_timestamp = client.storage_client().clock().current_time();
         client.process_inbox().await?;
         let start_balance = client.local_balance().await?;
         Ok(Self {
