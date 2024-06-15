@@ -49,32 +49,6 @@ pub struct TestValidator {
     chains: Arc<DashMap<ChainId, ActiveChain>>,
 }
 
-impl Default for TestValidator {
-    fn default() -> Self {
-        let key_pair = KeyPair::generate();
-        let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
-        let wasm_runtime = Some(WasmRuntime::default());
-        let storage = MemoryStorage::make_test_storage(wasm_runtime)
-            .now_or_never()
-            .expect("execution of MemoryStorage::new should not await anything");
-        let clock = storage.clock.clone();
-        let worker = WorkerState::new(
-            "Single validator node".to_string(),
-            Some(key_pair.copy()),
-            storage,
-        );
-
-        TestValidator {
-            key_pair,
-            committee,
-            worker: Arc::new(Mutex::new(worker)),
-            clock,
-            root_chain_counter: Arc::default(),
-            chains: Arc::default(),
-        }
-    }
-}
-
 impl Clone for TestValidator {
     fn clone(&self) -> Self {
         TestValidator {
@@ -89,6 +63,34 @@ impl Clone for TestValidator {
 }
 
 impl TestValidator {
+    /// Creates a new [`TestValidator`].
+    pub async fn new() -> Self {
+        let key_pair = KeyPair::generate();
+        let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
+        let wasm_runtime = Some(WasmRuntime::default());
+        let storage = MemoryStorage::make_test_storage(wasm_runtime)
+            .now_or_never()
+            .expect("execution of MemoryStorage::new should not await anything");
+        let clock = storage.clock.clone();
+        let worker = WorkerState::new(
+            "Single validator node".to_string(),
+            Some(key_pair.copy()),
+            storage,
+        );
+
+        let validator = TestValidator {
+            key_pair,
+            committee,
+            worker: Arc::new(Mutex::new(worker)),
+            clock,
+            root_chain_counter: Arc::new(AtomicU32::new(1)),
+            chains: Arc::default(),
+        };
+
+        validator.create_admin_chain().await;
+        validator
+    }
+
     /// Creates a new [`TestValidator`] with a single microchain with the bytecode of the crate
     /// calling this method published on it.
     ///
@@ -97,7 +99,7 @@ impl TestValidator {
         TestValidator,
         BytecodeId<Abi, Parameters, InstantiationArgument>,
     ) {
-        let validator = TestValidator::default();
+        let validator = TestValidator::new().await;
         let publisher = validator.new_chain().await;
 
         let bytecode_id = publisher.publish_current_bytecode().await;
@@ -187,5 +189,29 @@ impl TestValidator {
     /// Returns the [`ActiveChain`] reference to the microchain identified by `chain_id`.
     pub fn get_chain(&self, chain_id: &ChainId) -> ActiveChain {
         self.chains.get(chain_id).expect("Chain not found").clone()
+    }
+
+    /// Creates the root admin microchain and returns the [`ActiveChain`] map with it.
+    async fn create_admin_chain(&self) {
+        let key_pair = KeyPair::generate();
+        let description = ChainDescription::Root(0);
+
+        self.worker()
+            .await
+            .storage_client()
+            .create_chain(
+                self.committee.clone(),
+                ChainId::root(0),
+                description,
+                key_pair.public(),
+                0.into(),
+                Timestamp::from(0),
+            )
+            .await
+            .expect("Failed to create root admin chain");
+
+        let chain = ActiveChain::new(key_pair, description, self.clone());
+
+        self.chains.insert(description.into(), chain);
     }
 }
