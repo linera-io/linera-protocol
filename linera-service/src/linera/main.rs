@@ -747,8 +747,8 @@ impl Runnable for Job {
                 join_set.spawn_task(listener);
                 while let Some(notification) = notifications.next().await {
                     if let Reason::NewBlock { .. } = notification.reason {
-                        let mut guard = chain_client.lock().await;
-                        context.update_and_save_wallet(&mut *guard).await;
+                        let guard = chain_client.lock().await;
+                        context.update_and_save_wallet(&*guard).await;
                     }
                     if raw {
                         println!("{}", serde_json::to_string(&notification)?);

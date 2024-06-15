@@ -243,10 +243,10 @@ where
         let mut certificates = Vec::new();
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {
-            let mut guard = chain_client.0.lock().await;
+            let guard = chain_client.0.lock().await;
             guard.synchronize_from_validators().await?;
             let result = guard.process_inbox().await;
-            self.update_wallet_from_client(&mut *guard).await;
+            self.update_wallet_from_client(&*guard).await;
             if result.is_err() {
                 self.save_wallet();
             }
@@ -264,9 +264,9 @@ where
 
         loop {
             let (new_certificates, maybe_timeout) = {
-                let mut guard = chain_client.0.lock().await;
+                let guard = chain_client.0.lock().await;
                 let result = guard.process_inbox().await;
-                self.update_wallet_from_client(&mut *guard).await;
+                self.update_wallet_from_client(&*guard).await;
                 if result.is_err() {
                     self.save_wallet();
                 }
@@ -368,7 +368,7 @@ where
     {
         // Try applying f optimistically without validator notifications. Return if committed.
         let result = f(client.0.clone().lock_owned().await).await;
-        self.update_and_save_wallet(&mut *client.lock().await).await;
+        self.update_and_save_wallet(&*client.lock().await).await;
         if let ClientOutcome::Committed(t) = result? {
             return Ok(t);
         }
@@ -380,7 +380,7 @@ where
         loop {
             // Try applying f. Return if committed.
             let result = f(client.0.clone().lock_owned().await).await;
-            self.update_and_save_wallet(&mut *client.lock().await).await;
+            self.update_and_save_wallet(&*client.lock().await).await;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -503,9 +503,9 @@ where
         }
 
         for chain_id in key_pairs.keys() {
-            let mut child_client = self.make_chain_client(*chain_id);
+            let child_client = self.make_chain_client(*chain_id);
             child_client.process_inbox().await?;
-            self.wallet_mut().update_from_state(&mut child_client).await;
+            self.wallet_mut().update_from_state(&child_client).await;
         }
         Ok(key_pairs)
     }
@@ -584,8 +584,8 @@ where
             .collect::<Vec<_>>()
             .await;
         for result in results {
-            let mut client = result?;
-            self.update_wallet_from_client(&mut client).await;
+            let client = result?;
+            self.update_wallet_from_client(&client).await;
         }
         Ok(())
     }

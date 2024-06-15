@@ -286,8 +286,8 @@ where
         loop {
             let client = self.clients.try_client_lock(chain_id).await?;
             let mut stream = client.subscribe().await?;
-            let (result, mut client) = f(client).await;
-            self.context.lock().await.update_wallet(&mut *client).await;
+            let (result, client) = f(client).await;
+            self.context.lock().await.update_wallet(&*client).await;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -310,10 +310,10 @@ where
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
         let mut hashes = Vec::new();
         loop {
-            let mut client = self.clients.try_client_lock(&chain_id).await?;
+            let client = self.clients.try_client_lock(&chain_id).await?;
             client.synchronize_from_validators().await?;
             let result = client.process_inbox().await;
-            self.context.lock().await.update_wallet(&mut *client).await;
+            self.context.lock().await.update_wallet(&*client).await;
             let (certificates, maybe_timeout) = result?;
             hashes.extend(certificates.into_iter().map(|cert| cert.hash()));
             match maybe_timeout {
@@ -329,9 +329,9 @@ where
 
     /// Retries the pending block that was unsuccessfully proposed earlier.
     async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.clients.try_client_lock(&chain_id).await?;
         let outcome = client.process_pending_block().await?;
-        self.context.lock().await.update_wallet(&mut *client).await;
+        self.context.lock().await.update_wallet(&*client).await;
         match outcome {
             ClientOutcome::Committed(Some(certificate)) => Ok(Some(certificate.hash())),
             ClientOutcome::Committed(None) => Ok(None),
