@@ -6,21 +6,20 @@
 //! The [`TestValidator`] is a minimal validator with a single shard. Micro-chains can be added to
 //! it, and blocks can be added to each microchain individually.
 
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Arc,
-};
+use std::sync::Arc;
 
 use dashmap::DashMap;
 use futures::FutureExt as _;
 use linera_base::{
-    crypto::KeyPair,
-    data_types::Timestamp,
+    crypto::{KeyPair, PublicKey},
+    data_types::{ApplicationPermissions, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId},
+    ownership::ChainOwnership,
 };
 use linera_core::worker::WorkerState;
 use linera_execution::{
-    committee::{Committee, ValidatorName},
+    committee::{Committee, Epoch, ValidatorName},
+    system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
     WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage, TestClock};
@@ -45,7 +44,6 @@ pub struct TestValidator {
     committee: Committee,
     worker: Arc<Mutex<WorkerState<MemoryStorage<TestClock>>>>,
     clock: TestClock,
-    root_chain_counter: Arc<AtomicU32>,
     chains: Arc<DashMap<ChainId, ActiveChain>>,
 }
 
@@ -56,7 +54,6 @@ impl Clone for TestValidator {
             committee: self.committee.clone(),
             worker: self.worker.clone(),
             clock: self.clock.clone(),
-            root_chain_counter: self.root_chain_counter.clone(),
             chains: self.chains.clone(),
         }
     }
@@ -83,7 +80,6 @@ impl TestValidator {
             committee,
             worker: Arc::new(Mutex::new(worker)),
             clock,
-            root_chain_counter: Arc::new(AtomicU32::new(1)),
             chains: Arc::default(),
         };
 
@@ -162,28 +158,46 @@ impl TestValidator {
     /// it.
     pub async fn new_chain(&self) -> ActiveChain {
         let key_pair = KeyPair::generate();
-        let description =
-            ChainDescription::Root(self.root_chain_counter.fetch_add(1, Ordering::AcqRel));
-
-        self.worker()
-            .await
-            .storage_client()
-            .create_chain(
-                self.committee.clone(),
-                ChainId::root(0),
-                description,
-                key_pair.public(),
-                0.into(),
-                Timestamp::from(0),
-            )
-            .await
-            .expect("Failed to create chain");
-
+        let description = self
+            .request_new_chain_from_admin_chain(key_pair.public())
+            .await;
         let chain = ActiveChain::new(key_pair, description, self.clone());
+
+        chain.handle_received_messages().await;
 
         self.chains.insert(description.into(), chain.clone());
 
         chain
+    }
+
+    /// Adds a block to the admin chain to create a new chain.
+    ///
+    /// Returns the [`ChainDescription`] of the new chain.
+    async fn request_new_chain_from_admin_chain(&self, public_key: PublicKey) -> ChainDescription {
+        let admin_id = ChainId::root(0);
+        let admin_chain = self
+            .chains
+            .get(&admin_id)
+            .expect("Admin chain should be created when the `TestValidator` is constructed");
+
+        let new_chain_config = OpenChainConfig {
+            ownership: ChainOwnership::single(public_key),
+            committees: [(Epoch::ZERO, self.committee.clone())]
+                .into_iter()
+                .collect(),
+            admin_id,
+            epoch: Epoch::ZERO,
+            balance: 0.into(),
+            application_permissions: ApplicationPermissions::default(),
+        };
+
+        let messages = admin_chain
+            .add_block(|block| {
+                block.with_system_operation(SystemOperation::OpenChain(new_chain_config));
+            })
+            .await;
+
+        ChainDescription::Child(messages[OPEN_CHAIN_MESSAGE_INDEX as usize])
     }
 
     /// Returns the [`ActiveChain`] reference to the microchain identified by `chain_id`.
