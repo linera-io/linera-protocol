@@ -4585,6 +4585,7 @@ dependencies = [
  "linera-alloy",
  "linera-base",
  "linera-chain",
+ "linera-client",
  "linera-core",
  "linera-ethereum",
  "linera-execution",

@@ -34,9 +34,10 @@ use {
 
 use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
-    storage::{StorageConfig, StorageConfigNamespace},
     util::ChildExt,
 };
+
+use linera_client::storage::{StorageConfig, StorageConfigNamespace};
 
 #[cfg(all(feature = "rocksdb", with_testing))]
 trait LocalServerInternal: Sized {

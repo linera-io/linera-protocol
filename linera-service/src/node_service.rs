@@ -47,56 +47,17 @@ use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
 
-use crate::{
+use linera_client::{
+    chain_clients::ChainClients,
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
-    util,
 };
+
+use crate::util;
 
 #[derive(SimpleObject, Serialize, Deserialize, Clone)]
 pub struct Chains {
     pub list: Vec<ChainId>,
     pub default: Option<ChainId>,
-}
-
-pub type ClientMapInner<P, S> = BTreeMap<ChainId, ArcChainClient<P, S>>;
-pub(crate) struct ChainClients<P, S>(Arc<Mutex<ClientMapInner<P, S>>>);
-
-impl<P, S> Clone for ChainClients<P, S> {
-    fn clone(&self) -> Self {
-        ChainClients(self.0.clone())
-    }
-}
-
-impl<P, S> Default for ChainClients<P, S> {
-    fn default() -> Self {
-        Self(Arc::new(Mutex::new(BTreeMap::new())))
-    }
-}
-
-impl<P, S> ChainClients<P, S> {
-    async fn client(&self, chain_id: &ChainId) -> Option<ArcChainClient<P, S>> {
-        Some(self.0.lock().await.get(chain_id)?.clone())
-    }
-
-    pub(crate) async fn client_lock(
-        &self,
-        chain_id: &ChainId,
-    ) -> Option<OwnedMutexGuard<ChainClient<P, S>>> {
-        Some(self.client(chain_id).await?.0.lock_owned().await)
-    }
-
-    pub(crate) async fn try_client_lock(
-        &self,
-        chain_id: &ChainId,
-    ) -> Result<OwnedMutexGuard<ChainClient<P, S>>, Error> {
-        self.client_lock(chain_id)
-            .await
-            .ok_or_else(|| Error::new(format!("Unknown chain ID: {}", chain_id)))
-    }
-
-    pub(crate) async fn map_lock(&self) -> MutexGuard<ClientMapInner<P, S>> {
-        self.0.lock().await
-    }
 }
 
 /// Our root GraphQL query type.

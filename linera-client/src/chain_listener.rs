@@ -82,7 +82,7 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Creates a new chain listener given client chains.
-    pub(crate) fn new(config: ChainListenerConfig, clients: ChainClients<P, S>) -> Self {
+    pub fn new(config: ChainListenerConfig, clients: ChainClients<P, S>) -> Self {
         Self { config, clients }
     }
 

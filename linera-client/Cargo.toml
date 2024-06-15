@@ -28,6 +28,7 @@ scylladb = [
 ]
 metrics = ["prometheus", "linera-base/metrics"]
 storage_service = []
+kubernetes = []
 
 [dependencies]
 anyhow.workspace = true
