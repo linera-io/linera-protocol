@@ -3,7 +3,7 @@
 
 use std::process;
 
-use linera_service::storage::StorageConfigNamespace;
+use linera_client::storage::StorageConfigNamespace;
 use linera_views::common::CommonStoreConfig;
 
 #[derive(clap::Parser)]

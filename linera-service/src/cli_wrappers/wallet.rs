@@ -35,11 +35,12 @@ use tracing::{info, warn};
 
 use crate::{
     cli_wrappers::{local_net::PathProvider, Network},
-    config::{GenesisConfig, WalletState},
     faucet::ClaimOutcome,
     util::ChildExt,
-    wallet::Wallet,
 };
+
+use linera_client::config::{GenesisConfig, WalletState};
+use linera_client::wallet::Wallet;
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
 /// to the node-service command of the client.

@@ -27,11 +27,11 @@ use crate::config::GenesisConfig;
 
 #[derive(Serialize, Deserialize)]
 pub struct Wallet {
-    chains: BTreeMap<ChainId, UserChain>,
-    unassigned_key_pairs: HashMap<PublicKey, KeyPair>,
-    default: Option<ChainId>,
-    genesis_config: GenesisConfig,
-    testing_prng_seed: Option<u64>,
+    pub chains: BTreeMap<ChainId, UserChain>,
+    pub unassigned_key_pairs: HashMap<PublicKey, KeyPair>,
+    pub default: Option<ChainId>,
+    pub genesis_config: GenesisConfig,
+    pub testing_prng_seed: Option<u64>,
 }
 
 impl Extend<UserChain> for Wallet {

@@ -19,11 +19,11 @@ use linera_core::{
     },
 };
 use linera_execution::committee::Committee;
-use linera_service::{
+use linera_client::{
     chain_listener::{ChainListenerConfig, ClientContext},
-    node_service::NodeService,
     wallet::Wallet,
 };
+use linera_service::node_service::NodeService;
 use linera_storage::{MemoryStorage, Storage};
 use linera_version::VersionInfo;
 use linera_views::{

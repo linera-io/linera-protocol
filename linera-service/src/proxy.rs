@@ -19,10 +19,12 @@ use linera_rpc::{
 };
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
-use linera_service::{
+use linera_client::{
     config::{GenesisConfig, ValidatorServerConfig},
-    grpc_proxy::GrpcProxy,
     storage::{run_with_storage, Runnable, StorageConfigNamespace},
+};
+use linera_service::{
+    grpc_proxy::GrpcProxy,
     util,
 };
 use linera_storage::Storage;

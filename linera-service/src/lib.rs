@@ -6,16 +6,12 @@
 
 #![deny(clippy::large_futures)]
 
-pub mod chain_listener;
 pub mod cli_wrappers;
-pub mod config;
 pub mod faucet;
 pub mod grpc_proxy;
 pub mod node_service;
-pub mod persistent;
 pub mod project;
 #[cfg(with_metrics)]
 pub mod prometheus_server;
-pub mod storage;
 pub mod util;
 pub mod wallet;

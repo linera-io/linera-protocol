@@ -19,7 +19,7 @@ use linera_core::{
 use linera_storage::{MemoryStorage, TestClock};
 
 use super::MutationRoot;
-use crate::{chain_listener, wallet::Wallet};
+use linera_client::{chain_listener, wallet::Wallet};
 
 #[derive(Default)]
 struct ClientContext {

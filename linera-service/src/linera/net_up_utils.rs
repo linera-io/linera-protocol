@@ -11,9 +11,9 @@ use linera_service::{
         local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
-    storage::StorageConfig,
     util::listen_for_shutdown_signals,
 };
+use linera_client::storage::StorageConfig;
 use linera_storage_service::{
     child::{get_free_endpoint, StorageService},
     common::get_service_storage_binary,

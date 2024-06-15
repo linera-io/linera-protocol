@@ -370,7 +370,7 @@ impl AmmApp {
 async fn test_storage_service_wallet_lock() -> Result<()> {
     use std::mem::drop;
 
-    use linera_service::config::WalletState;
+    use linera_client::config::WalletState;
     let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
