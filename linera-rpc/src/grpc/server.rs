@@ -11,7 +11,7 @@ use std::{
 use futures::{
     channel::{mpsc, mpsc::Receiver},
     future::BoxFuture,
-    FutureExt, StreamExt,
+    FutureExt as _, StreamExt,
 };
 use linera_base::identifiers::ChainId;
 use linera_core::{

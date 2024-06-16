@@ -57,6 +57,7 @@ The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analo
 */
 
 #![deny(missing_docs)]
+#![deny(clippy::large_futures)]
 
 #[cfg(with_metrics)]
 use {

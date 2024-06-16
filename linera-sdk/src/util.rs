@@ -77,7 +77,7 @@ where
 mod tests {
     use std::task::{Context, Poll};
 
-    use futures::{future::poll_fn, task::noop_waker, FutureExt};
+    use futures::{future::poll_fn, task::noop_waker, FutureExt as _};
 
     use super::{yield_once, BlockingWait};
 

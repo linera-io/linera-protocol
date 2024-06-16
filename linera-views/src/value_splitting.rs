@@ -3,7 +3,7 @@
 
 use std::fmt::Debug;
 
-use futures::FutureExt;
+use futures::FutureExt as _;
 use linera_base::ensure;
 use thiserror::Error;
 

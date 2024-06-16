@@ -15,7 +15,7 @@ use std::{
 
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{future::BoxFuture, FutureExt};
+use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::identifiers::ChainId;
 use linera_core::{notifier::Notifier, JoinSetExt as _};
 use linera_rpc::{

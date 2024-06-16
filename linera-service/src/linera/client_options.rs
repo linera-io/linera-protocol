@@ -4,6 +4,7 @@
 use std::{env, iter, num::NonZeroU16, path::PathBuf, time::Duration};
 
 use chrono::{DateTime, Utc};
+use futures::FutureExt as _;
 use linera_base::{
     crypto::PublicKey,
     data_types::{Amount, ApplicationPermissions, TimeDelta},
@@ -139,6 +140,7 @@ impl ClientOptions {
             self.wasm_runtime.with_wasm_default(),
             Job(self, wallet),
         )
+        .boxed()
         .await?;
         Ok(())
     }

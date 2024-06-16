@@ -19,7 +19,7 @@ use std::{ops::Deref, sync::Arc};
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
-use futures::{future::join_all, StreamExt};
+use futures::{future::join_all, FutureExt as _, StreamExt};
 use linera_base::ensure;
 use scylla::{
     frame::request::batch::BatchType,
@@ -436,6 +436,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
+            .boxed()
             .await?;
         let store = ScyllaDbClient::new(session, namespace.to_string());
         let store = Arc::new(store);
@@ -455,6 +456,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
+            .boxed()
             .await?;
         let miss_msg = "'kv' not found in keyspaces";
         let mut paging_state = None;
@@ -503,6 +505,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
+            .boxed()
             .await?;
         let query = "DROP KEYSPACE IF EXISTS kv;".to_string();
         session.query(query, &[]).await?;
@@ -514,6 +517,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
+            .boxed()
             .await?;
         // We check the way the test can fail. It can fail in different ways.
         let query = format!("SELECT dummy FROM kv.{} LIMIT 1 ALLOW FILTERING", namespace);
@@ -554,6 +558,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
+            .boxed()
             .await?;
         // Create a keyspace if it doesn't exist
         let query = "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { \
@@ -578,6 +583,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
+            .boxed()
             .await?;
         let query = format!("DROP TABLE IF EXISTS kv.{};", namespace);
         session.query(query, &[]).await?;
@@ -690,11 +696,11 @@ impl WritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
     const MAX_VALUE_SIZE: usize = ScyllaDbStoreInternal::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), ScyllaDbContextError> {
-        self.store.write_batch(batch, base_key).await
+        self.store.write_batch(batch, base_key).boxed().await
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), ScyllaDbContextError> {
-        self.store.clear_journal(base_key).await
+        self.store.clear_journal(base_key).boxed().await
     }
 }
 

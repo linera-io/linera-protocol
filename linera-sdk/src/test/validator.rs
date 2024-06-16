@@ -12,7 +12,7 @@ use std::sync::{
 };
 
 use dashmap::DashMap;
-use futures::FutureExt;
+use futures::FutureExt as _;
 use linera_base::{
     crypto::KeyPair,
     data_types::Timestamp,
