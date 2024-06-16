@@ -16,13 +16,14 @@ use linera_execution::{
     committee::ValidatorName, system::SystemChannel, UserApplicationId, WasmRuntime,
     WithWasmDefault as _,
 };
+use linera_views::common::CommonStoreConfig;
+
 use crate::{
     chain_listener::ChainListenerConfig,
     config::{GenesisConfig, WalletState},
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
     util,
 };
-use linera_views::common::CommonStoreConfig;
 
 #[derive(Clone, clap::Parser)]
 #[command(
@@ -135,7 +136,7 @@ impl ClientOptions {
                 .add_common_config(self.common_config())
                 .await?,
             &wallet.inner().genesis_config().clone(),
-            self.wasm_runtime.clone().with_wasm_default(),
+            self.wasm_runtime.with_wasm_default(),
             job,
         )
         .boxed()

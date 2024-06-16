@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use colored::Colorize as _;
 use linera_base::data_types::Amount;
+use linera_client::storage::StorageConfig;
 use linera_execution::ResourceControlPolicy;
 use linera_service::{
     cli_wrappers::{
@@ -13,7 +14,6 @@ use linera_service::{
     },
     util::listen_for_shutdown_signals,
 };
-use linera_client::storage::StorageConfig;
 use linera_storage_service::{
     child::{get_free_endpoint, StorageService},
     common::get_service_storage_binary,

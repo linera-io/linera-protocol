@@ -27,12 +27,6 @@ use linera_core::{
 };
 use linera_execution::Bytecode;
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
-use crate::{
-    chain_listener,
-    config::WalletState,
-    util::wait_for_next_round,
-    wallet::{UserChain, Wallet},
-};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use tokio::task::JoinSet;
@@ -64,7 +58,13 @@ use {
     tracing::{error, trace},
 };
 
-use crate::{client_options::ChainOwnershipConfig, client_options::ClientOptions};
+use crate::{
+    chain_listener,
+    client_options::{ChainOwnershipConfig, ClientOptions},
+    config::WalletState,
+    util::wait_for_next_round,
+    wallet::{UserChain, Wallet},
+};
 
 pub struct ClientContext<Storage> {
     pub wallet_state: WalletState,

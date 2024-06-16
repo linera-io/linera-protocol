@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{borrow::Cow, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{
     futures_util::Stream,
@@ -14,7 +14,7 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
 use futures::{
     future::{self},
-    lock::{Mutex, MutexGuard, OwnedMutexGuard},
+    lock::{Mutex, OwnedMutexGuard},
     Future,
 };
 use linera_base::{
@@ -25,8 +25,12 @@ use linera_base::{
     BcsHexParseError,
 };
 use linera_chain::{data_types::HashedCertificateValue, ChainStateView};
+use linera_client::{
+    chain_clients::ChainClients,
+    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
+};
 use linera_core::{
-    client::{ArcChainClient, ChainClient, ChainClientError},
+    client::{ChainClient, ChainClientError},
     data_types::{ClientOutcome, RoundTimeout},
     node::{NotificationStream, ValidatorNode, ValidatorNodeProvider},
     worker::{Notification, Reason},
@@ -46,11 +50,6 @@ use tokio::sync::OwnedRwLockReadGuard;
 use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
-
-use linera_client::{
-    chain_clients::ChainClients,
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
-};
 
 use crate::util;
 

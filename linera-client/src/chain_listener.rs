@@ -183,10 +183,11 @@ where
             let Reason::NewBlock { hash, .. } = notification.reason else {
                 continue;
             };
-            {
-                let client_guard = client.lock().await;
-                context.lock().await.update_wallet(&*client_guard).await;
-            }
+            context
+                .lock()
+                .await
+                .update_wallet(&*client.lock().await)
+                .await;
             let value = storage.read_hashed_certificate_value(hash).await?;
             let Some(executed_block) = value.inner().executed_block() else {
                 error!("NewBlock notification about value without a block: {hash}");

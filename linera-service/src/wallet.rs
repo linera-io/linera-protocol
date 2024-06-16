@@ -1,28 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    iter::IntoIterator,
-};
-
-use anyhow::Context as _;
 use comfy_table::{
     modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
     Table,
 };
-use linera_base::{
-    crypto::{CryptoHash, CryptoRng, KeyPair, PublicKey},
-    data_types::{BlockHeight, HashedBlob, Timestamp},
-    identifiers::{BlobId, ChainDescription, ChainId, Owner},
-};
-use linera_chain::data_types::Block;
-use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
-use linera_storage::Storage;
-use linera_views::views::ViewError;
-use rand::Rng as _;
-use serde::{Deserialize, Serialize};
-
+use linera_base::identifiers::{ChainId, Owner};
 pub use linera_client::wallet::*;
 
 pub fn pretty_print(wallet: &Wallet, chain_id: Option<ChainId>) {
@@ -79,20 +62,20 @@ Block Hash:         {}
 Timestamp:          {}
 Next Block Height:  {}"#,
             user_chain
-            .key_pair
-            .as_ref()
-            .map(|kp| kp.public().to_string())
-            .unwrap_or_else(|| "-".to_string()),
+                .key_pair
+                .as_ref()
+                .map(|kp| kp.public().to_string())
+                .unwrap_or_else(|| "-".to_string()),
             user_chain
-            .key_pair
-            .as_ref()
-            .map(|kp| Owner::from(kp.public()))
-            .map(|o| o.to_string())
-            .unwrap_or_else(|| "-".to_string()),
+                .key_pair
+                .as_ref()
+                .map(|kp| Owner::from(kp.public()))
+                .map(|o| o.to_string())
+                .unwrap_or_else(|| "-".to_string()),
             user_chain
-            .block_hash
-            .map(|bh| bh.to_string())
-            .unwrap_or_else(|| "-".to_string()),
+                .block_hash
+                .map(|bh| bh.to_string())
+                .unwrap_or_else(|| "-".to_string()),
             user_chain.timestamp,
             user_chain.next_block_height
         )),

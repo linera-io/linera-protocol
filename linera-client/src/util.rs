@@ -5,23 +5,11 @@
 use std::path::{Path, PathBuf};
 use std::{num::ParseIntError, time::Duration};
 
-use anyhow::{bail, Context as _, Result};
-use async_graphql::http::GraphiQLSource;
-use axum::response::{self, IntoResponse};
+use anyhow::Result;
 use futures::future;
-use http::Uri;
-#[cfg(test)]
-use linera_base::command::parse_version_message;
 use linera_base::data_types::{TimeDelta, Timestamp};
-use linera_core::{
-    data_types::RoundTimeout,
-    node::NotificationStream,
-    worker::Reason,
-};
-use tokio::signal::unix;
+use linera_core::{data_types::RoundTimeout, node::NotificationStream, worker::Reason};
 use tokio_stream::StreamExt as _;
-use tokio_util::sync::CancellationToken;
-use tracing::debug;
 
 pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
@@ -44,5 +32,5 @@ pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: Round
             timeout.timestamp.duration_since(Timestamp::now()),
         )),
     )
-        .await;
+    .await;
 }

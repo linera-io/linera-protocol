@@ -12,6 +12,7 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
+use linera_client::{chain_listener, wallet::Wallet};
 use linera_core::{
     client::ChainClient,
     test_utils::{FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
@@ -19,7 +20,6 @@ use linera_core::{
 use linera_storage::{MemoryStorage, TestClock};
 
 use super::MutationRoot;
-use crate::{chain_listener, wallet::Wallet};
 
 #[derive(Default)]
 struct ClientContext {

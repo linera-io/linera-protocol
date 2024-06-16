@@ -22,6 +22,10 @@ use linera_base::{
     data_types::Amount,
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
+use linera_client::{
+    config::{GenesisConfig, WalletState},
+    wallet::Wallet,
+};
 use linera_core::worker::Notification;
 use linera_execution::{
     committee::ValidatorName, system::SystemChannel, Bytecode, ResourceControlPolicy,
@@ -38,9 +42,6 @@ use crate::{
     faucet::ClaimOutcome,
     util::ChildExt,
 };
-
-use linera_client::config::{GenesisConfig, WalletState};
-use linera_client::wallet::Wallet;
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
 /// to the node-service command of the client.
