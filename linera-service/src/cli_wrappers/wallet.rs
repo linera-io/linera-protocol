@@ -369,7 +369,6 @@ impl ClientWrapper {
     /// Runs `linera service`.
     pub async fn run_node_service(&self, port: impl Into<Option<u16>>) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
-        tracing::info!("Creating a node service on port={}", port);
         let mut command = self.command().await?;
         command.arg("service");
         if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
