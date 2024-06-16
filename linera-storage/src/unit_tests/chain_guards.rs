@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use futures::FutureExt;
+use futures::FutureExt as _;
 use linera_base::identifiers::ChainId;
 use tokio::{sync::Barrier, time::sleep};
 

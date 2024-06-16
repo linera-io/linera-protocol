@@ -12,7 +12,7 @@ use chrono::Utc;
 use client_context::ClientContext;
 use client_options::ClientOptions;
 use colored::Colorize;
-use futures::{lock::Mutex, FutureExt, StreamExt};
+use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{CryptoHash, CryptoRng, PublicKey},
     data_types::{ApplicationPermissions, Timestamp},

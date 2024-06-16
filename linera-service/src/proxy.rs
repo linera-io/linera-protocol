@@ -7,7 +7,7 @@ use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use futures::{FutureExt, SinkExt, StreamExt};
+use futures::{FutureExt as _, SinkExt, StreamExt};
 use linera_core::{node::NodeError, JoinSetExt as _};
 use linera_rpc::{
     config::{

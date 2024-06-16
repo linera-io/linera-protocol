@@ -14,7 +14,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::FutureExt;
+use futures::FutureExt as _;
 use tokio::{
     sync::oneshot,
     task::{AbortHandle, JoinSet},

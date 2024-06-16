@@ -4,7 +4,7 @@
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use async_lock::{Mutex, MutexGuardArc, RwLock};
-use futures::FutureExt;
+use futures::FutureExt as _;
 use thiserror::Error;
 
 use crate::{

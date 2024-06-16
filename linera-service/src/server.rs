@@ -8,7 +8,7 @@ use std::{path::PathBuf, time::Duration};
 
 use anyhow::bail;
 use async_trait::async_trait;
-use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
+use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt, TryFutureExt as _};
 use linera_base::crypto::{CryptoRng, KeyPair};
 use linera_core::{worker::WorkerState, JoinSetExt as _};
 use linera_execution::{committee::ValidatorName, WasmRuntime, WithWasmDefault};

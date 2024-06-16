@@ -19,7 +19,7 @@ use std::{ops::Deref, sync::Arc};
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
-use futures::{future::join_all, FutureExt, StreamExt};
+use futures::{future::join_all, FutureExt as _, StreamExt};
 use linera_base::ensure;
 use scylla::{
     frame::request::batch::BatchType,

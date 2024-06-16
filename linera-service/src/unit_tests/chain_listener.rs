@@ -6,7 +6,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
-use futures::{lock::Mutex, FutureExt};
+use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},

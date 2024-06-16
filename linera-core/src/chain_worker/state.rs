@@ -9,7 +9,7 @@ use std::{
     sync::Arc,
 };
 
-use futures::{future, FutureExt};
+use futures::{future, FutureExt as _};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{ArithmeticError, BlockHeight, HashedBlob},

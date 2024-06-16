@@ -11,7 +11,7 @@ use std::{
     },
 };
 
-use futures::FutureExt;
+use futures::FutureExt as _;
 use linera_views::{
     batch::Batch,
     common::{ReadableKeyValueStore, WritableKeyValueStore},

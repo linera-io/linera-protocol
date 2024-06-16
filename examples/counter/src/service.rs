@@ -70,7 +70,7 @@ impl QueryRoot {
 #[cfg(test)]
 mod tests {
     use async_graphql::{Request, Response, Value};
-    use futures::FutureExt;
+    use futures::FutureExt as _;
     use linera_sdk::{
         util::BlockingWait,
         views::{View, ViewStorageContext},
