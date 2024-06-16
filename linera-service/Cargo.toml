@@ -13,7 +13,7 @@ version.workspace = true
 
 [features]
 ethereum = []
-default = ["wasmer", "rocksdb"]
+default = ["wasmer"]
 test = ["linera-views/test", "linera-execution/test", "dep:stdext"]
 benchmark = ["linera-base/test", "dep:linera-sdk"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]

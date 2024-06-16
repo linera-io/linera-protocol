@@ -12,7 +12,6 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-default = ["rocksdb"]
 benchmark = ["linera-base/test", "linera-indexer/benchmark"]
 rocksdb = ["linera-indexer/rocksdb", "linera-indexer-plugins/rocksdb"]
 dynamodb = ["linera-indexer/dynamodb", "linera-indexer-plugins/dynamodb"]

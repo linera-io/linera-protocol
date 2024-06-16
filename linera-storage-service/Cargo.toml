@@ -12,7 +12,6 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-default = ["rocksdb"]
 metrics = ["linera-views/metrics"]
 rocksdb = ["linera-views/rocksdb"]
 storage_service = []

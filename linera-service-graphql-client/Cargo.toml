@@ -12,7 +12,6 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-default = ["rocksdb"]
 rocksdb = ["linera-service/rocksdb"]
 dynamodb = ["linera-service/dynamodb"]
 scylladb = ["linera-service/scylladb"]
