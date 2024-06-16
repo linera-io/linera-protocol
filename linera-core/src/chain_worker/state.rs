@@ -189,10 +189,7 @@ where
         let local_time = self.storage.clock().current_time();
         let signer = block.authenticated_signer;
 
-        let executed_block = self
-            .chain
-            .execute_block(&block, local_time, None)
-            .boxed()
+        let executed_block = Box::pin(self.chain.execute_block(&block, local_time, None))
             .await?
             .with(block);
 
@@ -345,11 +342,11 @@ where
         );
         self.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.storage.clock().current_time();
-        let outcome = self
-            .chain
-            .execute_block(block, local_time, oracle_records.clone())
-            .boxed()
-            .await?;
+        let outcome = Box::pin(
+            self.chain
+                .execute_block(block, local_time, oracle_records.clone()),
+        )
+        .await?;
         if let Some(lite_certificate) = &validated_block_certificate {
             let value = HashedCertificateValue::new_validated(outcome.clone().with(block.clone()));
             lite_certificate
@@ -536,11 +533,12 @@ where
         // Execute the block and update inboxes.
         self.chain.remove_events_from_inboxes(block).await?;
         let local_time = self.storage.clock().current_time();
-        let verified_outcome = self
-            .chain
-            .execute_block(block, local_time, Some(oracle_records.clone()))
-            .boxed()
-            .await?;
+        let verified_outcome = Box::pin(self.chain.execute_block(
+            block,
+            local_time,
+            Some(oracle_records.clone()),
+        ))
+        .await?;
         // We should always agree on the messages and state hash.
         ensure!(
             *messages == verified_outcome.messages,
