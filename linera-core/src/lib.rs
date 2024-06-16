@@ -4,6 +4,8 @@
 
 //! This module defines the core Linera protocol.
 
+#![deny(clippy::large_futures)]
+
 pub mod chain_worker;
 pub mod client;
 pub mod data_types;

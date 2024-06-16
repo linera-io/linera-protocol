@@ -10,6 +10,7 @@
 // because they are slow and their behavior appears to be correctly check by the
 // test with memory.
 
+#![allow(clippy::large_futures)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
 use std::collections::BTreeMap;

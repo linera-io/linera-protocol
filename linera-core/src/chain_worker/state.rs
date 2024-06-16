@@ -192,6 +192,7 @@ where
         let executed_block = self
             .chain
             .execute_block(&block, local_time, None)
+            .boxed()
             .await?
             .with(block);
 
@@ -347,6 +348,7 @@ where
         let outcome = self
             .chain
             .execute_block(block, local_time, oracle_records.clone())
+            .boxed()
             .await?;
         if let Some(lite_certificate) = &validated_block_certificate {
             let value = HashedCertificateValue::new_validated(outcome.clone().with(block.clone()));
@@ -537,6 +539,7 @@ where
         let verified_outcome = self
             .chain
             .execute_block(block, local_time, Some(oracle_records.clone()))
+            .boxed()
             .await?;
         // We should always agree on the messages and state hash.
         ensure!(

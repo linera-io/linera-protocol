@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![deny(clippy::large_futures)]
+
 use std::{collections::HashMap, env, path::PathBuf, sync::Arc, time::Instant};
 
 use anyhow::{anyhow, bail, ensure, Context};
@@ -10,7 +12,7 @@ use chrono::Utc;
 use client_context::ClientContext;
 use client_options::ClientOptions;
 use colored::Colorize;
-use futures::{lock::Mutex, StreamExt};
+use futures::{lock::Mutex, FutureExt, StreamExt};
 use linera_base::{
     crypto::{CryptoHash, CryptoRng, PublicKey},
     data_types::{ApplicationPermissions, Timestamp},
@@ -1323,7 +1325,7 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
             let mut wallet_state = options.create_wallet(genesis_config, *testing_prng_seed)?;
             wallet_state.extend(chains);
             wallet_state.save()?;
-            options.initialize_storage().await?;
+            options.initialize_storage().boxed().await?;
             Ok(())
         }
 
@@ -1479,7 +1481,7 @@ Make sure to use a Linera client compatible with this network.
                         .map(|chain_id| UserChain::make_other(*chain_id, timestamp)),
                 );
                 wallet.save()?;
-                options.initialize_storage().await?;
+                options.initialize_storage().boxed().await?;
                 if *with_new_chain {
                     ensure!(
                         faucet.is_some(),

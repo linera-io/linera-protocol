@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![deny(clippy::large_futures)]
+
 use std::{path::PathBuf, time::Duration};
 
 use anyhow::bail;
@@ -466,6 +468,7 @@ async fn run(options: ServerOptions) {
                 .await
                 .unwrap();
             run_with_storage(full_storage_config, &genesis_config, wasm_runtime, job)
+                .boxed()
                 .await
                 .unwrap();
         }

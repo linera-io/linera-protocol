@@ -1,11 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![deny(clippy::large_futures)]
+
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use futures::{SinkExt, StreamExt};
+use futures::{FutureExt, SinkExt, StreamExt};
 use linera_core::{node::NodeError, JoinSetExt as _};
 use linera_rpc::{
     config::{
@@ -341,6 +343,7 @@ impl ProxyOptions {
             None,
             ProxyContext::from_options(self)?,
         )
+        .boxed()
         .await
     }
 }

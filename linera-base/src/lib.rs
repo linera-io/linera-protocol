@@ -1,11 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![deny(missing_docs)]
-
 //! This module provides a common set of types and library functions that are shared
 //! between the Linera protocol (compiled from Rust to native code) and Linera
 //! applications (compiled from Rust to Wasm).
+
+#![deny(missing_docs)]
+#![deny(clippy::large_futures)]
 
 #[doc(hidden)]
 pub use async_trait::async_trait;

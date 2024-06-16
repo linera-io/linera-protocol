@@ -61,7 +61,9 @@ pub type Config = aws_sdk_dynamodb::Config;
 
 /// Gets the AWS configuration from the environment
 pub async fn get_base_config() -> Result<Config, DynamoDbContextError> {
-    let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+    let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
+        .boxed()
+        .await;
     Ok((&base_config).into())
 }
 
@@ -75,7 +77,9 @@ fn get_endpoint_address() -> Option<String> {
 
 /// Gets the localstack config
 pub async fn get_localstack_config() -> Result<Config, DynamoDbContextError> {
-    let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+    let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
+        .boxed()
+        .await;
     let endpoint_address = get_endpoint_address().unwrap();
     let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
         .endpoint_url(endpoint_address)
@@ -354,6 +358,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
                 .list_tables()
                 .set_exclusive_start_table_name(start_table)
                 .send()
+                .boxed()
                 .await?;
             if let Some(namespaces_blk) = response.table_names {
                 namespaces.extend(namespaces_blk);
@@ -371,7 +376,12 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         let client = Client::from_conf(config.config.clone());
         let tables = Self::list_all(config).await?;
         for table in tables {
-            client.delete_table().table_name(&table).send().await?;
+            client
+                .delete_table()
+                .table_name(&table)
+                .send()
+                .boxed()
+                .await?;
         }
         Ok(())
     }
@@ -385,6 +395,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
             .table_name(namespace)
             .set_key(Some(key_db))
             .send()
+            .boxed()
             .await;
         let Err(error) = response else {
             return Ok(true);
@@ -443,6 +454,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
                     .build()?,
             )
             .send()
+            .boxed()
             .await?;
         Ok(())
     }
@@ -450,7 +462,12 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbContextError> {
         Self::check_namespace(namespace)?;
         let client = Client::from_conf(config.config.clone());
-        client.delete_table().table_name(namespace).send().await?;
+        client
+            .delete_table()
+            .table_name(namespace)
+            .send()
+            .boxed()
+            .await?;
         Ok(())
     }
 }
@@ -864,6 +881,7 @@ impl DirectWritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal
                 .transact_write_items()
                 .set_transact_items(Some(builder.transacts))
                 .send()
+                .boxed()
                 .await?;
         }
         Ok(())

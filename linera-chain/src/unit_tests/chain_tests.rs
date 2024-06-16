@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::large_futures)]
+
 use std::{iter, sync::Arc};
 
 use assert_matches::assert_matches;

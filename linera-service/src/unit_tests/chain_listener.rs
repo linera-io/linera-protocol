@@ -1,10 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::large_futures)]
+
 use std::{collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
-use futures::lock::Mutex;
+use futures::{lock::Mutex, FutureExt};
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
@@ -177,7 +179,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         .transfer(None, Amount::ONE, recipient0, UserData::default())
         .await?;
     for i in 0.. {
-        client0.synchronize_from_validators().await?;
+        client0.synchronize_from_validators().boxed().await?;
         let balance = client0.local_balance().await?;
         if balance == Amount::from_tokens(2) {
             break;

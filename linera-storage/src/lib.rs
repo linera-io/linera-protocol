@@ -3,6 +3,8 @@
 
 //! This module defines the storage abstractions for individual chains and certificates.
 
+#![deny(clippy::large_futures)]
+
 mod chain_guards;
 mod db_storage;
 #[cfg(with_dynamodb)]
