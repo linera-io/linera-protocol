@@ -11,6 +11,7 @@ use std::{
     sync::Arc,
 };
 
+use futures::FutureExt as _;
 use cargo_toml::Manifest;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
@@ -114,8 +115,7 @@ impl ActiveChain {
 
         block_builder(&mut block);
 
-        // TODO(#2066): Remove boxing once call-stack is shallower
-        let (certificate, message_ids) = Box::pin(block.try_sign()).await?;
+        let (certificate, message_ids) = block.try_sign().boxed().await?;
 
         self.validator
             .worker()

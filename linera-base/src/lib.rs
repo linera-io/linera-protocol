@@ -31,10 +31,11 @@ pub use {async_graphql, bcs, hex};
 
 cfg_if::cfg_if! {
     if #[cfg(web)] {
-        #[cfg(web)]
         pub use web_time as time;
+        pub use futures::future::LocalBoxFuture as MaybeLocalBoxFuture;
     } else {
         pub use std::time;
+        pub use futures::future::BoxFuture as MaybeLocalBoxFuture;
     }
 }
 

@@ -3302,6 +3302,7 @@ dependencies = [
  "cfg_aliases",
  "chrono",
  "ed25519-dalek",
+ "futures",
  "generic-array",
  "hex",
  "linera-witty",

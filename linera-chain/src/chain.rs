@@ -13,6 +13,7 @@ use linera_base::{
     data_types::{Amount, ArithmeticError, BlockHeight, OracleRecord, Timestamp},
     ensure,
     identifiers::{ChainId, Destination, GenericApplicationId, MessageId},
+    MaybeLocalBoxFuture,
 };
 use linera_execution::{
     system::SystemMessage, ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView, Message,
@@ -712,204 +713,263 @@ where
     /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown
     ///   away.
     /// * Returns the list of messages caused by the block being executed.
-    pub async fn execute_block(
-        &mut self,
-        block: &Block,
+    #[inline]
+    pub fn execute_block<'a>(
+        &'a mut self,
+        block: &'a Block,
         local_time: Timestamp,
         oracle_records: Option<Vec<OracleRecord>>,
-    ) -> Result<BlockExecutionOutcome, ChainError> {
-        #[cfg(with_metrics)]
-        let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
-
-        assert_eq!(block.chain_id, self.chain_id());
-        let chain_id = self.chain_id();
-        ensure!(
-            *self.execution_state.system.timestamp.get() <= block.timestamp,
-            ChainError::InvalidBlockTimestamp
-        );
-        self.execution_state.system.timestamp.set(block.timestamp);
-        let Some((_, committee)) = self.execution_state.system.current_committee() else {
-            return Err(ChainError::InactiveChain(chain_id));
-        };
-        let mut resource_controller = ResourceController {
-            policy: Arc::new(committee.policy().clone()),
-            tracker: ResourceTracker::default(),
-            account: block.authenticated_signer,
-        };
-        let mut messages = Vec::new();
-
-        if self.is_closed() {
-            ensure!(
-                !block.incoming_messages.is_empty() && block.has_only_rejected_messages(),
-                ChainError::ClosedChain
-            );
-        }
-
-        // The first incoming message of any child chain must be `OpenChain`. A root chain must
-        // already be initialized
-        if block.height == BlockHeight::ZERO
-            && self
-                .execution_state
-                .system
-                .description
-                .get()
-                .map_or(true, |description| description.is_child())
-        {
-            ensure!(
-                matches!(
-                    block.incoming_messages.first(),
-                    Some(IncomingMessage {
-                        event: Event {
-                            message: Message::System(SystemMessage::OpenChain(_)),
-                            ..
-                        },
-                        action: MessageAction::Accept,
-                        ..
-                    })
-                ),
-                ChainError::InactiveChain(self.chain_id())
-            );
-        }
-        let app_permissions = self.execution_state.system.application_permissions.get();
-        let mut mandatory = HashSet::<UserApplicationId>::from_iter(
-            app_permissions.mandatory_applications.iter().cloned(),
-        );
-        for operation in &block.operations {
-            ensure!(
-                app_permissions.can_execute_operations(&operation.application_id()),
-                ChainError::AuthorizedApplications(
-                    app_permissions.execute_operations.clone().unwrap()
-                )
-            );
-            if let Operation::User { application_id, .. } = operation {
-                mandatory.remove(application_id);
-            }
-        }
-        for message in &block.incoming_messages {
-            if mandatory.is_empty() {
-                break;
-            }
-            if let Message::User { application_id, .. } = &message.event.message {
-                mandatory.remove(application_id);
-            }
-        }
-        ensure!(
-            mandatory.is_empty(),
-            ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
-        );
-        let mut oracle_records = oracle_records.map(Vec::into_iter);
-        let mut new_oracle_records = Vec::new();
-        let mut next_message_index = 0;
-        for (index, message) in block.incoming_messages.iter().enumerate() {
+    ) -> MaybeLocalBoxFuture<'a, Result<BlockExecutionOutcome, ChainError>> {
+        Box::pin(async move {
             #[cfg(with_metrics)]
-            let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
-            let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
-            let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
-            // Execute the received message.
-            let context = MessageContext {
-                chain_id,
-                is_bouncing: message.event.is_bouncing(),
-                height: block.height,
-                certificate_hash: message.event.certificate_hash,
-                message_id: MessageId {
-                    chain_id: message.origin.sender,
-                    height: message.event.height,
-                    index: message.event.index,
-                },
-                authenticated_signer: message.event.authenticated_signer,
-                refund_grant_to: message.event.refund_grant_to,
-                next_message_index,
+            let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
+
+            assert_eq!(block.chain_id, self.chain_id());
+            let chain_id = self.chain_id();
+            ensure!(
+                *self.execution_state.system.timestamp.get() <= block.timestamp,
+                ChainError::InvalidBlockTimestamp
+            );
+            self.execution_state.system.timestamp.set(block.timestamp);
+            let Some((_, committee)) = self.execution_state.system.current_committee() else {
+                return Err(ChainError::InactiveChain(chain_id));
             };
-            let outcomes = match message.action {
-                MessageAction::Accept => {
-                    let mut grant = message.event.grant;
-                    let (mut outcomes, oracle_record) = self
-                        .execution_state
-                        .execute_message(
-                            context,
-                            local_time,
-                            message.event.message.clone(),
-                            (grant > Amount::ZERO).then_some(&mut grant),
-                            match &mut oracle_records {
-                                Some(records) => Some(
-                                    records
-                                        .next()
-                                        .ok_or_else(|| ChainError::MissingOracleRecord)?,
-                                ),
-                                None => None,
+            let mut resource_controller = ResourceController {
+                policy: Arc::new(committee.policy().clone()),
+                tracker: ResourceTracker::default(),
+                account: block.authenticated_signer,
+            };
+            let mut messages = Vec::new();
+
+            if self.is_closed() {
+                ensure!(
+                    !block.incoming_messages.is_empty() && block.has_only_rejected_messages(),
+                    ChainError::ClosedChain
+                );
+            }
+
+            // The first incoming message of any child chain must be `OpenChain`. A root chain must
+            // already be initialized
+            if block.height == BlockHeight::ZERO
+                && self
+                    .execution_state
+                    .system
+                    .description
+                    .get()
+                    .map_or(true, |description| description.is_child())
+            {
+                ensure!(
+                    matches!(
+                        block.incoming_messages.first(),
+                        Some(IncomingMessage {
+                            event: Event {
+                                message: Message::System(SystemMessage::OpenChain(_)),
+                                ..
                             },
-                            &mut resource_controller,
-                        )
-                        .await
-                        .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-                    new_oracle_records.push(oracle_record);
-                    if grant > Amount::ZERO {
-                        if let Some(refund_grant_to) = message.event.refund_grant_to {
-                            let outcome = self
-                                .execution_state
-                                .send_refund(context, grant, refund_grant_to)
-                                .await
-                                .map_err(|err| {
-                                    ChainError::ExecutionError(err, chain_execution_context)
-                                })?;
-                            outcomes.push(outcome);
-                        }
-                    }
-                    outcomes
+                            action: MessageAction::Accept,
+                            ..
+                        })
+                    ),
+                    ChainError::InactiveChain(self.chain_id())
+                );
+            }
+            let app_permissions = self.execution_state.system.application_permissions.get();
+            let mut mandatory = HashSet::<UserApplicationId>::from_iter(
+                app_permissions.mandatory_applications.iter().cloned(),
+            );
+            for operation in &block.operations {
+                ensure!(
+                    app_permissions.can_execute_operations(&operation.application_id()),
+                    ChainError::AuthorizedApplications(
+                        app_permissions.execute_operations.clone().unwrap()
+                    )
+                );
+                if let Operation::User { application_id, .. } = operation {
+                    mandatory.remove(application_id);
                 }
-                MessageAction::Reject => {
-                    // If rejecting a message fails, the entire block proposal should be
-                    // scrapped.
-                    let chain_execution_context = ChainExecutionContext::Block;
-                    ensure!(
-                        !message.event.is_protected() || self.is_closed(),
-                        ChainError::CannotRejectMessage {
-                            chain_id,
-                            origin: Box::new(message.origin.clone()),
-                            event: message.event.clone(),
-                        }
-                    );
-                    if message.event.is_tracked() {
-                        // Bounce the message.
-                        self.execution_state
-                            .bounce_message(
+            }
+            for message in &block.incoming_messages {
+                if mandatory.is_empty() {
+                    break;
+                }
+                if let Message::User { application_id, .. } = &message.event.message {
+                    mandatory.remove(application_id);
+                }
+            }
+            ensure!(
+                mandatory.is_empty(),
+                ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
+            );
+            let mut oracle_records = oracle_records.map(Vec::into_iter);
+            let mut new_oracle_records = Vec::new();
+            let mut next_message_index = 0;
+            for (index, message) in block.incoming_messages.iter().enumerate() {
+                #[cfg(with_metrics)]
+                let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
+                let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
+                let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
+                // Execute the received message.
+                let context = MessageContext {
+                    chain_id,
+                    is_bouncing: message.event.is_bouncing(),
+                    height: block.height,
+                    certificate_hash: message.event.certificate_hash,
+                    message_id: MessageId {
+                        chain_id: message.origin.sender,
+                        height: message.event.height,
+                        index: message.event.index,
+                    },
+                    authenticated_signer: message.event.authenticated_signer,
+                    refund_grant_to: message.event.refund_grant_to,
+                    next_message_index,
+                };
+                let outcomes = match message.action {
+                    MessageAction::Accept => {
+                        let mut grant = message.event.grant;
+                        let (mut outcomes, oracle_record) = self
+                            .execution_state
+                            .execute_message(
                                 context,
-                                message.event.grant,
-                                message.event.refund_grant_to,
+                                local_time,
                                 message.event.message.clone(),
+                                (grant > Amount::ZERO).then_some(&mut grant),
+                                match &mut oracle_records {
+                                    Some(records) => Some(
+                                        records
+                                            .next()
+                                            .ok_or_else(|| ChainError::MissingOracleRecord)?,
+                                    ),
+                                    None => None,
+                                },
+                                &mut resource_controller,
                             )
                             .await
                             .map_err(|err| {
                                 ChainError::ExecutionError(err, chain_execution_context)
-                            })?
-                    } else {
-                        // Nothing to do except maybe refund the grant.
-                        let mut outcomes = Vec::new();
-                        if message.event.grant > Amount::ZERO {
-                            let Some(refund_grant_to) = message.event.refund_grant_to else {
-                                // See OperationContext::refund_grant_to()
-                                return Err(ChainError::InternalError(
-                                    "Messages with grants should have a non-empty `refund_grant_to`".into()
-                                ));
-                            };
-                            // Refund grant.
-                            let outcome = self
-                                .execution_state
-                                .send_refund(context, message.event.grant, refund_grant_to)
-                                .await
-                                .map_err(|err| {
-                                    ChainError::ExecutionError(err, chain_execution_context)
-                                })?;
-                            outcomes.push(outcome);
+                            })?;
+                        new_oracle_records.push(oracle_record);
+                        if grant > Amount::ZERO {
+                            if let Some(refund_grant_to) = message.event.refund_grant_to {
+                                let outcome = self
+                                    .execution_state
+                                    .send_refund(context, grant, refund_grant_to)
+                                    .await
+                                    .map_err(|err| {
+                                        ChainError::ExecutionError(err, chain_execution_context)
+                                    })?;
+                                outcomes.push(outcome);
+                            }
                         }
                         outcomes
                     }
+                    MessageAction::Reject => {
+                        // If rejecting a message fails, the entire block proposal should be
+                        // scrapped.
+                        let chain_execution_context = ChainExecutionContext::Block;
+                        ensure!(
+                            !message.event.is_protected() || self.is_closed(),
+                            ChainError::CannotRejectMessage {
+                                chain_id,
+                                origin: Box::new(message.origin.clone()),
+                                event: message.event.clone(),
+                            }
+                        );
+                        if message.event.is_tracked() {
+                            // Bounce the message.
+                            self.execution_state
+                                .bounce_message(
+                                    context,
+                                    message.event.grant,
+                                    message.event.refund_grant_to,
+                                    message.event.message.clone(),
+                                )
+                                .await
+                                .map_err(|err| {
+                                    ChainError::ExecutionError(err, chain_execution_context)
+                                })?
+                        } else {
+                            // Nothing to do except maybe refund the grant.
+                            let mut outcomes = Vec::new();
+                            if message.event.grant > Amount::ZERO {
+                                let Some(refund_grant_to) = message.event.refund_grant_to else {
+                                    // See OperationContext::refund_grant_to()
+                                    return Err(ChainError::InternalError(
+                                    "Messages with grants should have a non-empty `refund_grant_to`".into()
+                                ));
+                                };
+                                // Refund grant.
+                                let outcome = self
+                                    .execution_state
+                                    .send_refund(context, message.event.grant, refund_grant_to)
+                                    .await
+                                    .map_err(|err| {
+                                        ChainError::ExecutionError(err, chain_execution_context)
+                                    })?;
+                                outcomes.push(outcome);
+                            }
+                            outcomes
+                        }
+                    }
+                };
+                let messages_out = self
+                    .process_execution_outcomes(context.height, outcomes)
+                    .await?;
+                if let MessageAction::Accept = message.action {
+                    for message_out in &messages_out {
+                        resource_controller
+                            .with_state(&mut self.execution_state)
+                            .await?
+                            .track_message(&message_out.message)
+                            .map_err(|err| {
+                                ChainError::ExecutionError(err, chain_execution_context)
+                            })?;
+                    }
                 }
-            };
-            let messages_out = self
-                .process_execution_outcomes(context.height, outcomes)
-                .await?;
-            if let MessageAction::Accept = message.action {
+                next_message_index +=
+                    u32::try_from(messages_out.len()).map_err(|_| ArithmeticError::Overflow)?;
+                messages.push(messages_out);
+            }
+            // Second, execute the operations in the block and remember the recipients to notify.
+            for (index, operation) in block.operations.iter().enumerate() {
+                #[cfg(with_metrics)]
+                let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
+                let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
+                let chain_execution_context = ChainExecutionContext::Operation(index);
+                let context = OperationContext {
+                    chain_id,
+                    height: block.height,
+                    index: Some(index),
+                    authenticated_signer: block.authenticated_signer,
+                    authenticated_caller_id: None,
+                    next_message_index,
+                };
+                let (outcomes, oracle_record) = self
+                    .execution_state
+                    .execute_operation(
+                        context,
+                        local_time,
+                        operation.clone(),
+                        match &mut oracle_records {
+                            Some(records) => Some(
+                                records
+                                    .next()
+                                    .ok_or_else(|| ChainError::MissingOracleRecord)?,
+                            ),
+                            None => None,
+                        },
+                        &mut resource_controller,
+                    )
+                    .await
+                    .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+                new_oracle_records.push(oracle_record);
+                let messages_out = self
+                    .process_execution_outcomes(context.height, outcomes)
+                    .await?;
+                resource_controller
+                    .with_state(&mut self.execution_state)
+                    .await?
+                    .track_operation(operation)
+                    .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
                 for message_out in &messages_out {
                     resource_controller
                         .with_state(&mut self.execution_state)
@@ -917,116 +977,64 @@ where
                         .track_message(&message_out.message)
                         .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
                 }
+                next_message_index +=
+                    u32::try_from(messages_out.len()).map_err(|_| ArithmeticError::Overflow)?;
+                messages.push(messages_out);
             }
-            next_message_index +=
-                u32::try_from(messages_out.len()).map_err(|_| ArithmeticError::Overflow)?;
-            messages.push(messages_out);
-        }
-        // Second, execute the operations in the block and remember the recipients to notify.
-        for (index, operation) in block.operations.iter().enumerate() {
-            #[cfg(with_metrics)]
-            let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
-            let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
-            let chain_execution_context = ChainExecutionContext::Operation(index);
-            let context = OperationContext {
-                chain_id,
-                height: block.height,
-                index: Some(index),
-                authenticated_signer: block.authenticated_signer,
-                authenticated_caller_id: None,
-                next_message_index,
-            };
-            let (outcomes, oracle_record) = self
-                .execution_state
-                .execute_operation(
-                    context,
-                    local_time,
-                    operation.clone(),
-                    match &mut oracle_records {
-                        Some(records) => Some(
-                            records
-                                .next()
-                                .ok_or_else(|| ChainError::MissingOracleRecord)?,
-                        ),
-                        None => None,
-                    },
-                    &mut resource_controller,
-                )
-                .await
-                .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-            new_oracle_records.push(oracle_record);
-            let messages_out = self
-                .process_execution_outcomes(context.height, outcomes)
-                .await?;
-            resource_controller
-                .with_state(&mut self.execution_state)
-                .await?
-                .track_operation(operation)
-                .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-            for message_out in &messages_out {
+
+            // Finally, charge for the block fee, except if the chain is closed. Closed chains should
+            // always be able to reject incoming messages.
+            if !self.is_closed() {
                 resource_controller
                     .with_state(&mut self.execution_state)
                     .await?
-                    .track_message(&message_out.message)
-                    .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+                    .track_block()
+                    .map_err(|err| ChainError::ExecutionError(err, ChainExecutionContext::Block))?;
             }
-            next_message_index +=
-                u32::try_from(messages_out.len()).map_err(|_| ArithmeticError::Overflow)?;
-            messages.push(messages_out);
-        }
 
-        // Finally, charge for the block fee, except if the chain is closed. Closed chains should
-        // always be able to reject incoming messages.
-        if !self.is_closed() {
-            resource_controller
-                .with_state(&mut self.execution_state)
-                .await?
-                .track_block()
-                .map_err(|err| ChainError::ExecutionError(err, ChainExecutionContext::Block))?;
-        }
+            // Recompute the state hash.
+            let state_hash = {
+                #[cfg(with_metrics)]
+                let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
+                self.execution_state.crypto_hash().await?
+            };
+            self.execution_state_hash.set(Some(state_hash));
+            // Last, reset the consensus state based on the current ownership.
+            let maybe_committee = self.execution_state.system.current_committee().into_iter();
+            self.manager.get_mut().reset(
+                self.execution_state.system.ownership.get(),
+                block.height.try_add_one()?,
+                local_time,
+                maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights()),
+            )?;
 
-        // Recompute the state hash.
-        let state_hash = {
             #[cfg(with_metrics)]
-            let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
-            self.execution_state.crypto_hash().await?
-        };
-        self.execution_state_hash.set(Some(state_hash));
-        // Last, reset the consensus state based on the current ownership.
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
-        self.manager.get_mut().reset(
-            self.execution_state.system.ownership.get(),
-            block.height.try_add_one()?,
-            local_time,
-            maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights()),
-        )?;
+            {
+                // Log Prometheus metrics
+                NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
+                WASM_FUEL_USED_PER_BLOCK
+                    .with_label_values(&[])
+                    .observe(resource_controller.tracker.fuel as f64);
+                WASM_NUM_READS_PER_BLOCK
+                    .with_label_values(&[])
+                    .observe(resource_controller.tracker.read_operations as f64);
+                WASM_BYTES_READ_PER_BLOCK
+                    .with_label_values(&[])
+                    .observe(resource_controller.tracker.bytes_read as f64);
+                WASM_BYTES_WRITTEN_PER_BLOCK
+                    .with_label_values(&[])
+                    .observe(resource_controller.tracker.bytes_written as f64);
+            }
 
-        #[cfg(with_metrics)]
-        {
-            // Log Prometheus metrics
-            NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
-            WASM_FUEL_USED_PER_BLOCK
-                .with_label_values(&[])
-                .observe(resource_controller.tracker.fuel as f64);
-            WASM_NUM_READS_PER_BLOCK
-                .with_label_values(&[])
-                .observe(resource_controller.tracker.read_operations as f64);
-            WASM_BYTES_READ_PER_BLOCK
-                .with_label_values(&[])
-                .observe(resource_controller.tracker.bytes_read as f64);
-            WASM_BYTES_WRITTEN_PER_BLOCK
-                .with_label_values(&[])
-                .observe(resource_controller.tracker.bytes_written as f64);
-        }
-
-        assert_eq!(
-            messages.len(),
-            block.incoming_messages.len() + block.operations.len()
-        );
-        Ok(BlockExecutionOutcome {
-            messages,
-            state_hash,
-            oracle_records: new_oracle_records,
+            assert_eq!(
+                messages.len(),
+                block.incoming_messages.len() + block.operations.len()
+            );
+            Ok(BlockExecutionOutcome {
+                messages,
+                state_hash,
+                oracle_records: new_oracle_records,
+            })
         })
     }
 

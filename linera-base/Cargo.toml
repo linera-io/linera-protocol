@@ -26,6 +26,7 @@ bcs.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
 ed25519-dalek.workspace = true
+futures.workspace = true
 generic-array.workspace = true
 getrandom = { workspace = true, optional = true }
 hex.workspace = true
