@@ -10,27 +10,12 @@
     feature = "remote_net"
 ))]
 
-// TODO(#2112): The end-to-end tests are taking a pair `(Database,Network)` which is
-// a relatively rigid structure. We should be able to have tests for mixes of validators.
-
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage_service",
-    feature = "remote_net"
-))]
 mod common;
 
 use std::{env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use async_graphql::InputType;
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage_service",
-    feature = "remote_net"
-))]
 use common::INTEGRATION_TEST_GUARD;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 use linera_base::{
@@ -51,8 +36,8 @@ use linera_service::cli_wrappers::{
     docker::BuildArg, local_kubernetes_net::SharedLocalKubernetesNetTestingConfig,
 };
 use linera_service::cli_wrappers::{
-    local_net::{get_node_port, PathProvider},
-    ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+    local_net::PathProvider, ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet,
+    LineraNetConfig, Network,
 };
 use serde_json::{json, Value};
 use test_case::test_case;
@@ -465,8 +450,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
             None,
         )
         .await?;
-    let port = get_node_port().await;
-    let node_service = client.run_node_service(port).await?;
+    let node_service = client.run_node_service(None).await?;
 
     let app = EthereumTrackerApp(
         node_service
@@ -509,7 +493,6 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use counter::CounterAbi;
-    #[cfg(not(feature = "kubernetes"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client) = config.instantiate().await?;
@@ -530,8 +513,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
             None,
         )
         .await?;
-    let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port).await?;
+    let mut node_service = client.run_node_service(None).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -562,7 +544,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfig) -> Result<()> {
     use counter::CounterAbi;
-    #[cfg(not(feature = "kubernetes"))]
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client) = config.instantiate().await?;
@@ -579,8 +561,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     let application_id = client
         .create_application(&bytecode_id, &(), &original_counter_value, &[], None)
         .await?;
-    let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port).await?;
+    let mut node_service = client.run_node_service(None).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -613,7 +594,6 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     use std::time::Instant;
 
     use social::SocialAbi;
-    #[cfg(not(feature = "kubernetes"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client1) = config.instantiate().await?;
@@ -631,10 +611,8 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .create_application(&bytecode_id, &(), &(), &[], None)
         .await?;
 
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1).await?;
-    let mut node_service2 = client2.run_node_service(port2).await?;
+    let mut node_service1 = client1.run_node_service(8080).await?;
+    let mut node_service2 = client2.run_node_service(8081).await?;
 
     node_service1.process_inbox(&chain1).await?;
 
@@ -711,7 +689,7 @@ async fn test_wasm_end_to_end_fungible(
     use std::collections::BTreeMap;
 
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
-    #[cfg(not(feature = "kubernetes"))]
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client1) = config.instantiate().await?;
@@ -750,10 +728,8 @@ async fn test_wasm_end_to_end_fungible(
         )
         .await?;
 
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1).await?;
-    let mut node_service2 = client2.run_node_service(port2).await?;
+    let mut node_service1 = client1.run_node_service(8080).await?;
+    let mut node_service2 = client2.run_node_service(8081).await?;
 
     let app1 = FungibleApp(
         node_service1
@@ -872,7 +848,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     use std::collections::BTreeMap;
 
     use fungible::{Account, FungibleTokenAbi, InitialState, Parameters};
-    #[cfg(not(feature = "kubernetes"))]
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client1) = config.instantiate().await?;
 
@@ -918,8 +894,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         )
         .await?;
 
-    let port = get_node_port().await;
-    let mut node_service = client1.run_node_service(port).await?;
+    let mut node_service = client1.run_node_service(8080).await?;
 
     let app1 = FungibleApp(
         node_service
@@ -993,7 +968,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Result<()> {
     use non_fungible::{NftOutput, NonFungibleTokenAbi};
-    #[cfg(not(feature = "kubernetes"))]
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client1) = config.instantiate().await?;
@@ -1014,10 +989,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .publish_and_create::<NonFungibleTokenAbi, (), ()>(contract, service, &(), &(), &[], None)
         .await?;
 
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1).await?;
-    let mut node_service2 = client2.run_node_service(port2).await?;
+    let mut node_service1 = client1.run_node_service(8080).await?;
+    let mut node_service2 = client2.run_node_service(8081).await?;
 
     let app1 = NonFungibleApp(
         node_service1
@@ -1259,7 +1232,6 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
     use linera_base::data_types::Timestamp;
 
-    #[cfg(not(feature = "kubernetes"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client1) = config.instantiate().await?;
@@ -1313,10 +1285,8 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
         )
         .await?;
 
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1).await?;
-    let mut node_service2 = client2.run_node_service(port2).await?;
+    let mut node_service1 = client1.run_node_service(8080).await?;
+    let mut node_service2 = client2.run_node_service(8081).await?;
 
     let app_fungible1 = FungibleApp(
         node_service1
@@ -1390,7 +1360,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     use std::collections::BTreeMap;
 
     use matching_engine::{MatchingEngineAbi, OrderNature, Parameters, Price};
-    #[cfg(not(feature = "kubernetes"))]
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client_admin) = config.instantiate().await?;
@@ -1450,12 +1420,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         .await?;
 
     // Now creating the service and exporting the applications
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
-    let port3 = get_node_port().await;
-    let mut node_service_admin = client_admin.run_node_service(port1).await?;
-    let mut node_service_a = client_a.run_node_service(port2).await?;
-    let mut node_service_b = client_b.run_node_service(port3).await?;
+    let mut node_service_admin = client_admin.run_node_service(8080).await?;
+    let mut node_service_a = client_a.run_node_service(8081).await?;
+    let mut node_service_b = client_b.run_node_service(8082).await?;
 
     node_service_a
         .request_application(&chain_a, &token1)
@@ -1683,7 +1650,6 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
 
     use amm::{AmmAbi, Parameters};
-    #[cfg(not(feature = "kubernetes"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client_amm) = config.instantiate().await?;
@@ -1710,12 +1676,9 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let owner0 = get_fungible_account_owner(&client0);
     let owner1 = get_fungible_account_owner(&client1);
 
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
-    let port3 = get_node_port().await;
-    let mut node_service_amm = client_amm.run_node_service(port1).await?;
-    let mut node_service0 = client0.run_node_service(port2).await?;
-    let mut node_service1 = client1.run_node_service(port3).await?;
+    let mut node_service_amm = client_amm.run_node_service(8080).await?;
+    let mut node_service0 = client0.run_node_service(8081).await?;
+    let mut node_service1 = client1.run_node_service(8082).await?;
 
     // Amounts of token0 that will be owned by each user
     let state_fungible0 = fungible::InitialState {
@@ -2435,9 +2398,8 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     let chain_2 = client
         .open_and_assign(&client_2, Amount::from_tokens(3))
         .await?;
-    let port = get_node_port().await;
     let node_service_2 = match network {
-        Network::Grpc => Some(client_2.run_node_service(port).await?),
+        Network::Grpc => Some(client_2.run_node_service(8081).await?),
         Network::Tcp | Network::Udp => None,
     };
 
@@ -2538,10 +2500,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
-
-    #[cfg(not(feature = "kubernetes"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let (mut net, client) = config.instantiate().await?;
 
     let chain1 = client.load_wallet()?.default_chain().unwrap();
@@ -2572,8 +2531,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
         .await
         ?;
 
-    let port = get_node_port().await;
-    let node_service = client.run_node_service(port).await?;
+    let node_service = client.run_node_service(8080).await?;
 
     // Open a new chain with the same public key.
     // The node service should automatically create a client for it internally.
@@ -2667,8 +2625,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     client2.wallet_init(&[chain], FaucetOption::None).await?;
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
-    let port = get_node_port().await;
-    let mut node_service2 = client2.run_node_service(port).await?;
+    let mut node_service2 = client2.run_node_service(8081).await?;
     let response = node_service2
         .query_node(format!(
             "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
@@ -2719,7 +2676,6 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Result<()> {
-    #[cfg(not(feature = "kubernetes"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create net and two clients.
@@ -2818,8 +2774,7 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
         .await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
 
-    let port = get_node_port().await;
-    let node_service = client.run_node_service(port).await?;
+    let node_service = client.run_node_service(None).await?;
 
     assert_eq!(
         node_service.try_get_applications_uri(&chain).await?.len(),
@@ -2903,8 +2858,7 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
         .await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
 
-    let port = get_node_port().await;
-    let node_service = client.run_node_service(port).await?;
+    let node_service = client.run_node_service(None).await?;
 
     assert_eq!(
         node_service.try_get_applications_uri(&chain).await?.len(),
@@ -2924,7 +2878,6 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) -> Result<()> {
-    #[cfg(not(feature = "kubernetes"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
@@ -2994,8 +2947,6 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Result<()> {
     use linera_base::crypto::PublicKey;
-
-    #[cfg(not(feature = "kubernetes"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and client.
@@ -3036,7 +2987,6 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConfig) -> Result<()> {
-    #[cfg(not(feature = "kubernetes"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
@@ -3082,7 +3032,6 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
-    #[cfg(not(feature = "kubernetes"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
@@ -3161,7 +3110,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
 async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) -> Result<()> {
     use linera_base::command::CommandExt;
     use tokio::process::Command;
-    #[cfg(not(feature = "kubernetes"))]
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
@@ -3322,7 +3271,6 @@ impl Drop for RestoreVarOnDrop {
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> Result<()> {
-    #[cfg(not(feature = "kubernetes"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     use tokio::task::JoinHandle;
 
