@@ -1075,13 +1075,17 @@ where
         // Now we should have a complete view of all committees in the system.
         let (committees, max_epoch) = self.known_committees().await?;
         // Proceed to downloading received certificates.
-        let trackers = &self.state().received_certificate_trackers;
         let result = communicate_with_quorum(
             &nodes,
             &local_committee,
             |_| (),
             |name, node| {
-                let tracker = *trackers.get(&name).unwrap_or(&0);
+                let tracker = self
+                    .state()
+                    .received_certificate_trackers
+                    .get(&name)
+                    .copied()
+                    .unwrap_or(0);
                 let committees = committees.clone();
                 let node_client = node_client.clone();
                 Box::pin(Self::synchronize_received_certificates_from_validator(
