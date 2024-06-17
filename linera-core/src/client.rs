@@ -293,7 +293,7 @@ pub enum ChainClientError {
 
 impl From<Infallible> for ChainClientError {
     fn from(infallible: Infallible) -> Self {
-        infallible.into()
+        match infallible {}
     }
 }
 

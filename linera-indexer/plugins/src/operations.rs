@@ -199,12 +199,12 @@ where
         let mut result = Vec::new();
         let limit = limit.unwrap_or(20);
         for _ in 0..limit {
-            let Some(next_key) = key else { break };
-            let operation = plugin.operations.get(&next_key).await?;
+            let Some(next_key) = &key else { break };
+            let operation = plugin.operations.get(next_key).await?;
             match operation {
                 None => break,
                 Some(op) => {
-                    key = op.previous_operation.clone();
+                    key.clone_from(&op.previous_operation);
                     result.push(op)
                 }
             }
