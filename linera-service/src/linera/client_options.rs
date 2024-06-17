@@ -27,7 +27,7 @@ use linera_views::common::CommonStoreConfig;
 
 use crate::{GenesisConfig, Job};
 
-#[derive(clap::Parser)]
+#[derive(Clone, clap::Parser)]
 #[command(
     name = "linera",
     version = linera_version::VersionInfo::default_clap_str(),

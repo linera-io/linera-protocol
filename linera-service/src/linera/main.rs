@@ -106,7 +106,7 @@ impl Runnable for Job {
         ViewError: From<S::ContextError>,
     {
         let Job(options, wallet) = self;
-        let mut context = ClientContext::new(storage.clone(), &options, wallet);
+        let mut context = ClientContext::new(storage.clone(), options.clone(), wallet);
         let command = options.command;
 
         use ClientCommand::*;
