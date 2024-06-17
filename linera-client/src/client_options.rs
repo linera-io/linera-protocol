@@ -4,7 +4,6 @@
 use std::{env, iter, num::NonZeroU16, path::PathBuf, time::Duration};
 
 use chrono::{DateTime, Utc};
-use futures::FutureExt as _;
 use linera_base::{
     crypto::PublicKey,
     data_types::{Amount, ApplicationPermissions, TimeDelta},
@@ -130,7 +129,7 @@ impl ClientOptions {
     }
 
     pub async fn run_with_storage<R: Runnable>(&self, job: R) -> anyhow::Result<R::Output> {
-        let wallet = self.wallet()?;
+        let genesis_config = self.wallet()?.genesis_config().clone();
         let output = Box::pin(run_with_storage(
             self.storage_config()?
                 .add_common_config(self.common_config())
