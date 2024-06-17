@@ -59,4 +59,4 @@ jobs:
           # Docker compose can take some time to start
           max_attempts: 5
           timeout_minutes: 2
-          command: sleep 60 && linera --wallet docker/wallet.json --storage rocksdb:docker/linera.db sync-balance
+          command: sleep 60 && linera --wallet docker/wallet.json --storage service:tcp:127.0.0.1:1235:linera_docker_db sync-balance
