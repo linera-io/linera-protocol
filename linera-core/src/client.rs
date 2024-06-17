@@ -1281,9 +1281,9 @@ where
         for blob_id in blob_ids {
             if let Some(blob) = self.client.local_node.recent_blob(&blob_id).await {
                 blobs.push(blob);
-            } else if let Some(blob) = self.state().pending_blobs.get(&blob_id) {
-                self.client.local_node.cache_recent_blob(blob).await;
-                blobs.push(blob.to_owned());
+            } else if let Some(blob) = self.state().pending_blobs.get(&blob_id).cloned() {
+                self.client.local_node.cache_recent_blob(&blob).await;
+                blobs.push(blob);
             } else {
                 return Err(LocalNodeError::CannotReadLocalBlob {
                     chain_id: self.chain_id,
