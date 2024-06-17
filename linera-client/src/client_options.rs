@@ -4,7 +4,6 @@
 use std::{env, iter, num::NonZeroU16, path::PathBuf, time::Duration};
 
 use chrono::{DateTime, Utc};
-use futures::FutureExt as _;
 use linera_base::{
     crypto::PublicKey,
     data_types::{Amount, ApplicationPermissions, TimeDelta},
