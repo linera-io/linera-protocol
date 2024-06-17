@@ -550,8 +550,9 @@ impl LocalNet {
             .context("endpoint should always parse")?
             .connect_lazy();
         let mut client = HealthClient::new(connection);
+        tokio::time::sleep(Duration::from_millis(100)).await;
         for i in 0..10 {
-            tokio::time::sleep(Duration::from_secs(i)).await;
+            tokio::time::sleep(Duration::from_millis(i * 500)).await;
             let result = client.check(HealthCheckRequest::default()).await;
             if result.is_ok() && result.unwrap().get_ref().status() == ServingStatus::Serving {
                 info!("Successfully started {nickname}");
