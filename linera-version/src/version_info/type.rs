@@ -103,14 +103,17 @@ fn get_hash(
 
     let package_glob = format!("{}/{}", package_root.display(), glob);
 
+    let mut n_file = 0;
     for path in glob::glob(&package_glob)? {
         let path = path?;
         let mut file = std::fs::File::open(&path)?;
         relevant_paths.push(path);
+        n_file += 1;
         while file.read(&mut buffer)? != 0 {
             hasher.update(buffer);
         }
     }
+    assert!(n_file > 0);
 
     Ok(STANDARD_NO_PAD.encode(hasher.finalize()))
 }
