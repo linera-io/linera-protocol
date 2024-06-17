@@ -131,15 +131,14 @@ impl ClientOptions {
 
     pub async fn run_with_storage<R: Runnable>(&self, job: R) -> anyhow::Result<R::Output> {
         let genesis_config = self.wallet()?.inner().genesis_config().clone();
-        let output = run_with_storage(
+        let output = Box::pin(run_with_storage(
             self.storage_config()?
                 .add_common_config(self.common_config())
                 .await?,
             &genesis_config,
             self.wasm_runtime.with_wasm_default(),
             job,
-        )
-        .boxed()
+        ))
         .await?;
         Ok(output)
     }
