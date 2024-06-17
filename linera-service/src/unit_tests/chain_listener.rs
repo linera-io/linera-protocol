@@ -26,8 +26,7 @@ use linera_rpc::{
     config::{NetworkProtocol, ValidatorPublicNetworkPreConfig},
     simple::TransportProtocol,
 };
-use linera_storage::{MemoryStorage, Storage, TestClock};
-use linera_views::views::ViewError;
+use linera_storage::{MemoryStorage, TestClock};
 use rand::SeedableRng as _;
 
 use crate::{
@@ -36,22 +35,24 @@ use crate::{
     wallet::{UserChain, Wallet},
 };
 
+type TestStorage = MemoryStorage<TestClock>;
+type TestProvider = NodeProvider<TestStorage>;
+
 struct ClientContext {
     wallet: Wallet,
-    chain_client_builder: Client<NodeProvider<MemoryStorage<TestClock>>>,
+    client: Arc<Client<TestProvider, TestStorage>>,
 }
 
 #[async_trait]
-impl chain_listener::ClientContext<NodeProvider<MemoryStorage<TestClock>>> for ClientContext {
+impl chain_listener::ClientContext for ClientContext {
+    type ValidatorNodeProvider = TestProvider;
+    type Storage = TestStorage;
+
     fn wallet(&self) -> &Wallet {
         &self.wallet
     }
 
-    fn make_chain_client<S>(
-        &self,
-        storage: S,
-        chain_id: ChainId,
-    ) -> ChainClient<NodeProvider<MemoryStorage<TestClock>>, S> {
+    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<TestProvider, TestStorage> {
         let chain = self
             .wallet
             .get(chain_id)
@@ -62,10 +63,9 @@ impl chain_listener::ClientContext<NodeProvider<MemoryStorage<TestClock>>> for C
             .map(|kp| kp.copy())
             .into_iter()
             .collect();
-        self.chain_client_builder.build(
+        self.client.build(
             chain_id,
             known_key_pairs,
-            storage,
             self.wallet.genesis_admin_chain(),
             chain.block_hash,
             chain.timestamp,
@@ -94,13 +94,10 @@ impl chain_listener::ClientContext<NodeProvider<MemoryStorage<TestClock>>> for C
         }
     }
 
-    async fn update_wallet<'a, S>(
+    async fn update_wallet<'a>(
         &'a mut self,
-        client: &'a mut ChainClient<NodeProvider<MemoryStorage<TestClock>>, S>,
-    ) where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
+        client: &'a mut ChainClient<TestProvider, TestStorage>,
+    ) {
         self.wallet.update_from_state(client).await;
     }
 }
@@ -151,7 +148,12 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let delivery = CrossChainMessageDelivery::NonBlocking;
     let mut context = ClientContext {
         wallet: Wallet::new(genesis_config, Some(37)),
-        chain_client_builder: Client::new(builder.make_node_provider(), 10, delivery),
+        client: Arc::new(Client::new(
+            builder.make_node_provider(),
+            storage.clone(),
+            10,
+            delivery,
+        )),
     };
     let key_pair = KeyPair::generate_from(&mut rng);
     let public_key = key_pair.public();

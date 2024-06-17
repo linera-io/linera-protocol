@@ -629,11 +629,15 @@ where
         let storage = self.make_storage().await?;
         self.chain_client_storages.push(storage.clone());
         let provider = self.make_node_provider();
-        let builder = Client::new(provider, 10, CrossChainMessageDelivery::NonBlocking);
+        let builder = Arc::new(Client::new(
+            provider,
+            storage,
+            10,
+            CrossChainMessageDelivery::NonBlocking,
+        ));
         Ok(builder.build(
             chain_id,
             vec![key_pair],
-            storage,
             self.admin_id,
             block_hash,
             Timestamp::from(0),

@@ -16,8 +16,7 @@ use linera_core::{
     client::ChainClient,
     test_utils::{FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
 };
-use linera_storage::{DbStorage, Storage, TestClock};
-use linera_views::{memory::MemoryStore, views::ViewError};
+use linera_storage::{MemoryStorage, TestClock};
 
 use super::MutationRoot;
 use crate::{chain_listener, wallet::Wallet};
@@ -27,19 +26,19 @@ struct ClientContext {
     update_calls: usize,
 }
 
+type TestStorage = MemoryStorage<TestClock>;
+type TestProvider = NodeProvider<TestStorage>;
+
 #[async_trait]
-impl chain_listener::ClientContext<NodeProvider<DbStorage<MemoryStore, TestClock>>>
-    for ClientContext
-{
+impl chain_listener::ClientContext for ClientContext {
+    type ValidatorNodeProvider = TestProvider;
+    type Storage = TestStorage;
+
     fn wallet(&self) -> &Wallet {
         unimplemented!()
     }
 
-    fn make_chain_client<S>(
-        &self,
-        _: S,
-        _: ChainId,
-    ) -> ChainClient<NodeProvider<DbStorage<MemoryStore, TestClock>>, S> {
+    fn make_chain_client(&self, _: ChainId) -> ChainClient<TestProvider, TestStorage> {
         unimplemented!()
     }
 
@@ -47,13 +46,7 @@ impl chain_listener::ClientContext<NodeProvider<DbStorage<MemoryStore, TestClock
         self.update_calls += 1;
     }
 
-    async fn update_wallet<'a, S>(
-        &'a mut self,
-        _: &'a mut ChainClient<NodeProvider<DbStorage<MemoryStore, TestClock>>, S>,
-    ) where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
+    async fn update_wallet<'a>(&'a mut self, _: &'a mut ChainClient<TestProvider, TestStorage>) {
         self.update_calls += 1;
     }
 }

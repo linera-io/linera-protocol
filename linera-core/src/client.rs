@@ -69,42 +69,52 @@ use crate::{
 mod client_tests;
 
 /// A builder that creates `ChainClients` which share the cache and notifiers.
-pub struct Client<ValidatorNodeProvider> {
+pub struct Client<ValidatorNodeProvider, Storage> {
     /// How to talk to the validators.
     validator_node_provider: ValidatorNodeProvider,
+    /// Local node to manage the execution state and the local storage of the chains that we are
+    /// tracking.
+    local_node: LocalNodeClient<Storage>,
     /// Maximum number of pending messages processed at a time in a block.
     max_pending_messages: usize,
     /// The policy for automatically handling incoming messages.
     message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
     cross_chain_message_delivery: CrossChainMessageDelivery,
-    /// Cached hashed certificate values by hash.
-    recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
-    /// Cached blobs by blob ID.
-    recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
-    /// One-shot channels to notify callers when messages of a particular chain have been
-    /// delivered.
-    delivery_notifiers: Arc<tokio::sync::Mutex<DeliveryNotifiers>>,
     /// References to clients waiting for chain notifications.
     notifier: Arc<Notifier<Notification>>,
+    /// A copy of the storage client so that we don't have to lock the local node client
+    /// to retrieve it.
+    storage: Storage,
 }
 
-impl<ValidatorNodeProvider: Clone> Client<ValidatorNodeProvider> {
+impl<P, S: Storage + Clone> Client<P, S> {
     /// Creates a new `Client` with a new cache and notifiers.
     pub fn new(
-        validator_node_provider: ValidatorNodeProvider,
+        validator_node_provider: P,
+        storage: S,
         max_pending_messages: usize,
         cross_chain_message_delivery: CrossChainMessageDelivery,
     ) -> Self {
+        let state = WorkerState::new_for_client(
+            "Client node".to_string(),
+            storage.clone(),
+            Arc::new(ValueCache::default()),
+            Arc::new(ValueCache::default()),
+            Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
+        )
+        .with_allow_inactive_chains(true)
+        .with_allow_messages_from_deprecated_epochs(true);
+        let local_node = LocalNodeClient::new(state);
+
         Self {
             validator_node_provider,
+            local_node,
             max_pending_messages,
             message_policy: MessagePolicy::Accept,
             cross_chain_message_delivery,
-            recent_hashed_certificate_values: Arc::new(ValueCache::default()),
-            recent_hashed_blobs: Arc::new(ValueCache::default()),
-            delivery_notifiers: Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
             notifier: Arc::new(Notifier::default()),
+            storage,
         }
     }
 
@@ -114,35 +124,33 @@ impl<ValidatorNodeProvider: Clone> Client<ValidatorNodeProvider> {
         self
     }
 
+    /// Returns the storage client used by this client's local node.
+    pub fn storage_client(&self) -> &S {
+        &self.storage
+    }
+
     /// Creates a new `ChainClient`.
     #[allow(clippy::too_many_arguments)]
-    pub fn build<Storage>(
-        &self,
+    pub fn build(
+        self: &Arc<Self>,
         chain_id: ChainId,
         known_key_pairs: Vec<KeyPair>,
-        storage: Storage,
         admin_id: ChainId,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_block: Option<Block>,
         pending_blobs: BTreeMap<BlobId, HashedBlob>,
-    ) -> ChainClient<ValidatorNodeProvider, Storage> {
+    ) -> ChainClient<P, S>
+    where
+        P: Clone,
+    {
         let known_key_pairs = known_key_pairs
             .into_iter()
             .map(|kp| (Owner::from(kp.public()), kp))
             .collect();
-        let state = WorkerState::new_for_client(
-            format!("Client node {:?}", chain_id),
-            storage,
-            self.recent_hashed_certificate_values.clone(),
-            self.recent_hashed_blobs.clone(),
-            self.delivery_notifiers.clone(),
-        )
-        .with_allow_inactive_chains(true)
-        .with_allow_messages_from_deprecated_epochs(true);
-        let node_client = LocalNodeClient::new(state);
         ChainClient {
+            client: self.clone(),
             chain_id,
             known_key_pairs,
             validator_node_provider: self.validator_node_provider.clone(),
@@ -155,7 +163,6 @@ impl<ValidatorNodeProvider: Clone> Client<ValidatorNodeProvider> {
             timestamp,
             next_block_height,
             pending_block,
-            node_client,
             pending_blobs,
             notifier: self.notifier.clone(),
         }
@@ -193,6 +200,8 @@ impl MessagePolicy {
 /// * As a rule, operations are considered successful (and communication may stop) when
 /// they succeeded in gathering a quorum of responses.
 pub struct ChainClient<ValidatorNodeProvider, Storage> {
+    /// The Linera [`Client`] that manages operations on this chain.
+    client: Arc<Client<ValidatorNodeProvider, Storage>>,
     /// The off-chain chain ID.
     chain_id: ChainId,
     /// How to talk to the validators.
@@ -219,9 +228,6 @@ pub struct ChainClient<ValidatorNodeProvider, Storage> {
     cross_chain_message_delivery: CrossChainMessageDelivery,
     /// Support synchronization of received certificates.
     received_certificate_trackers: HashMap<ValidatorName, u64>,
-    /// Local node to manage the execution state and the local storage of the chains that we are
-    /// tracking.
-    node_client: LocalNodeClient<Storage>,
     /// This contains blobs belonging to our `pending_block` that may not even have
     /// been processed by (i.e. been proposed to) our own local chain manager yet.
     pending_blobs: BTreeMap<BlobId, HashedBlob>,
@@ -334,7 +340,11 @@ where
     pub async fn chain_state_view(
         &self,
     ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, LocalNodeError> {
-        Ok(self.node_client.chain_state_view(self.chain_id).await?)
+        Ok(self
+            .client
+            .local_node
+            .chain_state_view(self.chain_id)
+            .await?)
     }
 
     /// Subscribes to notifications from this client's chain.
@@ -345,14 +355,18 @@ where
     }
 
     /// Returns the storage client used by this client's local node.
-    pub async fn storage_client(&self) -> S {
-        self.node_client.storage_client().await
+    pub fn storage_client(&self) -> S {
+        self.client.storage_client().clone()
     }
 
     /// Obtains the basic `ChainInfo` data for the local chain.
     pub async fn chain_info(&mut self) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id);
-        let response = self.node_client.handle_chain_info_query(query).await?;
+        let response = self
+            .client
+            .local_node
+            .handle_chain_info_query(query)
+            .await?;
         Ok(response.info)
     }
 
@@ -361,7 +375,11 @@ where
         &mut self,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
-        let response = self.node_client.handle_chain_info_query(query).await?;
+        let response = self
+            .client
+            .local_node
+            .handle_chain_info_query(query)
+            .await?;
         Ok(response.info)
     }
 
@@ -374,7 +392,12 @@ where
             return Ok(Vec::new()); // OpenChain is already received, other are ignored.
         }
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
-        let info = self.node_client.handle_chain_info_query(query).await?.info;
+        let info = self
+            .client
+            .local_node
+            .handle_chain_info_query(query)
+            .await?
+            .info;
         ensure!(
             info.next_block_height == self.next_block_height,
             ChainClientError::WalletSynchronizationError
@@ -425,7 +448,8 @@ where
                 if applications
                     .iter()
                     .map(|application| {
-                        self.node_client
+                        self.client
+                            .local_node
                             .describe_application(chain_id, application.into())
                     })
                     .collect::<FuturesUnordered<_>>()
@@ -452,7 +476,12 @@ where
         chain_id: ChainId,
     ) -> Result<(Option<Epoch>, BTreeMap<Epoch, Committee>), LocalNodeError> {
         let query = ChainInfoQuery::new(chain_id).with_committees();
-        let info = self.node_client.handle_chain_info_query(query).await?.info;
+        let info = self
+            .client
+            .local_node
+            .handle_chain_info_query(query)
+            .await?
+            .info;
         let epoch = info.epoch;
         let committees = info
             .requested_committees
@@ -557,7 +586,8 @@ where
         let nodes = self.validator_nodes().await?;
         let mut notifications = vec![];
         let mut info = self
-            .node_client
+            .client
+            .local_node
             .download_certificates(
                 nodes,
                 self.chain_id,
@@ -583,7 +613,8 @@ where
             // This is a best-effort that depends on network conditions.
             let nodes = self.validator_nodes().await?;
             info = self
-                .node_client
+                .client
+                .local_node
                 .synchronize_chain_state(nodes, self.chain_id, &mut notifications)
                 .await?;
         }
@@ -653,7 +684,7 @@ where
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
-        let local_node = self.node_client.clone();
+        let local_node = self.client.local_node.clone();
         let chain_manager_pending_blobs = self.chain_managers_pending_blobs().await?;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
         communicate_with_quorum(
@@ -689,7 +720,7 @@ where
         action: CommunicateAction,
         value: HashedCertificateValue,
     ) -> Result<Certificate, ChainClientError> {
-        let local_node = self.node_client.clone();
+        let local_node = self.client.local_node.clone();
         let chain_manager_pending_blobs = self.chain_managers_pending_blobs().await?;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
@@ -794,7 +825,8 @@ where
         // certificate is still active.
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(remote_committee)?;
         let mut notifications = vec![];
-        self.node_client
+        self.client
+            .local_node
             .download_certificates(
                 nodes.clone(),
                 block.chain_id,
@@ -988,11 +1020,12 @@ where
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(&local_committee)?;
         let mut notifications = vec![];
         // Synchronize the state of the admin chain from the network.
-        self.node_client
+        self.client
+            .local_node
             .synchronize_chain_state(nodes.clone(), self.admin_id, &mut notifications)
             .await?;
         self.notifier.handle_notifications(&notifications);
-        let node_client = self.node_client.clone();
+        let node_client = self.client.local_node.clone();
         // Now we should have a complete view of all committees in the system.
         let (committees, max_epoch) = self.known_committees().await?;
         // Proceed to downloading received certificates.
@@ -1081,7 +1114,8 @@ where
     ) -> Result<(), LocalNodeError> {
         let mut notifications = vec![];
         let info = self
-            .node_client
+            .client
+            .local_node
             .handle_certificate(
                 certificate,
                 hashed_certificate_values,
@@ -1109,7 +1143,12 @@ where
     pub async fn request_leader_timeout(&mut self) -> Result<Certificate, ChainClientError> {
         let chain_id = self.chain_id;
         let query = ChainInfoQuery::new(chain_id).with_committees();
-        let info = self.node_client.handle_chain_info_query(query).await?.info;
+        let info = self
+            .client
+            .local_node
+            .handle_chain_info_query(query)
+            .await?
+            .info;
         let epoch = info.epoch.ok_or(LocalNodeError::InactiveChain(chain_id))?;
         let committee = info
             .requested_committees
@@ -1145,7 +1184,11 @@ where
         mut block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
-            let result = self.node_client.stage_block_execution(block.clone()).await;
+            let result = self
+                .client
+                .local_node
+                .stage_block_execution(block.clone())
+                .await;
             if let Err(LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))) = &result
             {
                 if let ChainError::ExecutionError(
@@ -1184,10 +1227,10 @@ where
     ) -> Result<Vec<HashedBlob>, LocalNodeError> {
         let mut blobs = Vec::new();
         for blob_id in blob_ids {
-            if let Some(blob) = self.node_client.recent_blob(&blob_id).await {
+            if let Some(blob) = self.client.local_node.recent_blob(&blob_id).await {
                 blobs.push(blob);
             } else if let Some(blob) = self.pending_blobs.get(&blob_id) {
-                self.node_client.cache_recent_blob(blob).await;
+                self.client.local_node.cache_recent_blob(blob).await;
                 blobs.push(blob.to_owned());
             } else {
                 return Err(LocalNodeError::CannotReadLocalBlob {
@@ -1267,7 +1310,8 @@ where
         let nodes: Vec<(ValidatorName, P::Node)> =
             self.validator_node_provider.make_nodes(&committee)?;
         let values = self
-            .node_client
+            .client
+            .local_node
             .read_or_download_hashed_certificate_values(nodes.clone(), block.bytecode_locations())
             .await?;
         let hashed_blobs = self.read_local_blobs(block.blob_ids()).await?;
@@ -1279,7 +1323,8 @@ where
             BlockProposal::new_initial(round, block.clone(), key_pair, values, hashed_blobs)
         };
         // Check the final block proposal. This will be cheaper after #1401.
-        self.node_client
+        self.client
+            .local_node
             .handle_block_proposal(proposal.clone())
             .await?;
         // Remember what we are trying to do before sending the proposal to the validators.
@@ -1425,7 +1470,7 @@ where
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
     async fn next_timestamp(&self, incoming_messages: &[IncomingMessage]) -> Timestamp {
-        let local_time = self.storage_client().await.clock().current_time();
+        let local_time = self.storage_client().clock().current_time();
         incoming_messages
             .iter()
             .map(|msg| msg.event.timestamp)
@@ -1437,7 +1482,8 @@ where
     /// Queries an application.
     pub async fn query_application(&self, query: Query) -> Result<Response, ChainClientError> {
         let response = self
-            .node_client
+            .client
+            .local_node
             .query_application(self.chain_id, query)
             .await?;
         Ok(response)
@@ -1449,7 +1495,8 @@ where
         query: SystemQuery,
     ) -> Result<SystemResponse, ChainClientError> {
         let response = self
-            .node_client
+            .client
+            .local_node
             .query_application(self.chain_id, Query::System(query))
             .await?;
         match response {
@@ -1468,7 +1515,8 @@ where
     ) -> Result<A::QueryResponse, ChainClientError> {
         let query = Query::user(application_id, query)?;
         let response = self
-            .node_client
+            .client
+            .local_node
             .query_application(self.chain_id, query)
             .await?;
         match response {
@@ -1585,7 +1633,11 @@ where
         );
         let mut query = ChainInfoQuery::new(self.chain_id);
         query.request_owner_balance = owner;
-        let response = self.node_client.handle_chain_info_query(query).await?;
+        let response = self
+            .client
+            .local_node
+            .handle_chain_info_query(query)
+            .await?;
         Ok((
             response.info.chain_balance,
             response.info.requested_owner_balance,
@@ -1673,7 +1725,7 @@ where
         // If the current round has timed out, we request a timeout certificate and retry in
         // the next round.
         if let Some(round_timeout) = info.manager.round_timeout {
-            if round_timeout <= self.storage_client().await.clock().current_time() {
+            if round_timeout <= self.storage_client().clock().current_time() {
                 self.request_leader_timeout().await?;
                 info = self.chain_info_with_manager_values().await?;
             }
@@ -1955,7 +2007,7 @@ where
         &mut self,
         hashed_blob: HashedBlob,
     ) -> Result<ClientOutcome<(BlobId, Certificate)>, ChainClientError> {
-        self.node_client.cache_recent_blob(&hashed_blob).await;
+        self.client.local_node.cache_recent_blob(&hashed_blob).await;
         self.pending_blobs
             .insert(hashed_blob.id(), hashed_blob.clone());
         self.execute_operation(Operation::System(SystemOperation::PublishBlob {
@@ -2187,8 +2239,8 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, ViewError> {
-        self.storage_client()
-            .await
+        self.client
+            .storage_client()
             .read_hashed_certificate_value(hash)
             .await
     }
@@ -2198,8 +2250,8 @@ where
         from: CryptoHash,
         limit: u32,
     ) -> Result<Vec<HashedCertificateValue>, ViewError> {
-        self.storage_client()
-            .await
+        self.client
+            .storage_client()
             .read_hashed_certificate_values_downward(from, limit)
             .await
     }
@@ -2454,7 +2506,7 @@ where
             let mut guard = self.lock().await;
             let committee = guard.local_committee().await?;
             let nodes: HashMap<_, _> = guard.validator_node_provider.make_nodes(&committee)?;
-            (guard.chain_id, nodes, guard.node_client.clone())
+            (guard.chain_id, nodes, guard.client.local_node.clone())
         };
         // Drop removed validators.
         senders.retain(|name, abort| {

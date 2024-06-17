@@ -17,7 +17,7 @@ use linera_base::{
 use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
     client::{ArcChainClient, ChainClient},
-    node::{ValidatorNode, ValidatorNodeProvider},
+    node::{LocalValidatorNodeProvider, ValidatorNode, ValidatorNodeProvider},
     worker::Reason,
 };
 use linera_execution::{Message, SystemMessage};
@@ -43,10 +43,16 @@ pub struct ChainListenerConfig {
 }
 
 #[async_trait]
-pub trait ClientContext<P: ValidatorNodeProvider> {
+pub trait ClientContext {
+    type ValidatorNodeProvider: LocalValidatorNodeProvider;
+    type Storage: Storage;
+
     fn wallet(&self) -> &Wallet;
 
-    fn make_chain_client<S>(&self, storage: S, chain_id: ChainId) -> ChainClient<P, S>;
+    fn make_chain_client(
+        &self,
+        chain_id: ChainId,
+    ) -> ChainClient<Self::ValidatorNodeProvider, Self::Storage>;
 
     fn update_wallet_for_new_chain(
         &mut self,
@@ -55,10 +61,10 @@ pub trait ClientContext<P: ValidatorNodeProvider> {
         timestamp: Timestamp,
     );
 
-    async fn update_wallet<'a, S>(&'a mut self, client: &'a mut ChainClient<P, S>)
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>;
+    async fn update_wallet<'a>(
+        &'a mut self,
+        client: &'a mut ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
+    );
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
@@ -83,7 +89,7 @@ where
     /// Runs the chain listener.
     pub async fn run<C>(self, context: Arc<Mutex<C>>, storage: S)
     where
-        C: ClientContext<P> + Send + 'static,
+        C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     {
         let chain_ids = context.lock().await.wallet().chain_ids();
         for chain_id in chain_ids {
@@ -104,7 +110,7 @@ where
         storage: S,
         config: ChainListenerConfig,
     ) where
-        C: ClientContext<P> + Send + 'static,
+        C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     {
         let _handle = tokio::task::spawn(async move {
             if let Err(err) =
@@ -123,7 +129,7 @@ where
         config: ChainListenerConfig,
     ) -> anyhow::Result<()>
     where
-        C: ClientContext<P> + Send + 'static,
+        C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     {
         let client = {
             let mut map_guard = clients.map_lock().await;
@@ -134,7 +140,7 @@ where
                 // chain, and then process the OpenChain message in the parent.
                 return Ok(());
             };
-            let client = context_guard.make_chain_client(storage.clone(), chain_id);
+            let client = context_guard.make_chain_client(chain_id);
             let client = ArcChainClient::new(client);
             entry.insert(client.clone());
             client
