@@ -192,7 +192,7 @@ impl VersionInfo {
         .into();
 
         let rpc_hash =
-            get_hash(paths, &metadata, "linera-rpc", "tests/staged/formats.yaml")?.into();
+            get_hash(paths, &metadata, "linera-rpc", "proto/rpc.proto")?.into();
 
         let graphql_hash = get_hash(
             paths,
@@ -202,7 +202,7 @@ impl VersionInfo {
         )?
         .into();
 
-        let wit_hash = get_hash(paths, &metadata, "linera-sdk", "*.wit")?.into();
+        let wit_hash = get_hash(paths, &metadata, "linera-sdk", "wit/*.wit")?.into();
 
         Ok(Self {
             crate_version,
