@@ -35,10 +35,13 @@ done
 # * Private chain states are stored in one local wallet `wallet.json`.
 # * `genesis.json` will contain the initial balances of chains as well as the initial committee.
 
-./linera --wallet wallet.json --storage rocksdb:linera.db create-genesis-config 10 --genesis genesis.json --initial-funding 10 --committee committee.json --testing-prng-seed 2
+STORAGEDB1="service:tcp:$ENDPOINT:linera1_db"
+STORAGEDB2="service:tcp:$ENDPOINT:linera2_db"
+
+./linera --wallet wallet.json --storage "$STORAGEDB1" create-genesis-config 10 --genesis genesis.json --initial-funding 10 --committee committee.json --testing-prng-seed 2
 
 # Initialize the second wallet.
-./linera --wallet wallet_2.json --storage rocksdb:linera_2.db wallet init --genesis genesis.json --testing-prng-seed 3
+./linera --wallet wallet_2.json --storage "$STORAGEDB2" wallet init --genesis genesis.json --testing-prng-seed 3
 
 # Find free port for service
 while true; do
@@ -61,6 +64,8 @@ fi
 
 STORAGE="service:tcp:$ENDPOINT:linera"
 
+
+
 # Start servers and create initial chains in DB
 for I in $(seq 1 $NUM_VALIDATORS)
 do
@@ -79,13 +84,13 @@ done
 sleep 3;
 
 # Create second wallet with unassigned key.
-KEY=$(./linera --wallet wallet_2.json --storage rocksdb:linera_2.db keygen)
+KEY=$(./linera --wallet wallet_2.json --storage "$STORAGEDB1" keygen)
 
 # Open chain on behalf of wallet 2.
-EFFECT_AND_CHAIN=$(./linera --wallet wallet.json --storage rocksdb:linera.db open-chain --to-public-key "$KEY")
+EFFECT_AND_CHAIN=$(./linera --wallet wallet.json --storage "$STORAGEDB1" open-chain --to-public-key "$KEY")
 EFFECT=$(echo "$EFFECT_AND_CHAIN" | sed -n '1 p')
 
 # Assign newly created chain to unassigned key.
-./linera --wallet wallet_2.json --storage rocksdb:linera_2.db assign --key "$KEY" --message-id "$EFFECT"
+./linera --wallet wallet_2.json --storage "$STORAGEDB2" assign --key "$KEY" --message-id "$EFFECT"
 
 read
