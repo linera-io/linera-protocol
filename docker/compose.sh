@@ -28,7 +28,21 @@ cleanup() {
 trap cleanup EXIT INT
 
 cd "$ROOT_DIR"
-docker build -f docker/Dockerfile . -t linera-test
+
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    docker build -f docker/Dockerfile . -t linera-test
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+        CPU_ARCH=$(sysctl -n machdep.cpu.brand_string)
+        if [[ "$CPU_ARCH" == *"Apple"* ]]; then
+            docker build --build-arg target=aarch64-unknown-linux-gnu -f docker/Dockerfile -t linera-test .
+        else
+            echo "Unsupported Architecture: $CPU_ARCH"
+            exit 1;
+        fi
+else
+    echo "Unsupported OS: $OSTYPE"
+    exit 1;
+fi
 
 cd "$SCRIPT_DIR"
 
