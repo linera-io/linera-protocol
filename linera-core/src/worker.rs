@@ -31,7 +31,10 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{oneshot, Mutex, OwnedRwLockReadGuard};
+use tokio::{
+    sync::{oneshot, Mutex, OwnedRwLockReadGuard},
+    task::JoinSet,
+};
 use tracing::{error, instrument, trace, warn};
 #[cfg(with_testing)]
 use {
@@ -48,7 +51,7 @@ use {
 };
 
 use crate::{
-    chain_worker::{ChainWorkerConfig, ChainWorkerState},
+    chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
 };
@@ -281,6 +284,8 @@ pub struct WorkerState<StorageClient> {
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
+    /// The set of spawned [`ChainWorkerActor`] tasks.
+    chain_worker_tasks: Arc<Mutex<JoinSet<()>>>,
 }
 
 pub(crate) type DeliveryNotifiers =
@@ -295,6 +300,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             recent_hashed_certificate_values: Arc::new(ValueCache::default()),
             recent_hashed_blobs: Arc::new(ValueCache::default()),
             delivery_notifiers: Arc::default(),
+            chain_worker_tasks: Arc::default(),
         }
     }
 
@@ -312,6 +318,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             recent_hashed_certificate_values,
             recent_hashed_blobs,
             delivery_notifiers,
+            chain_worker_tasks: Arc::default(),
         }
     }
 
@@ -435,10 +442,10 @@ where
         &mut self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
-        self.create_chain_worker(block.chain_id)
-            .await?
-            .stage_block_execution(block)
-            .await
+        self.query_chain_worker(block.chain_id, move |callback| {
+            ChainWorkerRequest::StageBlockExecution { block, callback }
+        })
+        .await
     }
 
     // Schedule a notification when cross-chain messages are delivered up to the given height.
@@ -479,10 +486,10 @@ where
         chain_id: ChainId,
         query: Query,
     ) -> Result<Response, WorkerError> {
-        self.create_chain_worker(chain_id)
-            .await?
-            .query_application(query)
-            .await
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::QueryApplication { query, callback }
+        })
+        .await
     }
 
     #[cfg(with_testing)]
@@ -491,10 +498,13 @@ where
         chain_id: ChainId,
         bytecode_id: BytecodeId,
     ) -> Result<Option<BytecodeLocation>, WorkerError> {
-        self.create_chain_worker(chain_id)
-            .await?
-            .read_bytecode_location(bytecode_id)
-            .await
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::ReadBytecodeLocation {
+                bytecode_id,
+                callback,
+            }
+        })
+        .await
     }
 
     pub async fn describe_application(
@@ -502,10 +512,13 @@ where
         chain_id: ChainId,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, WorkerError> {
-        self.create_chain_worker(chain_id)
-            .await?
-            .describe_application(application_id)
-            .await
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::DescribeApplication {
+                application_id,
+                callback,
+            }
+        })
+        .await
     }
 
     /// Processes a confirmed block (aka a commit).
@@ -523,9 +536,14 @@ where
         let height = executed_block.block.height;
 
         let (response, actions) = self
-            .create_chain_worker(chain_id)
-            .await?
-            .process_confirmed_block(certificate, hashed_certificate_values, hashed_blobs)
+            .query_chain_worker(chain_id, move |callback| {
+                ChainWorkerRequest::ProcessConfirmedBlock {
+                    certificate,
+                    hashed_certificate_values: hashed_certificate_values.to_owned(),
+                    hashed_blobs: hashed_blobs.to_owned(),
+                    callback,
+                }
+            })
             .await?;
 
         self.register_delivery_notifier(
@@ -553,10 +571,13 @@ where
         else {
             panic!("Expecting a validation certificate");
         };
-        self.create_chain_worker(block.chain_id)
-            .await?
-            .process_validated_block(certificate)
-            .await
+        self.query_chain_worker(block.chain_id, move |callback| {
+            ChainWorkerRequest::ProcessValidatedBlock {
+                certificate,
+                callback,
+            }
+        })
+        .await
     }
 
     /// Processes a leader timeout issued from a multi-owner chain.
@@ -567,10 +588,13 @@ where
         let CertificateValue::Timeout { chain_id, .. } = certificate.value() else {
             panic!("Expecting a leader timeout certificate");
         };
-        self.create_chain_worker(*chain_id)
-            .await?
-            .process_timeout(certificate)
-            .await
+        self.query_chain_worker(*chain_id, move |callback| {
+            ChainWorkerRequest::ProcessTimeout {
+                certificate,
+                callback,
+            }
+        })
+        .await
     }
 
     async fn process_cross_chain_update(
@@ -579,10 +603,14 @@ where
         recipient: ChainId,
         bundles: Vec<MessageBundle>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
-        self.create_chain_worker(recipient)
-            .await?
-            .process_cross_chain_update(origin, bundles)
-            .await
+        self.query_chain_worker(recipient, move |callback| {
+            ChainWorkerRequest::ProcessCrossChainUpdate {
+                origin,
+                bundles,
+                callback,
+            }
+        })
+        .await
     }
 
     /// Inserts a [`HashedCertificateValue`] into the worker's cache.
@@ -605,10 +633,10 @@ where
         chain_id: ChainId,
         height: BlockHeight,
     ) -> Result<Option<Certificate>, WorkerError> {
-        self.create_chain_worker(chain_id)
-            .await?
-            .read_certificate(height)
-            .await
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::ReadCertificate { height, callback }
+        })
+        .await
     }
 
     /// Returns an [`IncomingMessage`] that's awaiting to be received by the chain specified by
@@ -643,14 +671,16 @@ where
         let origin = Origin { sender, medium };
 
         let Some(event) = self
-            .create_chain_worker(chain_id)
-            .await?
-            .find_event_in_inbox(
-                origin.clone(),
-                certificate.hash(),
-                message_id.height,
-                message_id.index,
-            )
+            .query_chain_worker(chain_id, {
+                let origin = origin.clone();
+                move |callback| ChainWorkerRequest::FindEventInInbox {
+                    inbox_id: origin,
+                    certificate_hash: certificate.hash(),
+                    height: message_id.height,
+                    index: message_id.index,
+                    callback,
+                }
+            })
             .await?
         else {
             return Ok(None);
@@ -674,23 +704,38 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<OwnedRwLockReadGuard<ChainStateView<StorageClient::Context>>, WorkerError> {
-        let mut worker = self.create_chain_worker(chain_id).await?;
-        worker.chain_state_view().await
+        self.query_chain_worker(chain_id, |callback| ChainWorkerRequest::GetChainStateView {
+            callback,
+        })
+        .await
     }
 
-    /// Creates a [`ChainWorkerState`] instance for a specific chain.
-    async fn create_chain_worker(
+    /// Sends a request to the [`ChainWorker`] for a [`ChainId`] and waits for the `Response`.
+    async fn query_chain_worker<Response>(
         &self,
         chain_id: ChainId,
-    ) -> Result<ChainWorkerState<StorageClient>, WorkerError> {
-        ChainWorkerState::load(
+        request_builder: impl FnOnce(
+            oneshot::Sender<Result<Response, WorkerError>>,
+        ) -> ChainWorkerRequest<StorageClient::Context>,
+    ) -> Result<Response, WorkerError> {
+        let chain_actor = ChainWorkerActor::spawn(
             self.chain_worker_config.clone(),
             self.storage.clone(),
             self.recent_hashed_certificate_values.clone(),
             self.recent_hashed_blobs.clone(),
             chain_id,
+            &mut *self.chain_worker_tasks.lock().await,
         )
-        .await
+        .await?;
+        let (callback, response) = oneshot::channel();
+
+        chain_actor
+            .send(request_builder(callback))
+            .expect("`ChainWorkerActor` stopped executing unexpectedly");
+
+        response
+            .await
+            .expect("`ChainWorkerActor` stopped executing without responding")
     }
 }
 
@@ -732,9 +777,9 @@ where
         #[cfg(with_metrics)]
         let round = proposal.content.round;
         let response = self
-            .create_chain_worker(proposal.content.block.chain_id)
-            .await?
-            .handle_block_proposal(proposal)
+            .query_chain_worker(proposal.content.block.chain_id, move |callback| {
+                ChainWorkerRequest::HandleBlockProposal { proposal, callback }
+            })
             .await?;
         #[cfg(with_metrics)]
         NUM_ROUNDS_IN_BLOCK_PROPOSAL
@@ -848,13 +893,11 @@ where
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, query);
-        let result = async move {
-            self.create_chain_worker(query.chain_id)
-                .await?
-                .handle_chain_info_query(query)
-                .await
-        }
-        .await;
+        let result = self
+            .query_chain_worker(query.chain_id, move |callback| {
+                ChainWorkerRequest::HandleChainInfoQuery { query, callback }
+            })
+            .await;
         trace!("{} --> {:?}", self.nickname, result);
         result
     }
@@ -916,9 +959,12 @@ where
                     .map(|(medium, height)| (Target { recipient, medium }, height))
                     .collect();
                 let height_with_fully_delivered_messages = self
-                    .create_chain_worker(sender)
-                    .await?
-                    .confirm_updated_recipient(latest_heights)
+                    .query_chain_worker(sender, move |callback| {
+                        ChainWorkerRequest::ConfirmUpdatedRecipient {
+                            latest_heights,
+                            callback,
+                        }
+                    })
                     .await?;
                 // Handle delivery notifiers for this chain, if any.
                 if let hash_map::Entry::Occupied(mut map) =
