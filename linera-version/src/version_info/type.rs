@@ -191,8 +191,13 @@ impl VersionInfo {
         }
         .into();
 
-        let rpc_hash =
-            get_hash(paths, &metadata, "linera-rpc", "proto/rpc.proto")?.into();
+        let rpc_hash = get_hash(
+            paths,
+            &metadata,
+            "linera-rpc",
+            "tests/snapshots/format__format.yaml.snap",
+        )?
+        .into();
 
         let graphql_hash = get_hash(
             paths,
