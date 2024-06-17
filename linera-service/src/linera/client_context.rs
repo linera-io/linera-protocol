@@ -132,12 +132,15 @@ where
         };
         let node_provider = NodeProvider::new(node_options);
         let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
-        let client = Arc::new(Client::new(
-            node_provider,
-            storage,
-            options.max_pending_messages,
-            delivery,
-        ));
+        let client = Arc::new(
+            Client::new(
+                node_provider,
+                storage,
+                options.max_pending_messages,
+                delivery,
+            )
+            .with_message_policy(options.message_policy),
+        );
         ClientContext {
             client,
             wallet_state,
