@@ -47,6 +47,8 @@ pub enum IndexerError {
     #[error("Invalid certificate content: {0:?}")]
     InvalidCertificateValue(CryptoHash),
 
+    #[error(transparent)]
+    StorageServiceError(#[from] linera_storage_service::common::ServiceContextError),
     #[cfg(feature = "rocksdb")]
     #[error(transparent)]
     RocksDbError(#[from] linera_views::rocks_db::RocksDbContextError),
