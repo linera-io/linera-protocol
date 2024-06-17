@@ -614,12 +614,13 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     let mut node_service1 = client1.run_node_service(8080).await?;
     let mut node_service2 = client2.run_node_service(8081).await?;
 
-    node_service1.process_inbox(&chain1).await?;
-
     // Request the application so chain 2 has it, too.
     node_service2
         .request_application(&chain2, &application_id)
         .await?;
+
+    node_service1.process_inbox(&chain1).await?;
+    node_service2.process_inbox(&chain2).await?;
 
     let app2 = node_service2
         .make_application(&chain2, &application_id)
@@ -767,6 +768,8 @@ async fn test_wasm_end_to_end_fungible(
     app1.assert_balances(expected_balances).await;
     app1.assert_entries(expected_balances).await;
     app1.assert_keys([account_owner1, account_owner2]).await;
+
+    node_service2.process_inbox(&chain2).await?;
 
     // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
     let app2 = FungibleApp(
@@ -924,6 +927,8 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     )
     .await;
 
+    node_service.process_inbox(&chain2).await?;
+
     // Checking the final values on chain1 and chain2.
     let expected_balances = [
         (account_owner1, Amount::from_tokens(4)),
@@ -1037,6 +1042,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         },
     )
     .await;
+
+    node_service2.process_inbox(&chain2).await?;
 
     // Checking the NFT is removed from chain1
     assert!(app1.get_nft(&nft1_id).await.is_err());
@@ -1315,6 +1322,9 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
         .request_application(&chain2, &application_id_crowd)
         .await?;
 
+    node_service1.process_inbox(&chain1).await?;
+    node_service2.process_inbox(&chain2).await?;
+
     let app_crowd2 = node_service2
         .make_application(&chain2, &application_id_crowd)
         .await?;
@@ -1437,6 +1447,11 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         .request_application(&chain_admin, &token1)
         .await?;
 
+    node_service_a.process_inbox(&chain_a).await?;
+    node_service_b.process_inbox(&chain_b).await?;
+    node_service_a.process_inbox(&chain_a).await?;
+    node_service_admin.process_inbox(&chain_admin).await?;
+
     let app_fungible0_a = FungibleApp(node_service_a.make_application(&chain_a, &token0).await?);
     let app_fungible1_a = FungibleApp(node_service_a.make_application(&chain_a, &token1).await?);
     let app_fungible0_b = FungibleApp(node_service_b.make_application(&chain_b, &token0).await?);
@@ -1508,14 +1523,19 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     node_service_a
         .request_application(&chain_a, &application_id_matching)
         .await?;
+    node_service_b
+        .request_application(&chain_b, &application_id_matching)
+        .await?;
+
+    node_service_admin.process_inbox(&chain_admin).await?;
+    node_service_a.process_inbox(&chain_a).await?;
+    node_service_b.process_inbox(&chain_b).await?;
+
     let app_matching_a = MatchingEngineApp(
         node_service_a
             .make_application(&chain_a, &application_id_matching)
             .await?,
     );
-    node_service_b
-        .request_application(&chain_b, &application_id_matching)
-        .await?;
     let app_matching_b = MatchingEngineApp(
         node_service_b
             .make_application(&chain_b, &application_id_matching)
@@ -1775,6 +1795,9 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         )
         .await;
 
+    node_service0.process_inbox(&chain0).await?;
+    node_service1.process_inbox(&chain1).await?;
+
     let app_fungible0_0 = FungibleApp(node_service0.make_application(&chain0, &token0).await?);
     let app_fungible1_0 = FungibleApp(node_service0.make_application(&chain0, &token1).await?);
 
@@ -1856,14 +1879,19 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     node_service0
         .request_application(&chain0, &application_id_amm)
         .await?;
+    node_service1
+        .request_application(&chain1, &application_id_amm)
+        .await?;
+
+    node_service_amm.process_inbox(&chain_amm).await?;
+    node_service0.process_inbox(&chain0).await?;
+    node_service1.process_inbox(&chain1).await?;
+
     let app_amm0 = AmmApp(
         node_service0
             .make_application(&chain0, &application_id_amm)
             .await?,
     );
-    node_service1
-        .request_application(&chain1, &application_id_amm)
-        .await?;
     let app_amm1 = AmmApp(
         node_service1
             .make_application(&chain1, &application_id_amm)
@@ -2574,6 +2602,8 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
         },
     )
     .await;
+
+    node_service.process_inbox(&chain2).await?;
 
     // Send 4 tokens back.
     let app2 = FungibleApp(
