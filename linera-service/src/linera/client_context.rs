@@ -71,13 +71,14 @@ where
     Storage: linera_storage::Storage,
     ViewError: From<Storage::ContextError>,
 {
-    pub(crate) wallet_state: WalletState,
-    pub(crate) client: Arc<Client<NodeProvider, Storage>>,
-    pub(crate) send_timeout: Duration,
-    pub(crate) recv_timeout: Duration,
-    pub(crate) notification_retry_delay: Duration,
-    pub(crate) notification_retries: u32,
-    chain_listeners: JoinSet<()>,
+    pub wallet_state: WalletState,
+    pub client: Arc<Client<NodeProvider, Storage>>,
+    pub send_timeout: Duration,
+    pub recv_timeout: Duration,
+    pub notification_retry_delay: Duration,
+    pub notification_retries: u32,
+    pub options: ClientOptions,
+    pub chain_listeners: JoinSet<()>,
 }
 
 #[async_trait]
@@ -127,7 +128,7 @@ where
         self.wallet_state.inner_mut()
     }
 
-    pub fn new(storage: S, options: &ClientOptions, wallet_state: WalletState) -> Self {
+    pub fn new(storage: S, options: ClientOptions, wallet_state: WalletState) -> Self {
         let node_options = NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
@@ -136,22 +137,21 @@ where
         };
         let node_provider = NodeProvider::new(node_options);
         let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
-        let client = Arc::new(
-            Client::new(
-                node_provider,
-                storage,
-                options.max_pending_messages,
-                delivery,
-            )
-            .with_message_policy(options.message_policy),
+        let client = Client::new(
+            node_provider,
+            storage,
+            options.max_pending_messages,
+            delivery,
         );
+
         ClientContext {
-            client,
+            client: Arc::new(client),
             wallet_state,
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
             notification_retry_delay: options.notification_retry_delay,
             notification_retries: options.notification_retries,
+            options,
             chain_listeners: JoinSet::new(),
         }
     }
@@ -180,7 +180,7 @@ where
             .map(|kp| kp.copy())
             .into_iter()
             .collect();
-        self.client.create_chain(
+        let mut chain_client = self.client.create_chain(
             chain_id,
             known_key_pairs,
             self.wallet().genesis_admin_chain(),
@@ -189,7 +189,9 @@ where
             chain.next_block_height,
             chain.pending_block.clone(),
             chain.pending_blobs.clone(),
-        )
+        );
+        chain_client.options_mut().message_policy = self.options.message_policy;
+        chain_client
     }
 
     pub fn make_node_provider(&self) -> NodeProvider {
