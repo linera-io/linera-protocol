@@ -57,6 +57,9 @@ service ValidatorNode {
 
   // Downloads a certificate value.
   rpc DownloadCertificateValue(CryptoHash) returns (CertificateValue);
+
+  // Downloads a certificate.
+  rpc DownloadCertificate(CryptoHash) returns (Certificate);
 }
 
 // Information about the Linera crate version the validator is running

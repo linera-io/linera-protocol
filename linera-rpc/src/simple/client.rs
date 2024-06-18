@@ -151,6 +151,11 @@ impl ValidatorNode for SimpleClient {
             .await?;
         Ok(certificate_value.with_hash_checked(hash)?)
     }
+
+    async fn download_certificate(&mut self, hash: CryptoHash) -> Result<Certificate, NodeError> {
+        self.query(RpcMessage::DownloadCertificate(Box::new(hash)))
+            .await
+    }
 }
 
 #[derive(Clone)]

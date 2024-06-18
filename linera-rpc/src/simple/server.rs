@@ -301,7 +301,9 @@ where
             | RpcMessage::DownloadBlob(_)
             | RpcMessage::DownloadBlobResponse(_)
             | RpcMessage::DownloadCertificateValue(_)
-            | RpcMessage::DownloadCertificateValueResponse(_) => Err(NodeError::UnexpectedMessage),
+            | RpcMessage::DownloadCertificateValueResponse(_)
+            | RpcMessage::DownloadCertificate(_)
+            | RpcMessage::DownloadCertificateResponse(_) => Err(NodeError::UnexpectedMessage),
         };
 
         self.server.packets_processed += 1;
