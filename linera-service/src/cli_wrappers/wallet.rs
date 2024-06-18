@@ -854,16 +854,11 @@ impl NodeService {
         application_id: &ApplicationId<A>,
     ) -> Result<ApplicationWrapper<A>> {
         let application_id = application_id.forget_abi().to_string();
-        let n_try = 15;
-        for i in 0..n_try {
-            tokio::time::sleep(Duration::from_secs(i)).await;
-            let values = self.try_get_applications_uri(chain_id).await?;
-            if let Some(link) = values.get(&application_id) {
-                return Ok(ApplicationWrapper::from(link.to_string()));
-            }
-            warn!("Waiting for application {application_id:?} to be visible on chain {chain_id:?}");
-        }
-        bail!("Could not find application URI: {application_id} after {n_try} tries");
+        let values = self.try_get_applications_uri(chain_id).await?;
+        let Some(link) = values.get(&application_id) else {
+            bail!("Could not find application URI: {application_id}");
+        };
+        Ok(ApplicationWrapper::from(link.to_string()))
     }
 
     pub async fn try_get_applications_uri(
