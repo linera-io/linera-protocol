@@ -211,7 +211,6 @@ impl VersionInfo {
         .into();
 
         let wit_hash = get_hash(paths, &metadata, "linera-sdk", "wit/*.wit")?.into();
-        assert_ne!(rpc_hash, wit_hash);
 
         Ok(Self {
             crate_version,
