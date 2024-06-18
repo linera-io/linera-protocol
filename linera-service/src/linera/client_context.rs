@@ -11,7 +11,7 @@ use std::{
 use anyhow::Context;
 use async_trait::async_trait;
 use colored::Colorize;
-use futures::{lock::OwnedMutexGuard, Future};
+use futures::Future;
 use linera_base::{
     crypto::KeyPair,
     data_types::{BlockHeight, HashedBlob, Timestamp},
@@ -20,7 +20,7 @@ use linera_base::{
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
-    client::{ArcChainClient, ChainClient, Client},
+    client::{ChainClient, Client},
     data_types::ClientOutcome,
     node::CrossChainMessageDelivery,
     JoinSetExt as _,
@@ -240,15 +240,14 @@ where
 
     pub async fn process_inbox(
         &mut self,
-        chain_client: &ArcChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<NodeProvider, S>,
     ) -> anyhow::Result<Vec<Certificate>> {
         let mut certificates = Vec::new();
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {
-            let guard = chain_client.0.lock().await;
-            guard.synchronize_from_validators().await?;
-            let result = guard.process_inbox().await;
-            self.update_wallet_from_client(&*guard).await;
+            chain_client.synchronize_from_validators().await?;
+            let result = chain_client.process_inbox().await;
+            self.update_wallet_from_client(chain_client).await;
             if result.is_err() {
                 self.save_wallet();
             }
@@ -266,9 +265,8 @@ where
 
         loop {
             let (new_certificates, maybe_timeout) = {
-                let guard = chain_client.0.lock().await;
-                let result = guard.process_inbox().await;
-                self.update_wallet_from_client(&*guard).await;
+                let result = chain_client.process_inbox().await;
+                self.update_wallet_from_client(chain_client).await;
                 if result.is_err() {
                     self.save_wallet();
                 }
@@ -287,7 +285,7 @@ where
 
     pub async fn publish_bytecode(
         &mut self,
-        chain_client: &ArcChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<NodeProvider, S>,
         contract: PathBuf,
         service: PathBuf,
     ) -> anyhow::Result<BytecodeId> {
@@ -306,6 +304,7 @@ where
             .apply_client_command(chain_client, |chain_client| {
                 let contract_bytecode = contract_bytecode.clone();
                 let service_bytecode = service_bytecode.clone();
+                let chain_client = chain_client.clone();
                 async move {
                     chain_client
                         .publish_bytecode(contract_bytecode, service_bytecode)
@@ -318,18 +317,14 @@ where
         info!("{}", "Bytecode published successfully!".green().bold());
 
         info!("Synchronizing client and processing inbox");
-        chain_client
-            .lock()
-            .await
-            .synchronize_from_validators()
-            .await?;
+        chain_client.synchronize_from_validators().await?;
         self.process_inbox(chain_client).await?;
         Ok(bytecode_id)
     }
 
     pub async fn publish_blob(
         &mut self,
-        chain_client: &ArcChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<NodeProvider, S>,
         blob_path: PathBuf,
     ) -> anyhow::Result<BlobId> {
         info!("Loading blob file");
@@ -341,6 +336,7 @@ where
         info!("Publishing blob");
         self.apply_client_command(chain_client, |chain_client| {
             let blob = blob.clone();
+            let chain_client = chain_client.clone();
             async move {
                 chain_client
                     .publish_blob(blob)
@@ -360,17 +356,17 @@ where
     /// timeout, it will wait and retry.
     pub async fn apply_client_command<E, F, Fut, T>(
         &mut self,
-        client: &ArcChainClient<NodeProvider, S>,
+        client: &ChainClient<NodeProvider, S>,
         mut f: F,
     ) -> anyhow::Result<T>
     where
-        F: FnMut(OwnedMutexGuard<ChainClient<NodeProvider, S>>) -> Fut,
+        F: FnMut(&ChainClient<NodeProvider, S>) -> Fut,
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         anyhow::Error: From<E>,
     {
         // Try applying f optimistically without validator notifications. Return if committed.
-        let result = f(client.0.clone().lock_owned().await).await;
-        self.update_and_save_wallet(&*client.lock().await).await;
+        let result = f(client).await;
+        self.update_and_save_wallet(client).await;
         if let ClientOutcome::Committed(t) = result? {
             return Ok(t);
         }
@@ -381,8 +377,8 @@ where
 
         loop {
             // Try applying f. Return if committed.
-            let result = f(client.0.clone().lock_owned().await).await;
-            self.update_and_save_wallet(&*client.lock().await).await;
+            let result = f(client).await;
+            self.update_and_save_wallet(client).await;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -398,7 +394,7 @@ where
         ownership_config: ChainOwnershipConfig,
     ) -> anyhow::Result<()> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let chain_client = self.make_chain_client(chain_id).into_arc();
+        let chain_client = self.make_chain_client(chain_id);
         info!("Changing ownership for chain {}", chain_id);
         let time_start = Instant::now();
         let ownership = ChainOwnership::try_from(ownership_config)?;
@@ -406,6 +402,7 @@ where
         let certificate = self
             .apply_client_command(&chain_client, |chain_client| {
                 let ownership = ownership.clone();
+                let chain_client = chain_client.clone();
                 async move {
                     chain_client
                         .change_ownership(ownership)
@@ -429,9 +426,9 @@ where
 {
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {
         for chain_id in self.wallet.own_chain_ids() {
-            let chain_client = self.make_chain_client(chain_id).into_arc();
+            let chain_client = self.make_chain_client(chain_id);
             self.process_inbox(&chain_client).await.unwrap();
-            chain_client.lock().await.update_validators().await.unwrap();
+            chain_client.update_validators().await.unwrap();
         }
     }
 
