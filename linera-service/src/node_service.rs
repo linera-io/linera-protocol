@@ -14,7 +14,7 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
 use futures::{
     future::{self},
-    lock::{Mutex, MutexGuard, OwnedMutexGuard},
+    lock::{Mutex, MutexGuard},
     Future,
 };
 use linera_base::{
@@ -26,7 +26,7 @@ use linera_base::{
 };
 use linera_chain::{data_types::HashedCertificateValue, ChainStateView};
 use linera_core::{
-    client::{ArcChainClient, ChainClient, ChainClientError},
+    client::{ChainClient, ChainClientError},
     data_types::{ClientOutcome, RoundTimeout},
     node::{NotificationStream, ValidatorNode, ValidatorNodeProvider},
     worker::{Notification, Reason},
@@ -58,7 +58,7 @@ pub struct Chains {
     pub default: Option<ChainId>,
 }
 
-pub type ClientMapInner<P, S> = BTreeMap<ChainId, ArcChainClient<P, S>>;
+pub type ClientMapInner<P, S> = BTreeMap<ChainId, ChainClient<P, S>>;
 pub(crate) struct ChainClients<P, S>(Arc<Mutex<ClientMapInner<P, S>>>)
 where
     S: Storage,
@@ -89,21 +89,21 @@ where
     S: Storage,
     ViewError: From<S::ContextError>,
 {
-    async fn client(&self, chain_id: &ChainId) -> Option<ArcChainClient<P, S>> {
+    async fn client(&self, chain_id: &ChainId) -> Option<ChainClient<P, S>> {
         Some(self.0.lock().await.get(chain_id)?.clone())
     }
 
     pub(crate) async fn client_lock(
         &self,
         chain_id: &ChainId,
-    ) -> Option<OwnedMutexGuard<ChainClient<P, S>>> {
-        Some(self.client(chain_id).await?.0.lock_owned().await)
+    ) -> Option<ChainClient<P, S>> {
+        self.client(chain_id).await
     }
 
     pub(crate) async fn try_client_lock(
         &self,
         chain_id: &ChainId,
-    ) -> Result<OwnedMutexGuard<ChainClient<P, S>>, Error> {
+    ) -> Result<ChainClient<P, S>, Error> {
         self.client_lock(chain_id)
             .await
             .ok_or_else(|| Error::new(format!("Unknown chain ID: {}", chain_id)))
@@ -275,11 +275,11 @@ where
         mut f: F,
     ) -> Result<T, Error>
     where
-        F: FnMut(OwnedMutexGuard<ChainClient<P, S>>) -> Fut,
+        F: FnMut(ChainClient<P, S>) -> Fut,
         Fut: Future<
             Output = (
                 Result<ClientOutcome<T>, Error>,
-                OwnedMutexGuard<ChainClient<P, S>>,
+                ChainClient<P, S>,
             ),
         >,
     {
@@ -287,7 +287,7 @@ where
             let client = self.clients.try_client_lock(chain_id).await?;
             let mut stream = client.subscribe().await?;
             let (result, client) = f(client).await;
-            self.context.lock().await.update_wallet(&*client).await;
+            self.context.lock().await.update_wallet(&client).await;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -313,7 +313,7 @@ where
             let client = self.clients.try_client_lock(&chain_id).await?;
             client.synchronize_from_validators().await?;
             let result = client.process_inbox().await;
-            self.context.lock().await.update_wallet(&*client).await;
+            self.context.lock().await.update_wallet(&client).await;
             let (certificates, maybe_timeout) = result?;
             hashes.extend(certificates.into_iter().map(|cert| cert.hash()));
             match maybe_timeout {
@@ -331,7 +331,7 @@ where
     async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
         let client = self.clients.try_client_lock(&chain_id).await?;
         let outcome = client.process_pending_block().await?;
-        self.context.lock().await.update_wallet(&*client).await;
+        self.context.lock().await.update_wallet(&client).await;
         match outcome {
             ClientOutcome::Committed(Some(certificate)) => Ok(Some(certificate.hash())),
             ClientOutcome::Committed(None) => Ok(None),
@@ -714,7 +714,7 @@ where
             let result = client
                 .request_application(application_id, target_chain_id)
                 .await;
-            self.context.lock().await.update_wallet(&*client).await;
+            self.context.lock().await.update_wallet(&client).await;
             let timeout = match result? {
                 ClientOutcome::Committed(certificate) => return Ok(certificate.hash()),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,

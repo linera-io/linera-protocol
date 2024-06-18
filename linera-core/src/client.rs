@@ -16,7 +16,6 @@ use dashmap::{
 };
 use futures::{
     future::{self, FusedFuture, Future},
-    lock::Mutex,
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
 use linera_base::{
@@ -61,7 +60,7 @@ use crate::{
     local_node::{LocalNodeClient, LocalNodeError},
     node::{
         CrossChainMessageDelivery, LocalValidatorNode, LocalValidatorNodeProvider, NodeError,
-        NotificationStream, ValidatorNodeProvider,
+        NotificationStream,
     },
     notifier::Notifier,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
@@ -227,6 +226,7 @@ where
 }
 
 #[non_exhaustive]
+#[derive(Clone)]
 pub struct ChainClientOptions {
     /// Maximum number of pending messages processed at a time in a block.
     pub max_pending_messages: usize,
@@ -248,6 +248,12 @@ pub struct ChainClient<ValidatorNodeProvider, Storage> {
     chain_id: ChainId,
     /// The client options.
     options: ChainClientOptions,
+}
+
+impl<P, S> Clone for ChainClient<P, S> {
+    fn clone(&self) -> Self {
+        Self { client: self.client.clone(), chain_id: self.chain_id, options: self.options.clone() }
+    }
 }
 
 /// Error type for [`ChainClient`].
@@ -2301,83 +2307,17 @@ where
             .await
     }
 
-    /// Wraps this chain client into an `Arc<Mutex<_>>`.
-    pub fn into_arc(self) -> ArcChainClient<P, S> {
-        ArcChainClient::new(self)
-    }
-}
-
-/// The outcome of trying to commit a list of incoming messages and operations to the chain.
-#[derive(Debug)]
-enum ExecuteBlockOutcome {
-    /// A block with the messages and operations was committed.
-    Executed(Certificate),
-    /// A different block was already proposed and got committed. Check whether the messages and
-    /// operations are still suitable, and try again at the next block height.
-    Conflict(Certificate),
-    /// We are not the round leader and cannot do anything. Try again at the specified time or
-    /// or whenever the round or block height changes.
-    WaitForTimeout(RoundTimeout),
-}
-
-/// A chain client in an `Arc<Mutex<_>>`, so it can be used by different tasks and threads.
-#[derive(Debug)]
-pub struct ArcChainClient<P, S>(pub Arc<Mutex<ChainClient<P, S>>>)
-where
-    S: Storage,
-    ViewError: From<S::ContextError>;
-
-impl<P, S> Deref for ArcChainClient<P, S>
-where
-    S: Storage,
-    ViewError: From<S::ContextError>,
-{
-    type Target = Arc<Mutex<ChainClient<P, S>>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<P, S> Clone for ArcChainClient<P, S>
-where
-    S: Storage,
-    ViewError: From<S::ContextError>,
-{
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
-impl<P, S> ArcChainClient<P, S>
-where
-    S: Storage,
-    ViewError: From<S::ContextError>,
-{
-    pub fn new(client: ChainClient<P, S>) -> Self {
-        Self(Arc::new(Mutex::new(client)))
-    }
-}
-
-impl<P, S> ArcChainClient<P, S>
-where
-    P: ValidatorNodeProvider + Sync,
-    <<P as ValidatorNodeProvider>::Node as crate::node::ValidatorNode>::NotificationStream: Send,
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
-{
     async fn local_chain_info(
         &self,
         chain_id: ChainId,
         local_node: &mut LocalNodeClient<S>,
     ) -> Option<Box<ChainInfo>> {
-        let guard = self.lock().await;
         let Ok(info) = local_node.local_chain_info(chain_id).await else {
             error!("Fail to read local chain info for {chain_id}");
             return None;
         };
         // Useful in case `chain_id` is the same as the local chain.
-        guard.update_from_info(&info);
+        self.update_from_info(&info);
         Some(info)
     }
 
@@ -2393,7 +2333,7 @@ where
     async fn process_notification(
         &self,
         name: ValidatorName,
-        node: <P as ValidatorNodeProvider>::Node,
+        node: <P as LocalValidatorNodeProvider>::Node,
         mut local_node: LocalNodeClient<S>,
         notification: Notification,
     ) {
@@ -2436,7 +2376,7 @@ where
                     .unwrap_or_else(|e| {
                         error!("Fail to process notification: {e}");
                     });
-                self.0.lock().await.handle_notifications(&mut notifications);
+                self.handle_notifications(&mut notifications);
                 let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
                     .await;
@@ -2458,7 +2398,7 @@ where
                 {
                     error!("Fail to process notification: {error}");
                 }
-                self.0.lock().await.handle_notifications(&mut notifications);
+                self.handle_notifications(&mut notifications);
                 let Some(info) = self.local_chain_info(chain_id, &mut local_node).await else {
                     error!("Fail to read local chain info for {chain_id}");
                     return;
@@ -2495,13 +2435,11 @@ where
         }
 
         let mut senders = HashMap::new(); // Senders to cancel notification streams.
-        let guard = self.lock().await;
-        let notifications = guard.subscribe().await?;
-        let (abortable_notifications, abort) = stream::abortable(guard.subscribe().await?);
-        if let Err(error) = guard.synchronize_from_validators().await {
+        let notifications = self.subscribe().await?;
+        let (abortable_notifications, abort) = stream::abortable(self.subscribe().await?);
+        if let Err(error) = self.synchronize_from_validators().await {
             error!("Failed to synchronize from validators: {}", error);
         }
-        drop(guard);
 
         // Beware: if this future ceases to make progress, notification processing will
         // deadlock, because of the issue described in
@@ -2555,13 +2493,12 @@ where
         P: Send + 'static,
     {
         let (chain_id, nodes, local_node) = {
-            let guard = self.lock().await;
-            let committee = guard.local_committee().await?;
-            let nodes: HashMap<_, _> = guard
+            let committee = self.local_committee().await?;
+            let nodes: HashMap<_, _> = self
                 .client
                 .validator_node_provider
                 .make_nodes(&committee)?;
-            (guard.chain_id, nodes, guard.client.local_node.clone())
+            (self.chain_id, nodes, self.client.local_node.clone())
         };
         // Drop removed validators.
         senders.retain(|name, abort| {
@@ -2603,14 +2540,14 @@ where
     pub async fn find_received_certificates_from_validator(
         &self,
         name: ValidatorName,
-        node: <P as ValidatorNodeProvider>::Node,
+        node: <P as LocalValidatorNodeProvider>::Node,
         node_client: LocalNodeClient<S>,
     ) -> Result<(), ChainClientError> {
         let ((committees, max_epoch), chain_id, current_tracker) = {
-            let guard = self.lock().await;
-            let (committees, max_epoch) = guard.known_committees().await?;
-            let chain_id = guard.chain_id;
-            let current_tracker: u64 = guard
+
+            let (committees, max_epoch) = self.known_committees().await?;
+            let chain_id = self.chain_id;
+            let current_tracker: u64 = self
                 .state()
                 .received_certificate_trackers
                 .get(&name)
@@ -2632,12 +2569,23 @@ where
             .await?;
         // Process received certificates. If the client state has changed during the
         // network calls, we should still be fine.
-        self.lock()
-            .await
-            .receive_certificates_from_validator(name, tracker, certificates)
+        self.receive_certificates_from_validator(name, tracker, certificates)
             .await;
         Ok(())
     }
+}
+
+/// The outcome of trying to commit a list of incoming messages and operations to the chain.
+#[derive(Debug)]
+enum ExecuteBlockOutcome {
+    /// A block with the messages and operations was committed.
+    Executed(Certificate),
+    /// A different block was already proposed and got committed. Check whether the messages and
+    /// operations are still suitable, and try again at the next block height.
+    Conflict(Certificate),
+    /// We are not the round leader and cannot do anything. Try again at the specified time or
+    /// or whenever the round or block height changes.
+    WaitForTimeout(RoundTimeout),
 }
 
 /// Wrapper for `AbortHandle` that aborts when its dropped.

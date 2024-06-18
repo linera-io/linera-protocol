@@ -36,7 +36,7 @@ use crate::test_utils::ScyllaDbStorageBuilder;
 #[cfg(feature = "storage_service")]
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
-    client::{ArcChainClient, ChainClientError, ClientOutcome, MessageAction, MessagePolicy},
+    client::{ChainClientError, ClientOutcome, MessageAction, MessagePolicy},
     local_node::LocalNodeError,
     node::{
         CrossChainMessageDelivery,
@@ -67,13 +67,11 @@ where
     let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
-    let sender = ArcChainClient::new(sender);
     // Listen to the notifications on the sender chain.
-    let mut notifications = sender.lock().await.subscribe().await?;
+    let mut notifications = sender.subscribe().await?;
     let (listener, _listen_handle, _) = sender.listen().await?;
     tokio::spawn(listener);
     {
-        let sender = sender.lock().await;
         let certificate = sender
             .transfer_to_account(
                 None,
