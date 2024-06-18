@@ -10,6 +10,7 @@ use linera_views::{
     common::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
     memory::{create_memory_store_stream_queries, MemoryStore},
 };
+use tracing::{debug, instrument};
 #[cfg(feature = "rocksdb")]
 use linera_views::{
     common::AdminKeyValueStore,
@@ -224,11 +225,13 @@ enum ServiceStoreServerOptions {
 
 #[tonic::async_trait]
 impl StoreProcessor for ServiceStoreServer {
+    #[instrument(target = "grpc_server", skip_all, err, fields(key = ?request.get_ref().key))]
     async fn process_read_value(
         &self,
         request: Request<RequestReadValue>,
     ) -> Result<Response<ReplyReadValue>, Status> {
         let request = request.into_inner();
+        debug!(?request, "Process read value");
         let RequestReadValue { key } = request;
         let value = self.read_value_bytes(&key).await?;
         let size = match &value {
@@ -252,22 +255,26 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "grpc_server", skip_all, err, fields(key = ?request.get_ref().key))]
     async fn process_contains_key(
         &self,
         request: Request<RequestContainsKey>,
     ) -> Result<Response<ReplyContainsKey>, Status> {
         let request = request.into_inner();
+        debug!(?request, "Process contains key");
         let RequestContainsKey { key } = request;
         let test = self.contains_key(&key).await?;
         let response = ReplyContainsKey { test };
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "grpc_server", skip_all, err, fields(n_keys = ?request.get_ref().keys.len()))]
     async fn process_read_multi_values(
         &self,
         request: Request<RequestReadMultiValues>,
     ) -> Result<Response<ReplyReadMultiValues>, Status> {
         let request = request.into_inner();
+        debug!(?request, "Process read multi values");
         let RequestReadMultiValues { keys } = request;
         let values = self.read_multi_values_bytes(keys.clone()).await?;
         let size = values
@@ -298,11 +305,13 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "grpc_server", skip_all, err, fields(key_prefix = ?request.get_ref().key_prefix))]
     async fn process_find_keys_by_prefix(
         &self,
         request: Request<RequestFindKeysByPrefix>,
     ) -> Result<Response<ReplyFindKeysByPrefix>, Status> {
         let request = request.into_inner();
+        debug!(?request, "Process find keys by prefix");
         let RequestFindKeysByPrefix { key_prefix } = request;
         let keys = self.find_keys_by_prefix(&key_prefix).await?;
         let size = keys.iter().map(|x| x.len()).sum::<usize>();
@@ -323,11 +332,13 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "grpc_server", skip_all, err, fields(key_prefix = ?request.get_ref().key_prefix))]
     async fn process_find_key_values_by_prefix(
         &self,
         request: Request<RequestFindKeyValuesByPrefix>,
     ) -> Result<Response<ReplyFindKeyValuesByPrefix>, Status> {
         let request = request.into_inner();
+        debug!(?request, "Process find key values by prefix");
         let RequestFindKeyValuesByPrefix { key_prefix } = request;
         let key_values = self.find_key_values_by_prefix(&key_prefix).await?;
         let size = key_values
@@ -358,11 +369,13 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "grpc_server", skip_all, err, fields(n_statements = ?request.get_ref().statements.len()))]
     async fn process_write_batch_extended(
         &self,
         request: Request<RequestWriteBatchExtended>,
     ) -> Result<Response<ReplyWriteBatchExtended>, Status> {
         let request = request.into_inner();
+        debug!(?request, "Process write batch extended");
         let RequestWriteBatchExtended { statements } = request;
         let mut batch = Batch::default();
         for statement in statements {
@@ -401,11 +414,13 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "grpc_server", skip_all, err, fields(message_index = ?request.get_ref().message_index, index = ?request.get_ref().index))]
     async fn process_specific_chunk(
         &self,
         request: Request<RequestSpecificChunk>,
     ) -> Result<Response<ReplySpecificChunk>, Status> {
         let request = request.into_inner();
+        debug!(?request, "Process specific chunk");
         let RequestSpecificChunk {
             message_index,
             index,
@@ -423,52 +438,64 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "grpc_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_create_namespace(
         &self,
         request: Request<RequestCreateNamespace>,
     ) -> Result<Response<ReplyCreateNamespace>, Status> {
         let request = request.into_inner();
+        debug!(?request, "Process create namespace");
         let RequestCreateNamespace { namespace } = request;
         self.create_namespace(&namespace).await?;
         let response = ReplyCreateNamespace {};
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "grpc_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_exists_namespace(
         &self,
         request: Request<RequestExistsNamespace>,
     ) -> Result<Response<ReplyExistsNamespace>, Status> {
         let request = request.into_inner();
+        debug!(?request, "Process exists namespace");
         let RequestExistsNamespace { namespace } = request;
         let exists = self.exists_namespace(&namespace).await?;
         let response = ReplyExistsNamespace { exists };
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "grpc_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_delete_namespace(
         &self,
         request: Request<RequestDeleteNamespace>,
     ) -> Result<Response<ReplyDeleteNamespace>, Status> {
         let request = request.into_inner();
+        debug!(?request, "Process delete namespace");
         let RequestDeleteNamespace { namespace } = request;
         self.delete_namespace(&namespace).await?;
         let response = ReplyDeleteNamespace {};
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "grpc_server", skip_all, err, fields(list_all = "list_all"))]
     async fn process_list_all(
         &self,
-        _request: Request<RequestListAll>,
+        request: Request<RequestListAll>,
     ) -> Result<Response<ReplyListAll>, Status> {
+        let request = request.into_inner();
+        debug!(?request, "Process list all");
         let namespaces = self.list_all().await?;
         let response = ReplyListAll { namespaces };
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "grpc_server", skip_all, err, fields(delete_all = "delete_all"))]
     async fn process_delete_all(
         &self,
-        _request: Request<RequestDeleteAll>,
+        request: Request<RequestDeleteAll>,
     ) -> Result<Response<ReplyDeleteAll>, Status> {
+        let request = request.into_inner();
+        debug!(?request, "Process delete all");
         self.delete_all().await?;
         let response = ReplyDeleteAll {};
         Ok(Response::new(response))
