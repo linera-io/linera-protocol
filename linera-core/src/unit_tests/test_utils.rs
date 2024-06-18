@@ -158,6 +158,16 @@ where
         self.spawn_and_receive(move |validator, sender| validator.do_download_blob(blob_id, sender))
             .await
     }
+
+    async fn download_certificate_value(
+        &mut self,
+        hash: CryptoHash,
+    ) -> Result<HashedCertificateValue, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_download_certificate_value(hash, sender)
+        })
+        .await
+    }
 }
 
 impl<S> LocalValidatorClient<S>
@@ -338,6 +348,22 @@ where
             .await
             .map_err(Into::into);
         sender.send(hashed_blob.map(|hashed_blob| hashed_blob.blob().clone()))
+    }
+
+    async fn do_download_certificate_value(
+        self,
+        hash: CryptoHash,
+        sender: oneshot::Sender<Result<HashedCertificateValue, NodeError>>,
+    ) -> Result<(), Result<HashedCertificateValue, NodeError>> {
+        let validator = self.client.lock().await;
+        let certificate_value = validator
+            .state
+            .storage_client()
+            .read_hashed_certificate_value(hash)
+            .await
+            .map(Into::into)
+            .map_err(Into::into);
+        sender.send(certificate_value)
     }
 }
 
