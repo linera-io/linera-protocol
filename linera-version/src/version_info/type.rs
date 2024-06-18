@@ -103,14 +103,17 @@ fn get_hash(
 
     let package_glob = format!("{}/{}", package_root.display(), glob);
 
+    let mut n_file = 0;
     for path in glob::glob(&package_glob)? {
         let path = path?;
         let mut file = std::fs::File::open(&path)?;
         relevant_paths.push(path);
+        n_file += 1;
         while file.read(&mut buffer)? != 0 {
             hasher.update(buffer);
         }
     }
+    assert!(n_file > 0);
 
     Ok(STANDARD_NO_PAD.encode(hasher.finalize()))
 }
@@ -191,8 +194,13 @@ impl VersionInfo {
         }
         .into();
 
-        let rpc_hash =
-            get_hash(paths, &metadata, "linera-rpc", "tests/staged/formats.yaml")?.into();
+        let rpc_hash = get_hash(
+            paths,
+            &metadata,
+            "linera-rpc",
+            "tests/snapshots/format__format.yaml.snap",
+        )?
+        .into();
 
         let graphql_hash = get_hash(
             paths,
@@ -202,7 +210,8 @@ impl VersionInfo {
         )?
         .into();
 
-        let wit_hash = get_hash(paths, &metadata, "linera-sdk", "*.wit")?.into();
+        let wit_hash = get_hash(paths, &metadata, "linera-sdk", "wit/*.wit")?.into();
+        assert_ne!(rpc_hash, wit_hash);
 
         Ok(Self {
             crate_version,
