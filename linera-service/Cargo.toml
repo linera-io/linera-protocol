@@ -14,7 +14,7 @@ version.workspace = true
 [features]
 ethereum = []
 default = ["wasmer", "rocksdb"]
-test = ["linera-views/test", "linera-execution/test"]
+test = ["linera-views/test", "linera-execution/test", "dep:stdext"]
 benchmark = ["linera-base/test", "dep:linera-sdk", "dep:port-selector"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
@@ -78,6 +78,7 @@ rcgen.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
 serde_json.workspace = true
+stdext = { workspace = true, optional = true }
 tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
