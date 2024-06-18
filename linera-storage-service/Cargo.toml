@@ -36,6 +36,7 @@ serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tonic = { workspace = true, features = ["codegen", "prost", "transport"] }
+tracing.workspace = true
 
 [dev-dependencies]
 linera-storage-service = { path = ".", features = ["test"] }
