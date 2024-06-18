@@ -271,7 +271,7 @@ where
     }
 }
 
-#[Object]
+#[Object(cache_control(no_cache))]
 impl<P, S, C> MutationRoot<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
@@ -699,7 +699,7 @@ where
     }
 }
 
-#[Object]
+#[Object(cache_control(no_cache))]
 impl<P, S> QueryRoot<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
@@ -793,7 +793,7 @@ where
 
 struct ChainStateViewExtension(ChainId);
 
-#[Object]
+#[Object(cache_control(no_cache))]
 impl ChainStateViewExtension {
     async fn chain_id(&self) -> ChainId {
         self.0
