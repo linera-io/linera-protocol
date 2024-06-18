@@ -741,10 +741,6 @@ where
             let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
             info.requested_received_log = self.chain.received_log.read(start..).await?;
         }
-        if let Some(hash) = query.request_hashed_certificate_value {
-            info.requested_hashed_certificate_value =
-                Some(self.storage.read_hashed_certificate_value(hash).await?);
-        }
         if query.request_manager_values {
             info.manager.add_values(self.chain.manager.get());
         }
@@ -858,7 +854,7 @@ where
         // Find all certificates containing bytecode used when executing this block.
         let mut required_locations_left: HashMap<_, _> = block
             .bytecode_locations()
-            .into_keys()
+            .into_iter()
             .map(|bytecode_location| (bytecode_location.certificate_hash, bytecode_location))
             .collect();
         for value in hashed_certificate_values {

@@ -220,10 +220,10 @@ where
             | CertificateValue::ValidatedBlock { executed_block, .. } => {
                 executed_block.block.bytecode_locations()
             }
-            CertificateValue::Timeout { .. } => HashMap::new(),
+            CertificateValue::Timeout { .. } => HashSet::new(),
         };
         for location in locations {
-            if !required.contains_key(location) {
+            if !required.contains(location) {
                 let hash = location.certificate_hash;
                 warn!("validator requested {:?} but it is not required", hash);
                 return Err(NodeError::InvalidChainInfoResponse);

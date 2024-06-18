@@ -145,9 +145,6 @@ message ChainInfoQuery {
   // Request a signed vote for a leader timeout.
   bool request_leader_timeout = 8;
 
-  // Query a value that contains a binary hashed certificate value (e.g. bytecode) required by this chain.
-  optional bytes request_hashed_certificate_value = 9;
-
   // Query the balance of a given owner.
   optional Owner request_owner_balance = 10;
 
