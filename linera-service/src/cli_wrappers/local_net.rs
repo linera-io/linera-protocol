@@ -114,6 +114,20 @@ static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> =
     Lazy::new(LocalServer::new);
 
 #[cfg(with_testing)]
+static PORT_PROVIDER: Lazy<RwLock<u16>> = Lazy::new(|| RwLock::new(7080));
+
+/// Provides a port for the node_service. Increment the port numbers.
+#[cfg(with_testing)]
+pub async fn get_node_port() -> u16 {
+    let mut port = PORT_PROVIDER.write().await;
+    let port_ret = *port;
+    *port += 1;
+    info!("get_node_port returning port_ret={}", port_ret);
+    assert!(port_selector::is_free(port_ret));
+    port_ret
+}
+
+#[cfg(with_testing)]
 async fn make_testing_config(database: Database) -> StorageConfig {
     match database {
         Database::Service => {
