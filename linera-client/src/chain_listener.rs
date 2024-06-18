@@ -25,7 +25,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use tracing::{error, info, warn};
 
-use crate::{node_service::ChainClients, wallet::Wallet};
+use crate::{chain_clients::ChainClients, wallet::Wallet};
 
 #[cfg(test)]
 #[path = "unit_tests/chain_listener.rs"]
@@ -61,9 +61,9 @@ pub trait ClientContext {
         timestamp: Timestamp,
     );
 
-    async fn update_wallet<'a>(
-        &'a mut self,
-        client: &'a mut ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
+    async fn update_wallet(
+        &mut self,
+        client: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
     );
 }
 
@@ -82,7 +82,7 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Creates a new chain listener given client chains.
-    pub(crate) fn new(config: ChainListenerConfig, clients: ChainClients<P, S>) -> Self {
+    pub fn new(config: ChainListenerConfig, clients: ChainClients<P, S>) -> Self {
         Self { config, clients }
     }
 
@@ -183,10 +183,11 @@ where
             let Reason::NewBlock { hash, .. } = notification.reason else {
                 continue;
             };
-            {
-                let mut client_guard = client.lock().await;
-                context.lock().await.update_wallet(&mut *client_guard).await;
-            }
+            context
+                .lock()
+                .await
+                .update_wallet(&*client.lock().await)
+                .await;
             let value = storage.read_hashed_certificate_value(hash).await?;
             let Some(executed_block) = value.inner().executed_block() else {
                 error!("NewBlock notification about value without a block: {hash}");

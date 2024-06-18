@@ -22,6 +22,10 @@ use linera_base::{
     data_types::Amount,
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
+use linera_client::{
+    config::{GenesisConfig, WalletState},
+    wallet::Wallet,
+};
 use linera_core::worker::Notification;
 use linera_execution::{
     committee::ValidatorName, system::SystemChannel, Bytecode, ResourceControlPolicy,
@@ -35,10 +39,8 @@ use tracing::{info, warn};
 
 use crate::{
     cli_wrappers::{local_net::PathProvider, Network},
-    config::{GenesisConfig, WalletState},
     faucet::ClaimOutcome,
     util::ChildExt,
-    wallet::Wallet,
 };
 
 /// The name of the environment variable that allows specifying additional arguments to be passed

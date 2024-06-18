@@ -10,6 +10,10 @@ use linera_base::{
 use linera_chain::data_types::{
     BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
 };
+use linera_client::{
+    chain_listener::{ChainListenerConfig, ClientContext},
+    wallet::Wallet,
+};
 use linera_core::{
     client::ChainClient,
     data_types::{ChainInfoQuery, ChainInfoResponse},
@@ -19,11 +23,7 @@ use linera_core::{
     },
 };
 use linera_execution::committee::Committee;
-use linera_service::{
-    chain_listener::{ChainListenerConfig, ClientContext},
-    node_service::NodeService,
-    wallet::Wallet,
-};
+use linera_service::node_service::NodeService;
 use linera_storage::{MemoryStorage, Storage};
 use linera_version::VersionInfo;
 use linera_views::memory::{MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES};
@@ -122,7 +122,7 @@ impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientConte
 
     fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {}
 
-    async fn update_wallet<'a>(&'a mut self, _: &'a mut ChainClient<P, S>) {}
+    async fn update_wallet(&mut self, _: &ChainClient<P, S>) {}
 }
 
 #[tokio::main]

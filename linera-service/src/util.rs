@@ -1,9 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_testing)]
-use std::path::{Path, PathBuf};
-use std::{num::ParseIntError, time::Duration};
+use std::{
+    num::ParseIntError,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use anyhow::{bail, Context as _, Result};
 use async_graphql::http::GraphiQLSource;
@@ -12,6 +14,8 @@ use http::Uri;
 #[cfg(test)]
 use linera_base::command::parse_version_message;
 use linera_base::data_types::TimeDelta;
+pub use linera_client::util::*;
+use tempfile::{tempdir, TempDir};
 use tokio::signal::unix;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
@@ -55,10 +59,24 @@ pub async fn listen_for_shutdown_signals(shutdown_sender: CancellationToken) {
 }
 
 #[cfg(with_testing)]
-use {
-    std::io::Write,
-    tempfile::{tempdir, TempDir},
-};
+use std::io::Write;
+
+/// Returns an HTML response constructing the GraphiQL web page for the given URI.
+pub(crate) async fn graphiql(uri: Uri) -> impl IntoResponse {
+    let source = GraphiQLSource::build()
+        .endpoint(uri.path())
+        .subscription_endpoint("/ws")
+        .finish();
+    response::Html(source)
+}
+
+pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
+    Ok(Duration::from_millis(s.parse()?))
+}
+
+pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
+    Ok(TimeDelta::from_millis(s.parse()?))
+}
 
 #[cfg(with_testing)]
 pub struct QuotedBashAndGraphQlScript {
@@ -154,23 +172,6 @@ impl QuotedBashAndGraphQlScript {
 
         Ok(result)
     }
-}
-
-/// Returns an HTML response constructing the GraphiQL web page for the given URI.
-pub(crate) async fn graphiql(uri: Uri) -> impl IntoResponse {
-    let source = GraphiQLSource::build()
-        .endpoint(uri.path())
-        .subscription_endpoint("/ws")
-        .finish();
-    response::Html(source)
-}
-
-pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
-    Ok(Duration::from_millis(s.parse()?))
-}
-
-pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
-    Ok(TimeDelta::from_millis(s.parse()?))
 }
 
 #[test]

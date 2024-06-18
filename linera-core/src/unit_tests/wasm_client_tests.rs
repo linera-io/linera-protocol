@@ -94,10 +94,10 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
-    let mut publisher = builder
+    let publisher = builder
         .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
         .await?;
-    let mut creator = builder
+    let creator = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
 
@@ -260,15 +260,15 @@ where
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     // Will publish the bytecodes.
-    let mut publisher = builder
+    let publisher = builder
         .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
         .await?;
     // Will create the apps and use them to send a message.
-    let mut creator = builder
+    let creator = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
     // Will receive the message.
-    let mut receiver = builder
+    let receiver = builder
         .add_initial_chain(ChainDescription::Root(2), Amount::ONE)
         .await?;
     let receiver_id = ChainId::root(2);
@@ -499,10 +499,10 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
         .await?;
-    let mut receiver = builder
+    let receiver = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
 
@@ -709,10 +709,10 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(0), Amount::ONE)
         .await?;
-    let mut receiver = builder
+    let receiver = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
 

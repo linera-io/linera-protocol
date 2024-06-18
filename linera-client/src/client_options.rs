@@ -4,7 +4,6 @@
 use std::{env, iter, num::NonZeroU16, path::PathBuf, time::Duration};
 
 use chrono::{DateTime, Utc};
-use futures::FutureExt as _;
 use linera_base::{
     crypto::PublicKey,
     data_types::{Amount, ApplicationPermissions, TimeDelta},
@@ -16,17 +15,16 @@ use linera_execution::{
     committee::ValidatorName, system::SystemChannel, UserApplicationId, WasmRuntime,
     WithWasmDefault as _,
 };
-use linera_service::{
-    chain_listener::ChainListenerConfig,
-    config::WalletState,
-    storage::{full_initialize_storage, run_with_storage, StorageConfigNamespace},
-    util,
-};
 use linera_views::common::CommonStoreConfig;
 
-use crate::{GenesisConfig, Job};
+use crate::{
+    chain_listener::ChainListenerConfig,
+    config::{GenesisConfig, WalletState},
+    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
+    util,
+};
 
-#[derive(clap::Parser)]
+#[derive(Clone, clap::Parser)]
 #[command(
     name = "linera",
     version = linera_version::VersionInfo::default_clap_str(),
@@ -130,19 +128,18 @@ impl ClientOptions {
         }
     }
 
-    pub async fn run_command_with_storage(self) -> anyhow::Result<()> {
-        let wallet = self.wallet()?;
-        run_with_storage(
+    pub async fn run_with_storage<R: Runnable>(&self, job: R) -> anyhow::Result<R::Output> {
+        let genesis_config = self.wallet()?.inner().genesis_config().clone();
+        let output = Box::pin(run_with_storage(
             self.storage_config()?
                 .add_common_config(self.common_config())
                 .await?,
-            &wallet.inner().genesis_config().clone(),
+            &genesis_config,
             self.wasm_runtime.with_wasm_default(),
-            Job(self, wallet),
-        )
-        .boxed()
+            job,
+        ))
         .await?;
-        Ok(())
+        Ok(output)
     }
 
     pub fn storage_config(&self) -> Result<StorageConfigNamespace, anyhow::Error> {
@@ -150,7 +147,7 @@ impl ClientOptions {
             Some(config) => config.parse(),
             #[cfg(feature = "rocksdb")]
             None => {
-                let storage_config = linera_service::storage::StorageConfig::RocksDb {
+                let storage_config = crate::storage::StorageConfig::RocksDb {
                     path: self.config_path()?.join("wallet.db"),
                 };
                 let namespace = "default".to_string();

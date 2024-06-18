@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{borrow::Cow, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{
     futures_util::Stream,
@@ -14,7 +14,7 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
 use futures::{
     future::{self},
-    lock::{Mutex, MutexGuard, OwnedMutexGuard},
+    lock::{Mutex, OwnedMutexGuard},
     Future,
 };
 use linera_base::{
@@ -25,8 +25,12 @@ use linera_base::{
     BcsHexParseError,
 };
 use linera_chain::{data_types::HashedCertificateValue, ChainStateView};
+use linera_client::{
+    chain_clients::ChainClients,
+    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
+};
 use linera_core::{
-    client::{ArcChainClient, ChainClient, ChainClientError},
+    client::{ChainClient, ChainClientError},
     data_types::{ClientOutcome, RoundTimeout},
     node::{NotificationStream, ValidatorNode, ValidatorNodeProvider},
     worker::{Notification, Reason},
@@ -47,56 +51,12 @@ use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
 
-use crate::{
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
-    util,
-};
+use crate::util;
 
 #[derive(SimpleObject, Serialize, Deserialize, Clone)]
 pub struct Chains {
     pub list: Vec<ChainId>,
     pub default: Option<ChainId>,
-}
-
-pub type ClientMapInner<P, S> = BTreeMap<ChainId, ArcChainClient<P, S>>;
-pub(crate) struct ChainClients<P, S>(Arc<Mutex<ClientMapInner<P, S>>>);
-
-impl<P, S> Clone for ChainClients<P, S> {
-    fn clone(&self) -> Self {
-        ChainClients(self.0.clone())
-    }
-}
-
-impl<P, S> Default for ChainClients<P, S> {
-    fn default() -> Self {
-        Self(Arc::new(Mutex::new(BTreeMap::new())))
-    }
-}
-
-impl<P, S> ChainClients<P, S> {
-    async fn client(&self, chain_id: &ChainId) -> Option<ArcChainClient<P, S>> {
-        Some(self.0.lock().await.get(chain_id)?.clone())
-    }
-
-    pub(crate) async fn client_lock(
-        &self,
-        chain_id: &ChainId,
-    ) -> Option<OwnedMutexGuard<ChainClient<P, S>>> {
-        Some(self.client(chain_id).await?.0.lock_owned().await)
-    }
-
-    pub(crate) async fn try_client_lock(
-        &self,
-        chain_id: &ChainId,
-    ) -> Result<OwnedMutexGuard<ChainClient<P, S>>, Error> {
-        self.client_lock(chain_id)
-            .await
-            .ok_or_else(|| Error::new(format!("Unknown chain ID: {}", chain_id)))
-    }
-
-    pub(crate) async fn map_lock(&self) -> MutexGuard<ClientMapInner<P, S>> {
-        self.0.lock().await
-    }
 }
 
 /// Our root GraphQL query type.
@@ -207,7 +167,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.clients.try_client_lock(&chain_id).await?;
         Ok(client.subscribe().await?)
     }
 }
@@ -225,7 +185,7 @@ where
         chain_id: ChainId,
     ) -> Result<CryptoHash, Error> {
         let certificate = self
-            .apply_client_command(&chain_id, move |mut client| {
+            .apply_client_command(&chain_id, move |client| {
                 let operation = Operation::System(system_operation.clone());
                 async move {
                     let result = client
@@ -257,10 +217,10 @@ where
         >,
     {
         loop {
-            let mut client = self.clients.try_client_lock(chain_id).await?;
+            let client = self.clients.try_client_lock(chain_id).await?;
             let mut stream = client.subscribe().await?;
-            let (result, mut client) = f(client).await;
-            self.context.lock().await.update_wallet(&mut *client).await;
+            let (result, client) = f(client).await;
+            self.context.lock().await.update_wallet(&*client).await;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -283,10 +243,10 @@ where
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
         let mut hashes = Vec::new();
         loop {
-            let mut client = self.clients.try_client_lock(&chain_id).await?;
+            let client = self.clients.try_client_lock(&chain_id).await?;
             client.synchronize_from_validators().await?;
             let result = client.process_inbox().await;
-            self.context.lock().await.update_wallet(&mut *client).await;
+            self.context.lock().await.update_wallet(&*client).await;
             let (certificates, maybe_timeout) = result?;
             hashes.extend(certificates.into_iter().map(|cert| cert.hash()));
             match maybe_timeout {
@@ -302,9 +262,9 @@ where
 
     /// Retries the pending block that was unsuccessfully proposed earlier.
     async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.clients.try_client_lock(&chain_id).await?;
         let outcome = client.process_pending_block().await?;
-        self.context.lock().await.update_wallet(&mut *client).await;
+        self.context.lock().await.update_wallet(&*client).await;
         match outcome {
             ClientOutcome::Committed(Some(certificate)) => Ok(Some(certificate.hash())),
             ClientOutcome::Committed(None) => Ok(None),
@@ -325,7 +285,7 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        self.apply_client_command(&chain_id, move |mut client| {
+        self.apply_client_command(&chain_id, move |client| {
             let user_data = user_data.clone();
             async move {
                 let result = client
@@ -352,7 +312,7 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        self.apply_client_command(&chain_id, move |mut client| {
+        self.apply_client_command(&chain_id, move |client| {
             let user_data = user_data.clone();
             async move {
                 let result = client
@@ -383,7 +343,7 @@ where
         let ownership = ChainOwnership::single(public_key);
         let balance = balance.unwrap_or(Amount::ZERO);
         let message_id = self
-            .apply_client_command(&chain_id, move |mut client| {
+            .apply_client_command(&chain_id, move |client| {
                 let ownership = ownership.clone();
                 async move {
                     let result = client
@@ -454,7 +414,7 @@ where
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds, timeout_config);
         let balance = balance.unwrap_or(Amount::ZERO);
         let message_id = self
-            .apply_client_command(&chain_id, move |mut client| {
+            .apply_client_command(&chain_id, move |client| {
                 let ownership = ownership.clone();
                 let application_permissions = application_permissions.clone().unwrap_or_default();
                 async move {
@@ -473,7 +433,7 @@ where
     /// Closes the chain.
     async fn close_chain(&self, chain_id: ChainId) -> Result<CryptoHash, Error> {
         let certificate = self
-            .apply_client_command(&chain_id, |mut client| async move {
+            .apply_client_command(&chain_id, |client| async move {
                 let result = client.close_chain().await.map_err(Error::from);
                 (result, client)
             })
@@ -613,7 +573,7 @@ where
         contract: Bytecode,
         service: Bytecode,
     ) -> Result<BytecodeId, Error> {
-        self.apply_client_command(&chain_id, move |mut client| {
+        self.apply_client_command(&chain_id, move |client| {
             let contract = contract.clone();
             let service = service.clone();
             async move {
@@ -630,7 +590,7 @@ where
 
     /// Publishes a new blob.
     async fn publish_blob(&self, chain_id: ChainId, blob: Blob) -> Result<BlobId, Error> {
-        self.apply_client_command(&chain_id, move |mut client| {
+        self.apply_client_command(&chain_id, move |client| {
             let blob = blob.clone();
             async move {
                 let result = client
@@ -653,7 +613,7 @@ where
         instantiation_argument: String,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ApplicationId, Error> {
-        self.apply_client_command(&chain_id, move |mut client| {
+        self.apply_client_command(&chain_id, move |client| {
             let parameters = parameters.as_bytes().to_vec();
             let instantiation_argument = instantiation_argument.as_bytes().to_vec();
             let required_application_ids = required_application_ids.clone();
@@ -683,11 +643,11 @@ where
         target_chain_id: Option<ChainId>,
     ) -> Result<CryptoHash, Error> {
         loop {
-            let mut client = self.clients.try_client_lock(&chain_id).await?;
+            let client = self.clients.try_client_lock(&chain_id).await?;
             let result = client
                 .request_application(application_id, target_chain_id)
                 .await;
-            self.context.lock().await.update_wallet(&mut *client).await;
+            self.context.lock().await.update_wallet(&*client).await;
             let timeout = match result? {
                 ClientOutcome::Committed(certificate) => return Ok(certificate.hash()),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -1100,7 +1060,7 @@ where
             .collect::<Vec<_>>();
 
         let hash = loop {
-            let Some(mut client) = self.clients.client_lock(&chain_id).await else {
+            let Some(client) = self.clients.client_lock(&chain_id).await else {
                 return Err(NodeServiceError::UnknownChainId {
                     chain_id: chain_id.to_string(),
                 });

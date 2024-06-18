@@ -6,15 +6,13 @@ use std::{env, sync::Arc};
 use anyhow::Result;
 use async_trait::async_trait;
 use linera_base::data_types::Amount;
+use linera_client::config::Export;
 use linera_execution::ResourceControlPolicy;
 use tempfile::{tempdir, TempDir};
 
-use crate::{
-    cli_wrappers::{
-        local_net::PathProvider, ClientWrapper, Faucet, FaucetOption, LineraNet, LineraNetConfig,
-        Network,
-    },
-    config::Export,
+use crate::cli_wrappers::{
+    local_net::PathProvider, ClientWrapper, Faucet, FaucetOption, LineraNet, LineraNetConfig,
+    Network,
 };
 
 pub struct RemoteNetTestingConfig {

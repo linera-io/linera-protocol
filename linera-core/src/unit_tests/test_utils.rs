@@ -635,7 +635,7 @@ where
             10,
             CrossChainMessageDelivery::NonBlocking,
         ));
-        Ok(builder.build(
+        Ok(builder.create_chain(
             chain_id,
             vec![key_pair],
             self.admin_id,
