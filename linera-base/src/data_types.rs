@@ -14,7 +14,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 use crate::{
-    crypto::BcsHashable,
+    crypto::{BcsHashable, CryptoHash},
     doc_scalar,
     identifiers::{ApplicationId, BlobId, Destination, GenericApplicationId},
     time::{Duration, SystemTime},
@@ -798,6 +798,13 @@ impl From<HashedBlob> for Blob {
 pub struct HashedBlob {
     id: BlobId,
     blob: Blob,
+}
+
+/// The state of a blob of binary data.
+#[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize)]
+pub struct BlobState {
+    /// Hash of the last `Certificate` that published or used this blob.
+    pub last_used_by: CryptoHash,
 }
 
 impl HashedBlob {
