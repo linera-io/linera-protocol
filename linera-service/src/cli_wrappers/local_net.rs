@@ -26,11 +26,10 @@ use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
 use tracing::{info, warn};
+#[cfg(with_testing)]
+use {async_lock::RwLock, linera_base::sync::Lazy};
 #[cfg(all(feature = "rocksdb", with_testing))]
-use {
-    async_lock::RwLock, linera_base::sync::Lazy, linera_views::rocks_db::create_rocks_db_test_path,
-    std::ops::Deref,
-};
+use {linera_views::rocks_db::create_rocks_db_test_path, std::ops::Deref};
 
 use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
