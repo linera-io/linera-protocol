@@ -10,7 +10,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Owner},
 };
 use linera_chain::{
-    data_types::{Certificate, ChainAndHeight, IncomingMessage, Medium, MessageBundle},
+    data_types::{ChainAndHeight, IncomingMessage, Medium, MessageBundle},
     manager::ChainManagerInfo,
     ChainStateView,
 };
@@ -56,8 +56,8 @@ pub struct ChainInfoQuery {
     pub request_committees: bool,
     /// Query the received messages that are waiting be picked in the next block.
     pub request_pending_messages: bool,
-    /// Query a range of certificates sent from the chain.
-    pub request_sent_certificates_in_range: Option<BlockHeightRange>,
+    /// Query a range of certificate hashes sent from the chain.
+    pub request_sent_certificate_hashes_in_range: Option<BlockHeightRange>,
     /// Query new certificate sender chain IDs and block heights received from the chain.
     pub request_received_log_excluding_first_nth: Option<u64>,
     /// Query values from the chain manager, not just votes.
@@ -76,7 +76,7 @@ impl ChainInfoQuery {
             request_committees: false,
             request_owner_balance: None,
             request_pending_messages: false,
-            request_sent_certificates_in_range: None,
+            request_sent_certificate_hashes_in_range: None,
             request_received_log_excluding_first_nth: None,
             request_manager_values: false,
             request_leader_timeout: false,
@@ -104,8 +104,8 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_sent_certificates_in_range(mut self, range: BlockHeightRange) -> Self {
-        self.request_sent_certificates_in_range = Some(range);
+    pub fn with_sent_certificate_hashes_in_range(mut self, range: BlockHeightRange) -> Self {
+        self.request_sent_certificate_hashes_in_range = Some(range);
         self
     }
 
@@ -157,8 +157,8 @@ pub struct ChainInfo {
     pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
     /// The received messages that are waiting be picked in the next block (if requested).
     pub requested_pending_messages: Vec<IncomingMessage>,
-    /// The response to `request_sent_certificates_in_range`
-    pub requested_sent_certificates: Vec<Certificate>,
+    /// The response to `request_sent_certificate_hashes_in_range`
+    pub requested_sent_certificate_hashes: Vec<CryptoHash>,
     /// The current number of received certificates (useful for `request_received_log_excluding_first_nth`)
     pub count_received_log: usize,
     /// The response to `request_received_certificates_excluding_first_nth`
@@ -238,7 +238,7 @@ where
             requested_committees: None,
             requested_owner_balance: None,
             requested_pending_messages: Vec::new(),
-            requested_sent_certificates: Vec::new(),
+            requested_sent_certificate_hashes: Vec::new(),
             count_received_log: view.received_log.count(),
             requested_received_log: Vec::new(),
         }

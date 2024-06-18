@@ -206,9 +206,9 @@ ChainInfo:
     - requested_pending_messages:
         SEQ:
           TYPENAME: IncomingMessage
-    - requested_sent_certificates:
+    - requested_sent_certificate_hashes:
         SEQ:
-          TYPENAME: Certificate
+          TYPENAME: CryptoHash
     - count_received_log: U64
     - requested_received_log:
         SEQ:
@@ -225,7 +225,7 @@ ChainInfoQuery:
           TYPENAME: Owner
     - request_committees: BOOL
     - request_pending_messages: BOOL
-    - request_sent_certificates_in_range:
+    - request_sent_certificate_hashes_in_range:
         OPTION:
           TYPENAME: BlockHeightRange
     - request_received_log_excluding_first_nth:

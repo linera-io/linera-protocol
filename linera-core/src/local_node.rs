@@ -27,7 +27,7 @@ use tokio::sync::OwnedRwLockReadGuard;
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    node::LocalValidatorNode,
+    node::{LocalValidatorNode, NodeError},
     value_cache::ValueCache,
     worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
 };
@@ -72,6 +72,9 @@ pub enum LocalNodeError {
 
     #[error("The chain info response received from the local node is invalid")]
     InvalidChainInfoResponse,
+
+    #[error(transparent)]
+    NodeError(#[from] NodeError),
 }
 
 impl<S> LocalNodeClient<S>
@@ -468,10 +471,14 @@ where
         message_id: &MessageId,
     ) -> Result<Certificate, LocalNodeError> {
         let query = ChainInfoQuery::new(message_id.chain_id)
-            .with_sent_certificates_in_range(BlockHeightRange::single(message_id.height));
+            .with_sent_certificate_hashes_in_range(BlockHeightRange::single(message_id.height));
         let info = self.handle_chain_info_query(query).await?.info;
-        let certificate = info
-            .requested_sent_certificates
+        let certificates = self
+            .storage_client()
+            .await
+            .read_certificates(info.requested_sent_certificate_hashes)
+            .await?;
+        let certificate = certificates
             .into_iter()
             .find(|certificate| certificate.value().has_message(message_id))
             .ok_or_else(|| {
@@ -532,16 +539,23 @@ where
             start,
             limit: Some(limit),
         };
-        let query = ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(range);
+        let query = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range);
         if let Ok(response) = node.handle_chain_info_query(query).await {
             if response.check(name).is_err() {
                 return Ok(None);
             }
             let ChainInfo {
-                requested_sent_certificates,
+                requested_sent_certificate_hashes,
                 ..
             } = *response.info;
-            Ok(Some(requested_sent_certificates))
+
+            let certificates =
+                future::try_join_all(requested_sent_certificate_hashes.into_iter().map(|hash| {
+                    let mut node = node.clone();
+                    async move { node.download_certificate(hash).await }
+                }))
+                .await?;
+            Ok(Some(certificates))
         } else {
             Ok(None)
         }
@@ -571,7 +585,7 @@ where
             });
         }
 
-        for (result, notifications_) in futures::future::join_all(futures).await {
+        for (result, notifications_) in future::join_all(futures).await {
             if let Err(e) = result {
                 tracing::error!(?e, "Error synchronizing chain state");
             }
@@ -598,7 +612,7 @@ where
             limit: None,
         };
         let query = ChainInfoQuery::new(chain_id)
-            .with_sent_certificates_in_range(range)
+            .with_sent_certificate_hashes_in_range(range)
             .with_manager_values();
         let info = match node.handle_chain_info_query(query).await {
             Ok(response) if response.check(name).is_ok() => response.info,
@@ -612,15 +626,20 @@ where
                 return Ok(());
             }
         };
-        if !info.requested_sent_certificates.is_empty()
+
+        let certificates = future::try_join_all(
+            info.requested_sent_certificate_hashes
+                .into_iter()
+                .map(|hash| {
+                    let mut node = node.clone();
+                    async move { node.download_certificate(hash).await }
+                }),
+        )
+        .await?;
+
+        if !certificates.is_empty()
             && self
-                .try_process_certificates(
-                    name,
-                    &mut node,
-                    chain_id,
-                    info.requested_sent_certificates,
-                    notifications,
-                )
+                .try_process_certificates(name, &mut node, chain_id, certificates, notifications)
                 .await
                 .is_none()
         {

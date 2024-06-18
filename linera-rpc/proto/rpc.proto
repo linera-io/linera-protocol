@@ -136,8 +136,8 @@ message ChainInfoQuery {
   // Query the received messages that are waiting be picked in the next block.
   bool request_pending_messages = 4;
 
-  // Query a range of certificates sent from the chain.
-  optional bytes request_sent_certificates_in_range = 5;
+  // Query a range of certificates hashes sent from the chain.
+  optional bytes request_sent_certificate_hashes_in_range = 5;
 
   // Query new certificate removed from the chain.
   optional uint64 request_received_log_excluding_first_nth = 6;

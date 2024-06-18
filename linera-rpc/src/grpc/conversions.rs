@@ -375,8 +375,8 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
     type Error = GrpcProtoConversionError;
 
     fn try_from(chain_info_query: api::ChainInfoQuery) -> Result<Self, Self::Error> {
-        let request_sent_certificates_in_range = chain_info_query
-            .request_sent_certificates_in_range
+        let request_sent_certificate_hashes_in_range = chain_info_query
+            .request_sent_certificate_hashes_in_range
             .map(|range| bincode::deserialize(&range))
             .transpose()?;
 
@@ -388,7 +388,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
                 .transpose()?,
             request_pending_messages: chain_info_query.request_pending_messages,
             chain_id: try_proto_convert(chain_info_query.chain_id)?,
-            request_sent_certificates_in_range,
+            request_sent_certificate_hashes_in_range,
             request_received_log_excluding_first_nth: chain_info_query
                 .request_received_log_excluding_first_nth,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
@@ -403,8 +403,8 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
     type Error = GrpcProtoConversionError;
 
     fn try_from(chain_info_query: ChainInfoQuery) -> Result<Self, Self::Error> {
-        let request_sent_certificates_in_range = chain_info_query
-            .request_sent_certificates_in_range
+        let request_sent_certificate_hashes_in_range = chain_info_query
+            .request_sent_certificate_hashes_in_range
             .map(|range| bincode::serialize(&range))
             .transpose()?;
 
@@ -414,7 +414,7 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             request_owner_balance: chain_info_query.request_owner_balance.map(Into::into),
             request_pending_messages: chain_info_query.request_pending_messages,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
-            request_sent_certificates_in_range,
+            request_sent_certificate_hashes_in_range,
             request_received_log_excluding_first_nth: chain_info_query
                 .request_received_log_excluding_first_nth,
             request_manager_values: chain_info_query.request_manager_values,
@@ -706,7 +706,7 @@ pub mod tests {
             requested_committees: None,
             requested_owner_balance: None,
             requested_pending_messages: vec![],
-            requested_sent_certificates: vec![],
+            requested_sent_certificate_hashes: vec![],
             count_received_log: 0,
             requested_received_log: vec![],
         });
@@ -737,10 +737,12 @@ pub mod tests {
             request_committees: false,
             request_owner_balance: None,
             request_pending_messages: false,
-            request_sent_certificates_in_range: Some(linera_core::data_types::BlockHeightRange {
-                start: BlockHeight::from(3),
-                limit: Some(5),
-            }),
+            request_sent_certificate_hashes_in_range: Some(
+                linera_core::data_types::BlockHeightRange {
+                    start: BlockHeight::from(3),
+                    limit: Some(5),
+                },
+            ),
             request_received_log_excluding_first_nth: None,
             request_manager_values: false,
             request_leader_timeout: false,

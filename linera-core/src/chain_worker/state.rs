@@ -724,7 +724,7 @@ where
 
             info.requested_pending_messages = messages;
         }
-        if let Some(range) = query.request_sent_certificates_in_range {
+        if let Some(range) = query.request_sent_certificate_hashes_in_range {
             let start: usize = range.start.try_into()?;
             let end = match range.limit {
                 None => self.chain.confirmed_log.count(),
@@ -734,8 +734,7 @@ where
                     .min(self.chain.confirmed_log.count()),
             };
             let keys = self.chain.confirmed_log.read(start..end).await?;
-            let certs = self.storage.read_certificates(keys).await?;
-            info.requested_sent_certificates = certs;
+            info.requested_sent_certificate_hashes = keys;
         }
         if let Some(start) = query.request_received_log_excluding_first_nth {
             let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
