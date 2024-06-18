@@ -83,10 +83,10 @@ jobs:
     - name: Compile the workspace with the default features (build)
       run: |
         cargo build --locked
-    - name: Run Storage Service
+    - name: Run end-to-end tests
       run: |
         ./target/debug/storage_service_server memory --endpoint $LINERA_STORAGE_SERVICE &
-        cargo test --features storage_service -- storage_service
+        RUST_LOG=info cargo test --features storage_service -- storage_service --nocapture
     - name: Run Ethereum tests
       run: |
         cargo test -p linera-ethereum --features ethereum

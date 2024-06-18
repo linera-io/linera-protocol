@@ -7,7 +7,7 @@
 mod common;
 
 use common::INTEGRATION_TEST_GUARD;
-use linera_service::util::QuotedBashAndGraphQlScript;
+use linera_service::{test_name, util::QuotedBashAndGraphQlScript};
 use tokio::{process::Command, time::Duration};
 
 #[test_case::test_case(".." ; "main")]
@@ -24,6 +24,8 @@ use tokio::{process::Command, time::Duration};
 #[test_log::test(tokio::test)]
 async fn test_script_in_readme_with_storage_service(path: &str) -> std::io::Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {} for path {}", test_name!(), path);
+
     let script = QuotedBashAndGraphQlScript::from_markdown(
         format!("{path}/README.md"),
         Some(Duration::from_secs(3)),

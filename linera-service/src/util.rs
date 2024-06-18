@@ -61,6 +61,16 @@ use {
 };
 
 #[cfg(with_testing)]
+#[macro_export]
+macro_rules! test_name {
+    () => {
+        stdext::function_name!()
+            .strip_suffix("::{{closure}}")
+            .expect("should be called from the body of a test")
+    };
+}
+
+#[cfg(with_testing)]
 pub struct QuotedBashAndGraphQlScript {
     tmp_dir: TempDir,
     path: PathBuf,
