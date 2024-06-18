@@ -302,6 +302,8 @@ where
             | RpcMessage::DownloadBlobResponse(_)
             | RpcMessage::DownloadCertificateValue(_)
             | RpcMessage::DownloadCertificateValueResponse(_)
+            | RpcMessage::BlobLastUsedBy(_)
+            | RpcMessage::BlobLastUsedByResponse(_)
             | RpcMessage::DownloadCertificate(_)
             | RpcMessage::DownloadCertificateResponse(_) => Err(NodeError::UnexpectedMessage),
         };

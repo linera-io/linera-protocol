@@ -89,6 +89,9 @@ pub trait LocalValidatorNode {
     ) -> Result<HashedCertificateValue, NodeError>;
 
     async fn download_certificate(&mut self, hash: CryptoHash) -> Result<Certificate, NodeError>;
+
+    /// Returns the hash of the `Certificate` that last used a blob.
+    async fn blob_last_used_by(&mut self, blob_id: BlobId) -> Result<CryptoHash, NodeError>;
 }
 
 /// Turn an address into a validator node.

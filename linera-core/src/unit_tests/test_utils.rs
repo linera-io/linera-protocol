@@ -175,6 +175,13 @@ where
         })
         .await
     }
+
+    async fn blob_last_used_by(&mut self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_blob_last_used_by(blob_id, sender)
+        })
+        .await
+    }
 }
 
 impl<S> LocalValidatorClient<S>
@@ -387,6 +394,23 @@ where
             .map_err(Into::into);
 
         sender.send(certificate)
+    }
+
+    async fn do_blob_last_used_by(
+        self,
+        blob_id: BlobId,
+        sender: oneshot::Sender<Result<CryptoHash, NodeError>>,
+    ) -> Result<(), Result<CryptoHash, NodeError>> {
+        let validator = self.client.lock().await;
+        let certificate_hash = validator
+            .state
+            .storage_client()
+            .read_blob_state(blob_id)
+            .await
+            .map(|blob_state| blob_state.last_used_by)
+            .map_err(Into::into);
+
+        sender.send(certificate_hash)
     }
 }
 

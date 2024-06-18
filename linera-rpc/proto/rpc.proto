@@ -60,6 +60,9 @@ service ValidatorNode {
 
   // Downloads a certificate.
   rpc DownloadCertificate(CryptoHash) returns (Certificate);
+
+  // Returns the hash of the `Certificate` that last used a blob.
+  rpc BlobLastUsedBy(BlobId) returns (CryptoHash);
 }
 
 // Information about the Linera crate version the validator is running
