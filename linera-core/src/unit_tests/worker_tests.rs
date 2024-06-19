@@ -354,13 +354,11 @@ fn generate_key_pairs(count: usize) -> Vec<KeyPair> {
 /// Creates a `CrossChainRequest` with the messages sent by the certificate to the recipient.
 fn update_recipient_direct(recipient: ChainId, certificate: &Certificate) -> CrossChainRequest {
     let sender = certificate.value().chain_id();
-    let bundle = certificate
-        .message_bundle_for(&Medium::Direct, recipient)
-        .unwrap();
+    let bundles = certificate.message_bundles_for(&Medium::Direct, recipient);
     CrossChainRequest::UpdateRecipient {
         sender,
         recipient,
-        bundle_vecs: vec![(Medium::Direct, vec![bundle])],
+        bundle_vecs: vec![(Medium::Direct, bundles)],
     }
 }
 
@@ -3073,18 +3071,13 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         Some(&certificate2),
     )
     .await;
-    let bundle0 = certificate0
-        .message_bundle_for(&Medium::Direct, id1)
-        .unwrap();
-    let bundle1 = certificate1
-        .message_bundle_for(&Medium::Direct, id1)
-        .unwrap();
-    let bundle2 = certificate2
-        .message_bundle_for(&Medium::Direct, id1)
-        .unwrap();
-    let bundle3 = certificate3
-        .message_bundle_for(&Medium::Direct, id1)
-        .unwrap();
+    let bundles0 = certificate0.message_bundles_for(&Medium::Direct, id1);
+    let bundles1 = certificate1.message_bundles_for(&Medium::Direct, id1);
+    let bundles2 = certificate2.message_bundles_for(&Medium::Direct, id1);
+    let bundles3 = certificate3.message_bundles_for(&Medium::Direct, id1);
+    let bundles01 = Vec::from_iter(bundles0.iter().cloned().chain(bundles1.iter().cloned()));
+    let bundles012 = Vec::from_iter(bundles01.iter().cloned().chain(bundles2.iter().cloned()));
+    let bundles0123 = Vec::from_iter(bundles012.iter().cloned().chain(bundles3.iter().cloned()));
 
     let helper = CrossChainUpdateHelper {
         allow_messages_from_deprecated_epochs: true,
@@ -3098,9 +3091,9 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             id1,
             BlockHeight::ZERO,
             None,
-            vec![bundle0.clone(), bundle1.clone()]
+            bundles01.clone()
         )?,
-        vec![bundle0.clone(), bundle1.clone()]
+        bundles01.clone()
     );
     // Received heights is removing prefixes.
     assert_eq!(
@@ -3109,9 +3102,9 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             id1,
             BlockHeight::from(1),
             None,
-            vec![bundle0.clone(), bundle1.clone()]
+            bundles01.clone()
         )?,
-        vec![bundle1.clone()]
+        bundles1.clone()
     );
     assert_eq!(
         helper.select_message_bundles(
@@ -3119,7 +3112,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             id1,
             BlockHeight::from(2),
             None,
-            vec![bundle0.clone(), bundle1.clone()]
+            bundles01.clone()
         )?,
         vec![]
     );
@@ -3130,7 +3123,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             id1,
             BlockHeight::ZERO,
             None,
-            vec![bundle1.clone(), bundle0.clone()]
+            Vec::from_iter(bundles1.iter().cloned().chain(bundles0.iter().cloned()))
         ),
         Err(WorkerError::InvalidCrossChainRequest)
     );
@@ -3147,7 +3140,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             id1,
             BlockHeight::ZERO,
             None,
-            vec![bundle0.clone(), bundle1.clone()]
+            bundles01.clone()
         )?,
         vec![]
     );
@@ -3158,9 +3151,9 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             id1,
             BlockHeight::ZERO,
             None,
-            vec![bundle0.clone(), bundle1.clone(), bundle2.clone(), bundle3]
+            bundles0123.clone()
         )?,
-        vec![bundle0.clone(), bundle1.clone(), bundle2.clone()]
+        bundles012.clone()
     );
     // Received heights is still removing prefixes.
     assert_eq!(
@@ -3169,9 +3162,9 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             id1,
             BlockHeight::from(1),
             None,
-            vec![bundle0.clone(), bundle1.clone(), bundle2.clone()]
+            bundles012.clone()
         )?,
-        vec![bundle1.clone(), bundle2.clone()]
+        Vec::from_iter(bundles1.iter().cloned().chain(bundles2.iter().cloned()))
     );
     // Anticipated messages re-certify blocks up to the given height.
     assert_eq!(
@@ -3180,9 +3173,9 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             id1,
             BlockHeight::from(1),
             Some(BlockHeight::from(1)),
-            vec![bundle0.clone(), bundle1.clone()]
+            bundles01.clone()
         )?,
-        vec![bundle1.clone()]
+        bundles1.clone()
     );
     assert_eq!(
         helper.select_message_bundles(
@@ -3190,9 +3183,9 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             id1,
             BlockHeight::ZERO,
             Some(BlockHeight::from(1)),
-            vec![bundle0.clone(), bundle1.clone()]
+            bundles01.clone()
         )?,
-        vec![bundle0.clone(), bundle1.clone()]
+        bundles01.clone()
     );
     Ok(())
 }

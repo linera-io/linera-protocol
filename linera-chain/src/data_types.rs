@@ -1069,23 +1069,34 @@ impl Certificate {
             .is_ok()
     }
 
-    /// Returns the bundle of messages sent via the given medium to the specified
-    /// recipient. If the medium is a channel, does not verify that the recipient is
-    /// actually subscribed to that channel.
-    pub fn message_bundle_for(&self, medium: &Medium, recipient: ChainId) -> Option<MessageBundle> {
-        let executed_block = self.value().executed_block()?;
-        let messages = (0u32..)
-            .zip(executed_block.messages().iter().flatten())
-            .filter(|(_, message)| message.has_destination(medium, recipient))
-            .map(|(idx, message)| (idx, message.clone()))
-            .collect();
-        Some(MessageBundle {
-            height: executed_block.block.height,
-            epoch: executed_block.block.epoch,
-            timestamp: executed_block.block.timestamp,
-            hash: self.hash(),
-            messages,
-        })
+    /// Returns the bundles of messages sent via the given medium to the specified
+    /// recipient. Messages originating from different transactions of the original block
+    /// are kept in separate bundles. If the medium is a channel, does not verify that the
+    /// recipient is actually subscribed to that channel.
+    pub fn message_bundles_for(&self, medium: &Medium, recipient: ChainId) -> Vec<MessageBundle> {
+        let Some(executed_block) = self.value().executed_block() else {
+            return Vec::new();
+        };
+        let mut bundles = Vec::new();
+        let mut index = 0u32;
+        for block_messages in executed_block.messages().iter() {
+            let messages = (index..)
+                .zip(block_messages)
+                .filter(|(_, message)| message.has_destination(medium, recipient))
+                .map(|(idx, message)| (idx, message.clone()))
+                .collect::<Vec<_>>();
+            index += block_messages.len() as u32;
+            if !messages.is_empty() {
+                bundles.push(MessageBundle {
+                    height: executed_block.block.height,
+                    epoch: executed_block.block.epoch,
+                    timestamp: executed_block.block.timestamp,
+                    hash: self.hash(),
+                    messages,
+                });
+            }
+        }
+        bundles
     }
 }
 

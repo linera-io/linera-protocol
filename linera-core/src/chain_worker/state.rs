@@ -948,21 +948,19 @@ where
             .zip(certificates)
             .collect::<HashMap<_, _>>();
         // For each medium, select the relevant messages.
-        let bundle_vecs = height_map
-            .into_iter()
-            .map(|(medium, heights)| {
-                let bundles = heights
-                    .into_iter()
-                    .map(|height| {
-                        certificates
-                            .get(&height)?
-                            .message_bundle_for(&medium, recipient)
-                    })
-                    .collect::<Option<_>>()?;
-                Some((medium, bundles))
-            })
-            .collect::<Option<_>>()
-            .ok_or_else(|| ChainError::InternalError("missing certificates".to_string()))?;
+        let mut bundle_vecs = Vec::new();
+        for (medium, heights) in height_map {
+            let mut bundles = Vec::new();
+            for height in heights {
+                let cert = certificates
+                    .get(&height)
+                    .ok_or_else(|| ChainError::InternalError("missing certificates".to_string()))?;
+                bundles.extend(cert.message_bundles_for(&medium, recipient));
+            }
+            if !bundles.is_empty() {
+                bundle_vecs.push((medium, bundles));
+            }
+        }
         Ok(CrossChainRequest::UpdateRecipient {
             sender: self.chain.chain_id(),
             recipient,
@@ -1031,9 +1029,9 @@ impl<'a> CrossChainUpdateHelper<'a> {
         let mut skipped_len = 0;
         let mut trusted_len = 0;
         for (i, bundle) in bundles.iter().enumerate() {
-            // Make sure that heights are increasing.
+            // Make sure that heights are not decreasing.
             ensure!(
-                latest_height < Some(bundle.height),
+                latest_height <= Some(bundle.height),
                 WorkerError::InvalidCrossChainRequest
             );
             latest_height = Some(bundle.height);
