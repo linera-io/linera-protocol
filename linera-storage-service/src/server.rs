@@ -10,7 +10,7 @@ use linera_views::{
     common::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
     memory::{create_memory_store_stream_queries, MemoryStore},
 };
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 #[cfg(feature = "rocksdb")]
 use linera_views::{
     common::AdminKeyValueStore,
@@ -225,7 +225,7 @@ enum ServiceStoreServerOptions {
 
 #[tonic::async_trait]
 impl StoreProcessor for ServiceStoreServer {
-    #[instrument(target = "grpc_server", skip_all, err, fields(key = ?request.get_ref().key))]
+    #[instrument(target = "store_server", skip_all, err, fields(key = ?request.get_ref().key))]
     async fn process_read_value(
         &self,
         request: Request<RequestReadValue>,
@@ -255,7 +255,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(key = ?request.get_ref().key))]
+    #[instrument(target = "store_server", skip_all, err, fields(key = ?request.get_ref().key))]
     async fn process_contains_key(
         &self,
         request: Request<RequestContainsKey>,
@@ -268,7 +268,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(n_keys = ?request.get_ref().keys.len()))]
+    #[instrument(target = "store_server", skip_all, err, fields(n_keys = ?request.get_ref().keys.len()))]
     async fn process_read_multi_values(
         &self,
         request: Request<RequestReadMultiValues>,
@@ -305,7 +305,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(key_prefix = ?request.get_ref().key_prefix))]
+    #[instrument(target = "store_server", skip_all, err, fields(key_prefix = ?request.get_ref().key_prefix))]
     async fn process_find_keys_by_prefix(
         &self,
         request: Request<RequestFindKeysByPrefix>,
@@ -332,7 +332,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(key_prefix = ?request.get_ref().key_prefix))]
+    #[instrument(target = "store_server", skip_all, err, fields(key_prefix = ?request.get_ref().key_prefix))]
     async fn process_find_key_values_by_prefix(
         &self,
         request: Request<RequestFindKeyValuesByPrefix>,
@@ -369,7 +369,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(n_statements = ?request.get_ref().statements.len()))]
+    #[instrument(target = "store_server", skip_all, err, fields(n_statements = ?request.get_ref().statements.len()))]
     async fn process_write_batch_extended(
         &self,
         request: Request<RequestWriteBatchExtended>,
@@ -504,6 +504,14 @@ impl StoreProcessor for ServiceStoreServer {
 
 #[tokio::main]
 async fn main() {
+    let env_filter = tracing_subscriber::EnvFilter::builder()
+        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        .from_env_lossy();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(env_filter)
+        .init();
+
     let options = <ServiceStoreServerOptions as clap::Parser>::parse();
     let common_config = CommonStoreConfig::default();
     let (store, endpoint) = match options {
@@ -535,6 +543,8 @@ async fn main() {
         pending_big_reads,
     };
     let endpoint = endpoint.parse().unwrap();
+    println!("endpoint={}", endpoint);
+    info!("endpoint={}", endpoint);
     Server::builder()
         .add_service(StoreProcessorServer::new(store))
         .serve(endpoint)
