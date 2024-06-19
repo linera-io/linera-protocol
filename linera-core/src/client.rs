@@ -1886,8 +1886,9 @@ where
 
     /// Clears the information on any operation that previously failed.
     pub fn clear_pending_block(&self) {
-        self.state_mut().pending_block = None;
-        self.state_mut().pending_blobs.clear();
+        let mut state = self.state_mut();
+        state.pending_block = None;
+        state.pending_blobs.clear();
     }
 
     /// Processes confirmed operation for which this chain is a recipient.
