@@ -285,7 +285,12 @@ pub async fn run_reads<S: LocalKeyValueStore>(store: S, key_values: Vec<(Vec<u8>
         }
         assert_eq!(set_key_value1, set_key_value2);
     }
-    // Now checking the read_multi_values_bytes
+    // Now checking the `read_value_bytes`
+    for (key, value) in &key_values {
+        let value_read = store.read_value_bytes(key).await.unwrap();
+        assert_eq!(value_read, Some(value.clone()));
+    }
+    // Now checking the `read_multi_values_bytes`
     let mut rng = make_deterministic_rng();
     for _ in 0..10 {
         let mut keys = Vec::new();
