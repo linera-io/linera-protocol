@@ -1336,8 +1336,7 @@ where
         let certificate = self
             .submit_block_proposal(&committee, proposal, hashed_value)
             .await?;
-        self.pending_block = None;
-        self.pending_blobs.clear();
+        self.clear_pending_block();
         // Communicate the new certificate now.
         self.communicate_chain_updates(
             &committee,
@@ -1737,8 +1736,7 @@ where
         // Drop the pending block if it is outdated.
         if let Some(block) = &self.pending_block {
             if block.height != info.next_block_height {
-                self.pending_block = None;
-                self.pending_blobs.clear();
+                self.clear_pending_block();
             }
         }
         // If there is a validated block in the current round, finalize it.
