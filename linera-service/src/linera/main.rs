@@ -271,9 +271,7 @@ impl Runnable for Job {
                 let certificate = context
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
-                        async move {
-                            chain_client.close_chain().await
-                        }
+                        async move { chain_client.close_chain().await }
                     })
                     .await
                     .context("Failed to close chain")?;
@@ -475,9 +473,8 @@ impl Runnable for Job {
                 // Make sure genesis chains are subscribed to the admin chain.
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
-                let chain_client = context
-                    .make_chain_client(context.wallet().genesis_admin_chain())
-                    ;
+                let chain_client =
+                    context.make_chain_client(context.wallet().genesis_admin_chain());
                 let n = context
                     .process_inbox(&chain_client)
                     .await
@@ -641,9 +638,7 @@ impl Runnable for Job {
                 context
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
-                        async move {
-                            chain_client.finalize_committee().await
-                        }
+                        async move { chain_client.finalize_committee().await }
                     })
                     .await
                     .context("Failed to finalize committee")?;

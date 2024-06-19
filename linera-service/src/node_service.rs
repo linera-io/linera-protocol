@@ -93,10 +93,7 @@ where
         Some(self.0.lock().await.get(chain_id)?.clone())
     }
 
-    pub(crate) async fn client_lock(
-        &self,
-        chain_id: &ChainId,
-    ) -> Option<ChainClient<P, S>> {
+    pub(crate) async fn client_lock(&self, chain_id: &ChainId) -> Option<ChainClient<P, S>> {
         self.client(chain_id).await
     }
 
@@ -276,12 +273,7 @@ where
     ) -> Result<T, Error>
     where
         F: FnMut(ChainClient<P, S>) -> Fut,
-        Fut: Future<
-            Output = (
-                Result<ClientOutcome<T>, Error>,
-                ChainClient<P, S>,
-            ),
-        >,
+        Fut: Future<Output = (Result<ClientOutcome<T>, Error>, ChainClient<P, S>)>,
     {
         loop {
             let client = self.clients.try_client_lock(chain_id).await?;

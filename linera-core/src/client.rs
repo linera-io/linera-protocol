@@ -252,7 +252,11 @@ pub struct ChainClient<ValidatorNodeProvider, Storage> {
 
 impl<P, S> Clone for ChainClient<P, S> {
     fn clone(&self) -> Self {
-        Self { client: self.client.clone(), chain_id: self.chain_id, options: self.options.clone() }
+        Self {
+            client: self.client.clone(),
+            chain_id: self.chain_id,
+            options: self.options.clone(),
+        }
     }
 }
 
@@ -2498,10 +2502,8 @@ where
     {
         let (chain_id, nodes, local_node) = {
             let committee = self.local_committee().await?;
-            let nodes: HashMap<_, _> = self
-                .client
-                .validator_node_provider
-                .make_nodes(&committee)?;
+            let nodes: HashMap<_, _> =
+                self.client.validator_node_provider.make_nodes(&committee)?;
             (self.chain_id, nodes, self.client.local_node.clone())
         };
         // Drop removed validators.
@@ -2548,7 +2550,6 @@ where
         node_client: LocalNodeClient<S>,
     ) -> Result<(), ChainClientError> {
         let ((committees, max_epoch), chain_id, current_tracker) = {
-
             let (committees, max_epoch) = self.known_committees().await?;
             let chain_id = self.chain_id;
             let current_tracker: u64 = self
