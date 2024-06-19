@@ -37,8 +37,8 @@ use linera_service::cli_wrappers::{
 };
 use linera_service::{
     cli_wrappers::{
-        local_net::PathProvider, ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet,
-        LineraNetConfig, Network,
+        local_net::{get_node_port, PathProvider},
+        ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     test_name,
 };
@@ -455,7 +455,8 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
             None,
         )
         .await?;
-    let node_service = client.run_node_service(None).await?;
+    let port = get_node_port().await;
+    let node_service = client.run_node_service(port).await?;
 
     let app = EthereumTrackerApp(
         node_service
@@ -519,7 +520,8 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
             None,
         )
         .await?;
-    let mut node_service = client.run_node_service(None).await?;
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -568,7 +570,8 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     let application_id = client
         .create_application(&bytecode_id, &(), &original_counter_value, &[], None)
         .await?;
-    let mut node_service = client.run_node_service(None).await?;
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -619,8 +622,10 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .create_application(&bytecode_id, &(), &(), &[], None)
         .await?;
 
-    let mut node_service1 = client1.run_node_service(8080).await?;
-    let mut node_service2 = client2.run_node_service(8081).await?;
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let mut node_service1 = client1.run_node_service(port1).await?;
+    let mut node_service2 = client2.run_node_service(port2).await?;
 
     // Request the application so chain 2 has it, too.
     node_service2
@@ -738,8 +743,10 @@ async fn test_wasm_end_to_end_fungible(
         )
         .await?;
 
-    let mut node_service1 = client1.run_node_service(8080).await?;
-    let mut node_service2 = client2.run_node_service(8081).await?;
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let mut node_service1 = client1.run_node_service(port1).await?;
+    let mut node_service2 = client2.run_node_service(port2).await?;
 
     let app1 = FungibleApp(
         node_service1
@@ -908,7 +915,8 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         )
         .await?;
 
-    let mut node_service = client1.run_node_service(8080).await?;
+    let port = get_node_port().await;
+    let mut node_service = client1.run_node_service(port).await?;
 
     let app1 = FungibleApp(
         node_service
@@ -1006,8 +1014,10 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .publish_and_create::<NonFungibleTokenAbi, (), ()>(contract, service, &(), &(), &[], None)
         .await?;
 
-    let mut node_service1 = client1.run_node_service(8080).await?;
-    let mut node_service2 = client2.run_node_service(8081).await?;
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let mut node_service1 = client1.run_node_service(port1).await?;
+    let mut node_service2 = client2.run_node_service(port2).await?;
 
     let app1 = NonFungibleApp(
         node_service1
@@ -1305,8 +1315,10 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
         )
         .await?;
 
-    let mut node_service1 = client1.run_node_service(8080).await?;
-    let mut node_service2 = client2.run_node_service(8081).await?;
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let mut node_service1 = client1.run_node_service(port1).await?;
+    let mut node_service2 = client2.run_node_service(port2).await?;
 
     let app_fungible1 = FungibleApp(
         node_service1
@@ -1444,9 +1456,12 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         .await?;
 
     // Now creating the service and exporting the applications
-    let mut node_service_admin = client_admin.run_node_service(8080).await?;
-    let mut node_service_a = client_a.run_node_service(8081).await?;
-    let mut node_service_b = client_b.run_node_service(8082).await?;
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let port3 = get_node_port().await;
+    let mut node_service_admin = client_admin.run_node_service(port1).await?;
+    let mut node_service_a = client_a.run_node_service(port2).await?;
+    let mut node_service_b = client_b.run_node_service(port3).await?;
 
     node_service_a
         .request_application(&chain_a, &token1)
@@ -1711,9 +1726,12 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let owner0 = get_fungible_account_owner(&client0);
     let owner1 = get_fungible_account_owner(&client1);
 
-    let mut node_service_amm = client_amm.run_node_service(8080).await?;
-    let mut node_service0 = client0.run_node_service(8081).await?;
-    let mut node_service1 = client1.run_node_service(8082).await?;
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let port3 = get_node_port().await;
+    let mut node_service_amm = client_amm.run_node_service(port1).await?;
+    let mut node_service0 = client0.run_node_service(port2).await?;
+    let mut node_service1 = client1.run_node_service(port3).await?;
 
     // Amounts of token0 that will be owned by each user
     let state_fungible0 = fungible::InitialState {
@@ -2443,8 +2461,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     let chain_2 = client
         .open_and_assign(&client_2, Amount::from_tokens(3))
         .await?;
+    let port = get_node_port().await;
     let node_service_2 = match network {
-        Network::Grpc => Some(client_2.run_node_service(8081).await?),
+        Network::Grpc => Some(client_2.run_node_service(port).await?),
         Network::Tcp | Network::Udp => None,
     };
 
@@ -2578,7 +2597,8 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
         .await
         ?;
 
-    let node_service = client.run_node_service(8080).await?;
+    let port = get_node_port().await;
+    let node_service = client.run_node_service(port).await?;
 
     // Open a new chain with the same public key.
     // The node service should automatically create a client for it internally.
@@ -2675,7 +2695,8 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     client2.wallet_init(&[chain], FaucetOption::None).await?;
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
-    let mut node_service2 = client2.run_node_service(8081).await?;
+    let port = get_node_port().await;
+    let mut node_service2 = client2.run_node_service(port).await?;
     let response = node_service2
         .query_node(format!(
             "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
@@ -2827,7 +2848,8 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
         .await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
 
-    let node_service = client.run_node_service(None).await?;
+    let port = get_node_port().await;
+    let node_service = client.run_node_service(port).await?;
 
     assert_eq!(
         node_service.try_get_applications_uri(&chain).await?.len(),
@@ -2914,7 +2936,8 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
         .await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
 
-    let node_service = client.run_node_service(None).await?;
+    let port = get_node_port().await;
+    let node_service = client.run_node_service(port).await?;
 
     assert_eq!(
         node_service.try_get_applications_uri(&chain).await?.len(),
