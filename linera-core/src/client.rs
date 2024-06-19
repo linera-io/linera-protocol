@@ -1787,10 +1787,13 @@ where
         }
         let manager = *info.manager;
         // Drop the pending block if it is outdated.
-        if let Some(block) = &self.state().pending_block {
-            if block.height != info.next_block_height {
-                self.clear_pending_block();
-            }
+        // Caveat editor: this cannot be an `if let` as the borrow of `state()` will be
+        // extended over the body, causing a deadlock.
+        if matches!(
+            self.state().pending_block,
+            Some(ref block) if block.height != info.next_block_height,
+        ) {
+            self.clear_pending_block();
         }
         // If there is a validated block in the current round, finalize it.
         if let Some(certificate) = &manager.requested_locked {
