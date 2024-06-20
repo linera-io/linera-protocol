@@ -647,17 +647,13 @@ where
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
         // network.
+        let next_block_height = self.next_block_height();
         let nodes = self.validator_nodes().await?;
         let mut notifications = vec![];
         let mut info = self
             .client
             .local_node
-            .download_certificates(
-                nodes,
-                self.chain_id,
-                self.next_block_height(),
-                &mut notifications,
-            )
+            .download_certificates(nodes, self.chain_id, next_block_height, &mut notifications)
             .await?;
         self.handle_notifications(&mut notifications);
         if info.next_block_height == self.next_block_height {
