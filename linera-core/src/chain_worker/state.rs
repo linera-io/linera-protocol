@@ -521,10 +521,12 @@ where
         }
 
         let blobs_in_block = self.get_blobs(block.blob_ids()).await?;
+        let certificate_hash = certificate.hash();
         let (result_hashed_certificate_value, result_blobs, result_certificate) = tokio::join!(
             self.storage
                 .write_hashed_certificate_values(hashed_certificate_values),
-            self.storage.write_hashed_blobs(&blobs_in_block),
+            self.storage
+                .write_hashed_blobs(&blobs_in_block, &certificate_hash),
             self.storage.write_certificate(&certificate)
         );
         result_hashed_certificate_value?;
