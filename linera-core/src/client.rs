@@ -30,6 +30,7 @@ use linera_chain::{
         Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
         IncomingMessage, LiteCertificate, LiteVote, MessageAction,
     },
+    manager::ChainManagerInfo,
     ChainError, ChainExecutionContext, ChainStateView,
 };
 use linera_execution::{
@@ -1250,6 +1251,7 @@ where
         &mut self,
         block: Block,
         round: Round,
+        manager: ChainManagerInfo,
     ) -> Result<Certificate, ChainClientError> {
         ensure!(
             block.height == self.next_block_height,
@@ -1259,8 +1261,6 @@ where
             block.previous_block_hash == self.block_hash,
             ChainClientError::BlockProposalError("Unexpected previous block hash")
         );
-        // Gather information on the current local state.
-        let manager = *self.chain_info_with_manager_values().await?.manager;
         // In the fast round, we must never make any conflicting proposals.
         if round.is_fast() {
             if let Some(pending) = &self.pending_block {
@@ -1336,8 +1336,7 @@ where
         let certificate = self
             .submit_block_proposal(&committee, proposal, hashed_value)
             .await?;
-        self.pending_block = None;
-        self.pending_blobs.clear();
+        self.clear_pending_block();
         // Communicate the new certificate now.
         self.communicate_chain_updates(
             &committee,
@@ -1737,8 +1736,7 @@ where
         // Drop the pending block if it is outdated.
         if let Some(block) = &self.pending_block {
             if block.height != info.next_block_height {
-                self.pending_block = None;
-                self.pending_blobs.clear();
+                self.clear_pending_block();
             }
         }
         // If there is a validated block in the current round, finalize it.
@@ -1812,7 +1810,7 @@ where
             Round::SingleLeader(_) | Round::Validator(_) => manager.leader == Some(identity),
         };
         if can_propose {
-            let certificate = self.propose_block(block.clone(), round).await?;
+            let certificate = self.propose_block(block.clone(), round, manager).await?;
             Ok(ClientOutcome::Committed(Some(certificate)))
         } else {
             // TODO(#1424): Local timeout might not match validators' exactly.
