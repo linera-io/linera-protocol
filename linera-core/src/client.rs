@@ -1187,9 +1187,8 @@ where
 
     /// Updates the latest block and next block height and round information from the chain info.
     fn update_from_info(&self, info: &ChainInfo) {
-        if info.chain_id == self.chain_id && info.next_block_height > self.state().next_block_height
-        {
-            let mut state = self.state_mut();
+        let mut state = self.state_mut();
+        if info.chain_id == self.chain_id && info.next_block_height > state.next_block_height {
             state.next_block_height = info.next_block_height;
             state.block_hash = info.block_hash;
             state.timestamp = info.timestamp;
