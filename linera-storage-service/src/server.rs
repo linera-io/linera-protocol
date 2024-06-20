@@ -414,7 +414,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(message_index = ?request.get_ref().message_index, index = ?request.get_ref().index))]
+    #[instrument(target = "store_server", skip_all, err, fields(message_index = ?request.get_ref().message_index, index = ?request.get_ref().index))]
     async fn process_specific_chunk(
         &self,
         request: Request<RequestSpecificChunk>,
@@ -438,7 +438,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
+    #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_create_namespace(
         &self,
         request: Request<RequestCreateNamespace>,
@@ -451,7 +451,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
+    #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_exists_namespace(
         &self,
         request: Request<RequestExistsNamespace>,
@@ -464,7 +464,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
+    #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_delete_namespace(
         &self,
         request: Request<RequestDeleteNamespace>,
@@ -477,7 +477,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(list_all = "list_all"))]
+    #[instrument(target = "store_server", skip_all, err, fields(list_all = "list_all"))]
     async fn process_list_all(
         &self,
         request: Request<RequestListAll>,
@@ -490,7 +490,7 @@ impl StoreProcessor for ServiceStoreServer {
     }
 
     #[instrument(
-        target = "grpc_server",
+        target = "store_server",
         skip_all,
         err,
         fields(delete_all = "delete_all")
