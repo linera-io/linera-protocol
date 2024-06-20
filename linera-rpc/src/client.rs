@@ -175,4 +175,13 @@ impl ValidatorNode for Client {
             Client::Simple(simple_client) => simple_client.download_certificate(hash).await?,
         })
     }
+
+    async fn blob_last_used_by(&mut self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.blob_last_used_by(blob_id).await?,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.blob_last_used_by(blob_id).await?,
+        })
+    }
 }

@@ -441,6 +441,21 @@ where
             .map_err(|err| Status::from_error(Box::new(err)))?;
         Ok(Response::new(certificate.try_into()?))
     }
+
+    #[instrument(skip_all, err(Display))]
+    async fn blob_last_used_by(
+        &self,
+        request: Request<BlobId>,
+    ) -> Result<Response<CryptoHash>, Status> {
+        let blob_id = request.into_inner().try_into()?;
+        let blob_state = self
+            .0
+            .storage
+            .read_blob_state(blob_id)
+            .await
+            .map_err(|err| Status::from_error(Box::new(err)))?;
+        Ok(Response::new(blob_state.last_used_by.into()))
+    }
 }
 
 #[async_trait]

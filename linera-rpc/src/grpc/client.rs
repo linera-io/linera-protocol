@@ -299,6 +299,16 @@ impl ValidatorNode for GrpcClient {
             .into_inner()
             .try_into()?)
     }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn blob_last_used_by(&mut self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
+        Ok(self
+            .client
+            .blob_last_used_by(<BlobId as Into<api::BlobId>>::into(blob_id))
+            .await?
+            .into_inner()
+            .try_into()?)
+    }
 }
 
 #[cfg(not(web))]

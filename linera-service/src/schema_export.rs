@@ -88,6 +88,10 @@ impl ValidatorNode for DummyValidatorNode {
     async fn download_certificate(&mut self, _: CryptoHash) -> Result<Certificate, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
+
+    async fn blob_last_used_by(&mut self, _: BlobId) -> Result<CryptoHash, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
 }
 
 struct DummyValidatorNodeProvider;
