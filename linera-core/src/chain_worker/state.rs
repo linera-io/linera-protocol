@@ -355,9 +355,11 @@ where
                 .ok_or_else(|| WorkerError::InvalidLiteCertificate)?;
         }
         if round.is_fast() {
-            let mut records = outcome.oracle_records.iter();
             ensure!(
-                records.all(|record| record.responses.is_empty()),
+                outcome
+                    .oracle_records
+                    .iter()
+                    .all(|record| record.is_permitted_in_fast_blocks()),
                 WorkerError::FastBlockUsingOracles
             );
         }

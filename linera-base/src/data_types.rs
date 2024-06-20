@@ -718,6 +718,15 @@ pub struct OracleRecord {
     pub responses: Vec<OracleResponse>,
 }
 
+impl OracleRecord {
+    /// Wether an `OracleRecord` is permitted in fast blocks or not.
+    pub fn is_permitted_in_fast_blocks(&self) -> bool {
+        self.responses
+            .iter()
+            .all(|oracle_response| oracle_response.is_permitted_in_fast_blocks())
+    }
+}
+
 /// A record of a single oracle response.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum OracleResponse {
@@ -725,8 +734,17 @@ pub enum OracleResponse {
     Service(Vec<u8>),
     /// The response from an HTTP POST request.
     Post(Vec<u8>),
+    /// A successful read or write of a blob.
+    Blob(BlobId),
     /// An assertion oracle that passed.
     Assert,
+}
+
+impl OracleResponse {
+    /// Wether an `OracleResponse` is permitted in fast blocks or not.
+    pub fn is_permitted_in_fast_blocks(&self) -> bool {
+        matches!(self, OracleResponse::Blob(_))
+    }
 }
 
 impl fmt::Display for OracleResponse {
@@ -736,6 +754,7 @@ impl fmt::Display for OracleResponse {
                 write!(f, "Service:{}", STANDARD_NO_PAD.encode(bytes))?
             }
             OracleResponse::Post(bytes) => write!(f, "Post:{}", STANDARD_NO_PAD.encode(bytes))?,
+            OracleResponse::Blob(blob_id) => write!(f, "Blob:{}", blob_id)?,
             OracleResponse::Assert => write!(f, "Assert")?,
         };
 
@@ -756,6 +775,9 @@ impl std::str::FromStr for OracleResponse {
             return Ok(OracleResponse::Post(
                 STANDARD_NO_PAD.decode(string).context("Invalid base64")?,
             ));
+        }
+        if let Some(string) = s.strip_prefix("Blob:") {
+            return Ok(OracleResponse::Blob(BlobId(CryptoHash::from_str(string)?)));
         }
         Err(anyhow::anyhow!("Invalid enum! Enum: {}", s))
     }

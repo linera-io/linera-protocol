@@ -651,6 +651,10 @@ OracleResponse:
         NEWTYPE:
           SEQ: U8
     2:
+      Blob:
+        NEWTYPE:
+          TYPENAME: BlobId
+    3:
       Assert: UNIT
 Origin:
   STRUCT:
