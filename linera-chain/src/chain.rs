@@ -538,10 +538,6 @@ where
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
-        ensure!(
-            bundle.height >= self.next_block_height_to_receive(origin).await?,
-            ChainError::InternalError("Trying to receive messages in the wrong order".to_string())
-        );
         tracing::trace!(
             "Processing new messages to {:?} from {:?} at height {}",
             chain_id,
