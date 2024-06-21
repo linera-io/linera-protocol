@@ -172,16 +172,8 @@ pub enum NodeError {
         height: BlockHeight,
     },
 
-    // This error must be normalized during conversions.
-    #[error("The following values containing application bytecode are missing: {0:?}.")]
-    ApplicationBytecodesNotFound(Vec<BytecodeLocation>),
-
-    // This error must be normalized during conversions.
-    #[error("The following blobs are missing: {0:?}.")]
-    BlobsNotFound(Vec<BlobId>),
-
     #[error("The following values containing application bytecode are missing: {0:?} and the following blobs are missing: {1:?}.")]
-    ApplicationBytecodesAndBlobsNotFound(Vec<BytecodeLocation>, Vec<BlobId>),
+    ApplicationBytecodesOrBlobsNotFound(Vec<BytecodeLocation>, Vec<BlobId>),
 
     // This error must be normalized during conversions.
     #[error("We don't have the value for the certificate.")]
@@ -294,12 +286,8 @@ impl From<WorkerError> for NodeError {
         match error {
             WorkerError::ChainError(error) => (*error).into(),
             WorkerError::MissingCertificateValue => Self::MissingCertificateValue,
-            WorkerError::ApplicationBytecodesNotFound(locations) => {
-                NodeError::ApplicationBytecodesNotFound(locations)
-            }
-            WorkerError::BlobsNotFound(blob_ids) => NodeError::BlobsNotFound(blob_ids),
-            WorkerError::ApplicationBytecodesAndBlobsNotFound(locations, blob_ids) => {
-                NodeError::ApplicationBytecodesAndBlobsNotFound(locations, blob_ids)
+            WorkerError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids) => {
+                NodeError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids)
             }
             error => Self::WorkerError {
                 error: error.to_string(),

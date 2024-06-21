@@ -248,16 +248,12 @@ pub enum WorkerError {
     UnneededValue { value_hash: CryptoHash },
     #[error("An additional blob was provided that is not required: {blob_id}.")]
     UnneededBlob { blob_id: BlobId },
-    #[error("The following values containing application bytecode are missing: {0:?}.")]
-    ApplicationBytecodesNotFound(Vec<BytecodeLocation>),
     #[error("The certificate in the block proposal is not a ValidatedBlock")]
     MissingExecutedBlockInProposal,
     #[error("Fast blocks cannot query oracles")]
     FastBlockUsingOracles,
-    #[error("The following blobs are missing: {0:?}.")]
-    BlobsNotFound(Vec<BlobId>),
     #[error("The following values containing application bytecode are missing: {0:?} and the following blobs are missing: {1:?}.")]
-    ApplicationBytecodesAndBlobsNotFound(Vec<BytecodeLocation>, Vec<BlobId>),
+    ApplicationBytecodesOrBlobsNotFound(Vec<BytecodeLocation>, Vec<BlobId>),
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
 }

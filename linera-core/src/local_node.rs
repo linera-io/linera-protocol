@@ -240,31 +240,8 @@ where
                 .await;
 
             result = match &result {
-                Err(LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
-                    locations,
-                ))) => {
-                    let values = self
-                        .find_missing_application_bytecodes(locations, node, name)
-                        .await;
-
-                    if values.len() != locations.len() {
-                        result
-                    } else {
-                        self.handle_certificate(certificate, values, vec![], notifications)
-                            .await
-                    }
-                }
-                Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids))) => {
-                    let blobs = self.find_missing_blobs(blob_ids, node, name).await;
-                    if blobs.len() != blob_ids.len() {
-                        result
-                    } else {
-                        self.handle_certificate(certificate, vec![], blobs, notifications)
-                            .await
-                    }
-                }
                 Err(LocalNodeError::WorkerError(
-                    WorkerError::ApplicationBytecodesAndBlobsNotFound(locations, blob_ids),
+                    WorkerError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids),
                 )) => {
                     let values = self
                         .find_missing_application_bytecodes(locations, node, name)
