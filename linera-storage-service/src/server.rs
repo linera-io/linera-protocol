@@ -225,13 +225,13 @@ enum ServiceStoreServerOptions {
 
 #[tonic::async_trait]
 impl StoreProcessor for ServiceStoreServer {
-    #[instrument(target = "store_server", skip_all, err, fields(key = ?request.get_ref().key))]
+    #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().key.len()))]
     async fn process_read_value(
         &self,
         request: Request<RequestReadValue>,
     ) -> Result<Response<ReplyReadValue>, Status> {
         let request = request.into_inner();
-        info!(?request, "Process read value");
+        info!("Process read value");
         let RequestReadValue { key } = request;
         let value = self.read_value_bytes(&key).await?;
         let size = match &value {
@@ -255,13 +255,13 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "store_server", skip_all, err, fields(key = ?request.get_ref().key))]
+    #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().key.len()))]
     async fn process_contains_key(
         &self,
         request: Request<RequestContainsKey>,
     ) -> Result<Response<ReplyContainsKey>, Status> {
         let request = request.into_inner();
-        info!(?request, "Process contains key");
+        info!("Process contains key");
         let RequestContainsKey { key } = request;
         let test = self.contains_key(&key).await?;
         let response = ReplyContainsKey { test };
@@ -274,7 +274,7 @@ impl StoreProcessor for ServiceStoreServer {
         request: Request<RequestReadMultiValues>,
     ) -> Result<Response<ReplyReadMultiValues>, Status> {
         let request = request.into_inner();
-        info!(?request, "Process read multi values");
+        info!("Process read multi values");
         let RequestReadMultiValues { keys } = request;
         let values = self.read_multi_values_bytes(keys.clone()).await?;
         let size = values
@@ -305,13 +305,13 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "store_server", skip_all, err, fields(key_prefix = ?request.get_ref().key_prefix))]
+    #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
     async fn process_find_keys_by_prefix(
         &self,
         request: Request<RequestFindKeysByPrefix>,
     ) -> Result<Response<ReplyFindKeysByPrefix>, Status> {
         let request = request.into_inner();
-        info!(?request, "Process find keys by prefix");
+        info!("Process find keys by prefix");
         let RequestFindKeysByPrefix { key_prefix } = request;
         let keys = self.find_keys_by_prefix(&key_prefix).await?;
         let size = keys.iter().map(|x| x.len()).sum::<usize>();
@@ -332,13 +332,13 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "store_server", skip_all, err, fields(key_prefix = ?request.get_ref().key_prefix))]
+    #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
     async fn process_find_key_values_by_prefix(
         &self,
         request: Request<RequestFindKeyValuesByPrefix>,
     ) -> Result<Response<ReplyFindKeyValuesByPrefix>, Status> {
         let request = request.into_inner();
-        info!(?request, "Process find key values by prefix");
+        info!("Process find key values by prefix");
         let RequestFindKeyValuesByPrefix { key_prefix } = request;
         let key_values = self.find_key_values_by_prefix(&key_prefix).await?;
         let size = key_values
@@ -375,7 +375,7 @@ impl StoreProcessor for ServiceStoreServer {
         request: Request<RequestWriteBatchExtended>,
     ) -> Result<Response<ReplyWriteBatchExtended>, Status> {
         let request = request.into_inner();
-        info!(?request, "Process write batch extended");
+        info!("Process write batch extended");
         let RequestWriteBatchExtended { statements } = request;
         let mut batch = Batch::default();
         for statement in statements {
@@ -420,7 +420,7 @@ impl StoreProcessor for ServiceStoreServer {
         request: Request<RequestSpecificChunk>,
     ) -> Result<Response<ReplySpecificChunk>, Status> {
         let request = request.into_inner();
-        info!(?request, "Process specific chunk");
+        info!("Process specific chunk");
         let RequestSpecificChunk {
             message_index,
             index,
@@ -444,7 +444,7 @@ impl StoreProcessor for ServiceStoreServer {
         request: Request<RequestCreateNamespace>,
     ) -> Result<Response<ReplyCreateNamespace>, Status> {
         let request = request.into_inner();
-        info!(?request, "Process create namespace");
+        info!("Process create namespace");
         let RequestCreateNamespace { namespace } = request;
         self.create_namespace(&namespace).await?;
         let response = ReplyCreateNamespace {};
@@ -457,7 +457,7 @@ impl StoreProcessor for ServiceStoreServer {
         request: Request<RequestExistsNamespace>,
     ) -> Result<Response<ReplyExistsNamespace>, Status> {
         let request = request.into_inner();
-        info!(?request, "Process exists namespace");
+        info!("Process exists namespace");
         let RequestExistsNamespace { namespace } = request;
         let exists = self.exists_namespace(&namespace).await?;
         let response = ReplyExistsNamespace { exists };
@@ -470,7 +470,7 @@ impl StoreProcessor for ServiceStoreServer {
         request: Request<RequestDeleteNamespace>,
     ) -> Result<Response<ReplyDeleteNamespace>, Status> {
         let request = request.into_inner();
-        info!(?request, "Process delete namespace");
+        info!("Process delete namespace");
         let RequestDeleteNamespace { namespace } = request;
         self.delete_namespace(&namespace).await?;
         let response = ReplyDeleteNamespace {};
@@ -480,10 +480,9 @@ impl StoreProcessor for ServiceStoreServer {
     #[instrument(target = "store_server", skip_all, err, fields(list_all = "list_all"))]
     async fn process_list_all(
         &self,
-        request: Request<RequestListAll>,
+        _request: Request<RequestListAll>,
     ) -> Result<Response<ReplyListAll>, Status> {
-        let request = request.into_inner();
-        info!(?request, "Process list all");
+        info!("Process list all");
         let namespaces = self.list_all().await?;
         let response = ReplyListAll { namespaces };
         Ok(Response::new(response))
@@ -497,10 +496,9 @@ impl StoreProcessor for ServiceStoreServer {
     )]
     async fn process_delete_all(
         &self,
-        request: Request<RequestDeleteAll>,
+        _request: Request<RequestDeleteAll>,
     ) -> Result<Response<ReplyDeleteAll>, Status> {
-        let request = request.into_inner();
-        info!(?request, "Process delete all");
+        info!("Process delete all");
         self.delete_all().await?;
         let response = ReplyDeleteAll {};
         Ok(Response::new(response))
