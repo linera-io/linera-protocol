@@ -199,30 +199,30 @@ impl MessagePolicy {
     }
 }
 
-pub(crate) struct ChainState
+pub struct ChainState
 where
     Storage: linera_storage::Storage,
     ViewError: From<Storage::ContextError>,
 {
     /// Latest block hash, if any.
-    block_hash: Option<CryptoHash>,
+    pub block_hash: Option<CryptoHash>,
     /// The earliest possible timestamp for the next block.
-    timestamp: Timestamp,
+    pub timestamp: Timestamp,
     /// Sequence number that we plan to use for the next block.
     /// We track this value outside local storage mainly for security reasons.
-    next_block_height: BlockHeight,
+    pub next_block_height: BlockHeight,
     /// Pending block.
-    pending_block: Option<Block>,
+    pub pending_block: Option<Block>,
     /// Known key pairs from present and past identities.
-    known_key_pairs: BTreeMap<Owner, KeyPair>,
+    pub known_key_pairs: BTreeMap<Owner, KeyPair>,
     /// The ID of the admin chain.
-    admin_id: ChainId,
+    pub admin_id: ChainId,
 
     /// Support synchronization of received certificates.
-    received_certificate_trackers: HashMap<ValidatorName, u64>,
+    pub received_certificate_trackers: HashMap<ValidatorName, u64>,
     /// This contains blobs belonging to our `pending_block` that may not even have
     /// been processed by (i.e. been proposed to) our own local chain manager yet.
-    pending_blobs: BTreeMap<BlobId, HashedBlob>,
+    pub pending_blobs: BTreeMap<BlobId, HashedBlob>,
 }
 
 #[non_exhaustive]
@@ -326,14 +326,14 @@ where
     S: Storage,
     ViewError: From<S::ContextError>,
 {
-    pub(crate) fn state(&self) -> DashMapRef<ChainId, ChainState> {
+    pub fn state(&self) -> DashMapRef<ChainId, ChainState> {
         self.client
             .chains
             .get(&self.chain_id)
             .expect("Chain client constructed for invalid chain")
     }
 
-    pub(crate) fn state_mut(&self) -> DashMapRefMut<ChainId, ChainState> {
+    pub fn state_mut(&self) -> DashMapRefMut<ChainId, ChainState> {
         self.client
             .chains
             .get_mut(&self.chain_id)
@@ -348,39 +348,39 @@ where
         self.chain_id
     }
 
-    /// Returns the hash of the latest known block.
-    pub fn block_hash(&self) -> Option<CryptoHash> {
-        self.state().block_hash
-    }
+    // /// Returns the hash of the latest known block.
+    // pub fn block_hash(&self) -> Option<CryptoHash> {
+    //     self.state().block_hash
+    // }
 
-    /// Returns the earliest possible timestamp for the next block.
-    pub fn timestamp(&self) -> Timestamp {
-        self.state().timestamp
-    }
+    // /// Returns the earliest possible timestamp for the next block.
+    // pub fn timestamp(&self) -> Timestamp {
+    //     self.state().timestamp
+    // }
 
-    pub fn next_block_height(&self) -> BlockHeight {
-        self.state().next_block_height
-    }
+    // pub fn next_block_height(&self) -> BlockHeight {
+    //     self.state().next_block_height
+    // }
 
-    pub fn pending_block(&self) -> impl Deref<Target = Option<Block>> + '_ {
-        self.state().map(|state| &state.pending_block)
-    }
+    // pub fn pending_block(&self) -> impl Deref<Target = Option<Block>> + '_ {
+    //     self.state().map(|state| &state.pending_block)
+    // }
 
-    pub fn pending_blobs(&self) -> impl Deref<Target = BTreeMap<BlobId, HashedBlob>> + '_ {
-        self.state().map(|state| &state.pending_blobs)
-    }
+    // pub fn pending_blobs(&self) -> impl Deref<Target = BTreeMap<BlobId, HashedBlob>> + '_ {
+    //     self.state().map(|state| &state.pending_blobs)
+    // }
 
-    pub fn admin_id(&self) -> ChainId {
-        self.state().admin_id
-    }
+    // pub fn admin_id(&self) -> ChainId {
+    //     self.state().admin_id
+    // }
 
-    pub fn known_key_pairs(&self) -> impl Deref<Target = BTreeMap<Owner, KeyPair>> + '_ {
-        self.state().map(|state| &state.known_key_pairs)
-    }
+    // pub fn known_key_pairs(&self) -> impl Deref<Target = BTreeMap<Owner, KeyPair>> + '_ {
+    //     self.state().map(|state| &state.known_key_pairs)
+    // }
 
-    pub fn known_key_pairs_mut(&self) -> impl DerefMut<Target = BTreeMap<Owner, KeyPair>> + '_ {
-        self.state_mut().map(|state| &mut state.known_key_pairs)
-    }
+    // pub fn known_key_pairs_mut(&self) -> impl DerefMut<Target = BTreeMap<Owner, KeyPair>> + '_ {
+    //     self.state_mut().map(|state| &mut state.known_key_pairs)
+    // }
 }
 
 enum ReceiveCertificateMode {
@@ -444,7 +444,7 @@ where
     /// Messages known to be redundant are filtered out: A `RegisterApplications` message whose
     /// entries are already known never needs to be included in a block.
     async fn pending_messages(&self) -> Result<Vec<IncomingMessage>, ChainClientError> {
-        if self.next_block_height() != BlockHeight::ZERO && self.options.message_policy.is_ignore()
+        if self.state().next_block_height != BlockHeight::ZERO && self.options.message_policy.is_ignore()
         {
             return Ok(Vec::new()); // OpenChain is already received, other are ignored.
         }
@@ -456,7 +456,7 @@ where
             .await?
             .info;
         ensure!(
-            info.next_block_height == self.next_block_height(),
+            info.next_block_height == self.state().next_block_height,
             ChainClientError::WalletSynchronizationError
         );
         let mut requested_pending_messages = info.requested_pending_messages;
@@ -570,7 +570,7 @@ where
         &self,
     ) -> Result<(BTreeMap<Epoch, Committee>, Epoch), LocalNodeError> {
         let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
-        let (admin_epoch, admin_committees) = self.epoch_and_committees(self.admin_id()).await?;
+        let (admin_epoch, admin_committees) = self.epoch_and_committees(self.state().admin_id).await?;
         committees.extend(admin_committees);
         let epoch = std::cmp::max(epoch.unwrap_or_default(), admin_epoch.unwrap_or_default());
         Ok((committees, epoch))
@@ -610,7 +610,7 @@ where
             .ownership
             .all_owners()
             .chain(&manager.leader)
-            .filter(|owner| self.known_key_pairs().contains_key(owner));
+            .filter(|owner| self.state().known_key_pairs.contains_key(owner));
         let Some(identity) = identities.next() else {
             return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
         };
@@ -647,7 +647,7 @@ where
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
         // network.
-        let next_block_height = self.next_block_height();
+        let next_block_height = self.state().next_block_height;
         let nodes = self.validator_nodes().await?;
         let mut notifications = vec![];
         let mut info = self
@@ -659,14 +659,15 @@ where
         if info.next_block_height == self.next_block_height {
             // Check that our local node has the expected block hash.
             ensure!(
-                self.block_hash() == info.block_hash,
+                self.state().block_hash == info.block_hash,
                 ChainClientError::InternalError("Invalid chain of blocks in local node")
             );
         }
         let ownership = &info.manager.ownership;
+        let keys: std::collections::HashSet<_> = self.state().known_key_pairs.keys().cloned().collect();
         if ownership
             .all_owners()
-            .any(|owner| !self.known_key_pairs().contains_key(owner))
+            .any(|owner| !keys.contains(owner))
         {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
@@ -1074,7 +1075,7 @@ where
         // Synchronize the state of the admin chain from the network.
         self.client
             .local_node
-            .synchronize_chain_state(nodes.clone(), self.admin_id(), &mut notifications)
+            .synchronize_chain_state(nodes.clone(), self.state().admin_id, &mut notifications)
             .await?;
         self.handle_notifications(&mut notifications);
         let node_client = self.client.local_node.clone();
@@ -1308,11 +1309,11 @@ where
         manager: ChainManagerInfo,
     ) -> Result<Certificate, ChainClientError> {
         ensure!(
-            block.height == self.next_block_height(),
+            block.height == self.state().next_block_height,
             ChainClientError::BlockProposalError("Unexpected block height")
         );
         ensure!(
-            block.previous_block_hash == self.block_hash(),
+            block.previous_block_hash == self.state().block_hash,
             ChainClientError::BlockProposalError("Unexpected previous block hash")
         );
         // In the fast round, we must never make any conflicting proposals.
@@ -1396,7 +1397,7 @@ where
         self.communicate_chain_updates(
             &committee,
             self.chain_id,
-            self.next_block_height(),
+            self.state().next_block_height,
             self.options.cross_chain_message_delivery,
         )
         .await?;
@@ -1407,7 +1408,7 @@ where
                 self.communicate_chain_updates(
                     &new_committee,
                     self.chain_id,
-                    self.next_block_height(),
+                    self.state().next_block_height,
                     self.options.cross_chain_message_delivery,
                 )
                 .await?;
@@ -1507,8 +1508,8 @@ where
             chain_id: self.chain_id,
             incoming_messages,
             operations,
-            previous_block_hash: self.block_hash(),
-            height: self.next_block_height(),
+            previous_block_hash: self.state().block_hash,
+            height: self.state().next_block_height,
             authenticated_signer: Some(self.identity().await?),
             timestamp,
         };
@@ -1625,8 +1626,8 @@ where
             chain_id: self.chain_id,
             incoming_messages,
             operations: Vec::new(),
-            previous_block_hash: self.block_hash(),
-            height: self.next_block_height(),
+            previous_block_hash: self.state().block_hash,
+            height: self.state().next_block_height,
             authenticated_signer: owner,
             timestamp,
         };
@@ -1684,7 +1685,7 @@ where
         owner: Option<Owner>,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         ensure!(
-            self.chain_info().await?.next_block_height == self.next_block_height(),
+            self.chain_info().await?.next_block_height == self.state().next_block_height,
             ChainClientError::WalletSynchronizationError
         );
         let mut query = ChainInfoQuery::new(self.chain_id);
@@ -1706,7 +1707,7 @@ where
         self.communicate_chain_updates(
             &committee,
             self.chain_id,
-            self.next_block_height(),
+            self.state().next_block_height,
             CrossChainMessageDelivery::NonBlocking,
         )
         .await?;
@@ -1905,7 +1906,7 @@ where
         key_pair: KeyPair,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         let new_public_key = key_pair.public();
-        self.known_key_pairs_mut()
+        self.state_mut().known_key_pairs
             .insert(new_public_key.into(), key_pair);
         self.transfer_ownership(new_public_key).await
     }
@@ -2006,7 +2007,7 @@ where
             let config = OpenChainConfig {
                 ownership: ownership.clone(),
                 committees,
-                admin_id: self.admin_id(),
+                admin_id: self.state().admin_id,
                 epoch,
                 balance,
                 application_permissions: application_permissions.clone(),
@@ -2205,7 +2206,7 @@ where
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Subscribe {
-            chain_id: self.admin_id(),
+            chain_id: self.state().admin_id,
             channel: SystemChannel::Admin,
         }))
         .await
@@ -2217,7 +2218,7 @@ where
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
-            chain_id: self.admin_id(),
+            chain_id: self.state().admin_id,
             channel: SystemChannel::Admin,
         }))
         .await
