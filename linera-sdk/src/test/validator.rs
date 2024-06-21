@@ -187,13 +187,15 @@ impl TestValidator {
                 .collect(),
             admin_id,
             epoch: Epoch::ZERO,
-            balance: 0.into(),
             application_permissions: ApplicationPermissions::default(),
         };
 
         let messages = admin_chain
             .add_block(|block| {
-                block.with_system_operation(SystemOperation::OpenChain(new_chain_config));
+                block.with_system_operation(SystemOperation::OpenChain {
+                    config: new_chain_config,
+                    balance: 0.into(),
+                });
             })
             .await;
 
