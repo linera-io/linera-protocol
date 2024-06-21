@@ -296,7 +296,7 @@ where
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
             Operation::System(op) => {
-                let (mut result, new_application) =
+                let (mut result, new_application, returned_oracle_record) =
                     self.system.execute_operation(context, op).await?;
                 result.authenticated_signer = context.authenticated_signer;
                 result.refund_grant_to = context.refund_grant_to();
@@ -318,7 +318,7 @@ where
                     outcomes.extend(user_outcomes);
                     return Ok((outcomes, oracle_record));
                 }
-                Ok((outcomes, OracleRecord::default()))
+                Ok((outcomes, returned_oracle_record))
             }
             Operation::User {
                 application_id,

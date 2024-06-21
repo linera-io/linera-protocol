@@ -12,7 +12,9 @@ use async_graphql::Enum;
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, ApplicationPermissions, ArithmeticError, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, ArithmeticError, OracleRecord, OracleResponse, Timestamp,
+    },
     ensure, hex_debug,
     identifiers::{Account, BlobId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -443,12 +445,16 @@ where
         (
             RawExecutionOutcome<SystemMessage, Amount>,
             Option<(UserApplicationId, Vec<u8>)>,
+            OracleRecord,
         ),
         SystemExecutionError,
     > {
         use SystemOperation::*;
         let mut outcome = RawExecutionOutcome::default();
         let mut new_application = None;
+        let mut oracle_record = OracleRecord {
+            responses: Vec::new(),
+        };
         match operation {
             OpenChain(config) => {
                 let next_message_id = context.next_message_id();
@@ -672,10 +678,12 @@ where
                 };
                 outcome.messages.push(message);
             }
-            PublishBlob { .. } => (),
+            PublishBlob { blob_id } => {
+                oracle_record.responses.push(OracleResponse::Blob(blob_id));
+            }
         }
 
-        Ok((outcome, new_application))
+        Ok((outcome, new_application, oracle_record))
     }
 
     pub async fn transfer(
@@ -1074,7 +1082,7 @@ mod tests {
             contract: Bytecode::new(vec![]),
             service: Bytecode::new(vec![]),
         };
-        let (result, new_application) = view
+        let (result, new_application, _) = view
             .system
             .execute_operation(context, operation)
             .await
@@ -1112,7 +1120,7 @@ mod tests {
             instantiation_argument: vec![],
             required_application_ids: vec![],
         };
-        let (result, new_application) = view
+        let (result, new_application, _) = view
             .system
             .execute_operation(context, operation)
             .await
@@ -1149,7 +1157,7 @@ mod tests {
             application_permissions: Default::default(),
         };
         let operation = SystemOperation::OpenChain(config.clone());
-        let (result, new_application) = view
+        let (result, new_application, _) = view
             .system
             .execute_operation(context, operation)
             .await
