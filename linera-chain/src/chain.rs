@@ -734,13 +734,6 @@ where
         };
         let mut messages = Vec::new();
 
-        if self.is_closed() {
-            ensure!(
-                !block.incoming_messages.is_empty() && block.has_only_rejected_messages(),
-                ChainError::ClosedChain
-            );
-        }
-
         // The first incoming message of any child chain must be `OpenChain`. A root chain must
         // already be initialized
         if block.height == BlockHeight::ZERO
@@ -759,12 +752,19 @@ where
                             message: Message::System(SystemMessage::OpenChain(_)),
                             ..
                         },
-                        action: MessageAction::Accept,
                         ..
                     })
                 ),
                 ChainError::InactiveChain(self.chain_id())
             );
+            // If this first OpenChain message was rejected, the chain is immediately "closed".
+            if let Some(IncomingMessage {
+                action: MessageAction::Reject,
+                ..
+            }) = block.incoming_messages.first()
+            {
+                self.execution_state.system.closed.set(true);
+            }
         }
         let app_permissions = self.execution_state.system.application_permissions.get();
         let mut mandatory = HashSet::<UserApplicationId>::from_iter(
@@ -818,6 +818,9 @@ where
             };
             let outcomes = match message.action {
                 MessageAction::Accept => {
+                    // Once a chain is closed, accepting incoming messages is not allowed.
+                    ensure!(!self.is_closed(), ChainError::ClosedChain);
+
                     let mut grant = message.event.grant;
                     let (mut outcomes, oracle_record) = self
                         .execution_state
@@ -922,6 +925,10 @@ where
         for (index, operation) in block.operations.iter().enumerate() {
             #[cfg(with_metrics)]
             let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
+
+            // Once a chain is closed, operations are not allowed.
+            ensure!(!self.is_closed(), ChainError::ClosedChain);
+
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::Operation(index);
             let context = OperationContext {
@@ -971,9 +978,12 @@ where
             messages.push(messages_out);
         }
 
-        // Finally, charge for the block fee, except if the chain is closed. Closed chains should
-        // always be able to reject incoming messages.
-        if !self.is_closed() {
+        // Finally, charge for the block fee, except if the chain is closed and the block
+        // was used to reject some incoming messages (and only that).
+        if !self.is_closed()
+            || !block.incoming_messages.is_empty()
+            || !block.has_only_rejected_messages()
+        {
             resource_controller
                 .with_state(&mut self.execution_state)
                 .await?
