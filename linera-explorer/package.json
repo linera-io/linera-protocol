@@ -28,7 +28,7 @@
     "jsdom": "^22.1",
     "vite": "^4.4",
     "vitest": "^0.34",
-    "vue-tsc": "^1.8",
+    "vue-tsc": "^2.0.21",
     "wasm-pack": "^0.12.1",
     "webdriverio": "^8.16.4"
   }
