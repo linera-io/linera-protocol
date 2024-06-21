@@ -321,23 +321,61 @@ impl From<Infallible> for ChainClientError {
     }
 }
 
+use std::cmp::Eq;
+use std::hash::Hash;
+
+struct UnsendRef<'r, K, V> {
+    r#ref: DashMapRef<'r, K, V>,
+    _phantom: std::marker::PhantomData<*mut u8>,
+}
+struct UnsendRefMut<'r, K, V> {
+    r#ref: DashMapRefMut<'r, K, V>,
+    _phantom: std::marker::PhantomData<*mut u8>,
+}
+
+impl<K: Eq + Hash, V> Deref for UnsendRef<'_, K, V> {
+    type Target = V;
+    fn deref(&self) -> &V {
+        self.r#ref.deref()
+    }
+}
+
+impl<K: Eq + Hash, V> Deref for UnsendRefMut<'_, K, V> {
+    type Target = V;
+    fn deref(&self) -> &V {
+        self.r#ref.deref()
+    }
+}
+
+impl<K: Eq + Hash, V> DerefMut for UnsendRefMut<'_, K, V> {
+    fn deref_mut(&mut self) -> &mut V {
+        self.r#ref.deref_mut()
+    }
+}
+
 impl<P, S> ChainClient<P, S>
 where
     S: Storage,
     ViewError: From<S::ContextError>,
 {
-    pub fn state(&self) -> DashMapRef<ChainId, ChainState> {
-        self.client
-            .chains
-            .get(&self.chain_id)
-            .expect("Chain client constructed for invalid chain")
+    pub fn state(&self) -> impl Deref<Target = ChainState> + '_ {
+        UnsendRef {
+            r#ref: self.client
+                .chains
+                .get(&self.chain_id)
+                .expect("Chain client constructed for invalid chain"),
+            _phantom: Default::default(),
+        }
     }
 
-    pub fn state_mut(&self) -> DashMapRefMut<ChainId, ChainState> {
-        self.client
-            .chains
-            .get_mut(&self.chain_id)
-            .expect("Chain client constructed for invalid chain")
+    pub fn state_mut(&self) -> impl DerefMut<Target = ChainState> + '_ {
+        UnsendRefMut {
+            r#ref: self.client
+                .chains
+                .get_mut(&self.chain_id)
+                .expect("Chain client constructed for invalid chain"),
+            _phantom: Default::default(),
+        }
     }
 
     pub fn options_mut(&mut self) -> &mut ChainClientOptions {
@@ -569,8 +607,9 @@ where
     async fn known_committees(
         &self,
     ) -> Result<(BTreeMap<Epoch, Committee>, Epoch), LocalNodeError> {
+        let admin_id = self.state().admin_id;
         let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
-        let (admin_epoch, admin_committees) = self.epoch_and_committees(self.state().admin_id).await?;
+        let (admin_epoch, admin_committees) = self.epoch_and_committees(admin_id).await?;
         committees.extend(admin_committees);
         let epoch = std::cmp::max(epoch.unwrap_or_default(), admin_epoch.unwrap_or_default());
         Ok((committees, epoch))
@@ -1042,6 +1081,7 @@ where
             }
         }
         // Update tracker.
+        // TODO (a) this deadlocks with (b)
         self.state_mut()
             .received_certificate_trackers
             .entry(name)
@@ -1065,6 +1105,7 @@ where
     /// is regularly upgraded to new committees.
     async fn find_received_certificates(&self) -> Result<(), ChainClientError> {
         // Use network information from the local chain.
+        let admin_id = self.state().admin_id;
         let chain_id = self.chain_id;
         let local_committee = self.local_committee().await?;
         let nodes: Vec<_> = self
@@ -1075,7 +1116,7 @@ where
         // Synchronize the state of the admin chain from the network.
         self.client
             .local_node
-            .synchronize_chain_state(nodes.clone(), self.state().admin_id, &mut notifications)
+            .synchronize_chain_state(nodes.clone(), admin_id, &mut notifications)
             .await?;
         self.handle_notifications(&mut notifications);
         let node_client = self.client.local_node.clone();
@@ -1188,11 +1229,14 @@ where
 
     /// Updates the latest block and next block height and round information from the chain info.
     fn update_from_info(&self, info: &ChainInfo) {
-        let mut state = self.state_mut();
-        if info.chain_id == self.chain_id && info.next_block_height > state.next_block_height {
-            state.next_block_height = info.next_block_height;
-            state.block_hash = info.block_hash;
-            state.timestamp = info.timestamp;
+        // TODO (b) this deadlocks with (a)
+        if info.chain_id == self.chain_id {
+            let mut state = self.state_mut();
+            if info.next_block_height > state.next_block_height {
+                state.next_block_height = info.next_block_height;
+                state.block_hash = info.block_hash;
+                state.timestamp = info.timestamp;
+            }
         }
     }
 
@@ -1287,17 +1331,16 @@ where
         for blob_id in blob_ids {
             if let Some(blob) = self.client.local_node.recent_blob(&blob_id).await {
                 blobs.push(blob);
-            } else if let Some(blob) = self.state().pending_blobs.get(&blob_id).cloned() {
+            } else {
+                let blob = self.state().pending_blobs.get(&blob_id).ok_or_else(
+                    || LocalNodeError::CannotReadLocalBlob {
+                        chain_id: self.chain_id,
+                        blob_id,
+                    })?.clone();
                 self.client.local_node.cache_recent_blob(&blob).await;
                 blobs.push(blob);
-            } else {
-                return Err(LocalNodeError::CannotReadLocalBlob {
-                    chain_id: self.chain_id,
-                    blob_id,
-                });
             }
         }
-
         Ok(blobs)
     }
 
@@ -1308,26 +1351,34 @@ where
         round: Round,
         manager: ChainManagerInfo,
     ) -> Result<Certificate, ChainClientError> {
+        let next_block_height;
+        let block_hash;
+        {
+            let state = self.state();
+            next_block_height = state.next_block_height;
+            block_hash = state.block_hash;
+            // In the fast round, we must never make any conflicting proposals.
+            if round.is_fast() {
+                if let Some(pending) = &self.state().pending_block {
+                    ensure!(
+                        pending == &block,
+                        ChainClientError::BlockProposalError(
+                            "Client state has a different pending block; \
+                         use the `linera retry-pending-block` command to commit that first"
+                        )
+                    );
+                }
+            }
+        }
+
         ensure!(
-            block.height == self.state().next_block_height,
+            block.height == next_block_height,
             ChainClientError::BlockProposalError("Unexpected block height")
         );
         ensure!(
-            block.previous_block_hash == self.state().block_hash,
+            block.previous_block_hash == block_hash,
             ChainClientError::BlockProposalError("Unexpected previous block hash")
         );
-        // In the fast round, we must never make any conflicting proposals.
-        if round.is_fast() {
-            if let Some(pending) = &self.state().pending_block {
-                ensure!(
-                    pending == &block,
-                    ChainClientError::BlockProposalError(
-                        "Client state has a different pending block; \
-                         use the `linera retry-pending-block` command to commit that first"
-                    )
-                );
-            }
-        }
         // Make sure that we follow the steps in the multi-round protocol.
         let executed_block = if let Some(validated_block_certificate) = &manager.requested_locked {
             ensure!(
@@ -1394,10 +1445,11 @@ where
             .await?;
         self.clear_pending_block();
         // Communicate the new certificate now.
+        let next_block_height = self.state().next_block_height;
         self.communicate_chain_updates(
             &committee,
             self.chain_id,
-            self.state().next_block_height,
+            next_block_height,
             self.options.cross_chain_message_delivery,
         )
         .await?;
@@ -1405,10 +1457,11 @@ where
             if new_committee != committee {
                 // If the configuration just changed, communicate to the new committee as well.
                 // (This is actually more important that updating the previous committee.)
+                let next_block_height = self.state().next_block_height;
                 self.communicate_chain_updates(
                     &new_committee,
                     self.chain_id,
-                    self.state().next_block_height,
+                    next_block_height,
                     self.options.cross_chain_message_delivery,
                 )
                 .await?;
@@ -1503,14 +1556,22 @@ where
         operations: Vec<Operation>,
     ) -> Result<HashedCertificateValue, ChainClientError> {
         let timestamp = self.next_timestamp(&incoming_messages).await;
+        let identity = self.identity().await?;
+        let previous_block_hash;
+        let height;
+        {
+            let state = self.state();
+            previous_block_hash = state.block_hash;
+            height = state.next_block_height;
+        }
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages,
             operations,
-            previous_block_hash: self.state().block_hash,
-            height: self.state().next_block_height,
-            authenticated_signer: Some(self.identity().await?),
+            previous_block_hash,
+            height,
+            authenticated_signer: Some(identity),
             timestamp,
         };
         // Make sure every incoming message succeeds and otherwise remove them.
@@ -1704,10 +1765,11 @@ where
     /// Attempts to update all validators about the local chain.
     pub async fn update_validators(&self) -> Result<(), ChainClientError> {
         let committee = self.local_committee().await?;
+        let next_block_height = self.state().next_block_height;
         self.communicate_chain_updates(
             &committee,
             self.chain_id,
-            self.state().next_block_height,
+            next_block_height,
             CrossChainMessageDelivery::NonBlocking,
         )
         .await?;
@@ -2205,8 +2267,9 @@ where
     pub async fn subscribe_to_new_committees(
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+        let chain_id = self.state().admin_id;
         self.execute_operation(Operation::System(SystemOperation::Subscribe {
-            chain_id: self.state().admin_id,
+            chain_id,
             channel: SystemChannel::Admin,
         }))
         .await
@@ -2217,8 +2280,9 @@ where
     pub async fn unsubscribe_from_new_committees(
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+        let chain_id = self.state().admin_id;
         self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
-            chain_id: self.state().admin_id,
+            chain_id,
             channel: SystemChannel::Admin,
         }))
         .await
