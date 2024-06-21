@@ -3021,12 +3021,12 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
 
     let account2 = Account::chain(chain2);
     assert_eq!(
-        client1.local_balance(account2).await?,
-        Amount::from_tokens(6),
+        client1.query_balance(account2).await?,
+        Amount::from_millis(5999),
     );
     assert_eq!(
-        client2.local_balance(account2).await?,
-        Amount::from_tokens(6),
+        client2.query_balance(account2).await?,
+        Amount::from_millis(5999),
     );
 
     // Transfer 2 + 1 units from Chain 2 to Chain 1 using both clients, leaving 3 (minus fees).
@@ -3190,17 +3190,22 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
 
     // Clients 2 and 3 should have the tokens, and own the chain.
     client2.sync(chain2).await?;
+    // We haven't process incoming messages yet.
     assert_eq!(
         client2.local_balance(Account::chain(chain2)).await?,
-        Amount::from_tokens(2),
+        Amount::from_tokens(0),
+    );
+    assert_eq!(
+        client2.query_balance(Account::chain(chain2)).await?,
+        Amount::from_millis(1999),
     );
     client2.transfer(Amount::ONE, chain2, chain1).await?;
     assert!(client2.local_balance(Account::chain(chain2)).await? <= Amount::ONE);
 
     client3.sync(chain3).await?;
     assert_eq!(
-        client3.local_balance(Account::chain(chain3)).await?,
-        Amount::from_tokens(2),
+        client3.query_balance(Account::chain(chain3)).await?,
+        Amount::from_millis(1999),
     );
     client3.transfer(Amount::ONE, chain3, chain1).await?;
     assert!(client3.query_balance(Account::chain(chain3)).await? <= Amount::ONE);
