@@ -1250,22 +1250,29 @@ where
         subscriptions,
         ..SystemExecutionState::new(epoch, description, admin_id)
     };
-    let open_chain_message = IncomingBundle {
+    let open_chain_bundle = IncomingBundle {
         origin: Origin::chain(ChainId::root(3)),
         bundle: MessageBundle {
             certificate_hash: CryptoHash::test_hash("certificate"),
             height: BlockHeight::ZERO,
             timestamp: Timestamp::from(0),
             transaction_index: 0,
-            messages: vec![Message::System(SystemMessage::OpenChain(OpenChainConfig {
-                ownership,
-                admin_id,
-                epoch,
-                committees,
-                balance,
-                application_permissions: Default::default(),
-            }))
-            .to_posted(0, MessageKind::Protected)],
+            messages: vec![
+                SystemMessage::OpenChain(OpenChainConfig {
+                    ownership,
+                    admin_id,
+                    epoch,
+                    committees,
+                    application_permissions: Default::default(),
+                })
+                .to_posted(0, MessageKind::Simple),
+                Message::System(SystemMessage::Credit {
+                    source: None,
+                    target: None,
+                    amount: balance,
+                })
+                .to_posted(1, MessageKind::Tracked),
+            ],
         },
         action: MessageAction::Accept,
     };
@@ -1276,7 +1283,7 @@ where
             state_hash: state.into_hash().await,
             oracle_responses: vec![Vec::new()],
         }
-        .with(make_first_block(chain_id).with_incoming_bundle(open_chain_message)),
+        .with(make_first_block(chain_id).with_incoming_bundle(open_chain_bundle)),
     );
     let certificate = make_certificate(&committee, &worker, value);
     let info = worker
@@ -2285,13 +2292,12 @@ where
                 messages: vec![vec![
                     direct_outgoing_message(
                         user_id,
-                        MessageKind::Protected,
+                        MessageKind::Simple,
                         SystemMessage::OpenChain(OpenChainConfig {
                             ownership: ChainOwnership::single(key_pair.public()),
                             epoch: Epoch::ZERO,
                             committees: committees.clone(),
                             admin_id,
-                            balance: Amount::ZERO,
                             application_permissions: Default::default(),
                         }),
                     ),
@@ -2316,14 +2322,16 @@ where
                 oracle_responses: vec![Vec::new()],
             }
             .with(make_first_block(admin_id).with_operation(
-                SystemOperation::OpenChain(OpenChainConfig {
-                    ownership: ChainOwnership::single(key_pair.public()),
-                    epoch: Epoch::ZERO,
-                    committees: committees.clone(),
-                    admin_id,
+                SystemOperation::OpenChain {
+                    config: OpenChainConfig {
+                        ownership: ChainOwnership::single(key_pair.public()),
+                        epoch: Epoch::ZERO,
+                        committees: committees.clone(),
+                        admin_id,
+                        application_permissions: Default::default(),
+                    },
                     balance: Amount::ZERO,
-                    application_permissions: Default::default(),
-                }),
+                },
             )),
         ),
     );
@@ -2551,11 +2559,10 @@ where
                                     epoch: Epoch::from(0),
                                     committees: committees.clone(),
                                     admin_id,
-                                    balance: Amount::ZERO,
                                     application_permissions: Default::default(),
                                 },
                             ))
-                            .to_posted(0, MessageKind::Protected)],
+                            .to_posted(0, MessageKind::Simple)],
                         },
                         action: MessageAction::Accept,
                     })

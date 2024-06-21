@@ -102,7 +102,6 @@ pub struct OpenChainConfig {
     pub admin_id: ChainId,
     pub epoch: Epoch,
     pub committees: BTreeMap<Epoch, Committee>,
-    pub balance: Amount,
     pub application_permissions: ApplicationPermissions,
 }
 
@@ -129,7 +128,10 @@ pub enum SystemOperation {
     },
     /// Creates (or activates) a new chain.
     /// This will automatically subscribe to the future committees created by `admin_id`.
-    OpenChain(OpenChainConfig),
+    OpenChain {
+        config: OpenChainConfig,
+        balance: Amount,
+    },
     /// Closes the chain.
     CloseChain,
     /// Changes the ownership of the chain.
@@ -462,9 +464,9 @@ where
         };
         let mut new_application = None;
         match operation {
-            OpenChain(config) => {
+            OpenChain { config, balance } => {
                 let next_message_id = context.next_message_id(txn_tracker.next_message_index());
-                let messages = self.open_chain(config, next_message_id)?;
+                let messages = self.open_chain(config, balance, next_message_id)?;
                 outcome.messages.extend(messages);
                 #[cfg(with_metrics)]
                 OPEN_CHAIN_COUNT.with_label_values(&[]).inc();
@@ -958,7 +960,6 @@ where
             admin_id,
             epoch,
             committees,
-            balance,
             application_permissions,
         } = config;
         let description = ChainDescription::Child(message_id);
@@ -974,7 +975,6 @@ where
             .expect("serialization failed");
         self.ownership.set(ownership);
         self.timestamp.set(timestamp);
-        self.balance.set(balance);
         self.application_permissions.set(application_permissions);
     }
 
@@ -995,8 +995,9 @@ where
     pub fn open_chain(
         &mut self,
         config: OpenChainConfig,
+        amount: Amount,
         next_message_id: MessageId,
-    ) -> Result<[RawOutgoingMessage<SystemMessage, Amount>; 2], SystemExecutionError> {
+    ) -> Result<Vec<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
         let child_id = ChainId::child(next_message_id);
         ensure!(
             self.admin_id.get().as_ref() == Some(&config.admin_id),
@@ -1016,20 +1017,34 @@ where
         );
         let balance = self.balance.get_mut();
         balance
-            .try_sub_assign(config.balance)
+            .try_sub_assign(amount)
             .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
-        let open_chain_message = RawOutgoingMessage {
+        let mut messages = Vec::new();
+        messages.push(RawOutgoingMessage {
             destination: Destination::Recipient(child_id),
             authenticated: false,
             grant: Amount::ZERO,
-            kind: MessageKind::Protected,
+            kind: MessageKind::Simple,
             message: SystemMessage::OpenChain(config),
-        };
+        });
+        if amount > Amount::ZERO {
+            messages.push(RawOutgoingMessage {
+                destination: Destination::Recipient(child_id),
+                authenticated: false,
+                grant: Amount::ZERO,
+                kind: MessageKind::Tracked,
+                message: SystemMessage::Credit {
+                    amount,
+                    target: None,
+                    source: None,
+                },
+            });
+        }
         let subscription = ChannelSubscription {
             chain_id: admin_id,
             name: SystemChannel::Admin.name(),
         };
-        let subscribe_message = RawOutgoingMessage {
+        messages.push(RawOutgoingMessage {
             destination: Destination::Recipient(admin_id),
             authenticated: false,
             grant: Amount::ZERO,
@@ -1038,8 +1053,8 @@ where
                 id: child_id,
                 subscription,
             },
-        };
-        Ok([open_chain_message, subscribe_message])
+        });
+        Ok(messages)
     }
 
     pub async fn close_chain(
@@ -1198,11 +1213,13 @@ mod tests {
             committees,
             epoch,
             admin_id,
-            balance: Amount::ZERO,
             application_permissions: Default::default(),
         };
         let mut txn_tracker = TransactionTracker::default();
-        let operation = SystemOperation::OpenChain(config.clone());
+        let operation = SystemOperation::OpenChain {
+            config: config.clone(),
+            balance: Amount::ZERO,
+        };
         let new_application = view
             .system
             .execute_operation(context, operation, &mut txn_tracker)

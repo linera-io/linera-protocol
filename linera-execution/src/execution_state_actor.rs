@@ -268,10 +268,9 @@ where
                     admin_id: self.system.admin_id.get().ok_or_else(inactive_err)?,
                     epoch: self.system.epoch.get().ok_or_else(inactive_err)?,
                     committees: self.system.committees.get().clone(),
-                    balance,
                     application_permissions,
                 };
-                let messages = self.system.open_chain(config, next_message_id)?;
+                let messages = self.system.open_chain(config, balance, next_message_id)?;
                 callback.respond(messages)
             }
 
@@ -421,7 +420,7 @@ pub enum ExecutionRequest {
         balance: Amount,
         next_message_id: MessageId,
         application_permissions: ApplicationPermissions,
-        callback: Sender<[RawOutgoingMessage<SystemMessage, Amount>; 2]>,
+        callback: Sender<Vec<RawOutgoingMessage<SystemMessage, Amount>>>,
     },
 
     CloseChain {

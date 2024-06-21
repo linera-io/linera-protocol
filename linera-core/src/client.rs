@@ -2478,10 +2478,9 @@ where
                 committees,
                 admin_id: self.admin_id(),
                 epoch,
-                balance,
                 application_permissions: application_permissions.clone(),
             };
-            let operation = Operation::System(SystemOperation::OpenChain(config));
+            let operation = Operation::System(SystemOperation::OpenChain { config, balance });
             let certificate = match self.execute_block(vec![operation]).await? {
                 ExecuteBlockOutcome::Executed(certificate) => certificate,
                 ExecuteBlockOutcome::Conflict(_) => continue,

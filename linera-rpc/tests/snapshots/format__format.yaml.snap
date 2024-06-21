@@ -617,8 +617,6 @@ OpenChainConfig:
             TYPENAME: Epoch
           VALUE:
             TYPENAME: Committee
-    - balance:
-        TYPENAME: Amount
     - application_permissions:
         TYPENAME: ApplicationPermissions
 Operation:
@@ -960,8 +958,11 @@ SystemOperation:
               TYPENAME: UserData
     2:
       OpenChain:
-        NEWTYPE:
-          TYPENAME: OpenChainConfig
+        STRUCT:
+          - config:
+              TYPENAME: OpenChainConfig
+          - balance:
+              TYPENAME: Amount
     3:
       CloseChain: UNIT
     4:

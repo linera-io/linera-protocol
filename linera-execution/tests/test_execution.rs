@@ -1540,9 +1540,26 @@ async fn test_open_chain() {
         panic!("Unexpected message at index {}: {:?}", index, message);
     };
     assert_eq!(*recipient_id, ChainId::child(message_id));
-    assert_eq!(config.balance, Amount::ONE);
     assert_eq!(config.ownership, child_ownership);
     assert_eq!(config.committees, committees);
+
+    let message = outcomes
+        .iter()
+        .flat_map(|outcome| match outcome {
+            ExecutionOutcome::System(outcome) => &outcome.messages,
+            ExecutionOutcome::User(_, _) => panic!("Unexpected message"),
+        })
+        .nth((index - first_message_index + 1) as usize)
+        .unwrap();
+    let RawOutgoingMessage {
+        message: SystemMessage::Credit { .. },
+        destination: Destination::Recipient(recipient_id),
+        ..
+    } = message
+    else {
+        panic!("Unexpected message at index {}: {:?}", index, message);
+    };
+    assert_eq!(*recipient_id, ChainId::child(message_id));
 
     // Initialize the child chain using the config from the message.
     let mut child_view = SystemExecutionState::default()
@@ -1551,7 +1568,7 @@ async fn test_open_chain() {
     child_view
         .system
         .initialize_chain(message_id, Timestamp::from(0), config.clone());
-    assert_eq!(*child_view.system.balance.get(), Amount::ONE);
+    assert_eq!(*child_view.system.balance.get(), Amount::ZERO);
     assert_eq!(*child_view.system.ownership.get(), child_ownership);
     assert_eq!(*child_view.system.committees.get(), committees);
     assert_eq!(

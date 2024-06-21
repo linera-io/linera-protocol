@@ -85,7 +85,6 @@ fn make_open_chain_config() -> OpenChainConfig {
         admin_id: admin_id(),
         epoch: Epoch::ZERO,
         committees: iter::once((Epoch::ZERO, committee)).collect(),
-        balance: Amount::from_tokens(10),
         application_permissions: Default::default(),
     }
 }
