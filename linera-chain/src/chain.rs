@@ -706,13 +706,6 @@ where
             account: block.authenticated_signer,
         };
 
-        if self.is_closed() {
-            ensure!(
-                !block.incoming_bundles.is_empty() && block.has_only_rejected_messages(),
-                ChainError::ClosedChain
-            );
-        }
-
         // The first incoming message of any child chain must be `OpenChain`. A root chain must
         // already be initialized
         if block.height == BlockHeight::ZERO
@@ -727,7 +720,19 @@ where
                 block.starts_with_open_chain(),
                 ChainError::InactiveChain(self.chain_id())
             );
+            // If this first OpenChain message was rejected, the chain is immediately "closed".
+            if let Some(IncomingBundle {
+                action: MessageAction::Reject,
+                ..
+            }) = block.incoming_bundles.first()
+            {
+                self.execution_state.system.closed.set(true);
+            }
         }
+        ensure!(
+            !self.is_closed() || !block.incoming_bundles.is_empty(),
+            ChainError::ClosedChain
+        );
         let app_permissions = self.execution_state.system.application_permissions.get();
         let mut mandatory = HashSet::<UserApplicationId>::from_iter(
             app_permissions.mandatory_applications.iter().cloned(),
@@ -795,6 +800,8 @@ where
                 Transaction::Operation(operation) => {
                     #[cfg(with_metrics)]
                     let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
+                    // Once a chain is closed, operations are not allowed.
+                    ensure!(!self.is_closed(), ChainError::ClosedChain);
                     let context = OperationContext {
                         chain_id,
                         height: block.height,
@@ -857,9 +864,12 @@ where
             events.push(txn_events);
         }
 
-        // Finally, charge for the block fee, except if the chain is closed. Closed chains should
-        // always be able to reject incoming messages.
-        if !self.is_closed() {
+        // Finally, charge for the block fee, except if the chain is closed and the block
+        // was used to reject some incoming messages (and only that).
+        if !self.is_closed()
+            || !block.incoming_bundles.is_empty()
+            || !block.has_only_rejected_messages()
+        {
             resource_controller
                 .with_state(&mut self.execution_state)
                 .await?
