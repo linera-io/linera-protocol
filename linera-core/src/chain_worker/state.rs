@@ -788,20 +788,14 @@ where
             .await?;
         let missing_blobs = self.get_missing_blobs(block, hashed_blobs).await?;
 
-        if missing_bytecodes.is_empty() {
-            if missing_blobs.is_empty() {
-                Ok(())
-            } else {
-                Err(WorkerError::BlobsNotFound(missing_blobs))
-            }
-        } else if missing_blobs.is_empty() {
-            Err(WorkerError::ApplicationBytecodesNotFound(missing_bytecodes))
-        } else {
-            Err(WorkerError::ApplicationBytecodesAndBlobsNotFound(
-                missing_bytecodes,
-                missing_blobs,
-            ))
+        if missing_bytecodes.is_empty() && missing_blobs.is_empty() {
+            return Ok(());
         }
+
+        Err(WorkerError::ApplicationBytecodesOrBlobsNotFound(
+            missing_bytecodes,
+            missing_blobs,
+        ))
     }
 
     /// Returns the blobs required by the block that we don't have, or an error if unrelated blobs were provided.

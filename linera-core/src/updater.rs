@@ -214,6 +214,10 @@ where
         certificate: &Certificate,
         locations: &Vec<BytecodeLocation>,
     ) -> Result<Vec<HashedCertificateValue>, NodeError> {
+        if locations.is_empty() {
+            return Ok(Vec::new());
+        }
+
         // Find the missing bytecodes locally and retry.
         let required = match certificate.value() {
             CertificateValue::ConfirmedBlock { executed_block, .. }
@@ -250,6 +254,10 @@ where
         certificate: &Certificate,
         blob_ids: &Vec<BlobId>,
     ) -> Result<Vec<HashedBlob>, NodeError> {
+        if blob_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
         // Find the missing blobs locally and retry.
         let required = match certificate.value() {
             CertificateValue::ConfirmedBlock { executed_block, .. }
@@ -320,21 +328,7 @@ where
             .await;
 
         let response = match &result {
-            Err(NodeError::ApplicationBytecodesNotFound(locations)) => {
-                let values = self
-                    .find_missing_application_bytecodes(&certificate, locations)
-                    .await?;
-                self.node
-                    .handle_certificate(certificate, values, vec![], delivery)
-                    .await
-            }
-            Err(NodeError::BlobsNotFound(blob_ids)) => {
-                let blobs = self.find_missing_blobs(&certificate, blob_ids).await?;
-                self.node
-                    .handle_certificate(certificate, vec![], blobs, delivery)
-                    .await
-            }
-            Err(NodeError::ApplicationBytecodesAndBlobsNotFound(locations, blob_ids)) => {
+            Err(NodeError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids)) => {
                 let values = self
                     .find_missing_application_bytecodes(&certificate, locations)
                     .await?;
@@ -358,14 +352,27 @@ where
         let chain_id = proposal.content.block.chain_id;
         let response = match self.node.handle_block_proposal(proposal.clone()).await {
             Ok(response) => response,
-            Err(NodeError::MissingCrossChainUpdate { .. })
-            | Err(NodeError::InactiveChain(_))
-            | Err(NodeError::BlobsNotFound(_))
-            | Err(NodeError::ApplicationBytecodesNotFound(_)) => {
+            Err(NodeError::MissingCrossChainUpdate { .. }) | Err(NodeError::InactiveChain(_)) => {
                 // Some received certificates may be missing for this validator
                 // (e.g. to create the chain or make the balance sufficient) so we are going to
                 // synchronize them now and retry.
                 self.send_chain_information_for_senders(chain_id).await?;
+                self.node.handle_block_proposal(proposal.clone()).await?
+            }
+            Err(
+                ref e @ NodeError::ApplicationBytecodesOrBlobsNotFound(ref locations, ref blob_ids),
+            ) => {
+                if !locations.is_empty() {
+                    // Some received certificates may be missing for this validator
+                    // (e.g. to create the chain or make the balance sufficient) so we are going to
+                    // synchronize them now and retry.
+                    self.send_chain_information_for_senders(chain_id).await?;
+                }
+
+                if !blob_ids.is_empty() {
+                    return Err(e.clone());
+                }
+
                 self.node.handle_block_proposal(proposal.clone()).await?
             }
             Err(e) => {

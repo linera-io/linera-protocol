@@ -551,57 +551,47 @@ NodeError:
           - height:
               TYPENAME: BlockHeight
     7:
-      ApplicationBytecodesNotFound:
-        NEWTYPE:
-          SEQ:
-            TYPENAME: BytecodeLocation
-    8:
-      BlobsNotFound:
-        NEWTYPE:
-          SEQ:
-            TYPENAME: BlobId
-    9:
-      ApplicationBytecodesAndBlobsNotFound:
+      ApplicationBytecodesOrBlobsNotFound:
         TUPLE:
           - SEQ:
               TYPENAME: BytecodeLocation
           - SEQ:
               TYPENAME: BlobId
-    10:
+    8:
       MissingCertificateValue: UNIT
-    11:
+    9:
       MissingVoteInValidatorResponse: UNIT
-    12:
+    10:
       InactiveLocalChain:
         NEWTYPE:
           TYPENAME: ChainId
-    13:
+    11:
       InvalidChainInfoResponse: UNIT
-    14:
+    12:
       InvalidDecoding: UNIT
-    15:
+    13:
       UnexpectedMessage: UNIT
-    16:
+    14:
       GrpcError:
         STRUCT:
           - error: STR
-    17:
+    15:
       ClientIoError:
         STRUCT:
           - error: STR
-    18:
+    16:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    19:
+    17:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    20:
+    18:
       SubscriptionFailed:
         STRUCT:
           - status: STR
-    21:
+    19:
       LocalNodeQuery:
         STRUCT:
           - error: STR
