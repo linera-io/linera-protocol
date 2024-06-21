@@ -574,6 +574,11 @@ where
             .expect("key should be known at this point"))
     }
 
+    fn handle_notifications(&self, notifications: &mut Vec<Notification>) {
+        self.notifier.handle_notifications(notifications);
+        notifications.clear();
+    }
+
     /// Obtains the public key associated to the current identity.
     pub async fn public_key(&mut self) -> Result<PublicKey, ChainClientError> {
         Ok(self.key_pair().await?.public())
@@ -596,7 +601,7 @@ where
                 &mut notifications,
             )
             .await?;
-        self.notifier.handle_notifications(&notifications);
+        self.handle_notifications(&mut notifications);
         if info.next_block_height == self.next_block_height {
             // Check that our local node has the expected block hash.
             ensure!(
@@ -618,6 +623,7 @@ where
                 .local_node
                 .synchronize_chain_state(nodes, self.chain_id, &mut notifications)
                 .await?;
+            self.handle_notifications(&mut notifications);
         }
         self.update_from_info(&info);
         Ok(info)
@@ -830,7 +836,7 @@ where
                 &mut notifications,
             )
             .await?;
-        self.notifier.handle_notifications(&notifications);
+        self.handle_notifications(&mut notifications);
         // Process the received operations. Download required hashed certificate values if necessary.
         if let Err(err) = self
             .process_certificate(certificate.clone(), vec![], vec![])
@@ -1027,7 +1033,7 @@ where
             .local_node
             .synchronize_chain_state(nodes.clone(), self.admin_id, &mut notifications)
             .await?;
-        self.notifier.handle_notifications(&notifications);
+        self.handle_notifications(&mut notifications);
         let node_client = self.client.local_node.clone();
         // Now we should have a complete view of all committees in the system.
         let (committees, max_epoch) = self.known_committees().await?;
@@ -1127,7 +1133,7 @@ where
             )
             .await?
             .info;
-        self.notifier.handle_notifications(&notifications);
+        self.handle_notifications(&mut notifications);
         self.update_from_info(&info);
         Ok(())
     }
@@ -2377,11 +2383,7 @@ where
                     .unwrap_or_else(|e| {
                         error!("Fail to process notification: {e}");
                     });
-                self.0
-                    .lock()
-                    .await
-                    .notifier
-                    .handle_notifications(&notifications);
+                self.0.lock().await.handle_notifications(&mut notifications);
                 let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
                     .await;
@@ -2403,11 +2405,7 @@ where
                 {
                     error!("Fail to process notification: {error}");
                 }
-                self.0
-                    .lock()
-                    .await
-                    .notifier
-                    .handle_notifications(&notifications);
+                self.0.lock().await.handle_notifications(&mut notifications);
                 let Some(info) = self.local_chain_info(chain_id, &mut local_node).await else {
                     error!("Fail to read local chain info for {chain_id}");
                     return;
