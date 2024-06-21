@@ -13,7 +13,6 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "preserve",
-    "jsxImportSource": true,
 
     /* Linting */
     "strict": true,
@@ -22,7 +21,7 @@
     "noFallthroughCasesInSwitch": true,
 
     "esModuleInterop": true,
-    "forceConsistentCastingInFileNames": true,
+    "forceConsistentCasingInFileNames": true,
 
     "types": [ "vitest/globals" ]
   },
