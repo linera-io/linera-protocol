@@ -14,8 +14,8 @@ use tracing::log;
 
 use super::WasmExecutionError;
 use crate::{
-    BaseRuntime, ContractRuntime, ContractSyncRuntime, ExecutionError, ServiceRuntime,
-    ServiceSyncRuntime,
+    BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, ExecutionError, ServiceRuntime,
+    ServiceSyncRuntimeHandle,
 };
 
 /// Common host data used as the `UserData` of the system API implementations.
@@ -674,13 +674,13 @@ pub trait WriteBatch {
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
 }
 
-impl WriteBatch for ContractSyncRuntime {
+impl WriteBatch for ContractSyncRuntimeHandle {
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
         ContractRuntime::write_batch(self, batch)
     }
 }
 
-impl WriteBatch for ServiceSyncRuntime {
+impl WriteBatch for ServiceSyncRuntimeHandle {
     fn write_batch(&mut self, _: Batch) -> Result<(), ExecutionError> {
         Err(ExecutionError::ServiceWriteAttempt)
     }

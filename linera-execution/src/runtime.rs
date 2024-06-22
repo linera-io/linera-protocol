@@ -4,6 +4,7 @@
 use std::{
     collections::{hash_map, BTreeMap, HashMap, HashSet},
     mem,
+    ops::{Deref, DerefMut},
     sync::{Arc, Mutex},
     vec,
 };
@@ -36,10 +37,16 @@ use crate::{
 mod tests;
 
 #[derive(Debug)]
-pub struct SyncRuntime<UserInstance>(Arc<Mutex<SyncRuntimeInternal<UserInstance>>>);
+pub struct SyncRuntime<UserInstance>(SyncRuntimeHandle<UserInstance>);
 
 pub type ContractSyncRuntime = SyncRuntime<UserContractInstance>;
 pub type ServiceSyncRuntime = SyncRuntime<UserServiceInstance>;
+
+#[derive(Debug)]
+pub struct SyncRuntimeHandle<UserInstance>(Arc<Mutex<SyncRuntimeInternal<UserInstance>>>);
+
+pub type ContractSyncRuntimeHandle = SyncRuntimeHandle<UserContractInstance>;
+pub type ServiceSyncRuntimeHandle = SyncRuntimeHandle<UserServiceInstance>;
 
 /// Responses to oracle queries that are being recorded or replayed.
 #[derive(Debug)]
@@ -265,6 +272,20 @@ impl ViewUserState {
     }
 }
 
+impl<UserInstance> Deref for SyncRuntime<UserInstance> {
+    type Target = SyncRuntimeHandle<UserInstance>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<UserInstance> DerefMut for SyncRuntime<UserInstance> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -379,7 +400,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
                     .send_request(|callback| Request::LoadContract { id, callback })?
                     .recv_response()?;
 
-                let instance = code.instantiate(SyncRuntime(this))?;
+                let instance = code.instantiate(SyncRuntimeHandle(this))?;
 
                 self.applications_to_finalize.push(id);
                 Ok(entry
@@ -492,7 +513,7 @@ impl SyncRuntimeInternal<UserServiceInstance> {
                     .send_request(|callback| Request::LoadService { id, callback })?
                     .recv_response()?;
 
-                let instance = code.instantiate(SyncRuntime(this))?;
+                let instance = code.instantiate(SyncRuntimeHandle(this))?;
                 Ok(entry
                     .insert(LoadedApplication::new(instance, description))
                     .clone())
@@ -502,9 +523,9 @@ impl SyncRuntimeInternal<UserServiceInstance> {
     }
 }
 
-impl<UserInstance> SyncRuntime<UserInstance> {
+impl<UserInstance> SyncRuntimeHandle<UserInstance> {
     fn new(runtime: SyncRuntimeInternal<UserInstance>) -> Self {
-        SyncRuntime(Arc::new(Mutex::new(runtime)))
+        SyncRuntimeHandle(Arc::new(Mutex::new(runtime)))
     }
 
     fn into_inner(self) -> Option<SyncRuntimeInternal<UserInstance>> {
@@ -521,7 +542,7 @@ impl<UserInstance> SyncRuntime<UserInstance> {
     }
 }
 
-impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
+impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
     type Read = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::Read;
     type ReadValueBytes = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ReadValueBytes;
     type ContainsKey = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ContainsKey;
@@ -932,9 +953,9 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     }
 }
 
-impl<UserInstance> Clone for SyncRuntime<UserInstance> {
+impl<UserInstance> Clone for SyncRuntimeHandle<UserInstance> {
     fn clone(&self) -> Self {
-        SyncRuntime(self.0.clone())
+        SyncRuntimeHandle(self.0.clone())
     }
 }
 
@@ -963,7 +984,7 @@ impl ContractSyncRuntime {
         } else {
             OracleResponses::Record(Vec::new())
         };
-        let mut runtime = ContractSyncRuntime::new(SyncRuntimeInternal::new(
+        let mut runtime = SyncRuntime(ContractSyncRuntimeHandle::new(SyncRuntimeInternal::new(
             chain_id,
             height,
             local_time,
@@ -974,7 +995,7 @@ impl ContractSyncRuntime {
             refund_grant_to,
             resource_controller,
             oracle_record,
-        ));
+        )));
         let finalize_context = FinalizeContext {
             authenticated_signer: signer,
             chain_id,
@@ -990,6 +1011,7 @@ impl ContractSyncRuntime {
         })?;
         runtime.finalize(finalize_context)?;
         let runtime = runtime
+            .0
             .into_inner()
             .expect("Runtime clones should have been freed by now");
         let oracle_record = if let OracleResponses::Record(responses) = runtime.oracle_responses {
@@ -1055,7 +1077,7 @@ impl ContractSyncRuntime {
         closure: impl FnOnce(&mut UserContractInstance) -> Result<(), ExecutionError>,
     ) -> Result<(), ExecutionError> {
         let contract = {
-            let cloned_runtime = self.0.clone();
+            let cloned_runtime = self.0 .0.clone();
             let mut runtime = self.inner();
             let application = runtime.load_contract_instance(cloned_runtime, application_id)?;
 
@@ -1093,7 +1115,7 @@ impl ContractSyncRuntime {
     }
 }
 
-impl ContractRuntime for ContractSyncRuntime {
+impl ContractRuntime for ContractSyncRuntimeHandle {
     fn authenticated_signer(&mut self) -> Result<Option<Owner>, ExecutionError> {
         Ok(self.inner().authenticated_signer)
     }
@@ -1308,7 +1330,7 @@ impl ServiceSyncRuntime {
             ResourceController::default(),
             OracleResponses::Forget,
         );
-        let mut runtime = ServiceSyncRuntime::new(runtime_internal);
+        let mut runtime = ServiceSyncRuntimeHandle::new(runtime_internal);
 
         let result = runtime.try_query_application(application_id, query);
 
@@ -1319,7 +1341,7 @@ impl ServiceSyncRuntime {
     }
 }
 
-impl ServiceRuntime for ServiceSyncRuntime {
+impl ServiceRuntime for ServiceSyncRuntimeHandle {
     /// Note that queries are not available from writable contexts.
     fn try_query_application(
         &mut self,
