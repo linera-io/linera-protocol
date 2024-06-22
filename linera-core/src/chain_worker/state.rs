@@ -426,19 +426,6 @@ where
         Ok(())
     }
 
-    /// Returns an error if the block is not at the expected epoch.
-    fn check_block_epoch(chain_epoch: Epoch, block: &Block) -> Result<(), WorkerError> {
-        ensure!(
-            block.epoch == chain_epoch,
-            WorkerError::InvalidEpoch {
-                chain_id: block.chain_id,
-                epoch: block.epoch,
-                chain_epoch
-            }
-        );
-        Ok(())
-    }
-
     /// Returns an error if the block requires bytecode or a blob we don't have, or if unrelated bytecode
     /// hashed certificate values or blobs were provided.
     async fn check_no_missing_blobs(
@@ -725,7 +712,7 @@ where
             .system
             .current_committee()
             .expect("chain is active");
-        ChainWorkerState::<StorageClient>::check_block_epoch(epoch, block)?;
+        check_block_epoch(epoch, block)?;
         // Check the authentication of the block.
         let public_key = self
             .state
@@ -968,7 +955,7 @@ where
             .system
             .current_committee()
             .expect("chain is active");
-        ChainWorkerState::<StorageClient>::check_block_epoch(epoch, block)?;
+        check_block_epoch(epoch, block)?;
         certificate.check(committee)?;
         let mut actions = NetworkActions::default();
         let already_validated_block = self
@@ -1071,7 +1058,7 @@ where
             .system
             .current_committee()
             .expect("chain is active");
-        ChainWorkerState::<StorageClient>::check_block_epoch(epoch, block)?;
+        check_block_epoch(epoch, block)?;
         certificate.check(committee)?;
         // This should always be true for valid certificates.
         ensure!(
@@ -1259,4 +1246,17 @@ impl<'a> CrossChainUpdateHelper<'a> {
         };
         Ok(certificates)
     }
+}
+
+/// Returns an error if the block is not at the expected epoch.
+fn check_block_epoch(chain_epoch: Epoch, block: &Block) -> Result<(), WorkerError> {
+    ensure!(
+        block.epoch == chain_epoch,
+        WorkerError::InvalidEpoch {
+            chain_id: block.chain_id,
+            epoch: block.epoch,
+            chain_epoch
+        }
+    );
+    Ok(())
 }
