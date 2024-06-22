@@ -225,6 +225,7 @@ enum ServiceStoreServerOptions {
 
 #[tonic::async_trait]
 impl StoreProcessor for ServiceStoreServer {
+    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().key.len()))]
     async fn process_read_value(
         &self,
@@ -255,6 +256,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().key.len()))]
     async fn process_contains_key(
         &self,
@@ -268,6 +270,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(n_keys = ?request.get_ref().keys.len()))]
     async fn process_read_multi_values(
         &self,
@@ -305,6 +308,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
     async fn process_find_keys_by_prefix(
         &self,
@@ -332,6 +336,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
     async fn process_find_key_values_by_prefix(
         &self,
@@ -369,6 +374,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(n_statements = ?request.get_ref().statements.len()))]
     async fn process_write_batch_extended(
         &self,
@@ -414,6 +420,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(message_index = ?request.get_ref().message_index, index = ?request.get_ref().index))]
     async fn process_specific_chunk(
         &self,
@@ -438,6 +445,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_create_namespace(
         &self,
@@ -451,6 +459,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_exists_namespace(
         &self,
@@ -464,6 +473,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_delete_namespace(
         &self,
@@ -477,6 +487,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(list_all = "list_all"))]
     async fn process_list_all(
         &self,
@@ -488,6 +499,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[allow(clippy::blocks_in_conditions)]
     #[instrument(
         target = "store_server",
         skip_all,
