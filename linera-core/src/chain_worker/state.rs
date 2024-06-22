@@ -261,23 +261,9 @@ where
         &mut self,
         latest_heights: Vec<(Target, BlockHeight)>,
     ) -> Result<BlockHeight, WorkerError> {
-        let mut height_with_fully_delivered_messages = BlockHeight::ZERO;
-
-        for (target, height) in latest_heights {
-            let fully_delivered = self
-                .chain
-                .mark_messages_as_received(&target, height)
-                .await?
-                && self.chain.all_messages_delivered_up_to(height);
-
-            if fully_delivered && height > height_with_fully_delivered_messages {
-                height_with_fully_delivered_messages = height;
-            }
-        }
-
-        self.save().await?;
-
-        Ok(height_with_fully_delivered_messages)
+        ChainWorkerStateWithAttemptedChanges::from(self)
+            .confirm_updated_recipient(latest_heights)
+            .await
     }
 
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
@@ -1160,6 +1146,31 @@ where
         // Save the chain.
         self.save().await?;
         Ok(Some(last_updated_height))
+    }
+
+    /// Handles the cross-chain request confirming that the recipient was updated.
+    pub async fn confirm_updated_recipient(
+        &mut self,
+        latest_heights: Vec<(Target, BlockHeight)>,
+    ) -> Result<BlockHeight, WorkerError> {
+        let mut height_with_fully_delivered_messages = BlockHeight::ZERO;
+
+        for (target, height) in latest_heights {
+            let fully_delivered = self
+                .state
+                .chain
+                .mark_messages_as_received(&target, height)
+                .await?
+                && self.state.chain.all_messages_delivered_up_to(height);
+
+            if fully_delivered && height > height_with_fully_delivered_messages {
+                height_with_fully_delivered_messages = height;
+            }
+        }
+
+        self.save().await?;
+
+        Ok(height_with_fully_delivered_messages)
     }
 
     /// Stores the chain state in persistent storage.
