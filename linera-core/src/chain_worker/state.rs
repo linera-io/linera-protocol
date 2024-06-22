@@ -194,55 +194,9 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let (chain_id, height, epoch) = match certificate.value() {
-            CertificateValue::Timeout {
-                chain_id,
-                height,
-                epoch,
-                ..
-            } => (*chain_id, *height, *epoch),
-            _ => panic!("Expecting a leader timeout certificate"),
-        };
-        // Check that the chain is active and ready for this timeout.
-        // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.ensure_is_active()?;
-        let (chain_epoch, committee) = self
-            .chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
-        ensure!(
-            epoch == chain_epoch,
-            WorkerError::InvalidEpoch {
-                chain_id,
-                chain_epoch,
-                epoch
-            }
-        );
-        certificate.check(committee)?;
-        let mut actions = NetworkActions::default();
-        if self.chain.tip_state.get().already_validated_block(height)? {
-            return Ok((
-                ChainInfoResponse::new(&self.chain, self.config.key_pair()),
-                actions,
-            ));
-        }
-        let old_round = self.chain.manager.get().current_round;
-        self.chain
-            .manager
-            .get_mut()
-            .handle_timeout_certificate(certificate.clone(), self.storage.clock().current_time());
-        let round = self.chain.manager.get().current_round;
-        if round > old_round {
-            actions.notifications.push(Notification {
-                chain_id,
-                reason: Reason::NewRound { height, round },
-            })
-        }
-        let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
-        self.save().await?;
-        Ok((info, actions))
+        ChainWorkerStateWithAttemptedChanges::from(self)
+            .process_timeout(certificate)
+            .await
     }
 
     /// Handles a proposal for the next block for this chain.
@@ -1083,6 +1037,73 @@ where
     StorageClient: Storage + Clone + Send + Sync + 'static,
     ViewError: From<StorageClient::ContextError>,
 {
+    /// Processes a leader timeout issued for this multi-owner chain.
+    pub async fn process_timeout(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        let (chain_id, height, epoch) = match certificate.value() {
+            CertificateValue::Timeout {
+                chain_id,
+                height,
+                epoch,
+                ..
+            } => (*chain_id, *height, *epoch),
+            _ => panic!("Expecting a leader timeout certificate"),
+        };
+        // Check that the chain is active and ready for this timeout.
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        self.state.ensure_is_active()?;
+        let (chain_epoch, committee) = self
+            .state
+            .chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        ensure!(
+            epoch == chain_epoch,
+            WorkerError::InvalidEpoch {
+                chain_id,
+                chain_epoch,
+                epoch
+            }
+        );
+        certificate.check(committee)?;
+        let mut actions = NetworkActions::default();
+        if self
+            .state
+            .chain
+            .tip_state
+            .get()
+            .already_validated_block(height)?
+        {
+            return Ok((
+                ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair()),
+                actions,
+            ));
+        }
+        let old_round = self.state.chain.manager.get().current_round;
+        self.state
+            .chain
+            .manager
+            .get_mut()
+            .handle_timeout_certificate(
+                certificate.clone(),
+                self.state.storage.clock().current_time(),
+            );
+        let round = self.state.chain.manager.get().current_round;
+        if round > old_round {
+            actions.notifications.push(Notification {
+                chain_id,
+                reason: Reason::NewRound { height, round },
+            })
+        }
+        let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
+        self.save().await?;
+        Ok((info, actions))
+    }
+
     /// Stores the chain state in persistent storage.
     async fn save(&mut self) -> Result<(), WorkerError> {
         self.state.save().await?;
