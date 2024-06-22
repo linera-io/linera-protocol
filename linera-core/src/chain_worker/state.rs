@@ -549,24 +549,6 @@ where
             bundle_vecs,
         })
     }
-
-    /// Stores the chain state in persistent storage.
-    ///
-    /// Waits until the [`ChainStateView`] is no longer shared before persisting the changes.
-    async fn save(&mut self) -> Result<(), WorkerError> {
-        // SAFETY: this is the only place a write-lock is acquired, and read-locks are acquired in
-        // the `chain_state_view` method, which has a `&mut self` receiver like this `save` method.
-        // That means that when the write-lock is acquired, no readers will be waiting to acquire
-        // the lock. This is important because otherwise readers could have a stale view of the
-        // chain state.
-        let maybe_shared_chain_view = self.shared_chain_view.take();
-        let _maybe_write_guard = match &maybe_shared_chain_view {
-            Some(shared_chain_view) => Some(shared_chain_view.write().await),
-            None => None,
-        };
-
-        Ok(self.chain.save().await?)
-    }
 }
 
 /// Wrapper type that rolls back changes to the `chain` state when dropped.
@@ -1199,8 +1181,21 @@ where
     }
 
     /// Stores the chain state in persistent storage.
+    ///
+    /// Waits until the [`ChainStateView`] is no longer shared before persisting the changes.
     async fn save(&mut self) -> Result<(), WorkerError> {
-        self.state.save().await?;
+        // SAFETY: this is the only place a write-lock is acquired, and read-locks are acquired in
+        // the `chain_state_view` method, which has a `&mut self` receiver like this `save` method.
+        // That means that when the write-lock is acquired, no readers will be waiting to acquire
+        // the lock. This is important because otherwise readers could have a stale view of the
+        // chain state.
+        let maybe_shared_chain_view = self.state.shared_chain_view.take();
+        let _maybe_write_guard = match &maybe_shared_chain_view {
+            Some(shared_chain_view) => Some(shared_chain_view.write().await),
+            None => None,
+        };
+
+        self.state.chain.save().await?;
         self.succeeded = true;
         Ok(())
     }
