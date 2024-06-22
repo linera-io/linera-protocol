@@ -867,7 +867,7 @@ where
         // Finally, charge for the block fee, except if the chain is closed and the block
         // was used to reject some incoming messages (and only that).
         if !self.is_closed()
-            || !block.incoming_bundles.is_empty()
+            || block.incoming_bundles.is_empty()
             || !block.has_only_rejected_messages()
         {
             resource_controller

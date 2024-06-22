@@ -961,13 +961,12 @@ where
         )
     );
 
-    // Since blocks are free of charge on closed chains, empty blocks are not allowed.
-    assert_matches!(
-        client1.execute_operations(vec![]).await,
-        Err(ChainClientError::LocalNodeError(
-            LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(*error, ChainError::ClosedChain)
-    );
+    // Empty blocks are allowed on closed chains but they must pay the block fee.
+    {
+        let balance = client1.local_balance().await.unwrap();
+        client1.execute_operations(vec![]).await.unwrap();
+        assert!(client1.local_balance().await.unwrap() < balance);
+    }
     Ok(())
 }
 
