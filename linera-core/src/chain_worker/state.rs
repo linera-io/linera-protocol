@@ -273,15 +273,9 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let chain_id = self.chain.chain_id();
         if query.request_leader_timeout {
-            if let Some(epoch) = self.chain.execution_state.system.epoch.get() {
-                let height = self.chain.tip_state.get().next_block_height;
-                let key_pair = self.config.key_pair();
-                let local_time = self.storage.clock().current_time();
-                let manager = self.chain.manager.get_mut();
-                if manager.vote_timeout(chain_id, height, *epoch, key_pair, local_time) {
-                    self.save().await?;
-                }
-            }
+            ChainWorkerStateWithAttemptedChanges::from(&mut *self)
+                .vote_for_leader_timeout()
+                .await?;
         }
         if query.request_fallback {
             if let (Some(epoch), Some(entry)) = (
@@ -1171,6 +1165,22 @@ where
         self.save().await?;
 
         Ok(height_with_fully_delivered_messages)
+    }
+
+    /// Attempts to vote for a leader timeout, if possible.
+    pub async fn vote_for_leader_timeout(&mut self) -> Result<(), WorkerError> {
+        let chain = &mut self.state.chain;
+        if let Some(epoch) = chain.execution_state.system.epoch.get() {
+            let chain_id = chain.chain_id();
+            let height = chain.tip_state.get().next_block_height;
+            let key_pair = self.state.config.key_pair();
+            let local_time = self.state.storage.clock().current_time();
+            let manager = chain.manager.get_mut();
+            if manager.vote_timeout(chain_id, height, *epoch, key_pair, local_time) {
+                self.save().await?;
+            }
+        }
+        Ok(())
     }
 
     /// Stores the chain state in persistent storage.
