@@ -13,8 +13,8 @@ use linera_base::{
 };
 use linera_core::client::MessagePolicy;
 use linera_execution::{
-    committee::ValidatorName, system::SystemChannel, UserApplicationId, WasmRuntime,
-    WithWasmDefault as _,
+    committee::ValidatorName, system::SystemChannel, ResourceControlPolicy, UserApplicationId,
+    WasmRuntime, WithWasmDefault as _,
 };
 use linera_service::{
     chain_listener::ChainListenerConfig,
@@ -786,6 +786,11 @@ pub enum NetCommand {
         #[arg(long, default_value = "1")]
         shards: usize,
 
+        /// Configure the resource control policy (notably fees) according to pre-defined
+        /// settings.
+        #[arg(long, default_value = "default")]
+        policy_config: ResourceControlPolicyConfig,
+
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.
         #[arg(long)]
@@ -811,6 +816,42 @@ pub enum NetCommand {
     /// Print a bash helper script to make `linera net up` easier to use. The script is
     /// meant to be installed in `~/.bash_profile` or sourced when needed.
     Helper,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResourceControlPolicyConfig {
+    Default,
+    OnlyFuel,
+    FuelAndBlock,
+    AllCategories,
+    Devnet,
+}
+
+impl ResourceControlPolicyConfig {
+    pub fn into_policy(self) -> ResourceControlPolicy {
+        use ResourceControlPolicyConfig::*;
+        match self {
+            Default => ResourceControlPolicy::default(),
+            OnlyFuel => ResourceControlPolicy::only_fuel(),
+            FuelAndBlock => ResourceControlPolicy::fuel_and_block(),
+            AllCategories => ResourceControlPolicy::all_categories(),
+            Devnet => ResourceControlPolicy::devnet(),
+        }
+    }
+}
+
+impl std::str::FromStr for ResourceControlPolicyConfig {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        clap::ValueEnum::from_str(s, true)
+    }
+}
+
+impl std::fmt::Display for ResourceControlPolicyConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Clone, clap::Subcommand)]
