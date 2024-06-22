@@ -12,7 +12,7 @@ use linera_base::{
 };
 use linera_views::batch::Batch;
 
-use super::{ApplicationStatus, SyncRuntime, SyncRuntimeInternal};
+use super::{ApplicationStatus, SyncRuntimeHandle, SyncRuntimeInternal};
 use crate::{
     execution_state_actor::Request, runtime::ResourceController, ContractRuntime,
     RawExecutionOutcome, UserContractInstance,
@@ -24,7 +24,7 @@ use crate::{
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_write_batch() {
     let (runtime, mut execution_state_receiver) = create_contract_runtime();
-    let mut runtime = SyncRuntime::new(runtime);
+    let mut runtime = SyncRuntimeHandle::new(runtime);
     let mut batch = Batch::new();
 
     let write_key = vec![1, 2, 3, 4, 5];
