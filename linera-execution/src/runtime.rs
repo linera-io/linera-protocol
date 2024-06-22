@@ -37,7 +37,7 @@ use crate::{
 mod tests;
 
 #[derive(Debug)]
-pub struct SyncRuntime<UserInstance>(SyncRuntimeHandle<UserInstance>);
+pub struct SyncRuntime<UserInstance>(Option<SyncRuntimeHandle<UserInstance>>);
 
 pub type ContractSyncRuntime = SyncRuntime<UserContractInstance>;
 pub type ServiceSyncRuntime = SyncRuntime<UserServiceInstance>;
@@ -276,13 +276,17 @@ impl<UserInstance> Deref for SyncRuntime<UserInstance> {
     type Target = SyncRuntimeHandle<UserInstance>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0.as_ref().expect(
+            "`SyncRuntime` should not be used after its `inner` contents have been moved out",
+        )
     }
 }
 
 impl<UserInstance> DerefMut for SyncRuntime<UserInstance> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        self.0.as_mut().expect(
+            "`SyncRuntime` should not be used after its `inner` contents have been moved out",
+        )
     }
 }
 
@@ -523,16 +527,22 @@ impl SyncRuntimeInternal<UserServiceInstance> {
     }
 }
 
+impl<UserInstance> SyncRuntime<UserInstance> {
+    fn into_inner(mut self) -> Option<SyncRuntimeInternal<UserInstance>> {
+        let handle = self.0.take().expect(
+            "`SyncRuntime` should not be used after its `inner` contents have been moved out",
+        );
+        let runtime = Arc::into_inner(handle.0)?.into_inner().expect(
+            "`SyncRuntime::into_inner` should only be called \
+            after loaded applications have been cleared",
+        );
+        Some(runtime)
+    }
+}
+
 impl<UserInstance> SyncRuntimeHandle<UserInstance> {
     fn new(runtime: SyncRuntimeInternal<UserInstance>) -> Self {
         SyncRuntimeHandle(Arc::new(Mutex::new(runtime)))
-    }
-
-    fn into_inner(self) -> Option<SyncRuntimeInternal<UserInstance>> {
-        let runtime = Arc::into_inner(self.0)?
-            .into_inner()
-            .expect("thread should not have panicked");
-        Some(runtime)
     }
 
     fn inner(&mut self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<UserInstance>> {
@@ -984,17 +994,19 @@ impl ContractSyncRuntime {
         } else {
             OracleResponses::Record(Vec::new())
         };
-        let mut runtime = SyncRuntime(ContractSyncRuntimeHandle::new(SyncRuntimeInternal::new(
-            chain_id,
-            height,
-            local_time,
-            signer,
-            next_message_index,
-            executing_message,
-            execution_state_sender,
-            refund_grant_to,
-            resource_controller,
-            oracle_record,
+        let mut runtime = SyncRuntime(Some(ContractSyncRuntimeHandle::new(
+            SyncRuntimeInternal::new(
+                chain_id,
+                height,
+                local_time,
+                signer,
+                next_message_index,
+                executing_message,
+                execution_state_sender,
+                refund_grant_to,
+                resource_controller,
+                oracle_record,
+            ),
         )));
         let finalize_context = FinalizeContext {
             authenticated_signer: signer,
@@ -1011,7 +1023,6 @@ impl ContractSyncRuntime {
         })?;
         runtime.finalize(finalize_context)?;
         let runtime = runtime
-            .0
             .into_inner()
             .expect("Runtime clones should have been freed by now");
         let oracle_record = if let OracleResponses::Record(responses) = runtime.oracle_responses {
@@ -1077,9 +1088,11 @@ impl ContractSyncRuntime {
         closure: impl FnOnce(&mut UserContractInstance) -> Result<(), ExecutionError>,
     ) -> Result<(), ExecutionError> {
         let contract = {
-            let cloned_runtime = self.0 .0.clone();
+            let cloned_runtime = self.0.clone().expect(
+                "`SyncRuntime` should not be used after its `inner` contents have been moved out",
+            );
             let mut runtime = self.inner();
-            let application = runtime.load_contract_instance(cloned_runtime, application_id)?;
+            let application = runtime.load_contract_instance(cloned_runtime.0, application_id)?;
 
             let status = ApplicationStatus {
                 caller_id: None,
@@ -1330,14 +1343,8 @@ impl ServiceSyncRuntime {
             ResourceController::default(),
             OracleResponses::Forget,
         );
-        let mut runtime = ServiceSyncRuntimeHandle::new(runtime_internal);
 
-        let result = runtime.try_query_application(application_id, query);
-
-        // Ensure the `loaded_applications` are cleared to remove circular references in
-        // `runtime_internal`
-        runtime.inner().loaded_applications.clear();
-        result
+        ServiceSyncRuntimeHandle::new(runtime_internal).try_query_application(application_id, query)
     }
 }
 
