@@ -184,29 +184,9 @@ where
         &mut self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
-        self.ensure_is_active()?;
-
-        let local_time = self.storage.clock().current_time();
-        let signer = block.authenticated_signer;
-
-        let executed_block = Box::pin(self.chain.execute_block(&block, local_time, None))
-            .await?
-            .with(block);
-
-        let mut response = ChainInfoResponse::new(&self.chain, None);
-        if let Some(signer) = signer {
-            response.info.requested_owner_balance = self
-                .chain
-                .execution_state
-                .system
-                .balances
-                .get(&signer)
-                .await?;
-        }
-
-        self.chain.rollback();
-
-        Ok((executed_block, response))
+        ChainWorkerStateWithTemporaryChanges { state: self }
+            .stage_block_execution(block)
+            .await
     }
 
     /// Processes a leader timeout issued for this multi-owner chain.
@@ -992,6 +972,41 @@ where
     ViewError: From<StorageClient::ContextError>,
 {
     state: &'state mut ChainWorkerState<StorageClient>,
+}
+
+impl<StorageClient> ChainWorkerStateWithTemporaryChanges<'_, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    /// Executes a block without persisting any changes to the state.
+    pub async fn stage_block_execution(
+        &mut self,
+        block: Block,
+    ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
+        self.state.ensure_is_active()?;
+
+        let local_time = self.state.storage.clock().current_time();
+        let signer = block.authenticated_signer;
+
+        let executed_block = Box::pin(self.state.chain.execute_block(&block, local_time, None))
+            .await?
+            .with(block);
+
+        let mut response = ChainInfoResponse::new(&self.state.chain, None);
+        if let Some(signer) = signer {
+            response.info.requested_owner_balance = self
+                .state
+                .chain
+                .execution_state
+                .system
+                .balances
+                .get(&signer)
+                .await?;
+        }
+
+        Ok((executed_block, response))
+    }
 }
 
 impl<StorageClient> Drop for ChainWorkerStateWithTemporaryChanges<'_, StorageClient>
