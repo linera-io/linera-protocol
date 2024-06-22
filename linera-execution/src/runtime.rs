@@ -290,6 +290,16 @@ impl<UserInstance> DerefMut for SyncRuntime<UserInstance> {
     }
 }
 
+impl<UserInstance> Drop for SyncRuntime<UserInstance> {
+    fn drop(&mut self) {
+        // Ensure the `loaded_applications` are cleared to prevent circular references in
+        // the runtime
+        if let Some(mut handle) = self.0.take() {
+            handle.inner().loaded_applications.clear();
+        }
+    }
+}
+
 impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     #[allow(clippy::too_many_arguments)]
     fn new(
