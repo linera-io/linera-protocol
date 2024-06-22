@@ -12,7 +12,7 @@ use std::{
 use futures::{future, FutureExt as _};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{ArithmeticError, BlockHeight, HashedBlob},
+    data_types::{ArithmeticError, BlockHeight, HashedBlob, Timestamp},
     ensure,
     identifiers::{BlobId, ChainId},
 };
@@ -250,108 +250,17 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let BlockProposal {
-            content:
-                ProposalContent {
-                    block,
-                    round,
-                    forced_oracle_records: oracle_records,
-                },
-            owner,
-            hashed_certificate_values,
-            hashed_blobs,
-            validated_block_certificate,
-            signature: _,
-        } = &proposal;
-        ensure!(
-            validated_block_certificate.is_some() == oracle_records.is_some(),
-            WorkerError::InvalidBlockProposal(
-                "Must contain a certificate if and only if it contains oracle records".to_string()
-            )
-        );
-        self.ensure_is_active()?;
-        // Check the epoch.
-        let (epoch, committee) = self
-            .chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
-        Self::check_block_epoch(epoch, block)?;
-        // Check the authentication of the block.
-        let public_key = self
-            .chain
-            .manager
-            .get()
-            .verify_owner(&proposal)
-            .ok_or(WorkerError::InvalidOwner)?;
-        proposal.check_signature(public_key)?;
-        if let Some(lite_certificate) = validated_block_certificate {
-            // Verify that this block has been validated by a quorum before.
-            lite_certificate.check(committee)?;
-        } else if let Some(signer) = block.authenticated_signer {
-            // Check the authentication of the operations in the new block.
-            ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
-        }
-        // Check if the chain is ready for this new block proposal.
-        // This should always pass for nodes without voting key.
-        self.chain.tip_state.get().verify_block_chaining(block)?;
-        if self.chain.manager.get().check_proposed_block(&proposal)? == manager::Outcome::Skip {
+        let Some((outcome, local_time)) = ChainWorkerStateWithTemporaryChanges { state: self }
+            .validate_block_proposal(&proposal)
+            .await?
+        else {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
                 ChainInfoResponse::new(&self.chain, self.config.key_pair()),
                 NetworkActions::default(),
             ));
-        }
-        // Update the inboxes so that we can verify the provided hashed certificate values are
-        // legitimately required.
-        // Actual execution happens below, after other validity checks.
-        self.chain.remove_events_from_inboxes(block).await?;
-        // Verify that all required bytecode hashed certificate values are available, and no
-        // unrelated ones provided.
-        self.check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
-            .await?;
-        // Write the values so that the bytecode is available during execution.
-        self.storage
-            .write_hashed_certificate_values(hashed_certificate_values)
-            .await?;
-        let local_time = self.storage.clock().current_time();
-        ensure!(
-            block.timestamp.duration_since(local_time) <= self.config.grace_period,
-            WorkerError::InvalidTimestamp
-        );
-        self.storage.clock().sleep_until(block.timestamp).await;
-        let local_time = self.storage.clock().current_time();
-        let outcome = Box::pin(
-            self.chain
-                .execute_block(block, local_time, oracle_records.clone()),
-        )
-        .await?;
-        if let Some(lite_certificate) = &validated_block_certificate {
-            let value = HashedCertificateValue::new_validated(outcome.clone().with(block.clone()));
-            lite_certificate
-                .clone()
-                .with_value(value)
-                .ok_or_else(|| WorkerError::InvalidLiteCertificate)?;
-        }
-        if round.is_fast() {
-            ensure!(
-                outcome
-                    .oracle_records
-                    .iter()
-                    .all(|record| record.is_permitted_in_fast_blocks()),
-                WorkerError::FastBlockUsingOracles
-            );
-        }
-        // Check if the counters of tip_state would be valid.
-        self.chain
-            .tip_state
-            .get()
-            .verify_counters(block, &outcome)?;
-        // Verify that the resulting chain would have no unconfirmed incoming messages.
-        self.chain.validate_incoming_messages().await?;
-        // Reset all the staged changes as we were only validating things.
-        self.chain.rollback();
+        };
+
         // Create the vote and store it in the chain state.
         let manager = self.chain.manager.get_mut();
         manager.create_vote(proposal, outcome, self.config.key_pair(), local_time);
@@ -1006,6 +915,131 @@ where
         }
 
         Ok((executed_block, response))
+    }
+
+    /// Validates a proposal for the next block for this chain.
+    pub async fn validate_block_proposal(
+        &mut self,
+        proposal: &BlockProposal,
+    ) -> Result<Option<(BlockExecutionOutcome, Timestamp)>, WorkerError> {
+        let BlockProposal {
+            content:
+                ProposalContent {
+                    block,
+                    round,
+                    forced_oracle_records: oracle_records,
+                },
+            owner,
+            hashed_certificate_values,
+            hashed_blobs,
+            validated_block_certificate,
+            signature: _,
+        } = proposal;
+        ensure!(
+            validated_block_certificate.is_some() == oracle_records.is_some(),
+            WorkerError::InvalidBlockProposal(
+                "Must contain a certificate if and only if it contains oracle records".to_string()
+            )
+        );
+        self.state.ensure_is_active()?;
+        // Check the epoch.
+        let (epoch, committee) = self
+            .state
+            .chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        ChainWorkerState::<StorageClient>::check_block_epoch(epoch, block)?;
+        // Check the authentication of the block.
+        let public_key = self
+            .state
+            .chain
+            .manager
+            .get()
+            .verify_owner(proposal)
+            .ok_or(WorkerError::InvalidOwner)?;
+        proposal.check_signature(public_key)?;
+        if let Some(lite_certificate) = validated_block_certificate {
+            // Verify that this block has been validated by a quorum before.
+            lite_certificate.check(committee)?;
+        } else if let Some(signer) = block.authenticated_signer {
+            // Check the authentication of the operations in the new block.
+            ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
+        }
+        // Check if the chain is ready for this new block proposal.
+        // This should always pass for nodes without voting key.
+        self.state
+            .chain
+            .tip_state
+            .get()
+            .verify_block_chaining(block)?;
+        if self
+            .state
+            .chain
+            .manager
+            .get()
+            .check_proposed_block(proposal)?
+            == manager::Outcome::Skip
+        {
+            return Ok(None);
+        }
+        // Update the inboxes so that we can verify the provided hashed certificate values are
+        // legitimately required.
+        // Actual execution happens below, after other validity checks.
+        self.state.chain.remove_events_from_inboxes(block).await?;
+        // Verify that all required bytecode hashed certificate values are available, and no
+        // unrelated ones provided.
+        self.state
+            .check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
+            .await?;
+        // Write the values so that the bytecode is available during execution.
+        self.state
+            .storage
+            .write_hashed_certificate_values(hashed_certificate_values)
+            .await?;
+        let local_time = self.state.storage.clock().current_time();
+        ensure!(
+            block.timestamp.duration_since(local_time) <= self.state.config.grace_period,
+            WorkerError::InvalidTimestamp
+        );
+        self.state
+            .storage
+            .clock()
+            .sleep_until(block.timestamp)
+            .await;
+        let local_time = self.state.storage.clock().current_time();
+        let outcome = Box::pin(self.state.chain.execute_block(
+            block,
+            local_time,
+            oracle_records.clone(),
+        ))
+        .await?;
+        if let Some(lite_certificate) = &validated_block_certificate {
+            let value = HashedCertificateValue::new_validated(outcome.clone().with(block.clone()));
+            lite_certificate
+                .clone()
+                .with_value(value)
+                .ok_or_else(|| WorkerError::InvalidLiteCertificate)?;
+        }
+        if round.is_fast() {
+            ensure!(
+                outcome
+                    .oracle_records
+                    .iter()
+                    .all(|record| record.is_permitted_in_fast_blocks()),
+                WorkerError::FastBlockUsingOracles
+            );
+        }
+        // Check if the counters of tip_state would be valid.
+        self.state
+            .chain
+            .tip_state
+            .get()
+            .verify_counters(block, &outcome)?;
+        // Verify that the resulting chain would have no unconfirmed incoming messages.
+        self.state.chain.validate_incoming_messages().await?;
+        Ok(Some((outcome, local_time)))
     }
 }
 
