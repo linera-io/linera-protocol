@@ -458,14 +458,14 @@ where
             } => {
                 let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
                 let response = self
-                    .query_application_with_sync_runtime(application_id, context, bytes)
+                    .query_user_application(application_id, context, bytes)
                     .await?;
                 Ok(Response::User(response))
             }
         }
     }
 
-    async fn query_application_with_sync_runtime(
+    async fn query_user_application(
         &mut self,
         application_id: UserApplicationId,
         context: QueryContext,
