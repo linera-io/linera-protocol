@@ -204,30 +204,22 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let Some((outcome, local_time)) = ChainWorkerStateWithTemporaryChanges { state: self }
+        let maybe_validation_outcome = ChainWorkerStateWithTemporaryChanges { state: self }
             .validate_block_proposal(&proposal)
-            .await?
-        else {
+            .await?;
+
+        let actions = if let Some((outcome, local_time)) = maybe_validation_outcome {
+            ChainWorkerStateWithAttemptedChanges::from(&mut *self)
+                .vote_for_block_proposal(proposal, outcome, local_time)
+                .await?;
+            // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
+            self.create_network_actions().await?
+        } else {
             // If we just processed the same pending block, return the chain info unchanged.
-            return Ok((
-                ChainInfoResponse::new(&self.chain, self.config.key_pair()),
-                NetworkActions::default(),
-            ));
+            NetworkActions::default()
         };
 
-        // Create the vote and store it in the chain state.
-        let manager = self.chain.manager.get_mut();
-        manager.create_vote(proposal, outcome, self.config.key_pair(), local_time);
-        // Cache the value we voted on, so the client doesn't have to send it again.
-        if let Some(vote) = manager.pending() {
-            self.recent_hashed_certificate_values
-                .insert(Cow::Borrowed(&vote.value))
-                .await;
-        }
         let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
-        self.save().await?;
-        // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
-        let actions = self.create_network_actions().await?;
         Ok((info, actions))
     }
 
@@ -1102,6 +1094,27 @@ where
         let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
         self.save().await?;
         Ok((info, actions))
+    }
+
+    /// Votes for a block proposal for the next block for this chain.
+    pub async fn vote_for_block_proposal(
+        &mut self,
+        proposal: BlockProposal,
+        outcome: BlockExecutionOutcome,
+        local_time: Timestamp,
+    ) -> Result<(), WorkerError> {
+        // Create the vote and store it in the chain state.
+        let manager = self.state.chain.manager.get_mut();
+        manager.create_vote(proposal, outcome, self.state.config.key_pair(), local_time);
+        // Cache the value we voted on, so the client doesn't have to send it again.
+        if let Some(vote) = manager.pending() {
+            self.state
+                .recent_hashed_certificate_values
+                .insert(Cow::Borrowed(&vote.value))
+                .await;
+        }
+        self.save().await?;
+        Ok(())
     }
 
     /// Stores the chain state in persistent storage.
