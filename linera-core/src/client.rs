@@ -1349,11 +1349,11 @@ where
         operations: Vec<Operation>,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.prepare_chain().await?;
-        self.execute_with_messages(operations).await
+        self.execute_without_prepare(operations).await
     }
 
     /// Executes a list of operations, without calling `prepare_chain`.
-    pub async fn execute_with_messages(
+    pub async fn execute_without_prepare(
         &mut self,
         operations: Vec<Operation>,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
@@ -2189,7 +2189,7 @@ where
                 }
             })
             .collect();
-        self.execute_with_messages(operations).await
+        self.execute_without_prepare(operations).await
     }
 
     /// Sends money to a chain.
