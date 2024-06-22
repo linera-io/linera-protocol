@@ -2605,7 +2605,8 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     let query = format!(
         "mutation {{ openChain(\
             chainId:\"{chain1}\", \
-            publicKey:\"{public_key}\"\
+            publicKey:\"{public_key}\", \
+            balance: \"1\"\
         ) }}"
     );
     node_service.query_node(query).await?;
