@@ -985,6 +985,25 @@ where
     }
 }
 
+/// Wrapper type that rolls back changes to the `chain` state when dropped.
+pub struct ChainWorkerStateWithTemporaryChanges<'state, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    state: &'state mut ChainWorkerState<StorageClient>,
+}
+
+impl<StorageClient> Drop for ChainWorkerStateWithTemporaryChanges<'_, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    fn drop(&mut self) {
+        self.state.chain.rollback();
+    }
+}
+
 /// Helper type for handling cross-chain updates.
 pub(crate) struct CrossChainUpdateHelper<'a> {
     pub allow_messages_from_deprecated_epochs: bool,
