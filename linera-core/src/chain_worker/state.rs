@@ -271,28 +271,15 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let chain_id = self.chain.chain_id();
         if query.request_leader_timeout {
             ChainWorkerStateWithAttemptedChanges::from(&mut *self)
                 .vote_for_leader_timeout()
                 .await?;
         }
         if query.request_fallback {
-            if let (Some(epoch), Some(entry)) = (
-                self.chain.execution_state.system.epoch.get(),
-                self.chain.unskippable.front().await?,
-            ) {
-                let ownership = self.chain.execution_state.system.ownership.get();
-                let elapsed = self.storage.clock().current_time().delta_since(entry.seen);
-                if elapsed >= ownership.timeout_config.fallback_duration {
-                    let height = self.chain.tip_state.get().next_block_height;
-                    let key_pair = self.config.key_pair();
-                    let manager = self.chain.manager.get_mut();
-                    if manager.vote_fallback(chain_id, height, *epoch, key_pair) {
-                        self.save().await?;
-                    }
-                }
-            }
+            ChainWorkerStateWithAttemptedChanges::from(&mut *self)
+                .vote_for_fallback()
+                .await?;
         }
         let mut info = ChainInfo::from(&self.chain);
         if query.request_committees {
@@ -1178,6 +1165,34 @@ where
             let manager = chain.manager.get_mut();
             if manager.vote_timeout(chain_id, height, *epoch, key_pair, local_time) {
                 self.save().await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Votes for falling back to a public chain.
+    ///
+    pub async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
+        let chain = &mut self.state.chain;
+        if let (Some(epoch), Some(entry)) = (
+            chain.execution_state.system.epoch.get(),
+            chain.unskippable.front().await?,
+        ) {
+            let ownership = chain.execution_state.system.ownership.get();
+            let elapsed = self
+                .state
+                .storage
+                .clock()
+                .current_time()
+                .delta_since(entry.seen);
+            if elapsed >= ownership.timeout_config.fallback_duration {
+                let chain_id = chain.chain_id();
+                let height = chain.tip_state.get().next_block_height;
+                let key_pair = self.state.config.key_pair();
+                let manager = chain.manager.get_mut();
+                if manager.vote_fallback(chain_id, height, *epoch, key_pair) {
+                    self.save().await?;
+                }
             }
         }
         Ok(())
