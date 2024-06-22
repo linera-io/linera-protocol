@@ -1058,39 +1058,14 @@ impl ContractSyncRuntime {
             self.execute(application, context.authenticated_signer, |contract| {
                 contract.finalize(context)
             })?;
+            self.inner().loaded_applications.remove(&application);
         }
-
-        self.inner().loaded_applications.clear();
 
         Ok(())
     }
 
     /// Executes a `closure` with the contract code for the `application_id`.
-    ///
-    /// Automatically clears the `loaded_applications` if an error occurs, allowing for a safe
-    /// early return in the caller.
     fn execute(
-        &mut self,
-        application_id: UserApplicationId,
-        signer: Option<Owner>,
-        closure: impl FnOnce(&mut UserContractInstance) -> Result<(), ExecutionError>,
-    ) -> Result<(), ExecutionError> {
-        match self.try_execute(application_id, signer, closure) {
-            Ok(()) => Ok(()),
-            Err(error) => {
-                // Ensure the `loaded_applications` are cleared to prevent circular references in
-                // the `runtime`
-                self.inner().loaded_applications.clear();
-                Err(error)
-            }
-        }
-    }
-
-    /// Tries to execute a `closure` with the contract code for the `application_id`.
-    ///
-    /// If an error occurs, the caller *must* clear the `loaded_applications` to prevent a deadlock
-    /// happening because the runtime never gets dropped due to circular references.
-    fn try_execute(
         &mut self,
         application_id: UserApplicationId,
         signer: Option<Owner>,
