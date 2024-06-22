@@ -26,10 +26,10 @@ use {
 
 use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
-    ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
-    MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
-    UserApplicationDescription, UserApplicationId,
+    ExecutionError, ExecutionOutcome, ExecutionRuntimeContext, Message, MessageContext,
+    MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
+    RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage, UserApplicationDescription,
+    UserApplicationId,
 };
 
 /// A view accessing the execution state of a chain.
@@ -153,22 +153,18 @@ where
         oracle_record: Option<OracleRecord>,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(Vec<ExecutionOutcome>, OracleRecord), ExecutionError> {
-        let (execution_outcomes, oracle_record) =
-            match self.context().extra().execution_runtime_config() {
-                ExecutionRuntimeConfig::Synchronous => {
-                    self.run_user_action_with_synchronous_runtime(
-                        application_id,
-                        chain_id,
-                        local_time,
-                        action,
-                        refund_grant_to,
-                        grant,
-                        oracle_record,
-                        resource_controller,
-                    )
-                    .await?
-                }
-            };
+        let (execution_outcomes, oracle_record) = self
+            .run_user_action_with_synchronous_runtime(
+                application_id,
+                chain_id,
+                local_time,
+                action,
+                refund_grant_to,
+                grant,
+                oracle_record,
+                resource_controller,
+            )
+            .await?;
         let execution_outcomes = self
             .update_execution_outcomes_with_app_registrations(execution_outcomes)
             .await?;
@@ -459,12 +455,9 @@ where
                 application_id,
                 bytes,
             } => {
-                let response = match self.context().extra().execution_runtime_config() {
-                    ExecutionRuntimeConfig::Synchronous => {
-                        self.query_application_with_sync_runtime(application_id, context, bytes)
-                            .await?
-                    }
-                };
+                let response = self
+                    .query_application_with_sync_runtime(application_id, context, bytes)
+                    .await?;
                 Ok(Response::User(response))
             }
         }

@@ -23,9 +23,9 @@ use crate::{
     committee::{Committee, Epoch},
     execution::UserAction,
     system::SystemChannel,
-    ChannelSubscription, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    ExecutionStateView, OperationContext, ResourceControlPolicy, ResourceController,
-    ResourceTracker, TestExecutionRuntimeContext, UserApplicationDescription, UserContractCode,
+    ChannelSubscription, ExecutionError, ExecutionRuntimeContext, ExecutionStateView,
+    OperationContext, ResourceControlPolicy, ResourceController, ResourceTracker,
+    TestExecutionRuntimeContext, UserApplicationDescription, UserContractCode,
 };
 
 /// A system execution state, not represented as a view but as a simple struct.
@@ -77,14 +77,12 @@ impl SystemExecutionState {
             .description
             .expect("Chain description should be set")
             .into();
-        self.into_view_with(chain_id, ExecutionRuntimeConfig::default())
-            .await
+        self.into_view_with(chain_id).await
     }
 
     pub async fn into_view_with(
         self,
         chain_id: ChainId,
-        execution_runtime_config: ExecutionRuntimeConfig,
     ) -> ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>> {
         // Destructure, to make sure we don't miss any fields.
         let SystemExecutionState {
@@ -101,7 +99,7 @@ impl SystemExecutionState {
             closed,
             application_permissions,
         } = self;
-        let extra = TestExecutionRuntimeContext::new(chain_id, execution_runtime_config);
+        let extra = TestExecutionRuntimeContext::new(chain_id);
         let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, extra);
         let mut view = ExecutionStateView::load(context)
             .await

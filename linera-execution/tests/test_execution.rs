@@ -1526,7 +1526,7 @@ async fn test_open_chain() {
 
     // Initialize the child chain using the config from the message.
     let mut child_view = SystemExecutionState::default()
-        .into_view_with(ChainId::child(message_id), Default::default())
+        .into_view_with(ChainId::child(message_id))
         .await;
     child_view
         .system
