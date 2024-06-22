@@ -1053,6 +1053,56 @@ where
     }
 }
 
+/// Wrapper type that tracks if the changes to the `chain` state should be rolled back when
+/// dropped.
+pub struct ChainWorkerStateWithAttemptedChanges<'state, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    state: &'state mut ChainWorkerState<StorageClient>,
+    succeeded: bool,
+}
+
+impl<'state, StorageClient> From<&'state mut ChainWorkerState<StorageClient>>
+    for ChainWorkerStateWithAttemptedChanges<'state, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    fn from(state: &'state mut ChainWorkerState<StorageClient>) -> Self {
+        ChainWorkerStateWithAttemptedChanges {
+            state,
+            succeeded: false,
+        }
+    }
+}
+
+impl<StorageClient> ChainWorkerStateWithAttemptedChanges<'_, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    /// Stores the chain state in persistent storage.
+    async fn save(&mut self) -> Result<(), WorkerError> {
+        self.state.save().await?;
+        self.succeeded = true;
+        Ok(())
+    }
+}
+
+impl<StorageClient> Drop for ChainWorkerStateWithAttemptedChanges<'_, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    fn drop(&mut self) {
+        if !self.succeeded {
+            self.state.chain.rollback();
+        }
+    }
+}
+
 /// Helper type for handling cross-chain updates.
 pub(crate) struct CrossChainUpdateHelper<'a> {
     pub allow_messages_from_deprecated_epochs: bool,
