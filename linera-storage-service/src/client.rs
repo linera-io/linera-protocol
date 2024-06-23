@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{mem, sync::Arc, time::Instant};
+use std::{mem, sync::Arc};
 
 use async_lock::{Mutex, RwLock, RwLockWriteGuardArc, Semaphore, SemaphoreGuard};
 use linera_base::ensure;
@@ -18,7 +18,6 @@ use linera_views::{
 };
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
-use tracing::info;
 
 #[cfg(with_metrics)]
 use crate::common::STORAGE_SERVICE_METRICS;
@@ -55,6 +54,7 @@ const MAX_KEY_SIZE: usize = 1000000;
 //   [KeyTag::Namespace] + [namespace]
 // is stored to indicate the existence of a namespace.
 #[derive(Clone)]
+#[allow(clippy::type_complexity)]
 pub struct ServiceStoreClientInternal {
     endpoint: Endpoint,
     max_stream_queries: usize,
@@ -62,15 +62,10 @@ pub struct ServiceStoreClientInternal {
     clients: Arc<Mutex<Vec<Arc<RwLock<StoreProcessorClient<Channel>>>>>>,
 }
 
-// What we want is a data structure such that:
-// * We can get multiple mutable reference to the vectors.
-// * Vec / VecDeque works in the same way in that respect.
-// * The LinkedList does not address that.
-// * The construction of a manual way does not address it as well.
-
-
 impl ServiceStoreClientInternal {
-    pub async fn get_client(&self) -> Result<RwLockWriteGuardArc<StoreProcessorClient<Channel>>, ServiceContextError> {
+    pub async fn get_client(
+        &self,
+    ) -> Result<RwLockWriteGuardArc<StoreProcessorClient<Channel>>, ServiceContextError> {
         let mut clients = self.clients.lock_arc().await;
         let n_client = clients.len();
         for i_client in 0..n_client {
