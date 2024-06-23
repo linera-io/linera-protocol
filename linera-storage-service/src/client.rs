@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{mem, sync::Arc};
+use std::{mem, sync::Arc, time::Instant};
 
-use async_lock::{RwLock, RwLockWriteGuard, Semaphore, SemaphoreGuard};
+use async_lock::{Mutex, RwLock, RwLockWriteGuardArc, Semaphore, SemaphoreGuard};
 use linera_base::ensure;
 #[cfg(with_metrics)]
 use linera_views::metering::MeteredStore;
@@ -18,6 +18,7 @@ use linera_views::{
 };
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
+use tracing::info;
 
 #[cfg(with_metrics)]
 use crate::common::STORAGE_SERVICE_METRICS;
@@ -55,10 +56,37 @@ const MAX_KEY_SIZE: usize = 1000000;
 // is stored to indicate the existence of a namespace.
 #[derive(Clone)]
 pub struct ServiceStoreClientInternal {
-    client: Arc<RwLock<StoreProcessorClient<Channel>>>,
-    semaphore: Option<Arc<Semaphore>>,
+    endpoint: Endpoint,
     max_stream_queries: usize,
     namespace: Vec<u8>,
+    clients: Arc<Mutex<Vec<Arc<RwLock<StoreProcessorClient<Channel>>>>>>,
+}
+
+// What we want is a data structure such that:
+// * We can get multiple mutable reference to the vectors.
+// * Vec / VecDeque works in the same way in that respect.
+// * The LinkedList does not address that.
+// * The construction of a manual way does not address it as well.
+
+
+impl ServiceStoreClientInternal {
+    pub async fn get_client(&self) -> Result<RwLockWriteGuardArc<StoreProcessorClient<Channel>>, ServiceContextError> {
+        let mut clients = self.clients.lock_arc().await;
+        let n_client = clients.len();
+        for i_client in 0..n_client {
+            let client = clients.get(i_client).unwrap();
+            let client = client.clone().try_write_arc();
+            if let Some(client) = client {
+                return Ok(client);
+            }
+        }
+        let client = StoreProcessorClient::connect(self.endpoint.clone()).await?;
+        let client = Arc::new(RwLock::new(client));
+        clients.push(client);
+        let client = clients.last().unwrap();
+        let client = client.clone().try_write_arc();
+        Ok(client.unwrap())
+    }
 }
 
 impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClientInternal {
@@ -76,8 +104,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClientInternal {
         full_key.extend(key);
         let query = RequestReadValue { key: full_key };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
-        let _guard = self.acquire().await;
+        let mut client = self.get_client().await?;
         let response = client.process_read_value(request).await?;
         let response = response.into_inner();
         let ReplyReadValue {
@@ -88,7 +115,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClientInternal {
         if num_chunks == 0 {
             Ok(value)
         } else {
-            Self::read_entries(client, message_index, num_chunks).await
+            self.read_entries(message_index, num_chunks).await
         }
     }
 
@@ -98,8 +125,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClientInternal {
         full_key.extend(key);
         let query = RequestContainsKey { key: full_key };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
-        let _guard = self.acquire().await;
+        let mut client = self.get_client().await?;
         let response = client.process_contains_key(request).await?;
         let response = response.into_inner();
         let ReplyContainsKey { test } = response;
@@ -119,8 +145,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClientInternal {
         }
         let query = RequestReadMultiValues { keys: full_keys };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
-        let _guard = self.acquire().await;
+        let mut client = self.get_client().await?;
         let response = client.process_read_multi_values(request).await?;
         let response = response.into_inner();
         let ReplyReadMultiValues {
@@ -132,7 +157,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClientInternal {
             let values = values.into_iter().map(|x| x.value).collect::<Vec<_>>();
             Ok(values)
         } else {
-            Self::read_entries(client, message_index, num_chunks).await
+            self.read_entries(message_index, num_chunks).await
         }
     }
 
@@ -150,8 +175,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClientInternal {
             key_prefix: full_key_prefix,
         };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
-        let _guard = self.acquire().await;
+        let mut client = self.get_client().await?;
         let response = client.process_find_keys_by_prefix(request).await?;
         let response = response.into_inner();
         let ReplyFindKeysByPrefix {
@@ -162,7 +186,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClientInternal {
         if num_chunks == 0 {
             Ok(keys)
         } else {
-            Self::read_entries(client, message_index, num_chunks).await
+            self.read_entries(message_index, num_chunks).await
         }
     }
 
@@ -180,8 +204,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClientInternal {
             key_prefix: full_key_prefix,
         };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
-        let _guard = self.acquire().await;
+        let mut client = self.get_client().await?;
         let response = client.process_find_key_values_by_prefix(request).await?;
         let response = response.into_inner();
         let ReplyFindKeyValuesByPrefix {
@@ -196,7 +219,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClientInternal {
                 .collect::<Vec<_>>();
             Ok(key_values)
         } else {
-            Self::read_entries(client, message_index, num_chunks).await
+            self.read_entries(message_index, num_chunks).await
         }
     }
 }
@@ -205,6 +228,10 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClientInternal {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ServiceContextError> {
+        let n_operation = batch.operations.len();
+        if n_operation == 0 {
+            return Ok(());
+        }
         let mut statements = Vec::new();
         let mut chunk_size = 0;
         for operation in batch.operations {
@@ -268,14 +295,6 @@ impl KeyValueStore for ServiceStoreClientInternal {
 }
 
 impl ServiceStoreClientInternal {
-    /// Obtains the semaphore lock on the database if needed.
-    async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
-        match &self.semaphore {
-            None => None,
-            Some(count) => Some(count.acquire().await),
-        }
-    }
-
     fn namespace_as_vec(namespace: &str) -> Result<Vec<u8>, ServiceContextError> {
         let mut key = vec![KeyTag::Key as u8];
         bcs::serialize_into(&mut key, namespace)?;
@@ -289,8 +308,7 @@ impl ServiceStoreClientInternal {
         if !statements.is_empty() {
             let query = RequestWriteBatchExtended { statements };
             let request = tonic::Request::new(query);
-            let mut client = self.client.write().await;
-            let _guard = self.acquire().await;
+            let mut client = self.get_client().await?;
             let _response = client.process_write_batch_extended(request).await?;
         }
         Ok(())
@@ -323,10 +341,11 @@ impl ServiceStoreClientInternal {
     }
 
     async fn read_entries<S: DeserializeOwned>(
-        mut client: RwLockWriteGuard<'_, StoreProcessorClient<Channel>>,
+        &self,
         message_index: i64,
         num_chunks: i32,
     ) -> Result<S, ServiceContextError> {
+        let mut client = self.get_client().await?;
         let mut value = Vec::new();
         for index in 0..num_chunks {
             let query = RequestSpecificChunk {
@@ -350,19 +369,14 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ServiceContextError> {
         let endpoint = format!("http://{}", config.endpoint);
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let client = StoreProcessorClient::connect(endpoint).await?;
-        let client = Arc::new(RwLock::new(client));
-        let semaphore = config
-            .common_config
-            .max_concurrent_queries
-            .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
         let namespace = Self::namespace_as_vec(namespace)?;
+        let clients = Arc::new(Mutex::new(Vec::new()));
         Ok(Self {
-            client,
-            semaphore,
+            endpoint,
             max_stream_queries,
             namespace,
+            clients,
         })
     }
 
@@ -479,10 +493,21 @@ pub async fn create_service_test_store(
 
 #[derive(Clone)]
 pub struct ServiceStoreClient {
+    semaphore: Option<Arc<Semaphore>>,
     #[cfg(with_metrics)]
     store: MeteredStore<ServiceStoreClientInternal>,
     #[cfg(not(with_metrics))]
     store: ServiceStoreClientInternal,
+}
+
+impl ServiceStoreClient {
+    /// Obtains the semaphore lock on the database if needed.
+    async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
+        match &self.semaphore {
+            None => None,
+            Some(count) => Some(count.acquire().await),
+        }
+    }
 }
 
 impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
@@ -495,10 +520,12 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ServiceContextError> {
+        let _guard = self.acquire().await;
         self.store.read_value_bytes(key).await
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, ServiceContextError> {
+        let _guard = self.acquire().await;
         self.store.contains_key(key).await
     }
 
@@ -506,6 +533,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ServiceContextError> {
+        let _guard = self.acquire().await;
         self.store.read_multi_values_bytes(keys).await
     }
 
@@ -513,6 +541,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, ServiceContextError> {
+        let _guard = self.acquire().await;
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
@@ -520,6 +549,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ServiceContextError> {
+        let _guard = self.acquire().await;
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
@@ -528,10 +558,12 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), ServiceContextError> {
+        let _guard = self.acquire().await;
         self.store.write_batch(batch, base_key).await
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), ServiceContextError> {
+        let _guard = self.acquire().await;
         self.store.clear_journal(base_key).await
     }
 }
@@ -545,10 +577,14 @@ impl AdminKeyValueStore for ServiceStoreClient {
     type Config = ServiceStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ServiceContextError> {
+        let semaphore = config
+            .common_config
+            .max_concurrent_queries
+            .map(|n| Arc::new(Semaphore::new(n)));
         let store = ServiceStoreClientInternal::connect(config, namespace).await?;
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&STORAGE_SERVICE_METRICS, store);
-        Ok(Self { store })
+        Ok(Self { semaphore, store })
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceContextError> {
