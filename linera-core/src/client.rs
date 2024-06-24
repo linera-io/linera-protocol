@@ -6,12 +6,11 @@ use std::{
     collections::{hash_map, BTreeMap, HashMap},
     convert::Infallible,
     iter,
-    ops::{Deref, DerefMut},
     sync::Arc,
 };
 
 use dashmap::{
-    mapref::one::{Ref as DashMapRef, RefMut as DashMapRefMut},
+    mapref::one::{MappedRef as DashMapMappedRef, Ref as DashMapRef, RefMut as DashMapRefMut},
     DashMap,
 };
 use futures::{
@@ -321,96 +320,67 @@ impl From<Infallible> for ChainClientError {
     }
 }
 
-use std::cmp::Eq;
-use std::hash::Hash;
-
-struct UnsendRef<'r, K, V> {
-    r#ref: DashMapRef<'r, K, V>,
-    _phantom: std::marker::PhantomData<*mut u8>,
-}
-struct UnsendRefMut<'r, K, V> {
-    r#ref: DashMapRefMut<'r, K, V>,
-    _phantom: std::marker::PhantomData<*mut u8>,
-}
-
-impl<K: Eq + Hash, V> Deref for UnsendRef<'_, K, V> {
-    type Target = V;
-    fn deref(&self) -> &V {
-        self.r#ref.deref()
-    }
-}
-
-impl<K: Eq + Hash, V> Deref for UnsendRefMut<'_, K, V> {
-    type Target = V;
-    fn deref(&self) -> &V {
-        self.r#ref.deref()
-    }
-}
-
-impl<K: Eq + Hash, V> DerefMut for UnsendRefMut<'_, K, V> {
-    fn deref_mut(&mut self) -> &mut V {
-        self.r#ref.deref_mut()
-    }
-}
+pub type ChainGuard<'a, T> = DashMapRef<'a, ChainId, T>;
+pub type ChainGuardMut<'a, T> = DashMapRefMut<'a, ChainId, T>;
+pub type ChainGuardMapped<'a, T> = DashMapMappedRef<'a, ChainId, ChainState, T>;
 
 impl<P, S> ChainClient<P, S>
 where
     S: Storage,
     ViewError: From<S::ContextError>,
 {
-    pub fn state(&self) -> impl Deref<Target = ChainState> + '_ {
-        UnsendRef {
-            r#ref: self.client
-                .chains
-                .get(&self.chain_id)
-                .expect("Chain client constructed for invalid chain"),
-            _phantom: Default::default(),
-        }
+    /// Get a shared reference to the chain's state.
+    pub fn state(&self) -> ChainGuard<ChainState> {
+        self.client
+            .chains
+            .get(&self.chain_id)
+            .expect("Chain client constructed for invalid chain")
     }
 
-    pub fn state_mut(&self) -> impl DerefMut<Target = ChainState> + '_ {
-        UnsendRefMut {
-            r#ref: self.client
-                .chains
-                .get_mut(&self.chain_id)
-                .expect("Chain client constructed for invalid chain"),
-            _phantom: Default::default(),
-        }
+    /// Get a mutable reference to the state.
+    /// Beware: this will block any other reference to any chain's state!
+    fn state_mut(&self) -> ChainGuardMut<ChainState> {
+        self.client
+            .chains
+            .get_mut(&self.chain_id)
+            .expect("Chain client constructed for invalid chain")
     }
 
+    /// The per-`ChainClient` options.
     pub fn options_mut(&mut self) -> &mut ChainClientOptions {
         &mut self.options
     }
 
+    /// The ID of the associated chain.
     pub fn chain_id(&self) -> ChainId {
         self.chain_id
     }
 
-    // /// Returns the hash of the latest known block.
-    // pub fn block_hash(&self) -> Option<CryptoHash> {
-    //     self.state().block_hash
-    // }
+    /// Returns the hash of the latest known block.
+    pub fn block_hash(&self) -> Option<CryptoHash> {
+        self.state().block_hash
+    }
 
-    // /// Returns the earliest possible timestamp for the next block.
-    // pub fn timestamp(&self) -> Timestamp {
-    //     self.state().timestamp
-    // }
+    /// Returns the earliest possible timestamp for the next block.
+    pub fn timestamp(&self) -> Timestamp {
+        self.state().timestamp
+    }
 
-    // pub fn next_block_height(&self) -> BlockHeight {
-    //     self.state().next_block_height
-    // }
+    pub fn next_block_height(&self) -> BlockHeight {
+        self.state().next_block_height
+    }
 
-    // pub fn pending_block(&self) -> impl Deref<Target = Option<Block>> + '_ {
-    //     self.state().map(|state| &state.pending_block)
-    // }
+    pub fn pending_block(&self) -> ChainGuardMapped<Option<Block>> {
+        self.state().map(|state| &state.pending_block)
+    }
 
-    // pub fn pending_blobs(&self) -> impl Deref<Target = BTreeMap<BlobId, HashedBlob>> + '_ {
-    //     self.state().map(|state| &state.pending_blobs)
-    // }
+    pub fn pending_blobs(&self) -> ChainGuardMapped<BTreeMap<BlobId, HashedBlob>> {
+        self.state().map(|state| &state.pending_blobs)
+    }
 
-    // pub fn admin_id(&self) -> ChainId {
-    //     self.state().admin_id
-    // }
+    pub fn admin_id(&self) -> ChainId {
+        self.state().admin_id
+    }
 
     // pub fn known_key_pairs(&self) -> impl Deref<Target = BTreeMap<Owner, KeyPair>> + '_ {
     //     self.state().map(|state| &state.known_key_pairs)
@@ -482,7 +452,8 @@ where
     /// Messages known to be redundant are filtered out: A `RegisterApplications` message whose
     /// entries are already known never needs to be included in a block.
     async fn pending_messages(&self) -> Result<Vec<IncomingMessage>, ChainClientError> {
-        if self.state().next_block_height != BlockHeight::ZERO && self.options.message_policy.is_ignore()
+        if self.state().next_block_height != BlockHeight::ZERO
+            && self.options.message_policy.is_ignore()
         {
             return Ok(Vec::new()); // OpenChain is already received, other are ignored.
         }
@@ -607,9 +578,8 @@ where
     async fn known_committees(
         &self,
     ) -> Result<(BTreeMap<Epoch, Committee>, Epoch), LocalNodeError> {
-        let admin_id = self.state().admin_id;
         let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
-        let (admin_epoch, admin_committees) = self.epoch_and_committees(admin_id).await?;
+        let (admin_epoch, admin_committees) = self.epoch_and_committees(self.admin_id()).await?;
         committees.extend(admin_committees);
         let epoch = std::cmp::max(epoch.unwrap_or_default(), admin_epoch.unwrap_or_default());
         Ok((committees, epoch))
@@ -703,11 +673,9 @@ where
             );
         }
         let ownership = &info.manager.ownership;
-        let keys: std::collections::HashSet<_> = self.state().known_key_pairs.keys().cloned().collect();
-        if ownership
-            .all_owners()
-            .any(|owner| !keys.contains(owner))
-        {
+        let keys: std::collections::HashSet<_> =
+            self.state().known_key_pairs.keys().cloned().collect();
+        if ownership.all_owners().any(|owner| !keys.contains(owner)) {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
@@ -1105,7 +1073,6 @@ where
     /// is regularly upgraded to new committees.
     async fn find_received_certificates(&self) -> Result<(), ChainClientError> {
         // Use network information from the local chain.
-        let admin_id = self.state().admin_id;
         let chain_id = self.chain_id;
         let local_committee = self.local_committee().await?;
         let nodes: Vec<_> = self
@@ -1116,7 +1083,7 @@ where
         // Synchronize the state of the admin chain from the network.
         self.client
             .local_node
-            .synchronize_chain_state(nodes.clone(), admin_id, &mut notifications)
+            .synchronize_chain_state(nodes.clone(), self.admin_id(), &mut notifications)
             .await?;
         self.handle_notifications(&mut notifications);
         let node_client = self.client.local_node.clone();
@@ -1332,11 +1299,15 @@ where
             if let Some(blob) = self.client.local_node.recent_blob(&blob_id).await {
                 blobs.push(blob);
             } else {
-                let blob = self.state().pending_blobs.get(&blob_id).ok_or_else(
-                    || LocalNodeError::CannotReadLocalBlob {
+                let blob = self
+                    .state()
+                    .pending_blobs
+                    .get(&blob_id)
+                    .ok_or_else(|| LocalNodeError::CannotReadLocalBlob {
                         chain_id: self.chain_id,
                         blob_id,
-                    })?.clone();
+                    })?
+                    .clone();
                 self.client.local_node.cache_recent_blob(&blob).await;
                 blobs.push(blob);
             }
@@ -1968,7 +1939,8 @@ where
         key_pair: KeyPair,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         let new_public_key = key_pair.public();
-        self.state_mut().known_key_pairs
+        self.state_mut()
+            .known_key_pairs
             .insert(new_public_key.into(), key_pair);
         self.transfer_ownership(new_public_key).await
     }
@@ -2069,7 +2041,7 @@ where
             let config = OpenChainConfig {
                 ownership: ownership.clone(),
                 committees,
-                admin_id: self.state().admin_id,
+                admin_id: self.admin_id(),
                 epoch,
                 balance,
                 application_permissions: application_permissions.clone(),
@@ -2267,9 +2239,8 @@ where
     pub async fn subscribe_to_new_committees(
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        let chain_id = self.state().admin_id;
         self.execute_operation(Operation::System(SystemOperation::Subscribe {
-            chain_id,
+            chain_id: self.admin_id(),
             channel: SystemChannel::Admin,
         }))
         .await
@@ -2280,9 +2251,8 @@ where
     pub async fn unsubscribe_from_new_committees(
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        let chain_id = self.state().admin_id;
         self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
-            chain_id,
+            chain_id: self.admin_id(),
             channel: SystemChannel::Admin,
         }))
         .await
