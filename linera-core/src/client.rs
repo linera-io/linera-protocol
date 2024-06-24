@@ -665,7 +665,7 @@ where
             .download_certificates(nodes, self.chain_id, next_block_height, &mut notifications)
             .await?;
         self.handle_notifications(&mut notifications);
-        if info.next_block_height == self.next_block_height {
+        if info.next_block_height == next_block_height {
             // Check that our local node has the expected block hash.
             ensure!(
                 self.state().block_hash == info.block_hash,
