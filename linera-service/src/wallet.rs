@@ -179,9 +179,9 @@ impl Wallet {
             UserChain {
                 chain_id: chain_client.chain_id(),
                 key_pair,
-                block_hash: state.block_hash.clone(),
-                next_block_height: state.next_block_height.clone(),
-                timestamp: state.timestamp.clone(),
+                block_hash: state.block_hash,
+                next_block_height: state.next_block_height,
+                timestamp: state.timestamp,
                 pending_block: state.pending_block.clone(),
                 pending_blobs: state.pending_blobs.clone(),
             },
