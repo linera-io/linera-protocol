@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser as _;
-use linera_views::common::{AdminKeyValueStore, CommonStoreConfig};
 use linera_storage_service::{client::ServiceStoreClient, common::ServiceStoreConfig};
+use linera_views::common::{AdminKeyValueStore, CommonStoreConfig};
 
 use crate::{
     common::IndexerError,

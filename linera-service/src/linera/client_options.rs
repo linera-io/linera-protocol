@@ -150,9 +150,7 @@ impl ClientOptions {
             Some(config) => config.parse(),
             None => {
                 let endpoint = std::env::var("LINERA_STORAGE_SERVICE")?;
-                let storage_config = linera_service::storage::StorageConfig::Service {
-                    endpoint,
-                };
+                let storage_config = linera_service::storage::StorageConfig::Service { endpoint };
                 let namespace = "default".to_string();
                 Ok(StorageConfigNamespace {
                     storage_config,
