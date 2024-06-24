@@ -486,7 +486,7 @@ where
                 .take(num_new_chains)
                 .collect();
             let certificate = chain_client
-                .execute_with_messages(operations)
+                .execute_without_prepare(operations)
                 .await?
                 .expect("should execute block with OpenChain operations");
             let executed_block = certificate
@@ -549,7 +549,7 @@ where
         // Put at most 1000 fungible token operations in each block.
         for operations in operations.chunks(1000) {
             chain_client
-                .execute_with_messages(operations.to_vec())
+                .execute_without_prepare(operations.to_vec())
                 .await?
                 .expect("should execute block with OpenChain operations");
         }

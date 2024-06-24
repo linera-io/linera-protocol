@@ -1355,18 +1355,17 @@ where
         operations: Vec<Operation>,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.prepare_chain().await?;
-        self.execute_with_messages(operations).await
+        self.execute_without_prepare(operations).await
     }
 
     /// Executes a list of operations, without calling `prepare_chain`.
-    pub async fn execute_with_messages(
+    pub async fn execute_without_prepare(
         &mut self,
         operations: Vec<Operation>,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         loop {
-            let messages = self.pending_messages().await?;
             // TODO(#2066): Remove boxing once the call-stack is shallower
-            match Box::pin(self.execute_block(messages, operations.clone())).await? {
+            match Box::pin(self.execute_block(operations.clone())).await? {
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate));
                 }
@@ -1396,7 +1395,6 @@ where
     /// This must be preceded by a call to `prepare_chain()`.
     async fn execute_block(
         &mut self,
-        incoming_messages: Vec<IncomingMessage>,
         operations: Vec<Operation>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
         match self.process_pending_block_without_prepare().await? {
@@ -1408,6 +1406,7 @@ where
                 return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
             }
         }
+        let incoming_messages = self.pending_messages().await?;
         let confirmed_value = self
             .set_pending_block(incoming_messages, operations)
             .await?;
@@ -1864,7 +1863,6 @@ where
                 ownership.is_active(),
                 ChainError::InactiveChain(self.chain_id)
             );
-            let messages = self.pending_messages().await?;
             let mut owners = ownership.owners.values().copied().collect::<Vec<_>>();
             owners.extend(
                 ownership
@@ -1880,7 +1878,7 @@ where
                 multi_leader_rounds: ownership.multi_leader_rounds,
                 timeout_config: ownership.timeout_config,
             })];
-            match self.execute_block(messages, operations).await? {
+            match self.execute_block(operations).await? {
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate));
                 }
@@ -1932,7 +1930,6 @@ where
         loop {
             let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
             let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
-            let messages = self.pending_messages().await?;
             let config = OpenChainConfig {
                 ownership: ownership.clone(),
                 committees,
@@ -1942,7 +1939,7 @@ where
                 application_permissions: application_permissions.clone(),
             };
             let operation = Operation::System(SystemOperation::OpenChain(config));
-            let certificate = match self.execute_block(messages, vec![operation]).await? {
+            let certificate = match self.execute_block(vec![operation]).await? {
                 ExecuteBlockOutcome::Executed(certificate) => certificate,
                 ExecuteBlockOutcome::Conflict(_) => continue,
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
@@ -2071,17 +2068,13 @@ where
         loop {
             self.prepare_chain().await?;
             let epoch = self.epoch().await?;
-            let messages = self.pending_messages().await?;
             match self
-                .execute_block(
-                    messages,
-                    vec![Operation::System(SystemOperation::Admin(
-                        AdminOperation::CreateCommittee {
-                            epoch: epoch.try_add_one()?,
-                            committee: committee.clone(),
-                        },
-                    ))],
-                )
+                .execute_block(vec![Operation::System(SystemOperation::Admin(
+                    AdminOperation::CreateCommittee {
+                        epoch: epoch.try_add_one()?,
+                        committee: committee.clone(),
+                    },
+                ))])
                 .await?
             {
                 ExecuteBlockOutcome::Executed(certificate) => {
@@ -2109,7 +2102,7 @@ where
             if incoming_messages.is_empty() {
                 return Ok((certificates, None));
             }
-            match self.execute_block(incoming_messages, vec![]).await {
+            match self.execute_block(vec![]).await {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
                 | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
@@ -2202,7 +2195,7 @@ where
                 }
             })
             .collect();
-        self.execute_with_messages(operations).await
+        self.execute_without_prepare(operations).await
     }
 
     /// Sends money to a chain.
