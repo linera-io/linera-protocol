@@ -6,6 +6,7 @@ use std::{
     collections::{hash_map, BTreeMap, HashMap},
     convert::Infallible,
     iter,
+    ops::{Deref, DerefMut},
     sync::Arc,
 };
 
@@ -320,9 +321,39 @@ impl From<Infallible> for ChainClientError {
     }
 }
 
-pub type ChainGuard<'a, T> = DashMapRef<'a, ChainId, T>;
-pub type ChainGuardMut<'a, T> = DashMapRefMut<'a, ChainId, T>;
-pub type ChainGuardMapped<'a, T> = DashMapMappedRef<'a, ChainId, ChainState, T>;
+// We never want to pass the DashMap references over an `await` point, for fear of
+// deadlocks.  The following construct will cause a (relatively) helpful error if we do.
+
+pub struct Unsend<T> {
+    inner: T,
+    _phantom: std::marker::PhantomData<*mut u8>,
+}
+
+impl<T> Unsend<T> {
+    fn new(inner: T) -> Self {
+        Self {
+            inner,
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl<T: Deref> Deref for Unsend<T> {
+    type Target = T::Target;
+    fn deref(&self) -> &T::Target {
+        self.inner.deref()
+    }
+}
+
+impl<T: DerefMut> DerefMut for Unsend<T> {
+    fn deref_mut(&mut self) -> &mut T::Target {
+        self.inner.deref_mut()
+    }
+}
+
+pub type ChainGuard<'a, T> = Unsend<DashMapRef<'a, ChainId, T>>;
+pub type ChainGuardMut<'a, T> = Unsend<DashMapRefMut<'a, ChainId, T>>;
+pub type ChainGuardMapped<'a, T> = Unsend<DashMapMappedRef<'a, ChainId, ChainState, T>>;
 
 impl<P, S> ChainClient<P, S>
 where
@@ -331,19 +362,23 @@ where
 {
     /// Get a shared reference to the chain's state.
     pub fn state(&self) -> ChainGuard<ChainState> {
-        self.client
-            .chains
-            .get(&self.chain_id)
-            .expect("Chain client constructed for invalid chain")
+        Unsend::new(
+            self.client
+                .chains
+                .get(&self.chain_id)
+                .expect("Chain client constructed for invalid chain"),
+        )
     }
 
     /// Get a mutable reference to the state.
     /// Beware: this will block any other reference to any chain's state!
     fn state_mut(&self) -> ChainGuardMut<ChainState> {
-        self.client
-            .chains
-            .get_mut(&self.chain_id)
-            .expect("Chain client constructed for invalid chain")
+        Unsend::new(
+            self.client
+                .chains
+                .get_mut(&self.chain_id)
+                .expect("Chain client constructed for invalid chain"),
+        )
     }
 
     /// The per-`ChainClient` options.
@@ -371,11 +406,11 @@ where
     }
 
     pub fn pending_block(&self) -> ChainGuardMapped<Option<Block>> {
-        self.state().map(|state| &state.pending_block)
+        Unsend::new(self.state().inner.map(|state| &state.pending_block))
     }
 
     pub fn pending_blobs(&self) -> ChainGuardMapped<BTreeMap<BlobId, HashedBlob>> {
-        self.state().map(|state| &state.pending_blobs)
+        Unsend::new(self.state().inner.map(|state| &state.pending_blobs))
     }
 
     pub fn admin_id(&self) -> ChainId {
