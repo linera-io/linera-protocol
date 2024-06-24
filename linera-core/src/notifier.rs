@@ -6,6 +6,8 @@ use linera_base::identifiers::ChainId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::trace;
 
+// TODO(#2171): replace this with a Tokio broadcast channel
+
 /// A `Notifier` holds references to clients waiting to receive notifications
 /// from the validator.
 /// Clients will be evicted if their connections are terminated.
