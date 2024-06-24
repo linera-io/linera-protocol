@@ -12,7 +12,7 @@ use std::{
 use futures::{future, FutureExt as _};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{ArithmeticError, BlockHeight, HashedBlob},
+    data_types::{ArithmeticError, BlockHeight, HashedBlob, Timestamp},
     ensure,
     identifiers::{BlobId, ChainId},
 };
@@ -184,29 +184,9 @@ where
         &mut self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
-        self.ensure_is_active()?;
-
-        let local_time = self.storage.clock().current_time();
-        let signer = block.authenticated_signer;
-
-        let executed_block = Box::pin(self.chain.execute_block(&block, local_time, None))
-            .await?
-            .with(block);
-
-        let mut response = ChainInfoResponse::new(&self.chain, None);
-        if let Some(signer) = signer {
-            response.info.requested_owner_balance = self
-                .chain
-                .execution_state
-                .system
-                .balances
-                .get(&signer)
-                .await?;
-        }
-
-        self.chain.rollback();
-
-        Ok((executed_block, response))
+        ChainWorkerStateWithTemporaryChanges { state: self }
+            .stage_block_execution(block)
+            .await
     }
 
     /// Processes a leader timeout issued for this multi-owner chain.
@@ -214,55 +194,9 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let (chain_id, height, epoch) = match certificate.value() {
-            CertificateValue::Timeout {
-                chain_id,
-                height,
-                epoch,
-                ..
-            } => (*chain_id, *height, *epoch),
-            _ => panic!("Expecting a leader timeout certificate"),
-        };
-        // Check that the chain is active and ready for this timeout.
-        // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.ensure_is_active()?;
-        let (chain_epoch, committee) = self
-            .chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
-        ensure!(
-            epoch == chain_epoch,
-            WorkerError::InvalidEpoch {
-                chain_id,
-                chain_epoch,
-                epoch
-            }
-        );
-        certificate.check(committee)?;
-        let mut actions = NetworkActions::default();
-        if self.chain.tip_state.get().already_validated_block(height)? {
-            return Ok((
-                ChainInfoResponse::new(&self.chain, self.config.key_pair()),
-                actions,
-            ));
-        }
-        let old_round = self.chain.manager.get().current_round;
-        self.chain
-            .manager
-            .get_mut()
-            .handle_timeout_certificate(certificate.clone(), self.storage.clock().current_time());
-        let round = self.chain.manager.get().current_round;
-        if round > old_round {
-            actions.notifications.push(Notification {
-                chain_id,
-                reason: Reason::NewRound { height, round },
-            })
-        }
-        let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
-        self.save().await?;
-        Ok((info, actions))
+        ChainWorkerStateWithAttemptedChanges::from(self)
+            .process_timeout(certificate)
+            .await
     }
 
     /// Handles a proposal for the next block for this chain.
@@ -270,121 +204,22 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let BlockProposal {
-            content:
-                ProposalContent {
-                    block,
-                    round,
-                    forced_oracle_records: oracle_records,
-                },
-            owner,
-            hashed_certificate_values,
-            hashed_blobs,
-            validated_block_certificate,
-            signature: _,
-        } = &proposal;
-        ensure!(
-            validated_block_certificate.is_some() == oracle_records.is_some(),
-            WorkerError::InvalidBlockProposal(
-                "Must contain a certificate if and only if it contains oracle records".to_string()
-            )
-        );
-        self.ensure_is_active()?;
-        // Check the epoch.
-        let (epoch, committee) = self
-            .chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
-        Self::check_block_epoch(epoch, block)?;
-        // Check the authentication of the block.
-        let public_key = self
-            .chain
-            .manager
-            .get()
-            .verify_owner(&proposal)
-            .ok_or(WorkerError::InvalidOwner)?;
-        proposal.check_signature(public_key)?;
-        if let Some(lite_certificate) = validated_block_certificate {
-            // Verify that this block has been validated by a quorum before.
-            lite_certificate.check(committee)?;
-        } else if let Some(signer) = block.authenticated_signer {
-            // Check the authentication of the operations in the new block.
-            ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
-        }
-        // Check if the chain is ready for this new block proposal.
-        // This should always pass for nodes without voting key.
-        self.chain.tip_state.get().verify_block_chaining(block)?;
-        if self.chain.manager.get().check_proposed_block(&proposal)? == manager::Outcome::Skip {
+        let maybe_validation_outcome = ChainWorkerStateWithTemporaryChanges { state: self }
+            .validate_block_proposal(&proposal)
+            .await?;
+
+        let actions = if let Some((outcome, local_time)) = maybe_validation_outcome {
+            ChainWorkerStateWithAttemptedChanges::from(&mut *self)
+                .vote_for_block_proposal(proposal, outcome, local_time)
+                .await?;
+            // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
+            self.create_network_actions().await?
+        } else {
             // If we just processed the same pending block, return the chain info unchanged.
-            return Ok((
-                ChainInfoResponse::new(&self.chain, self.config.key_pair()),
-                NetworkActions::default(),
-            ));
-        }
-        // Update the inboxes so that we can verify the provided hashed certificate values are
-        // legitimately required.
-        // Actual execution happens below, after other validity checks.
-        self.chain.remove_events_from_inboxes(block).await?;
-        // Verify that all required bytecode hashed certificate values are available, and no
-        // unrelated ones provided.
-        self.check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
-            .await?;
-        // Write the values so that the bytecode is available during execution.
-        self.storage
-            .write_hashed_certificate_values(hashed_certificate_values)
-            .await?;
-        let local_time = self.storage.clock().current_time();
-        ensure!(
-            block.timestamp.duration_since(local_time) <= self.config.grace_period,
-            WorkerError::InvalidTimestamp
-        );
-        self.storage.clock().sleep_until(block.timestamp).await;
-        let local_time = self.storage.clock().current_time();
-        let outcome = Box::pin(
-            self.chain
-                .execute_block(block, local_time, oracle_records.clone()),
-        )
-        .await?;
-        if let Some(lite_certificate) = &validated_block_certificate {
-            let value = HashedCertificateValue::new_validated(outcome.clone().with(block.clone()));
-            lite_certificate
-                .clone()
-                .with_value(value)
-                .ok_or_else(|| WorkerError::InvalidLiteCertificate)?;
-        }
-        if round.is_fast() {
-            ensure!(
-                outcome
-                    .oracle_records
-                    .iter()
-                    .all(|record| record.is_permitted_in_fast_blocks()),
-                WorkerError::FastBlockUsingOracles
-            );
-        }
-        // Check if the counters of tip_state would be valid.
-        self.chain
-            .tip_state
-            .get()
-            .verify_counters(block, &outcome)?;
-        // Verify that the resulting chain would have no unconfirmed incoming messages.
-        self.chain.validate_incoming_messages().await?;
-        // Reset all the staged changes as we were only validating things.
-        self.chain.rollback();
-        // Create the vote and store it in the chain state.
-        let manager = self.chain.manager.get_mut();
-        manager.create_vote(proposal, outcome, self.config.key_pair(), local_time);
-        // Cache the value we voted on, so the client doesn't have to send it again.
-        if let Some(vote) = manager.pending() {
-            self.recent_hashed_certificate_values
-                .insert(Cow::Borrowed(&vote.value))
-                .await;
-        }
+            NetworkActions::default()
+        };
+
         let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
-        self.save().await?;
-        // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
-        let actions = self.create_network_actions().await?;
         Ok((info, actions))
     }
 
@@ -393,60 +228,9 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
-        let block = match certificate.value() {
-            CertificateValue::ValidatedBlock {
-                executed_block: ExecutedBlock { block, .. },
-            } => block,
-            _ => panic!("Expecting a validation certificate"),
-        };
-        let height = block.height;
-        // Check that the chain is active and ready for this validated block.
-        // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.ensure_is_active()?;
-        let (epoch, committee) = self
-            .chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
-        Self::check_block_epoch(epoch, block)?;
-        certificate.check(committee)?;
-        let mut actions = NetworkActions::default();
-        let already_validated_block = self.chain.tip_state.get().already_validated_block(height)?;
-        let should_skip_validated_block = || {
-            self.chain
-                .manager
-                .get()
-                .check_validated_block(&certificate)
-                .map(|outcome| outcome == manager::Outcome::Skip)
-        };
-        if already_validated_block || should_skip_validated_block()? {
-            // If we just processed the same pending block, return the chain info unchanged.
-            return Ok((
-                ChainInfoResponse::new(&self.chain, self.config.key_pair()),
-                actions,
-                true,
-            ));
-        }
-        self.recent_hashed_certificate_values
-            .insert(Cow::Borrowed(&certificate.value))
-            .await;
-        let old_round = self.chain.manager.get().current_round;
-        self.chain.manager.get_mut().create_final_vote(
-            certificate,
-            self.config.key_pair(),
-            self.storage.clock().current_time(),
-        );
-        let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
-        self.save().await?;
-        let round = self.chain.manager.get().current_round;
-        if round > old_round {
-            actions.notifications.push(Notification {
-                chain_id: self.chain_id(),
-                reason: Reason::NewRound { height, round },
-            })
-        }
-        Ok((info, actions, false))
+        ChainWorkerStateWithAttemptedChanges::from(self)
+            .process_validated_block(certificate)
+            .await
     }
 
     /// Processes a confirmed block (aka a commit).
@@ -456,129 +240,9 @@ where
         hashed_certificate_values: &[HashedCertificateValue],
         hashed_blobs: &[HashedBlob],
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
-            panic!("Expecting a confirmation certificate");
-        };
-        let block = &executed_block.block;
-        let BlockExecutionOutcome {
-            messages,
-            state_hash,
-            oracle_records,
-        } = &executed_block.outcome;
-        // Check that the chain is active and ready for this confirmation.
-        let tip = self.chain.tip_state.get().clone();
-        if tip.next_block_height < block.height {
-            return Err(WorkerError::MissingEarlierBlocks {
-                current_block_height: tip.next_block_height,
-            });
-        }
-        if tip.next_block_height > block.height {
-            // Block was already confirmed.
-            let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
-            let actions = self.create_network_actions().await?;
-            return Ok((info, actions));
-        }
-        if tip.is_first_block() && !self.chain.is_active() {
-            let local_time = self.storage.clock().current_time();
-            for message in &block.incoming_messages {
-                if self
-                    .chain
-                    .execute_init_message(
-                        message.id(),
-                        &message.event.message,
-                        message.event.timestamp,
-                        local_time,
-                    )
-                    .await?
-                {
-                    break;
-                }
-            }
-        }
-        self.ensure_is_active()?;
-        // Verify the certificate.
-        let (epoch, committee) = self
-            .chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
-        Self::check_block_epoch(epoch, block)?;
-        certificate.check(committee)?;
-        // This should always be true for valid certificates.
-        ensure!(
-            tip.block_hash == block.previous_block_hash,
-            WorkerError::InvalidBlockChaining
-        );
-        // Verify that all required bytecode hashed certificate values are available, and no
-        // unrelated ones provided.
-        self.check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
-            .await?;
-        // Persist certificate and hashed certificate values.
-        self.recent_hashed_certificate_values
-            .insert_all(hashed_certificate_values.iter().map(Cow::Borrowed))
-            .await;
-        for hashed_blob in hashed_blobs {
-            self.cache_recent_blob(Cow::Borrowed(hashed_blob)).await;
-        }
-
-        let blobs_in_block = self.get_blobs(block.blob_ids()).await?;
-        let certificate_hash = certificate.hash();
-        let (result_hashed_certificate_value, result_blobs, result_certificate) = tokio::join!(
-            self.storage
-                .write_hashed_certificate_values(hashed_certificate_values),
-            self.storage
-                .write_hashed_blobs(&blobs_in_block, &certificate_hash),
-            self.storage.write_certificate(&certificate)
-        );
-        result_hashed_certificate_value?;
-        result_blobs?;
-        result_certificate?;
-        // Execute the block and update inboxes.
-        self.chain.remove_events_from_inboxes(block).await?;
-        let local_time = self.storage.clock().current_time();
-        let verified_outcome = Box::pin(self.chain.execute_block(
-            block,
-            local_time,
-            Some(oracle_records.clone()),
-        ))
-        .await?;
-        // We should always agree on the messages and state hash.
-        ensure!(
-            *messages == verified_outcome.messages,
-            WorkerError::IncorrectMessages {
-                computed: verified_outcome.messages,
-                submitted: messages.clone(),
-            }
-        );
-        ensure!(
-            *state_hash == verified_outcome.state_hash,
-            WorkerError::IncorrectStateHash
-        );
-        // Advance to next block height.
-        let tip = self.chain.tip_state.get_mut();
-        tip.block_hash = Some(certificate.hash());
-        tip.next_block_height.try_add_assign_one()?;
-        tip.num_incoming_messages += block.incoming_messages.len() as u32;
-        tip.num_operations += block.operations.len() as u32;
-        tip.num_outgoing_messages += messages.len() as u32;
-        self.chain.confirmed_log.push(certificate.hash());
-        let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
-        let mut actions = self.create_network_actions().await?;
-        actions.notifications.push(Notification {
-            chain_id: block.chain_id,
-            reason: Reason::NewBlock {
-                height: block.height,
-                hash: certificate.value.hash(),
-            },
-        });
-        // Persist chain.
-        self.save().await?;
-        self.recent_hashed_certificate_values
-            .insert(Cow::Owned(certificate.value))
-            .await;
-
-        Ok((info, actions))
+        ChainWorkerStateWithAttemptedChanges::from(self)
+            .process_confirmed_block(certificate, hashed_certificate_values, hashed_blobs)
+            .await
     }
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
@@ -587,43 +251,9 @@ where
         origin: Origin,
         bundles: Vec<MessageBundle>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
-        // Only process certificates with relevant heights and epochs.
-        let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
-        let last_anticipated_block_height =
-            self.chain.last_anticipated_block_height(&origin).await?;
-        let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
-        let recipient = self.chain_id();
-        let bundles = helper.select_message_bundles(
-            &origin,
-            recipient,
-            next_height_to_receive,
-            last_anticipated_block_height,
-            bundles,
-        )?;
-        let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
-            return Ok(None);
-        };
-        // Process the received messages in certificates.
-        let local_time = self.storage.clock().current_time();
-        for bundle in bundles {
-            // Update the staged chain state with the received block.
-            self.chain
-                .receive_message_bundle(&origin, bundle, local_time)
-                .await?
-        }
-        if !self.config.allow_inactive_chains && !self.chain.is_active() {
-            // Refuse to create a chain state if the chain is still inactive by
-            // now. Accordingly, do not send a confirmation, so that the
-            // cross-chain update is retried later.
-            warn!(
-                "Refusing to deliver messages to {recipient:?} from {origin:?} \
-                at height {last_updated_height} because the recipient is still inactive",
-            );
-            return Ok(None);
-        }
-        // Save the chain.
-        self.save().await?;
-        Ok(Some(last_updated_height))
+        ChainWorkerStateWithAttemptedChanges::from(self)
+            .process_cross_chain_update(origin, bundles)
+            .await
     }
 
     /// Handles the cross-chain request confirming that the recipient was updated.
@@ -631,23 +261,9 @@ where
         &mut self,
         latest_heights: Vec<(Target, BlockHeight)>,
     ) -> Result<BlockHeight, WorkerError> {
-        let mut height_with_fully_delivered_messages = BlockHeight::ZERO;
-
-        for (target, height) in latest_heights {
-            let fully_delivered = self
-                .chain
-                .mark_messages_as_received(&target, height)
-                .await?
-                && self.chain.all_messages_delivered_up_to(height);
-
-            if fully_delivered && height > height_with_fully_delivered_messages {
-                height_with_fully_delivered_messages = height;
-            }
-        }
-
-        self.save().await?;
-
-        Ok(height_with_fully_delivered_messages)
+        ChainWorkerStateWithAttemptedChanges::from(self)
+            .confirm_updated_recipient(latest_heights)
+            .await
     }
 
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
@@ -655,34 +271,15 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let chain_id = self.chain.chain_id();
         if query.request_leader_timeout {
-            if let Some(epoch) = self.chain.execution_state.system.epoch.get() {
-                let height = self.chain.tip_state.get().next_block_height;
-                let key_pair = self.config.key_pair();
-                let local_time = self.storage.clock().current_time();
-                let manager = self.chain.manager.get_mut();
-                if manager.vote_timeout(chain_id, height, *epoch, key_pair, local_time) {
-                    self.save().await?;
-                }
-            }
+            ChainWorkerStateWithAttemptedChanges::from(&mut *self)
+                .vote_for_leader_timeout()
+                .await?;
         }
         if query.request_fallback {
-            if let (Some(epoch), Some(entry)) = (
-                self.chain.execution_state.system.epoch.get(),
-                self.chain.unskippable.front().await?,
-            ) {
-                let ownership = self.chain.execution_state.system.ownership.get();
-                let elapsed = self.storage.clock().current_time().delta_since(entry.seen);
-                if elapsed >= ownership.timeout_config.fallback_duration {
-                    let height = self.chain.tip_state.get().next_block_height;
-                    let key_pair = self.config.key_pair();
-                    let manager = self.chain.manager.get_mut();
-                    if manager.vote_fallback(chain_id, height, *epoch, key_pair) {
-                        self.save().await?;
-                    }
-                }
-            }
+            ChainWorkerStateWithAttemptedChanges::from(&mut *self)
+                .vote_for_fallback()
+                .await?;
         }
         let mut info = ChainInfo::from(&self.chain);
         if query.request_committees {
@@ -759,19 +356,6 @@ where
             self.chain.ensure_is_active()?;
             self.knows_chain_is_active = true;
         }
-        Ok(())
-    }
-
-    /// Returns an error if the block is not at the expected epoch.
-    fn check_block_epoch(chain_epoch: Epoch, block: &Block) -> Result<(), WorkerError> {
-        ensure!(
-            block.epoch == chain_epoch,
-            WorkerError::InvalidEpoch {
-                chain_id: block.chain_id,
-                epoch: block.epoch,
-                chain_epoch
-            }
-        );
         Ok(())
     }
 
@@ -965,6 +549,636 @@ where
             bundle_vecs,
         })
     }
+}
+
+/// Wrapper type that rolls back changes to the `chain` state when dropped.
+pub struct ChainWorkerStateWithTemporaryChanges<'state, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    state: &'state mut ChainWorkerState<StorageClient>,
+}
+
+impl<StorageClient> ChainWorkerStateWithTemporaryChanges<'_, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    /// Executes a block without persisting any changes to the state.
+    pub async fn stage_block_execution(
+        &mut self,
+        block: Block,
+    ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
+        self.state.ensure_is_active()?;
+
+        let local_time = self.state.storage.clock().current_time();
+        let signer = block.authenticated_signer;
+
+        let executed_block = Box::pin(self.state.chain.execute_block(&block, local_time, None))
+            .await?
+            .with(block);
+
+        let mut response = ChainInfoResponse::new(&self.state.chain, None);
+        if let Some(signer) = signer {
+            response.info.requested_owner_balance = self
+                .state
+                .chain
+                .execution_state
+                .system
+                .balances
+                .get(&signer)
+                .await?;
+        }
+
+        Ok((executed_block, response))
+    }
+
+    /// Validates a proposal for the next block for this chain.
+    pub async fn validate_block_proposal(
+        &mut self,
+        proposal: &BlockProposal,
+    ) -> Result<Option<(BlockExecutionOutcome, Timestamp)>, WorkerError> {
+        let BlockProposal {
+            content:
+                ProposalContent {
+                    block,
+                    round,
+                    forced_oracle_records: oracle_records,
+                },
+            owner,
+            hashed_certificate_values,
+            hashed_blobs,
+            validated_block_certificate,
+            signature: _,
+        } = proposal;
+        ensure!(
+            validated_block_certificate.is_some() == oracle_records.is_some(),
+            WorkerError::InvalidBlockProposal(
+                "Must contain a certificate if and only if it contains oracle records".to_string()
+            )
+        );
+        self.state.ensure_is_active()?;
+        // Check the epoch.
+        let (epoch, committee) = self
+            .state
+            .chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        check_block_epoch(epoch, block)?;
+        // Check the authentication of the block.
+        let public_key = self
+            .state
+            .chain
+            .manager
+            .get()
+            .verify_owner(proposal)
+            .ok_or(WorkerError::InvalidOwner)?;
+        proposal.check_signature(public_key)?;
+        if let Some(lite_certificate) = validated_block_certificate {
+            // Verify that this block has been validated by a quorum before.
+            lite_certificate.check(committee)?;
+        } else if let Some(signer) = block.authenticated_signer {
+            // Check the authentication of the operations in the new block.
+            ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
+        }
+        // Check if the chain is ready for this new block proposal.
+        // This should always pass for nodes without voting key.
+        self.state
+            .chain
+            .tip_state
+            .get()
+            .verify_block_chaining(block)?;
+        if self
+            .state
+            .chain
+            .manager
+            .get()
+            .check_proposed_block(proposal)?
+            == manager::Outcome::Skip
+        {
+            return Ok(None);
+        }
+        // Update the inboxes so that we can verify the provided hashed certificate values are
+        // legitimately required.
+        // Actual execution happens below, after other validity checks.
+        self.state.chain.remove_events_from_inboxes(block).await?;
+        // Verify that all required bytecode hashed certificate values are available, and no
+        // unrelated ones provided.
+        self.state
+            .check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
+            .await?;
+        // Write the values so that the bytecode is available during execution.
+        self.state
+            .storage
+            .write_hashed_certificate_values(hashed_certificate_values)
+            .await?;
+        let local_time = self.state.storage.clock().current_time();
+        ensure!(
+            block.timestamp.duration_since(local_time) <= self.state.config.grace_period,
+            WorkerError::InvalidTimestamp
+        );
+        self.state
+            .storage
+            .clock()
+            .sleep_until(block.timestamp)
+            .await;
+        let local_time = self.state.storage.clock().current_time();
+        let outcome = Box::pin(self.state.chain.execute_block(
+            block,
+            local_time,
+            oracle_records.clone(),
+        ))
+        .await?;
+        if let Some(lite_certificate) = &validated_block_certificate {
+            let value = HashedCertificateValue::new_validated(outcome.clone().with(block.clone()));
+            lite_certificate
+                .clone()
+                .with_value(value)
+                .ok_or_else(|| WorkerError::InvalidLiteCertificate)?;
+        }
+        if round.is_fast() {
+            ensure!(
+                outcome
+                    .oracle_records
+                    .iter()
+                    .all(|record| record.is_permitted_in_fast_blocks()),
+                WorkerError::FastBlockUsingOracles
+            );
+        }
+        // Check if the counters of tip_state would be valid.
+        self.state
+            .chain
+            .tip_state
+            .get()
+            .verify_counters(block, &outcome)?;
+        // Verify that the resulting chain would have no unconfirmed incoming messages.
+        self.state.chain.validate_incoming_messages().await?;
+        Ok(Some((outcome, local_time)))
+    }
+}
+
+impl<StorageClient> Drop for ChainWorkerStateWithTemporaryChanges<'_, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    fn drop(&mut self) {
+        self.state.chain.rollback();
+    }
+}
+
+/// Wrapper type that tracks if the changes to the `chain` state should be rolled back when
+/// dropped.
+pub struct ChainWorkerStateWithAttemptedChanges<'state, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    state: &'state mut ChainWorkerState<StorageClient>,
+    succeeded: bool,
+}
+
+impl<'state, StorageClient> From<&'state mut ChainWorkerState<StorageClient>>
+    for ChainWorkerStateWithAttemptedChanges<'state, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    fn from(state: &'state mut ChainWorkerState<StorageClient>) -> Self {
+        ChainWorkerStateWithAttemptedChanges {
+            state,
+            succeeded: false,
+        }
+    }
+}
+
+impl<StorageClient> ChainWorkerStateWithAttemptedChanges<'_, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    /// Processes a leader timeout issued for this multi-owner chain.
+    pub async fn process_timeout(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        let (chain_id, height, epoch) = match certificate.value() {
+            CertificateValue::Timeout {
+                chain_id,
+                height,
+                epoch,
+                ..
+            } => (*chain_id, *height, *epoch),
+            _ => panic!("Expecting a leader timeout certificate"),
+        };
+        // Check that the chain is active and ready for this timeout.
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        self.state.ensure_is_active()?;
+        let (chain_epoch, committee) = self
+            .state
+            .chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        ensure!(
+            epoch == chain_epoch,
+            WorkerError::InvalidEpoch {
+                chain_id,
+                chain_epoch,
+                epoch
+            }
+        );
+        certificate.check(committee)?;
+        let mut actions = NetworkActions::default();
+        if self
+            .state
+            .chain
+            .tip_state
+            .get()
+            .already_validated_block(height)?
+        {
+            return Ok((
+                ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair()),
+                actions,
+            ));
+        }
+        let old_round = self.state.chain.manager.get().current_round;
+        self.state
+            .chain
+            .manager
+            .get_mut()
+            .handle_timeout_certificate(
+                certificate.clone(),
+                self.state.storage.clock().current_time(),
+            );
+        let round = self.state.chain.manager.get().current_round;
+        if round > old_round {
+            actions.notifications.push(Notification {
+                chain_id,
+                reason: Reason::NewRound { height, round },
+            })
+        }
+        let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
+        self.save().await?;
+        Ok((info, actions))
+    }
+
+    /// Votes for a block proposal for the next block for this chain.
+    pub async fn vote_for_block_proposal(
+        &mut self,
+        proposal: BlockProposal,
+        outcome: BlockExecutionOutcome,
+        local_time: Timestamp,
+    ) -> Result<(), WorkerError> {
+        // Create the vote and store it in the chain state.
+        let manager = self.state.chain.manager.get_mut();
+        manager.create_vote(proposal, outcome, self.state.config.key_pair(), local_time);
+        // Cache the value we voted on, so the client doesn't have to send it again.
+        if let Some(vote) = manager.pending() {
+            self.state
+                .recent_hashed_certificate_values
+                .insert(Cow::Borrowed(&vote.value))
+                .await;
+        }
+        self.save().await?;
+        Ok(())
+    }
+
+    /// Processes a validated block issued for this multi-owner chain.
+    pub async fn process_validated_block(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
+        let block = match certificate.value() {
+            CertificateValue::ValidatedBlock {
+                executed_block: ExecutedBlock { block, .. },
+            } => block,
+            _ => panic!("Expecting a validation certificate"),
+        };
+        let height = block.height;
+        // Check that the chain is active and ready for this validated block.
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        self.state.ensure_is_active()?;
+        let (epoch, committee) = self
+            .state
+            .chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        check_block_epoch(epoch, block)?;
+        certificate.check(committee)?;
+        let mut actions = NetworkActions::default();
+        let already_validated_block = self
+            .state
+            .chain
+            .tip_state
+            .get()
+            .already_validated_block(height)?;
+        let should_skip_validated_block = || {
+            self.state
+                .chain
+                .manager
+                .get()
+                .check_validated_block(&certificate)
+                .map(|outcome| outcome == manager::Outcome::Skip)
+        };
+        if already_validated_block || should_skip_validated_block()? {
+            // If we just processed the same pending block, return the chain info unchanged.
+            return Ok((
+                ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair()),
+                actions,
+                true,
+            ));
+        }
+        self.state
+            .recent_hashed_certificate_values
+            .insert(Cow::Borrowed(&certificate.value))
+            .await;
+        let old_round = self.state.chain.manager.get().current_round;
+        self.state.chain.manager.get_mut().create_final_vote(
+            certificate,
+            self.state.config.key_pair(),
+            self.state.storage.clock().current_time(),
+        );
+        let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
+        self.save().await?;
+        let round = self.state.chain.manager.get().current_round;
+        if round > old_round {
+            actions.notifications.push(Notification {
+                chain_id: self.state.chain_id(),
+                reason: Reason::NewRound { height, round },
+            })
+        }
+        Ok((info, actions, false))
+    }
+
+    /// Processes a confirmed block (aka a commit).
+    pub async fn process_confirmed_block(
+        &mut self,
+        certificate: Certificate,
+        hashed_certificate_values: &[HashedCertificateValue],
+        hashed_blobs: &[HashedBlob],
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
+            panic!("Expecting a confirmation certificate");
+        };
+        let block = &executed_block.block;
+        let BlockExecutionOutcome {
+            messages,
+            state_hash,
+            oracle_records,
+        } = &executed_block.outcome;
+        // Check that the chain is active and ready for this confirmation.
+        let tip = self.state.chain.tip_state.get().clone();
+        if tip.next_block_height < block.height {
+            return Err(WorkerError::MissingEarlierBlocks {
+                current_block_height: tip.next_block_height,
+            });
+        }
+        if tip.next_block_height > block.height {
+            // Block was already confirmed.
+            let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
+            let actions = self.state.create_network_actions().await?;
+            return Ok((info, actions));
+        }
+        if tip.is_first_block() && !self.state.chain.is_active() {
+            let local_time = self.state.storage.clock().current_time();
+            for message in &block.incoming_messages {
+                if self
+                    .state
+                    .chain
+                    .execute_init_message(
+                        message.id(),
+                        &message.event.message,
+                        message.event.timestamp,
+                        local_time,
+                    )
+                    .await?
+                {
+                    break;
+                }
+            }
+        }
+        self.state.ensure_is_active()?;
+        // Verify the certificate.
+        let (epoch, committee) = self
+            .state
+            .chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        check_block_epoch(epoch, block)?;
+        certificate.check(committee)?;
+        // This should always be true for valid certificates.
+        ensure!(
+            tip.block_hash == block.previous_block_hash,
+            WorkerError::InvalidBlockChaining
+        );
+        // Verify that all required bytecode hashed certificate values are available, and no
+        // unrelated ones provided.
+        self.state
+            .check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
+            .await?;
+        // Persist certificate and hashed certificate values.
+        self.state
+            .recent_hashed_certificate_values
+            .insert_all(hashed_certificate_values.iter().map(Cow::Borrowed))
+            .await;
+        for hashed_blob in hashed_blobs {
+            self.state
+                .cache_recent_blob(Cow::Borrowed(hashed_blob))
+                .await;
+        }
+
+        let blobs_in_block = self.state.get_blobs(block.blob_ids()).await?;
+        let certificate_hash = certificate.hash();
+        let (result_hashed_certificate_value, result_blobs, result_certificate) = tokio::join!(
+            self.state
+                .storage
+                .write_hashed_certificate_values(hashed_certificate_values),
+            self.state
+                .storage
+                .write_hashed_blobs(&blobs_in_block, &certificate_hash),
+            self.state.storage.write_certificate(&certificate)
+        );
+        result_hashed_certificate_value?;
+        result_blobs?;
+        result_certificate?;
+        // Execute the block and update inboxes.
+        self.state.chain.remove_events_from_inboxes(block).await?;
+        let local_time = self.state.storage.clock().current_time();
+        let verified_outcome = Box::pin(self.state.chain.execute_block(
+            block,
+            local_time,
+            Some(oracle_records.clone()),
+        ))
+        .await?;
+        // We should always agree on the messages and state hash.
+        ensure!(
+            *messages == verified_outcome.messages,
+            WorkerError::IncorrectMessages {
+                computed: verified_outcome.messages,
+                submitted: messages.clone(),
+            }
+        );
+        ensure!(
+            *state_hash == verified_outcome.state_hash,
+            WorkerError::IncorrectStateHash
+        );
+        // Advance to next block height.
+        let tip = self.state.chain.tip_state.get_mut();
+        tip.block_hash = Some(certificate.hash());
+        tip.next_block_height.try_add_assign_one()?;
+        tip.num_incoming_messages += block.incoming_messages.len() as u32;
+        tip.num_operations += block.operations.len() as u32;
+        tip.num_outgoing_messages += messages.len() as u32;
+        self.state.chain.confirmed_log.push(certificate.hash());
+        let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
+        let mut actions = self.state.create_network_actions().await?;
+        actions.notifications.push(Notification {
+            chain_id: block.chain_id,
+            reason: Reason::NewBlock {
+                height: block.height,
+                hash: certificate.value.hash(),
+            },
+        });
+        // Persist chain.
+        self.save().await?;
+        self.state
+            .recent_hashed_certificate_values
+            .insert(Cow::Owned(certificate.value))
+            .await;
+
+        Ok((info, actions))
+    }
+
+    /// Updates the chain's inboxes, receiving messages from a cross-chain update.
+    pub async fn process_cross_chain_update(
+        &mut self,
+        origin: Origin,
+        bundles: Vec<MessageBundle>,
+    ) -> Result<Option<BlockHeight>, WorkerError> {
+        // Only process certificates with relevant heights and epochs.
+        let next_height_to_receive = self
+            .state
+            .chain
+            .next_block_height_to_receive(&origin)
+            .await?;
+        let last_anticipated_block_height = self
+            .state
+            .chain
+            .last_anticipated_block_height(&origin)
+            .await?;
+        let helper = CrossChainUpdateHelper::new(&self.state.config, &self.state.chain);
+        let recipient = self.state.chain_id();
+        let bundles = helper.select_message_bundles(
+            &origin,
+            recipient,
+            next_height_to_receive,
+            last_anticipated_block_height,
+            bundles,
+        )?;
+        let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
+            return Ok(None);
+        };
+        // Process the received messages in certificates.
+        let local_time = self.state.storage.clock().current_time();
+        for bundle in bundles {
+            // Update the staged chain state with the received block.
+            self.state
+                .chain
+                .receive_message_bundle(&origin, bundle, local_time)
+                .await?
+        }
+        if !self.state.config.allow_inactive_chains && !self.state.chain.is_active() {
+            // Refuse to create a chain state if the chain is still inactive by
+            // now. Accordingly, do not send a confirmation, so that the
+            // cross-chain update is retried later.
+            warn!(
+                "Refusing to deliver messages to {recipient:?} from {origin:?} \
+                at height {last_updated_height} because the recipient is still inactive",
+            );
+            return Ok(None);
+        }
+        // Save the chain.
+        self.save().await?;
+        Ok(Some(last_updated_height))
+    }
+
+    /// Handles the cross-chain request confirming that the recipient was updated.
+    pub async fn confirm_updated_recipient(
+        &mut self,
+        latest_heights: Vec<(Target, BlockHeight)>,
+    ) -> Result<BlockHeight, WorkerError> {
+        let mut height_with_fully_delivered_messages = BlockHeight::ZERO;
+
+        for (target, height) in latest_heights {
+            let fully_delivered = self
+                .state
+                .chain
+                .mark_messages_as_received(&target, height)
+                .await?
+                && self.state.chain.all_messages_delivered_up_to(height);
+
+            if fully_delivered && height > height_with_fully_delivered_messages {
+                height_with_fully_delivered_messages = height;
+            }
+        }
+
+        self.save().await?;
+
+        Ok(height_with_fully_delivered_messages)
+    }
+
+    /// Attempts to vote for a leader timeout, if possible.
+    pub async fn vote_for_leader_timeout(&mut self) -> Result<(), WorkerError> {
+        let chain = &mut self.state.chain;
+        if let Some(epoch) = chain.execution_state.system.epoch.get() {
+            let chain_id = chain.chain_id();
+            let height = chain.tip_state.get().next_block_height;
+            let key_pair = self.state.config.key_pair();
+            let local_time = self.state.storage.clock().current_time();
+            let manager = chain.manager.get_mut();
+            if manager.vote_timeout(chain_id, height, *epoch, key_pair, local_time) {
+                self.save().await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Votes for falling back to a public chain.
+    ///
+    pub async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
+        let chain = &mut self.state.chain;
+        if let (Some(epoch), Some(entry)) = (
+            chain.execution_state.system.epoch.get(),
+            chain.unskippable.front().await?,
+        ) {
+            let ownership = chain.execution_state.system.ownership.get();
+            let elapsed = self
+                .state
+                .storage
+                .clock()
+                .current_time()
+                .delta_since(entry.seen);
+            if elapsed >= ownership.timeout_config.fallback_duration {
+                let chain_id = chain.chain_id();
+                let height = chain.tip_state.get().next_block_height;
+                let key_pair = self.state.config.key_pair();
+                let manager = chain.manager.get_mut();
+                if manager.vote_fallback(chain_id, height, *epoch, key_pair) {
+                    self.save().await?;
+                }
+            }
+        }
+        Ok(())
+    }
 
     /// Stores the chain state in persistent storage.
     ///
@@ -975,13 +1189,27 @@ where
         // That means that when the write-lock is acquired, no readers will be waiting to acquire
         // the lock. This is important because otherwise readers could have a stale view of the
         // chain state.
-        let maybe_shared_chain_view = self.shared_chain_view.take();
+        let maybe_shared_chain_view = self.state.shared_chain_view.take();
         let _maybe_write_guard = match &maybe_shared_chain_view {
             Some(shared_chain_view) => Some(shared_chain_view.write().await),
             None => None,
         };
 
-        Ok(self.chain.save().await?)
+        self.state.chain.save().await?;
+        self.succeeded = true;
+        Ok(())
+    }
+}
+
+impl<StorageClient> Drop for ChainWorkerStateWithAttemptedChanges<'_, StorageClient>
+where
+    StorageClient: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
+{
+    fn drop(&mut self) {
+        if !self.succeeded {
+            self.state.chain.rollback();
+        }
     }
 }
 
@@ -1068,4 +1296,17 @@ impl<'a> CrossChainUpdateHelper<'a> {
         };
         Ok(certificates)
     }
+}
+
+/// Returns an error if the block is not at the expected epoch.
+fn check_block_epoch(chain_epoch: Epoch, block: &Block) -> Result<(), WorkerError> {
+    ensure!(
+        block.epoch == chain_epoch,
+        WorkerError::InvalidEpoch {
+            chain_id: block.chain_id,
+            epoch: block.epoch,
+            chain_epoch
+        }
+    );
+    Ok(())
 }
