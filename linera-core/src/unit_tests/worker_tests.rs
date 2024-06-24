@@ -1288,26 +1288,48 @@ where
             authenticated_signer: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
-            kind: MessageKind::Protected,
+            kind: MessageKind::Simple,
             timestamp: Timestamp::from(0),
             message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
                 ownership,
                 admin_id,
                 epoch,
                 committees,
-                balance,
                 application_permissions: Default::default(),
             })),
         },
         action: MessageAction::Accept,
     };
+    let credit_message = IncomingMessage {
+        origin: Origin::chain(ChainId::root(3)),
+        event: Event {
+            certificate_hash: CryptoHash::test_hash("certificate"),
+            height: BlockHeight::ZERO,
+            index: 1,
+            authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
+            kind: MessageKind::Tracked,
+            timestamp: Timestamp::from(0),
+            message: Message::System(SystemMessage::Credit {
+                source: None,
+                target: None,
+                amount: balance,
+            }),
+        },
+        action: MessageAction::Accept,
+    };
     let value = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![Vec::new()],
+            messages: vec![Vec::new(), Vec::new()],
             state_hash: state.into_hash().await,
-            oracle_records: vec![OracleRecord::default()],
+            oracle_records: vec![OracleRecord::default(), OracleRecord::default()],
         }
-        .with(make_first_block(chain_id).with_incoming_message(open_chain_message)),
+        .with(
+            make_first_block(chain_id)
+                .with_incoming_message(open_chain_message)
+                .with_incoming_message(credit_message),
+        ),
     );
     let certificate = make_certificate(&committee, &worker, value);
     let info = worker
@@ -2312,13 +2334,12 @@ where
                 messages: vec![vec![
                     direct_outgoing_message(
                         user_id,
-                        MessageKind::Protected,
+                        MessageKind::Simple,
                         SystemMessage::OpenChain(OpenChainConfig {
                             ownership: ChainOwnership::single(key_pair.public()),
                             epoch: Epoch::ZERO,
                             committees: committees.clone(),
                             admin_id,
-                            balance: Amount::ZERO,
                             application_permissions: Default::default(),
                         }),
                     ),
@@ -2342,14 +2363,16 @@ where
                 oracle_records: vec![OracleRecord::default()],
             }
             .with(make_first_block(admin_id).with_operation(
-                SystemOperation::OpenChain(OpenChainConfig {
-                    ownership: ChainOwnership::single(key_pair.public()),
-                    epoch: Epoch::ZERO,
-                    committees: committees.clone(),
-                    admin_id,
+                SystemOperation::OpenChain {
+                    config: OpenChainConfig {
+                        ownership: ChainOwnership::single(key_pair.public()),
+                        epoch: Epoch::ZERO,
+                        committees: committees.clone(),
+                        admin_id,
+                        application_permissions: Default::default(),
+                    },
                     balance: Amount::ZERO,
-                    application_permissions: Default::default(),
-                }),
+                },
             )),
         ),
     );
@@ -2575,14 +2598,13 @@ where
                             authenticated_signer: None,
                             grant: Amount::ZERO,
                             refund_grant_to: None,
-                            kind: MessageKind::Protected,
+                            kind: MessageKind::Simple,
                             timestamp: Timestamp::from(0),
                             message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
                                 ownership: ChainOwnership::single(key_pair.public()),
                                 epoch: Epoch::from(0),
                                 committees: committees.clone(),
                                 admin_id,
-                                balance: Amount::ZERO,
                                 application_permissions: Default::default(),
                             })),
                         },

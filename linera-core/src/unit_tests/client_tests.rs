@@ -600,7 +600,7 @@ where
         certificate.value(),
         CertificateValue::ConfirmedBlock { executed_block, .. } if matches!(
             executed_block.block.operations[open_chain_message_id.index as usize],
-            Operation::System(SystemOperation::OpenChain(_)),
+            Operation::System(SystemOperation::OpenChain {..}),
         ),
         "Unexpected certificate value",
     );
@@ -700,7 +700,7 @@ where
         &certificate.value(),
         CertificateValue::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
             block.operations[open_chain_message_id.index as usize],
-            Operation::System(SystemOperation::OpenChain(_)),
+            Operation::System(SystemOperation::OpenChain { .. }),
         ),
         "Unexpected certificate value",
     );
@@ -908,13 +908,12 @@ where
         } if sender == ChainId::root(2)
     );
 
-    // Since blocks are free of charge on closed chains, empty blocks are not allowed.
-    assert_matches!(
-        client1.execute_operations(vec![]).await,
-        Err(ChainClientError::LocalNodeError(
-            LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(*error, ChainError::ClosedChain)
-    );
+    // Empty blocks are allowed on closed chains but they must pay the block fee.
+    {
+        let balance = client1.local_balance().await.unwrap();
+        client1.execute_operations(vec![]).await.unwrap();
+        assert!(client1.local_balance().await.unwrap() < balance);
+    }
     Ok(())
 }
 
