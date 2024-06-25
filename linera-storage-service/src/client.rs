@@ -67,20 +67,16 @@ impl ServiceStoreClientInternal {
         &self,
     ) -> Result<RwLockWriteGuardArc<StoreProcessorClient<Channel>>, ServiceContextError> {
         let mut clients = self.clients.lock_arc().await;
-        let n_client = clients.len();
-        for i_client in 0..n_client {
-            let client = clients.get(i_client).unwrap();
-            let client = client.clone().try_write_arc();
-            if let Some(client) = client {
+        for client in clients.iter() {
+            if let Some(client) = client.clone().try_write_arc() {
                 return Ok(client);
             }
         }
         let client = StoreProcessorClient::connect(self.endpoint.clone()).await?;
         let client = Arc::new(RwLock::new(client));
-        clients.push(client);
-        let client = clients.last().unwrap();
-        let client = client.clone().try_write_arc();
-        Ok(client.unwrap())
+        clients.push(client.clone());
+        let client = client.try_write_arc().expect("new client is not locked");
+        Ok(client)
     }
 }
 
