@@ -143,7 +143,21 @@ impl ChainDescription {
 pub struct ChainId(pub CryptoHash);
 
 /// A content-addressed blob ID i.e. the hash of the Blob.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Debug, Serialize, Deserialize)]
+#[derive(
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Clone,
+    Copy,
+    Hash,
+    Debug,
+    Serialize,
+    Deserialize,
+    WitType,
+    WitStore,
+    WitLoad,
+)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Default))]
 pub struct BlobId(pub CryptoHash);
 

@@ -5,8 +5,8 @@
 
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
-    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    data_types::{Amount, Blob, BlockHeight, HashedBlob, TimeDelta, Timestamp},
+    identifiers::{ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, CloseChainError, TimeoutConfig},
 };
 
@@ -33,6 +33,27 @@ impl From<wit_system_api::ApplicationId> for ApplicationId {
         ApplicationId {
             bytecode_id: application_id.bytecode_id.into(),
             creation: application_id.creation.into(),
+        }
+    }
+}
+
+impl From<wit_system_api::BlobId> for BlobId {
+    fn from(blob_id: wit_system_api::BlobId) -> Self {
+        BlobId(blob_id.inner0.into())
+    }
+}
+
+impl From<wit_system_api::Blob> for Blob {
+    fn from(blob: wit_system_api::Blob) -> Self {
+        Blob { bytes: blob.bytes }
+    }
+}
+
+impl From<wit_system_api::HashedBlob> for HashedBlob {
+    fn from(hashed_blob: wit_system_api::HashedBlob) -> Self {
+        HashedBlob {
+            id: hashed_blob.id.into(),
+            blob: hashed_blob.blob.into(),
         }
     }
 }

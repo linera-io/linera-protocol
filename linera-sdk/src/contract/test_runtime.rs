@@ -10,8 +10,10 @@ use std::{
 
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
-    data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
-    identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
+    data_types::{Amount, BlockHeight, HashedBlob, Resources, SendMessageRequest, Timestamp},
+    identifiers::{
+        Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, MessageId, Owner,
+    },
     ownership::{ChainOwnership, CloseChainError},
 };
 use serde::Serialize;
@@ -44,6 +46,7 @@ where
     claim_requests: Vec<ClaimRequest>,
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
     expected_post_requests: VecDeque<(String, Vec<u8>, Vec<u8>)>,
+    expected_read_blob_requests: VecDeque<(BlobId, HashedBlob)>,
     key_value_store: KeyValueStore,
 }
 
@@ -84,6 +87,7 @@ where
             claim_requests: Vec::new(),
             expected_service_queries: VecDeque::new(),
             expected_post_requests: VecDeque::new(),
+            expected_read_blob_requests: VecDeque::new(),
             key_value_store: KeyValueStore::mock().to_mut(),
         }
     }
@@ -601,6 +605,12 @@ where
             .push_back((url, payload, response));
     }
 
+    /// Adds an expected `read_blob` call, and the response it should return in the test.
+    pub fn add_expected_read_blob_requests(&mut self, blob_id: BlobId, response: HashedBlob) {
+        self.expected_read_blob_requests
+            .push_back((blob_id, response));
+    }
+
     /// Queries our application service as an oracle and returns the response.
     ///
     /// Should only be used with queries where it is very likely that all validators will compute
@@ -645,6 +655,14 @@ where
     /// owner, not a super owner.
     pub fn assert_before(&mut self, timestamp: Timestamp) {
         assert!(self.timestamp.is_some_and(|t| t < timestamp))
+    }
+
+    /// Reads a blob with the given `BlobId` from storage.
+    pub fn read_blob(&mut self, blob_id: &BlobId) -> HashedBlob {
+        let maybe_request = self.expected_read_blob_requests.pop_front();
+        let (expected_blob_id, response) = maybe_request.expect("Unexpected read_blob request");
+        assert_eq!(*blob_id, expected_blob_id);
+        response
     }
 }
 

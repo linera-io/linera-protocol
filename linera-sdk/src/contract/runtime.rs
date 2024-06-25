@@ -5,8 +5,10 @@
 
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
-    data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
-    identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
+    data_types::{Amount, BlockHeight, HashedBlob, Resources, SendMessageRequest, Timestamp},
+    identifiers::{
+        Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, MessageId, Owner,
+    },
     ownership::{ChainOwnership, CloseChainError},
 };
 use serde::Serialize;
@@ -242,6 +244,11 @@ where
     /// owner, not a super owner.
     pub fn assert_before(&mut self, timestamp: Timestamp) {
         wit::assert_before(timestamp.into());
+    }
+
+    /// Reads a blob with the given `BlobId` from storage.
+    pub fn read_blob(&mut self, blob_id: BlobId) -> HashedBlob {
+        wit::read_blob(blob_id.into()).into()
     }
 }
 
