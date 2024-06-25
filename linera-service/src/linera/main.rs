@@ -1364,6 +1364,7 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                     binaries,
                     policy_config.into_policy(),
                 )
+                .boxed()
                 .await
             }
 
@@ -1388,6 +1389,7 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                     table_name,
                     policy_config.into_policy(),
                 )
+                .boxed()
                 .await
             }
 
