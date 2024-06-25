@@ -117,13 +117,9 @@ where
         &mut self,
         height: BlockHeight,
     ) -> Result<Option<Certificate>, WorkerError> {
-        self.ensure_is_active()?;
-        let certificate_hash = match self.chain.confirmed_log.get(height.try_into()?).await? {
-            Some(hash) => hash,
-            None => return Ok(None),
-        };
-        let certificate = self.storage.read_certificate(certificate_hash).await?;
-        Ok(Some(certificate))
+        ChainWorkerStateWithTemporaryChanges { state: self }
+            .read_certificate(height)
+            .await
     }
 
     /// Searches for an event in one of the chain's inboxes.
@@ -565,6 +561,31 @@ where
     StorageClient: Storage + Clone + Send + Sync + 'static,
     ViewError: From<StorageClient::ContextError>,
 {
+    /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
+    #[cfg(with_testing)]
+    pub async fn read_certificate(
+        &mut self,
+        height: BlockHeight,
+    ) -> Result<Option<Certificate>, WorkerError> {
+        self.state.ensure_is_active()?;
+        let certificate_hash = match self
+            .state
+            .chain
+            .confirmed_log
+            .get(height.try_into()?)
+            .await?
+        {
+            Some(hash) => hash,
+            None => return Ok(None),
+        };
+        let certificate = self
+            .state
+            .storage
+            .read_certificate(certificate_hash)
+            .await?;
+        Ok(Some(certificate))
+    }
+
     /// Executes a block without persisting any changes to the state.
     pub async fn stage_block_execution(
         &mut self,
