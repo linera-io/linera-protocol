@@ -58,7 +58,7 @@ pub fn sdl<Q: ObjectType + 'static>(query: Q) -> String {
     schema(query).sdl()
 }
 
-pub fn route<Q: async_graphql::ObjectType + 'static>(
+pub fn route<Q: ObjectType + 'static>(
     name: &str,
     query: Q,
     app: axum::Router,

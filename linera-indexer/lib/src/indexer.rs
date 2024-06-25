@@ -209,7 +209,7 @@ pub struct HighestBlock {
     height: Option<BlockHeight>,
 }
 
-#[Object]
+#[Object(cache_control(no_cache))]
 impl<C> State<C>
 where
     C: Context + Clone + Send + Sync + 'static,

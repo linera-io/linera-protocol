@@ -293,7 +293,7 @@ pub enum CertificateValue {
     },
 }
 
-#[Object]
+#[Object(cache_control(no_cache))]
 impl CertificateValue {
     #[graphql(derived(name = "executed_block"))]
     async fn _executed_block(&self) -> Option<ExecutedBlock> {
@@ -317,7 +317,7 @@ pub struct HashedCertificateValue {
     hash: CryptoHash,
 }
 
-#[Object]
+#[Object(cache_control(no_cache))]
 impl HashedCertificateValue {
     #[graphql(derived(name = "hash"))]
     async fn _hash(&self) -> CryptoHash {

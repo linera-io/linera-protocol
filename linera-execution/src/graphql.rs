@@ -32,7 +32,7 @@ doc_scalar!(
 doc_scalar!(UserData, "Optional user message attached to a transfer");
 doc_scalar!(ValidatorName, "The identity of a validator");
 
-#[Object]
+#[Object(cache_control(no_cache))]
 impl Committee {
     #[graphql(derived(name = "validators"))]
     async fn _validators(&self) -> &BTreeMap<ValidatorName, ValidatorState> {
@@ -55,7 +55,7 @@ impl Committee {
     }
 }
 
-#[async_graphql::Object]
+#[Object(cache_control(no_cache))]
 impl<C: Send + Sync + Context> ExecutionStateView<C>
 where
     ViewError: From<C::Error>,
@@ -66,7 +66,7 @@ where
     }
 }
 
-#[async_graphql::Object]
+#[Object(cache_control(no_cache))]
 impl<C: Send + Sync + Context> SystemExecutionStateView<C>
 where
     ViewError: From<C::Error>,

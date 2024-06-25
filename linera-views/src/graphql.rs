@@ -229,7 +229,7 @@ impl<C: Send + Sync, V: async_graphql::OutputType> async_graphql::TypeName for B
         .into()
     }
 }
-#[async_graphql::Object(name_type)]
+#[async_graphql::Object(cache_control(no_cache), name_type)]
 impl<C, V> ByteMapView<C, V>
 where
     C: Context + Send + Sync,
@@ -299,7 +299,7 @@ impl<C: Send + Sync, I: async_graphql::OutputType, V: async_graphql::OutputType>
         .into()
     }
 }
-#[async_graphql::Object(name_type)]
+#[async_graphql::Object(cache_control(no_cache), name_type)]
 impl<C, I, V> MapView<C, I, V>
 where
     C: Context + Send + Sync,
@@ -371,7 +371,7 @@ impl<C: Send + Sync, I: async_graphql::OutputType, V: async_graphql::OutputType>
         format!("CustomMapView_{}_{}", I::type_name(), V::type_name()).into()
     }
 }
-#[async_graphql::Object(name_type)]
+#[async_graphql::Object(cache_control(no_cache), name_type)]
 impl<C, I, V> CustomMapView<C, I, V>
 where
     C: Context + Send + Sync,
@@ -494,7 +494,7 @@ impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
         .into()
     }
 }
-#[async_graphql::Object(name_type)]
+#[async_graphql::Object(cache_control(no_cache), name_type)]
 impl<C, K, V> CollectionView<C, K, V>
 where
     C: Send + Sync + Context,
@@ -561,7 +561,7 @@ impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
         .into()
     }
 }
-#[async_graphql::Object(name_type)]
+#[async_graphql::Object(cache_control(no_cache), name_type)]
 impl<C, K, V> CustomCollectionView<C, K, V>
 where
     C: Send + Sync + Context,
@@ -654,7 +654,7 @@ fn missing_key_error(key: &impl std::fmt::Debug) -> async_graphql::Error {
     }
 }
 
-#[async_graphql::Object(name_type)]
+#[async_graphql::Object(cache_control(no_cache), name_type)]
 impl<C, K, V> ReentrantCollectionView<C, K, V>
 where
     C: Send + Sync + Context,
@@ -724,7 +724,7 @@ impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
         .into()
     }
 }
-#[async_graphql::Object(name_type)]
+#[async_graphql::Object(cache_control(no_cache), name_type)]
 impl<C, K, V> ReentrantCustomCollectionView<C, K, V>
 where
     C: Send + Sync + Context,
@@ -858,7 +858,7 @@ impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName for L
         .into()
     }
 }
-#[async_graphql::Object(name_type)]
+#[async_graphql::Object(cache_control(no_cache), name_type)]
 impl<C: Context, T: async_graphql::OutputType> LogView<C, T>
 where
     C: Send + Sync,
@@ -915,7 +915,7 @@ impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName for Q
         .into()
     }
 }
-#[async_graphql::Object(name_type)]
+#[async_graphql::Object(cache_control(no_cache), name_type)]
 impl<C: Context, T: async_graphql::OutputType> QueueView<C, T>
 where
     C: Send + Sync,

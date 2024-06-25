@@ -160,7 +160,7 @@ where
 }
 
 /// Implements `ObjectType`
-#[Object]
+#[Object(cache_control(no_cache))]
 impl<C> OperationsPlugin<C>
 where
     C: Context + Send + Sync + 'static + Clone,
