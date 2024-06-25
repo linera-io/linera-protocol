@@ -847,6 +847,12 @@ Start a Local Linera Network
 * `--shards <SHARDS>` — The number of shards per validator in the local test network. Default is 1
 
   Default value: `1`
+* `--policy-config <POLICY_CONFIG>` — Configure the resource control policy (notably fees) according to pre-defined settings
+
+  Default value: `default`
+
+  Possible values: `default`, `only-fuel`, `fuel-and-block`, `all-categories`, `devnet`
+
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 * `--table-name <TABLE_NAME>` — The name for the database table to store the chain data in
 

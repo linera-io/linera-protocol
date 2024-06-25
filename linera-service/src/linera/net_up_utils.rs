@@ -26,6 +26,7 @@ use {
     std::path::PathBuf,
 };
 
+#[allow(clippy::too_many_arguments)]
 #[cfg(feature = "kubernetes")]
 pub async fn handle_net_up_kubernetes(
     extra_wallets: Option<usize>,
@@ -35,6 +36,7 @@ pub async fn handle_net_up_kubernetes(
     num_shards: usize,
     testing_prng_seed: Option<u64>,
     binaries: &Option<Option<PathBuf>>,
+    policy: ResourceControlPolicy,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -54,13 +56,14 @@ pub async fn handle_net_up_kubernetes(
         num_initial_validators,
         num_shards,
         binaries: binaries.clone().into(),
-        policy: ResourceControlPolicy::default(),
+        policy,
     };
     let (mut net, client1) = config.instantiate().await?;
     net_up(extra_wallets, &mut net, client1).await?;
     wait_for_shutdown(shutdown_notifier, &mut net).await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_net_up_service(
     extra_wallets: Option<usize>,
     num_other_initial_chains: u32,
@@ -69,6 +72,7 @@ pub async fn handle_net_up_service(
     num_shards: usize,
     testing_prng_seed: Option<u64>,
     table_name: &str,
+    policy: ResourceControlPolicy,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -102,7 +106,7 @@ pub async fn handle_net_up_service(
         initial_amount: Amount::from_tokens(initial_amount),
         num_initial_validators,
         num_shards,
-        policy: ResourceControlPolicy::default(),
+        policy,
         storage_config_builder,
         path_provider,
     };

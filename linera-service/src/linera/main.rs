@@ -1350,6 +1350,7 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                 shards,
                 testing_prng_seed,
                 table_name: _,
+                policy_config,
                 kubernetes: true,
                 binaries,
             } => {
@@ -1361,7 +1362,9 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                     *shards,
                     *testing_prng_seed,
                     binaries,
+                    policy_config.into_policy(),
                 )
+                .boxed()
                 .await
             }
 
@@ -1373,6 +1376,7 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                 shards,
                 testing_prng_seed,
                 table_name,
+                policy_config,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -1383,7 +1387,9 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                     *shards,
                     *testing_prng_seed,
                     table_name,
+                    policy_config.into_policy(),
                 )
+                .boxed()
                 .await
             }
 
