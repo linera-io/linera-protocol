@@ -138,10 +138,9 @@ where
 
     /// Queries an application's state on the chain.
     pub async fn query_application(&mut self, query: Query) -> Result<Response, WorkerError> {
-        self.ensure_is_active()?;
-        let local_time = self.storage.clock().current_time();
-        let response = self.chain.query_application(local_time, query).await?;
-        Ok(response)
+        ChainWorkerStateWithTemporaryChanges { state: self }
+            .query_application(query)
+            .await
     }
 
     /// Returns the [`BytecodeLocation`] for the requested [`BytecodeId`], if it is known by the
@@ -603,6 +602,18 @@ where
                     && event.index == index
             })
             .cloned())
+    }
+
+    /// Queries an application's state on the chain.
+    pub async fn query_application(&mut self, query: Query) -> Result<Response, WorkerError> {
+        self.state.ensure_is_active()?;
+        let local_time = self.state.storage.clock().current_time();
+        let response = self
+            .state
+            .chain
+            .query_application(local_time, query)
+            .await?;
+        Ok(response)
     }
 
     /// Executes a block without persisting any changes to the state.
