@@ -3393,7 +3393,7 @@ where
     // from a past round.
     let certificate =
         make_certificate_with_round(&committee, &worker, value1, Round::SingleLeader(7));
-    let mut worker = worker.with_key_pair(None); // Forget validator keys.
+    let mut worker = worker.with_key_pair(None).await; // Forget validator keys.
     worker
         .handle_certificate(certificate.clone(), vec![], vec![], None)
         .await?;

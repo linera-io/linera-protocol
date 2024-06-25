@@ -383,8 +383,9 @@ where
     }
 
     #[cfg(test)]
-    pub(crate) fn with_key_pair(mut self, key_pair: Option<Arc<KeyPair>>) -> Self {
+    pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<KeyPair>>) -> Self {
         self.chain_worker_config.key_pair = key_pair;
+        self.chain_workers.lock().await.clear();
         self
     }
 
