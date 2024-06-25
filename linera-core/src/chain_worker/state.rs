@@ -131,18 +131,9 @@ where
         height: BlockHeight,
         index: u32,
     ) -> Result<Option<Event>, WorkerError> {
-        self.ensure_is_active()?;
-
-        let mut inbox = self.chain.inboxes.try_load_entry_mut(&inbox_id).await?;
-        let mut events = inbox.added_events.iter_mut().await?;
-
-        Ok(events
-            .find(|event| {
-                event.certificate_hash == certificate_hash
-                    && event.height == height
-                    && event.index == index
-            })
-            .cloned())
+        ChainWorkerStateWithTemporaryChanges { state: self }
+            .find_event_in_inbox(inbox_id, certificate_hash, height, index)
+            .await
     }
 
     /// Queries an application's state on the chain.
@@ -584,6 +575,34 @@ where
             .read_certificate(certificate_hash)
             .await?;
         Ok(Some(certificate))
+    }
+
+    /// Searches for an event in one of the chain's inboxes.
+    #[cfg(with_testing)]
+    pub async fn find_event_in_inbox(
+        &mut self,
+        inbox_id: Origin,
+        certificate_hash: CryptoHash,
+        height: BlockHeight,
+        index: u32,
+    ) -> Result<Option<Event>, WorkerError> {
+        self.state.ensure_is_active()?;
+
+        let mut inbox = self
+            .state
+            .chain
+            .inboxes
+            .try_load_entry_mut(&inbox_id)
+            .await?;
+        let mut events = inbox.added_events.iter_mut().await?;
+
+        Ok(events
+            .find(|event| {
+                event.certificate_hash == certificate_hash
+                    && event.height == height
+                    && event.index == index
+            })
+            .cloned())
     }
 
     /// Executes a block without persisting any changes to the state.
