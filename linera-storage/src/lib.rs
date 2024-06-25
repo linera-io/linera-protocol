@@ -414,4 +414,8 @@ where
             }
         }
     }
+
+    async fn get_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ExecutionError> {
+        Ok(self.storage.read_hashed_blob(blob_id).await?)
+    }
 }

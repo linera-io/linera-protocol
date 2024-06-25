@@ -4,8 +4,10 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use linera_base::{
-    data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
-    identifiers::{Account, ApplicationId, ChainId, ChannelName, MessageId, Owner},
+    data_types::{
+        Amount, ApplicationPermissions, BlockHeight, HashedBlob, SendMessageRequest, Timestamp,
+    },
+    identifiers::{Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner},
     ownership::{ChainOwnership, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -338,6 +340,15 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Reads a blob from storage.
+    fn read_blob(caller: &mut Caller, blob_id: BlobId) -> Result<HashedBlob, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_blob(&blob_id)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Logs a `message` with the provided information `level`.
     fn log(_caller: &mut Caller, message: String, level: log::Level) -> Result<(), RuntimeError> {
         match level {
@@ -500,6 +511,15 @@ where
             .user_data_mut()
             .runtime
             .http_post(&query, content_type, payload)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Reads a blob from storage.
+    fn read_blob(caller: &mut Caller, blob_id: BlobId) -> Result<HashedBlob, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_blob(&blob_id)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

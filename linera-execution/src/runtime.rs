@@ -12,11 +12,11 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleRecord, OracleResponse,
-        Resources, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, OracleRecord,
+        OracleResponse, Resources, SendMessageRequest, Timestamp,
     },
     ensure,
-    identifiers::{Account, ApplicationId, ChainId, ChannelName, MessageId, Owner},
+    identifiers::{Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::batch::Batch;
@@ -697,6 +697,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
         self.inner().assert_before(timestamp)
     }
+
+    fn read_blob(&mut self, blob_id: &BlobId) -> Result<HashedBlob, ExecutionError> {
+        self.inner().read_blob(blob_id)
+    }
 }
 
 impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
@@ -971,6 +975,27 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             responses.push(OracleResponse::Assert);
         }
         Ok(())
+    }
+
+    fn read_blob(&mut self, blob_id: &BlobId) -> Result<HashedBlob, ExecutionError> {
+        if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
+            match responses.next() {
+                Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == *blob_id => (),
+                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                None => return Err(ExecutionError::MissingOracleResponse),
+            }
+        }
+        let blob = self
+            .execution_state_sender
+            .send_request(|callback| Request::ReadBlob {
+                blob_id: *blob_id,
+                callback,
+            })?
+            .recv_response()?;
+        if let OracleResponses::Record(responses) = &mut self.oracle_responses {
+            responses.push(OracleResponse::Blob(*blob_id));
+        }
+        Ok(blob)
     }
 }
 

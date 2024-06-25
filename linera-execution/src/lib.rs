@@ -30,12 +30,12 @@ use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Resources,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, Resources,
         SendMessageRequest, Timestamp,
     },
     doc_scalar, hex_debug,
     identifiers::{
-        Account, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
+        Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination,
         GenericApplicationId, MessageId, Owner,
     },
     ownership::ChainOwnership,
@@ -133,6 +133,8 @@ pub enum ExecutionError {
     ServiceWriteAttempt,
     #[error("Failed to load bytecode from storage {0:?}")]
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
+    #[error("Failed to load blob from storage {0:?}")]
+    BlobNotFound(Box<BlobId>),
 
     #[error("Excessive number of bytes read from storage")]
     ExcessiveRead,
@@ -242,6 +244,8 @@ pub trait ExecutionRuntimeContext {
         &self,
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
+
+    async fn get_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ExecutionError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -453,6 +457,9 @@ pub trait BaseRuntime {
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError>;
+
+    /// Reads a blob specified by a given `BlobId`.
+    fn read_blob(&mut self, blob_id: &BlobId) -> Result<HashedBlob, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
@@ -798,6 +805,7 @@ pub struct TestExecutionRuntimeContext {
     execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
+    blobs: Arc<DashMap<BlobId, HashedBlob>>,
 }
 
 #[cfg(with_testing)]
@@ -808,6 +816,7 @@ impl TestExecutionRuntimeContext {
             execution_runtime_config,
             user_contracts: Arc::default(),
             user_services: Arc::default(),
+            blobs: Arc::default(),
         }
     }
 }
@@ -856,6 +865,14 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .ok_or_else(|| {
                 ExecutionError::ApplicationBytecodeNotFound(Box::new(description.clone()))
             })?
+            .clone())
+    }
+
+    async fn get_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ExecutionError> {
+        Ok(self
+            .blobs
+            .get(&blob_id)
+            .ok_or_else(|| ExecutionError::BlobNotFound(Box::new(blob_id)))?
             .clone())
     }
 }

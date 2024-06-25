@@ -784,7 +784,7 @@ impl std::str::FromStr for OracleResponse {
 }
 
 /// A blob of binary data.
-#[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize, WitType, WitStore)]
 pub struct Blob {
     /// Bytes of the binary blob.
     #[serde(with = "serde_bytes")]
@@ -815,11 +815,13 @@ impl From<HashedBlob> for Blob {
     }
 }
 
-/// A blob of binary data, with its content-addressed blob ID
-#[derive(Eq, PartialEq, Debug, Hash, Clone)]
+/// A blob of binary data, with its content-addressed blob ID.
+#[derive(Eq, PartialEq, Debug, Hash, Clone, WitType, WitStore)]
 pub struct HashedBlob {
-    id: BlobId,
-    blob: Blob,
+    /// ID of the blob.
+    pub id: BlobId,
+    /// A blob of binary data.
+    pub blob: Blob,
 }
 
 /// The state of a blob of binary data.
