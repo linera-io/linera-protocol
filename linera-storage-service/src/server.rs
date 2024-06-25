@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::blocks_in_conditions)]
+
 use std::{collections::BTreeMap, sync::Arc};
 
 use async_lock::RwLock;
@@ -18,6 +20,7 @@ use linera_views::{
 use serde::Serialize;
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::{info, instrument};
+use tracing_subscriber::fmt::format::FmtSpan;
 
 use crate::key_value_store::{
     statement::Operation,
@@ -225,14 +228,12 @@ enum ServiceStoreServerOptions {
 
 #[tonic::async_trait]
 impl StoreProcessor for ServiceStoreServer {
-    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().key.len()))]
     async fn process_read_value(
         &self,
         request: Request<RequestReadValue>,
     ) -> Result<Response<ReplyReadValue>, Status> {
         let request = request.into_inner();
-        info!("Process read value");
         let RequestReadValue { key } = request;
         let value = self.read_value_bytes(&key).await?;
         let size = match &value {
@@ -256,28 +257,24 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().key.len()))]
     async fn process_contains_key(
         &self,
         request: Request<RequestContainsKey>,
     ) -> Result<Response<ReplyContainsKey>, Status> {
         let request = request.into_inner();
-        info!("Process contains key");
         let RequestContainsKey { key } = request;
         let test = self.contains_key(&key).await?;
         let response = ReplyContainsKey { test };
         Ok(Response::new(response))
     }
 
-    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(n_keys = ?request.get_ref().keys.len()))]
     async fn process_read_multi_values(
         &self,
         request: Request<RequestReadMultiValues>,
     ) -> Result<Response<ReplyReadMultiValues>, Status> {
         let request = request.into_inner();
-        info!("Process read multi values");
         let RequestReadMultiValues { keys } = request;
         let values = self.read_multi_values_bytes(keys.clone()).await?;
         let size = values
@@ -308,14 +305,12 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
     async fn process_find_keys_by_prefix(
         &self,
         request: Request<RequestFindKeysByPrefix>,
     ) -> Result<Response<ReplyFindKeysByPrefix>, Status> {
         let request = request.into_inner();
-        info!("Process find keys by prefix");
         let RequestFindKeysByPrefix { key_prefix } = request;
         let keys = self.find_keys_by_prefix(&key_prefix).await?;
         let size = keys.iter().map(|x| x.len()).sum::<usize>();
@@ -336,14 +331,12 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
     async fn process_find_key_values_by_prefix(
         &self,
         request: Request<RequestFindKeyValuesByPrefix>,
     ) -> Result<Response<ReplyFindKeyValuesByPrefix>, Status> {
         let request = request.into_inner();
-        info!("Process find key values by prefix");
         let RequestFindKeyValuesByPrefix { key_prefix } = request;
         let key_values = self.find_key_values_by_prefix(&key_prefix).await?;
         let size = key_values
@@ -374,14 +367,12 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(n_statements = ?request.get_ref().statements.len()))]
     async fn process_write_batch_extended(
         &self,
         request: Request<RequestWriteBatchExtended>,
     ) -> Result<Response<ReplyWriteBatchExtended>, Status> {
         let request = request.into_inner();
-        info!("Process write batch extended");
         let RequestWriteBatchExtended { statements } = request;
         let mut batch = Batch::default();
         for statement in statements {
@@ -420,14 +411,12 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(message_index = ?request.get_ref().message_index, index = ?request.get_ref().index))]
     async fn process_specific_chunk(
         &self,
         request: Request<RequestSpecificChunk>,
     ) -> Result<Response<ReplySpecificChunk>, Status> {
         let request = request.into_inner();
-        info!("Process specific chunk");
         let RequestSpecificChunk {
             message_index,
             index,
@@ -445,61 +434,52 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_create_namespace(
         &self,
         request: Request<RequestCreateNamespace>,
     ) -> Result<Response<ReplyCreateNamespace>, Status> {
         let request = request.into_inner();
-        info!("Process create namespace");
         let RequestCreateNamespace { namespace } = request;
         self.create_namespace(&namespace).await?;
         let response = ReplyCreateNamespace {};
         Ok(Response::new(response))
     }
 
-    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_exists_namespace(
         &self,
         request: Request<RequestExistsNamespace>,
     ) -> Result<Response<ReplyExistsNamespace>, Status> {
         let request = request.into_inner();
-        info!("Process exists namespace");
         let RequestExistsNamespace { namespace } = request;
         let exists = self.exists_namespace(&namespace).await?;
         let response = ReplyExistsNamespace { exists };
         Ok(Response::new(response))
     }
 
-    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_delete_namespace(
         &self,
         request: Request<RequestDeleteNamespace>,
     ) -> Result<Response<ReplyDeleteNamespace>, Status> {
         let request = request.into_inner();
-        info!("Process delete namespace");
         let RequestDeleteNamespace { namespace } = request;
         self.delete_namespace(&namespace).await?;
         let response = ReplyDeleteNamespace {};
         Ok(Response::new(response))
     }
 
-    #[allow(clippy::blocks_in_conditions)]
     #[instrument(target = "store_server", skip_all, err, fields(list_all = "list_all"))]
     async fn process_list_all(
         &self,
         _request: Request<RequestListAll>,
     ) -> Result<Response<ReplyListAll>, Status> {
-        info!("Process list all");
         let namespaces = self.list_all().await?;
         let response = ReplyListAll { namespaces };
         Ok(Response::new(response))
     }
 
-    #[allow(clippy::blocks_in_conditions)]
     #[instrument(
         target = "store_server",
         skip_all,
@@ -510,7 +490,6 @@ impl StoreProcessor for ServiceStoreServer {
         &self,
         _request: Request<RequestDeleteAll>,
     ) -> Result<Response<ReplyDeleteAll>, Status> {
-        info!("Process delete all");
         self.delete_all().await?;
         let response = ReplyDeleteAll {};
         Ok(Response::new(response))
@@ -523,6 +502,7 @@ async fn main() {
         .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
         .from_env_lossy();
     tracing_subscriber::fmt()
+        .with_span_events(FmtSpan::NEW)
         .with_writer(std::io::stderr)
         .with_env_filter(env_filter)
         .init();
@@ -558,7 +538,10 @@ async fn main() {
         pending_big_reads,
     };
     let endpoint = endpoint.parse().unwrap();
-    info!("Start of storage_service_service on endpoint={}", endpoint);
+    info!(
+        "Starting of storage_service_service on endpoint={}",
+        endpoint
+    );
     Server::builder()
         .add_service(StoreProcessorServer::new(store))
         .serve(endpoint)
