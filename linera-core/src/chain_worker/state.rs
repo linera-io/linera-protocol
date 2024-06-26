@@ -160,9 +160,9 @@ where
         &mut self,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, WorkerError> {
-        self.ensure_is_active()?;
-        let response = self.chain.describe_application(application_id).await?;
-        Ok(response)
+        ChainWorkerStateWithTemporaryChanges { state: self }
+            .describe_application(application_id)
+            .await
     }
 
     /// Executes a block without persisting any changes to the state.
@@ -625,6 +625,20 @@ where
     ) -> Result<Option<BytecodeLocation>, WorkerError> {
         self.state.ensure_is_active()?;
         let response = self.state.chain.read_bytecode_location(bytecode_id).await?;
+        Ok(response)
+    }
+
+    /// Returns an application's description.
+    pub async fn describe_application(
+        &mut self,
+        application_id: UserApplicationId,
+    ) -> Result<UserApplicationDescription, WorkerError> {
+        self.state.ensure_is_active()?;
+        let response = self
+            .state
+            .chain
+            .describe_application(application_id)
+            .await?;
         Ok(response)
     }
 
