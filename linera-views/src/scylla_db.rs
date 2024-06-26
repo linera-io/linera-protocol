@@ -19,7 +19,7 @@ use std::{ops::Deref, sync::Arc};
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
-use futures::{future::join_all, FutureExt as _, StreamExt};
+use futures::{FutureExt as _, StreamExt};
 use linera_base::ensure;
 use scylla::{
     frame::request::batch::BatchType,
@@ -146,6 +146,31 @@ impl ScyllaDbClient {
             Some(row) => Some(row?.into_typed::<(Vec<u8>,)>()?.0),
             None => None,
         })
+    }
+
+    async fn read_multi_values_internal(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbContextError> {
+        let num_keys = keys.len();
+        let session = &self.session;
+        let mut group_query = "?".to_string();
+        for _ in 1..num_keys {
+            group_query += ",?";
+        }
+        let query = format!(
+            "SELECT v FROM kv.{} WHERE dummy = 0 AND id in ({}) ALLOW FILTERING",
+            self.namespace, group_query
+        );
+        let read_multi_value = Query::new(query);
+        let mut rows = session.query_iter(read_multi_value, &keys).await?;
+        let mut values = Vec::<Option<Vec<u8>>>::new();
+        while let Some(row) = rows.next().await {
+            let value = row?.into_typed::<(Vec<u8>,)>()?;
+            let value = Some(value.0);
+            values.push(value);
+        }
+        Ok(values)
     }
 
     async fn contains_key_internal(&self, key: Vec<u8>) -> Result<bool, ScyllaDbContextError> {
@@ -369,13 +394,12 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbContextError> {
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        let handles = keys.into_iter().map(|key| store.read_value_internal(key));
-        join_all(handles)
-            .await
-            .into_iter()
-            .collect::<Result<_, _>>()
+        store.read_multi_values_internal(keys).await
     }
 
     async fn find_keys_by_prefix(
