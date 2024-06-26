@@ -150,9 +150,9 @@ where
         &mut self,
         bytecode_id: BytecodeId,
     ) -> Result<Option<BytecodeLocation>, WorkerError> {
-        self.ensure_is_active()?;
-        let response = self.chain.read_bytecode_location(bytecode_id).await?;
-        Ok(response)
+        ChainWorkerStateWithTemporaryChanges { state: self }
+            .read_bytecode_location(bytecode_id)
+            .await
     }
 
     /// Returns an application's description.
@@ -613,6 +613,18 @@ where
             .chain
             .query_application(local_time, query)
             .await?;
+        Ok(response)
+    }
+
+    /// Returns the [`BytecodeLocation`] for the requested [`BytecodeId`], if it is known by the
+    /// chain.
+    #[cfg(with_testing)]
+    pub async fn read_bytecode_location(
+        &mut self,
+        bytecode_id: BytecodeId,
+    ) -> Result<Option<BytecodeLocation>, WorkerError> {
+        self.state.ensure_is_active()?;
+        let response = self.state.chain.read_bytecode_location(bytecode_id).await?;
         Ok(response)
     }
 
