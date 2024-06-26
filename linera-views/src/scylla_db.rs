@@ -563,7 +563,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         // Create a keyspace if it doesn't exist
         let query = "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { \
             'class' : 'SimpleStrategy', \
-            'replication_factor' : 1 \
+            'replication_factor' : 3 \
         }";
         session.query(query, &[]).await?;
 
