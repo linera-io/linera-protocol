@@ -306,27 +306,28 @@ pub async fn run_reads<S: LocalKeyValueStore>(store: S, key_values: Vec<(Vec<u8>
             }
         }
         let mut test_exists = Vec::new();
+        let mut values_single_read = Vec::new();
         for key in &keys {
             test_exists.push(store.contains_key(key).await.unwrap());
+            values_single_read.push(store.read_value_bytes(key).await.unwrap());
         }
         let values_read = store.read_multi_values_bytes(keys).await.unwrap();
         assert_eq!(values, values_read);
+        assert_eq!(values, values_single_read);
         let values_read_stat = values_read.iter().map(|x| x.is_some()).collect::<Vec<_>>();
         assert_eq!(values_read_stat, test_exists);
     }
 }
 
-fn get_random_key_values1(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+fn get_random_key_values1(n: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     let key_prefix = vec![0];
-    let n = 30;
     let mut rng = make_deterministic_rng();
     get_random_key_values_prefix(&mut rng, key_prefix, 8, len_value, n)
 }
 
-fn get_random_key_values2(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+fn get_random_key_values2(n: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     let mut rng = make_deterministic_rng();
     let key_prefix = vec![0];
-    let n = 30;
     let mut key_values = Vec::new();
     let mut key_set = HashSet::new();
     for _ in 0..n {
@@ -343,10 +344,10 @@ fn get_random_key_values2(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
 /// We build a number of scenarios for testing the reads.
 pub fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
     let mut scenarios = Vec::new();
-    for len_value in [10, 100] {
-        scenarios.push(get_random_key_values1(len_value));
-        scenarios.push(get_random_key_values2(len_value));
-    }
+    scenarios.push(get_random_key_values1(7, 3));
+    scenarios.push(get_random_key_values1(30, 10));
+    scenarios.push(get_random_key_values2(30, 10));
+    scenarios.push(get_random_key_values2(30, 100));
     scenarios
 }
 
