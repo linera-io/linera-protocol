@@ -28,7 +28,7 @@ use crate::{
 #[test_log::test(tokio::test)]
 async fn test_dropping_sync_runtime_clears_loaded_applications() -> anyhow::Result<()> {
     let (runtime, _receiver) = create_runtime();
-    let handle = SyncRuntimeHandle::new(runtime);
+    let handle = SyncRuntimeHandle::from(runtime);
     let weak_handle = Arc::downgrade(&handle.0);
 
     let fake_application = create_fake_application_with_runtime(&handle);
@@ -51,7 +51,7 @@ async fn test_dropping_sync_runtime_clears_loaded_applications() -> anyhow::Resu
 #[test_log::test(tokio::test)]
 async fn test_into_inner_without_clearing_applications() {
     let (runtime, _receiver) = create_runtime();
-    let handle = SyncRuntimeHandle::new(runtime);
+    let handle = SyncRuntimeHandle::from(runtime);
 
     let fake_application = create_fake_application_with_runtime(&handle);
 
@@ -69,7 +69,7 @@ async fn test_into_inner_without_clearing_applications() {
 #[test_log::test(tokio::test)]
 async fn test_into_inner_after_clearing_applications() {
     let (runtime, _receiver) = create_runtime();
-    let handle = SyncRuntimeHandle::new(runtime);
+    let handle = SyncRuntimeHandle::from(runtime);
     let weak_handle = Arc::downgrade(&handle.0);
 
     let fake_application = create_fake_application_with_runtime(&handle);
@@ -92,7 +92,7 @@ async fn test_into_inner_after_clearing_applications() {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_write_batch() {
     let (runtime, mut execution_state_receiver) = create_contract_runtime();
-    let mut runtime = SyncRuntimeHandle::new(runtime);
+    let mut runtime = SyncRuntimeHandle::from(runtime);
     let mut batch = Batch::new();
 
     let write_key = vec![1, 2, 3, 4, 5];
