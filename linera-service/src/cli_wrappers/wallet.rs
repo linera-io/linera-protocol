@@ -688,7 +688,7 @@ impl ClientWrapper {
     }
 
     pub fn load_wallet(&self) -> Result<Wallet> {
-        Ok(WalletState::from_file(self.wallet_path().as_path())?.into_inner())
+        Ok(WalletState::from_file(self.wallet_path().as_path())?.into_value())
     }
 
     pub fn wallet_path(&self) -> PathBuf {

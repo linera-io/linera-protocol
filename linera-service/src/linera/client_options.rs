@@ -21,6 +21,7 @@ use linera_service::{
     config::WalletState,
     storage::{full_initialize_storage, run_with_storage, StorageConfigNamespace},
     util,
+    wallet::Wallet,
 };
 use linera_views::common::CommonStoreConfig;
 
@@ -136,7 +137,7 @@ impl ClientOptions {
             self.storage_config()?
                 .add_common_config(self.common_config())
                 .await?,
-            &wallet.inner().genesis_config().clone(),
+            &wallet.genesis_config().clone(),
             self.wasm_runtime.with_wasm_default(),
             Job(self, wallet),
         )
@@ -170,7 +171,7 @@ impl ClientOptions {
             self.storage_config()?
                 .add_common_config(self.common_config())
                 .await?,
-            wallet.inner().genesis_config(),
+            wallet.genesis_config(),
         )
         .await?;
         Ok(())
@@ -211,7 +212,7 @@ impl ClientOptions {
             "Wallet already exists at {}. Aborting",
             wallet_path.display()
         );
-        WalletState::create(&wallet_path, genesis_config, testing_prng_seed)
+        WalletState::create(&wallet_path, Wallet::new(genesis_config, testing_prng_seed))
     }
 }
 

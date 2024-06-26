@@ -20,7 +20,7 @@ use linera_rpc::{
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
 use linera_service::{
-    config::{GenesisConfig, Import, ValidatorServerConfig},
+    config::{GenesisConfig, ValidatorServerConfig},
     grpc_proxy::GrpcProxy,
     storage::{run_with_storage, Runnable, StorageConfigNamespace},
     util,
@@ -94,7 +94,7 @@ struct ProxyContext {
 
 impl ProxyContext {
     pub fn from_options(options: &ProxyOptions) -> Result<Self> {
-        let config = ValidatorServerConfig::read(&options.config_path)?;
+        let config = util::read_json(&options.config_path)?;
         Ok(Self {
             config,
             send_timeout: options.send_timeout,
@@ -366,8 +366,8 @@ impl ProxyOptions {
             cache_size: self.cache_size,
         };
         let full_storage_config = self.storage_config.add_common_config(common_config).await?;
-        let genesis_config = GenesisConfig::read(&self.genesis_config_path)
-            .expect("Fail to read initial chain config");
+        let genesis_config: GenesisConfig =
+            util::read_json(&self.genesis_config_path).expect("Fail to read initial chain config");
         run_with_storage(
             full_storage_config,
             &genesis_config,

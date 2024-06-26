@@ -14,7 +14,7 @@ use crate::{
         local_net::PathProvider, ClientWrapper, Faucet, FaucetOption, LineraNet, LineraNetConfig,
         Network,
     },
-    config::Export,
+    persistent::{self, Persistent},
 };
 
 pub struct RemoteNetTestingConfig {
@@ -116,9 +116,11 @@ impl LineraNet for RemoteNet {
 impl RemoteNet {
     async fn new(testing_prng_seed: Option<u64>, faucet: &Faucet) -> Result<Self> {
         let tmp_dir = Arc::new(tempdir()?);
-        let genesis_config = faucet.genesis_config().await?;
         // Write json config to disk
-        genesis_config.write(tmp_dir.path().join("genesis.json").as_path())?;
+        Persistent::save(&mut persistent::File::new(
+            tmp_dir.path().join("genesis.json").as_path(),
+            faucet.genesis_config().await?,
+        )?)?;
         Ok(Self {
             network: Network::Grpc,
             testing_prng_seed,

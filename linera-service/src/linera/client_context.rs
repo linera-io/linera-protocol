@@ -64,14 +64,17 @@ use {
     tracing::{error, trace},
 };
 
-use crate::{client_options::ChainOwnershipConfig, ClientOptions};
+use crate::{
+    client_options::{ChainOwnershipConfig, ClientOptions},
+    persistent::Persistent,
+};
 
 pub struct ClientContext<Storage>
 where
     Storage: linera_storage::Storage,
     ViewError: From<Storage::ContextError>,
 {
-    pub(crate) wallet_state: WalletState,
+    pub(crate) wallet: WalletState,
     pub(crate) client: Arc<Client<NodeProvider, Storage>>,
     pub(crate) send_timeout: Duration,
     pub(crate) recv_timeout: Duration,
@@ -90,7 +93,7 @@ where
     type Storage = S;
 
     fn wallet(&self) -> &Wallet {
-        self.wallet_state.inner()
+        &self.wallet
     }
 
     fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<NodeProvider, S> {
@@ -117,17 +120,12 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    /// Returns the [`Wallet`] as an immutable reference.
-    fn wallet(&self) -> &Wallet {
-        self.wallet_state.inner()
-    }
-
     /// Returns the [`Wallet`] as a mutable reference.
-    pub fn wallet_mut(&mut self) -> &mut Wallet {
-        self.wallet_state.inner_mut()
+    pub fn wallet_mut(&mut self) -> impl std::ops::DerefMut<Target = Wallet> + '_ {
+        Persistent::mutate(&mut self.wallet)
     }
 
-    pub fn new(storage: S, options: &ClientOptions, wallet_state: WalletState) -> Self {
+    pub fn new(storage: S, options: &ClientOptions, wallet: WalletState) -> Self {
         let node_options = NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
@@ -147,7 +145,7 @@ where
         );
         ClientContext {
             client,
-            wallet_state,
+            wallet,
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
             notification_retry_delay: options.notification_retry_delay,
@@ -164,14 +162,14 @@ where
 
     /// Retrieve the default chain.
     pub fn default_chain(&self) -> ChainId {
-        self.wallet()
+        self.wallet
             .default_chain()
             .expect("No chain specified in wallet with no default chain")
     }
 
     fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<NodeProvider, S> {
         let chain = self
-            .wallet()
+            .wallet
             .get(chain_id)
             .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
         let known_key_pairs = chain
@@ -183,7 +181,7 @@ where
         self.client.build(
             chain_id,
             known_key_pairs,
-            self.wallet().genesis_admin_chain(),
+            self.wallet.genesis_admin_chain(),
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
@@ -206,11 +204,7 @@ where
     }
 
     pub fn save_wallet(&mut self) {
-        self.wallet_state.refresh_prng_seed();
-        self.wallet_state
-            .write()
-            .expect("Unable to write user chains");
-        info!("Saved user chain states");
+        Persistent::save(&mut self.wallet).expect("Unable to write user chains");
     }
 
     async fn update_wallet_from_client(&mut self, state: &mut ChainClient<NodeProvider, S>) {
@@ -229,7 +223,7 @@ where
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
     ) {
-        if self.wallet().get(chain_id).is_none() {
+        if self.wallet.get(chain_id).is_none() {
             self.wallet_mut().insert(UserChain {
                 chain_id,
                 key_pair: key_pair.as_ref().map(|kp| kp.copy()),
@@ -432,7 +426,7 @@ where
     ViewError: From<S::ContextError>,
 {
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {
-        for chain_id in self.wallet().own_chain_ids() {
+        for chain_id in self.wallet.own_chain_ids() {
             let chain_client = self.make_chain_client(chain_id).into_arc();
             self.process_inbox(&chain_client).await.unwrap();
             chain_client.lock().await.update_validators().await.unwrap();
@@ -447,12 +441,12 @@ where
         balance: Amount,
     ) -> anyhow::Result<HashMap<ChainId, KeyPair>> {
         let mut key_pairs = HashMap::new();
-        for chain_id in self.wallet().own_chain_ids() {
+        for chain_id in self.wallet.own_chain_ids() {
             if key_pairs.len() == num_chains {
                 break;
             }
             let Some(key_pair) = self
-                .wallet()
+                .wallet
                 .get(chain_id)
                 .and_then(|chain| chain.key_pair.as_ref().map(|kp| kp.copy()))
             else {
@@ -467,12 +461,12 @@ where
         }
 
         let default_chain_id = self
-            .wallet()
+            .wallet
             .default_chain()
             .context("should have default chain")?;
         let mut chain_client = self.make_chain_client(default_chain_id);
         while key_pairs.len() < num_chains {
-            let key_pair = self.wallet_state.generate_key_pair();
+            let key_pair = self.wallet.generate_key_pair();
             let public_key = key_pair.public();
             let (epoch, committees) = chain_client.epoch_and_committees(default_chain_id).await?;
             let epoch = epoch.context("missing epoch on the default chain")?;
@@ -481,7 +475,7 @@ where
             let config = OpenChainConfig {
                 ownership: ChainOwnership::single(public_key),
                 committees,
-                admin_id: self.wallet().genesis_admin_chain(),
+                admin_id: self.wallet.genesis_admin_chain(),
                 epoch,
                 balance,
                 application_permissions: Default::default(),
@@ -525,11 +519,11 @@ where
         max_in_flight: usize,
     ) -> anyhow::Result<()> {
         let default_chain_id = self
-            .wallet()
+            .wallet
             .default_chain()
             .context("should have default chain")?;
         let default_key = self
-            .wallet()
+            .wallet
             .get(default_chain_id)
             .unwrap()
             .key_pair
@@ -626,7 +620,7 @@ where
             let operations = iter::repeat(operation)
                 .take(transactions_per_block)
                 .collect();
-            let chain = self.wallet().get(chain_id).expect("should have chain");
+            let chain = self.wallet.get(chain_id).expect("should have chain");
             let block = Block {
                 epoch: Epoch::ZERO,
                 chain_id,
@@ -653,7 +647,7 @@ where
 
     /// Tries to aggregate votes into certificates.
     pub fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
-        let committee = self.wallet().genesis_config().create_committee();
+        let committee = self.wallet.genesis_config().create_committee();
         let mut aggregators = HashMap::new();
         let mut certificates = Vec::new();
         let mut done_senders = HashSet::new();
@@ -738,7 +732,7 @@ where
 
     fn make_validator_mass_clients(&self) -> Vec<Box<dyn MassClient + Send>> {
         let mut validator_clients = Vec::new();
-        for config in &self.wallet().genesis_config().committee.validators {
+        for config in &self.wallet.genesis_config().committee.validators {
             let client: Box<dyn MassClient + Send> = match config.network.protocol {
                 NetworkProtocol::Simple(protocol) => {
                     let network = config.network.clone_with_protocol(protocol);
