@@ -267,70 +267,9 @@ where
                 .vote_for_fallback()
                 .await?;
         }
-        let mut info = ChainInfo::from(&self.chain);
-        if query.request_committees {
-            info.requested_committees =
-                Some(self.chain.execution_state.system.committees.get().clone());
-        }
-        if let Some(owner) = query.request_owner_balance {
-            info.requested_owner_balance = self
-                .chain
-                .execution_state
-                .system
-                .balances
-                .get(&owner)
-                .await?;
-        }
-        if let Some(next_block_height) = query.test_next_block_height {
-            ensure!(
-                self.chain.tip_state.get().next_block_height == next_block_height,
-                WorkerError::UnexpectedBlockHeight {
-                    expected_block_height: next_block_height,
-                    found_block_height: self.chain.tip_state.get().next_block_height
-                }
-            );
-        }
-        if query.request_pending_messages {
-            let mut messages = Vec::new();
-            let origins = self.chain.inboxes.indices().await?;
-            let inboxes = self.chain.inboxes.try_load_entries(&origins).await?;
-            let action = if *self.chain.execution_state.system.closed.get() {
-                MessageAction::Reject
-            } else {
-                MessageAction::Accept
-            };
-            for (origin, inbox) in origins.into_iter().zip(inboxes) {
-                for event in inbox.added_events.elements().await? {
-                    messages.push(IncomingMessage {
-                        origin: origin.clone(),
-                        event: event.clone(),
-                        action,
-                    });
-                }
-            }
-
-            info.requested_pending_messages = messages;
-        }
-        if let Some(range) = query.request_sent_certificate_hashes_in_range {
-            let start: usize = range.start.try_into()?;
-            let end = match range.limit {
-                None => self.chain.confirmed_log.count(),
-                Some(limit) => start
-                    .checked_add(usize::try_from(limit).map_err(|_| ArithmeticError::Overflow)?)
-                    .ok_or(ArithmeticError::Overflow)?
-                    .min(self.chain.confirmed_log.count()),
-            };
-            let keys = self.chain.confirmed_log.read(start..end).await?;
-            info.requested_sent_certificate_hashes = keys;
-        }
-        if let Some(start) = query.request_received_log_excluding_first_nth {
-            let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
-            info.requested_received_log = self.chain.received_log.read(start..).await?;
-        }
-        if query.request_manager_values {
-            info.manager.add_values(self.chain.manager.get());
-        }
-        let response = ChainInfoResponse::new(info, self.config.key_pair());
+        let response = ChainWorkerStateWithTemporaryChanges { state: self }
+            .prepare_chain_info_response(query)
+            .await?;
         // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
         let actions = self.create_network_actions().await?;
         Ok((response, actions))
@@ -794,6 +733,72 @@ where
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         self.state.chain.validate_incoming_messages().await?;
         Ok(Some((outcome, local_time)))
+    }
+
+    /// Prepares a [`ChainInfoResponse`] for a [`ChainInfoQuery`].
+    pub async fn prepare_chain_info_response(
+        &mut self,
+        query: ChainInfoQuery,
+    ) -> Result<ChainInfoResponse, WorkerError> {
+        let chain = &self.state.chain;
+        let mut info = ChainInfo::from(chain);
+        if query.request_committees {
+            info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
+        }
+        if let Some(owner) = query.request_owner_balance {
+            info.requested_owner_balance =
+                chain.execution_state.system.balances.get(&owner).await?;
+        }
+        if let Some(next_block_height) = query.test_next_block_height {
+            ensure!(
+                chain.tip_state.get().next_block_height == next_block_height,
+                WorkerError::UnexpectedBlockHeight {
+                    expected_block_height: next_block_height,
+                    found_block_height: chain.tip_state.get().next_block_height
+                }
+            );
+        }
+        if query.request_pending_messages {
+            let mut messages = Vec::new();
+            let origins = chain.inboxes.indices().await?;
+            let inboxes = chain.inboxes.try_load_entries(&origins).await?;
+            let action = if *chain.execution_state.system.closed.get() {
+                MessageAction::Reject
+            } else {
+                MessageAction::Accept
+            };
+            for (origin, inbox) in origins.into_iter().zip(inboxes) {
+                for event in inbox.added_events.elements().await? {
+                    messages.push(IncomingMessage {
+                        origin: origin.clone(),
+                        event: event.clone(),
+                        action,
+                    });
+                }
+            }
+
+            info.requested_pending_messages = messages;
+        }
+        if let Some(range) = query.request_sent_certificate_hashes_in_range {
+            let start: usize = range.start.try_into()?;
+            let end = match range.limit {
+                None => chain.confirmed_log.count(),
+                Some(limit) => start
+                    .checked_add(usize::try_from(limit).map_err(|_| ArithmeticError::Overflow)?)
+                    .ok_or(ArithmeticError::Overflow)?
+                    .min(chain.confirmed_log.count()),
+            };
+            let keys = chain.confirmed_log.read(start..end).await?;
+            info.requested_sent_certificate_hashes = keys;
+        }
+        if let Some(start) = query.request_received_log_excluding_first_nth {
+            let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
+            info.requested_received_log = chain.received_log.read(start..).await?;
+        }
+        if query.request_manager_values {
+            info.manager.add_values(chain.manager.get());
+        }
+        Ok(ChainInfoResponse::new(info, self.state.config.key_pair()))
     }
 }
 
