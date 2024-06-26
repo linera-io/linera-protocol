@@ -66,14 +66,22 @@ impl ServiceStoreClientInternal {
     pub async fn get_client(
         &self,
     ) -> Result<RwLockWriteGuardArc<StoreProcessorClient<Channel>>, ServiceContextError> {
-        let mut clients = self.clients.lock_arc().await;
-        for client in clients.iter() {
-            if let Some(client) = client.clone().try_write_arc() {
-                return Ok(client);
+        {
+            let clients = self.clients.lock().await;
+            for client in clients.iter() {
+                if let Some(client) = client.clone().try_write_arc() {
+                    return Ok(client);
+                }
             }
+            tracing::warn!(
+                "All {} connections are busy: creating a new one",
+                clients.len()
+            );
         }
         let client = StoreProcessorClient::connect(self.endpoint.clone()).await?;
         let client = Arc::new(RwLock::new(client));
+
+        let mut clients = self.clients.lock().await;
         clients.push(client.clone());
         let client = client.try_write_arc().expect("new client is not locked");
         Ok(client)
