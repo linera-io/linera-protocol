@@ -117,7 +117,7 @@ where
         &mut self,
         height: BlockHeight,
     ) -> Result<Option<Certificate>, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges { state: self }
+        ChainWorkerStateWithTemporaryChanges(self)
             .read_certificate(height)
             .await
     }
@@ -131,14 +131,14 @@ where
         height: BlockHeight,
         index: u32,
     ) -> Result<Option<Event>, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges { state: self }
+        ChainWorkerStateWithTemporaryChanges(self)
             .find_event_in_inbox(inbox_id, certificate_hash, height, index)
             .await
     }
 
     /// Queries an application's state on the chain.
     pub async fn query_application(&mut self, query: Query) -> Result<Response, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges { state: self }
+        ChainWorkerStateWithTemporaryChanges(self)
             .query_application(query)
             .await
     }
@@ -150,7 +150,7 @@ where
         &mut self,
         bytecode_id: BytecodeId,
     ) -> Result<Option<BytecodeLocation>, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges { state: self }
+        ChainWorkerStateWithTemporaryChanges(self)
             .read_bytecode_location(bytecode_id)
             .await
     }
@@ -160,7 +160,7 @@ where
         &mut self,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges { state: self }
+        ChainWorkerStateWithTemporaryChanges(self)
             .describe_application(application_id)
             .await
     }
@@ -170,7 +170,7 @@ where
         &mut self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
-        ChainWorkerStateWithTemporaryChanges { state: self }
+        ChainWorkerStateWithTemporaryChanges(self)
             .stage_block_execution(block)
             .await
     }
@@ -190,7 +190,7 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let maybe_validation_outcome = ChainWorkerStateWithTemporaryChanges { state: self }
+        let maybe_validation_outcome = ChainWorkerStateWithTemporaryChanges(self)
             .validate_block_proposal(&proposal)
             .await?;
 
@@ -267,7 +267,7 @@ where
                 .vote_for_fallback()
                 .await?;
         }
-        let response = ChainWorkerStateWithTemporaryChanges { state: self }
+        let response = ChainWorkerStateWithTemporaryChanges(self)
             .prepare_chain_info_response(query)
             .await?;
         // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
@@ -477,13 +477,12 @@ where
 }
 
 /// Wrapper type that rolls back changes to the `chain` state when dropped.
-pub struct ChainWorkerStateWithTemporaryChanges<'state, StorageClient>
+pub struct ChainWorkerStateWithTemporaryChanges<'state, StorageClient>(
+    &'state mut ChainWorkerState<StorageClient>,
+)
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>,
-{
-    state: &'state mut ChainWorkerState<StorageClient>,
-}
+    ViewError: From<StorageClient::ContextError>;
 
 impl<StorageClient> ChainWorkerStateWithTemporaryChanges<'_, StorageClient>
 where
@@ -496,22 +495,12 @@ where
         &mut self,
         height: BlockHeight,
     ) -> Result<Option<Certificate>, WorkerError> {
-        self.state.ensure_is_active()?;
-        let certificate_hash = match self
-            .state
-            .chain
-            .confirmed_log
-            .get(height.try_into()?)
-            .await?
-        {
+        self.0.ensure_is_active()?;
+        let certificate_hash = match self.0.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
             None => return Ok(None),
         };
-        let certificate = self
-            .state
-            .storage
-            .read_certificate(certificate_hash)
-            .await?;
+        let certificate = self.0.storage.read_certificate(certificate_hash).await?;
         Ok(Some(certificate))
     }
 
@@ -524,14 +513,9 @@ where
         height: BlockHeight,
         index: u32,
     ) -> Result<Option<Event>, WorkerError> {
-        self.state.ensure_is_active()?;
+        self.0.ensure_is_active()?;
 
-        let mut inbox = self
-            .state
-            .chain
-            .inboxes
-            .try_load_entry_mut(&inbox_id)
-            .await?;
+        let mut inbox = self.0.chain.inboxes.try_load_entry_mut(&inbox_id).await?;
         let mut events = inbox.added_events.iter_mut().await?;
 
         Ok(events
@@ -545,13 +529,9 @@ where
 
     /// Queries an application's state on the chain.
     pub async fn query_application(&mut self, query: Query) -> Result<Response, WorkerError> {
-        self.state.ensure_is_active()?;
-        let local_time = self.state.storage.clock().current_time();
-        let response = self
-            .state
-            .chain
-            .query_application(local_time, query)
-            .await?;
+        self.0.ensure_is_active()?;
+        let local_time = self.0.storage.clock().current_time();
+        let response = self.0.chain.query_application(local_time, query).await?;
         Ok(response)
     }
 
@@ -562,8 +542,8 @@ where
         &mut self,
         bytecode_id: BytecodeId,
     ) -> Result<Option<BytecodeLocation>, WorkerError> {
-        self.state.ensure_is_active()?;
-        let response = self.state.chain.read_bytecode_location(bytecode_id).await?;
+        self.0.ensure_is_active()?;
+        let response = self.0.chain.read_bytecode_location(bytecode_id).await?;
         Ok(response)
     }
 
@@ -572,12 +552,8 @@ where
         &mut self,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, WorkerError> {
-        self.state.ensure_is_active()?;
-        let response = self
-            .state
-            .chain
-            .describe_application(application_id)
-            .await?;
+        self.0.ensure_is_active()?;
+        let response = self.0.chain.describe_application(application_id).await?;
         Ok(response)
     }
 
@@ -586,19 +562,19 @@ where
         &mut self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
-        self.state.ensure_is_active()?;
+        self.0.ensure_is_active()?;
 
-        let local_time = self.state.storage.clock().current_time();
+        let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
 
-        let executed_block = Box::pin(self.state.chain.execute_block(&block, local_time, None))
+        let executed_block = Box::pin(self.0.chain.execute_block(&block, local_time, None))
             .await?
             .with(block);
 
-        let mut response = ChainInfoResponse::new(&self.state.chain, None);
+        let mut response = ChainInfoResponse::new(&self.0.chain, None);
         if let Some(signer) = signer {
             response.info.requested_owner_balance = self
-                .state
+                .0
                 .chain
                 .execution_state
                 .system
@@ -634,10 +610,10 @@ where
                 "Must contain a certificate if and only if it contains oracle records".to_string()
             )
         );
-        self.state.ensure_is_active()?;
+        self.0.ensure_is_active()?;
         // Check the epoch.
         let (epoch, committee) = self
-            .state
+            .0
             .chain
             .execution_state
             .system
@@ -646,7 +622,7 @@ where
         check_block_epoch(epoch, block)?;
         // Check the authentication of the block.
         let public_key = self
-            .state
+            .0
             .chain
             .manager
             .get()
@@ -662,47 +638,32 @@ where
         }
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
-        self.state
-            .chain
-            .tip_state
-            .get()
-            .verify_block_chaining(block)?;
-        if self
-            .state
-            .chain
-            .manager
-            .get()
-            .check_proposed_block(proposal)?
-            == manager::Outcome::Skip
-        {
+        self.0.chain.tip_state.get().verify_block_chaining(block)?;
+        if self.0.chain.manager.get().check_proposed_block(proposal)? == manager::Outcome::Skip {
             return Ok(None);
         }
         // Update the inboxes so that we can verify the provided hashed certificate values are
         // legitimately required.
         // Actual execution happens below, after other validity checks.
-        self.state.chain.remove_events_from_inboxes(block).await?;
+        self.0.chain.remove_events_from_inboxes(block).await?;
         // Verify that all required bytecode hashed certificate values are available, and no
         // unrelated ones provided.
-        self.state
+        self.0
             .check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
             .await?;
         // Write the values so that the bytecode is available during execution.
-        self.state
+        self.0
             .storage
             .write_hashed_certificate_values(hashed_certificate_values)
             .await?;
-        let local_time = self.state.storage.clock().current_time();
+        let local_time = self.0.storage.clock().current_time();
         ensure!(
-            block.timestamp.duration_since(local_time) <= self.state.config.grace_period,
+            block.timestamp.duration_since(local_time) <= self.0.config.grace_period,
             WorkerError::InvalidTimestamp
         );
-        self.state
-            .storage
-            .clock()
-            .sleep_until(block.timestamp)
-            .await;
-        let local_time = self.state.storage.clock().current_time();
-        let outcome = Box::pin(self.state.chain.execute_block(
+        self.0.storage.clock().sleep_until(block.timestamp).await;
+        let local_time = self.0.storage.clock().current_time();
+        let outcome = Box::pin(self.0.chain.execute_block(
             block,
             local_time,
             oracle_records.clone(),
@@ -725,13 +686,13 @@ where
             );
         }
         // Check if the counters of tip_state would be valid.
-        self.state
+        self.0
             .chain
             .tip_state
             .get()
             .verify_counters(block, &outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
-        self.state.chain.validate_incoming_messages().await?;
+        self.0.chain.validate_incoming_messages().await?;
         Ok(Some((outcome, local_time)))
     }
 
@@ -740,7 +701,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let chain = &self.state.chain;
+        let chain = &self.0.chain;
         let mut info = ChainInfo::from(chain);
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
@@ -798,7 +759,7 @@ where
         if query.request_manager_values {
             info.manager.add_values(chain.manager.get());
         }
-        Ok(ChainInfoResponse::new(info, self.state.config.key_pair()))
+        Ok(ChainInfoResponse::new(info, self.0.config.key_pair()))
     }
 }
 
@@ -808,7 +769,7 @@ where
     ViewError: From<StorageClient::ContextError>,
 {
     fn drop(&mut self) {
-        self.state.chain.rollback();
+        self.0.chain.rollback();
     }
 }
 
