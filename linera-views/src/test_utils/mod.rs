@@ -343,12 +343,12 @@ fn get_random_key_values2(n: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)>
 
 /// We build a number of scenarios for testing the reads.
 pub fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
-    let mut scenarios = Vec::new();
-    scenarios.push(get_random_key_values1(7, 3));
-    scenarios.push(get_random_key_values1(30, 10));
-    scenarios.push(get_random_key_values2(30, 10));
-    scenarios.push(get_random_key_values2(30, 100));
-    scenarios
+    vec![
+        get_random_key_values1(7, 3),
+        get_random_key_values1(30, 10),
+        get_random_key_values2(30, 10),
+        get_random_key_values2(30, 100),
+    ]
 }
 
 fn generate_random_batch<R: Rng>(rng: &mut R, key_prefix: &[u8], batch_size: usize) -> Batch {
