@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use async_graphql::{Object, OneofObject, SimpleObject};
+use async_graphql::{OneofObject, SimpleObject};
 use axum::Router;
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, doc_scalar, identifiers::ChainId};
 use linera_chain::data_types::HashedCertificateValue;
@@ -160,7 +160,7 @@ where
 }
 
 /// Implements `ObjectType`
-#[Object(cache_control(no_cache))]
+#[async_graphql::Object(cache_control(no_cache))]
 impl<C> OperationsPlugin<C>
 where
     C: Context + Send + Sync + 'static + Clone,

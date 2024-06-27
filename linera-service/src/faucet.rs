@@ -3,7 +3,7 @@
 
 use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 
-use async_graphql::{EmptySubscription, Error, Object, Schema, SimpleObject};
+use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{http::StatusCode, response, response::IntoResponse, Extension, Router};
 use futures::lock::Mutex;
@@ -78,7 +78,7 @@ pub struct Validator {
     pub network_address: String,
 }
 
-#[Object(cache_control(no_cache))]
+#[async_graphql::Object(cache_control(no_cache))]
 impl<P, S> QueryRoot<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
@@ -110,7 +110,7 @@ where
     }
 }
 
-#[Object(cache_control(no_cache))]
+#[async_graphql::Object(cache_control(no_cache))]
 impl<P, S, C> MutationRoot<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,

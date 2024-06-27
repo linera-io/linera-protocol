@@ -4,7 +4,7 @@
 
 use std::{borrow::Cow, collections::HashSet};
 
-use async_graphql::{Object, SimpleObject};
+use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
     data_types::{Amount, BlockHeight, HashedBlob, OracleRecord, Round, Timestamp},
@@ -293,7 +293,7 @@ pub enum CertificateValue {
     },
 }
 
-#[Object(cache_control(no_cache))]
+#[async_graphql::Object(cache_control(no_cache))]
 impl CertificateValue {
     #[graphql(derived(name = "executed_block"))]
     async fn _executed_block(&self) -> Option<ExecutedBlock> {
@@ -317,7 +317,7 @@ pub struct HashedCertificateValue {
     hash: CryptoHash,
 }
 
-#[Object(cache_control(no_cache))]
+#[async_graphql::Object(cache_control(no_cache))]
 impl HashedCertificateValue {
     #[graphql(derived(name = "hash"))]
     async fn _hash(&self) -> CryptoHash {
