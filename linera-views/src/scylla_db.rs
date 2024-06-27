@@ -16,7 +16,7 @@
 //! [trait2]: common::Context
 
 use std::{ops::Deref, sync::Arc};
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
@@ -153,19 +153,23 @@ impl ScyllaDbClient {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbContextError> {
-        use std::collections::hash_map::Entry;
         let num_keys = keys.len();
         if num_keys == 0 {
             return Ok(Vec::new());
         }
         let session = &self.session;
         let mut group_query = "?".to_string();
-        for _ in 1..num_keys {
-            group_query += ",?";
-        }
-        let mut map = HashMap::new();
-        for i_key in 0..num_keys {
-            let key = keys[i_key].clone();
+        group_query.push_str(&",?".repeat(num_keys-1));
+        let query = format!(
+            "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k IN ({}) ALLOW FILTERING",
+            self.namespace, group_query
+        );
+        let read_multi_value = Query::new(query);
+        let mut rows = session.query_iter(read_multi_value, &keys).await?;
+        let mut values = Vec::with_capacity(num_keys);
+        values.resize(num_keys, None);
+        let mut map = HashMap::<Vec<u8>,Vec<usize>>::new();
+        for (i_key, key) in keys.into_iter().enumerate() {
             match map.entry(key) {
                 Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
@@ -175,16 +179,6 @@ impl ScyllaDbClient {
                     entry.insert(vec![i_key]);
                 },
             }
-        }
-        let query = format!(
-            "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k IN ({}) ALLOW FILTERING",
-            self.namespace, group_query
-        );
-        let read_multi_value = Query::new(query);
-        let mut rows = session.query_iter(read_multi_value, &keys).await?;
-        let mut values = Vec::new();
-        for _ in 0..num_keys {
-            values.push(None);
         }
         while let Some(row) = rows.next().await {
             let value = row?.into_typed::<(Vec<u8>,Vec<u8>)>()?;
@@ -418,6 +412,9 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbContextError> {
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
         let store = self.store.deref();
         let _guard = self.acquire().await;
         store.read_multi_values_internal(keys).await
@@ -719,6 +716,9 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbContextError> {
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
         self.store.read_multi_values_bytes(keys).await
     }
 
