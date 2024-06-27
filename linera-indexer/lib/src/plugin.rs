@@ -58,11 +58,7 @@ pub fn sdl<Q: ObjectType + 'static>(query: Q) -> String {
     schema(query).sdl()
 }
 
-pub fn route<Q: async_graphql::ObjectType + 'static>(
-    name: &str,
-    query: Q,
-    app: axum::Router,
-) -> axum::Router {
+pub fn route<Q: ObjectType + 'static>(name: &str, query: Q, app: axum::Router) -> axum::Router {
     app.route(
         &format!("/{}", name),
         axum::routing::get(crate::common::graphiql).post(handler::<Q>),

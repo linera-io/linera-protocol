@@ -7,8 +7,8 @@ use async_graphql::{
     futures_util::Stream,
     parser::types::{DocumentOperations, ExecutableDocument, OperationType},
     resolver_utils::ContainerType,
-    Error, MergedObject, Object, OutputType, Request, ScalarType, Schema, ServerError,
-    SimpleObject, Subscription,
+    Error, MergedObject, OutputType, Request, ScalarType, Schema, ServerError, SimpleObject,
+    Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
@@ -271,7 +271,7 @@ where
     }
 }
 
-#[Object(cache_control(no_cache))]
+#[async_graphql::Object(cache_control(no_cache))]
 impl<P, S, C> MutationRoot<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
@@ -699,7 +699,7 @@ where
     }
 }
 
-#[Object(cache_control(no_cache))]
+#[async_graphql::Object(cache_control(no_cache))]
 impl<P, S> QueryRoot<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
@@ -793,7 +793,7 @@ where
 
 struct ChainStateViewExtension(ChainId);
 
-#[Object(cache_control(no_cache))]
+#[async_graphql::Object(cache_control(no_cache))]
 impl ChainStateViewExtension {
     async fn chain_id(&self) -> ChainId {
         self.0

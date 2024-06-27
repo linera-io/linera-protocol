@@ -5,7 +5,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, SimpleObject};
+use async_graphql::{EmptyMutation, EmptySubscription, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{extract::Extension, routing::get, Router};
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
@@ -209,7 +209,7 @@ pub struct HighestBlock {
     height: Option<BlockHeight>,
 }
 
-#[Object]
+#[async_graphql::Object(cache_control(no_cache))]
 impl<C> State<C>
 where
     C: Context + Clone + Send + Sync + 'static,
