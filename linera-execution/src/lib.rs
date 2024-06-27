@@ -163,6 +163,9 @@ pub enum ExecutionError {
         timestamp: Timestamp,
         local_time: Timestamp,
     },
+
+    #[error("Blob not found on storage read: {0}")]
+    BlobNotFoundOnRead(BlobId),
 }
 
 /// The public entry points provided by the contract part of an application.

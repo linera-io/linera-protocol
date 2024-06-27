@@ -289,7 +289,12 @@ where
             }
 
             ReadBlob { blob_id, callback } => {
-                let blob = self.context().extra().get_blob(blob_id).await?;
+                let blob = self
+                    .context()
+                    .extra()
+                    .get_blob(blob_id)
+                    .await
+                    .map_err(|_| ExecutionError::BlobNotFoundOnRead(blob_id))?;
                 callback.respond(blob);
             }
         }

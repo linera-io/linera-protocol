@@ -366,15 +366,15 @@ where
             Err(
                 ref e @ NodeError::ApplicationBytecodesOrBlobsNotFound(ref locations, ref blob_ids),
             ) => {
+                if !blob_ids.is_empty() {
+                    return Err(e.clone());
+                }
+
                 if !locations.is_empty() {
                     // Some received certificates may be missing for this validator
                     // (e.g. to create the chain or make the balance sufficient) so we are going to
                     // synchronize them now and retry.
                     self.send_chain_information_for_senders(chain_id).await?;
-                }
-
-                if !blob_ids.is_empty() {
-                    return Err(e.clone());
                 }
 
                 self.node.handle_block_proposal(proposal.clone()).await?
