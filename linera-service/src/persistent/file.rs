@@ -51,14 +51,14 @@ impl<T> std::ops::Deref for File<T> {
     }
 }
 
-/// Returns options for opening and writing to the wallet file, creating it if it doesn't
+/// Returns options for opening and writing to the file, creating it if it doesn't
 /// exist. On Unix, this restricts read and write permissions to the current user.
 // TODO(#1924): Implement better key management.
 fn open_options() -> fs_err::OpenOptions {
     let mut options = fs_err::OpenOptions::new();
     #[cfg(target_family = "unix")]
     fs_err::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    options.create(true).write(true);
+    options.create(true).read(true).write(true);
     options
 }
 
@@ -69,6 +69,7 @@ impl<T: serde::de::DeserializeOwned> File<T> {
                 fs_err::OpenOptions::new()
                     .read(true)
                     .write(true)
+                    .create(true)
                     .open(path)?,
                 path,
             )?,
