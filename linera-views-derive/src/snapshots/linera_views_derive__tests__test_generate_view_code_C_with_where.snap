@@ -9,24 +9,66 @@ where
     C: linera_views::common::Context + Send + Sync + Clone + 'static,
     linera_views::views::ViewError: From<C::Error>,
 {
+    const NUM_INIT_KEYS: usize = RegisterView::<C, usize>::NUM_INIT_KEYS
+        + CollectionView::<C, usize, RegisterView<C, usize>>::NUM_INIT_KEYS;
     fn context(&self) -> &C {
         use linera_views::views::View;
         self.register.context()
     }
-    async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::{futures::join, common::Context};
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
+        use linera_views::common::Context as _;
+        let mut keys = Vec::new();
         let index = 0;
         let base_key = context
             .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
-        let register_fut = RegisterView::load(context.clone_with_base_key(base_key));
+        keys.extend(
+            RegisterView::<C, usize>::pre_load(&context.clone_with_base_key(base_key))?,
+        );
         let index = 1;
         let base_key = context
             .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
-        let collection_fut = CollectionView::load(context.clone_with_base_key(base_key));
-        let result = join!(register_fut, collection_fut);
-        let register = result.0?;
-        let collection = result.1?;
+        keys.extend(
+            CollectionView::<
+                C,
+                usize,
+                RegisterView<C, usize>,
+            >::pre_load(&context.clone_with_base_key(base_key))?,
+        );
+        Ok(keys)
+    }
+    fn post_load(
+        context: C,
+        values: &[Option<Vec<u8>>],
+    ) -> Result<Self, linera_views::views::ViewError> {
+        use linera_views::common::Context as _;
+        let mut pos = 0;
+        let index = 0;
+        let pos_next = pos + RegisterView::<C, usize>::NUM_INIT_KEYS;
+        let base_key = context
+            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+        let register = RegisterView::<
+            C,
+            usize,
+        >::post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
+        pos = pos_next;
+        let index = 1;
+        let pos_next = pos
+            + CollectionView::<C, usize, RegisterView<C, usize>>::NUM_INIT_KEYS;
+        let base_key = context
+            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+        let collection = CollectionView::<
+            C,
+            usize,
+            RegisterView<C, usize>,
+        >::post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
+        pos = pos_next;
         Ok(Self { register, collection })
+    }
+    async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
+        use linera_views::common::Context as _;
+        let keys = Self::pre_load(&context)?;
+        let values = context.read_multi_values_bytes(keys).await?;
+        Self::post_load(context, &values)
     }
     fn rollback(&mut self) {
         self.register.rollback();

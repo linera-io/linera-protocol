@@ -92,6 +92,16 @@ fn empty_where_clause() -> WhereClause {
     }
 }
 
+fn get_extended_entry(e: Type) -> TokenStream2 {
+    let syn::Type::Path(typepath) = e else {
+        panic!("The type should be a path");
+    };
+    let path_segment = typepath.path.segments.into_iter().next().unwrap();
+    let ident = path_segment.ident;
+    let arguments = path_segment.arguments;
+    quote! { #ident :: #arguments }
+}
+
 fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let struct_name = input.ident;
     let (impl_generics, type_generics, maybe_where_clause) = input.generics.split_for_impl();
@@ -115,12 +125,15 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut test_flush_quotes = Vec::new();
     let mut clear_quotes = Vec::new();
     let mut has_pending_changes_quotes = Vec::new();
+    let mut num_init_keys_quotes = Vec::new();
+    let mut pre_load_keys_quotes = Vec::new();
+    let mut post_load_keys_quotes = Vec::new();
     for (idx, e) in input.fields.into_iter().enumerate() {
         let name = e.clone().ident.unwrap();
         let fut = format_ident!("{}_fut", name.to_string());
         let test_flush_ident = format_ident!("deleted{}", idx);
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
-        let type_ident = get_type_field(e).expect("Failed to find the type");
+        let type_ident = get_type_field(e.clone()).expect("Failed to find the type");
         load_future_quotes.push(quote! {
             let index = #idx_lit;
             let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
@@ -132,6 +145,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         load_result_quotes.push(quote! {
             let #name = result.#idx_lit?;
         });
+        let g = get_extended_entry(e.ty.clone());
         name_quotes.push(quote! { #name });
         rollback_quotes.push(quote! { self.#name.rollback(); });
         flush_quotes.push(quote! { let #test_flush_ident = self.#name.flush(batch)?; });
@@ -142,12 +156,25 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 return true;
             }
         });
+        num_init_keys_quotes.push(quote! { #g :: NUM_INIT_KEYS });
+        pre_load_keys_quotes.push(quote! {
+            let index = #idx_lit;
+            let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            keys.extend(#g :: pre_load(&context.clone_with_base_key(base_key))?);
+        });
+        post_load_keys_quotes.push(quote! {
+            let index = #idx_lit;
+            let pos_next = pos + #g :: NUM_INIT_KEYS;
+            let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            let #name = #g :: post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
+            pos = pos_next;
+        });
     }
     let first_name_quote = name_quotes
         .first()
         .expect("list of names should be non-empty");
 
-    let increment_counter = if root && cfg!(feature = "metrics") {
+    let load_metrics = if root && cfg!(feature = "metrics") {
         quote! {
             #[cfg(not(target_arch = "wasm32"))]
             linera_views::increment_counter(
@@ -155,6 +182,9 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 stringify!(#struct_name),
                 &context.base_key(),
             );
+            #[cfg(not(target_arch = "wasm32"))]
+            use linera_views::prometheus_util::MeasureLatency as _;
+            let _latency = linera_views::LOAD_VIEW_LATENCY.measure_latency();
         }
     } else {
         quote! {}
@@ -165,18 +195,33 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         impl #impl_generics linera_views::views::View<#context> for #struct_name #type_generics
         #where_clause
         {
+            const NUM_INIT_KEYS: usize = #(#num_init_keys_quotes)+*;
+
             fn context(&self) -> &#context {
                 use linera_views::views::View;
                 self.#first_name_quote.context()
             }
 
-            async fn load(context: #context) -> Result<Self, linera_views::views::ViewError> {
-                use linera_views::{futures::join, common::Context};
-                #increment_counter
-                #(#load_future_quotes)*
-                let result = join!(#(#load_ident_quotes),*);
-                #(#load_result_quotes)*
+            fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
+                use linera_views::common::Context as _;
+                let mut keys = Vec::new();
+                #(#pre_load_keys_quotes)*
+                Ok(keys)
+            }
+
+            fn post_load(context: #context, values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::views::ViewError> {
+                use linera_views::common::Context as _;
+                let mut pos = 0;
+                #(#post_load_keys_quotes)*
                 Ok(Self {#(#name_quotes),*})
+            }
+
+            async fn load(context: #context) -> Result<Self, linera_views::views::ViewError> {
+                use linera_views::common::Context as _;
+                #load_metrics
+                let keys = Self::pre_load(&context)?;
+                let values = context.read_multi_values_bytes(keys).await?;
+                Self::post_load(context, &values)
             }
 
 

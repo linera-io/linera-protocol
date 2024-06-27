@@ -8,32 +8,94 @@ for TestView<MyParam>
 where
     MyParam: Send + Sync + 'static,
 {
+    const NUM_INIT_KEYS: usize = RegisterView::<
+        custom::path::to::ContextType,
+        usize,
+    >::NUM_INIT_KEYS
+        + CollectionView::<
+            custom::path::to::ContextType,
+            usize,
+            RegisterView<custom::path::to::ContextType, usize>,
+        >::NUM_INIT_KEYS;
     fn context(&self) -> &custom::path::to::ContextType {
         use linera_views::views::View;
         self.register.context()
     }
+    fn pre_load(
+        context: &custom::path::to::ContextType,
+    ) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
+        use linera_views::common::Context as _;
+        let mut keys = Vec::new();
+        let index = 0;
+        let base_key = context
+            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+        keys.extend(
+            RegisterView::<
+                custom::path::to::ContextType,
+                usize,
+            >::pre_load(&context.clone_with_base_key(base_key))?,
+        );
+        let index = 1;
+        let base_key = context
+            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+        keys.extend(
+            CollectionView::<
+                custom::path::to::ContextType,
+                usize,
+                RegisterView<custom::path::to::ContextType, usize>,
+            >::pre_load(&context.clone_with_base_key(base_key))?,
+        );
+        Ok(keys)
+    }
+    fn post_load(
+        context: custom::path::to::ContextType,
+        values: &[Option<Vec<u8>>],
+    ) -> Result<Self, linera_views::views::ViewError> {
+        use linera_views::common::Context as _;
+        let mut pos = 0;
+        let index = 0;
+        let pos_next = pos
+            + RegisterView::<custom::path::to::ContextType, usize>::NUM_INIT_KEYS;
+        let base_key = context
+            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+        let register = RegisterView::<
+            custom::path::to::ContextType,
+            usize,
+        >::post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
+        pos = pos_next;
+        let index = 1;
+        let pos_next = pos
+            + CollectionView::<
+                custom::path::to::ContextType,
+                usize,
+                RegisterView<custom::path::to::ContextType, usize>,
+            >::NUM_INIT_KEYS;
+        let base_key = context
+            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+        let collection = CollectionView::<
+            custom::path::to::ContextType,
+            usize,
+            RegisterView<custom::path::to::ContextType, usize>,
+        >::post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
+        pos = pos_next;
+        Ok(Self { register, collection })
+    }
     async fn load(
         context: custom::path::to::ContextType,
     ) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::{futures::join, common::Context};
+        use linera_views::common::Context as _;
         #[cfg(not(target_arch = "wasm32"))]
         linera_views::increment_counter(
             &linera_views::LOAD_VIEW_COUNTER,
             stringify!(TestView),
             &context.base_key(),
         );
-        let index = 0;
-        let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
-        let register_fut = RegisterView::load(context.clone_with_base_key(base_key));
-        let index = 1;
-        let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
-        let collection_fut = CollectionView::load(context.clone_with_base_key(base_key));
-        let result = join!(register_fut, collection_fut);
-        let register = result.0?;
-        let collection = result.1?;
-        Ok(Self { register, collection })
+        #[cfg(not(target_arch = "wasm32"))]
+        use linera_views::prometheus_util::MeasureLatency as _;
+        let _latency = linera_views::LOAD_VIEW_LATENCY.measure_latency();
+        let keys = Self::pre_load(&context)?;
+        let values = context.read_multi_values_bytes(keys).await?;
+        Self::post_load(context, &values)
     }
     fn rollback(&mut self) {
         self.register.rollback();
