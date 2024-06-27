@@ -151,7 +151,12 @@ where
             .map(|kp| (Owner::from(kp.public()), kp))
             .collect();
 
-        let _ = self.chains.entry(chain_id).insert(ChainState {
+        use dashmap::mapref::entry::Entry;
+
+        let Entry::Vacant(e) = self.chains.entry(chain_id) else {
+            panic!("Inserting already-existing chain {chain_id}");
+        };
+        e.insert(ChainState {
             known_key_pairs,
             admin_id,
             block_hash,
@@ -199,11 +204,7 @@ impl MessagePolicy {
     }
 }
 
-pub struct ChainState
-where
-    Storage: linera_storage::Storage,
-    ViewError: From<Storage::ContextError>,
-{
+pub struct ChainState {
     /// Latest block hash, if any.
     pub block_hash: Option<CryptoHash>,
     /// The earliest possible timestamp for the next block.
@@ -241,7 +242,11 @@ pub struct ChainClientOptions {
 /// * The chain being operated is called the "local chain" or just the "chain".
 /// * As a rule, operations are considered successful (and communication may stop) when
 /// they succeeded in gathering a quorum of responses.
-pub struct ChainClient<ValidatorNodeProvider, Storage> {
+pub struct ChainClient<ValidatorNodeProvider, Storage>
+where
+    Storage: linera_storage::Storage,
+    ViewError: From<<Storage as linera_storage::Storage>::ContextError>,
+{
     /// The Linera [`Client`] that manages operations for this chain client.
     client: Arc<Client<ValidatorNodeProvider, Storage>>,
     /// The off-chain chain ID.
@@ -250,7 +255,11 @@ pub struct ChainClient<ValidatorNodeProvider, Storage> {
     options: ChainClientOptions,
 }
 
-impl<P, S> Clone for ChainClient<P, S> {
+impl<P, S> Clone for ChainClient<P, S>
+where
+    S: linera_storage::Storage,
+    ViewError: From<<S as linera_storage::Storage>::ContextError>,
+{
     fn clone(&self) -> Self {
         Self {
             client: self.client.clone(),
