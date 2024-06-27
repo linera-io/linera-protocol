@@ -205,6 +205,9 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClientInternal {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ServiceContextError> {
+        if batch.operations.is_empty() {
+            return Ok(());
+        }
         let mut statements = Vec::new();
         let mut chunk_size = 0;
         for operation in batch.operations {
