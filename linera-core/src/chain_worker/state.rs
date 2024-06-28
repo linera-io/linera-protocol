@@ -592,7 +592,7 @@ where
         Ok((executed_block, response))
     }
 
-    /// Validates a proposal for the next block for this chain.
+    /// Validates a block proposed to extend this chain.
     pub(super) async fn validate_block(
         &mut self,
         proposal: &BlockProposal,
