@@ -23,10 +23,11 @@ use crate::{
     common::Context,
     memory::{create_memory_context, MemoryContext},
     queue_view::QueueView,
+    register_view::HashedRegisterView,
     test_utils::test_views::{
         TestCollectionView, TestLogView, TestMapView, TestRegisterView, TestView,
     },
-    views::{View, ViewError},
+    views::{HashableView, View, ViewError},
 };
 #[cfg(any(with_rocksdb, with_scylladb, with_dynamodb))]
 use crate::{common::AdminKeyValueStore, test_utils::generate_test_namespace};
@@ -333,6 +334,51 @@ where
     assert_ne!(original_state, first_clone_state);
     assert_ne!(original_state, second_clone_state);
     assert_ne!(first_clone_state, second_clone_state);
+
+    Ok(())
+}
+
+/// Check if the cached hash value persisted in storage is cleared when flushing a cleared
+/// [`HashableRegisterView`].
+///
+/// Otherwise `rollback` may set the cached staged hash value to an incorrect value.
+#[tokio::test]
+async fn test_clearing_of_cached_stored_hash() -> anyhow::Result<()> {
+    let context = create_memory_context();
+    let mut view = HashedRegisterView::<_, String>::load(context.clone()).await?;
+
+    let empty_hash = view.hash().await?;
+    assert_eq!(view.hash_mut().await?, empty_hash);
+
+    view.set("some value".to_owned());
+
+    let populated_hash = view.hash().await?;
+    assert_eq!(view.hash_mut().await?, populated_hash);
+    assert_ne!(populated_hash, empty_hash);
+
+    let mut batch = Batch::new();
+    view.flush(&mut batch)?;
+    context.write_batch(batch).await?;
+
+    assert_eq!(view.hash().await?, populated_hash);
+    assert_eq!(view.hash_mut().await?, populated_hash);
+
+    view.clear();
+
+    assert_eq!(view.hash().await?, empty_hash);
+    assert_eq!(view.hash_mut().await?, empty_hash);
+
+    let mut batch = Batch::new();
+    view.flush(&mut batch)?;
+    context.write_batch(batch).await?;
+
+    assert_eq!(view.hash().await?, empty_hash);
+    assert_eq!(view.hash_mut().await?, empty_hash);
+
+    view.rollback();
+
+    assert_eq!(view.hash().await?, empty_hash);
+    assert_eq!(view.hash_mut().await?, empty_hash);
 
     Ok(())
 }

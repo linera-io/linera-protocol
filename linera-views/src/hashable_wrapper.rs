@@ -75,7 +75,8 @@ where
         if delete_view {
             let mut key_prefix = self.inner.context().base_key();
             key_prefix.pop();
-            batch.delete_key_prefix(key_prefix)
+            batch.delete_key_prefix(key_prefix);
+            self.stored_hash = None;
         } else {
             let hash = *self.hash.get_mut();
             if self.stored_hash != hash {
