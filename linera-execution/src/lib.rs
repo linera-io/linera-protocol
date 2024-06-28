@@ -213,12 +213,9 @@ impl ApplicationCallOutcome {
     }
 }
 
-/// System runtime implementation in use.
-#[derive(Default, Clone, Copy)]
-pub enum ExecutionRuntimeConfig {
-    #[default]
-    Synchronous,
-}
+/// Configuration options for the execution runtime available to applications.
+#[derive(Clone, Copy, Default)]
+pub struct ExecutionRuntimeConfig {}
 
 /// Requirements for the `extra` field in our state views (and notably the
 /// [`ExecutionStateView`]).

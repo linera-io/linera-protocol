@@ -39,7 +39,7 @@ where
 {
     pub async fn new(chain_id: ChainId) -> Self {
         let exec_runtime_context =
-            TestExecutionRuntimeContext::new(chain_id, ExecutionRuntimeConfig::Synchronous);
+            TestExecutionRuntimeContext::new(chain_id, ExecutionRuntimeConfig::default());
         let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, exec_runtime_context);
         Self::load(context)
             .await
