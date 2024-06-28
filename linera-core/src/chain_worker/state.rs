@@ -660,6 +660,7 @@ where
             .check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
             .await?;
         // Write the values so that the bytecode is available during execution.
+        // TODO(#2199): We should not persist anything in storage before the block is confirmed.
         self.0
             .storage
             .write_hashed_certificate_values(hashed_certificate_values)
