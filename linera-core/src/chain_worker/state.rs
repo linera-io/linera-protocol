@@ -95,7 +95,7 @@ where
     ///
     /// The returned view holds a lock on the chain state, which prevents the worker from changing
     /// it.
-    pub async fn chain_state_view(
+    pub(super) async fn chain_state_view(
         &mut self,
     ) -> Result<OwnedRwLockReadGuard<ChainStateView<StorageClient::Context>>, WorkerError> {
         if self.shared_chain_view.is_none() {
@@ -113,7 +113,7 @@ where
 
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
     #[cfg(with_testing)]
-    pub async fn read_certificate(
+    pub(super) async fn read_certificate(
         &mut self,
         height: BlockHeight,
     ) -> Result<Option<Certificate>, WorkerError> {
@@ -124,7 +124,7 @@ where
 
     /// Searches for an event in one of the chain's inboxes.
     #[cfg(with_testing)]
-    pub async fn find_event_in_inbox(
+    pub(super) async fn find_event_in_inbox(
         &mut self,
         inbox_id: Origin,
         certificate_hash: CryptoHash,
@@ -137,7 +137,10 @@ where
     }
 
     /// Queries an application's state on the chain.
-    pub async fn query_application(&mut self, query: Query) -> Result<Response, WorkerError> {
+    pub(super) async fn query_application(
+        &mut self,
+        query: Query,
+    ) -> Result<Response, WorkerError> {
         ChainWorkerStateWithTemporaryChanges(self)
             .query_application(query)
             .await
@@ -146,7 +149,7 @@ where
     /// Returns the [`BytecodeLocation`] for the requested [`BytecodeId`], if it is known by the
     /// chain.
     #[cfg(with_testing)]
-    pub async fn read_bytecode_location(
+    pub(super) async fn read_bytecode_location(
         &mut self,
         bytecode_id: BytecodeId,
     ) -> Result<Option<BytecodeLocation>, WorkerError> {
@@ -156,7 +159,7 @@ where
     }
 
     /// Returns an application's description.
-    pub async fn describe_application(
+    pub(super) async fn describe_application(
         &mut self,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, WorkerError> {
@@ -166,7 +169,7 @@ where
     }
 
     /// Executes a block without persisting any changes to the state.
-    pub async fn stage_block_execution(
+    pub(super) async fn stage_block_execution(
         &mut self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
@@ -176,7 +179,7 @@ where
     }
 
     /// Processes a leader timeout issued for this multi-owner chain.
-    pub async fn process_timeout(
+    pub(super) async fn process_timeout(
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -186,15 +189,15 @@ where
     }
 
     /// Handles a proposal for the next block for this chain.
-    pub async fn handle_block_proposal(
+    pub(super) async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let maybe_validation_outcome = ChainWorkerStateWithTemporaryChanges(self)
-            .validate_block_proposal(&proposal)
+        let validation_outcome = ChainWorkerStateWithTemporaryChanges(self)
+            .validate_block(&proposal)
             .await?;
 
-        let actions = if let Some((outcome, local_time)) = maybe_validation_outcome {
+        let actions = if let Some((outcome, local_time)) = validation_outcome {
             ChainWorkerStateWithAttemptedChanges::from(&mut *self)
                 .vote_for_block_proposal(proposal, outcome, local_time)
                 .await?;
@@ -210,7 +213,7 @@ where
     }
 
     /// Processes a validated block issued for this multi-owner chain.
-    pub async fn process_validated_block(
+    pub(super) async fn process_validated_block(
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
@@ -220,7 +223,7 @@ where
     }
 
     /// Processes a confirmed block (aka a commit).
-    pub async fn process_confirmed_block(
+    pub(super) async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: &[HashedCertificateValue],
@@ -232,7 +235,7 @@ where
     }
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
-    pub async fn process_cross_chain_update(
+    pub(super) async fn process_cross_chain_update(
         &mut self,
         origin: Origin,
         bundles: Vec<MessageBundle>,
@@ -243,7 +246,7 @@ where
     }
 
     /// Handles the cross-chain request confirming that the recipient was updated.
-    pub async fn confirm_updated_recipient(
+    pub(super) async fn confirm_updated_recipient(
         &mut self,
         latest_heights: Vec<(Target, BlockHeight)>,
     ) -> Result<BlockHeight, WorkerError> {
@@ -253,7 +256,7 @@ where
     }
 
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
-    pub async fn handle_chain_info_query(
+    pub(super) async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -491,7 +494,7 @@ where
 {
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
     #[cfg(with_testing)]
-    pub async fn read_certificate(
+    pub(super) async fn read_certificate(
         &mut self,
         height: BlockHeight,
     ) -> Result<Option<Certificate>, WorkerError> {
@@ -506,7 +509,7 @@ where
 
     /// Searches for an event in one of the chain's inboxes.
     #[cfg(with_testing)]
-    pub async fn find_event_in_inbox(
+    pub(super) async fn find_event_in_inbox(
         &mut self,
         inbox_id: Origin,
         certificate_hash: CryptoHash,
@@ -528,7 +531,10 @@ where
     }
 
     /// Queries an application's state on the chain.
-    pub async fn query_application(&mut self, query: Query) -> Result<Response, WorkerError> {
+    pub(super) async fn query_application(
+        &mut self,
+        query: Query,
+    ) -> Result<Response, WorkerError> {
         self.0.ensure_is_active()?;
         let local_time = self.0.storage.clock().current_time();
         let response = self.0.chain.query_application(local_time, query).await?;
@@ -538,7 +544,7 @@ where
     /// Returns the [`BytecodeLocation`] for the requested [`BytecodeId`], if it is known by the
     /// chain.
     #[cfg(with_testing)]
-    pub async fn read_bytecode_location(
+    pub(super) async fn read_bytecode_location(
         &mut self,
         bytecode_id: BytecodeId,
     ) -> Result<Option<BytecodeLocation>, WorkerError> {
@@ -548,7 +554,7 @@ where
     }
 
     /// Returns an application's description.
-    pub async fn describe_application(
+    pub(super) async fn describe_application(
         &mut self,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, WorkerError> {
@@ -558,7 +564,7 @@ where
     }
 
     /// Executes a block without persisting any changes to the state.
-    pub async fn stage_block_execution(
+    pub(super) async fn stage_block_execution(
         &mut self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
@@ -587,7 +593,7 @@ where
     }
 
     /// Validates a proposal for the next block for this chain.
-    pub async fn validate_block_proposal(
+    pub(super) async fn validate_block(
         &mut self,
         proposal: &BlockProposal,
     ) -> Result<Option<(BlockExecutionOutcome, Timestamp)>, WorkerError> {
@@ -697,7 +703,7 @@ where
     }
 
     /// Prepares a [`ChainInfoResponse`] for a [`ChainInfoQuery`].
-    pub async fn prepare_chain_info_response(
+    pub(super) async fn prepare_chain_info_response(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
@@ -804,7 +810,7 @@ where
     ViewError: From<StorageClient::ContextError>,
 {
     /// Processes a leader timeout issued for this multi-owner chain.
-    pub async fn process_timeout(
+    pub(super) async fn process_timeout(
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -871,7 +877,7 @@ where
     }
 
     /// Votes for a block proposal for the next block for this chain.
-    pub async fn vote_for_block_proposal(
+    pub(super) async fn vote_for_block_proposal(
         &mut self,
         proposal: BlockProposal,
         outcome: BlockExecutionOutcome,
@@ -892,7 +898,7 @@ where
     }
 
     /// Processes a validated block issued for this multi-owner chain.
-    pub async fn process_validated_block(
+    pub(super) async fn process_validated_block(
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
@@ -961,7 +967,7 @@ where
     }
 
     /// Processes a confirmed block (aka a commit).
-    pub async fn process_confirmed_block(
+    pub(super) async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: &[HashedCertificateValue],
@@ -1102,7 +1108,7 @@ where
     }
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
-    pub async fn process_cross_chain_update(
+    pub(super) async fn process_cross_chain_update(
         &mut self,
         origin: Origin,
         bundles: Vec<MessageBundle>,
@@ -1155,7 +1161,7 @@ where
     }
 
     /// Handles the cross-chain request confirming that the recipient was updated.
-    pub async fn confirm_updated_recipient(
+    pub(super) async fn confirm_updated_recipient(
         &mut self,
         latest_heights: Vec<(Target, BlockHeight)>,
     ) -> Result<BlockHeight, WorkerError> {
@@ -1180,7 +1186,7 @@ where
     }
 
     /// Attempts to vote for a leader timeout, if possible.
-    pub async fn vote_for_leader_timeout(&mut self) -> Result<(), WorkerError> {
+    pub(super) async fn vote_for_leader_timeout(&mut self) -> Result<(), WorkerError> {
         let chain = &mut self.state.chain;
         if let Some(epoch) = chain.execution_state.system.epoch.get() {
             let chain_id = chain.chain_id();
@@ -1197,7 +1203,7 @@ where
 
     /// Votes for falling back to a public chain.
     ///
-    pub async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
+    pub(super) async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
         let chain = &mut self.state.chain;
         if let (Some(epoch), Some(entry)) = (
             chain.execution_state.system.epoch.get(),
