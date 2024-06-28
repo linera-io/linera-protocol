@@ -9,10 +9,13 @@ use std::{
     sync::Arc,
 };
 
-use futures::{future, FutureExt as _};
+use futures::{
+    future::{self, try_join_all},
+    FutureExt as _,
+};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{ArithmeticError, BlockHeight, HashedBlob, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, HashedBlob, OracleResponse, Timestamp},
     ensure,
     identifiers::{BlobId, ChainId},
 };
@@ -1071,20 +1074,52 @@ where
                 .await;
         }
 
-        let blobs_in_block = self.state.get_blobs(block.blob_ids()).await?;
+        let blob_ids_in_oracle_records = oracle_records
+            .iter()
+            .flat_map(|record| {
+                record.responses.iter().filter_map(|response| {
+                    if let OracleResponse::Blob(blob_id) = response {
+                        Some(blob_id)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<HashSet<_>>();
+
+        let block_blob_ids = block.blob_ids();
+        let missing_blobs_from_oracles = block_blob_ids
+            .iter()
+            .filter(|block_blob_id| !blob_ids_in_oracle_records.contains(block_blob_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        ensure!(
+            missing_blobs_from_oracles.is_empty(),
+            WorkerError::MissingBlockBlobsInOracles(missing_blobs_from_oracles)
+        );
+
+        let blobs_in_block = self.state.get_blobs(block_blob_ids).await?;
         let certificate_hash = certificate.hash();
+
         let (result_hashed_certificate_value, result_blobs, result_certificate) = tokio::join!(
             self.state
                 .storage
                 .write_hashed_certificate_values(hashed_certificate_values),
-            self.state
-                .storage
-                .write_hashed_blobs(&blobs_in_block, &certificate_hash),
+            self.state.storage.write_hashed_blobs(&blobs_in_block),
             self.state.storage.write_certificate(&certificate)
         );
         result_hashed_certificate_value?;
         result_blobs?;
         result_certificate?;
+
+        // Update the blob state with last used certificate hash.
+        try_join_all(blob_ids_in_oracle_records.into_iter().map(|blob_id| {
+            self.state
+                .storage
+                .write_blob_state(*blob_id, certificate_hash)
+        }))
+        .await?;
+
         // Execute the block and update inboxes.
         self.state.chain.remove_events_from_inboxes(block).await?;
         let local_time = self.state.storage.clock().current_time();
