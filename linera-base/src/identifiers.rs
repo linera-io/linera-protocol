@@ -166,6 +166,12 @@ impl BlobId {
     pub fn new(blob: &Blob) -> Self {
         BlobId(CryptoHash::new(blob))
     }
+
+    /// Returns the blob ID of `TestString(s)`, for testing purposes.
+    #[cfg(with_testing)]
+    pub fn test_blob_id(s: impl Into<String>) -> Self {
+        BlobId(CryptoHash::test_hash(s))
+    }
 }
 
 impl Display for BlobId {

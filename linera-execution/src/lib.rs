@@ -133,8 +133,6 @@ pub enum ExecutionError {
     ServiceWriteAttempt,
     #[error("Failed to load bytecode from storage {0:?}")]
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
-    #[error("Failed to load blob from storage {0:?}")]
-    BlobNotFound(Box<BlobId>),
 
     #[error("Excessive number of bytes read from storage")]
     ExcessiveRead,
@@ -875,7 +873,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         Ok(self
             .blobs
             .get(&blob_id)
-            .ok_or_else(|| ExecutionError::BlobNotFound(Box::new(blob_id)))?
+            .ok_or_else(|| ExecutionError::BlobNotFoundOnRead(blob_id))?
             .clone())
     }
 }
