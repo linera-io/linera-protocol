@@ -108,7 +108,7 @@ fn create_contract_runtime() -> (
     (runtime, execution_state_receiver)
 }
 
-/// Create an [`ApplicationStatus`] for a dummy application.
+/// Creates an [`ApplicationStatus`] for a dummy application.
 fn create_dummy_application() -> ApplicationStatus {
     let chain_id = ChainDescription::Root(1).into();
     let id = ApplicationId {
