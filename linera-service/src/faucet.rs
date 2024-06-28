@@ -34,13 +34,21 @@ use crate::{chain_listener::ClientContext, config::GenesisConfig, util};
 mod tests;
 
 /// The root GraphQL query type.
-pub struct QueryRoot<P, S> {
+pub struct QueryRoot<P, S>
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     genesis_config: Arc<GenesisConfig>,
     client: Arc<Mutex<ChainClient<P, S>>>,
 }
 
 /// The root GraphQL mutation type.
-pub struct MutationRoot<P, S, C> {
+pub struct MutationRoot<P, S, C>
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     client: Arc<Mutex<ChainClient<P, S>>>,
     context: Arc<Mutex<C>>,
     amount: Amount,
@@ -184,7 +192,11 @@ where
     }
 }
 
-impl<P, S, C> MutationRoot<P, S, C> {
+impl<P, S, C> MutationRoot<P, S, C>
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     /// Multiplies a `u128` with a `u64` and returns the result as a 192-bit number.
     fn multiply(a: u128, b: u64) -> [u64; 3] {
         let lower = u128::from(u64::MAX);
@@ -197,7 +209,11 @@ impl<P, S, C> MutationRoot<P, S, C> {
 }
 
 /// A GraphQL interface to request a new chain with tokens.
-pub struct FaucetService<P, S, C> {
+pub struct FaucetService<P, S, C>
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     client: Arc<Mutex<ChainClient<P, S>>>,
     context: Arc<Mutex<C>>,
     genesis_config: Arc<GenesisConfig>,
@@ -208,7 +224,11 @@ pub struct FaucetService<P, S, C> {
     start_balance: Amount,
 }
 
-impl<P, S: Clone, C> Clone for FaucetService<P, S, C> {
+impl<P, S: Clone, C> Clone for FaucetService<P, S, C>
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     fn clone(&self) -> Self {
         Self {
             client: self.client.clone(),

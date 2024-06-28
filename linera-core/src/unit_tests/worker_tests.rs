@@ -125,7 +125,11 @@ fn make_certificate<S>(
     committee: &Committee,
     worker: &WorkerState<S>,
     value: HashedCertificateValue,
-) -> Certificate {
+) -> Certificate
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     make_certificate_with_round(committee, worker, value, Round::Fast)
 }
 
@@ -134,7 +138,11 @@ fn make_certificate_with_round<S>(
     worker: &WorkerState<S>,
     value: HashedCertificateValue,
     round: Round,
-) -> Certificate {
+) -> Certificate
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     let vote = LiteVote::new(
         value.lite(),
         round,
@@ -158,7 +166,11 @@ async fn make_simple_transfer_certificate<S>(
     balance: Amount,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&Certificate>,
-) -> Certificate {
+) -> Certificate
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     make_transfer_certificate_for_epoch(
         chain_description,
         key_pair,
@@ -189,7 +201,11 @@ async fn make_transfer_certificate<S>(
     balances: BTreeMap<Owner, Amount>,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&Certificate>,
-) -> Certificate {
+) -> Certificate
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     make_transfer_certificate_for_epoch(
         chain_description,
         key_pair,
@@ -221,7 +237,11 @@ async fn make_transfer_certificate_for_epoch<S>(
     balances: BTreeMap<Owner, Amount>,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&Certificate>,
-) -> Certificate {
+) -> Certificate
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     let chain_id = chain_description.into();
     let system_state = SystemExecutionState {
         committees: [(epoch, committee.clone())].into_iter().collect(),
@@ -402,14 +422,9 @@ where
             .await,
             Err(WorkerError::CryptoError(error)) if matches!(error, CryptoError::InvalidSignature {..})
     );
-    assert!(worker
-        .storage
-        .load_active_chain(ChainId::root(1))
-        .await?
-        .manager
-        .get()
-        .pending()
-        .is_none());
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
+    assert!(chain.manager.get().pending().is_none());
     Ok(())
 }
 
@@ -458,14 +473,9 @@ where
             )
         )
     );
-    assert!(worker
-        .storage
-        .load_active_chain(ChainId::root(1))
-        .await?
-        .manager
-        .get()
-        .pending()
-        .is_none());
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
+    assert!(chain.manager.get().pending().is_none());
     Ok(())
 }
 
@@ -577,14 +587,9 @@ where
             .await,
         Err(WorkerError::InvalidOwner)
     );
-    assert!(worker
-        .storage
-        .load_active_chain(ChainId::root(1))
-        .await?
-        .manager
-        .get()
-        .pending()
-        .is_none());
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
+    assert!(chain.manager.get().pending().is_none());
     Ok(())
 }
 
@@ -631,38 +636,26 @@ where
         worker.handle_block_proposal(block_proposal1.clone()).await,
         Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight {..})
     );
-    assert!(worker
-        .storage
-        .load_active_chain(ChainId::root(1))
-        .await?
-        .manager
-        .get()
-        .pending()
-        .is_none());
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
+    assert!(chain.manager.get().pending().is_none());
 
+    drop(chain);
     worker
         .handle_block_proposal(block_proposal0.clone())
         .await?;
-    assert!(worker
-        .storage
-        .load_active_chain(ChainId::root(1))
-        .await?
-        .manager
-        .get()
-        .pending()
-        .is_some());
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
+    assert!(chain.manager.get().pending().is_some());
+    drop(chain);
     worker
         .handle_certificate(certificate0, vec![], vec![], None)
         .await?;
     worker.handle_block_proposal(block_proposal1).await?;
-    assert!(worker
-        .storage
-        .load_active_chain(ChainId::root(1))
-        .await?
-        .manager
-        .get()
-        .pending()
-        .is_some());
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
+    assert!(chain.manager.get().pending().is_some());
+    drop(chain);
     assert_matches!(
         worker.handle_block_proposal(block_proposal0.clone()).await,
         Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight {..})
@@ -1101,14 +1094,9 @@ where
             )
         )
     );
-    assert!(worker
-        .storage
-        .load_active_chain(ChainId::root(1))
-        .await?
-        .manager
-        .get()
-        .pending()
-        .is_none());
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
+    assert!(chain.manager.get().pending().is_none());
     Ok(())
 }
 
@@ -1138,15 +1126,9 @@ where
 
     let (chain_info_response, _actions) = worker.handle_block_proposal(block_proposal).await?;
     chain_info_response.check(ValidatorName(worker.public_key()))?;
-    let pending_value = worker
-        .storage
-        .load_active_chain(ChainId::root(1))
-        .await?
-        .manager
-        .get()
-        .pending()
-        .unwrap()
-        .lite();
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
+    let pending_value = chain.manager.get().pending().unwrap().lite();
     assert_eq!(
         chain_info_response.info.manager.pending.unwrap(),
         pending_value
@@ -1469,7 +1451,8 @@ where
     worker
         .fully_handle_certificate(certificate.clone(), vec![], vec![])
         .await?;
-    let mut chain = worker.storage.load_active_chain(ChainId::root(1)).await?;
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
     assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get());
     assert_eq!(
         BlockHeight::from(1),
@@ -1477,8 +1460,9 @@ where
     );
     let inbox = chain
         .inboxes
-        .try_load_entry_mut(&Origin::chain(ChainId::root(3)))
-        .await?;
+        .try_load_entry(&Origin::chain(ChainId::root(3)))
+        .await?
+        .expect("Missing inbox for `ChainId::root(3)` in `ChainId::root(1)`");
     assert_eq!(BlockHeight::ZERO, inbox.next_block_height_to_receive()?);
     assert_eq!(inbox.added_events.count(), 0);
     assert_matches!(
@@ -1505,7 +1489,8 @@ where
     );
     assert_eq!(chain.confirmed_log.count(), 1);
     assert_eq!(Some(certificate.hash()), chain.tip_state.get().block_hash);
-    worker.storage.load_active_chain(ChainId::root(2)).await?;
+    let chain = worker.chain_state_view(ChainId::root(2)).await?;
+    assert!(chain.is_active());
     Ok(())
 }
 
@@ -1554,7 +1539,8 @@ where
     worker
         .fully_handle_certificate(certificate.clone(), vec![], vec![])
         .await?;
-    let new_sender_chain = worker.storage.load_active_chain(ChainId::root(1)).await?;
+    let new_sender_chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(new_sender_chain.is_active());
     assert_eq!(
         Amount::ZERO,
         *new_sender_chain.execution_state.system.balance.get()
@@ -1568,7 +1554,8 @@ where
         Some(certificate.hash()),
         new_sender_chain.tip_state.get().block_hash
     );
-    let new_recipient_chain = worker.storage.load_active_chain(ChainId::root(2)).await?;
+    let new_recipient_chain = worker.chain_state_view(ChainId::root(2)).await?;
+    assert!(new_recipient_chain.is_active());
     assert_eq!(
         Amount::MAX,
         *new_recipient_chain.execution_state.system.balance.get()
@@ -1609,12 +1596,14 @@ where
     worker
         .fully_handle_certificate(certificate.clone(), vec![], vec![])
         .await?;
-    let mut chain = worker.storage.load_active_chain(ChainId::root(1)).await?;
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
     assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get());
     let inbox = chain
         .inboxes
-        .try_load_entry_mut(&Origin::chain(ChainId::root(1)))
-        .await?;
+        .try_load_entry(&Origin::chain(ChainId::root(1)))
+        .await?
+        .expect("Missing inbox for `ChainId::root(1)` in `ChainId::root(1)`");
     assert_eq!(BlockHeight::from(1), inbox.next_block_height_to_receive()?);
     assert_matches!(
         inbox.added_events.front().await?.unwrap(),
@@ -1678,13 +1667,15 @@ where
     worker
         .handle_cross_chain_request(update_recipient_direct(ChainId::root(2), &certificate))
         .await?;
-    let mut chain = worker.storage.load_active_chain(ChainId::root(2)).await?;
+    let chain = worker.chain_state_view(ChainId::root(2)).await?;
+    assert!(chain.is_active());
     assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
     assert_eq!(BlockHeight::ZERO, chain.tip_state.get().next_block_height);
     let inbox = chain
         .inboxes
-        .try_load_entry_mut(&Origin::chain(ChainId::root(1)))
-        .await?;
+        .try_load_entry(&Origin::chain(ChainId::root(1)))
+        .await?
+        .expect("Missing inbox for `ChainId::root(1)` in `ChainId::root(2)`");
     assert_eq!(BlockHeight::from(1), inbox.next_block_height_to_receive()?);
     assert_matches!(
         inbox
@@ -1746,7 +1737,7 @@ where
         .await?
         .cross_chain_requests
         .is_empty());
-    let chain = worker.storage.load_chain(ChainId::root(2)).await?;
+    let chain = worker.chain_state_view(ChainId::root(2)).await?;
     // The target chain did not receive the message
     assert!(chain.inboxes.indices().await?.is_empty());
     Ok(())
@@ -1797,7 +1788,7 @@ where
             }
         }]
     );
-    let chain = worker.storage.load_chain(ChainId::root(2)).await?;
+    let chain = worker.chain_state_view(ChainId::root(2)).await?;
     assert!(!chain.inboxes.indices().await?.is_empty());
     Ok(())
 }
@@ -1925,7 +1916,8 @@ where
     );
 
     {
-        let recipient_chain = worker.storage.load_active_chain(ChainId::root(2)).await?;
+        let recipient_chain = worker.chain_state_view(ChainId::root(2)).await?;
+        assert!(recipient_chain.is_active());
         assert_eq!(
             *recipient_chain.execution_state.system.balance.get(),
             Amount::from_tokens(4)
@@ -2107,7 +2099,8 @@ where
         .await?;
 
     {
-        let chain = worker.storage.load_active_chain(ChainId::root(1)).await?;
+        let chain = worker.chain_state_view(ChainId::root(1)).await?;
+        assert!(chain.is_active());
         chain.validate_incoming_messages().await?;
     }
 
@@ -2210,7 +2203,8 @@ where
         .await?;
 
     {
-        let chain = worker.storage.load_active_chain(ChainId::root(2)).await?;
+        let chain = worker.chain_state_view(ChainId::root(2)).await?;
+        assert!(chain.is_active());
         chain.validate_incoming_messages().await?;
     }
 
@@ -2253,7 +2247,8 @@ where
         .await?;
 
     {
-        let chain = worker.storage.load_active_chain(ChainId::root(1)).await?;
+        let chain = worker.chain_state_view(ChainId::root(1)).await?;
+        assert!(chain.is_active());
         chain.validate_incoming_messages().await?;
     }
     Ok(())
@@ -2357,7 +2352,8 @@ where
         .fully_handle_certificate(certificate0.clone(), vec![], vec![])
         .await?;
     {
-        let admin_chain = worker.storage.load_active_chain(admin_id).await?;
+        let admin_chain = worker.chain_state_view(admin_id).await?;
+        assert!(admin_chain.is_active());
         admin_chain.validate_incoming_messages().await?;
         assert_eq!(
             BlockHeight::from(1),
@@ -2467,13 +2463,15 @@ where
         .await?;
     {
         // The root chain has 1 subscribers.
-        let mut admin_chain = worker.storage.load_active_chain(admin_id).await?;
+        let admin_chain = worker.chain_state_view(admin_id).await?;
+        assert!(admin_chain.is_active());
         admin_chain.validate_incoming_messages().await?;
         assert_eq!(
             admin_chain
                 .channels
-                .try_load_entry_mut(&admin_channel_full_name)
+                .try_load_entry(&admin_channel_full_name)
                 .await?
+                .expect("Missing channel for admin channel in `ChainId::root(1)`")
                 .subscribers
                 .indices()
                 .await?
@@ -2483,7 +2481,8 @@ where
     }
     {
         // The child is active and has not migrated yet.
-        let mut user_chain = worker.storage.load_active_chain(user_id).await?;
+        let user_chain = worker.chain_state_view(user_id).await?;
+        assert!(user_chain.is_active());
         assert_eq!(
             BlockHeight::ZERO,
             user_chain.tip_state.get().next_block_height
@@ -2506,8 +2505,9 @@ where
         matches!(
             user_chain
                 .inboxes
-                .try_load_entry_mut(&Origin::chain(admin_id))
+                .try_load_entry(&Origin::chain(admin_id))
                 .await?
+                .expect("Missing inbox for admin chain in user chain")
                 .added_events
                 .read_front(10)
                 .await?[..],
@@ -2528,8 +2528,9 @@ where
         );
         let channel_inbox = user_chain
             .inboxes
-            .try_load_entry_mut(&admin_channel_origin)
-            .await?;
+            .try_load_entry(&admin_channel_origin)
+            .await?
+            .expect("Missing inbox for admin channel in user chain");
         matches!(
             channel_inbox.added_events.read_front(10).await?[..],
             [Event {
@@ -2643,7 +2644,8 @@ where
         .fully_handle_certificate(certificate3, vec![], vec![])
         .await?;
     {
-        let mut user_chain = worker.storage.load_active_chain(user_id).await?;
+        let user_chain = worker.chain_state_view(user_id).await?;
+        assert!(user_chain.is_active());
         assert_eq!(
             BlockHeight::from(1),
             user_chain.tip_state.get().next_block_height
@@ -2667,8 +2669,9 @@ where
         {
             let inbox = user_chain
                 .inboxes
-                .try_load_entry_mut(&Origin::chain(admin_id))
-                .await?;
+                .try_load_entry(&Origin::chain(admin_id))
+                .await?
+                .expect("Missing inbox for admin chain in user chain");
             assert_eq!(inbox.next_block_height_to_receive()?, BlockHeight(3));
             assert_eq!(inbox.added_events.count(), 0);
             assert_eq!(inbox.removed_events.count(), 0);
@@ -2676,8 +2679,9 @@ where
         {
             let inbox = user_chain
                 .inboxes
-                .try_load_entry_mut(&admin_channel_origin)
-                .await?;
+                .try_load_entry(&admin_channel_origin)
+                .await?
+                .expect("Missing inbox for admin channel in user chain");
             assert_eq!(inbox.next_block_height_to_receive()?, BlockHeight(2));
             assert_eq!(inbox.added_events.count(), 0);
             assert_eq!(inbox.removed_events.count(), 0);
@@ -2778,7 +2782,8 @@ where
         .await?;
 
     // The transfer was started..
-    let user_chain = worker.storage.load_active_chain(user_id).await?;
+    let user_chain = worker.chain_state_view(user_id).await?;
+    assert!(user_chain.is_active());
     assert_eq!(
         BlockHeight::from(1),
         user_chain.tip_state.get().next_block_height
@@ -2793,13 +2798,15 @@ where
     );
 
     // .. and the message has gone through.
-    let mut admin_chain = worker.storage.load_active_chain(admin_id).await?;
+    let admin_chain = worker.chain_state_view(admin_id).await?;
+    assert!(admin_chain.is_active());
     assert_eq!(admin_chain.inboxes.indices().await?.len(), 1);
     matches!(
         admin_chain
             .inboxes
-            .try_load_entry_mut(&Origin::chain(user_id))
+            .try_load_entry(&Origin::chain(user_id))
             .await?
+            .expect("Missing inbox for user chain in admin chain")
             .added_events
             .read_front(10)
             .await?[..],
@@ -2913,7 +2920,8 @@ where
 
     {
         // The transfer was started..
-        let user_chain = worker.storage.load_active_chain(user_id).await?;
+        let user_chain = worker.chain_state_view(user_id).await?;
+        assert!(user_chain.is_active());
         assert_eq!(
             BlockHeight::from(1),
             user_chain.tip_state.get().next_block_height
@@ -2928,7 +2936,8 @@ where
         );
 
         // .. but the message hasn't gone through.
-        let admin_chain = worker.storage.load_active_chain(admin_id).await?;
+        let admin_chain = worker.chain_state_view(admin_id).await?;
+        assert!(admin_chain.is_active());
         assert!(admin_chain.inboxes.indices().await?.is_empty());
     }
 
@@ -2976,7 +2985,8 @@ where
 
     {
         // The admin chain has an anticipated message.
-        let admin_chain = worker.storage.load_active_chain(admin_id).await?;
+        let admin_chain = worker.chain_state_view(admin_id).await?;
+        assert!(admin_chain.is_active());
         assert_matches!(
             admin_chain.validate_incoming_messages().await,
             Err(ChainError::MissingCrossChainUpdate { .. })
@@ -2991,7 +3001,8 @@ where
 
     {
         // The admin chain has no more anticipated messages.
-        let admin_chain = worker.storage.load_active_chain(admin_id).await?;
+        let admin_chain = worker.chain_state_view(admin_id).await?;
+        assert!(admin_chain.is_active());
         admin_chain.validate_incoming_messages().await?;
     }
     Ok(())
@@ -3382,7 +3393,7 @@ where
     // from a past round.
     let certificate =
         make_certificate_with_round(&committee, &worker, value1, Round::SingleLeader(7));
-    let mut worker = worker.with_key_pair(None); // Forget validator keys.
+    let mut worker = worker.with_key_pair(None).await; // Forget validator keys.
     worker
         .handle_certificate(certificate.clone(), vec![], vec![], None)
         .await?;

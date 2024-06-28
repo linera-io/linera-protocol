@@ -5,6 +5,7 @@
 use std::{
     borrow::Cow,
     collections::{hash_map, BTreeMap, HashMap, VecDeque},
+    num::NonZeroUsize,
     sync::Arc,
     time::Duration,
 };
@@ -15,6 +16,7 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, HashedBlob, Round},
     doc_scalar, ensure,
     identifiers::{BlobId, ChainId, Owner},
+    sync::Lazy,
 };
 use linera_chain::{
     data_types::{
@@ -29,13 +31,19 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
+use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::{
-    sync::{oneshot, Mutex, OwnedRwLockReadGuard},
+    sync::{mpsc, oneshot, Mutex, OwnedRwLockReadGuard},
     task::JoinSet,
 };
 use tracing::{error, instrument, trace, warn};
+#[cfg(with_metrics)]
+use {
+    linera_base::prometheus_util,
+    prometheus::{HistogramVec, IntCounterVec},
+};
 #[cfg(with_testing)]
 use {
     linera_base::{
@@ -43,11 +51,6 @@ use {
         identifiers::{BytecodeId, Destination, MessageId},
     },
     linera_chain::data_types::{ChannelFullName, IncomingMessage, Medium, MessageAction},
-};
-#[cfg(with_metrics)]
-use {
-    linera_base::{prometheus_util, sync::Lazy},
-    prometheus::{HistogramVec, IntCounterVec},
 };
 
 use crate::{
@@ -59,6 +62,10 @@ use crate::{
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
+
+/// The maximum number of [`ChainWorkerActor`]s to keep running.
+static CHAIN_WORKER_LIMIT: Lazy<NonZeroUsize> =
+    Lazy::new(|| NonZeroUsize::new(1_000).expect("`CHAIN_WORKER_LIMIT` should not be zero"));
 
 #[cfg(with_metrics)]
 static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
@@ -266,7 +273,11 @@ impl From<linera_chain::ChainError> for WorkerError {
 
 /// State of a worker in a validator or a local node.
 #[derive(Clone)]
-pub struct WorkerState<StorageClient> {
+pub struct WorkerState<StorageClient>
+where
+    StorageClient: Storage,
+    ViewError: From<StorageClient::ContextError>,
+{
     /// A name used for logging
     nickname: String,
     /// Access to local persistent storage.
@@ -282,12 +293,22 @@ pub struct WorkerState<StorageClient> {
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     /// The set of spawned [`ChainWorkerActor`] tasks.
     chain_worker_tasks: Arc<Mutex<JoinSet<()>>>,
+    /// The cache of running [`ChainWorkerActor`]s.
+    chain_workers: Arc<Mutex<LruCache<ChainId, ChainActorEndpoint<StorageClient>>>>,
 }
+
+/// The sender endpoint for [`ChainWorkerRequest`]s.
+type ChainActorEndpoint<StorageClient> =
+    mpsc::UnboundedSender<ChainWorkerRequest<<StorageClient as Storage>::Context>>;
 
 pub(crate) type DeliveryNotifiers =
     HashMap<ChainId, BTreeMap<BlockHeight, Vec<oneshot::Sender<()>>>>;
 
-impl<StorageClient> WorkerState<StorageClient> {
+impl<StorageClient> WorkerState<StorageClient>
+where
+    StorageClient: Storage,
+    ViewError: From<StorageClient::ContextError>,
+{
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
         WorkerState {
             nickname,
@@ -297,6 +318,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             recent_hashed_blobs: Arc::new(ValueCache::default()),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
+            chain_workers: Arc::new(Mutex::new(LruCache::new(*CHAIN_WORKER_LIMIT))),
         }
     }
 
@@ -315,6 +337,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             recent_hashed_blobs,
             delivery_notifiers,
             chain_worker_tasks: Arc::default(),
+            chain_workers: Arc::new(Mutex::new(LruCache::new(*CHAIN_WORKER_LIMIT))),
         }
     }
 
@@ -360,8 +383,9 @@ impl<StorageClient> WorkerState<StorageClient> {
     }
 
     #[cfg(test)]
-    pub(crate) fn with_key_pair(mut self, key_pair: Option<Arc<KeyPair>>) -> Self {
+    pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<KeyPair>>) -> Self {
         self.chain_worker_config.key_pair = key_pair;
+        self.chain_workers.lock().await.clear();
         self
     }
 
@@ -714,15 +738,7 @@ where
             oneshot::Sender<Result<Response, WorkerError>>,
         ) -> ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<Response, WorkerError> {
-        let chain_actor = ChainWorkerActor::spawn(
-            self.chain_worker_config.clone(),
-            self.storage.clone(),
-            self.recent_hashed_certificate_values.clone(),
-            self.recent_hashed_blobs.clone(),
-            chain_id,
-            &mut *self.chain_worker_tasks.lock().await,
-        )
-        .await?;
+        let chain_actor = self.get_chain_worker_endpoint(chain_id).await?;
         let (callback, response) = oneshot::channel();
 
         chain_actor
@@ -733,10 +749,45 @@ where
             .await
             .expect("`ChainWorkerActor` stopped executing without responding")
     }
+
+    /// Retrieves an endpoint to a [`ChainWorkerActor`] from the cache, creating one and adding it
+    /// to the cache if needed.
+    async fn get_chain_worker_endpoint(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainActorEndpoint<StorageClient>, WorkerError> {
+        let mut chain_workers = self.chain_workers.lock().await;
+
+        if !chain_workers.contains(&chain_id) {
+            chain_workers.push(
+                chain_id,
+                ChainWorkerActor::spawn(
+                    self.chain_worker_config.clone(),
+                    self.storage.clone(),
+                    self.recent_hashed_certificate_values.clone(),
+                    self.recent_hashed_blobs.clone(),
+                    chain_id,
+                    &mut *self.chain_worker_tasks.lock().await,
+                )
+                .await?,
+            );
+        }
+
+        Ok(chain_workers
+            .get(&chain_id)
+            .expect(
+                "Chain worker should have been inserted in the cache if it wasn't there already",
+            )
+            .clone())
+    }
 }
 
 #[cfg(with_testing)]
-impl<StorageClient> WorkerState<StorageClient> {
+impl<StorageClient> WorkerState<StorageClient>
+where
+    StorageClient: Storage,
+    ViewError: From<StorageClient::ContextError>,
+{
     /// Gets a reference to the validator's [`PublicKey`].
     ///
     /// # Panics

@@ -52,7 +52,9 @@ pub trait ClientContext {
     fn make_chain_client(
         &self,
         chain_id: ChainId,
-    ) -> ChainClient<Self::ValidatorNodeProvider, Self::Storage>;
+    ) -> ChainClient<Self::ValidatorNodeProvider, Self::Storage>
+    where
+        ViewError: From<<Self::Storage as Storage>::ContextError>;
 
     fn update_wallet_for_new_chain(
         &mut self,
@@ -64,12 +66,17 @@ pub trait ClientContext {
     async fn update_wallet<'a>(
         &'a mut self,
         client: &'a mut ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
-    );
+    ) where
+        ViewError: From<<Self::Storage as Storage>::ContextError>;
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
 /// appropriately.
-pub struct ChainListener<P, S> {
+pub struct ChainListener<P, S>
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     config: ChainListenerConfig,
     clients: ChainClients<P, S>,
 }

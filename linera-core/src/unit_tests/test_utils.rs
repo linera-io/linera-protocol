@@ -76,14 +76,22 @@ pub enum FaultType {
 /// All methods are executed in spawned Tokio tasks, so that canceling a client task doesn't cause
 /// the validator's tasks to be canceled: In a real network, a validator also wouldn't cancel
 /// tasks if the client stopped waiting for the response.
-struct LocalValidator<S> {
+struct LocalValidator<S>
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     state: WorkerState<S>,
     fault_type: FaultType,
     notifier: Notifier<Notification>,
 }
 
 #[derive(Clone)]
-pub struct LocalValidatorClient<S> {
+pub struct LocalValidatorClient<S>
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     name: ValidatorName,
     client: Arc<Mutex<LocalValidator<S>>>,
 }
@@ -415,7 +423,10 @@ where
 }
 
 #[derive(Clone)]
-pub struct NodeProvider<S>(BTreeMap<ValidatorName, Arc<Mutex<LocalValidator<S>>>>);
+pub struct NodeProvider<S>(BTreeMap<ValidatorName, Arc<Mutex<LocalValidator<S>>>>)
+where
+    S: Storage,
+    ViewError: From<S::ContextError>;
 
 impl<S> LocalValidatorNodeProvider for NodeProvider<S>
 where
@@ -452,7 +463,11 @@ where
     }
 }
 
-impl<S> FromIterator<LocalValidatorClient<S>> for NodeProvider<S> {
+impl<S> FromIterator<LocalValidatorClient<S>> for NodeProvider<S>
+where
+    S: Storage,
+    ViewError: From<S::ContextError>,
+{
     fn from_iter<T>(iter: T) -> Self
     where
         T: IntoIterator<Item = LocalValidatorClient<S>>,
@@ -468,7 +483,10 @@ impl<S> FromIterator<LocalValidatorClient<S>> for NodeProvider<S> {
 // * When using `LocalValidatorClient`, clients communicate with an exact quorum then stop.
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
-pub struct TestBuilder<B: StorageBuilder> {
+pub struct TestBuilder<B: StorageBuilder>
+where
+    ViewError: From<<B::Storage as Storage>::ContextError>,
+{
     storage_builder: B,
     pub initial_committee: Committee,
     admin_id: ChainId,
