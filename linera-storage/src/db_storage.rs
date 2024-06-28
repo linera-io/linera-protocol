@@ -14,7 +14,9 @@ use linera_chain::{
     data_types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
     ChainStateView,
 };
-use linera_execution::{UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime};
+use linera_execution::{
+    ExecutionRuntimeConfig, UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime,
+};
 use linera_views::{
     batch::Batch,
     common::{AdminKeyValueStore, ContextFromStore, KeyValueStore},
@@ -238,6 +240,7 @@ where
 pub struct DbStorage<Client, Clock> {
     pub(crate) client: Arc<DbStorageInner<Client>>,
     pub clock: Clock,
+    pub execution_runtime_config: ExecutionRuntimeConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -396,6 +399,7 @@ where
         let runtime_context = ChainRuntimeContext {
             storage: self.clone(),
             chain_id,
+            execution_runtime_config: self.execution_runtime_config,
             user_contracts: self.client.user_contracts.clone(),
             user_services: self.client.user_services.clone(),
             _chain_guard: Arc::new(guard),
@@ -658,6 +662,7 @@ where
         Self {
             client: Arc::new(storage),
             clock,
+            execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }
 }

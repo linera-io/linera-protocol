@@ -12,9 +12,9 @@ use linera_base::{
 };
 use linera_execution::{
     test_utils::{create_dummy_user_application_description, SystemExecutionState},
-    ExecutionOutcome, ExecutionRuntimeContext, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, ResourceControlPolicy, ResourceController, ResourceTracker, Response,
-    WasmContractModule, WasmRuntime, WasmServiceModule,
+    ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext,
+    Query, QueryContext, RawExecutionOutcome, ResourceControlPolicy, ResourceController,
+    ResourceTracker, Response, WasmContractModule, WasmRuntime, WasmServiceModule,
 };
 use linera_views::views::View;
 use serde_json::json;
@@ -37,7 +37,9 @@ async fn test_fuel_for_counter_wasm_application(
         description: Some(ChainDescription::Root(0)),
         ..Default::default()
     };
-    let mut view = state.into_view_with(ChainId::root(0)).await;
+    let mut view = state
+        .into_view_with(ChainId::root(0), ExecutionRuntimeConfig::default())
+        .await;
     let app_desc = create_dummy_user_application_description(1);
     let app_id = view
         .system

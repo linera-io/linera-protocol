@@ -26,10 +26,10 @@ use {
 
 use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
-    ExecutionError, ExecutionOutcome, ExecutionRuntimeContext, Message, MessageContext,
-    MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage, UserApplicationDescription,
-    UserApplicationId,
+    ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
+    MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
+    UserApplicationDescription, UserApplicationId,
 };
 
 /// A view accessing the execution state of a chain.
@@ -153,8 +153,9 @@ where
         oracle_record: Option<OracleRecord>,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(Vec<ExecutionOutcome>, OracleRecord), ExecutionError> {
+        let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
         let (execution_outcomes, oracle_record) = self
-            .run_user_action_with_synchronous_runtime(
+            .run_user_action_with_sync_runtime(
                 application_id,
                 chain_id,
                 local_time,
@@ -172,7 +173,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    async fn run_user_action_with_synchronous_runtime(
+    async fn run_user_action_with_sync_runtime(
         &mut self,
         application_id: UserApplicationId,
         chain_id: ChainId,
@@ -455,6 +456,7 @@ where
                 application_id,
                 bytes,
             } => {
+                let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
                 let response = self
                     .query_application_with_sync_runtime(application_id, context, bytes)
                     .await?;

@@ -16,7 +16,7 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::OpenChainConfig,
     test_utils::{ExpectedCall, MockApplication},
-    BytecodeLocation, ExecutionRuntimeContext, Operation, SystemMessage,
+    BytecodeLocation, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, SystemMessage,
     TestExecutionRuntimeContext, UserApplicationDescription,
 };
 use linera_views::{
@@ -38,7 +38,8 @@ where
         From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::common::Context>::Error>,
 {
     pub async fn new(chain_id: ChainId) -> Self {
-        let exec_runtime_context = TestExecutionRuntimeContext::new(chain_id);
+        let exec_runtime_context =
+            TestExecutionRuntimeContext::new(chain_id, ExecutionRuntimeConfig::default());
         let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, exec_runtime_context);
         Self::load(context)
             .await

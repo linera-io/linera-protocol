@@ -212,11 +212,17 @@ impl ApplicationCallOutcome {
     }
 }
 
+/// Configuration options for the execution runtime available to applications.
+#[derive(Clone, Copy, Default)]
+pub struct ExecutionRuntimeConfig {}
+
 /// Requirements for the `extra` field in our state views (and notably the
 /// [`ExecutionStateView`]).
 #[async_trait]
 pub trait ExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId;
+
+    fn execution_runtime_config(&self) -> ExecutionRuntimeConfig;
 
     fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>>;
 
@@ -784,15 +790,17 @@ impl OperationContext {
 #[derive(Clone)]
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
+    execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
 }
 
 #[cfg(with_testing)]
 impl TestExecutionRuntimeContext {
-    pub fn new(chain_id: ChainId) -> Self {
+    pub fn new(chain_id: ChainId, execution_runtime_config: ExecutionRuntimeConfig) -> Self {
         Self {
             chain_id,
+            execution_runtime_config,
             user_contracts: Arc::default(),
             user_services: Arc::default(),
         }
@@ -804,6 +812,10 @@ impl TestExecutionRuntimeContext {
 impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId {
         self.chain_id
+    }
+
+    fn execution_runtime_config(&self) -> ExecutionRuntimeConfig {
+        self.execution_runtime_config
     }
 
     fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>> {
