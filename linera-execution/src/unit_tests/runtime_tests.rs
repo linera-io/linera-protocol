@@ -47,6 +47,24 @@ async fn test_dropping_sync_runtime_clears_loaded_applications() -> anyhow::Resu
     Ok(())
 }
 
+/// Test if [`SyncRuntime::into_inner`] fails if it would leak memory.
+#[test_log::test(tokio::test)]
+async fn test_into_inner_without_clearing_applications() {
+    let (runtime, _receiver) = create_runtime();
+    let handle = SyncRuntimeHandle::new(runtime);
+
+    let fake_application = create_fake_application_with_runtime(&handle);
+
+    handle
+        .0
+        .try_lock()
+        .expect("Failed to lock runtime")
+        .loaded_applications
+        .insert(create_dummy_application_id(), fake_application);
+
+    assert!(SyncRuntime(Some(handle)).into_inner().is_none());
+}
+
 /// Test writing a batch of changes.
 ///
 /// Ensure that resource consumption counts are updated correctly.
