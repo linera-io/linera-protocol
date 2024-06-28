@@ -122,10 +122,13 @@ pub trait Storage: Sized {
     ) -> Result<(), ViewError>;
 
     /// Writes the given blob.
-    async fn write_hashed_blob(
+    async fn write_hashed_blob(&self, blob: &HashedBlob) -> Result<(), ViewError>;
+
+    /// Writes the given blob state.
+    async fn write_blob_state(
         &self,
-        blob: &HashedBlob,
-        last_used_by: &CryptoHash,
+        blob_id: BlobId,
+        last_used_by: CryptoHash,
     ) -> Result<(), ViewError>;
 
     /// Writes several hashed certificate values.
@@ -135,11 +138,7 @@ pub trait Storage: Sized {
     ) -> Result<(), ViewError>;
 
     /// Writes several blobs.
-    async fn write_hashed_blobs(
-        &self,
-        blobs: &[HashedBlob],
-        last_used_by: &CryptoHash,
-    ) -> Result<(), ViewError>;
+    async fn write_hashed_blobs(&self, blobs: &[HashedBlob]) -> Result<(), ViewError>;
 
     /// Tests existence of the certificate with the given hash.
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
