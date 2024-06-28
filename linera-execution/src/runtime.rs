@@ -28,7 +28,7 @@ use crate::{
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, FinalizeContext,
-    MessageContext, OperationContext, RawExecutionOutcome, ServiceRuntime,
+    MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime,
     UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
 };
 
@@ -910,7 +910,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                 None => Err(ExecutionError::MissingOracleResponse),
             };
         }
-        let context = crate::QueryContext {
+        let context = QueryContext {
             chain_id: self.chain_id,
             next_block_height: self.height,
             local_time: self.local_time,
@@ -1314,7 +1314,7 @@ impl ServiceSyncRuntime {
     pub(crate) fn run_query(
         execution_state_sender: ExecutionStateSender,
         application_id: UserApplicationId,
-        context: crate::QueryContext,
+        context: QueryContext,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let runtime_internal = SyncRuntimeInternal::new(
@@ -1350,7 +1350,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
             // Load the application.
             let application = this.load_service_instance(cloned_self, queried_id)?;
             // Make the call to user code.
-            let query_context = crate::QueryContext {
+            let query_context = QueryContext {
                 chain_id: this.chain_id,
                 next_block_height: this.height,
                 local_time: this.local_time,
