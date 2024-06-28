@@ -86,11 +86,27 @@ fn create_contract_runtime() -> (
     SyncRuntimeInternal<UserContractInstance>,
     mpsc::UnboundedReceiver<Request>,
 ) {
+    let (mut runtime, execution_state_receiver) = create_runtime();
+
+    runtime.push_application(create_dummy_application());
+
+    (runtime, execution_state_receiver)
+}
+
+/// Creates a [`SyncRuntimeInternal`] instance for custom `Application` types (which can
+/// be invalid types).
+///
+/// Returns the [`SyncRuntimeInternal`] instance and the receiver endpoint for the requests the
+/// runtime sends to the [`ExecutionStateView`] actor.
+fn create_runtime<Application>() -> (
+    SyncRuntimeInternal<Application>,
+    mpsc::UnboundedReceiver<Request>,
+) {
     let chain_id = ChainDescription::Root(0).into();
     let (execution_state_sender, execution_state_receiver) = mpsc::unbounded();
     let resource_controller = ResourceController::default();
 
-    let mut runtime = SyncRuntimeInternal::new(
+    let runtime = SyncRuntimeInternal::new(
         chain_id,
         BlockHeight(0),
         Timestamp::from(0),
@@ -102,8 +118,6 @@ fn create_contract_runtime() -> (
         resource_controller,
         super::OracleResponses::Record(Vec::new()),
     );
-
-    runtime.push_application(create_dummy_application());
 
     (runtime, execution_state_receiver)
 }
