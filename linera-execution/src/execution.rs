@@ -155,7 +155,7 @@ where
     ) -> Result<(Vec<ExecutionOutcome>, OracleRecord), ExecutionError> {
         let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
         let (execution_outcomes, oracle_record) = self
-            .run_user_action_with_sync_runtime(
+            .run_user_action_with_runtime(
                 application_id,
                 chain_id,
                 local_time,
@@ -173,7 +173,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    async fn run_user_action_with_sync_runtime(
+    async fn run_user_action_with_runtime(
         &mut self,
         application_id: UserApplicationId,
         chain_id: ChainId,
