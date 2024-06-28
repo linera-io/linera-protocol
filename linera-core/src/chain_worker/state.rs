@@ -602,7 +602,7 @@ where
                 ProposalContent {
                     block,
                     round,
-                    forced_oracle_records: oracle_records,
+                    forced_oracle_records,
                 },
             owner,
             hashed_certificate_values,
@@ -611,9 +611,11 @@ where
             signature: _,
         } = proposal;
         ensure!(
-            validated_block_certificate.is_some() == oracle_records.is_some(),
+            validated_block_certificate.is_some() == forced_oracle_records.is_some(),
             WorkerError::InvalidBlockProposal(
-                "Must contain a certificate if and only if it contains oracle records".to_string()
+                "Must contain a validation certificate if and only if \
+                 oracle records are forced from a previous round"
+                    .to_string()
             )
         );
         self.0.ensure_is_active()?;
@@ -672,7 +674,7 @@ where
         let outcome = Box::pin(self.0.chain.execute_block(
             block,
             local_time,
-            oracle_records.clone(),
+            forced_oracle_records.clone(),
         ))
         .await?;
         if let Some(lite_certificate) = &validated_block_certificate {
