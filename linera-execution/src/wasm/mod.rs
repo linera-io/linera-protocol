@@ -41,8 +41,8 @@ pub use self::{
     system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi},
 };
 use crate::{
-    Bytecode, ContractSyncRuntime, ExecutionError, ServiceSyncRuntime, UserContractInstance,
-    UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
+    Bytecode, ContractSyncRuntimeHandle, ExecutionError, ServiceSyncRuntimeHandle,
+    UserContractInstance, UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
 };
 
 #[cfg(with_metrics)]
@@ -128,7 +128,7 @@ impl WasmContractModule {
 impl UserContractModule for WasmContractModule {
     fn instantiate(
         &self,
-        runtime: ContractSyncRuntime,
+        runtime: ContractSyncRuntimeHandle,
     ) -> Result<UserContractInstance, ExecutionError> {
         #[cfg(with_metrics)]
         let _instantiation_latency = CONTRACT_INSTANTIATION_LATENCY.measure_latency();
@@ -195,7 +195,7 @@ impl WasmServiceModule {
 impl UserServiceModule for WasmServiceModule {
     fn instantiate(
         &self,
-        runtime: ServiceSyncRuntime,
+        runtime: ServiceSyncRuntimeHandle,
     ) -> Result<UserServiceInstance, ExecutionError> {
         #[cfg(with_metrics)]
         let _instantiation_latency = SERVICE_INSTANTIATION_LATENCY.measure_latency();
