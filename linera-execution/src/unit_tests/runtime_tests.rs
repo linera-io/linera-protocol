@@ -65,6 +65,27 @@ async fn test_into_inner_without_clearing_applications() {
     assert!(SyncRuntime(Some(handle)).into_inner().is_none());
 }
 
+/// Test if [`SyncRuntime::into_inner`] succeeds if loaded applications have been cleared.
+#[test_log::test(tokio::test)]
+async fn test_into_inner_after_clearing_applications() {
+    let (runtime, _receiver) = create_runtime();
+    let handle = SyncRuntimeHandle::new(runtime);
+    let weak_handle = Arc::downgrade(&handle.0);
+
+    let fake_application = create_fake_application_with_runtime(&handle);
+
+    {
+        let mut runtime = handle.0.try_lock().expect("Failed to lock runtime");
+        runtime
+            .loaded_applications
+            .insert(create_dummy_application_id(), fake_application);
+        runtime.loaded_applications.clear();
+    }
+
+    assert!(SyncRuntime(Some(handle)).into_inner().is_some());
+    assert!(weak_handle.upgrade().is_none());
+}
+
 /// Test writing a batch of changes.
 ///
 /// Ensure that resource consumption counts are updated correctly.
