@@ -110,8 +110,20 @@ fn create_contract_runtime() -> (
 
 /// Creates an [`ApplicationStatus`] for a dummy application.
 fn create_dummy_application() -> ApplicationStatus {
+    ApplicationStatus {
+        caller_id: None,
+        id: create_dummy_application_id(),
+        parameters: vec![],
+        signer: None,
+        outcome: RawExecutionOutcome::default(),
+    }
+}
+
+/// Creates a dummy [`ApplicationId`].
+fn create_dummy_application_id() -> ApplicationId {
     let chain_id = ChainDescription::Root(1).into();
-    let id = ApplicationId {
+
+    ApplicationId {
         bytecode_id: BytecodeId::new(MessageId {
             chain_id,
             height: BlockHeight(1),
@@ -122,13 +134,5 @@ fn create_dummy_application() -> ApplicationStatus {
             height: BlockHeight(1),
             index: 1,
         },
-    };
-
-    ApplicationStatus {
-        caller_id: None,
-        id,
-        parameters: vec![],
-        signer: None,
-        outcome: RawExecutionOutcome::default(),
     }
 }
