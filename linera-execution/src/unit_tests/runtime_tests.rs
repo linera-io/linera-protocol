@@ -5,6 +5,11 @@
 
 #![cfg(with_tokio_multi_thread)]
 
+use std::{
+    any::Any,
+    sync::{Arc, Mutex},
+};
+
 use futures::{channel::mpsc, StreamExt};
 use linera_base::{
     data_types::{BlockHeight, Timestamp},
@@ -14,9 +19,33 @@ use linera_views::batch::Batch;
 
 use super::{ApplicationStatus, SyncRuntimeHandle, SyncRuntimeInternal};
 use crate::{
-    execution_state_actor::Request, runtime::ResourceController, ContractRuntime,
-    RawExecutionOutcome, UserContractInstance,
+    execution_state_actor::Request,
+    runtime::{LoadedApplication, ResourceController, SyncRuntime},
+    ContractRuntime, RawExecutionOutcome, UserContractInstance,
 };
+
+/// Test if dropping [`SyncRuntime`] does not leak memory.
+#[test_log::test(tokio::test)]
+async fn test_dropping_sync_runtime_clears_loaded_applications() -> anyhow::Result<()> {
+    let (runtime, _receiver) = create_runtime();
+    let handle = SyncRuntimeHandle::new(runtime);
+    let weak_handle = Arc::downgrade(&handle.0);
+
+    let fake_application = create_fake_application_with_runtime(&handle);
+
+    handle
+        .0
+        .try_lock()
+        .expect("Failed to lock runtime")
+        .loaded_applications
+        .insert(create_dummy_application_id(), fake_application);
+
+    let runtime = SyncRuntime(Some(handle));
+    drop(runtime);
+    assert!(weak_handle.upgrade().is_none());
+
+    Ok(())
+}
 
 /// Test writing a batch of changes.
 ///
@@ -148,5 +177,17 @@ fn create_dummy_application_id() -> ApplicationId {
             height: BlockHeight(1),
             index: 1,
         },
+    }
+}
+
+/// Creates a fake application instance that's just a reference to the `runtime`.
+fn create_fake_application_with_runtime(
+    runtime: &SyncRuntimeHandle<Arc<dyn Any + Send + Sync>>,
+) -> LoadedApplication<Arc<dyn Any + Send + Sync>> {
+    let fake_instance: Arc<dyn Any + Send + Sync> = runtime.0.clone();
+
+    LoadedApplication {
+        instance: Arc::new(Mutex::new(fake_instance)),
+        parameters: vec![],
     }
 }
