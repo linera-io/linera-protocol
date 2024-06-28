@@ -916,7 +916,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             local_time: self.local_time,
         };
         let sender = self.execution_state_sender.clone();
-        let response = ServiceSyncRuntime::run_query(sender, application_id, context, query)?;
+        let response = ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
         if let OracleResponses::Record(responses) = &mut self.oracle_responses {
             responses.push(OracleResponse::Service(response.clone()));
         }
@@ -1311,28 +1311,37 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 }
 
 impl ServiceSyncRuntime {
+    /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
+    pub(crate) fn new(execution_state_sender: ExecutionStateSender, context: QueryContext) -> Self {
+        SyncRuntime(Some(
+            SyncRuntimeInternal::new(
+                context.chain_id,
+                context.next_block_height,
+                context.local_time,
+                None,
+                0,
+                None,
+                execution_state_sender,
+                None,
+                ResourceController::default(),
+                OracleResponses::Forget,
+            )
+            .into(),
+        ))
+    }
+
+    /// Queries an application specified by its [`UserApplicationId`].
     pub(crate) fn run_query(
-        execution_state_sender: ExecutionStateSender,
+        &mut self,
         application_id: UserApplicationId,
-        context: QueryContext,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let runtime_internal = SyncRuntimeInternal::new(
-            context.chain_id,
-            context.next_block_height,
-            context.local_time,
-            None,
-            0,
-            None,
-            execution_state_sender,
-            None,
-            ResourceController::default(),
-            OracleResponses::Forget,
-        );
-        let mut handle = ServiceSyncRuntimeHandle::from(runtime_internal);
-        let _guard = SyncRuntime(Some(handle.clone()));
-
-        handle.try_query_application(application_id, query)
+        self.0
+            .as_mut()
+            .expect(
+                "`SyncRuntimeHandle` should be available while `SyncRuntime` hasn't been dropped",
+            )
+            .try_query_application(application_id, query)
     }
 }
 

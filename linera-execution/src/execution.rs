@@ -474,7 +474,8 @@ where
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let query_result_future = tokio::task::spawn_blocking(move || {
-            ServiceSyncRuntime::run_query(execution_state_sender, application_id, context, query)
+            ServiceSyncRuntime::new(execution_state_sender, context)
+                .run_query(application_id, query)
         });
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
