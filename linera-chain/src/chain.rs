@@ -367,6 +367,7 @@ where
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
+    /// Returns the [`ChainId`] of the chain this [`ChainStateView`] represents.
     pub fn chain_id(&self) -> ChainId {
         self.context().extra().chain_id()
     }
