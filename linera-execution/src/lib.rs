@@ -46,7 +46,7 @@ use thiserror::Error;
 
 #[cfg(with_testing)]
 pub use crate::applications::ApplicationRegistry;
-use crate::runtime::{ContractSyncRuntime, ServiceSyncRuntime};
+use crate::runtime::ContractSyncRuntime;
 #[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
@@ -59,9 +59,13 @@ pub use crate::{
         ApplicationRegistryView, BytecodeLocation, UserApplicationDescription, UserApplicationId,
     },
     execution::ExecutionStateView,
+    execution_state_actor::ExecutionRequest,
     policy::ResourceControlPolicy,
     resources::{ResourceController, ResourceTracker},
-    runtime::{ContractSyncRuntimeHandle, ServiceSyncRuntimeHandle},
+    runtime::{
+        ContractSyncRuntimeHandle, ServiceRuntimeRequest, ServiceSyncRuntime,
+        ServiceSyncRuntimeHandle,
+    },
     system::{
         SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation,
         SystemQuery, SystemResponse,

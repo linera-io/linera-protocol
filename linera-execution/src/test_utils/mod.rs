@@ -8,7 +8,7 @@
 mod mock_application;
 mod system_execution_state;
 
-use std::{sync::Arc, vec};
+use std::{sync::Arc, thread, vec};
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
@@ -26,7 +26,8 @@ pub use self::{
     system_execution_state::SystemExecutionState,
 };
 use crate::{
-    ApplicationRegistryView, BytecodeLocation, ExecutionRuntimeContext, ExecutionStateView,
+    ApplicationRegistryView, BytecodeLocation, ExecutionRequest, ExecutionRuntimeContext,
+    ExecutionStateView, QueryContext, ServiceRuntimeRequest, ServiceSyncRuntime,
     TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
 };
 
@@ -110,4 +111,26 @@ where
     }
 
     Ok(ids)
+}
+
+impl QueryContext {
+    /// Spawns a thread running the [`ServiceSyncRuntime`] actor.
+    ///
+    /// Returns the endpoints to communicate with the actor.
+    pub fn spawn_service_runtime_actor(
+        self,
+    ) -> (
+        futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+        std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+    ) {
+        let (execution_state_sender, execution_state_receiver) =
+            futures::channel::mpsc::unbounded();
+        let (request_sender, request_receiver) = std::sync::mpsc::channel();
+
+        thread::spawn(move || {
+            ServiceSyncRuntime::new(execution_state_sender, self).run(request_receiver)
+        });
+
+        (execution_state_receiver, request_sender)
+    }
 }

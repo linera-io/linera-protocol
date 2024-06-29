@@ -1312,7 +1312,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
 impl ServiceSyncRuntime {
     /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
-    pub(crate) fn new(execution_state_sender: ExecutionStateSender, context: QueryContext) -> Self {
+    pub fn new(execution_state_sender: ExecutionStateSender, context: QueryContext) -> Self {
         SyncRuntime(Some(
             SyncRuntimeInternal::new(
                 context.chain_id,

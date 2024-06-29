@@ -15,10 +15,10 @@ use linera_base::{
     identifiers::{ChainId, Destination, GenericApplicationId, MessageId},
 };
 use linera_execution::{
-    system::SystemMessage, ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView, Message,
-    MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, ResourceController, ResourceTracker, Response, UserApplicationDescription,
-    UserApplicationId,
+    system::SystemMessage, ExecutionOutcome, ExecutionRequest, ExecutionRuntimeContext,
+    ExecutionStateView, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker, Response,
+    ServiceRuntimeRequest, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -376,6 +376,8 @@ where
         &mut self,
         local_time: Timestamp,
         query: Query,
+        incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Response, ChainError> {
         let context = QueryContext {
             chain_id: self.chain_id(),
@@ -384,7 +386,12 @@ where
         };
         let response = self
             .execution_state
-            .query_application(context, query)
+            .query_application(
+                context,
+                query,
+                incoming_execution_requests,
+                runtime_request_sender,
+            )
             .await
             .map_err(|error| ChainError::ExecutionError(error, ChainExecutionContext::Query))?;
         Ok(response)
