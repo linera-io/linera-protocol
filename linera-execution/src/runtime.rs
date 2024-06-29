@@ -1345,6 +1345,23 @@ impl ServiceSyncRuntime {
     }
 }
 
+impl ServiceSyncRuntime {
+    /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
+    pub fn run(&mut self, incoming_requests: std::sync::mpsc::Receiver<ServiceRuntimeRequest>) {
+        while let Ok(request) = incoming_requests.recv() {
+            match request {
+                ServiceRuntimeRequest::Query {
+                    application_id,
+                    query,
+                    callback,
+                } => {
+                    let _ = callback.send(self.run_query(application_id, query));
+                }
+            }
+        }
+    }
+}
+
 impl ServiceRuntime for ServiceSyncRuntimeHandle {
     /// Note that queries are not available from writable contexts.
     fn try_query_application(
@@ -1389,6 +1406,15 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
             .send_request(|callback| Request::FetchUrl { url, callback })?
             .recv_response()
     }
+}
+
+/// A request to the service runtime actor.
+pub enum ServiceRuntimeRequest {
+    Query {
+        application_id: UserApplicationId,
+        query: Vec<u8>,
+        callback: oneshot::Sender<Result<Vec<u8>, ExecutionError>>,
+    },
 }
 
 /// The origin of the execution.
