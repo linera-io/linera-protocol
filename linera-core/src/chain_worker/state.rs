@@ -26,7 +26,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    BytecodeLocation, Query, Response, UserApplicationDescription, UserApplicationId,
+    BytecodeLocation, Query, QueryContext, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::{
@@ -89,6 +89,15 @@ where
     /// Returns the [`ChainId`] of the chain handled by this worker.
     pub fn chain_id(&self) -> ChainId {
         self.chain.chain_id()
+    }
+
+    /// Returns the current [`QueryContext`] for the current chain state.
+    pub fn current_query_context(&self) -> QueryContext {
+        QueryContext {
+            chain_id: self.chain_id(),
+            next_block_height: self.chain.tip_state.get().next_block_height,
+            local_time: self.storage.clock().current_time(),
+        }
     }
 
     /// Returns a read-only view of the [`ChainStateView`].
