@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use futures::{stream::FuturesUnordered, StreamExt, TryStreamExt};
+use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryStreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight, OracleRecord, Timestamp},
     identifiers::{Account, ChainId, Destination, Owner},
@@ -24,6 +24,7 @@ use {
     std::sync::Arc,
 };
 
+use super::runtime::ServiceRuntimeRequest;
 use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
     ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
@@ -473,14 +474,39 @@ where
     ) -> Result<Vec<u8>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let query_result_future = tokio::task::spawn_blocking(move || {
-            ServiceSyncRuntime::new(execution_state_sender, context)
-                .run_query(application_id, query)
+        let (request_sender, request_receiver) = std::sync::mpsc::channel();
+        let (response_sender, response_receiver) = oneshot::channel();
+        let mut response_receiver = response_receiver.fuse();
+
+        let runtime_thread = tokio::task::spawn_blocking(move || {
+            ServiceSyncRuntime::new(execution_state_sender, context).run(request_receiver)
         });
-        while let Some(request) = execution_state_receiver.next().await {
-            self.handle_request(request).await?;
-        }
-        query_result_future.await?
+
+        request_sender
+            .send(ServiceRuntimeRequest::Query {
+                application_id,
+                query,
+                callback: response_sender,
+            })
+            .expect("Service runtime thread should only stop when `request_sender` is dropped");
+
+        let response = loop {
+            futures::select! {
+                maybe_request = execution_state_receiver.next() => {
+                    if let Some(request) = maybe_request {
+                        self.handle_request(request).await?;
+                    }
+                }
+                response = &mut response_receiver => {
+                    break response.map_err(|_| ExecutionError::MissingRuntimeResponse);
+                }
+            }
+        };
+
+        runtime_thread
+            .await
+            .expect("Service runtime thread should not panic");
+        response?
     }
 
     pub async fn list_applications(
