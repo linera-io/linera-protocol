@@ -448,8 +448,10 @@ where
         &mut self,
         context: QueryContext,
         query: Query,
-        incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
+            ExecutionRequest,
+        >,
+        runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match query {
@@ -481,10 +483,10 @@ where
         application_id: UserApplicationId,
         context: QueryContext,
         query: Vec<u8>,
-        mut incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<
+        incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
             ExecutionRequest,
         >,
-        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let (response_sender, response_receiver) = oneshot::channel();
         let mut response_receiver = response_receiver.fuse();

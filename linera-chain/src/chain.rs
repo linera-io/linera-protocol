@@ -376,8 +376,10 @@ where
         &mut self,
         local_time: Timestamp,
         query: Query,
-        incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
+            ExecutionRequest,
+        >,
+        runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Response, ChainError> {
         let context = QueryContext {
             chain_id: self.chain_id(),

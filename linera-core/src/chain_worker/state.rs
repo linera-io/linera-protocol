@@ -560,8 +560,10 @@ where
     pub(super) async fn query_application(
         &mut self,
         query: Query,
-        incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        mut incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<
+            ExecutionRequest,
+        >,
+        mut runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Response, WorkerError> {
         self.0.ensure_is_active()?;
         let local_time = self.0.storage.clock().current_time();
@@ -571,8 +573,8 @@ where
             .query_application(
                 local_time,
                 query,
-                incoming_execution_requests,
-                runtime_request_sender,
+                &mut incoming_execution_requests,
+                &mut runtime_request_sender,
             )
             .await?;
         Ok(response)
