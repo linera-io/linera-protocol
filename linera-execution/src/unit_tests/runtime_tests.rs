@@ -19,7 +19,7 @@ use linera_views::batch::Batch;
 
 use super::{ApplicationStatus, SyncRuntimeHandle, SyncRuntimeInternal};
 use crate::{
-    execution_state_actor::Request,
+    execution_state_actor::ExecutionRequest,
     runtime::{LoadedApplication, ResourceController, SyncRuntime},
     ContractRuntime, RawExecutionOutcome, UserContractInstance,
 };
@@ -117,13 +117,13 @@ async fn test_write_batch() {
             .await
             .expect("Missing expected request to write a batch");
 
-        let Request::WriteBatch {
+        let ExecutionRequest::WriteBatch {
             id,
             batch,
             callback,
         } = request
         else {
-            panic!("Expected a `Request::WriteBatch` but got {request:?} instead");
+            panic!("Expected a `ExecutionRequest::WriteBatch` but got {request:?} instead");
         };
 
         assert_eq!(id, expected_application_id);
@@ -152,7 +152,7 @@ async fn test_write_batch() {
 /// endpoint for the requests the runtime sends to the [`ExecutionStateView`] actor.
 fn create_contract_runtime() -> (
     SyncRuntimeInternal<UserContractInstance>,
-    mpsc::UnboundedReceiver<Request>,
+    mpsc::UnboundedReceiver<ExecutionRequest>,
 ) {
     let (mut runtime, execution_state_receiver) = create_runtime();
 
@@ -168,7 +168,7 @@ fn create_contract_runtime() -> (
 /// runtime sends to the [`ExecutionStateView`] actor.
 fn create_runtime<Application>() -> (
     SyncRuntimeInternal<Application>,
-    mpsc::UnboundedReceiver<Request>,
+    mpsc::UnboundedReceiver<ExecutionRequest>,
 ) {
     let chain_id = ChainDescription::Root(0).into();
     let (execution_state_sender, execution_state_receiver) = mpsc::unbounded();

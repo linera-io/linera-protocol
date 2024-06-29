@@ -64,7 +64,7 @@ static LOAD_SERVICE_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Histogram creation should not fail")
 });
 
-pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<Request>;
+pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<ExecutionRequest>;
 
 impl<C> ExecutionStateView<C>
 where
@@ -73,8 +73,11 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     // TODO(#1416): Support concurrent I/O.
-    pub(crate) async fn handle_request(&mut self, request: Request) -> Result<(), ExecutionError> {
-        use Request::*;
+    pub(crate) async fn handle_request(
+        &mut self,
+        request: ExecutionRequest,
+    ) -> Result<(), ExecutionError> {
+        use ExecutionRequest::*;
         match request {
             LoadContract { id, callback } => {
                 #[cfg(with_metrics)]
@@ -291,7 +294,7 @@ where
 }
 
 /// Requests to the execution state.
-pub enum Request {
+pub enum ExecutionRequest {
     LoadContract {
         id: UserApplicationId,
         callback: Sender<(UserContractCode, UserApplicationDescription)>,
@@ -405,127 +408,127 @@ pub enum Request {
     },
 }
 
-impl Debug for Request {
+impl Debug for ExecutionRequest {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         match self {
-            Request::LoadContract { id, .. } => formatter
-                .debug_struct("Request::LoadContract")
+            ExecutionRequest::LoadContract { id, .. } => formatter
+                .debug_struct("ExecutionRequest::LoadContract")
                 .field("id", id)
                 .finish_non_exhaustive(),
 
-            Request::LoadService { id, .. } => formatter
-                .debug_struct("Request::LoadService")
+            ExecutionRequest::LoadService { id, .. } => formatter
+                .debug_struct("ExecutionRequest::LoadService")
                 .field("id", id)
                 .finish_non_exhaustive(),
 
-            Request::ChainBalance { .. } => formatter
-                .debug_struct("Request::ChainBalance")
+            ExecutionRequest::ChainBalance { .. } => formatter
+                .debug_struct("ExecutionRequest::ChainBalance")
                 .finish_non_exhaustive(),
 
-            Request::OwnerBalance { owner, .. } => formatter
-                .debug_struct("Request::OwnerBalance")
+            ExecutionRequest::OwnerBalance { owner, .. } => formatter
+                .debug_struct("ExecutionRequest::OwnerBalance")
                 .field("owner", owner)
                 .finish_non_exhaustive(),
 
-            Request::OwnerBalances { .. } => formatter
-                .debug_struct("Request::OwnerBalances")
+            ExecutionRequest::OwnerBalances { .. } => formatter
+                .debug_struct("ExecutionRequest::OwnerBalances")
                 .finish_non_exhaustive(),
 
-            Request::BalanceOwners { .. } => formatter
-                .debug_struct("Request::BalanceOwners")
+            ExecutionRequest::BalanceOwners { .. } => formatter
+                .debug_struct("ExecutionRequest::BalanceOwners")
                 .finish_non_exhaustive(),
 
-            Request::Transfer {
+            ExecutionRequest::Transfer {
                 source,
                 destination,
                 amount,
                 signer,
                 ..
             } => formatter
-                .debug_struct("Request::Transfer")
+                .debug_struct("ExecutionRequest::Transfer")
                 .field("source", source)
                 .field("destination", destination)
                 .field("amount", amount)
                 .field("signer", signer)
                 .finish_non_exhaustive(),
 
-            Request::Claim {
+            ExecutionRequest::Claim {
                 source,
                 destination,
                 amount,
                 signer,
                 ..
             } => formatter
-                .debug_struct("Request::Claim")
+                .debug_struct("ExecutionRequest::Claim")
                 .field("source", source)
                 .field("destination", destination)
                 .field("amount", amount)
                 .field("signer", signer)
                 .finish_non_exhaustive(),
 
-            Request::SystemTimestamp { .. } => formatter
-                .debug_struct("Request::SystemTimestamp")
+            ExecutionRequest::SystemTimestamp { .. } => formatter
+                .debug_struct("ExecutionRequest::SystemTimestamp")
                 .finish_non_exhaustive(),
 
-            Request::ChainOwnership { .. } => formatter
-                .debug_struct("Request::ChainOwnership")
+            ExecutionRequest::ChainOwnership { .. } => formatter
+                .debug_struct("ExecutionRequest::ChainOwnership")
                 .finish_non_exhaustive(),
 
-            Request::ReadValueBytes { id, key, .. } => formatter
-                .debug_struct("Request::ReadValueBytes")
+            ExecutionRequest::ReadValueBytes { id, key, .. } => formatter
+                .debug_struct("ExecutionRequest::ReadValueBytes")
                 .field("id", id)
                 .field("key", key)
                 .finish_non_exhaustive(),
 
-            Request::ContainsKey { id, key, .. } => formatter
-                .debug_struct("Request::ContainsKey")
+            ExecutionRequest::ContainsKey { id, key, .. } => formatter
+                .debug_struct("ExecutionRequest::ContainsKey")
                 .field("id", id)
                 .field("key", key)
                 .finish_non_exhaustive(),
 
-            Request::ReadMultiValuesBytes { id, keys, .. } => formatter
-                .debug_struct("Request::ReadMultiValuesBytes")
+            ExecutionRequest::ReadMultiValuesBytes { id, keys, .. } => formatter
+                .debug_struct("ExecutionRequest::ReadMultiValuesBytes")
                 .field("id", id)
                 .field("keys", keys)
                 .finish_non_exhaustive(),
 
-            Request::FindKeysByPrefix { id, key_prefix, .. } => formatter
-                .debug_struct("Request::FindKeysByPrefix")
+            ExecutionRequest::FindKeysByPrefix { id, key_prefix, .. } => formatter
+                .debug_struct("ExecutionRequest::FindKeysByPrefix")
                 .field("id", id)
                 .field("key_prefix", key_prefix)
                 .finish_non_exhaustive(),
 
-            Request::FindKeyValuesByPrefix { id, key_prefix, .. } => formatter
-                .debug_struct("Request::FindKeyValuesByPrefix")
+            ExecutionRequest::FindKeyValuesByPrefix { id, key_prefix, .. } => formatter
+                .debug_struct("ExecutionRequest::FindKeyValuesByPrefix")
                 .field("id", id)
                 .field("key_prefix", key_prefix)
                 .finish_non_exhaustive(),
 
-            Request::WriteBatch { id, batch, .. } => formatter
-                .debug_struct("Request::WriteBatch")
+            ExecutionRequest::WriteBatch { id, batch, .. } => formatter
+                .debug_struct("ExecutionRequest::WriteBatch")
                 .field("id", id)
                 .field("batch", batch)
                 .finish_non_exhaustive(),
 
-            Request::OpenChain { balance, .. } => formatter
-                .debug_struct("Request::OpenChain")
+            ExecutionRequest::OpenChain { balance, .. } => formatter
+                .debug_struct("ExecutionRequest::OpenChain")
                 .field("balance", balance)
                 .finish_non_exhaustive(),
 
-            Request::CloseChain { application_id, .. } => formatter
-                .debug_struct("Request::CloseChain")
+            ExecutionRequest::CloseChain { application_id, .. } => formatter
+                .debug_struct("ExecutionRequest::CloseChain")
                 .field("application_id", application_id)
                 .finish_non_exhaustive(),
 
-            Request::FetchUrl { url, .. } => formatter
-                .debug_struct("Request::FetchUrl")
+            ExecutionRequest::FetchUrl { url, .. } => formatter
+                .debug_struct("ExecutionRequest::FetchUrl")
                 .field("url", url)
                 .finish_non_exhaustive(),
 
-            Request::HttpPost {
+            ExecutionRequest::HttpPost {
                 url, content_type, ..
             } => formatter
-                .debug_struct("Request::HttpPost")
+                .debug_struct("ExecutionRequest::HttpPost")
                 .field("url", url)
                 .field("content_type", content_type)
                 .finish_non_exhaustive(),
