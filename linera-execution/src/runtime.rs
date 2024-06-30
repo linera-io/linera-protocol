@@ -40,7 +40,11 @@ mod tests;
 pub struct SyncRuntime<UserInstance>(Option<SyncRuntimeHandle<UserInstance>>);
 
 pub type ContractSyncRuntime = SyncRuntime<UserContractInstance>;
-pub type ServiceSyncRuntime = SyncRuntime<UserServiceInstance>;
+
+pub struct ServiceSyncRuntime {
+    runtime: SyncRuntime<UserServiceInstance>,
+    current_context: QueryContext,
+}
 
 #[derive(Debug)]
 pub struct SyncRuntimeHandle<UserInstance>(Arc<Mutex<SyncRuntimeInternal<UserInstance>>>);
@@ -1319,7 +1323,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 impl ServiceSyncRuntime {
     /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
     pub fn new(execution_state_sender: ExecutionStateSender, context: QueryContext) -> Self {
-        SyncRuntime(Some(
+        let runtime = SyncRuntime(Some(
             SyncRuntimeInternal::new(
                 context.chain_id,
                 context.next_block_height,
@@ -1333,7 +1337,12 @@ impl ServiceSyncRuntime {
                 None,
             )
             .into(),
-        ))
+        ));
+
+        ServiceSyncRuntime {
+            runtime,
+            current_context: context,
+        }
     }
 
     /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
@@ -1354,8 +1363,17 @@ impl ServiceSyncRuntime {
 
     /// Prepares the runtime to query an application.
     pub(crate) fn prepare_for_query(&mut self, new_context: QueryContext) {
-        let execution_state_sender = self.handle_mut().inner().execution_state_sender.clone();
-        *self = ServiceSyncRuntime::new(execution_state_sender, new_context);
+        let expected_context = QueryContext {
+            local_time: new_context.local_time,
+            ..self.current_context
+        };
+
+        if new_context != expected_context {
+            let execution_state_sender = self.handle_mut().inner().execution_state_sender.clone();
+            *self = ServiceSyncRuntime::new(execution_state_sender, new_context);
+        } else {
+            self.handle_mut().inner().local_time = new_context.local_time;
+        }
     }
 
     /// Queries an application specified by its [`UserApplicationId`].
@@ -1364,17 +1382,13 @@ impl ServiceSyncRuntime {
         application_id: UserApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        self.0
-            .as_mut()
-            .expect(
-                "`SyncRuntimeHandle` should be available while `SyncRuntime` hasn't been dropped",
-            )
+        self.handle_mut()
             .try_query_application(application_id, query)
     }
 
     /// Obtains the [`SyncRuntimeHandle`] stored in this [`ServiceSyncRuntime`].
     fn handle_mut(&mut self) -> &mut ServiceSyncRuntimeHandle {
-        self.0.as_mut().expect(
+        self.runtime.0.as_mut().expect(
             "`SyncRuntimeHandle` should be available while `SyncRuntime` hasn't been dropped",
         )
     }

@@ -300,7 +300,7 @@ pub struct FinalizeContext {
     pub next_message_index: u32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct QueryContext {
     /// The current chain ID.
     pub chain_id: ChainId,
