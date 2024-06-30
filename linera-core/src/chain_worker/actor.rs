@@ -10,7 +10,7 @@ use std::{
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, HashedBlob},
+    data_types::{BlockHeight, HashedBlob, Timestamp},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -21,13 +21,14 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    Query, Response, ServiceSyncRuntime, UserApplicationDescription, UserApplicationId,
+    ExecutionRequest, Query, QueryContext, Response, ServiceRuntimeRequest, ServiceSyncRuntime,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use tokio::{
     sync::{mpsc, oneshot, OwnedRwLockReadGuard},
-    task::JoinSet,
+    task::{JoinHandle, JoinSet},
 };
 use tracing::{instrument, trace, warn};
 #[cfg(with_testing)]
@@ -152,6 +153,7 @@ where
 {
     worker: ChainWorkerState<StorageClient>,
     incoming_requests: mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>,
+    service_runtime_thread: JoinHandle<()>,
 }
 
 impl<StorageClient> ChainWorkerActor<StorageClient>
@@ -170,24 +172,61 @@ where
         join_set: &mut JoinSet<()>,
     ) -> Result<mpsc::UnboundedSender<ChainWorkerRequest<StorageClient::Context>>, WorkerError>
     {
+        let (service_runtime_thread, execution_state_receiver, runtime_request_sender) =
+            Self::spawn_service_runtime_actor(chain_id);
+
         let worker = ChainWorkerState::load(
             config,
             storage,
             certificate_value_cache,
             blob_cache,
             chain_id,
+            execution_state_receiver,
+            runtime_request_sender,
         )
         .await?;
-        let (sender, receiver) = mpsc::unbounded_channel();
 
+        let (sender, receiver) = mpsc::unbounded_channel();
         let actor = ChainWorkerActor {
             worker,
             incoming_requests: receiver,
+            service_runtime_thread,
         };
 
         join_set.spawn_task(actor.run(tracing::Span::current()));
 
         Ok(sender)
+    }
+
+    /// Spawns a blocking task to execute the service runtime actor.
+    ///
+    /// Returns the task handle and the endpoints to interact with the actor.
+    fn spawn_service_runtime_actor(
+        chain_id: ChainId,
+    ) -> (
+        JoinHandle<()>,
+        futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+        std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+    ) {
+        let context = QueryContext {
+            chain_id,
+            next_block_height: BlockHeight(0),
+            local_time: Timestamp::from(0),
+        };
+
+        let (execution_state_sender, execution_state_receiver) =
+            futures::channel::mpsc::unbounded();
+        let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
+
+        let service_runtime_thread = tokio::task::spawn_blocking(move || {
+            ServiceSyncRuntime::new(execution_state_sender, context).run(runtime_request_receiver)
+        });
+
+        (
+            service_runtime_thread,
+            execution_state_receiver,
+            runtime_request_sender,
+        )
     }
 
     /// Runs the worker until there are no more incoming requests.
@@ -225,27 +264,9 @@ where
                 ChainWorkerRequest::GetChainStateView { callback } => {
                     callback.send(self.worker.chain_state_view().await).is_ok()
                 }
-                ChainWorkerRequest::QueryApplication { query, callback } => {
-                    let (execution_state_sender, execution_state_receiver) =
-                        futures::channel::mpsc::unbounded();
-                    let (request_sender, request_receiver) = std::sync::mpsc::channel();
-                    let context = self.worker.current_query_context();
-
-                    let runtime_thread = tokio::task::spawn_blocking(move || {
-                        ServiceSyncRuntime::new(execution_state_sender, context)
-                            .run(request_receiver)
-                    });
-
-                    let response = self
-                        .worker
-                        .query_application(query, execution_state_receiver, request_sender)
-                        .await;
-
-                    runtime_thread
-                        .await
-                        .expect("Service runtime thread should not panic");
-                    callback.send(response).is_ok()
-                }
+                ChainWorkerRequest::QueryApplication { query, callback } => callback
+                    .send(self.worker.query_application(query).await)
+                    .is_ok(),
                 #[cfg(with_testing)]
                 ChainWorkerRequest::ReadBytecodeLocation {
                     bytecode_id,
@@ -319,6 +340,11 @@ where
                 warn!("Callback for `ChainWorkerActor` was dropped before a response was sent");
             }
         }
+
+        drop(self.worker);
+        self.service_runtime_thread
+            .await
+            .expect("Service runtime thread should not panic");
 
         trace!("`ChainWorkerActor` finished");
     }
