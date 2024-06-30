@@ -70,6 +70,14 @@ where
         *self.hash.get_mut() = self.stored_hash;
     }
 
+    async fn has_pending(&self) -> bool {
+        if self.inner.has_pending().await {
+            return true;
+        }
+        let hash = self.hash.read().await;
+        self.stored_hash != *hash
+    }
+
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let delete_view = self.inner.flush(batch)?;
         let hash = self.hash.get_mut();
