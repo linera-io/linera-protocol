@@ -70,6 +70,13 @@ where
         self.update = None;
     }
 
+    async fn has_pending(&self) -> bool {
+        if self.delete_storage_first {
+            return true;
+        }
+        self.update.is_some()
+    }
+
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {

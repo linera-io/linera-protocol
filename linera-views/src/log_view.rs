@@ -82,6 +82,13 @@ where
         self.new_values.clear();
     }
 
+    async fn has_pending(&self) -> bool {
+        if self.delete_storage_first {
+            return true;
+        }
+        !self.new_values.is_empty()
+    }
+
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
