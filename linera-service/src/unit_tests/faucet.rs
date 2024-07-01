@@ -46,7 +46,7 @@ impl chain_listener::ClientContext for ClientContext {
         self.update_calls += 1;
     }
 
-    async fn update_wallet<'a>(&'a mut self, _: &'a mut ChainClient<TestProvider, TestStorage>) {
+    async fn update_wallet(&mut self, _: &ChainClient<TestProvider, TestStorage>) {
         self.update_calls += 1;
     }
 }

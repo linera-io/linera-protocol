@@ -103,6 +103,7 @@ impl FileLock {
     /// release the lock when dropped.
     pub fn new(file: File, path: &Path) -> Result<Self, anyhow::Error> {
         file.file().try_lock_exclusive().with_context(|| {
+            tracing::debug!("{:?}", std::fs::metadata(path));
             format!(
                 "Error getting write lock to wallet \"{}\". Please make sure the file exists \
                  and that it is not in use by another process already.",

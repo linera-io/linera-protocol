@@ -16,7 +16,7 @@ use linera_base::{
 };
 use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
-    client::{ArcChainClient, ChainClient},
+    client::ChainClient,
     node::{LocalValidatorNodeProvider, ValidatorNode, ValidatorNodeProvider},
     worker::Reason,
 };
@@ -63,9 +63,9 @@ pub trait ClientContext {
         timestamp: Timestamp,
     );
 
-    async fn update_wallet<'a>(
-        &'a mut self,
-        client: &'a mut ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
+    async fn update_wallet(
+        &mut self,
+        client: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
     ) where
         ViewError: From<<Self::Storage as Storage>::ContextError>;
 }
@@ -148,7 +148,6 @@ where
                 return Ok(());
             };
             let client = context_guard.make_chain_client(chain_id);
-            let client = ArcChainClient::new(client);
             entry.insert(client.clone());
             client
         };
@@ -161,7 +160,7 @@ where
                 Either::Left((Some(notification), _)) => notification,
                 Either::Left((None, _)) => break,
                 Either::Right(((), _)) => {
-                    match client.lock().await.process_inbox_if_owned().await {
+                    match client.process_inbox_if_owned().await {
                         Err(error) => {
                             warn!(%error, "Failed to process inbox.");
                             timeout = Timestamp::from(u64::MAX);
@@ -177,7 +176,7 @@ where
             match &notification.reason {
                 Reason::NewIncomingMessage { .. } => timeout = storage.clock().current_time(),
                 Reason::NewBlock { .. } | Reason::NewRound { .. } => {
-                    if let Err(error) = client.lock().await.update_validators().await {
+                    if let Err(error) = client.update_validators().await {
                         warn!(
                             "Failed to update validators about the local chain after \
                             receiving notification {:?} with error: {:?}",
@@ -191,8 +190,7 @@ where
                 continue;
             };
             {
-                let mut client_guard = client.lock().await;
-                context.lock().await.update_wallet(&mut *client_guard).await;
+                context.lock().await.update_wallet(&client).await;
             }
             let value = storage.read_hashed_certificate_value(hash).await?;
             let Some(executed_block) = value.inner().executed_block() else {
