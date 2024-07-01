@@ -94,6 +94,7 @@ async fn classic_collection_view_check() {
             if choice == 5 {
                 // Doing the rollback
                 view.rollback();
+                assert_eq!(view.has_pending().await, false);
                 new_map = map.clone();
             }
             // Checking the hash
@@ -115,8 +116,13 @@ async fn classic_collection_view_check() {
             assert_eq!(key_values, new_map);
         }
         if save {
+            if map != new_map {
+                assert_eq!(view.has_pending().await, true);
+            }
             map = new_map.clone();
             view.save().await.unwrap();
+            println!("After SAVE");
+            assert_eq!(view.has_pending().await, false);
         }
     }
 }
