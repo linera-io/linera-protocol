@@ -501,8 +501,32 @@ async fn main() {
     let env_filter = tracing_subscriber::EnvFilter::builder()
         .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
         .from_env_lossy();
+    let internal_event_filter = {
+        match std::env::var_os("RUST_LOG_SPAN_EVENTS") {
+            Some(mut value) => {
+            value.make_ascii_lowercase();
+                let value = value.to_str().expect("test-log: RUST_LOG_SPAN_EVENTS must be valid UTF-8");
+                value
+                    .split(",")
+                    .map(|filter| match filter.trim() {
+                        "new" => FmtSpan::NEW,
+                        "enter" => FmtSpan::ENTER,
+                        "exit" => FmtSpan::EXIT,
+                        "close" => FmtSpan::CLOSE,
+                        "active" => FmtSpan::ACTIVE,
+                        "full" => FmtSpan::FULL,
+                        _ => panic!("test-log: RUST_LOG_SPAN_EVENTS must contain filters separated by `,`.\n\t\
+                                     For example: `active` or `new,close`\n\t\
+                                     Supported filters: new, enter, exit, close, active, full\n\t\
+                                     Got: {}", value),
+                    })
+                    .fold(FmtSpan::NONE, |acc, filter| filter | acc)
+            },
+            None => FmtSpan::NONE,
+        }
+    };
     tracing_subscriber::fmt()
-        .with_span_events(FmtSpan::NEW)
+        .with_span_events(internal_event_filter)
         .with_writer(std::io::stderr)
         .with_env_filter(env_filter)
         .init();
