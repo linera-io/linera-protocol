@@ -105,7 +105,7 @@ async fn key_value_store_view_mutability() {
             if choice == 4 {
                 // Doing the rollback
                 view.rollback();
-                assert_eq!(view.has_pending().await, false);
+                assert!(!view.has_pending().await);
                 new_state_map = state_map.clone();
             }
             new_state_vec = new_state_map.clone().into_iter().collect();
@@ -124,11 +124,11 @@ async fn key_value_store_view_mutability() {
         }
         if save {
             if state_map != new_state_map {
-                assert_eq!(view.has_pending().await, true);
+                assert!(view.has_pending().await);
             }
             state_map = new_state_map.clone();
             view.save().await.unwrap();
-            assert_eq!(view.has_pending().await, false);
+            assert!(!view.has_pending().await);
         }
     }
 }
