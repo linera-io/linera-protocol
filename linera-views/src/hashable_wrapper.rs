@@ -77,6 +77,7 @@ where
             key_prefix.pop();
             batch.delete_key_prefix(key_prefix);
             self.stored_hash = None;
+            *self.hash.get_mut() = None;
         } else {
             let hash = *self.hash.get_mut();
             if self.stored_hash != hash {
