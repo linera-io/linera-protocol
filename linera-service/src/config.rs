@@ -84,8 +84,7 @@ impl Persistent for WalletState {
     type Error = anyhow::Error;
 
     fn save(this: &mut Self) -> anyhow::Result<()> {
-        Persistent::as_mut(&mut this.wallet).refresh_prng_seed(&mut this.prng);
-        Persistent::save(&mut this.wallet)?;
+        Persistent::mutate(&mut this.wallet).refresh_prng_seed(&mut this.prng);
         tracing::debug!("Persisted user chains");
         Ok(())
     }
@@ -97,7 +96,7 @@ impl Persistent for WalletState {
 
 impl Extend<UserChain> for WalletState {
     fn extend<Chains: IntoIterator<Item = UserChain>>(&mut self, chains: Chains) {
-        Persistent::mutate(&mut self.wallet).extend(chains);
+        Persistent::mutate(self).extend(chains);
     }
 }
 
