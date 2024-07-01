@@ -488,7 +488,7 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await?;

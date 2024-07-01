@@ -10,7 +10,7 @@ use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::PublicKey,
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, OracleRecord, Resources, SendMessageRequest,
+        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest,
         Timestamp,
     },
     identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, Owner},
@@ -59,7 +59,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
                 application_id: *app_id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await;
@@ -155,7 +155,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: dummy_operation.clone(),
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await
@@ -309,7 +309,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await?;
@@ -410,7 +410,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await;
@@ -451,7 +451,7 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
                 application_id: id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await;
@@ -522,7 +522,7 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
                 application_id: first_id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await;
@@ -639,7 +639,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
                 application_id: first_id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await?;
@@ -746,7 +746,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await;
@@ -806,7 +806,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await;
@@ -865,7 +865,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await;
@@ -922,7 +922,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await,
@@ -976,7 +976,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
                 application_id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await?;
@@ -1078,7 +1078,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await?;
@@ -1194,7 +1194,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await?;
@@ -1355,7 +1355,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await?;
@@ -1496,7 +1496,7 @@ async fn test_open_chain() {
             context,
             Timestamp::from(0),
             operation,
-            Some(OracleRecord::default()),
+            None,
             &mut controller,
         )
         .await
@@ -1578,7 +1578,7 @@ async fn test_close_chain() {
         context,
         Timestamp::from(0),
         operation,
-        Some(OracleRecord::default()),
+        None,
         &mut controller,
     )
     .await
@@ -1592,7 +1592,7 @@ async fn test_close_chain() {
         context,
         Timestamp::from(0),
         operation.into(),
-        Some(OracleRecord::default()),
+        None,
         &mut controller,
     )
     .await
@@ -1614,7 +1614,7 @@ async fn test_close_chain() {
         context,
         Timestamp::from(0),
         operation,
-        Some(OracleRecord::default()),
+        None,
         &mut controller,
     )
     .await
