@@ -393,12 +393,8 @@ impl LocalKubernetesNet {
     async fn run(&mut self) -> Result<()> {
         let github_root = get_github_root().await?;
         // Build Docker image
-        let docker_image = DockerImage::build(
-            String::from("linera-test:latest"),
-            &self.binaries,
-            &github_root,
-        )
-        .await?;
+        let docker_image =
+            DockerImage::build(String::from("linera:latest"), &self.binaries, &github_root).await?;
 
         let base_dir = github_root
             .join("kubernetes")

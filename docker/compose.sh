@@ -30,11 +30,11 @@ trap cleanup EXIT INT
 cd "$ROOT_DIR"
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    docker build -f docker/Dockerfile . -t linera-test
+    docker build -f docker/Dockerfile . -t linera
 elif [[ "$OSTYPE" == "darwin"* ]]; then
         CPU_ARCH=$(sysctl -n machdep.cpu.brand_string)
         if [[ "$CPU_ARCH" == *"Apple"* ]]; then
-            docker build --build-arg target=aarch64-unknown-linux-gnu -f docker/Dockerfile -t linera-test .
+            docker build --build-arg target=aarch64-unknown-linux-gnu -f docker/Dockerfile -t linera .
         else
             echo "Unsupported Architecture: $CPU_ARCH"
             exit 1;

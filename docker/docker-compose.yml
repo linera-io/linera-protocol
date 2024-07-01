@@ -9,7 +9,7 @@ services:
       SCYLLA_AUTO_CONF: 1
       SCYLLA_ENABLE_EXPERIMENTAL: 1
   proxy:
-    image: linera-test
+    image: linera
     container_name: proxy
     ports:
       - "19100:19100"
@@ -18,7 +18,7 @@ services:
       - .:/config
       - linera-shared:/shared
   shard:
-    image: linera-test
+    image: linera
     container_name: shard
     command: [ "./compose-server-entrypoint.sh" ]
     volumes:
@@ -27,7 +27,7 @@ services:
     depends_on:
       - shard-init
   shard-init:
-    image: linera-test
+    image: linera
     container_name: shard-init
     command: [ "./compose-server-init.sh" ]
     volumes:

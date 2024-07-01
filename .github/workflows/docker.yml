@@ -50,7 +50,7 @@ jobs:
         run: |
           cargo install --path linera-service --bin linera --bin linera-server --debug
       - name: Build Docker image
-        run: docker build . -f docker/Dockerfile -t linera-test
+        run: docker build . -f docker/Dockerfile -t linera
       - name: Run Compose
         run: cd docker && ./compose.sh &
       - name: Sync

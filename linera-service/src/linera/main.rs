@@ -1292,8 +1292,8 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                 .unwrap_or_else(Timestamp::now);
             let admin_id = ChainId::root(*admin_root);
             let network_name = network_name.clone().unwrap_or_else(|| {
-                // Default: e.g. "linera-test-2023-11-14T23:13:20"
-                format!("linera-test-{}", Utc::now().naive_utc().format("%FT%T"))
+                // Default: e.g. "linera-2023-11-14T23:13:20"
+                format!("linera-{}", Utc::now().naive_utc().format("%FT%T"))
             });
             let mut genesis_config =
                 GenesisConfig::new(committee_config, admin_id, timestamp, policy, network_name);

@@ -27,7 +27,7 @@ releases:
       - name: numShards
         value: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}
       - name: lineraImage
-        value: {{ env "LINERA_HELMFILE_LINERA_IMAGE" | default "linera-test:latest" }}
+        value: {{ env "LINERA_HELMFILE_LINERA_IMAGE" | default "linera:latest" }}
       - name: staticIpGcpName
         value: {{ env "LINERA_HELMFILE_STATIC_IP_GCP_NAME" | default "" }}
       - name: validatorDomainName
