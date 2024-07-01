@@ -1327,8 +1327,10 @@ impl ServiceSyncRuntime {
             ResourceController::default(),
             OracleResponses::Forget,
         );
+        let mut handle = ServiceSyncRuntimeHandle::new(runtime_internal);
+        let _guard = SyncRuntime(Some(handle.clone()));
 
-        ServiceSyncRuntimeHandle::new(runtime_internal).try_query_application(application_id, query)
+        handle.try_query_application(application_id, query)
     }
 }
 
