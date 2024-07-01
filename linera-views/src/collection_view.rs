@@ -106,7 +106,7 @@ where
         self.updates.get_mut().clear();
     }
 
-    async fn has_pending(&self) -> bool {
+    async fn has_pending_changes(&self) -> bool {
         if self.delete_storage_first {
             return true;
         }
@@ -651,8 +651,8 @@ where
         self.collection.rollback()
     }
 
-    async fn has_pending(&self) -> bool {
-        self.collection.has_pending().await
+    async fn has_pending_changes(&self) -> bool {
+        self.collection.has_pending_changes().await
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
@@ -990,8 +990,8 @@ where
         self.collection.rollback()
     }
 
-    async fn has_pending(&self) -> bool {
-        self.collection.has_pending().await
+    async fn has_pending_changes(&self) -> bool {
+        self.collection.has_pending_changes().await
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {

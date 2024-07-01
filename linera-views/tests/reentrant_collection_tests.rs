@@ -130,7 +130,7 @@ async fn reentrant_collection_view_check() {
             if choice == 6 {
                 // Doing the rollback
                 view.rollback();
-                assert!(!view.has_pending().await);
+                assert!(!view.has_pending_changes().await);
                 new_map = map.clone();
             }
             // Checking the hash
@@ -159,11 +159,11 @@ async fn reentrant_collection_view_check() {
         }
         if save {
             if map != new_map {
-                assert!(view.has_pending().await);
+                assert!(view.has_pending_changes().await);
             }
             map = new_map.clone();
             view.save().await.unwrap();
-            assert!(!view.has_pending().await);
+            assert!(!view.has_pending_changes().await);
         }
     }
 }

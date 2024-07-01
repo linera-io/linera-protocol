@@ -190,7 +190,7 @@ where
         *self.hash.get_mut() = self.stored_hash;
     }
 
-    async fn has_pending(&self) -> bool {
+    async fn has_pending_changes(&self) -> bool {
         if self.delete_storage_first {
             return true;
         }
@@ -200,7 +200,7 @@ where
         if !self.updates.is_empty() {
             return true;
         }
-        if self.sizes.has_pending().await {
+        if self.sizes.has_pending_changes().await {
             return true;
         }
         let hash = self.hash.lock().await;
