@@ -29,6 +29,15 @@ impl linera_views::views::View<custom::GenericContext<T>> for TestView {
         self.register.rollback();
         self.collection.rollback();
     }
+    async fn has_pending(&self) -> bool {
+        if self.register.has_pending().await {
+            return true;
+        }
+        if self.collection.has_pending().await {
+            return true;
+        }
+        false
+    }
     fn flush(
         &mut self,
         batch: &mut linera_views::batch::Batch,
