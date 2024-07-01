@@ -331,7 +331,7 @@ where
         block: &Block,
         hashed_blobs: &[HashedBlob],
     ) -> Result<Vec<BlobId>, WorkerError> {
-        let mut required_blob_ids = block.blob_ids();
+        let mut required_blob_ids = block.published_blob_ids();
         // Find all certificates containing blobs used when executing this block.
         for hashed_blob in hashed_blobs {
             let blob_id = hashed_blob.id();
@@ -1087,7 +1087,7 @@ where
             })
             .collect::<HashSet<_>>();
 
-        let block_blob_ids = block.blob_ids();
+        let block_blob_ids = block.published_blob_ids();
         let missing_blobs_from_oracles = block_blob_ids
             .iter()
             .filter(|block_blob_id| !blob_ids_in_oracle_records.contains(block_blob_id))

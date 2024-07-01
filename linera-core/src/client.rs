@@ -1441,7 +1441,7 @@ where
             .local_node
             .read_or_download_hashed_certificate_values(nodes.clone(), block.bytecode_locations())
             .await?;
-        let hashed_blobs = self.read_local_blobs(block.blob_ids()).await?;
+        let hashed_blobs = self.read_local_blobs(block.published_blob_ids()).await?;
         // Create the final block proposal.
         let key_pair = self.key_pair().await?;
         let proposal = if let Some(cert) = manager.requested_locked {

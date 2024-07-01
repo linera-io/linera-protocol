@@ -266,7 +266,7 @@ where
         let required = match certificate.value() {
             CertificateValue::ConfirmedBlock { executed_block, .. }
             | CertificateValue::ValidatedBlock { executed_block, .. } => {
-                executed_block.block.blob_ids()
+                executed_block.block.published_blob_ids()
             }
             CertificateValue::Timeout { .. } => HashSet::new(),
         };
