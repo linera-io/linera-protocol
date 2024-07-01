@@ -40,7 +40,7 @@ impl<C, W, O> View<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C> + Send,
+    W: HashableView<C> + Send + Sync,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
@@ -70,25 +70,32 @@ where
         *self.hash.get_mut() = self.stored_hash;
     }
 
+    async fn has_pending_changes(&self) -> bool {
+        if self.inner.has_pending_changes().await {
+            return true;
+        }
+        let hash = self.hash.lock().await;
+        self.stored_hash != *hash
+    }
+
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let delete_view = self.inner.flush(batch)?;
+        let hash = self.hash.get_mut();
         if delete_view {
             let mut key_prefix = self.inner.context().base_key();
             key_prefix.pop();
             batch.delete_key_prefix(key_prefix);
             self.stored_hash = None;
-        } else {
-            let hash = *self.hash.get_mut();
-            if self.stored_hash != hash {
-                let mut key = self.inner.context().base_key();
-                let tag = key.last_mut().unwrap();
-                *tag = KeyTag::Hash as u8;
-                match hash {
-                    None => batch.delete_key(key),
-                    Some(hash) => batch.put_key_value(key, &hash)?,
-                }
-                self.stored_hash = hash;
+            *hash = None;
+        } else if self.stored_hash != *hash {
+            let mut key = self.inner.context().base_key();
+            let tag = key.last_mut().unwrap();
+            *tag = KeyTag::Hash as u8;
+            match hash {
+                None => batch.delete_key(key),
+                Some(hash) => batch.put_key_value(key, hash)?,
             }
+            self.stored_hash = *hash;
         }
         Ok(delete_view)
     }
@@ -103,7 +110,7 @@ impl<C, W, O> ClonableView<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C> + ClonableView<C> + Send,
+    W: HashableView<C> + ClonableView<C> + Send + Sync,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {

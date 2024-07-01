@@ -64,6 +64,13 @@ where
         self.updates.clear();
     }
 
+    async fn has_pending_changes(&self) -> bool {
+        if self.delete_storage_first {
+            return true;
+        }
+        !self.updates.is_empty()
+    }
+
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
@@ -368,6 +375,10 @@ where
         self.set.rollback()
     }
 
+    async fn has_pending_changes(&self) -> bool {
+        self.set.has_pending_changes().await
+    }
+
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         self.set.flush(batch)
     }
@@ -615,6 +626,10 @@ where
 
     fn rollback(&mut self) {
         self.set.rollback()
+    }
+
+    async fn has_pending_changes(&self) -> bool {
+        self.set.has_pending_changes().await
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
