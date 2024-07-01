@@ -203,8 +203,8 @@ where
         if self.sizes.has_pending().await {
             return true;
         }
-        let hash = *self.hash.read().await;
-        if self.stored_hash != hash {
+        let hash = self.hash.lock().await;
+        if self.stored_hash != *hash {
             return true;
         }
         self.stored_total_size != self.total_size
