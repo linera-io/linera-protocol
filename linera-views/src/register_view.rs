@@ -70,7 +70,7 @@ where
         self.update = None;
     }
 
-    async fn has_pending(&self) -> bool {
+    async fn has_pending_changes(&self) -> bool {
         if self.delete_storage_first {
             return true;
         }

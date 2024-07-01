@@ -80,7 +80,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
             if choice == 4 {
                 // Doing the rollback
                 view.rollback();
-                assert!(!view.has_pending().await);
+                assert!(!view.has_pending_changes().await);
                 new_state_map = state_map.clone();
             }
             if choice == 5 && count > 0 {
@@ -144,11 +144,11 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
         }
         if save {
             if state_map != new_state_map {
-                assert!(view.has_pending().await);
+                assert!(view.has_pending_changes().await);
             }
             state_map = new_state_map.clone();
             view.save().await.unwrap();
-            assert!(!view.has_pending().await);
+            assert!(!view.has_pending_changes().await);
         }
     }
 }

@@ -93,7 +93,7 @@ where
         self.deleted_prefixes.clear();
     }
 
-    async fn has_pending(&self) -> bool {
+    async fn has_pending_changes(&self) -> bool {
         if self.delete_storage_first {
             return true;
         }
@@ -824,8 +824,8 @@ where
         self.map.rollback()
     }
 
-    async fn has_pending(&self) -> bool {
-        self.map.has_pending().await
+    async fn has_pending_changes(&self) -> bool {
+        self.map.has_pending_changes().await
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
@@ -1242,8 +1242,8 @@ where
         self.map.rollback()
     }
 
-    async fn has_pending(&self) -> bool {
-        self.map.has_pending().await
+    async fn has_pending_changes(&self) -> bool {
+        self.map.has_pending_changes().await
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {

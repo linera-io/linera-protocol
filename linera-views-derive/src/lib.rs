@@ -114,7 +114,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut flush_quotes = Vec::new();
     let mut test_flush_quotes = Vec::new();
     let mut clear_quotes = Vec::new();
-    let mut has_pending_quotes = Vec::new();
+    let mut has_pending_changes_quotes = Vec::new();
     for (idx, e) in input.fields.into_iter().enumerate() {
         let name = e.clone().ident.unwrap();
         let fut = format_ident!("{}_fut", name.to_string());
@@ -137,8 +137,8 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         flush_quotes.push(quote! { let #test_flush_ident = self.#name.flush(batch)?; });
         test_flush_quotes.push(quote! { #test_flush_ident });
         clear_quotes.push(quote! { self.#name.clear(); });
-        has_pending_quotes.push(quote! {
-            if self.#name.has_pending().await {
+        has_pending_changes_quotes.push(quote! {
+            if self.#name.has_pending_changes().await {
                 return true;
             }
         });
@@ -184,8 +184,8 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 #(#rollback_quotes)*
             }
 
-            async fn has_pending(&self) -> bool {
-                #(#has_pending_quotes)*
+            async fn has_pending_changes(&self) -> bool {
+                #(#has_pending_changes_quotes)*
                 false
             }
 

@@ -31,7 +31,7 @@ pub trait View<C>: Sized {
     fn rollback(&mut self);
 
     /// Returns true if the flush is going to be non-trivial
-    async fn has_pending(&self) -> bool;
+    async fn has_pending_changes(&self) -> bool;
 
     /// Clears the view. That can be seen as resetting to default. If the clear is followed
     /// by a flush then all the relevant data is removed on the storage.

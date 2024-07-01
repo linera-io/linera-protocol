@@ -70,8 +70,8 @@ where
         *self.hash.get_mut() = self.stored_hash;
     }
 
-    async fn has_pending(&self) -> bool {
-        if self.inner.has_pending().await {
+    async fn has_pending_changes(&self) -> bool {
+        if self.inner.has_pending_changes().await {
             return true;
         }
         let hash = self.hash.lock().await;

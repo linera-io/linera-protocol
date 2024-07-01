@@ -73,7 +73,7 @@ async fn queue_view_mutability_check() {
             if choice == 4 {
                 // Doing the rollback
                 view.rollback();
-                assert!(!view.has_pending().await);
+                assert!(!view.has_pending_changes().await);
                 new_vector.clone_from(&vector);
             }
             let new_elements = view.queue.elements().await.unwrap();
@@ -88,11 +88,11 @@ async fn queue_view_mutability_check() {
         }
         if save {
             if vector != new_vector {
-                assert!(view.has_pending().await);
+                assert!(view.has_pending_changes().await);
             }
             vector.clone_from(&new_vector);
             view.save().await.unwrap();
-            assert!(!view.has_pending().await);
+            assert!(!view.has_pending_changes().await);
         }
     }
 }
