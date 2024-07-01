@@ -40,7 +40,7 @@ impl<C, W, O> View<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C> + Send,
+    W: HashableView<C> + Send + Sync,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
@@ -74,7 +74,7 @@ where
         if self.inner.has_pending().await {
             return true;
         }
-        let hash = self.hash.read().await;
+        let hash = self.hash.lock().await;
         self.stored_hash != *hash
     }
 
@@ -110,7 +110,7 @@ impl<C, W, O> ClonableView<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C> + ClonableView<C> + Send,
+    W: HashableView<C> + ClonableView<C> + Send + Sync,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {

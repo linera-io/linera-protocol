@@ -123,7 +123,7 @@ where
         if self.delete_storage_first {
             return true;
         }
-        let updates = self.updates.read().await;
+        let updates = self.updates.lock().await;
         !updates.is_empty()
     }
 
