@@ -46,7 +46,6 @@ use thiserror::Error;
 
 #[cfg(with_testing)]
 pub use crate::applications::ApplicationRegistry;
-use crate::runtime::{ContractSyncRuntime, ServiceSyncRuntime};
 #[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
@@ -61,7 +60,7 @@ pub use crate::{
     execution::ExecutionStateView,
     policy::ResourceControlPolicy,
     resources::{ResourceController, ResourceTracker},
-    runtime::{ContractSyncRuntimeHandle, ServiceSyncRuntimeHandle},
+    runtime::{ContractSyncRuntime, ServiceSyncRuntime},
     system::{
         SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation,
         SystemQuery, SystemResponse,
@@ -84,7 +83,7 @@ pub type UserServiceInstance = Box<dyn UserService + 'static>;
 pub trait UserContractModule {
     fn instantiate(
         &self,
-        runtime: ContractSyncRuntimeHandle,
+        runtime: ContractSyncRuntime,
     ) -> Result<UserContractInstance, ExecutionError>;
 }
 
@@ -92,7 +91,7 @@ pub trait UserContractModule {
 pub trait UserServiceModule {
     fn instantiate(
         &self,
-        runtime: ServiceSyncRuntimeHandle,
+        runtime: ServiceSyncRuntime,
     ) -> Result<UserServiceInstance, ExecutionError>;
 }
 
