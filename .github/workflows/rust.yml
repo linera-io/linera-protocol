@@ -24,7 +24,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
-  RUST_BACKTRACE: short
+  RUST_BACKTRACE: full
   # We allow redundant explicit links because `cargo rdme` doesn't know how to resolve implicit intra-crate links.
   RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links -D warnings
   RUSTFLAGS: -D warnings
