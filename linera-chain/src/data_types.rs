@@ -71,7 +71,7 @@ impl Block {
     }
 
     /// Returns all the blob IDs referred to in this block's operations.
-    pub fn blob_ids(&self) -> HashSet<BlobId> {
+    pub fn published_blob_ids(&self) -> HashSet<BlobId> {
         let mut blob_ids = HashSet::new();
         for operation in &self.operations {
             if let Operation::System(SystemOperation::PublishBlob { blob_id }) = operation {
