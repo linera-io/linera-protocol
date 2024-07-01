@@ -87,17 +87,15 @@ where
             batch.delete_key_prefix(key_prefix);
             self.stored_hash = None;
             *hash = None;
-        } else {
-            if self.stored_hash != *hash {
-                let mut key = self.inner.context().base_key();
-                let tag = key.last_mut().unwrap();
-                *tag = KeyTag::Hash as u8;
-                match hash {
-                    None => batch.delete_key(key),
-                    Some(hash) => batch.put_key_value(key, hash)?,
-                }
-                self.stored_hash = *hash;
+        } else if self.stored_hash != *hash {
+            let mut key = self.inner.context().base_key();
+            let tag = key.last_mut().unwrap();
+            *tag = KeyTag::Hash as u8;
+            match hash {
+                None => batch.delete_key(key),
+                Some(hash) => batch.put_key_value(key, hash)?,
             }
+            self.stored_hash = *hash;
         }
         Ok(delete_view)
     }
