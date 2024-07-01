@@ -160,19 +160,19 @@ pub fn get_random_key_values_prefix<R: Rng>(
     key_prefix: Vec<u8>,
     len_key: usize,
     len_value: usize,
-    n: usize,
+    num_entries: usize,
 ) -> Vec<(Vec<u8>, Vec<u8>)> {
     loop {
         let mut v_ret = Vec::new();
         let mut vector_set = HashSet::new();
-        for _ in 0..n {
+        for _ in 0..num_entries {
             let v1 = get_random_byte_vector(rng, &key_prefix, len_key);
             let v2 = get_random_byte_vector(rng, &Vec::new(), len_value);
             let v12 = (v1.clone(), v2);
             vector_set.insert(v1);
             v_ret.push(v12);
         }
-        if vector_set.len() == n {
+        if vector_set.len() == num_entries {
             return v_ret;
         }
     }
@@ -180,15 +180,19 @@ pub fn get_random_key_values_prefix<R: Rng>(
 
 /// Takes a random number generator rng, a number n and returns n random `(key, value)`
 /// which are all distinct with key and value being of length 8.
-pub fn get_random_key_values<R: Rng>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
-    get_random_key_values_prefix(rng, Vec::new(), 8, 8, n)
+pub fn get_random_key_values<R: Rng>(rng: &mut R, num_entries: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+    get_random_key_values_prefix(rng, Vec::new(), 8, 8, num_entries)
 }
 
 type VectorPutDelete = (Vec<(Vec<u8>, Vec<u8>)>, usize);
 
 /// A bunch of puts and some deletes.
-pub fn get_random_key_value_operations<R: Rng>(rng: &mut R, n: usize, k: usize) -> VectorPutDelete {
-    let key_value_vector = get_random_key_values_prefix(rng, Vec::new(), 8, 8, n);
+pub fn get_random_key_value_operations<R: Rng>(
+    rng: &mut R,
+    num_entries: usize,
+    k: usize,
+) -> VectorPutDelete {
+    let key_value_vector = get_random_key_values_prefix(rng, Vec::new(), 8, 8, num_entries);
     (key_value_vector, k)
 }
 
@@ -319,18 +323,18 @@ pub async fn run_reads<S: LocalKeyValueStore>(store: S, key_values: Vec<(Vec<u8>
     }
 }
 
-fn get_random_key_values1(n: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+fn get_random_key_values1(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     let key_prefix = vec![0];
     let mut rng = make_deterministic_rng();
-    get_random_key_values_prefix(&mut rng, key_prefix, 8, len_value, n)
+    get_random_key_values_prefix(&mut rng, key_prefix, 8, len_value, num_entries)
 }
 
-fn get_random_key_values2(n: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+fn get_random_key_values2(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     let mut rng = make_deterministic_rng();
     let key_prefix = vec![0];
     let mut key_values = Vec::new();
     let mut key_set = HashSet::new();
-    for _ in 0..n {
+    for _ in 0..num_entries {
         let key = get_small_key_space(&mut rng, &key_prefix, 4);
         if !key_set.contains(&key) {
             key_set.insert(key.clone());

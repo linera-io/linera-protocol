@@ -169,10 +169,10 @@ impl ScyllaDbClient {
         );
         let read_multi_value = Query::new(query);
         let mut rows = session.query_iter(read_multi_value, &keys).await?;
-        let mut values = Vec::with_capacity(num_keys);
-        values.resize(num_keys, None);
+        let mut values = vec![None; num_keys];
         let mut map = HashMap::<Vec<u8>, Vec<usize>>::new();
         for (i_key, key) in keys.into_iter().enumerate() {
+            ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
             match map.entry(key) {
                 Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
@@ -188,7 +188,7 @@ impl ScyllaDbClient {
             let key = value.0;
             for i_key in map.get(&key).unwrap().clone() {
                 let value = Some(value.1.clone());
-                *values.get_mut(i_key).unwrap() = value;
+                *values.get_mut(i_key).expect("an entry in values") = value;
             }
         }
         Ok(values)
