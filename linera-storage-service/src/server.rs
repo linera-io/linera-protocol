@@ -504,8 +504,10 @@ async fn main() {
     let internal_event_filter = {
         match std::env::var_os("RUST_LOG_SPAN_EVENTS") {
             Some(mut value) => {
-            value.make_ascii_lowercase();
-                let value = value.to_str().expect("test-log: RUST_LOG_SPAN_EVENTS must be valid UTF-8");
+                value.make_ascii_lowercase();
+                let value = value
+                    .to_str()
+                    .expect("test-log: RUST_LOG_SPAN_EVENTS must be valid UTF-8");
                 value
                     .split(",")
                     .map(|filter| match filter.trim() {
@@ -521,7 +523,7 @@ async fn main() {
                                      Got: {}", value),
                     })
                     .fold(FmtSpan::NONE, |acc, filter| filter | acc)
-            },
+            }
             None => FmtSpan::NONE,
         }
     };
