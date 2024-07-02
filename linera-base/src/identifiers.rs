@@ -143,7 +143,21 @@ impl ChainDescription {
 pub struct ChainId(pub CryptoHash);
 
 /// A content-addressed blob ID i.e. the hash of the Blob.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Debug, Serialize, Deserialize)]
+#[derive(
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Clone,
+    Copy,
+    Hash,
+    Debug,
+    Serialize,
+    Deserialize,
+    WitType,
+    WitStore,
+    WitLoad,
+)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Default))]
 pub struct BlobId(pub CryptoHash);
 
@@ -151,6 +165,12 @@ impl BlobId {
     /// Creates a new `BlobId` from a `Blob`
     pub fn new(blob: &Blob) -> Self {
         BlobId(CryptoHash::new(blob))
+    }
+
+    /// Returns the blob ID of `TestString(s)`, for testing purposes.
+    #[cfg(with_testing)]
+    pub fn test_blob_id(s: impl Into<String>) -> Self {
+        BlobId(CryptoHash::test_hash(s))
     }
 }
 

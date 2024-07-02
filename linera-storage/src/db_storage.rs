@@ -499,13 +499,20 @@ where
         self.write_batch(batch).await
     }
 
-    async fn write_hashed_blob(
+    async fn write_hashed_blob(&self, blob: &HashedBlob) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        self.add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+        self.write_batch(batch).await?;
+        Ok(())
+    }
+
+    async fn write_blob_state(
         &self,
-        blob: &HashedBlob,
-        last_used_by: &CryptoHash,
+        blob_id: BlobId,
+        last_used_by: CryptoHash,
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.add_blob_to_batch(&blob.id(), blob, last_used_by, &mut batch)?;
+        self.add_blob_state_to_batch(blob_id, last_used_by, &mut batch)?;
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -521,14 +528,10 @@ where
         self.write_batch(batch).await
     }
 
-    async fn write_hashed_blobs(
-        &self,
-        blobs: &[HashedBlob],
-        last_used_by: &CryptoHash,
-    ) -> Result<(), ViewError> {
+    async fn write_hashed_blobs(&self, blobs: &[HashedBlob]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for blob in blobs {
-            self.add_blob_to_batch(&blob.id(), blob, last_used_by, &mut batch)?;
+            self.add_blob_to_batch(&blob.id(), blob, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -611,30 +614,23 @@ where
         &self,
         blob_id: &BlobId,
         blob: &HashedBlob,
-        last_used_by: &CryptoHash,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob_key = bcs::to_bytes(&BaseKey::BlobId(*blob_id))?;
         batch.put_key_value(blob_key.to_vec(), blob)?;
-        self.add_blob_state_to_batch(blob_id, last_used_by, batch)?;
         Ok(())
     }
 
     fn add_blob_state_to_batch(
         &self,
-        blob_id: &BlobId,
-        last_used_by: &CryptoHash,
+        blob_id: BlobId,
+        last_used_by: CryptoHash,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
-        let blob_state_key = bcs::to_bytes(&BaseKey::BlobStateId(*blob_id))?;
-        batch.put_key_value(
-            blob_state_key.to_vec(),
-            &BlobState {
-                last_used_by: *last_used_by,
-            },
-        )?;
+        let blob_state_key = bcs::to_bytes(&BaseKey::BlobStateId(blob_id))?;
+        batch.put_key_value(blob_state_key.to_vec(), &BlobState { last_used_by })?;
         Ok(())
     }
 

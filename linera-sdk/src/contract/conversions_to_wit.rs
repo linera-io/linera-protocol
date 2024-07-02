@@ -7,7 +7,8 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{
-        Account, ApplicationId, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner,
+        Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination, MessageId,
+        Owner,
     },
 };
 
@@ -36,6 +37,14 @@ impl From<Owner> for wit_system_api::Owner {
     fn from(owner: Owner) -> Self {
         wit_system_api::Owner {
             inner0: owner.0.into(),
+        }
+    }
+}
+
+impl From<BlobId> for wit_system_api::BlobId {
+    fn from(blob_id: BlobId) -> Self {
+        wit_system_api::BlobId {
+            inner0: blob_id.0.into(),
         }
     }
 }
