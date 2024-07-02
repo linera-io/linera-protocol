@@ -68,7 +68,7 @@ fn open_options() -> fs_err::OpenOptions {
 }
 
 impl<T: serde::de::DeserializeOwned> File<T> {
-    /// Create a new persistent file at `path` containing `value`.
+    /// Creates a new persistent file at `path` containing `value`.
     pub fn new(path: &Path, value: T) -> anyhow::Result<Self> {
         Ok(Self {
             _lock: Lock::new(
@@ -84,15 +84,15 @@ impl<T: serde::de::DeserializeOwned> File<T> {
         })
     }
 
-    /// Read the value from a file at `path`, returning an error if it does not exist.
+    /// Reads the value from a file at `path`, returning an error if it does not exist.
     pub fn read(path: &Path) -> anyhow::Result<Self> {
         Self::read_or_create(path, || {
             Err(anyhow::anyhow!("Path does not exist: {}", path.display()))
         })
     }
 
-    /// Read the value from a file at `path`, calling the `value` function to create it if
-    /// it does not exist.  If it does exist, `value` will not be called.
+    /// Reads the value from a file at `path`, calling the `value` function to create it
+    /// if it does not exist.  If it does exist, `value` will not be called.
     pub fn read_or_create(
         path: &Path,
         value: impl FnOnce() -> anyhow::Result<T>,
@@ -111,7 +111,7 @@ impl<T: serde::de::DeserializeOwned> File<T> {
         })
     }
 
-    /// Take the value out, releasing the lock on the persistent file.
+    /// Takes the value out, releasing the lock on the persistent file.
     pub fn into_value(self) -> T {
         self.value
     }

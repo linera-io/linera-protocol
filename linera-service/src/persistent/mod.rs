@@ -14,13 +14,13 @@ pub use file::File;
 pub trait Persist: Deref {
     type Error: std::fmt::Debug;
 
-    /// Get a mutable reference to the value.
+    /// Gets a mutable reference to the value.
     fn as_mut(_: &mut Self) -> &mut Self::Target;
 
-    /// Save the value to persistent storage.
+    /// Saves the value to persistent storage.
     fn persist(_: &mut Self) -> Result<(), Self::Error>;
 
-    /// Get a mutable reference to the value which, on drop, will automatically persist
+    /// Gets a mutable reference to the value which, on drop, will automatically persist
     /// the new value.
     fn mutate(this: &mut Self) -> RefMut<Self> {
         RefMut(this)
