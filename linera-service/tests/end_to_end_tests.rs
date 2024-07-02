@@ -2508,7 +2508,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         let name = net.validator_name(i).unwrap();
         client.remove_validator(name).await?;
         net.remove_validator(i)?;
-        if node_service_2.is_none() {
+        if let Some(service) = &node_service_2 {
+            service.process_inbox(&chain_2).await?;
+        } else {
             client_2.process_inbox(chain_2).await?;
         }
     }
