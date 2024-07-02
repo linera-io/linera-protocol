@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["allow_uninitialized","initialize","initialize_with_formatter"],"type":["FormatFn"]};

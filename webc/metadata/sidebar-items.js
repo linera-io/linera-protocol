@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AtomSignature","BindingsExtended","UrlOrManifest"],"mod":["annotations"],"struct":["Atom","AtomWithoutSignature","Binding","Command","Manifest","ManifestWithoutAtomSignatures","WaiBindings","WitBindings"],"type":["Annotation"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EMSCRIPTEN_RUNNER_URI","WASI_RUNNER_URI","WASM4_RUNNER_URI","WCGI_RUNNER_URI"],"struct":["Atom","Emscripten","FileSystemMapping","FileSystemMappings","VolumeSpecificPath","Wapm","Wasi","Wcgi"]};

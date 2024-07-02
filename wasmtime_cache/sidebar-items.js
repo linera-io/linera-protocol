@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_new_config"],"struct":["CacheConfig","ModuleCacheEntry"]};

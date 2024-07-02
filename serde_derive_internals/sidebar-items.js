@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Derive"],"fn":["replace_receiver","ungroup"],"mod":["ast","attr"],"struct":["Ctxt"]};

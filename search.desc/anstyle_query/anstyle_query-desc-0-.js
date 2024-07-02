@@ -1,0 +1,1 @@
+searchState.loadedDescShard("anstyle_query", 0, "Check CLICOLOR status\nCheck CLICOLOR_FORCE status\nReport whether this is running in CI\nCheck NO_COLOR status\nCheck <code>TERM</code> for ANSI color support\nCheck <code>TERM</code> for color support\nCheck COLORTERM for truecolor support")

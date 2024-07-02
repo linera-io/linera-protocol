@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Sha256Hash","Sha256HashParseError"]};

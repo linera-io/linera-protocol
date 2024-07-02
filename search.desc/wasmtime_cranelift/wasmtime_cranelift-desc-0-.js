@@ -1,0 +1,1 @@
+searchState.loadedDescShard("wasmtime_cranelift", 0, "Support for compiling with Cranelift.\nCompiled function: machine code body, jump table offsets, …\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.")

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["GWEI_TO_WEI"],"struct":["Withdrawal"]};

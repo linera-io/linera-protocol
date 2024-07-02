@@ -1,0 +1,1 @@
+searchState.loadedDescShard("async_stream", 0, "Asynchronous stream of elements.\nAsynchronous stream\nAsynchronous fallible stream")

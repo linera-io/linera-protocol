@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["alloc_uninit_bytes","assume_init","boxed_str","is_same_type","read","slice","slice_mut","slice_parts","transmute_copy","unroll","write"]};

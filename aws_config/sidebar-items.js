@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["defaults","from_env","load_defaults","load_from_env"],"mod":["credential_process","default_provider","ecs","environment","identity","imds","meta","profile","provider_config","retry","sso","stalled_stream_protection","sts","timeout","web_identity_token"],"struct":["AppName","BehaviorVersion","ConfigLoader","InvalidAppName","Region","SdkConfig"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["assume_role","assume_role_with_saml","assume_role_with_web_identity","decode_authorization_message","get_access_key_info","get_caller_identity","get_federation_token","get_session_token"],"trait":["RequestId"]};

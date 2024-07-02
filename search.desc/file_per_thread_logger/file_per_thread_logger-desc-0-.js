@@ -1,0 +1,1 @@
+searchState.loadedDescShard("file_per_thread_logger", 0, "Format function to print logs in a custom format.\nAllow logs files to be created from threads in which the …\nInitializes the current process/thread with a logger, …\nInitializes the current process/thread with a logger, …")

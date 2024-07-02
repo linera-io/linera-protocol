@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BadKeyspaceName","BadQuery","DbError","NewSessionError","OperationType","QueryError","TranslationError","WriteType"]};

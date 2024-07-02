@@ -1,0 +1,117 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Document your crate’s feature flags."><title>document_features - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-081576b923113409.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="document_features" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0 (129f3b996 2024-06-10)" data-channel="1.79.0" data-search-js="search-bf21c90c8c1d92b1.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-e32f0c247825364d.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-09095024cf37855e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../document_features/index.html">document_features</a><span class="version">0.2.8</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../document_features/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Type ‘S’ or ‘/’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings">Settings</a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">document_features</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/document_features/lib.rs.html#4-877">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Document your crate’s feature flags.</p>
+<p>This crates provides a macro that extracts “documentation” comments from Cargo.toml</p>
+<p>To use this crate, add <code>#![doc = document_features::document_features!()]</code> in your crate documentation.
+The <code>document_features!()</code> macro reads your <code>Cargo.toml</code> file, extracts feature comments and generates
+a markdown string for your documentation.</p>
+<p>Basic example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="doccomment">//! Normal crate documentation goes here.
+//!
+//! ## Feature flags
+</span><span class="attr">#![doc = <span class="macro">document_features::document_features!</span>()]
+
+</span><span class="comment">// rest of the crate goes here.</span></code></pre></div>
+<h3 id="documentation-format"><a class="doc-anchor" href="#documentation-format">§</a>Documentation format:</h3>
+<p>The documentation of your crate features goes into <code>Cargo.toml</code>, where they are defined.</p>
+<p>The <code>document_features!()</code> macro analyzes the contents of <code>Cargo.toml</code>.
+Similar to Rust’s documentation comments <code>///</code> and <code>//!</code>, the macro understands
+comments that start with <code>## </code> and <code>#! </code>. Note the required trailing space.
+Lines starting with <code>###</code> will not be understood as doc comment.</p>
+<p><code>## </code> comments are meant to be <em>above</em> the feature they document.
+There can be several <code>## </code> comments, but they must always be followed by a
+feature name or an optional dependency.
+There should not be <code>#! </code> comments between the comment and the feature they document.</p>
+<p><code>#! </code> comments are not associated with a particular feature, and will be printed
+in where they occur. Use them to group features, for example.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples:</h3>
+<p>This contents in Cargo.toml:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[package]
+name = &quot;...&quot;
+## ...
+
+[features]
+default = [&quot;foo&quot;]
+##! This comments goes on top
+
+### The foo feature enables the `foo` functions
+foo = []
+
+### The bar feature enables the bar module
+bar = []
+
+##! ### Experimental features
+##! The following features are experimental
+
+### Enable the fusion reactor
+###
+### ⚠️ Can lead to explosions
+fusion = []
+
+[dependencies]
+document-features = &quot;0.2&quot;
+
+##! ### Optional dependencies
+
+### Enable this feature to implement the trait for the types from the genial crate
+genial = { version = &quot;0.2&quot;, optional = true }
+
+### This awesome dependency is specified in its own table
+[dependencies.awesome]
+version = &quot;1.3.5&quot;
+optional = true
+
+</code></pre></div>
+<p>Generates the following:</p>
+<table><tr><th>Preview</th></tr><tr><td>
+<p>This comments goes on top</p>
+<ul>
+<li><strong><code>foo</code></strong> <em>(enabled by default)</em> —  The foo feature enables the <code>foo</code> functions</li>
+<li><strong><code>bar</code></strong> —  The bar feature enables the bar module</li>
+</ul>
+<h5 id="experimental-features"><a class="doc-anchor" href="#experimental-features">§</a>Experimental features</h5>
+<p>The following features are experimental</p>
+<ul>
+<li>
+<p><strong><code>fusion</code></strong> —  Enable the fusion reactor</p>
+<p>⚠️ Can lead to explosions</p>
+</li>
+</ul>
+<h5 id="optional-dependencies"><a class="doc-anchor" href="#optional-dependencies">§</a>Optional dependencies</h5>
+<ul>
+<li><strong><code>genial</code></strong> —  Enable this feature to implement the trait for the types from the genial crate</li>
+<li><strong><code>awesome</code></strong> —  This awesome dependency is specified in its own table</li>
+</ul>
+</td></tr></table>
+<p> </p>
+<h3 id="customization"><a class="doc-anchor" href="#customization">§</a>Customization</h3>
+<p>You can customize the formatting of the features in the generated documentation by setting
+the key <strong><code>feature_label=</code></strong> to a given format string. This format string must be either
+a <a href="https://doc.rust-lang.org/reference/tokens.html#string-literals">string literal</a> or
+a <a href="https://doc.rust-lang.org/reference/tokens.html#raw-string-literals">raw string literal</a>.
+Every occurrence of <code>{feature}</code> inside the format string will be substituted with the name of the feature.</p>
+<p>For instance, to emulate the HTML formatting used by <code>rustdoc</code> one can use the following:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![doc = <span class="macro">document_features::document_features!</span>(feature_label = <span class="string">r#"&lt;span class="stab portability"&gt;&lt;code&gt;{feature}&lt;/code&gt;&lt;/span&gt;"#</span>)]</span></code></pre></div>
+<p>The default formatting is equivalent to:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![doc = <span class="macro">document_features::document_features!</span>(feature_label = <span class="string">"**`{feature}`**"</span>)]</span></code></pre></div>
+<h3 id="compatibility"><a class="doc-anchor" href="#compatibility">§</a>Compatibility</h3>
+<p>The minimum Rust version required to use this crate is Rust 1.54 because of the
+feature to have macro in doc comments. You can make this crate optional and use
+<code>#[cfg_attr()]</code> statements to enable it only when building the documentation:
+You need to have two levels of <code>cfg_attr</code> because Rust &lt; 1.54 doesn’t parse the attribute
+otherwise.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#![cfg_attr(
+    feature = <span class="string">"document-features"</span>,
+    cfg_attr(doc, doc = <span class="macro">::document_features::document_features!</span>())
+)]</span></code></pre></div>
+<p>In your Cargo.toml, enable this feature while generating the documentation on docs.rs:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+document-features = { version = &quot;0.2&quot;, optional = true }
+
+[package.metadata.docs.rs]
+features = [&quot;document-features&quot;]
+## Alternative: enable all features so they are all documented
+## all-features = true
+</code></pre></div></div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.document_features.html" title="macro document_features::document_features">document_features</a></div><div class="desc docblock-short">Produce a literal string containing documentation extracted from Cargo.toml</div></li></ul></section></div></main></body></html>

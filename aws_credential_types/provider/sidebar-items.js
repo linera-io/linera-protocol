@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["error","future"],"struct":["SharedCredentialsProvider"],"trait":["ProvideCredentials"],"type":["Result"]};
