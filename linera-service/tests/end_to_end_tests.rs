@@ -378,7 +378,7 @@ async fn test_storage_service_wallet_lock() -> Result<()> {
     let (_net, client) = config.instantiate().await?;
 
     let wallet_state = WalletState::from_file(client.wallet_path().as_path())?;
-    let chain_id = wallet_state.inner().default_chain().unwrap();
+    let chain_id = wallet_state.default_chain().unwrap();
 
     let lock = wallet_state;
     assert!(client.process_inbox(chain_id).await.is_err());

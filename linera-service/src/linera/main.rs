@@ -36,11 +36,13 @@ use linera_execution::{
 use linera_service::{
     chain_listener::ClientContext as _,
     cli_wrappers,
-    config::{CommitteeConfig, Export, GenesisConfig, Import, WalletState},
+    config::{CommitteeConfig, GenesisConfig, WalletState},
     faucet::FaucetService,
     node_service::NodeService,
+    persistent::{self, Persist},
     project::{self, Project},
     storage::Runnable,
+    util,
     wallet::UserChain,
 };
 use linera_storage::Storage;
@@ -144,7 +146,7 @@ impl Runnable for Job {
                 let (new_public_key, key_pair) = match public_key {
                     Some(key) => (key, None),
                     None => {
-                        let key_pair = context.wallet_state.generate_key_pair();
+                        let key_pair = context.wallet.generate_key_pair();
                         (key_pair.public(), Some(key_pair))
                     }
                 };
@@ -170,7 +172,6 @@ impl Runnable for Job {
                     _ => panic!("Unexpected certificate."),
                 };
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
-                context.save_wallet();
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
@@ -218,7 +219,6 @@ impl Runnable for Job {
                     _ => panic!("Unexpected certificate."),
                 };
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
-                context.save_wallet();
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
@@ -1026,7 +1026,7 @@ impl Runnable for Job {
                 with_other_chains,
                 ..
             }) => {
-                let key_pair = context.wallet_state.generate_key_pair();
+                let key_pair = context.wallet.generate_key_pair();
                 let public_key = key_pair.public();
                 info!(
                     "Requesting a new chain for owner {} using the faucet at address {}",
@@ -1055,7 +1055,6 @@ impl Runnable for Job {
                     .chain([admin_id, outcome.chain_id]);
                 Self::print_peg_certificate_hash(storage, chains, &context).await?;
                 context.wallet_mut().set_default_chain(outcome.chain_id)?;
-                context.save_wallet();
             }
 
             CreateGenesisConfig { .. } | Keygen | Net(_) | Wallet(_) | HelpMarkdown => {
@@ -1258,7 +1257,7 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
             testing_prng_seed,
             network_name,
         } => {
-            let committee_config = CommitteeConfig::read(committee_config_path)
+            let committee_config: CommitteeConfig = util::read_json(committee_config_path)
                 .expect("Unable to read committee config file");
             let maximum_bytes_read_per_block = match *maximum_bytes_read_per_block {
                 Some(value) => value,
@@ -1295,8 +1294,11 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                 // Default: e.g. "linera-2023-11-14T23:13:20"
                 format!("linera-{}", Utc::now().naive_utc().format("%FT%T"))
             });
-            let mut genesis_config =
-                GenesisConfig::new(committee_config, admin_id, timestamp, policy, network_name);
+            let mut genesis_config = persistent::File::new(
+                genesis_config_path,
+                GenesisConfig::new(committee_config, admin_id, timestamp, policy, network_name),
+            )?;
+            let mut genesis_config_ref = Persist::mutate(&mut genesis_config);
             let mut rng = Box::<dyn CryptoRng>::from(*testing_prng_seed);
             let mut chains = vec![];
             for i in 0..*num_other_initial_chains {
@@ -1305,14 +1307,14 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                 let chain = UserChain::make_initial(&mut rng, description, timestamp);
                 // Public "genesis" state.
                 let key = chain.key_pair.as_ref().unwrap().public();
-                genesis_config.chains.push((key, *initial_funding));
+                genesis_config_ref.chains.push((key, *initial_funding));
                 // Private keys.
                 chains.push(chain);
             }
-            genesis_config.write(genesis_config_path)?;
-            let mut wallet_state = options.create_wallet(genesis_config, *testing_prng_seed)?;
-            wallet_state.extend(chains);
-            wallet_state.save()?;
+            drop(genesis_config_ref);
+            options
+                .create_wallet(genesis_config.into_value(), *testing_prng_seed)?
+                .extend(chains);
             options.initialize_storage().boxed().await?;
             Ok(())
         }
@@ -1334,8 +1336,7 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
             let mut wallet = options.wallet()?;
             let key_pair = wallet.generate_key_pair();
             let public = key_pair.public();
-            wallet.inner_mut().add_unassigned_key_pair(key_pair);
-            wallet.save()?;
+            Persist::mutate(&mut wallet).add_unassigned_key_pair(key_pair);
             println!("{}", public);
             Ok(())
         }
@@ -1406,28 +1407,22 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {
             WalletCommand::Show { chain_id } => {
-                options.wallet()?.inner().pretty_print(*chain_id);
+                options.wallet()?.pretty_print(*chain_id);
                 Ok(())
             }
 
             WalletCommand::SetDefault { chain_id } => {
-                let mut wallet = options.wallet()?;
-                wallet.inner_mut().set_default_chain(*chain_id)?;
-                wallet.save()?;
+                Persist::mutate(&mut options.wallet()?).set_default_chain(*chain_id)?;
                 Ok(())
             }
 
             WalletCommand::ForgetKeys { chain_id } => {
-                let mut wallet = options.wallet()?;
-                wallet.inner_mut().forget_keys(chain_id)?;
-                wallet.save()?;
+                Persist::mutate(&mut options.wallet()?).forget_keys(chain_id)?;
                 Ok(())
             }
 
             WalletCommand::ForgetChain { chain_id } => {
-                let mut wallet = options.wallet()?;
-                wallet.inner_mut().forget_chain(chain_id)?;
-                wallet.save()?;
+                Persist::mutate(&mut options.wallet()?).forget_chain(chain_id)?;
                 Ok(())
             }
 
@@ -1438,8 +1433,8 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                 with_other_chains,
                 testing_prng_seed,
             } => {
-                let genesis_config = match (genesis_config_path, faucet) {
-                    (Some(genesis_config_path), None) => GenesisConfig::read(genesis_config_path)?,
+                let genesis_config: GenesisConfig = match (genesis_config_path, faucet) {
+                    (Some(genesis_config_path), None) => util::read_json(genesis_config_path)?,
                     (None, Some(url)) => {
                         let faucet = cli_wrappers::Faucet::new(url.clone());
                         let version_info = faucet
@@ -1474,7 +1469,6 @@ Make sure to use a Linera client compatible with this network.
                         .iter()
                         .map(|chain_id| UserChain::make_other(*chain_id, timestamp)),
                 );
-                wallet.save()?;
                 options.initialize_storage().boxed().await?;
                 if *with_new_chain {
                     ensure!(

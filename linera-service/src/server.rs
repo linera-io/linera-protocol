@@ -4,7 +4,10 @@
 
 #![deny(clippy::large_futures)]
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use anyhow::bail;
 use async_trait::async_trait;
@@ -22,9 +25,8 @@ use linera_rpc::{
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
 use linera_service::{
-    config::{
-        CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
-    },
+    config::{CommitteeConfig, GenesisConfig, ValidatorConfig, ValidatorServerConfig},
+    persistent::{self, Persist},
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
     util,
 };
@@ -273,9 +275,10 @@ struct ValidatorOptions {
 }
 
 fn make_server_config<R: CryptoRng>(
+    path: &Path,
     rng: &mut R,
     options: ValidatorOptions,
-) -> ValidatorServerConfig {
+) -> anyhow::Result<persistent::File<ValidatorServerConfig>> {
     let network = ValidatorPublicNetworkConfig {
         protocol: options.external_protocol,
         host: options.host,
@@ -292,11 +295,14 @@ fn make_server_config<R: CryptoRng>(
     let key = KeyPair::generate_from(rng);
     let name = ValidatorName(key.public());
     let validator = ValidatorConfig { network, name };
-    ValidatorServerConfig {
-        validator,
-        key,
-        internal_network,
-    }
+    persistent::File::new(
+        path,
+        ValidatorServerConfig {
+            validator,
+            key,
+            internal_network,
+        },
+    )
 }
 
 #[derive(clap::Parser)]
@@ -439,10 +445,10 @@ async fn run(options: ServerOptions) {
             max_stream_queries,
             cache_size,
         } => {
-            let genesis_config = GenesisConfig::read(&genesis_config_path)
-                .expect("Fail to read initial chain config");
-            let server_config = ValidatorServerConfig::read(&server_config_path)
-                .expect("Fail to read server config");
+            let genesis_config: GenesisConfig =
+                util::read_json(&genesis_config_path).expect("Fail to read initial chain config");
+            let server_config: ValidatorServerConfig =
+                util::read_json(&server_config_path).expect("Fail to read server config");
 
             #[cfg(feature = "rocksdb")]
             if server_config.internal_network.shards.len() > 1
@@ -488,21 +494,24 @@ async fn run(options: ServerOptions) {
                 let options: ValidatorOptions =
                     toml::from_str(&options_string).expect("Invalid options file format");
                 let path = options.server_config_path.clone();
-                let server = make_server_config(&mut rng, options);
-                server
-                    .write(&path)
-                    .expect("Unable to write server config file");
+                let mut server = make_server_config(&path, &mut rng, options)
+                    .expect("Unable to open server config file");
+                Persist::persist(&mut server).expect("Unable to write server config file");
                 info!("Wrote server config {}", path.to_str().unwrap());
                 println!("{}", server.validator.name);
-                config_validators.push(server.validator);
+                config_validators.push(server.into_value().validator);
             }
             if let Some(committee) = committee {
-                let config = CommitteeConfig {
-                    validators: config_validators,
-                };
-                config
-                    .write(&committee)
-                    .expect("Unable to write committee description");
+                Persist::persist(
+                    &mut persistent::File::new(
+                        &committee,
+                        CommitteeConfig {
+                            validators: config_validators,
+                        },
+                    )
+                    .expect("Unable to open committee configuration"),
+                )
+                .expect("Unable to write committee description");
                 info!("Wrote committee config {}", committee.to_str().unwrap());
             }
         }
@@ -514,8 +523,8 @@ async fn run(options: ServerOptions) {
             max_stream_queries,
             cache_size,
         } => {
-            let genesis_config = GenesisConfig::read(&genesis_config_path)
-                .expect("Fail to read initial chain config");
+            let genesis_config: GenesisConfig =
+                util::read_json(&genesis_config_path).expect("Fail to read initial chain config");
             let common_config = CommonStoreConfig {
                 max_concurrent_queries,
                 max_stream_queries,

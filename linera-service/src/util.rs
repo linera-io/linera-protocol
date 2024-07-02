@@ -183,6 +183,10 @@ pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
     Ok(TimeDelta::from_millis(s.parse()?))
 }
 
+pub fn read_json<T: serde::de::DeserializeOwned>(path: &std::path::Path) -> anyhow::Result<T> {
+    Ok(serde_json::from_reader(fs_err::File::open(path)?)?)
+}
+
 #[test]
 fn test_parse_version_message() {
     let s = "something\n . . . version12\nother things";
