@@ -327,6 +327,22 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
                 let hash = self.hash().await?;
                 Ok(CryptoHash::new(&#hash_type(hash)))
             }
+
+            async fn crypto_hash_mut(&mut self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
+                use linera_base::crypto::{BcsHashable, CryptoHash};
+                use linera_views::{
+                    batch::Batch,
+                    generic_array::GenericArray,
+                    sha3::{digest::OutputSizeUser, Sha3_256},
+                    views::HashableView,
+                };
+                use serde::{Serialize, Deserialize};
+                #[derive(Serialize, Deserialize)]
+                struct #hash_type(GenericArray<u8, <Sha3_256 as OutputSizeUser>::OutputSize>);
+                impl BcsHashable for #hash_type {}
+                let hash = self.hash_mut().await?;
+                Ok(CryptoHash::new(&#hash_type(hash)))
+            }
         }
     }
 }
