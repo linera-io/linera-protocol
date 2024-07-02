@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::blocks_in_conditions)]
+
 use std::{collections::BTreeMap, sync::Arc};
 
 use async_lock::RwLock;
@@ -17,6 +19,8 @@ use linera_views::{
 };
 use serde::Serialize;
 use tonic::{transport::Server, Request, Response, Status};
+use tracing::{info, instrument};
+use tracing_subscriber::fmt::format::FmtSpan;
 
 use crate::key_value_store::{
     statement::Operation,
@@ -224,6 +228,7 @@ enum ServiceStoreServerOptions {
 
 #[tonic::async_trait]
 impl StoreProcessor for ServiceStoreServer {
+    #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().key.len()))]
     async fn process_read_value(
         &self,
         request: Request<RequestReadValue>,
@@ -252,6 +257,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().key.len()))]
     async fn process_contains_key(
         &self,
         request: Request<RequestContainsKey>,
@@ -263,6 +269,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "store_server", skip_all, err, fields(n_keys = ?request.get_ref().keys.len()))]
     async fn process_read_multi_values(
         &self,
         request: Request<RequestReadMultiValues>,
@@ -298,6 +305,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
     async fn process_find_keys_by_prefix(
         &self,
         request: Request<RequestFindKeysByPrefix>,
@@ -323,6 +331,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
     async fn process_find_key_values_by_prefix(
         &self,
         request: Request<RequestFindKeyValuesByPrefix>,
@@ -358,6 +367,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "store_server", skip_all, err, fields(n_statements = ?request.get_ref().statements.len()))]
     async fn process_write_batch_extended(
         &self,
         request: Request<RequestWriteBatchExtended>,
@@ -401,6 +411,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "store_server", skip_all, err, fields(message_index = ?request.get_ref().message_index, index = ?request.get_ref().index))]
     async fn process_specific_chunk(
         &self,
         request: Request<RequestSpecificChunk>,
@@ -423,6 +434,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_create_namespace(
         &self,
         request: Request<RequestCreateNamespace>,
@@ -434,6 +446,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_exists_namespace(
         &self,
         request: Request<RequestExistsNamespace>,
@@ -445,6 +458,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
     async fn process_delete_namespace(
         &self,
         request: Request<RequestDeleteNamespace>,
@@ -456,6 +470,7 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(target = "store_server", skip_all, err, fields(list_all = "list_all"))]
     async fn process_list_all(
         &self,
         _request: Request<RequestListAll>,
@@ -465,6 +480,12 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    #[instrument(
+        target = "store_server",
+        skip_all,
+        err,
+        fields(delete_all = "delete_all")
+    )]
     async fn process_delete_all(
         &self,
         _request: Request<RequestDeleteAll>,
@@ -477,6 +498,41 @@ impl StoreProcessor for ServiceStoreServer {
 
 #[tokio::main]
 async fn main() {
+    let env_filter = tracing_subscriber::EnvFilter::builder()
+        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        .from_env_lossy();
+    let internal_event_filter = {
+        match std::env::var_os("RUST_LOG_SPAN_EVENTS") {
+            Some(mut value) => {
+                value.make_ascii_lowercase();
+                let value = value
+                    .to_str()
+                    .expect("test-log: RUST_LOG_SPAN_EVENTS must be valid UTF-8");
+                value
+                    .split(',')
+                    .map(|filter| match filter.trim() {
+                        "new" => FmtSpan::NEW,
+                        "enter" => FmtSpan::ENTER,
+                        "exit" => FmtSpan::EXIT,
+                        "close" => FmtSpan::CLOSE,
+                        "active" => FmtSpan::ACTIVE,
+                        "full" => FmtSpan::FULL,
+                        _ => panic!("test-log: RUST_LOG_SPAN_EVENTS must contain filters separated by `,`.\n\t\
+                                     For example: `active` or `new,close`\n\t\
+                                     Supported filters: new, enter, exit, close, active, full\n\t\
+                                     Got: {}", value),
+                    })
+                    .fold(FmtSpan::NONE, |acc, filter| filter | acc)
+            }
+            None => FmtSpan::NONE,
+        }
+    };
+    tracing_subscriber::fmt()
+        .with_span_events(internal_event_filter)
+        .with_writer(std::io::stderr)
+        .with_env_filter(env_filter)
+        .init();
+
     let options = <ServiceStoreServerOptions as clap::Parser>::parse();
     let common_config = CommonStoreConfig::default();
     let (store, endpoint) = match options {
@@ -508,6 +564,10 @@ async fn main() {
         pending_big_reads,
     };
     let endpoint = endpoint.parse().unwrap();
+    info!(
+        "Starting of storage_service_service on endpoint={}",
+        endpoint
+    );
     Server::builder()
         .add_service(StoreProcessorServer::new(store))
         .serve(endpoint)
