@@ -8,7 +8,7 @@ use std::ops::{Deref, DerefMut};
 pub use file::File;
 
 /// The `Persist` trait provides a wrapper around a value that can be saved in a
-/// persistent way.  A minimal implementation provides an `Error` type, a `persist`
+/// persistent way. A minimal implementation provides an `Error` type, a `persist`
 /// function to persist the value, and an `as_mut` function to get a mutable reference to
 /// the value in memory.
 pub trait Persist: Deref {
