@@ -26,7 +26,7 @@ use linera_rpc::{
 use linera_service::prometheus_server;
 use linera_service::{
     config::{CommitteeConfig, GenesisConfig, ValidatorConfig, ValidatorServerConfig},
-    persistent::{self, Persistent},
+    persistent::{self, Persist},
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
     util,
 };
@@ -496,13 +496,13 @@ async fn run(options: ServerOptions) {
                 let path = options.server_config_path.clone();
                 let mut server = make_server_config(&path, &mut rng, options)
                     .expect("Unable to open server config file");
-                Persistent::save(&mut server).expect("Unable to write server config file");
+                Persist::persist(&mut server).expect("Unable to write server config file");
                 info!("Wrote server config {}", path.to_str().unwrap());
                 println!("{}", server.validator.name);
                 config_validators.push(server.into_value().validator);
             }
             if let Some(committee) = committee {
-                Persistent::save(
+                Persist::persist(
                     &mut persistent::File::new(
                         &committee,
                         CommitteeConfig {

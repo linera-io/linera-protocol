@@ -66,7 +66,7 @@ use {
 
 use crate::{
     client_options::{ChainOwnershipConfig, ClientOptions},
-    persistent::Persistent,
+    persistent::Persist,
 };
 
 pub struct ClientContext<Storage>
@@ -122,7 +122,7 @@ where
 {
     /// Returns the [`Wallet`] as a mutable reference.
     pub fn wallet_mut(&mut self) -> impl std::ops::DerefMut<Target = Wallet> + '_ {
-        Persistent::mutate(&mut self.wallet)
+        Persist::mutate(&mut self.wallet)
     }
 
     pub fn new(storage: S, options: &ClientOptions, wallet: WalletState) -> Self {
@@ -204,7 +204,7 @@ where
     }
 
     pub fn save_wallet(&mut self) {
-        Persistent::save(&mut self.wallet).expect("Unable to write user chains");
+        Persist::persist(&mut self.wallet).expect("Unable to write user chains");
     }
 
     async fn update_wallet_from_client(&mut self, state: &mut ChainClient<NodeProvider, S>) {

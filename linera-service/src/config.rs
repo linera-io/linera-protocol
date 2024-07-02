@@ -19,7 +19,7 @@ use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    persistent::{self, Persistent},
+    persistent::{self, Persist},
     wallet::{UserChain, Wallet},
 };
 
@@ -66,7 +66,7 @@ impl CommitteeConfig {
 }
 
 /// The runtime state of the wallet, persisted atomically on change via an instance of
-/// [`Persistent`].
+/// [`Persist`].
 pub struct WalletState {
     wallet: persistent::File<Wallet>,
     prng: Box<dyn CryptoRng>,
@@ -80,23 +80,23 @@ impl std::ops::Deref for WalletState {
     }
 }
 
-impl Persistent for WalletState {
+impl Persist for WalletState {
     type Error = anyhow::Error;
 
-    fn save(this: &mut Self) -> anyhow::Result<()> {
-        Persistent::mutate(&mut this.wallet).refresh_prng_seed(&mut this.prng);
+    fn persist(this: &mut Self) -> anyhow::Result<()> {
+        Persist::mutate(&mut this.wallet).refresh_prng_seed(&mut this.prng);
         tracing::debug!("Persisted user chains");
         Ok(())
     }
 
     fn as_mut(this: &mut Self) -> &mut Wallet {
-        Persistent::as_mut(&mut this.wallet)
+        Persist::as_mut(&mut this.wallet)
     }
 }
 
 impl Extend<UserChain> for WalletState {
     fn extend<Chains: IntoIterator<Item = UserChain>>(&mut self, chains: Chains) {
-        Persistent::mutate(self).extend(chains);
+        Persist::mutate(self).extend(chains);
     }
 }
 

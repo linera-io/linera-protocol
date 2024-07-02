@@ -9,7 +9,7 @@ use std::{
 use anyhow::Context as _;
 use fs4::FileExt as _;
 
-use super::Persistent;
+use super::Persist;
 
 /// A guard that keeps an exclusive lock on a file.
 pub struct Lock(fs_err::File);
@@ -107,7 +107,7 @@ impl<T: serde::de::DeserializeOwned> File<T> {
     }
 }
 
-impl<T: serde::Serialize + serde::de::DeserializeOwned> Persistent for File<T> {
+impl<T: serde::Serialize + serde::de::DeserializeOwned> Persist for File<T> {
     type Error = anyhow::Error;
 
     fn as_mut(this: &mut Self) -> &mut T {
@@ -123,7 +123,7 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> Persistent for File<T> {
     /// The temporary file is then renamed to the original filename. If
     /// serialization or writing to disk fails, the temporary file is
     /// deleted.
-    fn save(this: &mut Self) -> anyhow::Result<()> {
+    fn persist(this: &mut Self) -> anyhow::Result<()> {
         let mut temp_file_path = this.path.clone();
         temp_file_path.set_extension("json.new");
         let temp_file = open_options().open(&temp_file_path)?;

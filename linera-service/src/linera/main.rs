@@ -39,7 +39,7 @@ use linera_service::{
     config::{CommitteeConfig, GenesisConfig, WalletState},
     faucet::FaucetService,
     node_service::NodeService,
-    persistent::{self, Persistent},
+    persistent::{self, Persist},
     project::{self, Project},
     storage::Runnable,
     util,
@@ -1298,7 +1298,7 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                 genesis_config_path,
                 GenesisConfig::new(committee_config, admin_id, timestamp, policy, network_name),
             )?;
-            let mut genesis_config_ref = Persistent::mutate(&mut genesis_config);
+            let mut genesis_config_ref = Persist::mutate(&mut genesis_config);
             let mut rng = Box::<dyn CryptoRng>::from(*testing_prng_seed);
             let mut chains = vec![];
             for i in 0..*num_other_initial_chains {
@@ -1336,7 +1336,7 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
             let mut wallet = options.wallet()?;
             let key_pair = wallet.generate_key_pair();
             let public = key_pair.public();
-            Persistent::mutate(&mut wallet).add_unassigned_key_pair(key_pair);
+            Persist::mutate(&mut wallet).add_unassigned_key_pair(key_pair);
             println!("{}", public);
             Ok(())
         }
@@ -1412,17 +1412,17 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
             }
 
             WalletCommand::SetDefault { chain_id } => {
-                Persistent::mutate(&mut options.wallet()?).set_default_chain(*chain_id)?;
+                Persist::mutate(&mut options.wallet()?).set_default_chain(*chain_id)?;
                 Ok(())
             }
 
             WalletCommand::ForgetKeys { chain_id } => {
-                Persistent::mutate(&mut options.wallet()?).forget_keys(chain_id)?;
+                Persist::mutate(&mut options.wallet()?).forget_keys(chain_id)?;
                 Ok(())
             }
 
             WalletCommand::ForgetChain { chain_id } => {
-                Persistent::mutate(&mut options.wallet()?).forget_chain(chain_id)?;
+                Persist::mutate(&mut options.wallet()?).forget_chain(chain_id)?;
                 Ok(())
             }
 
