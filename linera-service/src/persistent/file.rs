@@ -139,13 +139,12 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> Persist for File<T> {
         let mut temp_file_writer = std::io::BufWriter::new(temp_file);
 
         if let Err(e) = serde_json::to_writer_pretty(&mut temp_file_writer, &this.value) {
-            // TODO this should capture both errors, not abort on the first one
-            fs_err::remove_file(&temp_file_path)?;
-            anyhow::bail!("failed to serialize the wallet state: {}", e)
+            fs_err::remove_file(&temp_file_path).context("handling writing error {e}")?;
+            anyhow::bail!("failed to serialize the wallet state: {e}")
         }
         if let Err(e) = temp_file_writer.flush() {
-            fs_err::remove_file(&temp_file_path)?;
-            anyhow::bail!("failed to write the wallet state: {}", e);
+            fs_err::remove_file(&temp_file_path).context("handling flushing error {e}")?;
+            anyhow::bail!("failed to write the wallet state: {e}");
         }
         fs_err::rename(&temp_file_path, &this.path)?;
         Ok(())
