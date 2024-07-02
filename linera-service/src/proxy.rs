@@ -351,11 +351,7 @@ fn main() -> Result<()> {
         builder
     };
 
-    runtime
-        .enable_all()
-        .build()
-        .expect("Failed to create Tokio runtime")
-        .block_on(options.run())
+    runtime.enable_all().build()?.block_on(options.run())
 }
 
 impl ProxyOptions {
@@ -366,8 +362,7 @@ impl ProxyOptions {
             cache_size: self.cache_size,
         };
         let full_storage_config = self.storage_config.add_common_config(common_config).await?;
-        let genesis_config: GenesisConfig =
-            util::read_json(&self.genesis_config_path).expect("Fail to read initial chain config");
+        let genesis_config: GenesisConfig = util::read_json(&self.genesis_config_path)?;
         run_with_storage(
             full_storage_config,
             &genesis_config,
