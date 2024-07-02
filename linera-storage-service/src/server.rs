@@ -509,7 +509,7 @@ async fn main() {
                     .to_str()
                     .expect("test-log: RUST_LOG_SPAN_EVENTS must be valid UTF-8");
                 value
-                    .split(",")
+                    .split(',')
                     .map(|filter| match filter.trim() {
                         "new" => FmtSpan::NEW,
                         "enter" => FmtSpan::ENTER,
