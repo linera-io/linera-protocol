@@ -58,6 +58,7 @@ impl<T> std::ops::Deref for File<T> {
 /// Returns options for opening and writing to the file, creating it if it doesn't
 /// exist. On Unix, this restricts read and write permissions to the current user.
 // TODO(#1924): Implement better key management.
+// BUG(#2053): Use a separate lock file per staging file.
 fn open_options() -> fs_err::OpenOptions {
     let mut options = fs_err::OpenOptions::new();
     #[cfg(target_family = "unix")]
