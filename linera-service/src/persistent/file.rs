@@ -38,6 +38,10 @@ impl Drop for Lock {
     }
 }
 
+/// An implementation of [`Persist`] based on an atomically-updated file at a given path.
+/// An exclusive lock is taken using `flock(2)` to ensure that concurrent updates cannot
+/// happen, and writes are saved to a staging file before being moved over the old file,
+/// an operation that is atomic on all UNIXes.
 pub struct File<T> {
     _lock: Lock,
     path: std::path::PathBuf,
@@ -63,6 +67,7 @@ fn open_options() -> fs_err::OpenOptions {
 }
 
 impl<T: serde::de::DeserializeOwned> File<T> {
+    /// Create a new persistent file at `path` containing `value`.
     pub fn new(path: &Path, value: T) -> anyhow::Result<Self> {
         Ok(Self {
             _lock: Lock::new(
@@ -78,12 +83,15 @@ impl<T: serde::de::DeserializeOwned> File<T> {
         })
     }
 
+    /// Read the value from a file at `path`, returning an error if it does not exist.
     pub fn read(path: &Path) -> anyhow::Result<Self> {
         Self::read_or_create(path, || {
             Err(anyhow::anyhow!("Path does not exist: {}", path.display()))
         })
     }
 
+    /// Read the value from a file at `path`, calling the `value` function to create it if
+    /// it does not exist.  If it does exist, `value` will not be called.
     pub fn read_or_create(
         path: &Path,
         value: impl FnOnce() -> anyhow::Result<T>,
@@ -102,6 +110,7 @@ impl<T: serde::de::DeserializeOwned> File<T> {
         })
     }
 
+    /// Take the value out, releasing the lock on the persistent file.
     pub fn into_value(self) -> T {
         self.value
     }

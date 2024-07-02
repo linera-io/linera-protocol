@@ -7,11 +7,21 @@ use std::ops::{Deref, DerefMut};
 
 pub use file::File;
 
+/// The `Persist` trait provides a wrapper around a value that can be saved in a
+/// persistent way.  A minimal implementation provides an `Error` type, a `persist`
+/// function to persist the value, and an `as_mut` function to get a mutable reference to
+/// the value in memory.
 pub trait Persist: Deref {
     type Error: std::fmt::Debug;
 
+    /// Get a mutable reference to the value.
     fn as_mut(_: &mut Self) -> &mut Self::Target;
+
+    /// Save the value to persistent storage.
     fn persist(_: &mut Self) -> Result<(), Self::Error>;
+
+    /// Get a mutable reference to the value which, on drop, will automatically persist
+    /// the new value.
     fn mutate(this: &mut Self) -> RefMut<Self> {
         RefMut(this)
     }
