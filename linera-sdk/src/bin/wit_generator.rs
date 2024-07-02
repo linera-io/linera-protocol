@@ -15,8 +15,8 @@ use std::{
 use anyhow::{ensure, Context, Result};
 use clap::Parser as _;
 use linera_execution::{
-    ContractEntrypoints, ContractSyncRuntime, ContractSystemApi, ServiceEntrypoints,
-    ServiceSyncRuntime, ServiceSystemApi, SystemApiData, ViewSystemApi,
+    ContractEntrypoints, ContractSyncRuntimeHandle, ContractSystemApi, ServiceEntrypoints,
+    ServiceSyncRuntimeHandle, ServiceSystemApi, SystemApiData, ViewSystemApi,
 };
 use linera_witty::{
     wit_generation::{WitInterfaceWriter, WitWorldWriter},
@@ -54,23 +54,23 @@ fn run_operation(options: WitGeneratorOptions, mut operation: impl Operation) ->
     let service_entrypoints = WitInterfaceWriter::new::<ServiceEntrypoints<MockInstance<()>>>();
 
     let contract_system_api = WitInterfaceWriter::new::<
-        ContractSystemApi<MockInstance<SystemApiData<ContractSyncRuntime>>>,
+        ContractSystemApi<MockInstance<SystemApiData<ContractSyncRuntimeHandle>>>,
     >();
     let service_system_api = WitInterfaceWriter::new::<
-        ServiceSystemApi<MockInstance<SystemApiData<ServiceSyncRuntime>>>,
+        ServiceSystemApi<MockInstance<SystemApiData<ServiceSyncRuntimeHandle>>>,
     >();
     let view_system_api = WitInterfaceWriter::new::<
-        ViewSystemApi<MockInstance<SystemApiData<ContractSyncRuntime>>>,
+        ViewSystemApi<MockInstance<SystemApiData<ContractSyncRuntimeHandle>>>,
     >();
 
     let contract_world = WitWorldWriter::new("linera:app", "contract")
         .export::<ContractEntrypoints<MockInstance<()>>>()
-        .import::<ContractSystemApi<MockInstance<SystemApiData<ContractSyncRuntime>>>>()
-        .import::<ViewSystemApi<MockInstance<SystemApiData<ContractSyncRuntime>>>>();
+        .import::<ContractSystemApi<MockInstance<SystemApiData<ContractSyncRuntimeHandle>>>>()
+        .import::<ViewSystemApi<MockInstance<SystemApiData<ContractSyncRuntimeHandle>>>>();
     let service_world = WitWorldWriter::new("linera:app", "service")
         .export::<ServiceEntrypoints<MockInstance<()>>>()
-        .import::<ServiceSystemApi<MockInstance<SystemApiData<ServiceSyncRuntime>>>>()
-        .import::<ViewSystemApi<MockInstance<SystemApiData<ContractSyncRuntime>>>>();
+        .import::<ServiceSystemApi<MockInstance<SystemApiData<ServiceSyncRuntimeHandle>>>>()
+        .import::<ViewSystemApi<MockInstance<SystemApiData<ContractSyncRuntimeHandle>>>>();
 
     operation.run_for_file(
         &options.base_directory.join("contract-entrypoints.wit"),
