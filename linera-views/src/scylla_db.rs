@@ -15,11 +15,15 @@
 //! [trait1]: common::KeyValueStore
 //! [trait2]: common::Context
 
-use std::{ops::Deref, sync::Arc};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    ops::Deref,
+    sync::Arc,
+};
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
-use futures::{future::join_all, FutureExt as _, StreamExt};
+use futures::{FutureExt as _, StreamExt};
 use linera_base::ensure;
 use scylla::{
     frame::request::batch::BatchType,
@@ -146,6 +150,48 @@ impl ScyllaDbClient {
             Some(row) => Some(row?.into_typed::<(Vec<u8>,)>()?.0),
             None => None,
         })
+    }
+
+    async fn read_multi_values_internal(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbContextError> {
+        let num_keys = keys.len();
+        if num_keys == 0 {
+            return Ok(Vec::new());
+        }
+        let session = &self.session;
+        let mut group_query = "?".to_string();
+        group_query.push_str(&",?".repeat(num_keys - 1));
+        let query = format!(
+            "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k IN ({}) ALLOW FILTERING",
+            self.namespace, group_query
+        );
+        let read_multi_value = Query::new(query);
+        let mut rows = session.query_iter(read_multi_value, &keys).await?;
+        let mut values = vec![None; num_keys];
+        let mut map = HashMap::<Vec<u8>, Vec<usize>>::new();
+        for (i_key, key) in keys.into_iter().enumerate() {
+            ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
+            match map.entry(key) {
+                Entry::Occupied(entry) => {
+                    let entry = entry.into_mut();
+                    entry.push(i_key);
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(vec![i_key]);
+                }
+            }
+        }
+        while let Some(row) = rows.next().await {
+            let value = row?.into_typed::<(Vec<u8>, Vec<u8>)>()?;
+            let key = value.0;
+            for i_key in map.get(&key).unwrap().clone() {
+                let value = Some(value.1.clone());
+                *values.get_mut(i_key).expect("an entry in values") = value;
+            }
+        }
+        Ok(values)
     }
 
     async fn contains_key_internal(&self, key: Vec<u8>) -> Result<bool, ScyllaDbContextError> {
@@ -369,13 +415,12 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbContextError> {
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        let handles = keys.into_iter().map(|key| store.read_value_internal(key));
-        join_all(handles)
-            .await
-            .into_iter()
-            .collect::<Result<_, _>>()
+        store.read_multi_values_internal(keys).await
     }
 
     async fn find_keys_by_prefix(
@@ -674,7 +719,10 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbContextError> {
-        self.store.read_multi_values_bytes(keys).await
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
+        Box::pin(self.store.read_multi_values_bytes(keys)).await
     }
 
     async fn find_keys_by_prefix(

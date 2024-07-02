@@ -160,19 +160,19 @@ pub fn get_random_key_values_prefix<R: Rng>(
     key_prefix: Vec<u8>,
     len_key: usize,
     len_value: usize,
-    n: usize,
+    num_entries: usize,
 ) -> Vec<(Vec<u8>, Vec<u8>)> {
     loop {
         let mut v_ret = Vec::new();
         let mut vector_set = HashSet::new();
-        for _ in 0..n {
+        for _ in 0..num_entries {
             let v1 = get_random_byte_vector(rng, &key_prefix, len_key);
             let v2 = get_random_byte_vector(rng, &Vec::new(), len_value);
             let v12 = (v1.clone(), v2);
             vector_set.insert(v1);
             v_ret.push(v12);
         }
-        if vector_set.len() == n {
+        if vector_set.len() == num_entries {
             return v_ret;
         }
     }
@@ -180,15 +180,19 @@ pub fn get_random_key_values_prefix<R: Rng>(
 
 /// Takes a random number generator rng, a number n and returns n random `(key, value)`
 /// which are all distinct with key and value being of length 8.
-pub fn get_random_key_values<R: Rng>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
-    get_random_key_values_prefix(rng, Vec::new(), 8, 8, n)
+pub fn get_random_key_values<R: Rng>(rng: &mut R, num_entries: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+    get_random_key_values_prefix(rng, Vec::new(), 8, 8, num_entries)
 }
 
 type VectorPutDelete = (Vec<(Vec<u8>, Vec<u8>)>, usize);
 
 /// A bunch of puts and some deletes.
-pub fn get_random_key_value_operations<R: Rng>(rng: &mut R, n: usize, k: usize) -> VectorPutDelete {
-    let key_value_vector = get_random_key_values_prefix(rng, Vec::new(), 8, 8, n);
+pub fn get_random_key_value_operations<R: Rng>(
+    rng: &mut R,
+    num_entries: usize,
+    k: usize,
+) -> VectorPutDelete {
+    let key_value_vector = get_random_key_values_prefix(rng, Vec::new(), 8, 8, num_entries);
     (key_value_vector, k)
 }
 
@@ -306,30 +310,31 @@ pub async fn run_reads<S: LocalKeyValueStore>(store: S, key_values: Vec<(Vec<u8>
             }
         }
         let mut test_exists = Vec::new();
+        let mut values_single_read = Vec::new();
         for key in &keys {
             test_exists.push(store.contains_key(key).await.unwrap());
+            values_single_read.push(store.read_value_bytes(key).await.unwrap());
         }
         let values_read = store.read_multi_values_bytes(keys).await.unwrap();
         assert_eq!(values, values_read);
+        assert_eq!(values, values_single_read);
         let values_read_stat = values_read.iter().map(|x| x.is_some()).collect::<Vec<_>>();
         assert_eq!(values_read_stat, test_exists);
     }
 }
 
-fn get_random_key_values1(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+fn get_random_key_values1(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     let key_prefix = vec![0];
-    let n = 30;
     let mut rng = make_deterministic_rng();
-    get_random_key_values_prefix(&mut rng, key_prefix, 8, len_value, n)
+    get_random_key_values_prefix(&mut rng, key_prefix, 8, len_value, num_entries)
 }
 
-fn get_random_key_values2(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+fn get_random_key_values2(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     let mut rng = make_deterministic_rng();
     let key_prefix = vec![0];
-    let n = 30;
     let mut key_values = Vec::new();
     let mut key_set = HashSet::new();
-    for _ in 0..n {
+    for _ in 0..num_entries {
         let key = get_small_key_space(&mut rng, &key_prefix, 4);
         if !key_set.contains(&key) {
             key_set.insert(key.clone());
@@ -342,12 +347,12 @@ fn get_random_key_values2(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
 
 /// We build a number of scenarios for testing the reads.
 pub fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
-    let mut scenarios = Vec::new();
-    for len_value in [10, 100] {
-        scenarios.push(get_random_key_values1(len_value));
-        scenarios.push(get_random_key_values2(len_value));
-    }
-    scenarios
+    vec![
+        get_random_key_values1(7, 3),
+        get_random_key_values1(30, 10),
+        get_random_key_values2(30, 10),
+        get_random_key_values2(30, 100),
+    ]
 }
 
 fn generate_random_batch<R: Rng>(rng: &mut R, key_prefix: &[u8], batch_size: usize) -> Batch {
