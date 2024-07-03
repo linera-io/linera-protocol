@@ -1860,14 +1860,18 @@ where
         }
         let manager = *info.manager;
         // Drop the pending block if it is outdated.
-        // Caveat editor: this cannot be an `if let` as the borrow of `state()` will be
-        // extended over the body, causing a deadlock.
-        if matches!(
-            &self.state().pending_block,
-            Some(block) if block.height != info.next_block_height,
-        ) {
-            self.clear_pending_block();
+        {
+            let state = self.state();
+            if let Some(block) = &state.pending_block {
+                if block.height != info.next_block_height {
+                    drop(state);
+                    // Caveat editor: `state` must no longer live before calling
+                    // `clear_pending_block`, or we will cause a deadlock.
+                    self.clear_pending_block();
+                }
+            }
         }
+
         // If there is a validated block in the current round, finalize it.
         if let Some(certificate) = &manager.requested_locked {
             if certificate.round == manager.current_round {
