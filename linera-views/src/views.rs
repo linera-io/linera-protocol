@@ -172,6 +172,9 @@ pub trait RootView<C>: View<C> {
 pub trait CryptoHashView<C>: HashableView<C> {
     /// Computing the hash and attributing the type to it.
     async fn crypto_hash(&self) -> Result<CryptoHash, ViewError>;
+
+    /// Computing the hash and attributing the type to it.
+    async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError>;
 }
 
 /// A [`RootView`] that also supports crypto hash
