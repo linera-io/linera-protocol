@@ -106,7 +106,7 @@ impl Runnable for Job {
         ViewError: From<S::ContextError>,
     {
         let Job(options, wallet) = self;
-        let mut context = ClientContext::new(storage.clone(), &options, wallet);
+        let mut context = ClientContext::new(storage.clone(), options.clone(), wallet);
         let command = options.command;
 
         use ClientCommand::*;
@@ -116,18 +116,21 @@ impl Runnable for Job {
                 recipient,
                 amount,
             } => {
-                let chain_client = context.make_chain_client(sender.chain_id).into_arc();
+                let chain_client = context.make_chain_client(sender.chain_id);
                 info!(
                     "Starting transfer of {} native tokens from {} to {}",
                     amount, sender, recipient
                 );
                 let time_start = Instant::now();
                 let certificate = context
-                    .apply_client_command(&chain_client, |mut chain_client| async move {
-                        let data = UserData::default();
-                        chain_client
-                            .transfer_to_account(sender.owner, amount, recipient, data)
-                            .await
+                    .apply_client_command(&chain_client, |chain_client| {
+                        let chain_client = chain_client.clone();
+                        async move {
+                            let data = UserData::default();
+                            chain_client
+                                .transfer_to_account(sender.owner, amount, recipient, data)
+                                .await
+                        }
                     })
                     .await
                     .context("Failed to make transfer")?;
@@ -142,7 +145,7 @@ impl Runnable for Job {
                 balance,
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let chain_client = context.make_chain_client(chain_id).into_arc();
+                let chain_client = context.make_chain_client(chain_id);
                 let (new_public_key, key_pair) = match public_key {
                     Some(key) => (key, None),
                     None => {
@@ -153,8 +156,9 @@ impl Runnable for Job {
                 info!("Opening a new chain from existing chain {}", chain_id);
                 let time_start = Instant::now();
                 let (message_id, certificate) = context
-                    .apply_client_command(&chain_client, |mut chain_client| {
+                    .apply_client_command(&chain_client, |chain_client| {
                         let ownership = ChainOwnership::single(new_public_key);
+                        let chain_client = chain_client.clone();
                         async move {
                             chain_client
                                 .open_chain(ownership, ApplicationPermissions::default(), balance)
@@ -187,7 +191,7 @@ impl Runnable for Job {
                 application_permissions_config,
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let chain_client = context.make_chain_client(chain_id).into_arc();
+                let chain_client = context.make_chain_client(chain_id);
                 info!(
                     "Opening a new multi-owner chain from existing chain {}",
                     chain_id
@@ -197,9 +201,10 @@ impl Runnable for Job {
                 let application_permissions =
                     ApplicationPermissions::from(application_permissions_config);
                 let (message_id, certificate) = context
-                    .apply_client_command(&chain_client, |mut chain_client| {
+                    .apply_client_command(&chain_client, |chain_client| {
                         let ownership = ownership.clone();
                         let application_permissions = application_permissions.clone();
+                        let chain_client = chain_client.clone();
                         async move {
                             chain_client
                                 .open_chain(ownership, application_permissions, balance)
@@ -237,14 +242,15 @@ impl Runnable for Job {
                 application_permissions_config,
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let chain_client = context.make_chain_client(chain_id).into_arc();
+                let chain_client = context.make_chain_client(chain_id);
                 info!("Changing application permissions for chain {}", chain_id);
                 let time_start = Instant::now();
                 let application_permissions =
                     ApplicationPermissions::from(application_permissions_config);
                 let certificate = context
-                    .apply_client_command(&chain_client, |mut chain_client| {
+                    .apply_client_command(&chain_client, |chain_client| {
                         let application_permissions = application_permissions.clone();
+                        let chain_client = chain_client.clone();
                         async move {
                             chain_client
                                 .change_application_permissions(application_permissions)
@@ -259,12 +265,13 @@ impl Runnable for Job {
             }
 
             CloseChain { chain_id } => {
-                let chain_client = context.make_chain_client(chain_id).into_arc();
+                let chain_client = context.make_chain_client(chain_id);
                 info!("Closing chain {}", chain_id);
                 let time_start = Instant::now();
                 let certificate = context
-                    .apply_client_command(&chain_client, |mut chain_client| async move {
-                        chain_client.close_chain().await
+                    .apply_client_command(&chain_client, |chain_client| {
+                        let chain_client = chain_client.clone();
+                        async move { chain_client.close_chain().await }
                     })
                     .await
                     .context("Failed to close chain")?;
@@ -279,22 +286,25 @@ impl Runnable for Job {
                 channel,
             } => {
                 let subscriber = subscriber.unwrap_or_else(|| context.default_chain());
-                let chain_client = context.make_chain_client(subscriber).into_arc();
+                let chain_client = context.make_chain_client(subscriber);
                 let time_start = Instant::now();
                 info!("Subscribing");
                 let certificate = context
-                    .apply_client_command(&chain_client, |mut chain_client| async move {
-                        match channel {
-                            SystemChannel::Admin => {
-                                chain_client.subscribe_to_new_committees().await
-                            }
-                            SystemChannel::PublishedBytecodes => {
-                                let publisher = publisher.ok_or_else(|| {
-                                    ChainClientError::InternalError("Incorrect chain ID")
-                                })?;
-                                chain_client
-                                    .subscribe_to_published_bytecodes(publisher)
-                                    .await
+                    .apply_client_command(&chain_client, |chain_client| {
+                        let chain_client = chain_client.clone();
+                        async move {
+                            match channel {
+                                SystemChannel::Admin => {
+                                    chain_client.subscribe_to_new_committees().await
+                                }
+                                SystemChannel::PublishedBytecodes => {
+                                    let publisher = publisher.ok_or_else(|| {
+                                        ChainClientError::InternalError("Incorrect chain ID")
+                                    })?;
+                                    chain_client
+                                        .subscribe_to_published_bytecodes(publisher)
+                                        .await
+                                }
                             }
                         }
                     })
@@ -311,23 +321,27 @@ impl Runnable for Job {
                 channel,
             } => {
                 let subscriber = subscriber.unwrap_or_else(|| context.default_chain());
-                let chain_client = context.make_chain_client(subscriber).into_arc();
+                let chain_client = context.make_chain_client(subscriber);
                 let time_start = Instant::now();
                 let certificate = context
-                    .apply_client_command(&chain_client, |mut chain_client| async move {
-                        match channel {
-                            SystemChannel::Admin => {
-                                info!("Unsubscribing from admin channel");
-                                chain_client.unsubscribe_from_new_committees().await
-                            }
-                            SystemChannel::PublishedBytecodes => {
-                                let publisher = publisher.ok_or_else(|| {
-                                    ChainClientError::InternalError("Incorrect chain ID")
-                                })?;
-                                info!("Unsubscribing from publisher {}", publisher);
-                                chain_client
-                                    .unsubscribe_from_published_bytecodes(publisher)
-                                    .await
+                    .apply_client_command(&chain_client, |chain_client| {
+                        let chain_client = chain_client.clone();
+                        async move {
+                            let chain_client = chain_client.clone();
+                            match channel {
+                                SystemChannel::Admin => {
+                                    info!("Unsubscribing from admin channel");
+                                    chain_client.unsubscribe_from_new_committees().await
+                                }
+                                SystemChannel::PublishedBytecodes => {
+                                    let publisher = publisher.ok_or_else(|| {
+                                        ChainClientError::InternalError("Incorrect chain ID")
+                                    })?;
+                                    info!("Unsubscribing from publisher {}", publisher);
+                                    chain_client
+                                        .unsubscribe_from_published_bytecodes(publisher)
+                                        .await
+                                }
                             }
                         }
                     })
@@ -340,7 +354,7 @@ impl Runnable for Job {
 
             LocalBalance { account } => {
                 let account = account.unwrap_or_else(|| context.default_account());
-                let mut chain_client = context.make_chain_client(account.chain_id);
+                let chain_client = context.make_chain_client(account.chain_id);
                 info!("Reading the balance of {} from the local state", account);
                 let time_start = Instant::now();
                 let balance = match account.owner {
@@ -354,7 +368,7 @@ impl Runnable for Job {
 
             QueryBalance { account } => {
                 let account = account.unwrap_or_else(|| context.default_account());
-                let mut chain_client = context.make_chain_client(account.chain_id);
+                let chain_client = context.make_chain_client(account.chain_id);
                 info!(
                     "Evaluating the local balance of {} by staging execution of known incoming messages", account
                 );
@@ -370,7 +384,7 @@ impl Runnable for Job {
 
             SyncBalance { account } => {
                 let account = account.unwrap_or_else(|| context.default_account());
-                let mut chain_client = context.make_chain_client(account.chain_id);
+                let chain_client = context.make_chain_client(account.chain_id);
                 info!("Synchronizing chain information and querying the local balance");
                 warn!("This command is deprecated. Use `linera sync && linera query-balance` instead.");
                 let time_start = Instant::now();
@@ -379,7 +393,7 @@ impl Runnable for Job {
                     Some(owner) => chain_client.query_owner_balance(owner).await,
                     None => chain_client.query_balance().await,
                 };
-                context.update_and_save_wallet(&mut chain_client).await;
+                context.update_and_save_wallet(&chain_client).await;
                 let balance = result.context("Failed to synchronize from validators")?;
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
@@ -388,11 +402,11 @@ impl Runnable for Job {
 
             Sync { chain_id } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let mut chain_client = context.make_chain_client(chain_id);
+                let chain_client = context.make_chain_client(chain_id);
                 info!("Synchronizing chain information");
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
-                context.update_and_save_wallet(&mut chain_client).await;
+                context.update_and_save_wallet(&chain_client).await;
                 let time_total = time_start.elapsed();
                 info!(
                     "Synchronized chain information in {} ms",
@@ -402,7 +416,7 @@ impl Runnable for Job {
 
             ProcessInbox { chain_id } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let chain_client = context.make_chain_client(chain_id).into_arc();
+                let chain_client = context.make_chain_client(chain_id);
                 info!("Processing the inbox of chain {}", chain_id);
                 let time_start = Instant::now();
                 let certificates = context.process_inbox(&chain_client).await?;
@@ -418,14 +432,14 @@ impl Runnable for Job {
                 use linera_core::node::ValidatorNode as _;
 
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let mut chain_client = context.make_chain_client(chain_id);
+                let chain_client = context.make_chain_client(chain_id);
                 info!(
                     "Querying the validators of the current epoch of chain {}",
                     chain_id
                 );
                 let time_start = Instant::now();
                 let result = chain_client.local_committee().await;
-                context.update_and_save_wallet(&mut chain_client).await;
+                context.update_and_save_wallet(&chain_client).await;
                 let committee = result.context("Failed to get local committee")?;
                 let time_total = time_start.elapsed();
                 info!("Validators obtained after {} ms", time_total.as_millis());
@@ -459,9 +473,8 @@ impl Runnable for Job {
                 // Make sure genesis chains are subscribed to the admin chain.
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
-                let chain_client = context
-                    .make_chain_client(context.wallet().genesis_admin_chain())
-                    .into_arc();
+                let chain_client =
+                    context.make_chain_client(context.wallet().genesis_admin_chain());
                 let n = context
                     .process_inbox(&chain_client)
                     .await
@@ -471,7 +484,8 @@ impl Runnable for Job {
                     .sum::<usize>();
                 info!("Subscribed {} chains to new committees", n);
                 let maybe_certificate = context
-                    .apply_client_command(&chain_client, |mut chain_client| {
+                    .apply_client_command(&chain_client, |chain_client| {
+                        let chain_client = chain_client.clone();
                         let command = command.clone();
                         async move {
                             // Create the new committee.
@@ -622,8 +636,9 @@ impl Runnable for Job {
                 // Remove the old committee.
                 info!("Finalizing committee:\n{:?}", certificate);
                 context
-                    .apply_client_command(&chain_client, |mut chain_client| async move {
-                        chain_client.finalize_committee().await
+                    .apply_client_command(&chain_client, |chain_client| {
+                        let chain_client = chain_client.clone();
+                        async move { chain_client.finalize_committee().await }
                     })
                     .await
                     .context("Failed to finalize committee")?;
@@ -740,14 +755,13 @@ impl Runnable for Job {
             Watch { chain_id, raw } => {
                 let mut join_set = JoinSet::new();
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let chain_client = context.make_chain_client(chain_id).into_arc();
+                let chain_client = context.make_chain_client(chain_id);
                 info!("Watching for notifications for chain {:?}", chain_id);
                 let (listener, _listen_handle, mut notifications) = chain_client.listen().await?;
                 join_set.spawn_task(listener);
                 while let Some(notification) = notifications.next().await {
                     if let Reason::NewBlock { .. } = notification.reason {
-                        let mut guard = chain_client.lock().await;
-                        context.update_and_save_wallet(&mut *guard).await;
+                        context.update_and_save_wallet(&chain_client).await;
                     }
                     if raw {
                         println!("{}", serde_json::to_string(&notification)?);
@@ -799,7 +813,7 @@ impl Runnable for Job {
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing bytecode on chain {}", publisher);
-                let chain_client = context.make_chain_client(publisher).into_arc();
+                let chain_client = context.make_chain_client(publisher);
                 let bytecode_id = context
                     .publish_bytecode(&chain_client, contract, service)
                     .await?;
@@ -815,7 +829,7 @@ impl Runnable for Job {
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing blob on chain {}", publisher);
-                let chain_client = context.make_chain_client(publisher).into_arc();
+                let chain_client = context.make_chain_client(publisher);
                 let blob_id = context.publish_blob(&chain_client, blob_path).await?;
                 println!("{}", blob_id);
                 info!("{}", "Blob published successfully!".green().bold());
@@ -834,19 +848,20 @@ impl Runnable for Job {
                 let start_time = Instant::now();
                 let creator = creator.unwrap_or_else(|| context.default_chain());
                 info!("Creating application on chain {}", creator);
-                let mut chain_client = context.make_chain_client(creator);
+                let chain_client = context.make_chain_client(creator);
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
 
                 info!("Synchronizing");
                 chain_client.synchronize_from_validators().await?;
-                let chain_client = chain_client.into_arc();
+                let chain_client = chain_client;
                 context.process_inbox(&chain_client).await?;
 
                 let (application_id, _) = context
-                    .apply_client_command(&chain_client, move |mut chain_client| {
+                    .apply_client_command(&chain_client, move |chain_client| {
                         let parameters = parameters.clone();
                         let argument = argument.clone();
+                        let chain_client = chain_client.clone();
                         let required_application_ids = required_application_ids.clone();
                         async move {
                             chain_client
@@ -879,7 +894,7 @@ impl Runnable for Job {
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing and creating application on chain {}", publisher);
-                let chain_client = context.make_chain_client(publisher).into_arc();
+                let chain_client = context.make_chain_client(publisher);
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
 
@@ -888,9 +903,10 @@ impl Runnable for Job {
                     .await?;
 
                 let (application_id, _) = context
-                    .apply_client_command(&chain_client, move |mut chain_client| {
+                    .apply_client_command(&chain_client, move |chain_client| {
                         let parameters = parameters.clone();
                         let argument = argument.clone();
+                        let chain_client = chain_client.clone();
                         let required_application_ids = required_application_ids.clone();
                         async move {
                             chain_client
@@ -918,12 +934,15 @@ impl Runnable for Job {
                 let requester_chain_id =
                     requester_chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Requesting application for chain {}", requester_chain_id);
-                let chain_client = context.make_chain_client(requester_chain_id).into_arc();
+                let chain_client = context.make_chain_client(requester_chain_id);
                 let certificate = context
-                    .apply_client_command(&chain_client, |mut chain_client| async move {
-                        chain_client
-                            .request_application(application_id, target_chain_id)
-                            .await
+                    .apply_client_command(&chain_client, |chain_client| {
+                        let chain_client = chain_client.clone();
+                        async move {
+                            chain_client
+                                .request_application(application_id, target_chain_id)
+                                .await
+                        }
                     })
                     .await
                     .context("Failed to request application")?;
@@ -964,7 +983,7 @@ impl Runnable for Job {
                     let start_time = Instant::now();
                     let publisher = publisher.unwrap_or_else(|| context.default_chain());
                     info!("Creating application on chain {}", publisher);
-                    let chain_client = context.make_chain_client(publisher).into_arc();
+                    let chain_client = context.make_chain_client(publisher);
 
                     let parameters = read_json(json_parameters, json_parameters_path)?;
                     let argument = read_json(json_argument, json_argument_path)?;
@@ -978,9 +997,10 @@ impl Runnable for Job {
                         .await?;
 
                     let (application_id, _) = context
-                        .apply_client_command(&chain_client, move |mut chain_client| {
+                        .apply_client_command(&chain_client, move |chain_client| {
                             let parameters = parameters.clone();
                             let argument = argument.clone();
+                            let chain_client = chain_client.clone();
                             let required_application_ids = required_application_ids.clone();
                             async move {
                                 chain_client
@@ -1005,7 +1025,7 @@ impl Runnable for Job {
             RetryPendingBlock { chain_id } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Committing pending block for chain {}", chain_id);
-                let mut chain_client = context.make_chain_client(chain_id);
+                let chain_client = context.make_chain_client(chain_id);
                 match chain_client.process_pending_block().await? {
                     ClientOutcome::Committed(Some(certificate)) => {
                         info!("Pending block committed successfully.");
@@ -1016,7 +1036,7 @@ impl Runnable for Job {
                         info!("Please try again at {}", timeout.timestamp)
                     }
                 }
-                context.update_and_save_wallet(&mut chain_client).await;
+                context.update_and_save_wallet(&chain_client).await;
             }
 
             Wallet(WalletCommand::Init {

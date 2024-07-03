@@ -11,7 +11,7 @@ use std::{
 use anyhow::Context;
 use async_trait::async_trait;
 use colored::Colorize;
-use futures::{lock::OwnedMutexGuard, Future};
+use futures::Future;
 use linera_base::{
     crypto::KeyPair,
     data_types::{BlockHeight, HashedBlob, Timestamp},
@@ -20,7 +20,7 @@ use linera_base::{
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
-    client::{ArcChainClient, ChainClient, Client},
+    client::{ChainClient, Client},
     data_types::ClientOutcome,
     node::CrossChainMessageDelivery,
     JoinSetExt as _,
@@ -74,13 +74,14 @@ where
     Storage: linera_storage::Storage,
     ViewError: From<Storage::ContextError>,
 {
-    pub(crate) wallet: WalletState,
-    pub(crate) client: Arc<Client<NodeProvider, Storage>>,
-    pub(crate) send_timeout: Duration,
-    pub(crate) recv_timeout: Duration,
-    pub(crate) notification_retry_delay: Duration,
-    pub(crate) notification_retries: u32,
-    chain_listeners: JoinSet<()>,
+    pub wallet: WalletState,
+    pub client: Arc<Client<NodeProvider, Storage>>,
+    pub send_timeout: Duration,
+    pub recv_timeout: Duration,
+    pub notification_retry_delay: Duration,
+    pub notification_retries: u32,
+    pub options: ClientOptions,
+    pub chain_listeners: JoinSet<()>,
 }
 
 #[async_trait]
@@ -110,7 +111,7 @@ where
         self.save_wallet();
     }
 
-    async fn update_wallet<'a>(&'a mut self, client: &'a mut ChainClient<NodeProvider, S>) {
+    async fn update_wallet(&mut self, client: &ChainClient<NodeProvider, S>) {
         self.update_and_save_wallet(client).await;
     }
 }
@@ -125,7 +126,7 @@ where
         Persist::mutate(&mut self.wallet)
     }
 
-    pub fn new(storage: S, options: &ClientOptions, wallet: WalletState) -> Self {
+    pub fn new(storage: S, options: ClientOptions, wallet: WalletState) -> Self {
         let node_options = NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
@@ -134,22 +135,21 @@ where
         };
         let node_provider = NodeProvider::new(node_options);
         let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
-        let client = Arc::new(
-            Client::new(
-                node_provider,
-                storage,
-                options.max_pending_messages,
-                delivery,
-            )
-            .with_message_policy(options.message_policy),
+        let client = Client::new(
+            node_provider,
+            storage,
+            options.max_pending_messages,
+            delivery,
         );
+
         ClientContext {
-            client,
+            client: Arc::new(client),
             wallet,
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
             notification_retry_delay: options.notification_retry_delay,
             notification_retries: options.notification_retries,
+            options,
             chain_listeners: JoinSet::new(),
         }
     }
@@ -178,7 +178,7 @@ where
             .map(|kp| kp.copy())
             .into_iter()
             .collect();
-        self.client.build(
+        let mut chain_client = self.client.create_chain(
             chain_id,
             known_key_pairs,
             self.wallet.genesis_admin_chain(),
@@ -187,7 +187,9 @@ where
             chain.next_block_height,
             chain.pending_block.clone(),
             chain.pending_blobs.clone(),
-        )
+        );
+        chain_client.options_mut().message_policy = self.options.message_policy;
+        chain_client
     }
 
     pub fn make_node_provider(&self) -> NodeProvider {
@@ -207,12 +209,12 @@ where
         Persist::persist(&mut self.wallet).expect("Unable to write user chains");
     }
 
-    async fn update_wallet_from_client(&mut self, state: &mut ChainClient<NodeProvider, S>) {
-        self.wallet_mut().update_from_state(state).await
+    async fn update_wallet_from_client(&mut self, client: &ChainClient<NodeProvider, S>) {
+        self.wallet_mut().update_from_state(client).await
     }
 
-    pub async fn update_and_save_wallet(&mut self, state: &mut ChainClient<NodeProvider, S>) {
-        self.update_wallet_from_client(state).await;
+    pub async fn update_and_save_wallet(&mut self, client: &ChainClient<NodeProvider, S>) {
+        self.update_wallet_from_client(client).await;
         self.save_wallet()
     }
 
@@ -238,15 +240,14 @@ where
 
     pub async fn process_inbox(
         &mut self,
-        chain_client: &ArcChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<NodeProvider, S>,
     ) -> anyhow::Result<Vec<Certificate>> {
         let mut certificates = Vec::new();
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {
-            let mut guard = chain_client.0.lock().await;
-            guard.synchronize_from_validators().await?;
-            let result = guard.process_inbox().await;
-            self.update_wallet_from_client(&mut *guard).await;
+            chain_client.synchronize_from_validators().await?;
+            let result = chain_client.process_inbox().await;
+            self.update_wallet_from_client(chain_client).await;
             if result.is_err() {
                 self.save_wallet();
             }
@@ -264,9 +265,8 @@ where
 
         loop {
             let (new_certificates, maybe_timeout) = {
-                let mut guard = chain_client.0.lock().await;
-                let result = guard.process_inbox().await;
-                self.update_wallet_from_client(&mut *guard).await;
+                let result = chain_client.process_inbox().await;
+                self.update_wallet_from_client(chain_client).await;
                 if result.is_err() {
                     self.save_wallet();
                 }
@@ -285,7 +285,7 @@ where
 
     pub async fn publish_bytecode(
         &mut self,
-        chain_client: &ArcChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<NodeProvider, S>,
         contract: PathBuf,
         service: PathBuf,
     ) -> anyhow::Result<BytecodeId> {
@@ -301,9 +301,10 @@ where
 
         info!("Publishing bytecode");
         let (bytecode_id, _) = self
-            .apply_client_command(chain_client, |mut chain_client| {
+            .apply_client_command(chain_client, |chain_client| {
                 let contract_bytecode = contract_bytecode.clone();
                 let service_bytecode = service_bytecode.clone();
+                let chain_client = chain_client.clone();
                 async move {
                     chain_client
                         .publish_bytecode(contract_bytecode, service_bytecode)
@@ -316,18 +317,14 @@ where
         info!("{}", "Bytecode published successfully!".green().bold());
 
         info!("Synchronizing client and processing inbox");
-        chain_client
-            .lock()
-            .await
-            .synchronize_from_validators()
-            .await?;
+        chain_client.synchronize_from_validators().await?;
         self.process_inbox(chain_client).await?;
         Ok(bytecode_id)
     }
 
     pub async fn publish_blob(
         &mut self,
-        chain_client: &ArcChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<NodeProvider, S>,
         blob_path: PathBuf,
     ) -> anyhow::Result<BlobId> {
         info!("Loading blob file");
@@ -337,8 +334,9 @@ where
         let blob_id = blob.id();
 
         info!("Publishing blob");
-        self.apply_client_command(chain_client, |mut chain_client| {
+        self.apply_client_command(chain_client, |chain_client| {
             let blob = blob.clone();
+            let chain_client = chain_client.clone();
             async move {
                 chain_client
                     .publish_blob(blob)
@@ -358,17 +356,17 @@ where
     /// timeout, it will wait and retry.
     pub async fn apply_client_command<E, F, Fut, T>(
         &mut self,
-        client: &ArcChainClient<NodeProvider, S>,
+        client: &ChainClient<NodeProvider, S>,
         mut f: F,
     ) -> anyhow::Result<T>
     where
-        F: FnMut(OwnedMutexGuard<ChainClient<NodeProvider, S>>) -> Fut,
+        F: FnMut(&ChainClient<NodeProvider, S>) -> Fut,
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         anyhow::Error: From<E>,
     {
         // Try applying f optimistically without validator notifications. Return if committed.
-        let result = f(client.0.clone().lock_owned().await).await;
-        self.update_and_save_wallet(&mut *client.lock().await).await;
+        let result = f(client).await;
+        self.update_and_save_wallet(client).await;
         if let ClientOutcome::Committed(t) = result? {
             return Ok(t);
         }
@@ -379,8 +377,8 @@ where
 
         loop {
             // Try applying f. Return if committed.
-            let result = f(client.0.clone().lock_owned().await).await;
-            self.update_and_save_wallet(&mut *client.lock().await).await;
+            let result = f(client).await;
+            self.update_and_save_wallet(client).await;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -396,14 +394,15 @@ where
         ownership_config: ChainOwnershipConfig,
     ) -> anyhow::Result<()> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let chain_client = self.make_chain_client(chain_id).into_arc();
+        let chain_client = self.make_chain_client(chain_id);
         info!("Changing ownership for chain {}", chain_id);
         let time_start = Instant::now();
         let ownership = ChainOwnership::try_from(ownership_config)?;
 
         let certificate = self
-            .apply_client_command(&chain_client, |mut chain_client| {
+            .apply_client_command(&chain_client, |chain_client| {
                 let ownership = ownership.clone();
+                let chain_client = chain_client.clone();
                 async move {
                     chain_client
                         .change_ownership(ownership)
@@ -427,9 +426,9 @@ where
 {
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {
         for chain_id in self.wallet.own_chain_ids() {
-            let chain_client = self.make_chain_client(chain_id).into_arc();
+            let chain_client = self.make_chain_client(chain_id);
             self.process_inbox(&chain_client).await.unwrap();
-            chain_client.lock().await.update_validators().await.unwrap();
+            chain_client.update_validators().await.unwrap();
         }
     }
 
@@ -452,7 +451,7 @@ where
             else {
                 continue;
             };
-            let mut chain_client = self.make_chain_client(chain_id);
+            let chain_client = self.make_chain_client(chain_id);
             let ownership = chain_client.chain_info().await?.manager.ownership;
             if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
                 continue;
@@ -464,7 +463,7 @@ where
             .wallet
             .default_chain()
             .context("should have default chain")?;
-        let mut chain_client = self.make_chain_client(default_chain_id);
+        let chain_client = self.make_chain_client(default_chain_id);
         while key_pairs.len() < num_chains {
             let key_pair = self.wallet.generate_key_pair();
             let public_key = key_pair.public();
@@ -503,9 +502,9 @@ where
         }
 
         for chain_id in key_pairs.keys() {
-            let mut child_client = self.make_chain_client(*chain_id);
+            let child_client = self.make_chain_client(*chain_id);
             child_client.process_inbox().await?;
-            self.wallet_mut().update_from_state(&mut child_client).await;
+            self.wallet_mut().update_from_state(&child_client).await;
         }
         Ok(key_pairs)
     }
@@ -543,7 +542,7 @@ where
                 )
             })
             .collect();
-        let mut chain_client = self.make_chain_client(default_chain_id);
+        let chain_client = self.make_chain_client(default_chain_id);
         // Put at most 1000 fungible token operations in each block.
         for operations in operations.chunks(1000) {
             chain_client
@@ -551,12 +550,12 @@ where
                 .await?
                 .expect("should execute block with OpenChain operations");
         }
-        self.update_wallet_from_client(&mut chain_client).await;
+        self.update_wallet_from_client(&chain_client).await;
         // Make sure all chains have registered the application now.
         let futures = key_pairs
             .keys()
             .map(|&chain_id| {
-                let mut chain_client = self.make_chain_client(chain_id);
+                let chain_client = self.make_chain_client(chain_id);
                 async move {
                     for i in 0..5 {
                         tokio::time::sleep(Duration::from_secs(i)).await;
@@ -584,8 +583,8 @@ where
             .collect::<Vec<_>>()
             .await;
         for result in results {
-            let mut client = result?;
-            self.update_wallet_from_client(&mut client).await;
+            let client = result?;
+            self.update_wallet_from_client(&client).await;
         }
         Ok(())
     }

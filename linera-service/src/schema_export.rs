@@ -143,7 +143,7 @@ impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientConte
 
     fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {}
 
-    async fn update_wallet<'a>(&'a mut self, _: &'a mut ChainClient<P, S>)
+    async fn update_wallet(&mut self, _: &ChainClient<P, S>)
     where
         ViewError: From<S::ContextError>,
     {

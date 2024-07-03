@@ -63,7 +63,7 @@ impl chain_listener::ClientContext for ClientContext {
             .map(|kp| kp.copy())
             .into_iter()
             .collect();
-        self.client.build(
+        self.client.create_chain(
             chain_id,
             known_key_pairs,
             self.wallet.genesis_admin_chain(),
@@ -94,10 +94,7 @@ impl chain_listener::ClientContext for ClientContext {
         }
     }
 
-    async fn update_wallet<'a>(
-        &'a mut self,
-        client: &'a mut ChainClient<TestProvider, TestStorage>,
-    ) {
+    async fn update_wallet(&mut self, client: &ChainClient<TestProvider, TestStorage>) {
         self.wallet.update_from_state(client).await;
     }
 }
@@ -139,8 +136,8 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let description0 = ChainDescription::Root(0);
     let description1 = ChainDescription::Root(1);
     let chain_id0 = ChainId::from(description0);
-    let mut client0 = builder.add_initial_chain(description0, Amount::ONE).await?;
-    let mut client1 = builder.add_initial_chain(description1, Amount::ONE).await?;
+    let client0 = builder.add_initial_chain(description0, Amount::ONE).await?;
+    let client1 = builder.add_initial_chain(description1, Amount::ONE).await?;
 
     // Start a chain listener for chain 0 with a new key.
     let genesis_config = make_genesis_config(&builder);

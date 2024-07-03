@@ -166,22 +166,24 @@ impl Wallet {
         Ok(())
     }
 
-    pub async fn update_from_state<P, S>(&mut self, state: &mut ChainClient<P, S>)
+    pub async fn update_from_state<P, S>(&mut self, chain_client: &ChainClient<P, S>)
     where
         P: ValidatorNodeProvider + Sync + 'static,
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
+        let key_pair = chain_client.key_pair().await.map(|k| k.copy()).ok();
+        let state = chain_client.state();
         self.chains.insert(
-            state.chain_id(),
+            chain_client.chain_id(),
             UserChain {
-                chain_id: state.chain_id(),
-                key_pair: state.key_pair().await.map(|k| k.copy()).ok(),
-                block_hash: state.block_hash(),
-                next_block_height: state.next_block_height(),
-                timestamp: state.timestamp(),
-                pending_block: state.pending_block().clone(),
-                pending_blobs: state.pending_blobs().clone(),
+                chain_id: chain_client.chain_id(),
+                key_pair,
+                block_hash: state.block_hash,
+                next_block_height: state.next_block_height,
+                timestamp: state.timestamp,
+                pending_block: state.pending_block.clone(),
+                pending_blobs: state.pending_blobs.clone(),
             },
         );
     }

@@ -56,7 +56,7 @@ where
 
 /// Sends a token from the first chain to the first chain's owner on chain 2, then
 /// reclaims that amount.
-pub async fn run_claim_bench<B>((mut chain1, mut chain2): (ChainClient<B>, ChainClient<B>))
+pub async fn run_claim_bench<B>((chain1, chain2): (ChainClient<B>, ChainClient<B>))
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
