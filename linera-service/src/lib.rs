@@ -12,6 +12,7 @@ pub mod config;
 pub mod faucet;
 pub mod grpc_proxy;
 pub mod node_service;
+pub mod persistent;
 pub mod project;
 #[cfg(with_metrics)]
 pub mod prometheus_server;
