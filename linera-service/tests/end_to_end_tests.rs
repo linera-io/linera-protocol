@@ -1659,6 +1659,11 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         .wait_for_messages(chain_b, chain_b_refund_admin_tip)
         .await?;
 
+    node_service_a.process_inbox(&chain_a).await?;
+    node_service_b.process_inbox(&chain_b).await?;
+    node_service_a.process_inbox(&chain_a).await?;
+    node_service_admin.process_inbox(&chain_admin).await?;
+
     // Check balances
     app_fungible0_a
         .assert_balances([(owner_a, Amount::from_tokens(4)), (owner_b, Amount::ZERO)])
