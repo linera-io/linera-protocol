@@ -48,7 +48,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build client binary
         run: |
-          cargo install --path linera-service --bin linera --bin linera-server --debug
+          cargo install --path linera-service --bin linera --bin linera-server --debug --features benchmark
       - name: Build Docker image
         run: docker build . -f docker/Dockerfile -t linera
       - name: Run Compose
@@ -60,3 +60,22 @@ jobs:
           max_attempts: 5
           timeout_minutes: 2
           command: sleep 60 && linera --wallet docker/wallet.json --storage rocksdb:docker/linera.db sync-balance
+      - name: Run benchmarks
+        run: |
+          ./scripts/bench.sh docker/wallet.json rocksdb:docker/linera.db > benchmark_results.txt
+      - name: Read benchmark results
+        id: read_results
+        run: |
+          results=$(cat benchmark_results.txt)
+          echo "::set-output name=results::$results"
+      - name: Post benchmark results as a PR comment
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ## Benchmark Results
+            ```
+            ${{ steps.read_results.outputs.results }}
+            ```
