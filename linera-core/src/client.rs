@@ -367,7 +367,7 @@ where
     S: Storage,
     ViewError: From<S::ContextError>,
 {
-    /// Get a shared reference to the chain's state.
+    /// Gets a shared reference to the chain's state.
     pub fn state(&self) -> ChainGuard<ChainState> {
         Unsend::new(
             self.client
@@ -377,7 +377,7 @@ where
         )
     }
 
-    /// Get a mutable reference to the state.
+    /// Gets a mutable reference to the state.
     /// Beware: this will block any other reference to any chain's state!
     fn state_mut(&self) -> ChainGuardMut<ChainState> {
         Unsend::new(
@@ -388,49 +388,45 @@ where
         )
     }
 
-    /// The per-`ChainClient` options.
+    /// Gets the per-`ChainClient` options.
     pub fn options_mut(&mut self) -> &mut ChainClientOptions {
         &mut self.options
     }
 
-    /// The ID of the associated chain.
+    /// Gets the ID of the associated chain.
     pub fn chain_id(&self) -> ChainId {
         self.chain_id
     }
 
-    /// Returns the hash of the latest known block.
+    /// Gets the hash of the latest known block.
     pub fn block_hash(&self) -> Option<CryptoHash> {
         self.state().block_hash
     }
 
-    /// Returns the earliest possible timestamp for the next block.
+    /// Gets the earliest possible timestamp for the next block.
     pub fn timestamp(&self) -> Timestamp {
         self.state().timestamp
     }
 
+    /// Gets the next block height.
     pub fn next_block_height(&self) -> BlockHeight {
         self.state().next_block_height
     }
 
+    /// Gets a guarded reference to the next pending block.
     pub fn pending_block(&self) -> ChainGuardMapped<Option<Block>> {
         Unsend::new(self.state().inner.map(|state| &state.pending_block))
     }
 
+    /// Gets a guarded reference to the set of pending blobs.
     pub fn pending_blobs(&self) -> ChainGuardMapped<BTreeMap<BlobId, HashedBlob>> {
         Unsend::new(self.state().inner.map(|state| &state.pending_blobs))
     }
 
+    /// Gets the ID of the admin chain.
     pub fn admin_id(&self) -> ChainId {
         self.state().admin_id
     }
-
-    // pub fn known_key_pairs(&self) -> impl Deref<Target = BTreeMap<Owner, KeyPair>> + '_ {
-    //     self.state().map(|state| &state.known_key_pairs)
-    // }
-
-    // pub fn known_key_pairs_mut(&self) -> impl DerefMut<Target = BTreeMap<Owner, KeyPair>> + '_ {
-    //     self.state_mut().map(|state| &mut state.known_key_pairs)
-    // }
 }
 
 enum ReceiveCertificateMode {
