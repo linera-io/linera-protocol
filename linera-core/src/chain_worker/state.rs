@@ -26,7 +26,8 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    BytecodeLocation, Query, Response, UserApplicationDescription, UserApplicationId,
+    BytecodeLocation, ExecutionRequest, Query, QueryContext, Response, ServiceRuntimeRequest,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::{
@@ -91,6 +92,15 @@ where
         self.chain.chain_id()
     }
 
+    /// Returns the current [`QueryContext`] for the current chain state.
+    pub fn current_query_context(&self) -> QueryContext {
+        QueryContext {
+            chain_id: self.chain_id(),
+            next_block_height: self.chain.tip_state.get().next_block_height,
+            local_time: self.storage.clock().current_time(),
+        }
+    }
+
     /// Returns a read-only view of the [`ChainStateView`].
     ///
     /// The returned view holds a lock on the chain state, which prevents the worker from changing
@@ -140,9 +150,11 @@ where
     pub(super) async fn query_application(
         &mut self,
         query: Query,
+        incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Response, WorkerError> {
         ChainWorkerStateWithTemporaryChanges(self)
-            .query_application(query)
+            .query_application(query, incoming_execution_requests, runtime_request_sender)
             .await
     }
 
@@ -534,10 +546,21 @@ where
     pub(super) async fn query_application(
         &mut self,
         query: Query,
+        incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Response, WorkerError> {
         self.0.ensure_is_active()?;
         let local_time = self.0.storage.clock().current_time();
-        let response = self.0.chain.query_application(local_time, query).await?;
+        let response = self
+            .0
+            .chain
+            .query_application(
+                local_time,
+                query,
+                incoming_execution_requests,
+                runtime_request_sender,
+            )
+            .await?;
         Ok(response)
     }
 

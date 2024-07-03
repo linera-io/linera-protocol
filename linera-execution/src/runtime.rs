@@ -24,11 +24,11 @@ use oneshot::Receiver;
 
 use crate::{
     execution::UserAction,
-    execution_state_actor::{ExecutionStateSender, Request},
+    execution_state_actor::{ExecutionRequest, ExecutionStateSender},
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, FinalizeContext,
-    MessageContext, OperationContext, RawExecutionOutcome, ServiceRuntime,
+    MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime,
     UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
 };
 
@@ -411,7 +411,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
             hash_map::Entry::Vacant(entry) => {
                 let (code, description) = self
                     .execution_state_sender
-                    .send_request(|callback| Request::LoadContract { id, callback })?
+                    .send_request(|callback| ExecutionRequest::LoadContract { id, callback })?
                     .recv_response()?;
 
                 let instance = code.instantiate(SyncRuntimeHandle(this))?;
@@ -524,7 +524,7 @@ impl SyncRuntimeInternal<UserServiceInstance> {
             hash_map::Entry::Vacant(entry) => {
                 let (code, description) = self
                     .execution_state_sender
-                    .send_request(|callback| Request::LoadService { id, callback })?
+                    .send_request(|callback| ExecutionRequest::LoadService { id, callback })?
                     .recv_response()?;
 
                 let instance = code.instantiate(SyncRuntimeHandle(this))?;
@@ -549,11 +549,13 @@ impl<UserInstance> SyncRuntime<UserInstance> {
     }
 }
 
-impl<UserInstance> SyncRuntimeHandle<UserInstance> {
-    fn new(runtime: SyncRuntimeInternal<UserInstance>) -> Self {
+impl<UserInstance> From<SyncRuntimeInternal<UserInstance>> for SyncRuntimeHandle<UserInstance> {
+    fn from(runtime: SyncRuntimeInternal<UserInstance>) -> Self {
         SyncRuntimeHandle(Arc::new(Mutex::new(runtime)))
     }
+}
 
+impl<UserInstance> SyncRuntimeHandle<UserInstance> {
     fn inner(&mut self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<UserInstance>> {
         self.0
             .try_lock()
@@ -723,37 +725,37 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
 
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
         self.execution_state_sender
-            .send_request(|callback| Request::SystemTimestamp { callback })?
+            .send_request(|callback| ExecutionRequest::SystemTimestamp { callback })?
             .recv_response()
     }
 
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
-            .send_request(|callback| Request::ChainBalance { callback })?
+            .send_request(|callback| ExecutionRequest::ChainBalance { callback })?
             .recv_response()
     }
 
     fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
-            .send_request(|callback| Request::OwnerBalance { owner, callback })?
+            .send_request(|callback| ExecutionRequest::OwnerBalance { owner, callback })?
             .recv_response()
     }
 
     fn read_owner_balances(&mut self) -> Result<Vec<(Owner, Amount)>, ExecutionError> {
         self.execution_state_sender
-            .send_request(|callback| Request::OwnerBalances { callback })?
+            .send_request(|callback| ExecutionRequest::OwnerBalances { callback })?
             .recv_response()
     }
 
     fn read_balance_owners(&mut self) -> Result<Vec<Owner>, ExecutionError> {
         self.execution_state_sender
-            .send_request(|callback| Request::BalanceOwners { callback })?
+            .send_request(|callback| ExecutionRequest::BalanceOwners { callback })?
             .recv_response()
     }
 
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError> {
         self.execution_state_sender
-            .send_request(|callback| Request::ChainOwnership { callback })?
+            .send_request(|callback| ExecutionRequest::ChainOwnership { callback })?
             .recv_response()
     }
 
@@ -763,7 +765,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         self.resource_controller.track_read_operations(1)?;
         let receiver = self
             .execution_state_sender
-            .send_request(move |callback| Request::ContainsKey { id, key, callback })?;
+            .send_request(move |callback| ExecutionRequest::ContainsKey { id, key, callback })?;
         state.contains_key_queries.register(receiver)
     }
 
@@ -781,9 +783,9 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
         self.resource_controller.track_read_operations(1)?;
-        let receiver = self
-            .execution_state_sender
-            .send_request(move |callback| Request::ReadMultiValuesBytes { id, keys, callback })?;
+        let receiver = self.execution_state_sender.send_request(move |callback| {
+            ExecutionRequest::ReadMultiValuesBytes { id, keys, callback }
+        })?;
         state.read_multi_values_queries.register(receiver)
     }
 
@@ -812,7 +814,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         self.resource_controller.track_read_operations(1)?;
         let receiver = self
             .execution_state_sender
-            .send_request(move |callback| Request::ReadValueBytes { id, key, callback })?;
+            .send_request(move |callback| ExecutionRequest::ReadValueBytes { id, key, callback })?;
         state.read_value_queries.register(receiver)
     }
 
@@ -838,7 +840,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let state = self.view_user_states.entry(id).or_default();
         self.resource_controller.track_read_operations(1)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
-            Request::FindKeysByPrefix {
+            ExecutionRequest::FindKeysByPrefix {
                 id,
                 key_prefix,
                 callback,
@@ -871,7 +873,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let state = self.view_user_states.entry(id).or_default();
         self.resource_controller.track_read_operations(1)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
-            Request::FindKeyValuesByPrefix {
+            ExecutionRequest::FindKeyValuesByPrefix {
                 id,
                 key_prefix,
                 callback,
@@ -908,13 +910,13 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                 None => Err(ExecutionError::MissingOracleResponse),
             };
         }
-        let context = crate::QueryContext {
+        let context = QueryContext {
             chain_id: self.chain_id,
             next_block_height: self.height,
             local_time: self.local_time,
         };
         let sender = self.execution_state_sender.clone();
-        let response = ServiceSyncRuntime::run_query(sender, application_id, context, query)?;
+        let response = ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
         if let OracleResponses::Record(responses) = &mut self.oracle_responses {
             responses.push(OracleResponse::Service(response.clone()));
         }
@@ -937,7 +939,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let url = url.to_string();
         let bytes = self
             .execution_state_sender
-            .send_request(|callback| Request::HttpPost {
+            .send_request(|callback| ExecutionRequest::HttpPost {
                 url,
                 content_type,
                 payload,
@@ -1003,7 +1005,7 @@ impl ContractSyncRuntime {
         } else {
             OracleResponses::Record(Vec::new())
         };
-        let mut runtime = SyncRuntime(Some(ContractSyncRuntimeHandle::new(
+        let mut runtime = SyncRuntime(Some(ContractSyncRuntimeHandle::from(
             SyncRuntimeInternal::new(
                 chain_id,
                 height,
@@ -1182,7 +1184,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let execution_outcome = self
             .inner()
             .execution_state_sender
-            .send_request(|callback| Request::Transfer {
+            .send_request(|callback| ExecutionRequest::Transfer {
                 source,
                 destination,
                 amount,
@@ -1206,7 +1208,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let execution_outcome = self
             .inner()
             .execution_state_sender
-            .send_request(|callback| Request::Claim {
+            .send_request(|callback| ExecutionRequest::Claim {
                 source,
                 destination,
                 amount,
@@ -1257,7 +1259,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let chain_id = ChainId::child(next_message_id);
         let [open_chain_message, subscribe_message] = this
             .execution_state_sender
-            .send_request(|callback| Request::OpenChain {
+            .send_request(|callback| ExecutionRequest::OpenChain {
                 ownership,
                 balance,
                 next_message_id,
@@ -1277,7 +1279,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let mut this = self.inner();
         let application_id = this.current_application().id;
         this.execution_state_sender
-            .send_request(|callback| Request::CloseChain {
+            .send_request(|callback| ExecutionRequest::CloseChain {
                 application_id,
                 callback,
             })?
@@ -1298,7 +1300,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         this.resource_controller
             .track_bytes_written(batch.size() as u64)?;
         this.execution_state_sender
-            .send_request(|callback| Request::WriteBatch {
+            .send_request(|callback| ExecutionRequest::WriteBatch {
                 id,
                 batch,
                 callback,
@@ -1309,28 +1311,54 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 }
 
 impl ServiceSyncRuntime {
+    /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
+    pub fn new(execution_state_sender: ExecutionStateSender, context: QueryContext) -> Self {
+        SyncRuntime(Some(
+            SyncRuntimeInternal::new(
+                context.chain_id,
+                context.next_block_height,
+                context.local_time,
+                None,
+                0,
+                None,
+                execution_state_sender,
+                None,
+                ResourceController::default(),
+                OracleResponses::Forget,
+            )
+            .into(),
+        ))
+    }
+
+    /// Queries an application specified by its [`UserApplicationId`].
     pub(crate) fn run_query(
-        execution_state_sender: ExecutionStateSender,
+        &mut self,
         application_id: UserApplicationId,
-        context: crate::QueryContext,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let runtime_internal = SyncRuntimeInternal::new(
-            context.chain_id,
-            context.next_block_height,
-            context.local_time,
-            None,
-            0,
-            None,
-            execution_state_sender,
-            None,
-            ResourceController::default(),
-            OracleResponses::Forget,
-        );
-        let mut handle = ServiceSyncRuntimeHandle::new(runtime_internal);
-        let _guard = SyncRuntime(Some(handle.clone()));
+        self.0
+            .as_mut()
+            .expect(
+                "`SyncRuntimeHandle` should be available while `SyncRuntime` hasn't been dropped",
+            )
+            .try_query_application(application_id, query)
+    }
+}
 
-        handle.try_query_application(application_id, query)
+impl ServiceSyncRuntime {
+    /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
+    pub fn run(&mut self, incoming_requests: std::sync::mpsc::Receiver<ServiceRuntimeRequest>) {
+        while let Ok(request) = incoming_requests.recv() {
+            match request {
+                ServiceRuntimeRequest::Query {
+                    application_id,
+                    query,
+                    callback,
+                } => {
+                    let _ = callback.send(self.run_query(application_id, query));
+                }
+            }
+        }
     }
 }
 
@@ -1348,7 +1376,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
             // Load the application.
             let application = this.load_service_instance(cloned_self, queried_id)?;
             // Make the call to user code.
-            let query_context = crate::QueryContext {
+            let query_context = QueryContext {
                 chain_id: this.chain_id,
                 next_block_height: this.height,
                 local_time: this.local_time,
@@ -1375,9 +1403,18 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
         let this = self.inner();
         let url = url.to_string();
         this.execution_state_sender
-            .send_request(|callback| Request::FetchUrl { url, callback })?
+            .send_request(|callback| ExecutionRequest::FetchUrl { url, callback })?
             .recv_response()
     }
+}
+
+/// A request to the service runtime actor.
+pub enum ServiceRuntimeRequest {
+    Query {
+        application_id: UserApplicationId,
+        query: Vec<u8>,
+        callback: oneshot::Sender<Result<Vec<u8>, ExecutionError>>,
+    },
 }
 
 /// The origin of the execution.

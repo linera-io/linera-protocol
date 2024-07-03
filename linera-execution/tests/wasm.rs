@@ -124,13 +124,20 @@ async fn test_fuel_for_counter_wasm_application(
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };
+    let (execution_request_receiver, runtime_request_sender) =
+        context.spawn_service_runtime_actor();
     let expected_value = async_graphql::Response::new(
         async_graphql::Value::from_json(json!({"value" : increments.into_iter().sum::<u64>()}))
             .unwrap(),
     );
     let request = async_graphql::Request::new("query { value }");
     let Response::User(serialized_value) = view
-        .query_application(context, Query::user(app_id, &request).unwrap())
+        .query_application(
+            context,
+            Query::user(app_id, &request).unwrap(),
+            execution_request_receiver,
+            runtime_request_sender,
+        )
         .await?
     else {
         panic!("unexpected response")

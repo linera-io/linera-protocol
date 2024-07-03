@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use futures::{stream::FuturesUnordered, StreamExt, TryStreamExt};
+use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryStreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight, OracleRecord, Timestamp},
     identifiers::{Account, ChainId, Destination, Owner},
@@ -24,12 +24,13 @@ use {
     std::sync::Arc,
 };
 
+use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
     ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
     MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
-    UserApplicationDescription, UserApplicationId,
+    RawExecutionOutcome, RawOutgoingMessage, Response, SystemMessage, UserApplicationDescription,
+    UserApplicationId,
 };
 
 /// A view accessing the execution state of a chain.
@@ -445,6 +446,8 @@ where
         &mut self,
         context: QueryContext,
         query: Query,
+        incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match query {
@@ -458,7 +461,12 @@ where
             } => {
                 let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
                 let response = self
-                    .query_user_application(application_id, context, bytes)
+                    .query_user_application(
+                        application_id,
+                        bytes,
+                        incoming_execution_requests,
+                        runtime_request_sender,
+                    )
                     .await?;
                 Ok(Response::User(response))
             }
@@ -468,18 +476,35 @@ where
     async fn query_user_application(
         &mut self,
         application_id: UserApplicationId,
-        context: QueryContext,
         query: Vec<u8>,
+        mut incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<
+            ExecutionRequest,
+        >,
+        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let (execution_state_sender, mut execution_state_receiver) =
-            futures::channel::mpsc::unbounded();
-        let query_result_future = tokio::task::spawn_blocking(move || {
-            ServiceSyncRuntime::run_query(execution_state_sender, application_id, context, query)
-        });
-        while let Some(request) = execution_state_receiver.next().await {
-            self.handle_request(request).await?;
+        let (response_sender, response_receiver) = oneshot::channel();
+        let mut response_receiver = response_receiver.fuse();
+
+        runtime_request_sender
+            .send(ServiceRuntimeRequest::Query {
+                application_id,
+                query,
+                callback: response_sender,
+            })
+            .expect("Service runtime thread should only stop when `request_sender` is dropped");
+
+        loop {
+            futures::select! {
+                maybe_request = incoming_execution_requests.next() => {
+                    if let Some(request) = maybe_request {
+                        self.handle_request(request).await?;
+                    }
+                }
+                response = &mut response_receiver => {
+                    return response.map_err(|_| ExecutionError::MissingRuntimeResponse)?;
+                }
+            }
         }
-        query_result_future.await?
     }
 
     pub async fn list_applications(
