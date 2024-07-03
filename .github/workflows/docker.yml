@@ -11,6 +11,7 @@ on:
       - 'docker/compose.sh'
       - 'Cargo.toml'
       - '.github/workflows/docker.yml'
+      - 'linera-*'
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
