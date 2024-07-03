@@ -824,13 +824,6 @@ pub struct HashedBlob {
     pub blob: Blob,
 }
 
-/// The state of a blob of binary data.
-#[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize)]
-pub struct BlobState {
-    /// Hash of the last `Certificate` that published or used this blob.
-    pub last_used_by: CryptoHash,
-}
-
 impl HashedBlob {
     /// Loads a hashed blob from a file.
     pub async fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {

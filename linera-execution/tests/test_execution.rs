@@ -10,8 +10,8 @@ use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::PublicKey,
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, HashedBlob, OracleRecord, Resources,
-        SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, BlockHeight, OracleRecord, Resources, SendMessageRequest,
+        Timestamp,
     },
     identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, Owner},
     ownership::ChainOwnership,
@@ -1624,53 +1624,4 @@ async fn test_close_chain() {
     .await
     .unwrap();
     assert!(view.system.closed.get());
-}
-
-/// Tests the system API call `read_blob``.
-#[tokio::test]
-async fn test_failing_read_blob() {
-    let committee = Committee::make_simple(vec![PublicKey::test_key(0).into()]);
-    let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
-    let ownership = ChainOwnership::single(PublicKey::test_key(1));
-    let state = SystemExecutionState {
-        committees: committees.clone(),
-        ownership: ownership.clone(),
-        balance: Amount::from_tokens(5),
-        ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), ChainId::root(0))
-    };
-    let mut view = state.into_view().await;
-    let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
-    let (application_id, application) = applications.next().unwrap();
-
-    // The application is not authorized to close the chain.
-    let context = make_operation_context();
-    let blob = HashedBlob::test_blob("test");
-    let blob_id = blob.id();
-    application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
-            assert_matches!(
-                runtime.read_blob(&blob_id),
-                Err(ExecutionError::MissingRuntimeResponse)
-            );
-            Ok(vec![])
-        },
-    ));
-    application.expect_call(ExpectedCall::default_finalize());
-
-    let mut controller = ResourceController::default();
-    let operation = Operation::User {
-        application_id,
-        bytes: vec![],
-    };
-    assert_matches!(
-        view.execute_operation(
-            context,
-            Timestamp::from(0),
-            operation,
-            None,
-            &mut controller,
-        )
-        .await,
-        Err(ExecutionError::BlobNotFoundOnRead(_))
-    );
 }

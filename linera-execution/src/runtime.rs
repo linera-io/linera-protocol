@@ -987,7 +987,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         }
         let blob = self
             .execution_state_sender
-            .send_request(|callback| Request::ReadBlob {
+            .send_request(|callback| ExecutionRequest::ReadBlob {
                 blob_id: *blob_id,
                 callback,
             })?

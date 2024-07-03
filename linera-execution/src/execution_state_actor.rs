@@ -548,8 +548,8 @@ impl Debug for ExecutionRequest {
                 .field("content_type", content_type)
                 .finish_non_exhaustive(),
 
-            Request::ReadBlob { blob_id, .. } => formatter
-                .debug_struct("Request::ReadBlob")
+            ExecutionRequest::ReadBlob { blob_id, .. } => formatter
+                .debug_struct("ExecutionRequest::ReadBlob")
                 .field("blob_id", blob_id)
                 .finish_non_exhaustive(),
         }

@@ -23,6 +23,7 @@ use std::{fmt, str::FromStr, sync::Arc};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
+use committee::Epoch;
 use custom_debug_derive::Debug;
 use dashmap::DashMap;
 use derive_more::Display;
@@ -1015,6 +1016,15 @@ impl std::fmt::Debug for Bytecode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         f.debug_tuple("Bytecode").finish()
     }
+}
+
+/// The state of a blob of binary data.
+#[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize)]
+pub struct BlobState {
+    /// Hash of the last `Certificate` that published or used this blob.
+    pub last_used_by: CryptoHash,
+    /// Epoch of the `last_used_by` certificate.
+    pub epoch: Epoch,
 }
 
 /// The runtime to use for running the application.

@@ -263,9 +263,6 @@ pub enum WorkerError {
     ApplicationBytecodesOrBlobsNotFound(Vec<BytecodeLocation>, Vec<BlobId>),
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
-
-    #[error("Block blobs missing from oracles: {0:?}")]
-    MissingBlockBlobsInOracles(Vec<BlobId>),
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
