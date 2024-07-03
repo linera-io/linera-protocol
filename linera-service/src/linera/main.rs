@@ -669,10 +669,9 @@ impl Runnable for Job {
 
                 for rpc_msg in &proposals {
                     if let RpcMessage::BlockProposal(proposal) = rpc_msg {
-                        let (executed_block, _) =
-                            WorkerState::new("staging".to_string(), None, storage.clone())
-                                .stage_block_execution(proposal.content.block.clone())
-                                .await?;
+                        let executed_block = context
+                            .stage_block_execution(proposal.content.block.clone())
+                            .await?;
                         let value =
                             HashedCertificateValue::from(CertificateValue::ConfirmedBlock {
                                 executed_block,

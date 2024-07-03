@@ -137,6 +137,11 @@ where
         &self.storage
     }
 
+    /// Returns a reference to the [`LocalNodeClient`] of the client.
+    pub fn local_node(&self) -> &LocalNodeClient<S> {
+        &self.local_node
+    }
+
     /// Creates a new `ChainClient`.
     #[allow(clippy::too_many_arguments)]
     pub fn build(

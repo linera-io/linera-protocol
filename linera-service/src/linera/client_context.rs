@@ -45,7 +45,7 @@ use {
         data_types::Amount,
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
-    linera_chain::data_types::{Block, BlockProposal, SignatureAggregator, Vote},
+    linera_chain::data_types::{Block, BlockProposal, ExecutedBlock, SignatureAggregator, Vote},
     linera_core::{data_types::ChainInfoQuery, local_node::LocalNodeClient, worker::WorkerState},
     linera_execution::{
         committee::Epoch,
@@ -807,5 +807,15 @@ where
             application_id,
             bytes,
         }
+    }
+
+    /// Stages the execution of a block proposal.
+    pub async fn stage_block_execution(&self, block: Block) -> anyhow::Result<ExecutedBlock> {
+        Ok(self
+            .client
+            .local_node()
+            .stage_block_execution(block)
+            .await?
+            .0)
     }
 }

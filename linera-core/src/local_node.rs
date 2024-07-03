@@ -180,7 +180,7 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    pub(crate) async fn stage_block_execution(
+    pub async fn stage_block_execution(
         &self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
