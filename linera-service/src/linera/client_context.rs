@@ -46,7 +46,7 @@ use {
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
     linera_chain::data_types::{Block, BlockProposal, ExecutedBlock, SignatureAggregator, Vote},
-    linera_core::{data_types::ChainInfoQuery, local_node::LocalNodeClient, worker::WorkerState},
+    linera_core::data_types::ChainInfoQuery,
     linera_execution::{
         committee::Epoch,
         system::{OpenChainConfig, Recipient, SystemOperation, UserData, OPEN_CHAIN_MESSAGE_INDEX},
@@ -759,16 +759,8 @@ where
     }
 
     pub async fn update_wallet_from_certificates(&mut self, certificates: Vec<Certificate>) {
-        // First instantiate a local node on top of storage.
-        let worker = WorkerState::new(
-            "Temporary client node".to_string(),
-            None,
-            self.client.storage_client().clone(),
-        )
-        .with_allow_inactive_chains(true)
-        .with_allow_messages_from_deprecated_epochs(true);
-        let node = LocalNodeClient::new(worker);
-        // Second replay the certificates locally.
+        let node = self.client.local_node().clone();
+        // Replay the certificates locally.
         for certificate in certificates {
             // No required certificates from other chains: This is only used with benchmark.
             node.handle_certificate(certificate, vec![], vec![], &mut vec![])
