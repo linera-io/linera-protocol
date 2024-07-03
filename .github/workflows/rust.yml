@@ -37,7 +37,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 95
+    timeout-minutes: 75
 
     steps:
     - uses: actions/checkout@v3
@@ -70,9 +70,6 @@ jobs:
       run: |
         cd examples
         cargo build --locked --release --target wasm32-unknown-unknown
-    - name: Compile the workspace with the default features (test)
-      run: |
-        cargo test --locked --no-run
     - name: Compile `linera-core` for the browser
       run: |
         cargo build -p linera-core \
@@ -80,12 +77,10 @@ jobs:
           --target wasm32-unknown-unknown \
           --no-default-features \
           --features web,wasmer
-    - name: Compile the workspace with the default features (build)
-      run: |
-        cargo build --locked
     - name: Run end-to-end tests
       run: |
-        ./target/debug/storage_service_server memory --endpoint $LINERA_STORAGE_SERVICE &
+        cargo build --release -p linera-storage-service
+        RUST_LOG=info target/release/storage_service_server memory --endpoint $LINERA_STORAGE_SERVICE &
         RUST_LOG=info cargo test --features storage_service -- storage_service --nocapture
     - name: Run Ethereum tests
       run: |
@@ -129,6 +124,7 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     continue-on-error: true
 
     steps:
