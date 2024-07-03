@@ -23,7 +23,7 @@ use std::{
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
-use futures::{FutureExt as _, StreamExt};
+use futures::{future::join_all, FutureExt as _, StreamExt};
 use linera_base::ensure;
 use scylla::{
     frame::request::batch::BatchType,
@@ -420,7 +420,16 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
         }
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        store.read_multi_values_internal(keys).await
+        // This is the maximal size of a query in ScyllaDb with current settings.
+        let max_size_queries = 100;
+        let handles = keys
+            .chunks(max_size_queries)
+            .map(|keys| store.read_multi_values_internal(keys.to_vec()));
+        let results: Vec<_> = join_all(handles)
+            .await
+            .into_iter()
+            .collect::<Result<_, _>>()?;
+        Ok(results.into_iter().flatten().collect())
     }
 
     async fn find_keys_by_prefix(
