@@ -56,4 +56,4 @@ jobs:
         docker run --name my_scylla_container -d -p 9042:9042 scylladb/scylla
     - name: Run ScyllaDB tests
       run: |
-        cargo test --locked --features scylladb -- scylla
+        RUST_LOG=linera=info cargo test --locked --features scylladb -- scylla --nocapture
