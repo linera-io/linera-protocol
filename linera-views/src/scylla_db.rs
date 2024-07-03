@@ -15,6 +15,9 @@
 //! [trait1]: common::KeyValueStore
 //! [trait2]: common::Context
 
+/// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
+const MAX_MULTI_KEYS: usize = 100;
+
 use std::{
     collections::{hash_map::Entry, HashMap},
     ops::Deref,
@@ -420,10 +423,8 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
         }
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        // This is the maximal size of a query in ScyllaDb with current settings.
-        let max_size_queries = 100;
         let handles = keys
-            .chunks(max_size_queries)
+            .chunks(MAX_MULTI_KEYS)
             .map(|keys| store.read_multi_values_internal(keys.to_vec()));
         let results: Vec<_> = join_all(handles)
             .await
