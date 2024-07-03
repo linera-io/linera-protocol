@@ -151,9 +151,7 @@ where
             .map(|kp| (Owner::from(kp.public()), kp))
             .collect();
 
-        use dashmap::mapref::entry::Entry;
-
-        let Entry::Vacant(e) = self.chains.entry(chain_id) else {
+        let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) else {
             panic!("Inserting already-existing chain {chain_id}");
         };
         e.insert(ChainState {
@@ -1093,7 +1091,6 @@ where
             }
         }
         // Update tracker.
-        // TODO (a) this deadlocks with (b)
         self.state_mut()
             .received_certificate_trackers
             .entry(name)
@@ -1240,7 +1237,6 @@ where
 
     /// Updates the latest block and next block height and round information from the chain info.
     fn update_from_info(&self, info: &ChainInfo) {
-        // TODO (b) this deadlocks with (a)
         if info.chain_id == self.chain_id {
             let mut state = self.state_mut();
             if info.next_block_height > state.next_block_height {
@@ -1867,8 +1863,8 @@ where
         // Caveat editor: this cannot be an `if let` as the borrow of `state()` will be
         // extended over the body, causing a deadlock.
         if matches!(
-            self.state().pending_block,
-            Some(ref block) if block.height != info.next_block_height,
+            &self.state().pending_block,
+            Some(block) if block.height != info.next_block_height,
         ) {
             self.clear_pending_block();
         }
