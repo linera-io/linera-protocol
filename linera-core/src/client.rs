@@ -1371,7 +1371,7 @@ where
                         pending == &block,
                         ChainClientError::BlockProposalError(
                             "Client state has a different pending block; \
-                         use the `linera retry-pending-block` command to commit that first"
+                             use the `linera retry-pending-block` command to commit that first"
                         )
                     );
                 }
