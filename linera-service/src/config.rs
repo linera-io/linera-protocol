@@ -56,7 +56,7 @@ impl CommitteeConfig {
                     v.name,
                     ValidatorState {
                         network_address: v.network.to_string(),
-                        votes: 1,
+                        votes: 100,
                     },
                 )
             })

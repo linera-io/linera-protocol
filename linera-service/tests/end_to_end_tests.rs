@@ -2461,8 +2461,13 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client.query_validators(Some(chain_1)).await?;
 
     // Add 6th validator
+    // TODO(#2212): Use weight 100.
     client
-        .set_validator(net.validator_name(5).unwrap(), LocalNet::proxy_port(5), 100)
+        .set_validator(
+            net.validator_name(5).unwrap(),
+            LocalNet::proxy_port(5),
+            10000,
+        )
         .await?;
 
     // Remove 5th validator
@@ -2479,7 +2484,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         let name = net.validator_name(i).unwrap();
         client.remove_validator(name).await?;
         net.remove_validator(i)?;
-        if node_service_2.is_none() {
+        if let Some(service) = &node_service_2 {
+            service.process_inbox(&chain_2).await?;
+        } else {
             client_2.process_inbox(chain_2).await?;
         }
     }
