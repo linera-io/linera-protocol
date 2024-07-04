@@ -15,6 +15,9 @@
 //! [trait1]: common::KeyValueStore
 //! [trait2]: common::Context
 
+/// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
+const MAX_MULTI_KEYS: usize = 100;
+
 use std::{
     collections::{hash_map::Entry, HashMap},
     ops::Deref,
@@ -23,7 +26,7 @@ use std::{
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
-use futures::{FutureExt as _, StreamExt};
+use futures::{future::join_all, FutureExt as _, StreamExt};
 use linera_base::ensure;
 use scylla::{
     frame::request::batch::BatchType,
@@ -420,7 +423,14 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
         }
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        store.read_multi_values_internal(keys).await
+        let handles = keys
+            .chunks(MAX_MULTI_KEYS)
+            .map(|keys| store.read_multi_values_internal(keys.to_vec()));
+        let results: Vec<_> = join_all(handles)
+            .await
+            .into_iter()
+            .collect::<Result<_, _>>()?;
+        Ok(results.into_iter().flatten().collect())
     }
 
     async fn find_keys_by_prefix(

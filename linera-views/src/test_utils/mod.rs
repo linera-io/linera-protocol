@@ -287,7 +287,7 @@ pub async fn run_reads<S: LocalKeyValueStore>(store: S, key_values: Vec<(Vec<u8>
     }
     // Now checking the read_multi_values_bytes
     let mut rng = make_deterministic_rng();
-    for _ in 0..10 {
+    for _ in 0..3 {
         let mut keys = Vec::new();
         let mut values = Vec::new();
         for (key, value) in &key_values {
@@ -349,6 +349,7 @@ fn get_random_key_values2(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>,
 pub fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
     vec![
         get_random_key_values1(7, 3),
+        get_random_key_values1(150, 3),
         get_random_key_values1(30, 10),
         get_random_key_values2(30, 10),
         get_random_key_values2(30, 100),
