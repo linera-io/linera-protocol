@@ -37,7 +37,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 95
+    timeout-minutes: 75
 
     steps:
     - uses: actions/checkout@v3
@@ -56,12 +56,6 @@ jobs:
       uses: arduino/setup-protoc@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Install chromedriver
-      uses: nanasess/setup-chromedriver@v2
-    - name: Install wasm-pack
-      uses: jetli/wasm-pack-action@v0.4.0
-      with:
-        version: 'latest'
     - name: Set environment variables
       run: |
         echo "LINERA_STORAGE_SERVICE=127.0.0.1:1235" >> "$GITHUB_ENV"
@@ -70,22 +64,10 @@ jobs:
       run: |
         cd examples
         cargo build --locked --release --target wasm32-unknown-unknown
-    - name: Compile the workspace with the default features (test)
-      run: |
-        cargo test --locked --no-run
-    - name: Compile `linera-core` for the browser
-      run: |
-        cargo build -p linera-core \
-          --locked \
-          --target wasm32-unknown-unknown \
-          --no-default-features \
-          --features web,wasmer
-    - name: Compile the workspace with the default features (build)
-      run: |
-        cargo build --locked
     - name: Run end-to-end tests
       run: |
-        ./target/debug/storage_service_server memory --endpoint $LINERA_STORAGE_SERVICE &
+        cargo build --release -p linera-storage-service
+        RUST_LOG=info target/release/storage_service_server memory --endpoint $LINERA_STORAGE_SERVICE &
         RUST_LOG=info cargo test --features storage_service -- storage_service --nocapture
     - name: Run Ethereum tests
       run: |
@@ -103,10 +85,6 @@ jobs:
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime
-    - name: Run the browser tests
-      run: |
-        cd linera-views
-        WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless --features web,indexeddb
     - name: Run the benchmark test
       run: |
         cargo build --locked -p linera-service --bin linera-benchmark --features benchmark
@@ -127,8 +105,34 @@ jobs:
           exit 1
         fi
 
+  web:
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 15
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Compile `linera-core` for the browser
+      run: |
+        cargo build -p linera-core \
+          --locked \
+          --target wasm32-unknown-unknown \
+          --no-default-features \
+          --features web,wasmer
+    - name: Install chromedriver
+      uses: nanasess/setup-chromedriver@v2
+    - name: Install wasm-pack
+      uses: jetli/wasm-pack-action@v0.4.0
+      with:
+        version: 'latest'
+    - name: Run the browser tests
+      run: |
+        cd linera-views
+        WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless --features web,indexeddb
+
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     continue-on-error: true
 
     steps:

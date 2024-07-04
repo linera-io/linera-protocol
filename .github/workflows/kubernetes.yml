@@ -36,6 +36,7 @@ permissions:
 jobs:
   kind-deployment-e2e-tests:
     runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v3
@@ -60,9 +61,11 @@ jobs:
         with:
           # Port forwarding sometimes dies, which makes all requests timeout
           # Which is why we need retries
-          max_attempts: 10
-          timeout_minutes: 45
-          command: kind get clusters | xargs -I {} kind delete cluster --name {} && cargo test --locked -p linera-service --features scylladb,kubernetes --test end_to_end_tests -- kubernetes
+          max_attempts: 3
+          timeout_minutes: 30
+          command: |
+            kind get clusters | xargs -I {} kind delete cluster --name {}
+            RUST_LOG=linera=info cargo test --locked -p linera-service --features scylladb,kubernetes --test end_to_end_tests -- kubernetes --nocapture
       - name: Port forward Prometheus
         run: |
           kubectl port-forward prometheus-linera-core-kube-prometheu-prometheus-0 9090 &
