@@ -632,6 +632,4 @@ impl ChainManagerInfo {
 
         None
     }
-
-
 }

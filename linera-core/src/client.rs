@@ -49,7 +49,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::Serialize;
 use thiserror::Error;
-use tokio::sync::OwnedRwLockReadGuard;
+use tokio::sync::{Mutex, OwnedRwLockReadGuard};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, info};
 
@@ -168,6 +168,7 @@ where
             pending_block,
             pending_blobs,
             received_certificate_trackers: HashMap::new(),
+            preparing_block: Arc::default(),
         });
 
         ChainClient {
@@ -227,6 +228,10 @@ pub struct ChainState {
     /// This contains blobs belonging to our `pending_block` that may not even have
     /// been processed by (i.e. been proposed to) our own local chain manager yet.
     pub pending_blobs: BTreeMap<BlobId, HashedBlob>,
+
+    /// A mutex that is held whilst we are preparing the next block, to ensure that no
+    /// other client can begin preparing a block.
+    preparing_block: Arc<Mutex<()>>,
 }
 
 #[non_exhaustive]
@@ -1530,6 +1535,8 @@ where
         &self,
         operations: Vec<Operation>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
+        let block_mutex = Arc::clone(&self.state().preparing_block);
+        let _block_guard = block_mutex.lock_owned().await;
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
@@ -1899,7 +1906,9 @@ where
         }
 
         // The block we want to propose is either the highest validated, or our pending one.
-        let Some(block) = manager.highest_validated_block().cloned()
+        let Some(block) = manager
+            .highest_validated_block()
+            .cloned()
             .or_else(|| self.state().pending_block.clone())
         else {
             return Ok(ClientOutcome::Committed(None)); // Nothing to propose.
