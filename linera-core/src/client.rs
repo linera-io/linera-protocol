@@ -1899,18 +1899,9 @@ where
         }
 
         // The block we want to propose is either the highest validated, or our pending one.
-        let maybe_block = manager
-            .requested_locked
-            .as_ref()
-            .and_then(|certificate| certificate.value().block())
-            .cloned()
-            .or(manager
-                .requested_proposed
-                .as_ref()
-                .filter(|proposal| proposal.content.round.is_fast())
-                .map(|proposal| proposal.content.block.clone()))
-            .or_else(|| self.state().pending_block.clone());
-        let Some(block) = maybe_block else {
+        let Some(block) = manager.highest_validated_block().cloned()
+            .or_else(|| self.state().pending_block.clone())
+        else {
             return Ok(ClientOutcome::Committed(None)); // Nothing to propose.
         };
 
