@@ -8,7 +8,7 @@ use {
     linera_execution::WasmRuntime,
     linera_storage_service::{
         client::service_config_from_endpoint,
-        common::{ServiceContextError, ServiceStoreConfig},
+        common::{ServiceStoreConfig, ServiceStoreError},
     },
     linera_views::test_utils::generate_test_namespace,
 };
@@ -33,7 +33,7 @@ impl ServiceStorage<TestClock> {
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
-    ) -> Result<Self, ServiceContextError> {
+    ) -> Result<Self, ServiceStoreError> {
         let storage = DbStorageInner::<ServiceStoreClient>::new_for_testing(
             store_config,
             namespace,

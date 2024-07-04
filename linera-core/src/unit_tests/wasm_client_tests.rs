@@ -89,7 +89,7 @@ async fn test_scylla_db_create_application(wasm_runtime: WasmRuntime) -> anyhow:
 async fn run_test_create_application<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
@@ -254,7 +254,7 @@ async fn test_scylla_db_run_application_with_dependency(
 async fn run_test_run_application_with_dependency<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
@@ -494,7 +494,7 @@ async fn test_scylla_db_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow
 async fn run_test_cross_chain_message<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
@@ -704,7 +704,7 @@ async fn test_scylla_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyh
 async fn run_test_user_pub_sub_channels<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?

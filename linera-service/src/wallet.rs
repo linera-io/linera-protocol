@@ -170,7 +170,7 @@ impl Wallet {
     where
         P: ValidatorNodeProvider + Sync + 'static,
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
+        ViewError: From<S::StoreError>,
     {
         let key_pair = chain_client.key_pair().await.map(|k| k.copy()).ok();
         let state = chain_client.state();

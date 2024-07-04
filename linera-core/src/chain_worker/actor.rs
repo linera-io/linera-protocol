@@ -145,7 +145,7 @@ where
 pub struct ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     worker: ChainWorkerState<StorageClient>,
     incoming_requests: mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>,
@@ -154,7 +154,7 @@ where
 impl<StorageClient> ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     /// Spawns a new task to run the [`ChainWorkerActor`], returning an endpoint for sending
     /// requests to the worker.

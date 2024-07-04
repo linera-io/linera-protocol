@@ -79,7 +79,7 @@ pub enum FaultType {
 struct LocalValidator<S>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     state: WorkerState<S>,
     fault_type: FaultType,
@@ -90,7 +90,7 @@ where
 pub struct LocalValidatorClient<S>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     name: ValidatorName,
     client: Arc<Mutex<LocalValidator<S>>>,
@@ -99,7 +99,7 @@ where
 impl<S> ValidatorNode for LocalValidatorClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     type NotificationStream = NotificationStream;
 
@@ -195,7 +195,7 @@ where
 impl<S> LocalValidatorClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     fn new(name: ValidatorName, state: WorkerState<S>) -> Self {
         let client = LocalValidator {
@@ -426,12 +426,12 @@ where
 pub struct NodeProvider<S>(BTreeMap<ValidatorName, Arc<Mutex<LocalValidator<S>>>>)
 where
     S: Storage,
-    ViewError: From<S::ContextError>;
+    ViewError: From<S::StoreError>;
 
 impl<S> LocalValidatorNodeProvider for NodeProvider<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     type Node = LocalValidatorClient<S>;
 
@@ -466,7 +466,7 @@ where
 impl<S> FromIterator<LocalValidatorClient<S>> for NodeProvider<S>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     fn from_iter<T>(iter: T) -> Self
     where
@@ -485,7 +485,7 @@ where
 // communicate with.
 pub struct TestBuilder<B: StorageBuilder>
 where
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     storage_builder: B,
     pub initial_committee: Committee,
@@ -528,7 +528,7 @@ impl GenesisStorageBuilder {
     async fn build<S>(&self, storage: S, initial_committee: Committee, admin_id: ChainId) -> S
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
+        ViewError: From<S::StoreError>,
     {
         for account in &self.accounts {
             storage
@@ -550,7 +550,7 @@ impl GenesisStorageBuilder {
 impl<B> TestBuilder<B>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     pub async fn new(
         mut storage_builder: B,

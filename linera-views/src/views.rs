@@ -71,7 +71,7 @@ pub enum ViewError {
 
     /// Errors within the context can occur and are presented as ViewError.
     #[error("Storage operation error in {backend}: {error}")]
-    ContextError {
+    StoreError {
         /// backend can be e.g. RocksDB / DynamoDB / Memory / etc.
         backend: String,
         /// error is the specific problem that occurred within that context

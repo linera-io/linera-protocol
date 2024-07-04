@@ -50,7 +50,7 @@ use crate::{
 pub struct ChainWorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     config: ChainWorkerConfig,
     storage: StorageClient,
@@ -64,7 +64,7 @@ where
 impl<StorageClient> ChainWorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     /// Creates a new [`ChainWorkerState`] using the provided `storage` client.
     pub async fn load(
@@ -497,12 +497,12 @@ pub struct ChainWorkerStateWithTemporaryChanges<'state, StorageClient>(
 )
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>;
+    ViewError: From<StorageClient::StoreError>;
 
 impl<StorageClient> ChainWorkerStateWithTemporaryChanges<'_, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
     #[cfg(with_testing)]
@@ -798,7 +798,7 @@ where
 impl<StorageClient> Drop for ChainWorkerStateWithTemporaryChanges<'_, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     fn drop(&mut self) {
         self.0.chain.rollback();
@@ -810,7 +810,7 @@ where
 pub struct ChainWorkerStateWithAttemptedChanges<'state, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     state: &'state mut ChainWorkerState<StorageClient>,
     succeeded: bool,
@@ -820,7 +820,7 @@ impl<'state, StorageClient> From<&'state mut ChainWorkerState<StorageClient>>
     for ChainWorkerStateWithAttemptedChanges<'state, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     fn from(state: &'state mut ChainWorkerState<StorageClient>) -> Self {
         ChainWorkerStateWithAttemptedChanges {
@@ -833,7 +833,7 @@ where
 impl<StorageClient> ChainWorkerStateWithAttemptedChanges<'_, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     /// Processes a leader timeout issued for this multi-owner chain.
     pub(super) async fn process_timeout(
@@ -1279,7 +1279,7 @@ where
 impl<StorageClient> Drop for ChainWorkerStateWithAttemptedChanges<'_, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     fn drop(&mut self) {
         if !self.succeeded {

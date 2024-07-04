@@ -33,7 +33,7 @@ mod recorder;
 pub fn setup_claim_bench<B>() -> (ChainClient<B>, ChainClient<B>)
 where
     B: StorageBuilder + Default,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage_builder = B::default();
     // Criterion doesn't allow setup functions to be async, but it runs them inside an async
@@ -59,7 +59,7 @@ where
 pub async fn run_claim_bench<B>((chain1, chain2): (ChainClient<B>, ChainClient<B>))
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let owner1 = chain1.identity().await.unwrap();
     let amt = Amount::ONE;

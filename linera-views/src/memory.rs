@@ -52,7 +52,7 @@ pub struct MemoryStore {
     pub max_stream_queries: usize,
 }
 
-impl ReadableKeyValueStore<MemoryContextError> for MemoryStore {
+impl ReadableKeyValueStore<MemoryStoreError> for MemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -61,12 +61,12 @@ impl ReadableKeyValueStore<MemoryContextError> for MemoryStore {
         self.max_stream_queries
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryStoreError> {
         let map = self.map.read().await;
         Ok(map.get(key).cloned())
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryContextError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryStoreError> {
         let map = self.map.read().await;
         Ok(map.contains_key(key))
     }
@@ -74,7 +74,7 @@ impl ReadableKeyValueStore<MemoryContextError> for MemoryStore {
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, MemoryContextError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, MemoryStoreError> {
         let map = self.map.read().await;
         let mut result = Vec::new();
         for key in keys {
@@ -86,7 +86,7 @@ impl ReadableKeyValueStore<MemoryContextError> for MemoryStore {
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, MemoryContextError> {
+    ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
         let map = self.map.read().await;
         let mut values = Vec::new();
         let len = key_prefix.len();
@@ -99,7 +99,7 @@ impl ReadableKeyValueStore<MemoryContextError> for MemoryStore {
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, MemoryContextError> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
         let map = self.map.read().await;
         let mut key_values = Vec::new();
         let len = key_prefix.len();
@@ -111,10 +111,10 @@ impl ReadableKeyValueStore<MemoryContextError> for MemoryStore {
     }
 }
 
-impl WritableKeyValueStore<MemoryContextError> for MemoryStore {
+impl WritableKeyValueStore<MemoryStoreError> for MemoryStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
-    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), MemoryContextError> {
+    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), MemoryStoreError> {
         let mut map = self.map.write().await;
         for ent in batch.operations {
             match ent {
@@ -138,16 +138,16 @@ impl WritableKeyValueStore<MemoryContextError> for MemoryStore {
         Ok(())
     }
 
-    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), MemoryContextError> {
+    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), MemoryStoreError> {
         Ok(())
     }
 }
 
 impl AdminKeyValueStore for MemoryStore {
-    type Error = MemoryContextError;
+    type Error = MemoryStoreError;
     type Config = MemoryStoreConfig;
 
-    async fn connect(config: &Self::Config, _namespace: &str) -> Result<Self, MemoryContextError> {
+    async fn connect(config: &Self::Config, _namespace: &str) -> Result<Self, MemoryStoreError> {
         let state = Arc::new(Mutex::new(BTreeMap::new()));
         let guard = state
             .try_lock_arc()
@@ -160,25 +160,25 @@ impl AdminKeyValueStore for MemoryStore {
         })
     }
 
-    async fn list_all(_config: &Self::Config) -> Result<Vec<String>, MemoryContextError> {
+    async fn list_all(_config: &Self::Config) -> Result<Vec<String>, MemoryStoreError> {
         Ok(Vec::new())
     }
 
-    async fn exists(_config: &Self::Config, _namespace: &str) -> Result<bool, MemoryContextError> {
+    async fn exists(_config: &Self::Config, _namespace: &str) -> Result<bool, MemoryStoreError> {
         Ok(false)
     }
 
-    async fn create(_config: &Self::Config, _namespace: &str) -> Result<(), MemoryContextError> {
+    async fn create(_config: &Self::Config, _namespace: &str) -> Result<(), MemoryStoreError> {
         Ok(())
     }
 
-    async fn delete(_config: &Self::Config, _namespace: &str) -> Result<(), MemoryContextError> {
+    async fn delete(_config: &Self::Config, _namespace: &str) -> Result<(), MemoryStoreError> {
         Ok(())
     }
 }
 
 impl KeyValueStore for MemoryStore {
-    type Error = MemoryContextError;
+    type Error = MemoryStoreError;
 }
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
@@ -236,7 +236,7 @@ pub fn create_memory_store() -> MemoryStore {
 
 /// The error type for [`MemoryContext`].
 #[derive(Error, Debug)]
-pub enum MemoryContextError {
+pub enum MemoryStoreError {
     /// Serialization error with BCS.
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
@@ -250,9 +250,9 @@ pub enum MemoryContextError {
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
-impl From<MemoryContextError> for ViewError {
-    fn from(error: MemoryContextError) -> Self {
-        Self::ContextError {
+impl From<MemoryStoreError> for ViewError {
+    fn from(error: MemoryStoreError) -> Self {
+        Self::StoreError {
             backend: "memory".to_string(),
             error: error.to_string(),
         }
@@ -260,7 +260,7 @@ impl From<MemoryContextError> for ViewError {
 }
 
 impl DeletePrefixExpander for MemoryContext<()> {
-    type Error = MemoryContextError;
+    type Error = MemoryStoreError;
 
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();

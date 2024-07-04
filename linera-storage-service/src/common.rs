@@ -44,7 +44,7 @@ pub enum KeyTag {
 }
 
 #[derive(Debug, Error)]
-pub enum ServiceContextError {
+pub enum ServiceStoreError {
     /// Not matching entry
     #[error("Not matching entry")]
     NotMatchingEntry,
@@ -74,9 +74,9 @@ pub enum ServiceContextError {
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
-impl From<ServiceContextError> for linera_views::views::ViewError {
-    fn from(error: ServiceContextError) -> Self {
-        Self::ContextError {
+impl From<ServiceStoreError> for linera_views::views::ViewError {
+    fn from(error: ServiceStoreError) -> Self {
+        Self::StoreError {
             backend: "service".to_string(),
             error: error.to_string(),
         }
@@ -107,7 +107,7 @@ pub struct ServiceStoreConfig {
 /// Obtains the binary of the executable.
 /// The path depends whether the test are run in the directory "linera-storage-service"
 /// or in the main directory
-pub async fn get_service_storage_binary() -> Result<PathBuf, ServiceContextError> {
+pub async fn get_service_storage_binary() -> Result<PathBuf, ServiceStoreError> {
     let binary = resolve_binary("storage_service_server", "linera-storage-service").await;
     if let Ok(binary) = binary {
         return Ok(binary);
@@ -116,5 +116,5 @@ pub async fn get_service_storage_binary() -> Result<PathBuf, ServiceContextError
     if let Ok(binary) = binary {
         return Ok(binary);
     }
-    Err(ServiceContextError::FailedToFindStorageServiceServerBinary)
+    Err(ServiceStoreError::FailedToFindStorageServiceServerBinary)
 }

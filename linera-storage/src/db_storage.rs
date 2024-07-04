@@ -382,7 +382,7 @@ where
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     type Context = ContextFromStore<ChainRuntimeContext<Self>, Client>;
-    type ContextError = <Client as KeyValueStore>::Error;
+    type StoreError = <Client as KeyValueStore>::Error;
 
     fn clock(&self) -> &dyn Clock {
         &self.clock

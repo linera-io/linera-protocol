@@ -36,7 +36,7 @@ use crate::{
 pub struct LocalNode<S>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     state: WorkerState<S>,
 }
@@ -46,7 +46,7 @@ where
 pub struct LocalNodeClient<S>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     node: Arc<Mutex<LocalNode<S>>>,
 }
@@ -88,7 +88,7 @@ pub enum LocalNodeError {
 impl<S> LocalNodeClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     pub async fn handle_block_proposal(
         &self,
@@ -153,7 +153,7 @@ where
 impl<S> LocalNodeClient<S>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     pub fn new(state: WorkerState<S>) -> Self {
         let node = LocalNode { state };
@@ -167,7 +167,7 @@ where
 impl<S> LocalNodeClient<S>
 where
     S: Storage + Clone,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     pub(crate) async fn storage_client(&self) -> S {
         let node = self.node.lock().await;
@@ -178,7 +178,7 @@ where
 impl<S> LocalNodeClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     pub async fn stage_block_execution(
         &self,

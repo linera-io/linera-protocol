@@ -6,9 +6,7 @@ use linera_views::rocks_db::RocksDbStore;
 use {
     crate::db_storage::{DbStorageInner, TestClock},
     linera_execution::WasmRuntime,
-    linera_views::rocks_db::{
-        create_rocks_db_test_config, RocksDbContextError, RocksDbStoreConfig,
-    },
+    linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStoreConfig, RocksDbStoreError},
     linera_views::test_utils::generate_test_namespace,
     tempfile::TempDir,
 };
@@ -42,7 +40,7 @@ impl RocksDbStorage<TestClock> {
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
-    ) -> Result<Self, RocksDbContextError> {
+    ) -> Result<Self, RocksDbStoreError> {
         let storage =
             DbStorageInner::<RocksDbStore>::new_for_testing(store_config, namespace, wasm_runtime)
                 .await?;

@@ -6,7 +6,7 @@ use linera_views::memory::MemoryStore;
 use {
     crate::db_storage::DbStorageInner,
     linera_execution::WasmRuntime,
-    linera_views::memory::{MemoryContextError, MemoryStoreConfig},
+    linera_views::memory::{MemoryStoreConfig, MemoryStoreError},
 };
 
 use crate::db_storage::DbStorage;
@@ -30,7 +30,7 @@ impl MemoryStorage<crate::TestClock> {
         wasm_runtime: Option<WasmRuntime>,
         max_stream_queries: usize,
         clock: TestClock,
-    ) -> Result<Self, MemoryContextError> {
+    ) -> Result<Self, MemoryStoreError> {
         let store_config = MemoryStoreConfig::new(max_stream_queries);
         let namespace = "unused_namespace";
         let storage =

@@ -162,7 +162,7 @@ impl GenesisConfig {
     pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), anyhow::Error>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
+        ViewError: From<S::StoreError>,
     {
         let committee = self.create_committee();
         for (chain_number, (public_key, balance)) in (0..).zip(&self.chains) {

@@ -73,14 +73,14 @@ pub use crate::{
 #[async_trait]
 pub trait Storage: Sized {
     /// The low-level storage implementation in use.
-    type Context: Context<Extra = ChainRuntimeContext<Self>, Error = Self::ContextError>
+    type Context: Context<Extra = ChainRuntimeContext<Self>, Error = Self::StoreError>
         + Clone
         + Send
         + Sync
         + 'static;
 
-    /// Alias to provide simpler trait bounds `ViewError: From<Self::ContextError>`
-    type ContextError: std::error::Error + Debug + Sync + Send;
+    /// Alias to provide simpler trait bounds `ViewError: From<Self::StoreError>`
+    type StoreError: std::error::Error + Debug + Sync + Send;
 
     /// Returns the current wall clock time.
     fn clock(&self) -> &dyn Clock;
@@ -88,7 +88,7 @@ pub trait Storage: Sized {
     /// Loads the view of a chain state.
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>
     where
-        ViewError: From<Self::ContextError>;
+        ViewError: From<Self::StoreError>;
 
     /// Tests existence of a hashed certificate value with the given hash.
     async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError>;
@@ -160,7 +160,7 @@ pub trait Storage: Sized {
     ) -> Result<ChainStateView<Self::Context>, linera_chain::ChainError>
     where
         ChainRuntimeContext<Self>: ExecutionRuntimeContext,
-        ViewError: From<Self::ContextError>,
+        ViewError: From<Self::StoreError>,
     {
         let chain = self.load_chain(id).await?;
         chain.ensure_is_active()?;
@@ -203,7 +203,7 @@ pub trait Storage: Sized {
     ) -> Result<(), ChainError>
     where
         ChainRuntimeContext<Self>: ExecutionRuntimeContext,
-        ViewError: From<Self::ContextError>,
+        ViewError: From<Self::StoreError>,
     {
         let id = description.into();
         let mut chain = self.load_chain(id).await?;

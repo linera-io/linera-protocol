@@ -104,7 +104,7 @@ static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: Lazy<HistogramVec> = Lazy::new(|
 pub struct GrpcServer<S>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     state: WorkerState<S>,
     shard_id: ShardId,
@@ -178,7 +178,7 @@ where
 impl<S> GrpcServer<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn spawn(
@@ -436,7 +436,7 @@ where
 impl<S> ValidatorWorkerRpc for GrpcServer<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
     async fn handle_block_proposal(

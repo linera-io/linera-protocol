@@ -276,7 +276,7 @@ impl From<linera_chain::ChainError> for WorkerError {
 pub struct WorkerState<StorageClient>
 where
     StorageClient: Storage,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     /// A name used for logging
     nickname: String,
@@ -307,7 +307,7 @@ pub(crate) type DeliveryNotifiers =
 impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
         WorkerState {
@@ -398,7 +398,7 @@ where
 impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     // NOTE: This only works for non-sharded workers!
     #[cfg(with_testing)]
@@ -771,7 +771,7 @@ where
 impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     /// Gets a reference to the validator's [`PublicKey`].
     ///
@@ -794,7 +794,7 @@ where
 impl<StorageClient> ValidatorWorker for WorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::ContextError>,
+    ViewError: From<StorageClient::StoreError>,
 {
     #[instrument(skip_all, fields(
         nick = self.nickname,

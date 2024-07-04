@@ -37,7 +37,7 @@ mod tests;
 pub struct QueryRoot<P, S>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     genesis_config: Arc<GenesisConfig>,
     client: Arc<Mutex<ChainClient<P, S>>>,
@@ -47,7 +47,7 @@ where
 pub struct MutationRoot<P, S, C>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     client: Arc<Mutex<ChainClient<P, S>>>,
     context: Arc<Mutex<C>>,
@@ -91,7 +91,7 @@ impl<P, S> QueryRoot<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     /// Returns the version information on this faucet service.
     async fn version(&self) -> linera_version::VersionInfo {
@@ -125,7 +125,7 @@ where
     <P as ValidatorNodeProvider>::Node: Sync,
     S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
     async fn claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
@@ -139,7 +139,7 @@ where
     <P as ValidatorNodeProvider>::Node: Sync,
     S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     async fn do_claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
         let client = self.client.lock().await;
@@ -195,7 +195,7 @@ where
 impl<P, S, C> MutationRoot<P, S, C>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     /// Multiplies a `u128` with a `u64` and returns the result as a 192-bit number.
     fn multiply(a: u128, b: u64) -> [u64; 3] {
@@ -212,7 +212,7 @@ where
 pub struct FaucetService<P, S, C>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     client: Arc<Mutex<ChainClient<P, S>>>,
     context: Arc<Mutex<C>>,
@@ -227,7 +227,7 @@ where
 impl<P, S: Clone, C> Clone for FaucetService<P, S, C>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     fn clone(&self) -> Self {
         Self {
@@ -248,7 +248,7 @@ where
     P: ValidatorNodeProvider + Send + Sync + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     /// Creates a new instance of the faucet service.
     pub async fn new(
