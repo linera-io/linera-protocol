@@ -569,6 +569,8 @@ where
     async fn process_validated_block(
         &self,
         certificate: Certificate,
+        hashed_certificate_values: &[HashedCertificateValue],
+        hashed_blobs: &[HashedBlob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let CertificateValue::ValidatedBlock {
             executed_block: ExecutedBlock { block, .. },
@@ -579,6 +581,8 @@ where
         self.query_chain_worker(block.chain_id, move |callback| {
             ChainWorkerRequest::ProcessValidatedBlock {
                 certificate,
+                hashed_certificate_values: hashed_certificate_values.to_owned(),
+                hashed_blobs: hashed_blobs.to_owned(),
                 callback,
             }
         })
@@ -849,7 +853,9 @@ where
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                let validation_outcomes = self.process_validated_block(certificate).await?;
+                let validation_outcomes = self
+                    .process_validated_block(certificate, &hashed_certificate_values, &hashed_blobs)
+                    .await?;
                 #[cfg(with_metrics)]
                 {
                     duplicated = validation_outcomes.2;

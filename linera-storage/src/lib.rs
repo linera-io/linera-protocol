@@ -118,6 +118,12 @@ pub trait Storage: Sized {
     /// Reads the blob with the given blob ID.
     async fn read_hashed_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ViewError>;
 
+    /// Reads the blobs with the given blob IDs.
+    async fn read_hashed_blobs(
+        &self,
+        blob_ids: &[BlobId],
+    ) -> Result<Vec<Option<HashedBlob>>, ViewError>;
+
     /// Reads the blob state with the given blob ID.
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError>;
 

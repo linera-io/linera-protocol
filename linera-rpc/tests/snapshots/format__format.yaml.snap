@@ -608,6 +608,10 @@ NodeError:
       LocalNodeQuery:
         STRUCT:
           - error: STR
+    20:
+      BlobNotFoundOnRead:
+        NEWTYPE:
+          TYPENAME: BlobId
 OpenChainConfig:
   STRUCT:
     - ownership:
@@ -999,6 +1003,11 @@ SystemOperation:
           - blob_id:
               TYPENAME: BlobId
     10:
+      ReadBlob:
+        STRUCT:
+          - blob_id:
+              TYPENAME: BlobId
+    11:
       CreateApplication:
         STRUCT:
           - bytecode_id:
@@ -1008,14 +1017,14 @@ SystemOperation:
           - required_application_ids:
               SEQ:
                 TYPENAME: ApplicationId
-    11:
+    12:
       RequestApplication:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - application_id:
               TYPENAME: ApplicationId
-    12:
+    13:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation

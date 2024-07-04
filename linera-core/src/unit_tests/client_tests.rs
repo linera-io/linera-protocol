@@ -153,7 +153,9 @@ where
         sender.local_balance().await.unwrap(),
         Amount::from_millis(898)
     );
-    receiver.receive_certificate(cert).await?;
+    receiver
+        .receive_certificate_and_update_validators(cert)
+        .await?;
     assert_eq!(receiver.process_inbox().await?.0.len(), 1);
     // The friend paid to receive the message.
     assert_eq!(
@@ -210,7 +212,9 @@ where
         .unwrap()
         .unwrap();
 
-    receiver.receive_certificate(cert).await?;
+    receiver
+        .receive_certificate_and_update_validators(cert)
+        .await?;
     let cert = receiver.process_inbox().await?.0.pop().unwrap();
     {
         let messages = &cert.value().block().unwrap().incoming_messages;
@@ -224,7 +228,9 @@ where
         assert_eq!(messages[1].action, MessageAction::Accept);
     }
 
-    sender.receive_certificate(cert).await?;
+    sender
+        .receive_certificate_and_update_validators(cert)
+        .await?;
     sender.process_inbox().await?;
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -526,7 +532,10 @@ where
     let client = builder
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
-    client.receive_certificate(certificate).await.unwrap();
+    client
+        .receive_certificate_and_update_validators(certificate)
+        .await
+        .unwrap();
     assert_eq!(client.query_balance().await.unwrap(), Amount::ZERO);
     client.close_chain().await.unwrap();
     Ok(())
@@ -606,7 +615,10 @@ where
     let client = builder
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
-    client.receive_certificate(certificate).await.unwrap();
+    client
+        .receive_certificate_and_update_validators(certificate)
+        .await
+        .unwrap();
     // Make another block on top of the one that sent the two tokens, so that the validators
     // process the cross-chain messages.
     let certificate2 = sender
@@ -619,7 +631,10 @@ where
         .await
         .unwrap()
         .unwrap();
-    client.receive_certificate(certificate2).await.unwrap();
+    client
+        .receive_certificate_and_update_validators(certificate2)
+        .await
+        .unwrap();
     assert_eq!(
         client.query_balance().await.unwrap(),
         Amount::from_tokens(3)
@@ -706,7 +721,10 @@ where
     let client = builder
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
-    client.receive_certificate(certificate).await.unwrap();
+    client
+        .receive_certificate_and_update_validators(certificate)
+        .await
+        .unwrap();
     let result = client
         .transfer_to_account(
             None,
@@ -775,12 +793,12 @@ where
         .await?;
     // Must process the creation certificate before using the new chain.
     client
-        .receive_certificate(creation_certificate)
+        .receive_certificate_and_update_validators(creation_certificate)
         .await
         .unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
     client
-        .receive_certificate(transfer_certificate)
+        .receive_certificate_and_update_validators(transfer_certificate)
         .await
         .unwrap();
     assert_eq!(
@@ -1099,7 +1117,10 @@ where
     client2.process_inbox().await.unwrap();
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
-    client2.receive_certificate(certificate).await.unwrap();
+    client2
+        .receive_certificate_and_update_validators(certificate)
+        .await
+        .unwrap();
     assert_eq!(
         client2.query_balance().await.unwrap(),
         Amount::from_millis(1999)
@@ -1203,7 +1224,10 @@ where
     // Last one was not confirmed remotely, hence a conservative balance.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
-    client3.receive_certificate(certificate).await.unwrap();
+    client3
+        .receive_certificate_and_update_validators(certificate)
+        .await
+        .unwrap();
     assert_eq!(
         client3.query_balance().await.unwrap(),
         Amount::from_tokens(2)
@@ -1246,7 +1270,10 @@ where
         .await
         .unwrap()
         .unwrap();
-    admin.receive_certificate(cert).await.unwrap();
+    admin
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     admin.process_inbox().await.unwrap();
 
     // Create a new committee.
@@ -1282,7 +1309,7 @@ where
     // User is still at the initial epoch, but we can receive transfers from future
     // epochs AFTER synchronizing the client with the admin chain.
     assert_matches!(
-        user.receive_certificate(cert).await,
+        user.receive_certificate_and_update_validators(cert).await,
         Err(ChainClientError::CommitteeSynchronizationError)
     );
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
@@ -1294,7 +1321,10 @@ where
 
     // Now subscribe explicitly to migrations.
     let cert = user.subscribe_to_new_committees().await.unwrap().unwrap();
-    admin.receive_certificate(cert).await.unwrap();
+    admin
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     admin.process_inbox().await.unwrap();
 
     // Have the admin chain deprecate the previous epoch.
@@ -1312,7 +1342,7 @@ where
         .unwrap()
         .unwrap();
     assert_matches!(
-        admin.receive_certificate(cert).await,
+        admin.receive_certificate_and_update_validators(cert).await,
         Err(ChainClientError::CommitteeDeprecationError)
     );
     // Transfer is blocked because the epoch #0 has been retired by admin.
@@ -1336,7 +1366,10 @@ where
         .await
         .unwrap()
         .unwrap();
-    admin.receive_certificate(cert).await.unwrap();
+    admin
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     admin.process_inbox().await.unwrap();
     // Transfer goes through and the previous one as well thanks to block chaining.
     assert_eq!(admin.local_balance().await.unwrap(), Amount::from_tokens(3));
@@ -1402,87 +1435,582 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_publish_blob<B>(storage_builder: B) -> anyhow::Result<()>
+async fn test_finalize_locked_block_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
-    // Configure a chain with two regular and no super owners.
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
-    let description = ChainDescription::Root(1);
-    let chain_id = ChainId::from(description);
-    let client_a = builder
-        .add_initial_chain(description, Amount::from_tokens(10))
+    let description1 = ChainDescription::Root(1);
+    let chain_id1 = ChainId::from(description1);
+    let mut client1_a = builder
+        .add_initial_chain(description1, Amount::ZERO)
         .await?;
-    let pub_key0 = client_a.public_key().await.unwrap();
-    let key_pair1 = KeyPair::generate();
-    let pub_key1 = key_pair1.public();
-    let owner_change_op = SystemOperation::ChangeOwnership {
+    let pub_key1_a = client1_a.public_key().await.unwrap();
+    let key_pair1_b = KeyPair::generate();
+    let pub_key1_b = key_pair1_b.public();
+    let owner_change_op1 = SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
-        owners: vec![(pub_key0, 100), (pub_key1, 100)],
+        owners: vec![(pub_key1_a, 50), (pub_key1_b, 50)],
         multi_leader_rounds: 10,
-        timeout_config: TimeoutConfig {
-            fast_round_duration: Some(TimeDelta::from_secs(5)),
-            ..TimeoutConfig::default()
-        },
+        timeout_config: TimeoutConfig::default(),
     }
     .into();
-    client_a.execute_operation(owner_change_op).await.unwrap();
-    let client_b = builder
+    client1_a.execute_operation(owner_change_op1).await.unwrap();
+    let mut client1_b = builder
         .make_client(
-            chain_id,
-            key_pair1,
-            client_a.block_hash(),
+            chain_id1,
+            key_pair1_b,
+            client1_a.block_hash(),
             BlockHeight::from(1),
         )
         .await?;
 
+    let description2 = ChainDescription::Root(2);
+    let chain_id2 = ChainId::from(description2);
+    let mut client2_a = builder
+        .add_initial_chain(description2, Amount::from_tokens(10))
+        .await?;
+    let pub_key2_a = client2_a.public_key().await.unwrap();
+    let key_pair2_b = KeyPair::generate();
+    let pub_key2_b = key_pair2_b.public();
+    let owner_change_op2 = SystemOperation::ChangeOwnership {
+        super_owners: Vec::new(),
+        owners: vec![(pub_key2_a, 50), (pub_key2_b, 50)],
+        multi_leader_rounds: 10,
+        timeout_config: TimeoutConfig::default(),
+    }
+    .into();
+    client2_a.execute_operation(owner_change_op2).await.unwrap();
+    let client2_b = builder
+        .make_client(
+            chain_id2,
+            key_pair2_b,
+            client2_a.block_hash(),
+            BlockHeight::from(1),
+        )
+        .await?;
+
+    let blob0 = HashedBlob::test_blob("blob0");
+    let blob0_id = blob0.id();
+
+    // Try to read a blob without publishing it first, should fail
+    let result = client1_a.read_blob(blob0_id).await;
+    assert_matches!(
+        result,
+        Err(ChainClientError::BlobNotFound(not_found_blob_id)) if not_found_blob_id == blob0_id
+    );
+
     // Take one validator down
-    builder.set_fault_type([0], FaultType::Offline).await;
-    let blob = HashedBlob::test_blob("blob1");
-    let expected_blob_id = blob.id();
-    let (blob_id, certificate) = client_a.publish_blob(blob).await.unwrap().unwrap();
-    client_a.synchronize_from_validators().await.unwrap();
-    assert_eq!(expected_blob_id, blob_id);
+    builder.set_fault_type([2], FaultType::Offline).await;
+
+    // Publish blob on chain 1
+    let publish_certificate = client1_a.publish_blob(blob0).await.unwrap().unwrap();
+    assert!(publish_certificate
+        .value()
+        .executed_block()
+        .unwrap()
+        .requires_blob(&blob0_id));
+
+    // Validators goes back up
+    builder.set_fault_type([2], FaultType::Honest).await;
+    // But another one goes down
+    builder.set_fault_type([3], FaultType::Offline).await;
+
+    // Try to read the blob. This is a different client but on the same chain, so when we synchronize this with the validators
+    // before executing the block, we'll actually download and cache locally the blobs that were published by `client_a`.
+    // So this will succeed.
+    let certificate = client1_b.read_blob(blob0_id).await.unwrap().unwrap();
     assert_eq!(certificate.round, Round::MultiLeader(0));
     assert!(certificate
         .value()
         .executed_block()
         .unwrap()
-        .outcome
-        .oracle_responses
-        .iter()
-        .any(|responses| responses.contains(&OracleResponse::Blob(expected_blob_id))));
-    let previous_block_hash = client_a.block_hash().unwrap();
+        .requires_blob(&blob0_id));
 
-    // Validators goes back up
-    builder.set_fault_type([0], FaultType::Honest).await;
-    // But another one goes down
-    builder.set_fault_type([1], FaultType::Offline).await;
+    builder
+        .set_fault_type([0, 1, 2], FaultType::DontSendConfirmVote)
+        .await;
 
-    let certificate = client_b
+    client2_a.synchronize_from_validators().await.unwrap();
+    let blob1 = HashedBlob::test_blob("blob1");
+    let blob1_id = blob1.id();
+
+    client2_a.add_pending_blobs(&[blob1]).await;
+    let blob_0_1_operations = vec![
+        Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
+        Operation::System(SystemOperation::PublishBlob { blob_id: blob1_id }),
+    ];
+    let b0_result = client2_a
+        .execute_operations(blob_0_1_operations.clone())
+        .await;
+
+    assert!(b0_result.is_err());
+    assert!(client2_a.pending_block().is_some());
+
+    for i in 0..=2 {
+        let validator_manager = builder
+            .node(i)
+            .chain_info_with_manager_values(chain_id2)
+            .await
+            .unwrap()
+            .manager;
+        assert_eq!(
+            validator_manager
+                .requested_locked
+                .unwrap()
+                .value()
+                .block()
+                .unwrap()
+                .operations,
+            blob_0_1_operations
+        );
+    }
+
+    builder.set_fault_type([2], FaultType::Offline).await;
+    builder.set_fault_type([0, 1, 3], FaultType::Honest).await;
+
+    client2_b.synchronize_from_validators().await.unwrap();
+    let bt_certificate = client2_b
         .burn(None, Amount::from_tokens(1), UserData::default())
         .await
         .unwrap()
         .unwrap();
-    client_b.synchronize_from_validators().await.unwrap();
-    client_b.process_inbox().await.unwrap();
+
+    let hashed_certificate_values = client2_b
+        .read_hashed_certificate_values_downward(bt_certificate.value.hash(), 2)
+        .await
+        .unwrap();
+
+    // Latest block should be the burn
+    assert!(hashed_certificate_values[0]
+        .inner()
+        .block()
+        .unwrap()
+        .operations
+        .contains(&Operation::System(SystemOperation::Transfer {
+            owner: None,
+            recipient: Recipient::Burn,
+            amount: Amount::from_tokens(1),
+            user_data: UserData::default(),
+        })));
+
+    // Block before that should be b0
     assert_eq!(
-        client_b.local_balance().await.unwrap(),
-        Amount::from_tokens(9)
+        hashed_certificate_values[1]
+            .inner()
+            .block()
+            .unwrap()
+            .operations,
+        blob_0_1_operations,
     );
-    // We're in a new height, so this will also be multileader round 0
-    assert_eq!(certificate.round, Round::MultiLeader(0));
-    // Check that this block is a child of the previous one
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_existing_proposal_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
+{
+    let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
+    let description1 = ChainDescription::Root(1);
+    let description2 = ChainDescription::Root(2);
+    let chain_id2 = ChainId::from(description2);
+    let client1 = builder
+        .add_initial_chain(description1, Amount::ZERO)
+        .await?;
+    let mut client2_a = builder
+        .add_initial_chain(description2, Amount::from_tokens(10))
+        .await?;
+    let pub_key2_a = client2_a.public_key().await.unwrap();
+    let key_pair2_b = KeyPair::generate();
+    let pub_key2_b = key_pair2_b.public();
+    let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
+        super_owners: Vec::new(),
+        owners: vec![(pub_key2_a, 50), (pub_key2_b, 50)],
+        multi_leader_rounds: 10,
+        timeout_config: TimeoutConfig::default(),
+    });
+    client2_a
+        .execute_operation(owner_change_op.clone())
+        .await
+        .unwrap();
+    let client2_b = builder
+        .make_client(
+            chain_id2,
+            key_pair2_b,
+            client2_a.block_hash(),
+            BlockHeight::from(1),
+        )
+        .await?;
+
+    // Take one validator down
+    builder.set_fault_type([3], FaultType::Offline).await;
+
+    let blob0 = HashedBlob::test_blob("blob0");
+    let blob0_id = blob0.id();
+
+    // Publish blob on chain 1
+    let publish_certificate = client1.publish_blob(blob0).await.unwrap().unwrap();
+    assert!(publish_certificate
+        .value()
+        .executed_block()
+        .unwrap()
+        .requires_blob(&blob0_id));
+
+    builder
+        .set_fault_type([0, 1, 2], FaultType::DontProcessValidated)
+        .await;
+
+    client2_a.synchronize_from_validators().await.unwrap();
+    let blob1 = HashedBlob::test_blob("blob1");
+    let blob1_id = blob1.id;
+
+    client2_a.add_pending_blobs(&[blob1]).await;
+    let blob_0_1_operations = vec![
+        Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
+        Operation::System(SystemOperation::PublishBlob { blob_id: blob1_id }),
+    ];
+    let b0_result = client2_a
+        .execute_operations(blob_0_1_operations.clone())
+        .await;
+
+    assert!(b0_result.is_err());
+    assert!(client2_a.pending_block().is_some());
+
+    for i in 0..=2 {
+        let validator_manager = builder
+            .node(i)
+            .chain_info_with_manager_values(chain_id2)
+            .await
+            .unwrap()
+            .manager;
+        assert_eq!(
+            validator_manager
+                .requested_proposed
+                .unwrap()
+                .content
+                .block
+                .operations,
+            blob_0_1_operations,
+        );
+        assert!(validator_manager.requested_locked.is_none());
+    }
+
+    builder.set_fault_type([2], FaultType::Offline).await;
+    builder.set_fault_type([0, 1, 3], FaultType::Honest).await;
+
+    let bt_certificate = client2_b
+        .burn(None, Amount::from_tokens(1), UserData::default())
+        .await
+        .unwrap()
+        .unwrap();
+
+    let hashed_certificate_values = client2_b
+        .read_hashed_certificate_values_downward(bt_certificate.value.hash(), 2)
+        .await
+        .unwrap();
+
+    // Latest block should be the burn
+    assert!(hashed_certificate_values[0]
+        .inner()
+        .block()
+        .unwrap()
+        .operations
+        .contains(&Operation::System(SystemOperation::Transfer {
+            owner: None,
+            recipient: Recipient::Burn,
+            amount: Amount::from_tokens(1),
+            user_data: UserData::default(),
+        })));
+
+    // Previous should be the `ChangeOwnership` operation, as the blob operations shouldn't be executed here.
+    assert!(hashed_certificate_values[1]
+        .inner()
+        .block()
+        .unwrap()
+        .operations
+        .contains(&owner_change_op));
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_re_propose_locked_block_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
+{
+    let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
+    let description1 = ChainDescription::Root(1);
+    let description2 = ChainDescription::Root(2);
+    let description3 = ChainDescription::Root(3);
+    let chain_id3 = ChainId::from(description3);
+    let client1 = builder
+        .add_initial_chain(description1, Amount::ZERO)
+        .await?;
+    let client2 = builder
+        .add_initial_chain(description2, Amount::ZERO)
+        .await?;
+    let mut client3_a = builder
+        .add_initial_chain(description3, Amount::from_tokens(10))
+        .await?;
+    let pub_key3_a = client3_a.public_key().await.unwrap();
+    let key_pair3_b = KeyPair::generate();
+    let pub_key3_b = key_pair3_b.public();
+    let key_pair3_c = KeyPair::generate();
+    let pub_key3_c = key_pair3_c.public();
+    let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
+        super_owners: Vec::new(),
+        owners: vec![(pub_key3_a, 50), (pub_key3_b, 50), (pub_key3_c, 50)],
+        multi_leader_rounds: 10,
+        timeout_config: TimeoutConfig::default(),
+    });
+    client3_a
+        .execute_operation(owner_change_op.clone())
+        .await
+        .unwrap();
+    let mut client3_b = builder
+        .make_client(
+            chain_id3,
+            key_pair3_b,
+            client3_a.block_hash(),
+            BlockHeight::from(1),
+        )
+        .await?;
+    let client3_c = builder
+        .make_client(
+            chain_id3,
+            key_pair3_c,
+            client3_a.block_hash(),
+            BlockHeight::from(1),
+        )
+        .await?;
+
+    // Take one validator down
+    builder.set_fault_type([3], FaultType::Offline).await;
+
+    let blob0 = HashedBlob::test_blob("blob0");
+    let blob0_id = blob0.id();
+
+    client1.synchronize_from_validators().await.unwrap();
+    // Publish blob0 on chain 1
+    let publish_certificate0 = client1.publish_blob(blob0).await.unwrap().unwrap();
+    assert!(publish_certificate0
+        .value()
+        .executed_block()
+        .unwrap()
+        .requires_blob(&blob0_id));
+
+    let blob2 = HashedBlob::test_blob("blob2");
+    let blob2_id = blob2.id();
+
+    client2.synchronize_from_validators().await.unwrap();
+    // Publish blob2 on chain 2
+    let publish_certificate2 = client2.publish_blob(blob2).await.unwrap().unwrap();
+    assert!(publish_certificate2
+        .value()
+        .executed_block()
+        .unwrap()
+        .requires_blob(&blob2_id));
+
+    builder
+        .set_fault_type([0, 1], FaultType::DontProcessValidated)
+        .await;
+    builder
+        .set_fault_type([2], FaultType::DontSendConfirmVote)
+        .await;
+
+    client3_a.synchronize_from_validators().await.unwrap();
+    let blob1 = HashedBlob::test_blob("blob1");
+    let blob1_id = blob1.id();
+
+    client3_a.add_pending_blobs(&[blob1]).await;
+    let blob_0_1_operations = vec![
+        Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
+        Operation::System(SystemOperation::PublishBlob { blob_id: blob1_id }),
+    ];
+    let b0_result = client3_a
+        .execute_operations(blob_0_1_operations.clone())
+        .await;
+
+    assert!(b0_result.is_err());
+    assert!(client3_a.pending_block().is_some());
+
+    let manager = client3_a
+        .chain_info_with_manager_values()
+        .await
+        .unwrap()
+        .manager;
+    // Validator 2 may or may not have processed the validated block before the update was
+    // canceled due to the errors from the faulty validators. Submit it again to make sure
+    // it's there, so that client 2 can download and re-propose it later.
+    let validated_block_certificate = *manager.requested_locked.unwrap();
+    let resubmission_result = builder
+        .node(2)
+        .handle_certificate(
+            validated_block_certificate,
+            Vec::new(),
+            Vec::new(),
+            CrossChainMessageDelivery::Blocking,
+        )
+        .await;
+    assert!(resubmission_result.is_err());
+
+    for i in 0..=2 {
+        let validator_manager = builder
+            .node(i)
+            .chain_info_with_manager_values(chain_id3)
+            .await
+            .unwrap()
+            .manager;
+        assert_eq!(
+            validator_manager
+                .requested_proposed
+                .unwrap()
+                .content
+                .block
+                .operations,
+            blob_0_1_operations,
+        );
+
+        if i == 2 {
+            assert_eq!(
+                validator_manager
+                    .requested_locked
+                    .unwrap()
+                    .value()
+                    .block()
+                    .unwrap()
+                    .operations,
+                blob_0_1_operations,
+            );
+        } else {
+            assert!(validator_manager.requested_locked.is_none());
+        }
+    }
+
+    builder.set_fault_type([2], FaultType::Offline).await;
+    builder
+        .set_fault_type([3], FaultType::DontSendConfirmVote)
+        .await;
+
+    client3_b.synchronize_from_validators().await.unwrap();
+    let blob3 = HashedBlob::test_blob("blob3");
+    let blob3_id = blob3.id();
+
+    client3_b.add_pending_blobs(&[blob3]).await;
+    let blob_2_3_operations = vec![
+        Operation::System(SystemOperation::ReadBlob { blob_id: blob2_id }),
+        Operation::System(SystemOperation::PublishBlob { blob_id: blob3_id }),
+    ];
+    let b1_result = client3_b
+        .execute_operations(blob_2_3_operations.clone())
+        .await;
+    assert!(b1_result.is_err());
+
+    let manager = client3_b
+        .chain_info_with_manager_values()
+        .await
+        .unwrap()
+        .manager;
+    // Validator 3 may or may not have processed the validated block before the update was
+    // canceled due to the errors from the faulty validators. Submit it again to make sure
+    // it's there, so that client 2 can download and re-propose it later.
+    let validated_block_certificate = *manager.requested_locked.unwrap();
+    let resubmission_result = builder
+        .node(3)
+        .handle_certificate(
+            validated_block_certificate,
+            Vec::new(),
+            Vec::new(),
+            CrossChainMessageDelivery::Blocking,
+        )
+        .await;
+    assert!(resubmission_result.is_err());
+
+    let validator_manager = builder
+        .node(3)
+        .chain_info_with_manager_values(chain_id3)
+        .await
+        .unwrap()
+        .manager;
     assert_eq!(
-        previous_block_hash,
-        certificate
+        validator_manager
+            .requested_proposed
+            .unwrap()
+            .content
+            .block
+            .operations,
+        blob_2_3_operations,
+    );
+    assert_eq!(
+        validator_manager
+            .requested_locked
+            .unwrap()
             .value()
             .block()
             .unwrap()
-            .previous_block_hash
-            .unwrap()
+            .operations,
+        blob_2_3_operations,
     );
+
+    builder.set_fault_type([1], FaultType::Offline).await;
+    builder.set_fault_type([0, 2, 3], FaultType::Honest).await;
+
+    client3_c.synchronize_from_validators().await.unwrap();
+    let bt_certificate = client3_c
+        .burn(None, Amount::from_tokens(1), UserData::default())
+        .await
+        .unwrap()
+        .unwrap();
+
+    let hashed_certificate_values = client3_c
+        .read_hashed_certificate_values_downward(bt_certificate.value.hash(), 3)
+        .await
+        .unwrap();
+
+    // Latest block should be the burn
+    assert!(hashed_certificate_values[0]
+        .inner()
+        .block()
+        .unwrap()
+        .operations
+        .contains(&Operation::System(SystemOperation::Transfer {
+            owner: None,
+            recipient: Recipient::Burn,
+            amount: Amount::from_tokens(1),
+            user_data: UserData::default(),
+        })));
+
+    // Block before that should be b1
+    assert_eq!(
+        hashed_certificate_values[1]
+            .inner()
+            .block()
+            .unwrap()
+            .operations,
+        blob_2_3_operations,
+    );
+
+    // Previous should be the `ChangeOwnership` operation
+    assert!(hashed_certificate_values[2]
+        .inner()
+        .block()
+        .unwrap()
+        .operations
+        .contains(&owner_change_op));
     Ok(())
 }
 
@@ -1665,7 +2193,9 @@ where
 
     // Client 1 thinks it is madness to burn 3 tokens! They want to publish a blob instead.
     // The validators are still faulty: They validate blocks but don't confirm them.
-    builder.set_fault_type([2], FaultType::NoConfirm).await;
+    builder
+        .set_fault_type([2], FaultType::DontSendConfirmVote)
+        .await;
     client1.synchronize_from_validators().await.unwrap();
     let manager = client1
         .chain_info_with_manager_values()
@@ -1811,7 +2341,9 @@ where
 
     // Client 0 tries to burn 3 tokens. Three validators are faulty: 1 and 2 will validate the
     // block but not receive it for confirmation. Validator 3 is offline.
-    builder.set_fault_type([1, 2], FaultType::NoConfirm).await;
+    builder
+        .set_fault_type([1, 2], FaultType::DontProcessValidated)
+        .await;
     builder.set_fault_type([3], FaultType::Offline).await;
     let result = client0
         .burn(None, Amount::from_tokens(3), UserData::default())
@@ -1917,7 +2449,9 @@ where
     );
 
     receiver.options_mut().message_policy = MessagePolicy::Ignore;
-    receiver.receive_certificate(cert).await?;
+    receiver
+        .receive_certificate_and_update_validators(cert)
+        .await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
@@ -1931,7 +2465,7 @@ where
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     sender
-        .receive_certificate(certs.into_iter().next().unwrap())
+        .receive_certificate_and_update_validators(certs.into_iter().next().unwrap())
         .await?;
     // The message bounces.
     assert_eq!(sender.process_inbox().await?.0.len(), 1);
