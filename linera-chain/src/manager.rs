@@ -85,7 +85,7 @@ use tracing::error;
 
 use crate::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
+        Block, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
         HashedCertificateValue, LiteVote, ProposalContent, Vote,
     },
     ChainError,
@@ -613,5 +613,23 @@ impl ChainManagerInfo {
             .as_ref()
             .map(|vote| Box::new(vote.value.clone()));
         self.pending_blobs = manager.pending_blobs.clone();
+    }
+
+    /// Gets the highest validated block.
+    pub fn highest_validated_block(&self) -> Option<&Block> {
+        if let Some(certificate) = &self.requested_locked {
+            let block = certificate.value().block();
+            if block.is_some() {
+                return block;
+            }
+        }
+
+        if let Some(proposal) = &self.requested_proposed {
+            if proposal.content.round.is_fast() {
+                return Some(&proposal.content.block);
+            }
+        }
+
+        None
     }
 }
