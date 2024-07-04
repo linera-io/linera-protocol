@@ -25,36 +25,22 @@ scylladb = [
     "linera-core/scylladb",
     "linera-storage/scylladb",
 ]
-metrics = ["prometheus", "linera-base/metrics"]
 storage_service = []
 kubernetes = []
 
 [dependencies]
 anyhow.workspace = true
-assert_matches.workspace = true
 async-graphql.workspace = true
-async-graphql-axum.workspace = true
-async-lock.workspace = true
 async-trait.workspace = true
-async-tungstenite.workspace = true
-axum = { workspace = true, features = ["ws"] }
 bcs.workspace = true
-cargo_toml.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 clap.workspace = true
-clap-markdown.workspace = true
 colored.workspace = true
 comfy-table.workspace = true
-current_platform = "0.2.0"
 dirs.workspace = true
 fs-err.workspace = true
 fs4.workspace = true
-fs_extra = { workspace = true, optional = true }
 futures.workspace = true
-hex.workspace = true
-http.workspace = true
-k8s-openapi = { workspace = true, optional = true }
-kube = { workspace = true, optional = true }
 linera-base = { workspace = true, features = ["metrics"] }
 linera-chain = { workspace = true, features = ["metrics"] }
 linera-core = { workspace = true, features = ["metrics", "rocksdb", "wasmer"] }
@@ -65,28 +51,12 @@ linera-storage = { workspace = true, features = ["metrics", "wasmer"] }
 linera-storage-service.workspace = true
 linera-version.workspace = true
 linera-views = { workspace = true, features = ["metrics"] }
-pathdiff = { workspace = true, optional = true }
-port-selector.workspace = true
-prometheus = { workspace = true, optional = true }
 rand.workspace = true
-rcgen.workspace = true
-reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
 serde_json.workspace = true
-tempfile.workspace = true
-thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
-tokio-util.workspace = true
-toml.workspace = true
-tonic = { workspace = true, features = ["transport", "tls", "tls-roots"] }
-tonic-health.workspace = true
-tonic-reflection.workspace = true
-tonic-web.workspace = true
-tower.workspace = true
-tower-http = { workspace = true, features = ["cors"] }
 tracing.workspace = true
-tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
