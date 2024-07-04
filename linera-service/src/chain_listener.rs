@@ -152,6 +152,7 @@ where
             client
         };
         let (listener, _listen_handle, mut local_stream) = client.listen().await?;
+        client.synchronize_from_validators().await?;
         tokio::spawn(listener);
         let mut timeout = storage.clock().current_time();
         loop {
@@ -168,6 +169,7 @@ where
                         Ok((_, None)) => timeout = Timestamp::from(u64::MAX),
                         Ok((_, Some(new_timeout))) => timeout = new_timeout.timestamp,
                     }
+                    context.lock().await.update_wallet(&client).await;
                     continue;
                 }
             };

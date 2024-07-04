@@ -81,9 +81,6 @@ APP_ID=$(linera -w0 --wait-for-outgoing-messages \
         \"blockDelay\": 100000000
     }")
 
-linera -w1 process-inbox $HEX_CHAIN
-linera -w0 process-inbox $HEX_CHAIN
-
 linera -w0 service --port 8080 &
 linera -w1 service --port 8081 &
 sleep 1
