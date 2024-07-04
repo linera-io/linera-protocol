@@ -15,6 +15,8 @@ use linera_execution::{
     committee::ValidatorName, system::SystemChannel, ResourceControlPolicy, UserApplicationId,
     WasmRuntime, WithWasmDefault as _,
 };
+use linera_views::common::CommonStoreConfig;
+
 use crate::{
     chain_listener::ChainListenerConfig,
     config::{GenesisConfig, WalletState},
@@ -22,7 +24,6 @@ use crate::{
     util,
     wallet::Wallet,
 };
-use linera_views::common::CommonStoreConfig;
 
 #[derive(Clone, clap::Parser)]
 #[command(

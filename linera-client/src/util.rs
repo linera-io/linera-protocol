@@ -5,22 +5,11 @@
 use std::path::{Path, PathBuf};
 use std::{num::ParseIntError, time::Duration};
 
-use anyhow::{Result};
-
-
+use anyhow::Result;
 use futures::future;
-
-
 use linera_base::data_types::{TimeDelta, Timestamp};
-use linera_core::{
-    data_types::RoundTimeout,
-    node::NotificationStream,
-    worker::Reason,
-};
-
+use linera_core::{data_types::RoundTimeout, node::NotificationStream, worker::Reason};
 use tokio_stream::StreamExt as _;
-
-
 
 pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
@@ -43,5 +32,5 @@ pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: Round
             timeout.timestamp.duration_since(Timestamp::now()),
         )),
     )
-        .await;
+    .await;
 }

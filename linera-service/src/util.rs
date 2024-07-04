@@ -8,15 +8,12 @@ use std::{num::ParseIntError, time::Duration};
 use anyhow::{bail, Context as _, Result};
 use async_graphql::http::GraphiQLSource;
 use axum::response::{self, IntoResponse};
-
 use http::Uri;
 #[cfg(test)]
 use linera_base::command::parse_version_message;
-use linera_base::data_types::{TimeDelta};
+use linera_base::data_types::TimeDelta;
 pub use linera_client::util::*;
-
 use tokio::signal::unix;
-
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 

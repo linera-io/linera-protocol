@@ -17,7 +17,11 @@ default = ["wasmer", "rocksdb"]
 test = ["linera-views/test", "linera-execution/test", "dep:stdext"]
 benchmark = ["linera-base/test", "linera-client/benchmark", "dep:linera-sdk"]
 wasmer = ["linera-client/wasmer", "linera-execution/wasmer", "linera-storage/wasmer"]
-wasmtime = ["linera-client/wasmtime", "linera-execution/wasmtime", "linera-storage/wasmtime"]
+wasmtime = [
+    "linera-client/wasmtime",
+    "linera-execution/wasmtime",
+    "linera-storage/wasmtime",
+]
 rocksdb = [
     "linera-client/rocksdb",
     "linera-views/rocksdb",
@@ -36,7 +40,13 @@ scylladb = [
     "linera-core/scylladb",
     "linera-storage/scylladb",
 ]
-kubernetes = ["linera-client/kubernetes", "dep:k8s-openapi", "dep:kube", "dep:pathdiff", "dep:fs_extra"]
+kubernetes = [
+    "linera-client/kubernetes",
+    "dep:k8s-openapi",
+    "dep:kube",
+    "dep:pathdiff",
+    "dep:fs_extra",
+]
 remote_net = ["dep:k8s-openapi", "dep:kube"]
 metrics = ["prometheus", "linera-base/metrics"]
 storage_service = []

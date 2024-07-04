@@ -14,7 +14,7 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
 use futures::{
     future::{self},
-    lock::{Mutex},
+    lock::Mutex,
     Future,
 };
 use linera_base::{
@@ -25,6 +25,10 @@ use linera_base::{
     BcsHexParseError,
 };
 use linera_chain::{data_types::HashedCertificateValue, ChainStateView};
+use linera_client::{
+    chain_clients::ChainClients,
+    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
+};
 use linera_core::{
     client::{ChainClient, ChainClientError},
     data_types::{ClientOutcome, RoundTimeout},
@@ -46,11 +50,6 @@ use tokio::sync::OwnedRwLockReadGuard;
 use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
-
-use linera_client::{
-    chain_clients::ChainClients,
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
-};
 
 use crate::util;
 

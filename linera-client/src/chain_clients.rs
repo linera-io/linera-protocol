@@ -3,33 +3,12 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use async_graphql::{
-    Error,
-};
-
-
-use futures::{
-    lock::{Mutex, MutexGuard},
-};
-use linera_base::{
-    identifiers::{ChainId},
-};
-
-use linera_core::{
-    client::{ChainClient},
-};
-
+use async_graphql::Error;
+use futures::lock::{Mutex, MutexGuard};
+use linera_base::identifiers::ChainId;
+use linera_core::client::ChainClient;
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-
-
-
-
-
-
-
-
-
 
 pub type ClientMapInner<P, S> = BTreeMap<ChainId, ChainClient<P, S>>;
 pub struct ChainClients<P, S>(pub Arc<Mutex<ClientMapInner<P, S>>>)
@@ -66,17 +45,11 @@ where
         Some(self.0.lock().await.get(chain_id)?.clone())
     }
 
-    pub async fn client_lock(
-        &self,
-        chain_id: &ChainId,
-    ) -> Option<ChainClient<P, S>> {
+    pub async fn client_lock(&self, chain_id: &ChainId) -> Option<ChainClient<P, S>> {
         self.client(chain_id).await
     }
 
-    pub async fn try_client_lock(
-        &self,
-        chain_id: &ChainId,
-    ) -> Result<ChainClient<P, S>, Error> {
+    pub async fn try_client_lock(&self, chain_id: &ChainId) -> Result<ChainClient<P, S>, Error> {
         self.client_lock(chain_id)
             .await
             .ok_or_else(|| Error::new(format!("Unknown chain ID: {}", chain_id)))

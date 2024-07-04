@@ -9,16 +9,6 @@ use std::{collections::HashMap, env, path::PathBuf, sync::Arc, time::Instant};
 use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
 use chrono::Utc;
-use linera_client::{
-    client_context::ClientContext,
-    client_options::{
-        ClientOptions,
-        ClientCommand,
-        NetCommand,
-        ProjectCommand,
-        WalletCommand,
-    },
-};
 use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
@@ -28,6 +18,15 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_chain::data_types::{CertificateValue, ExecutedBlock};
+use linera_client::{
+    chain_listener::ClientContext as _,
+    client_context::ClientContext,
+    client_options::{ClientCommand, ClientOptions, NetCommand, ProjectCommand, WalletCommand},
+    config::{CommitteeConfig, GenesisConfig},
+    persistent::{self, Persist},
+    storage::Runnable,
+    wallet::UserChain,
+};
 use linera_core::{
     client::ChainClientError,
     data_types::{ChainInfoQuery, ClientOutcome},
@@ -40,13 +39,6 @@ use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     system::{SystemChannel, UserData},
     Message, ResourceControlPolicy, SystemMessage,
-};
-use linera_client::{
-    chain_listener::ClientContext as _,
-    config::{CommitteeConfig, GenesisConfig},
-    persistent::{self, Persist},
-    storage::Runnable,
-    wallet::UserChain,
 };
 use linera_service::{
     cli_wrappers,

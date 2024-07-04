@@ -15,6 +15,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
 };
+use linera_client::storage::{StorageConfig, StorageConfigNamespace};
 use linera_execution::ResourceControlPolicy;
 #[cfg(all(feature = "storage_service", with_testing))]
 use linera_storage_service::storage_service_test_endpoint;
@@ -35,8 +36,6 @@ use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
     util::ChildExt,
 };
-
-use linera_client::storage::{StorageConfig, StorageConfigNamespace};
 
 #[cfg(all(feature = "rocksdb", with_testing))]
 trait LocalServerInternal: Sized {
