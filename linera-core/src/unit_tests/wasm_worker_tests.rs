@@ -96,7 +96,7 @@ async fn run_test_handle_certificates_to_create_application<S>(
 ) -> anyhow::Result<()>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     let admin_id = ChainDescription::Root(0);
     let publisher_key_pair = KeyPair::generate();

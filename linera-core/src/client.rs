@@ -75,7 +75,7 @@ mod client_tests;
 pub struct Client<ValidatorNodeProvider, Storage>
 where
     Storage: linera_storage::Storage,
-    ViewError: From<Storage::ContextError>,
+    ViewError: From<Storage::StoreError>,
 {
     /// How to talk to the validators.
     validator_node_provider: ValidatorNodeProvider,
@@ -99,7 +99,7 @@ where
 
 impl<P, S: Storage + Clone> Client<P, S>
 where
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     /// Creates a new `Client` with a new cache and notifiers.
     pub fn new(
@@ -149,7 +149,7 @@ where
         pending_blobs: BTreeMap<BlobId, HashedBlob>,
     ) -> ChainClient<P, S>
     where
-        ViewError: From<S::ContextError>,
+        ViewError: From<S::StoreError>,
     {
         let known_key_pairs = known_key_pairs
             .into_iter()
@@ -248,7 +248,7 @@ pub struct ChainClientOptions {
 pub struct ChainClient<ValidatorNodeProvider, Storage>
 where
     Storage: linera_storage::Storage,
-    ViewError: From<<Storage as linera_storage::Storage>::ContextError>,
+    ViewError: From<<Storage as linera_storage::Storage>::StoreError>,
 {
     /// The Linera [`Client`] that manages operations for this chain client.
     client: Arc<Client<ValidatorNodeProvider, Storage>>,
@@ -261,7 +261,7 @@ where
 impl<P, S> Clone for ChainClient<P, S>
 where
     S: linera_storage::Storage,
-    ViewError: From<<S as linera_storage::Storage>::ContextError>,
+    ViewError: From<<S as linera_storage::Storage>::StoreError>,
 {
     fn clone(&self) -> Self {
         Self {
@@ -370,7 +370,7 @@ pub type ChainGuardMapped<'a, T> = Unsend<DashMapMappedRef<'a, ChainId, ChainSta
 impl<P, S> ChainClient<P, S>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     /// Gets a shared reference to the chain's state.
     pub fn state(&self) -> ChainGuard<ChainState> {
@@ -443,7 +443,7 @@ impl<P, S> ChainClient<P, S>
 where
     P: LocalValidatorNodeProvider + Sync,
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     /// Obtains a `ChainStateView` for a given `ChainId`.
     pub async fn chain_state_view(

@@ -7,7 +7,7 @@ use {
     crate::db_storage::{DbStorageInner, TestClock},
     linera_execution::WasmRuntime,
     linera_views::scylla_db::{
-        create_scylla_db_test_config, ScyllaDbContextError, ScyllaDbStoreConfig,
+        create_scylla_db_test_config, ScyllaDbStoreConfig, ScyllaDbStoreError,
     },
     linera_views::test_utils::generate_test_namespace,
 };
@@ -35,7 +35,7 @@ impl ScyllaDbStorage<TestClock> {
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
-    ) -> Result<Self, ScyllaDbContextError> {
+    ) -> Result<Self, ScyllaDbStoreError> {
         let storage =
             DbStorageInner::<ScyllaDbStore>::new_for_testing(store_config, namespace, wasm_runtime)
                 .await?;

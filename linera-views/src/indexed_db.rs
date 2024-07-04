@@ -57,7 +57,7 @@ impl IndexedDbStore {
     fn with_object_store<R>(
         &self,
         f: impl FnOnce(IdbObjectStore) -> R,
-    ) -> Result<R, IndexedDbContextError> {
+    ) -> Result<R, IndexedDbStoreError> {
         let transaction = self.database.transaction_on_one(&self.object_store_name)?;
         let object_store = transaction.object_store(&self.object_store_name)?;
         Ok(f(object_store))
@@ -79,7 +79,7 @@ fn prefix_to_range(prefix: &[u8]) -> Result<web_sys::IdbKeyRange, wasm_bindgen::
     }
 }
 
-impl LocalReadableKeyValueStore<IndexedDbContextError> for IndexedDbStore {
+impl LocalReadableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -88,13 +88,13 @@ impl LocalReadableKeyValueStore<IndexedDbContextError> for IndexedDbStore {
         self.max_stream_queries
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, IndexedDbContextError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, IndexedDbStoreError> {
         let key = js_sys::Uint8Array::from(key);
         let value = self.with_object_store(|o| o.get(&key))??.await?;
         Ok(value.map(|v| js_sys::Uint8Array::new(&v).to_vec()))
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, IndexedDbContextError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, IndexedDbStoreError> {
         let key = js_sys::Uint8Array::from(key);
         let count = self.with_object_store(|o| o.count_with_key(&key))??.await?;
         assert!(count < 2);
@@ -104,7 +104,7 @@ impl LocalReadableKeyValueStore<IndexedDbContextError> for IndexedDbStore {
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, IndexedDbContextError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, IndexedDbStoreError> {
         future::try_join_all(
             keys.into_iter()
                 .map(|key| async move { self.read_value_bytes(&key).await }),
@@ -115,7 +115,7 @@ impl LocalReadableKeyValueStore<IndexedDbContextError> for IndexedDbStore {
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, IndexedDbContextError> {
+    ) -> Result<Vec<Vec<u8>>, IndexedDbStoreError> {
         let range = prefix_to_range(key_prefix)?;
         Ok(self
             .with_object_store(|o| o.get_all_keys_with_key(&range))??
@@ -131,7 +131,7 @@ impl LocalReadableKeyValueStore<IndexedDbContextError> for IndexedDbStore {
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, IndexedDbContextError> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, IndexedDbStoreError> {
         let mut key_values = vec![];
         let range = prefix_to_range(key_prefix)?;
         let transaction = self.database.transaction_on_one(&self.object_store_name)?;
@@ -158,14 +158,10 @@ impl LocalReadableKeyValueStore<IndexedDbContextError> for IndexedDbStore {
     }
 }
 
-impl LocalWritableKeyValueStore<IndexedDbContextError> for IndexedDbStore {
+impl LocalWritableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
-    async fn write_batch(
-        &self,
-        batch: Batch,
-        _base_key: &[u8],
-    ) -> Result<(), IndexedDbContextError> {
+    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), IndexedDbStoreError> {
         let transaction = self
             .database
             .transaction_on_one_with_mode(&self.object_store_name, IdbTransactionMode::Readwrite)?;
@@ -197,19 +193,16 @@ impl LocalWritableKeyValueStore<IndexedDbContextError> for IndexedDbStore {
         Ok(())
     }
 
-    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), IndexedDbContextError> {
+    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), IndexedDbStoreError> {
         Ok(())
     }
 }
 
 impl LocalAdminKeyValueStore for IndexedDbStore {
-    type Error = IndexedDbContextError;
+    type Error = IndexedDbStoreError;
     type Config = IndexedDbStoreConfig;
 
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Self, IndexedDbContextError> {
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, IndexedDbStoreError> {
         let namespace = namespace.to_string();
         let object_store_name = namespace.clone();
         let mut database = IdbDatabase::open(DATABASE_NAME)?.await?;
@@ -232,7 +225,7 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
         })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, IndexedDbContextError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, IndexedDbStoreError> {
         Ok(Self::connect(config, "")
             .await?
             .database
@@ -240,7 +233,7 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
             .collect())
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, IndexedDbContextError> {
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, IndexedDbStoreError> {
         Ok(Self::connect(config, "")
             .await?
             .database
@@ -248,7 +241,7 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
             .any(|x| x == namespace))
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), IndexedDbContextError> {
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), IndexedDbStoreError> {
         Self::connect(config, "")
             .await?
             .database
@@ -256,7 +249,7 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
         Ok(())
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), IndexedDbContextError> {
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), IndexedDbStoreError> {
         Ok(Self::connect(config, "")
             .await?
             .database
@@ -265,7 +258,7 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
 }
 
 impl LocalKeyValueStore for IndexedDbStore {
-    type Error = IndexedDbContextError;
+    type Error = IndexedDbStoreError;
 }
 
 /// An implementation of [`crate::common::Context`] that stores all values in an IndexedDB
@@ -317,7 +310,7 @@ pub use testing::*;
 
 /// The error type for [`IndexedDbContext`].
 #[derive(Error, Debug)]
-pub enum IndexedDbContextError {
+pub enum IndexedDbStoreError {
     /// Serialization error with BCS.
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
@@ -339,21 +332,21 @@ pub enum IndexedDbContextError {
     Js(wasm_bindgen::JsValue),
 }
 
-impl From<web_sys::DomException> for IndexedDbContextError {
+impl From<web_sys::DomException> for IndexedDbStoreError {
     fn from(dom_exception: web_sys::DomException) -> Self {
         Self::Dom(dom_exception)
     }
 }
 
-impl From<wasm_bindgen::JsValue> for IndexedDbContextError {
+impl From<wasm_bindgen::JsValue> for IndexedDbStoreError {
     fn from(js_value: wasm_bindgen::JsValue) -> Self {
         Self::Js(js_value)
     }
 }
 
-impl From<IndexedDbContextError> for ViewError {
-    fn from(error: IndexedDbContextError) -> Self {
-        Self::ContextError {
+impl From<IndexedDbStoreError> for ViewError {
+    fn from(error: IndexedDbStoreError) -> Self {
+        Self::StoreError {
             backend: "indexed_db".to_string(),
             error: error.to_string(),
         }

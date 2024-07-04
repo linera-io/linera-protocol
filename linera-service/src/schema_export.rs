@@ -136,7 +136,7 @@ impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientConte
 
     fn make_chain_client(&self, _: ChainId) -> ChainClient<P, S>
     where
-        ViewError: From<S::ContextError>,
+        ViewError: From<S::StoreError>,
     {
         unimplemented!()
     }
@@ -145,7 +145,7 @@ impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientConte
 
     async fn update_wallet(&mut self, _: &ChainClient<P, S>)
     where
-        ViewError: From<S::ContextError>,
+        ViewError: From<S::StoreError>,
     {
     }
 }

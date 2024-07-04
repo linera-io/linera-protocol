@@ -68,7 +68,7 @@ pub enum CommunicateAction {
 pub struct ValidatorUpdater<A, S>
 where
     S: Storage,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     pub name: ValidatorName,
     pub node: A,
@@ -184,7 +184,7 @@ impl<A, S> ValidatorUpdater<A, S>
 where
     A: LocalValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     async fn send_optimized_certificate(
         &mut self,

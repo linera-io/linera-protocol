@@ -103,7 +103,7 @@ impl Runnable for Job {
     async fn run<S>(self, storage: S) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
+        ViewError: From<S::StoreError>,
     {
         let Job(options, wallet) = self;
         let mut context = ClientContext::new(storage.clone(), options.clone(), wallet);
@@ -1095,7 +1095,7 @@ impl Job {
     ) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
+        ViewError: From<S::StoreError>,
     {
         let state = WorkerState::new("Local node".to_string(), None, storage)
             .with_allow_inactive_chains(true)
@@ -1166,7 +1166,7 @@ impl Job {
     ) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
+        ViewError: From<S::StoreError>,
     {
         let mut chains = HashMap::new();
         for chain_id in chain_ids {

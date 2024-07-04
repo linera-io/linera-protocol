@@ -54,7 +54,7 @@ impl ServerContext {
     ) -> (WorkerState<S>, ShardId, ShardConfig)
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
+        ViewError: From<S::StoreError>,
     {
         let shard = self.server_config.internal_network.shard(shard_id);
         info!("Shard booted on {}", shard.host);
@@ -78,7 +78,7 @@ impl ServerContext {
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
+        ViewError: From<S::StoreError>,
     {
         let mut join_set = JoinSet::new();
         let handles = FuturesUnordered::new();
@@ -131,7 +131,7 @@ impl ServerContext {
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
+        ViewError: From<S::StoreError>,
     {
         let mut join_set = JoinSet::new();
         let handles = FuturesUnordered::new();
@@ -187,7 +187,7 @@ impl Runnable for ServerContext {
     async fn run<S>(self, storage: S) -> Result<(), anyhow::Error>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
+        ViewError: From<S::StoreError>,
     {
         let shutdown_notifier = CancellationToken::new();
         let listen_address = self.get_listen_address();

@@ -72,7 +72,7 @@ use crate::{
 pub struct ClientContext<Storage>
 where
     Storage: linera_storage::Storage,
-    ViewError: From<Storage::ContextError>,
+    ViewError: From<Storage::StoreError>,
 {
     pub wallet: WalletState,
     pub client: Arc<Client<NodeProvider, Storage>>,
@@ -88,7 +88,7 @@ where
 impl<S> chain_listener::ClientContext for ClientContext<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<<S as Storage>::ContextError>,
+    ViewError: From<<S as Storage>::StoreError>,
 {
     type ValidatorNodeProvider = NodeProvider;
     type Storage = S;
@@ -119,7 +119,7 @@ where
 impl<S> ClientContext<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     /// Returns the [`Wallet`] as a mutable reference.
     pub fn wallet_mut(&mut self) -> impl std::ops::DerefMut<Target = Wallet> + '_ {
@@ -422,7 +422,7 @@ where
 impl<S> ClientContext<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    ViewError: From<S::StoreError>,
 {
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {
         for chain_id in self.wallet.own_chain_ids() {

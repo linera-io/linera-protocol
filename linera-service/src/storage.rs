@@ -354,7 +354,7 @@ impl StoreConfig {
     /// Deletes all the entries in the database
     pub async fn delete_all(self) -> Result<(), ViewError> {
         match self {
-            StoreConfig::Memory(_, _) => Err(ViewError::ContextError {
+            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
                 backend: "memory".to_string(),
                 error: "delete_all does not make sense for memory storage".to_string(),
             }),
@@ -383,7 +383,7 @@ impl StoreConfig {
     /// Deletes only one table of the database
     pub async fn delete_namespace(self) -> Result<(), ViewError> {
         match self {
-            StoreConfig::Memory(_, _) => Err(ViewError::ContextError {
+            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
                 backend: "memory".to_string(),
                 error: "delete_namespace does not make sense for memory storage".to_string(),
             }),
@@ -412,7 +412,7 @@ impl StoreConfig {
     /// Test existence of one table in the database
     pub async fn test_existence(self) -> Result<bool, ViewError> {
         match self {
-            StoreConfig::Memory(_, _) => Err(ViewError::ContextError {
+            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
                 backend: "memory".to_string(),
                 error: "test_existence does not make sense for memory storage".to_string(),
             }),
@@ -437,7 +437,7 @@ impl StoreConfig {
     /// Initializes the database
     pub async fn initialize(self) -> Result<(), ViewError> {
         match self {
-            StoreConfig::Memory(_, _) => Err(ViewError::ContextError {
+            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
                 backend: "memory".to_string(),
                 error: "initialize does not make sense for memory storage".to_string(),
             }),
@@ -466,7 +466,7 @@ impl StoreConfig {
     /// Lists all the namespaces of the storage
     pub async fn list_all(self) -> Result<Vec<String>, ViewError> {
         match self {
-            StoreConfig::Memory(_, _) => Err(ViewError::ContextError {
+            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
                 backend: "memory".to_string(),
                 error: "list_all is not supported for the memory storage".to_string(),
             }),
@@ -500,7 +500,7 @@ pub trait Runnable {
     async fn run<S>(self, storage: S) -> Result<Self::Output, anyhow::Error>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>;
+        ViewError: From<S::StoreError>;
 }
 
 // The design is that the initialization of the accounts should be separate

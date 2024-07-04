@@ -13,7 +13,7 @@ use crate::{
         AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
         KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
-    memory::{MemoryContextError, MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
+    memory::{MemoryStore, MemoryStoreConfig, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
 };
 
 /// Data type indicating that the database is not consistent
@@ -339,7 +339,7 @@ impl Default for TestMemoryStoreInternal {
     }
 }
 
-impl ReadableKeyValueStore<MemoryContextError> for TestMemoryStoreInternal {
+impl ReadableKeyValueStore<MemoryStoreError> for TestMemoryStoreInternal {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -348,56 +348,53 @@ impl ReadableKeyValueStore<MemoryContextError> for TestMemoryStoreInternal {
         TEST_MEMORY_MAX_STREAM_QUERIES
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryStoreError> {
         self.store.read_value_bytes(key).await
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryContextError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryStoreError> {
         self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, MemoryContextError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, MemoryStoreError> {
         self.store.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::Keys, MemoryContextError> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, MemoryStoreError> {
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, MemoryContextError> {
+    ) -> Result<Self::KeyValues, MemoryStoreError> {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
 
-impl WritableKeyValueStore<MemoryContextError> for TestMemoryStoreInternal {
+impl WritableKeyValueStore<MemoryStoreError> for TestMemoryStoreInternal {
     // We set up the MAX_VALUE_SIZE to the artificially low value of 100
     // purely for testing purposes.
     const MAX_VALUE_SIZE: usize = 100;
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), MemoryContextError> {
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), MemoryStoreError> {
         ensure!(
             batch.check_value_size(Self::MAX_VALUE_SIZE),
-            MemoryContextError::TooLargeValue
+            MemoryStoreError::TooLargeValue
         );
         self.store.write_batch(batch, base_key).await
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), MemoryContextError> {
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), MemoryStoreError> {
         self.store.clear_journal(base_key).await
     }
 }
 
 impl KeyValueStore for TestMemoryStoreInternal {
-    type Error = MemoryContextError;
+    type Error = MemoryStoreError;
 }
 
 impl TestMemoryStoreInternal {
@@ -424,7 +421,7 @@ pub struct TestMemoryStore {
     store: ValueSplittingStore<TestMemoryStoreInternal>,
 }
 
-impl ReadableKeyValueStore<MemoryContextError> for TestMemoryStore {
+impl ReadableKeyValueStore<MemoryStoreError> for TestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -433,50 +430,47 @@ impl ReadableKeyValueStore<MemoryContextError> for TestMemoryStore {
         self.store.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryStoreError> {
         self.store.read_value_bytes(key).await
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryContextError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryStoreError> {
         self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, MemoryContextError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, MemoryStoreError> {
         self.store.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::Keys, MemoryContextError> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, MemoryStoreError> {
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, MemoryContextError> {
+    ) -> Result<Self::KeyValues, MemoryStoreError> {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
 
-impl WritableKeyValueStore<MemoryContextError> for TestMemoryStore {
+impl WritableKeyValueStore<MemoryStoreError> for TestMemoryStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), MemoryContextError> {
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), MemoryStoreError> {
         self.store.write_batch(batch, base_key).await
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), MemoryContextError> {
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), MemoryStoreError> {
         self.store.clear_journal(base_key).await
     }
 }
 
 impl KeyValueStore for TestMemoryStore {
-    type Error = MemoryContextError;
+    type Error = MemoryStoreError;
 }
 
 impl TestMemoryStore {

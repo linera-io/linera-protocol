@@ -59,7 +59,7 @@ async fn test_initiating_valid_transfer_with_notifications<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
@@ -116,7 +116,7 @@ where
 async fn test_claim_amount<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
@@ -243,7 +243,7 @@ where
 async fn test_rotate_key_pair<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
@@ -292,7 +292,7 @@ where
 async fn test_transfer_ownership<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
@@ -350,7 +350,7 @@ where
 async fn test_share_ownership<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
     let sender = builder
@@ -497,7 +497,7 @@ where
 async fn test_open_chain_then_close_it<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
@@ -541,7 +541,7 @@ where
 async fn test_transfer_then_open_chain<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
@@ -645,7 +645,7 @@ where
 async fn test_open_chain_must_be_first<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
@@ -735,7 +735,7 @@ where
 async fn test_open_chain_then_transfer<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
@@ -809,7 +809,7 @@ where
 async fn test_close_chain<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
@@ -925,7 +925,7 @@ where
 async fn test_initiating_valid_transfer_too_many_faults<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 2).await?;
     let sender = builder
@@ -964,7 +964,7 @@ where
 async fn test_bidirectional_transfer<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let client1 = builder
@@ -1067,7 +1067,7 @@ where
 async fn test_receiving_unconfirmed_transfer<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
@@ -1118,7 +1118,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let client1 = builder
@@ -1220,7 +1220,7 @@ where
 async fn test_change_voting_rights<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let admin = builder
@@ -1349,7 +1349,7 @@ where
 async fn test_insufficient_balance<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
@@ -1405,7 +1405,7 @@ where
 async fn test_publish_blob<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     // Configure a chain with two regular and no super owners.
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
@@ -1487,7 +1487,7 @@ where
 async fn test_request_leader_timeout<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
@@ -1613,7 +1613,7 @@ where
 async fn test_finalize_validated<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     // Configure a chain with two regular and no super owners.
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
@@ -1724,7 +1724,7 @@ where
 async fn test_propose_pending_block<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let description = ChainDescription::Root(1);
@@ -1769,7 +1769,7 @@ where
 async fn test_re_propose_validated<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     // Configure a chain with two regular and no super owners.
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
@@ -1886,7 +1886,7 @@ where
 async fn test_message_policy<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::ContextError>,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
