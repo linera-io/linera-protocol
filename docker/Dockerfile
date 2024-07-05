@@ -5,8 +5,8 @@
 # - `build_date` is the date and time of when the docker image was
 #   built
 # - `binaries` is the path to the directory containing the Linera
-#   binaries.  Leave unset to build the binaries from scratch.
-# - `target` is a Rust target quadruple.  Currently known to be
+#   binaries. Leave unset to build the binaries from scratch.
+# - `target` is a Rust target quadruple. Currently known to be
 #   supported are `x86_64-unknown-linux-gnu` and
 #   `aarch64-unknown-linux-gnu`.
 

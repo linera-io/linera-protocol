@@ -73,7 +73,7 @@ linera service --port $PORT &
 - Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`.
 - To get the current balance of user $OWNER_1, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query{
+    query {
         accounts {
             entry(
                 key: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f"
@@ -85,7 +85,7 @@ linera service --port $PORT &
 ```
 - To get the current balance of user $OWNER_2, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query{
+    query {
         accounts {
             entry(
                 key: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
@@ -110,7 +110,7 @@ linera service --port $PORT &
 ```
 - To get the new balance of user $OWNER_1, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query{
+    query {
         accounts {
             entry(
                 key: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f"
@@ -122,7 +122,7 @@ linera service --port $PORT &
 ```
 - To get the new balance of user $OWNER_2, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query{
+    query {
         accounts {
             entry(
                 key: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"

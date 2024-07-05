@@ -709,7 +709,7 @@ impl ClientWrapper {
     pub async fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {
         self.load_wallet()
             .ok()
-            .map_or(false, |wallet| wallet.get(chain).is_some())
+            .is_some_and(|wallet| wallet.get(chain).is_some())
     }
 
     pub async fn set_validator(&self, name: &str, port: usize, votes: usize) -> Result<()> {

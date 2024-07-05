@@ -339,7 +339,7 @@ impl From<Infallible> for ChainClientError {
 }
 
 // We never want to pass the DashMap references over an `await` point, for fear of
-// deadlocks.  The following construct will cause a (relatively) helpful error if we do.
+// deadlocks. The following construct will cause a (relatively) helpful error if we do.
 
 pub struct Unsend<T> {
     inner: T,
@@ -1916,12 +1916,9 @@ where
 
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
-        let conflicting_proposal = manager
-            .requested_proposed
-            .as_ref()
-            .map_or(false, |proposal| {
-                proposal.content.round == manager.current_round && proposal.content.block != block
-            });
+        let conflicting_proposal = manager.requested_proposed.as_ref().is_some_and(|proposal| {
+            proposal.content.round == manager.current_round && proposal.content.block != block
+        });
         let round = if !conflicting_proposal {
             manager.current_round
         } else if let Some(round) = manager
