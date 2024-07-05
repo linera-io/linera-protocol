@@ -109,13 +109,13 @@ linera service --port $PORT &
 ```
 - To check that it's assigned to the owner, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query{
+    query {
         ownedNfts(owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f")
     }
 ```
 - To check everything that it's there, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query{
+    query {
         nfts
     }
 ```
