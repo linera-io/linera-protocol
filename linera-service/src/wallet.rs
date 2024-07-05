@@ -75,7 +75,7 @@ impl Wallet {
         let chain = self
             .chains
             .get_mut(chain_id)
-            .context(format!("Failed to get chain for chain id: {}", chain_id))?;
+            .context(format!("Failed to get chain for chain ID: {}", chain_id))?;
         chain.key_pair.take().context("Failed to take keypair")
     }
 

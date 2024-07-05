@@ -441,7 +441,7 @@ function App({ chainId, owner }) {
               rules={[
                 {
                   required: true,
-                  message: 'Please input the target chain id!',
+                  message: 'Please input the target chain ID!',
                 },
               ]}
             >
