@@ -9,7 +9,6 @@ edition.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["wasmer", "rocksdb"]
 test = ["linera-views/test", "linera-execution/test"]
 benchmark = ["linera-base/test", "dep:linera-sdk"]
 wasmer = [
@@ -29,7 +28,7 @@ scylladb = [
     "linera-core/scylladb",
     "linera-storage/scylladb",
 ]
-storage_service = []
+storage_service = ["linera-storage-service"]
 kubernetes = []
 fs = ["fs-err", "fs4", "linera-execution/fs"]
 metrics = [
@@ -39,6 +38,16 @@ metrics = [
     "linera-execution/metrics",
     "linera-rpc/metrics",
     "linera-views/metrics",
+]
+web = [
+    "linera-base/web",
+    "linera-storage/web",
+    "linera-chain/web",
+    "linera-client/web",
+    "linera-core/web",
+    "linera-views/web",
+    "linera-execution/web",
+    "linera-rpc/web",
 ]
 
 [dependencies]
@@ -58,7 +67,7 @@ linera-execution.workspace = true
 linera-rpc.workspace = true
 linera-sdk = { workspace = true, optional = true }
 linera-storage.workspace = true
-linera-storage-service.workspace = true
+linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
 rand.workspace = true
@@ -103,4 +112,6 @@ social.workspace = true
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
 test-strategy.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
