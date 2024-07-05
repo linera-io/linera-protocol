@@ -43,7 +43,7 @@ async fn test_script_in_readme_with_storage_service(path: &str) -> std::io::Resu
 
     if env::var_os("RUST_LOG").is_none() {
         // Increase log verbosity to verify that services can write to stderr.
-        command.env("RUST_LOG", "linera_service=debug");
+        command.env("RUST_LOG", "linera_execution::wasm=debug");
     }
 
     let status = command.status().await?;
