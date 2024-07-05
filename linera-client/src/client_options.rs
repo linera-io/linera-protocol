@@ -20,6 +20,7 @@ use linera_views::common::CommonStoreConfig;
 use crate::{
     chain_listener::ChainListenerConfig,
     config::{GenesisConfig, WalletState},
+    persistent::{self, Persist},
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
     util,
     wallet::Wallet,
@@ -174,8 +175,9 @@ impl ClientOptions {
         Ok(())
     }
 
-    pub fn wallet(&self) -> anyhow::Result<WalletState> {
-        WalletState::from_file(&self.wallet_path()?)
+    pub fn wallet(&self) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
+        let wallet = persistent::File::read(&self.wallet_path()?)?;
+        Ok(WalletState::new(wallet))
     }
 
     pub fn wallet_path(&self) -> anyhow::Result<PathBuf> {
@@ -202,7 +204,7 @@ impl ClientOptions {
         &self,
         genesis_config: GenesisConfig,
         testing_prng_seed: Option<u64>,
-    ) -> anyhow::Result<WalletState> {
+    ) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
         let wallet_path = self.wallet_path()?;
         anyhow::ensure!(
             !wallet_path.exists(),

@@ -25,7 +25,7 @@ use linera_client::{
     config::{CommitteeConfig, GenesisConfig},
     persistent::{self, Persist},
     storage::Runnable,
-    wallet::UserChain,
+    wallet::{UserChain, Wallet},
 };
 use linera_core::{
     client::ChainClientError,
@@ -472,8 +472,7 @@ impl Runnable for Job {
                 // Make sure genesis chains are subscribed to the admin chain.
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
-                let chain_client =
-                    context.make_chain_client(context.wallet().genesis_admin_chain());
+                let chain_client = context.make_chain_client(context.wallet.genesis_admin_chain());
                 let n = context
                     .process_inbox(&chain_client)
                     .await
@@ -1090,7 +1089,7 @@ impl Job {
         storage: S,
         public_key: PublicKey,
         validators: Option<Vec<(ValidatorName, String)>>,
-        context: &mut ClientContext<S>,
+        context: &mut ClientContext<S, impl Persist<Target = Wallet>>,
     ) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -1102,7 +1101,7 @@ impl Job {
         let node_client = LocalNodeClient::new(state);
 
         // Take the latest committee we know of.
-        let admin_chain_id = context.wallet().genesis_admin_chain();
+        let admin_chain_id = context.wallet.genesis_admin_chain();
         let query = ChainInfoQuery::new(admin_chain_id).with_committees();
         let nodes = if let Some(validators) = validators {
             context
@@ -1161,7 +1160,7 @@ impl Job {
     async fn print_peg_certificate_hash<S>(
         storage: S,
         chain_ids: impl IntoIterator<Item = ChainId>,
-        context: &ClientContext<S>,
+        context: &ClientContext<S, impl Persist<Target = Wallet>>,
     ) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -1199,7 +1198,7 @@ impl Job {
         }
         // This proves that once we have verified that the peg chain's tip is a block in the real
         // network, we can be confident that all downloaded chains are.
-        let config_hash = CryptoHash::new(context.wallet().genesis_config());
+        let config_hash = CryptoHash::new(context.wallet.genesis_config());
         let maybe_epoch = peg_chain.execution_state.system.epoch.get();
         let epoch = maybe_epoch.context("missing epoch in peg chain")?.0;
         info!(
@@ -1331,7 +1330,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
             }
             drop(genesis_config_ref);
             options
-                .create_wallet(genesis_config.into_value(), *testing_prng_seed)?
+                .create_wallet(Persist::into_value(genesis_config), *testing_prng_seed)?
                 .extend(chains);
             options.initialize_storage().boxed().await?;
             Ok(())

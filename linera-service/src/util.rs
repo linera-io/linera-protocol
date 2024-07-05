@@ -55,7 +55,9 @@ pub async fn listen_for_shutdown_signals(shutdown_sender: CancellationToken) {
     }
 }
 
-pub fn read_json<T: serde::de::DeserializeOwned>(path: &std::path::Path) -> anyhow::Result<T> {
+pub fn read_json<T: serde::de::DeserializeOwned>(
+    path: impl Into<std::path::PathBuf>,
+) -> anyhow::Result<T> {
     Ok(serde_json::from_reader(fs_err::File::open(path)?)?)
 }
 

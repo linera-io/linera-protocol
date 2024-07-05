@@ -67,12 +67,12 @@ use crate::{
     wallet::{UserChain, Wallet},
 };
 
-pub struct ClientContext<Storage>
+pub struct ClientContext<Storage, W>
 where
     Storage: linera_storage::Storage,
     ViewError: From<Storage::StoreError>,
 {
-    pub wallet: WalletState,
+    pub wallet: WalletState<W>,
     pub client: Arc<Client<NodeProvider, Storage>>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
@@ -83,10 +83,11 @@ where
 }
 
 #[async_trait]
-impl<S> chain_listener::ClientContext for ClientContext<S>
+impl<S, W> chain_listener::ClientContext for ClientContext<S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<<S as Storage>::StoreError>,
+    W: Persist<Target = Wallet> + Send,
 {
     type ValidatorNodeProvider = NodeProvider;
     type Storage = S;
@@ -114,17 +115,18 @@ where
     }
 }
 
-impl<S> ClientContext<S>
+impl<S, W> ClientContext<S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::StoreError>,
+    W: Persist<Target = Wallet>,
 {
     /// Returns the [`Wallet`] as a mutable reference.
     pub fn wallet_mut(&mut self) -> impl std::ops::DerefMut<Target = Wallet> + '_ {
         Persist::mutate(&mut self.wallet)
     }
 
-    pub fn new(storage: S, options: ClientOptions, wallet: WalletState) -> Self {
+    pub fn new(storage: S, options: ClientOptions, wallet: WalletState<W>) -> Self {
         let node_options = NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
@@ -417,10 +419,11 @@ where
 }
 
 #[cfg(feature = "benchmark")]
-impl<S> ClientContext<S>
+impl<S, W> ClientContext<S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::StoreError>,
+    W: Persist<Target = Wallet>,
 {
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {
         for chain_id in self.wallet.own_chain_ids() {

@@ -20,6 +20,9 @@ pub trait Persist: Deref {
     /// Saves the value to persistent storage.
     fn persist(_: &mut Self) -> Result<(), Self::Error>;
 
+    /// Takes the value out.
+    fn into_value(this: Self) -> Self::Target;
+
     /// Gets a mutable reference to the value which, on drop, will automatically persist
     /// the new value.
     fn mutate(this: &mut Self) -> RefMut<Self> {

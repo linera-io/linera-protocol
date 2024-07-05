@@ -22,10 +22,7 @@ use linera_base::{
     data_types::Amount,
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
-use linera_client::{
-    config::{GenesisConfig, WalletState},
-    wallet::Wallet,
-};
+use linera_client::{config::GenesisConfig, wallet::Wallet};
 use linera_core::worker::Notification;
 use linera_execution::{
     committee::ValidatorName, system::SystemChannel, Bytecode, ResourceControlPolicy,
@@ -40,7 +37,7 @@ use tracing::{info, warn};
 use crate::{
     cli_wrappers::{local_net::PathProvider, Network},
     faucet::ClaimOutcome,
-    util::ChildExt,
+    util::{self, ChildExt},
 };
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -690,7 +687,7 @@ impl ClientWrapper {
     }
 
     pub fn load_wallet(&self) -> Result<Wallet> {
-        Ok(WalletState::from_file(self.wallet_path().as_path())?.into_value())
+        util::read_json(self.wallet_path())
     }
 
     pub fn wallet_path(&self) -> PathBuf {

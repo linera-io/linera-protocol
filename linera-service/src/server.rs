@@ -499,7 +499,7 @@ async fn run(options: ServerOptions) {
                 Persist::persist(&mut server).expect("Unable to write server config file");
                 info!("Wrote server config {}", path.to_str().unwrap());
                 println!("{}", server.validator.name);
-                config_validators.push(server.into_value().validator);
+                config_validators.push(Persist::into_value(server).validator);
             }
             if let Some(committee) = committee {
                 Persist::persist(
