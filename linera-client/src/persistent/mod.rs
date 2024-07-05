@@ -1,11 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "fs")]
 mod file;
+#[cfg(feature = "fs")]
+pub use file::File;
 
 use std::ops::{Deref, DerefMut};
 
-pub use file::File;
 
 /// The `Persist` trait provides a wrapper around a value that can be saved in a
 /// persistent way. A minimal implementation provides an `Error` type, a `persist`

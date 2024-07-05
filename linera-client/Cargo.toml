@@ -12,7 +12,11 @@ edition.workspace = true
 default = ["wasmer", "rocksdb"]
 test = ["linera-views/test", "linera-execution/test"]
 benchmark = ["linera-base/test", "dep:linera-sdk"]
-wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
+wasmer = [
+    "linera-core/wasmer",
+    "linera-execution/wasmer",
+    "linera-storage/wasmer",
+]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 rocksdb = [
     "linera-views/rocksdb",
@@ -27,6 +31,15 @@ scylladb = [
 ]
 storage_service = []
 kubernetes = []
+fs = ["fs-err", "fs4", "linera-execution/fs"]
+metrics = [
+    "linera-base/metrics",
+    "linera-chain/metrics",
+    "linera-core/metrics",
+    "linera-execution/metrics",
+    "linera-rpc/metrics",
+    "linera-views/metrics",
+]
 
 [dependencies]
 anyhow.workspace = true
@@ -37,25 +50,29 @@ chrono = { workspace = true, features = ["clock"] }
 clap.workspace = true
 colored.workspace = true
 dirs.workspace = true
-fs-err.workspace = true
-fs4.workspace = true
 futures.workspace = true
-linera-base = { workspace = true, features = ["metrics"] }
-linera-chain = { workspace = true, features = ["metrics"] }
-linera-core = { workspace = true, features = ["metrics", "rocksdb", "wasmer"] }
-linera-execution = { workspace = true, features = ["fs", "metrics", "wasmer"] }
-linera-rpc = { workspace = true, features = ["server", "simple-network"] }
+linera-base.workspace = true
+linera-chain.workspace = true
+linera-core.workspace = true
+linera-execution.workspace = true
+linera-rpc.workspace = true
 linera-sdk = { workspace = true, optional = true }
-linera-storage = { workspace = true, features = ["metrics", "wasmer"] }
+linera-storage.workspace = true
 linera-storage-service.workspace = true
 linera-version.workspace = true
-linera-views = { workspace = true, features = ["metrics"] }
+linera-views.workspace = true
 rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["full"] }
+tokio.workspace = true
 tokio-stream.workspace = true
 tracing.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+fs-err = { workspace = true, optional = true }
+fs4 = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["full"] }
+linera-rpc = { workspace = true, features = ["server", "simple-network"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
