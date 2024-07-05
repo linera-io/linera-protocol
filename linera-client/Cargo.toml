@@ -36,7 +36,6 @@ bcs.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 clap.workspace = true
 colored.workspace = true
-comfy-table.workspace = true
 dirs.workspace = true
 fs-err.workspace = true
 fs4.workspace = true

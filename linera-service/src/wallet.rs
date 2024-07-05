@@ -15,7 +15,7 @@ pub fn pretty_print(wallet: &Wallet, chain_id: Option<ChainId>) {
         .apply_modifier(UTF8_ROUND_CORNERS)
         .set_content_arrangement(ContentArrangement::Dynamic)
         .set_header(vec![
-            Cell::new("Chain Id").add_attribute(Attribute::Bold),
+            Cell::new("Chain ID").add_attribute(Attribute::Bold),
             Cell::new("Latest Block").add_attribute(Attribute::Bold),
         ]);
     if let Some(chain_id) = chain_id {

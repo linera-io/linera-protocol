@@ -45,7 +45,7 @@ use linera_service::{
     faucet::FaucetService,
     node_service::NodeService,
     project::{self, Project},
-    util,
+    util, wallet,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -1427,7 +1427,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {
             WalletCommand::Show { chain_id } => {
-                options.wallet()?.pretty_print(*chain_id);
+                wallet::pretty_print(&*options.wallet()?, *chain_id);
                 Ok(())
             }
 

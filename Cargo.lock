@@ -4172,7 +4172,6 @@ dependencies = [
  "chrono",
  "clap",
  "colored",
- "comfy-table",
  "counter",
  "crowd-funding",
  "dirs",
