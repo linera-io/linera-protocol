@@ -6,6 +6,8 @@
 
 mod common;
 
+use std::env;
+
 use common::INTEGRATION_TEST_GUARD;
 use linera_service::{test_name, util::QuotedBashAndGraphQlScript};
 use tokio::{process::Command, time::Duration};
@@ -31,16 +33,20 @@ async fn test_script_in_readme_with_storage_service(path: &str) -> std::io::Resu
         format!("{path}/README.md"),
         Some(Duration::from_secs(3)),
     )?;
-    let status = Command::new("bash")
+    let mut command = Command::new("bash");
+    command
         // Run from the root of the repo.
         .current_dir("..")
-        // Increase log verbosity to verify that services can write to stderr.
-        .env("RUST_LOG", "linera_service=debug")
         .arg("-e")
         .arg("-x")
-        .arg(script.path())
-        .status()
-        .await?;
+        .arg(script.path());
+
+    if env::var_os("RUST_LOG").is_none() {
+        // Increase log verbosity to verify that services can write to stderr.
+        command.env("RUST_LOG", "linera_service=debug");
+    }
+
+    let status = command.status().await?;
 
     assert!(status.success());
     Ok(())
