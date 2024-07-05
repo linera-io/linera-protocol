@@ -83,7 +83,7 @@ cargo +nightly fmt
 ## Command-line tools and services
 
 * All executables should use `clap_derive`. When tools call each other, the `--version` is
-  checked and must match the package version of the caller.  This means that all executables
+  checked and must match the package version of the caller. This means that all executables
   should include a `command(version = linera_version::VersionInfo::default_clap_str())` annotation.
 
 * Only structured data should be printed to the standard output, preferably as newline-separated JSON values.
@@ -114,9 +114,9 @@ cargo check-all-features --all-targets
 ## Snapshot tests
 
 Several crates (`linera-rpc`, `linera-views-derive`, and others) use [`insta`](https://insta.rs/) to
-manage snapshot tests and ensure output or RPC formats don't unintentially change.  If you've
+manage snapshot tests and ensure output or RPC formats don't unintentially change. If you've
 deliberately changed the output of one of these crates, and the test fails, you can use `cargo insta
-review` to update the staged snapshot, or manually move the `.snap.new` file into place.  See the
+review` to update the staged snapshot, or manually move the `.snap.new` file into place. See the
 [`insta` documentation](https://insta.rs/docs/quickstart/) for more information.
 
 ## Wasm support
@@ -174,7 +174,7 @@ fn main() {
 ```
 
 Now, when we conditionally compile the feature in our code, we use `cfg(with_metrics)`
-instead of `cfg(feature = "metrics")`.  This has the effect that the feature is disabled both
+instead of `cfg(feature = "metrics")`. This has the effect that the feature is disabled both
 if it isn't requested _and_ if it is unsupported on the current target platform, allowing us
 to test `--all-targets` with impunity.
 

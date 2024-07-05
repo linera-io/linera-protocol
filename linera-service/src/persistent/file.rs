@@ -92,7 +92,7 @@ impl<T: serde::de::DeserializeOwned> File<T> {
     }
 
     /// Reads the value from a file at `path`, calling the `value` function to create it
-    /// if it does not exist.  If it does exist, `value` will not be called.
+    /// if it does not exist. If it does exist, `value` will not be called.
     pub fn read_or_create(
         path: &Path,
         value: impl FnOnce() -> anyhow::Result<T>,

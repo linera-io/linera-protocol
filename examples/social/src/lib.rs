@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO the following documentation involves `sleep`ing to avoid some race conditions.  See:
+// TODO the following documentation involves `sleep`ing to avoid some race conditions. See:
 // - https://github.com/linera-io/linera-protocol/issues/1176
 // - https://github.com/linera-io/linera-protocol/issues/1177
 

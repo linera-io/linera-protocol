@@ -339,7 +339,7 @@ impl From<Infallible> for ChainClientError {
 }
 
 // We never want to pass the DashMap references over an `await` point, for fear of
-// deadlocks.  The following construct will cause a (relatively) helpful error if we do.
+// deadlocks. The following construct will cause a (relatively) helpful error if we do.
 
 pub struct Unsend<T> {
     inner: T,

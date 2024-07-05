@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO the following documentation involves `sleep`ing to avoid some race conditions.  See:
+// TODO the following documentation involves `sleep`ing to avoid some race conditions. See:
 // - https://github.com/linera-io/linera-protocol/issues/1176
 // - https://github.com/linera-io/linera-protocol/issues/1177
 
@@ -53,7 +53,7 @@ export PATH=$PWD/target/debug:$PATH
 
 Using the helper function defined by `linera net helper`, set up a local network with two
 wallets, and define variables holding their wallet paths (`$LINERA_WALLET_0`,
-`$LINERA_WALLET_1`) and storage paths (`$LINERA_STORAGE_0`, `$LINERA_STORAGE_1`).  These
+`$LINERA_WALLET_1`) and storage paths (`$LINERA_STORAGE_0`, `$LINERA_STORAGE_1`). These
 variables are named according to a convention that we can access using `--with-wallet $n`
 to use the variable `LINERA_WALLET_$n` and `LINERA_STORAGE_$n`; e.g.
 `linera --with-wallet 0` is equivalent to
@@ -132,7 +132,7 @@ We will remember the application ID for the newly created token as `$APP_ID_0`.
 
 ## Creating a crowd-funding campaign
 
-Similarly, we're going to create a crowd-funding campaign on the default chain.  We have
+Similarly, we're going to create a crowd-funding campaign on the default chain. We have
 to specify our fungible application as a dependency and a parameter:
 
 ```bash
