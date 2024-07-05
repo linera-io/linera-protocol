@@ -16,5 +16,6 @@ linera-ethereum
 linera-sdk-derive
 linera-sdk
 linera-rpc
+linera-client
 linera-service
 linera-service-graphql-client
