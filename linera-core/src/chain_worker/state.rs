@@ -15,7 +15,9 @@ use futures::{
 };
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{ArithmeticError, BlockHeight, HashedBlob, OracleResponse, Timestamp},
+    data_types::{
+        ArithmeticError, BlockHeight, HashedBlob, OracleRecord, OracleResponse, Timestamp,
+    },
     ensure,
     identifiers::{BlobId, ChainId},
 };
@@ -680,7 +682,7 @@ where
         // legitimately required.
         // Actual execution happens below, after other validity checks.
         self.0.chain.remove_events_from_inboxes(block).await?;
-        // Verify that all required bytecode hashed certificate values are available, and no
+        // Verify that all required bytecode hashed certificate values and blobs are available, and no
         // unrelated ones provided.
         self.0
             .check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
@@ -931,12 +933,12 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
-        let block = match certificate.value() {
-            CertificateValue::ValidatedBlock {
-                executed_block: ExecutedBlock { block, .. },
-            } => block,
+        let executed_block = match certificate.value() {
+            CertificateValue::ValidatedBlock { executed_block } => executed_block,
             _ => panic!("Expecting a validation certificate"),
         };
+
+        let block = &executed_block.block;
         let height = block.height;
         // Check that the chain is active and ready for this validated block.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
@@ -977,6 +979,11 @@ where
             .recent_hashed_certificate_values
             .insert(Cow::Borrowed(&certificate.value))
             .await;
+        // Verify that all required bytecode hashed certificate values and blobs are available, and no
+        // unrelated ones provided.
+        self.state
+            .check_no_missing_blobs(block, executed_block.required_blob_ids(), &[], &[])
+            .await?;
         let old_round = self.state.chain.manager.get().current_round;
         self.state.chain.manager.get_mut().create_final_vote(
             certificate,
@@ -1058,7 +1065,9 @@ where
             tip.block_hash == block.previous_block_hash,
             WorkerError::InvalidBlockChaining
         );
-        // Verify that all required bytecode hashed certificate values are available, and no
+
+        let required_blob_ids = executed_block.required_blob_ids();
+        // Verify that all required bytecode hashed certificate values and blobs are available, and no
         // unrelated ones provided.
         self.state
             .check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
