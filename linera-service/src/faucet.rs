@@ -13,6 +13,7 @@ use linera_base::{
     identifiers::{ChainId, MessageId},
     ownership::ChainOwnership,
 };
+use linera_client::{chain_listener::ClientContext, config::GenesisConfig};
 use linera_core::{
     client::{ChainClient, ChainClientError},
     data_types::ClientOutcome,
@@ -27,7 +28,7 @@ use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info};
 
-use crate::{chain_listener::ClientContext, config::GenesisConfig, util};
+use crate::util;
 
 #[cfg(test)]
 #[path = "unit_tests/faucet.rs"]

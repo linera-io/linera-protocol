@@ -4159,6 +4159,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-client"
+version = "0.12.0"
+dependencies = [
+ "amm",
+ "anyhow",
+ "async-graphql",
+ "async-trait",
+ "base64 0.22.0",
+ "bcs",
+ "cfg_aliases",
+ "chrono",
+ "clap",
+ "colored",
+ "counter",
+ "crowd-funding",
+ "dirs",
+ "ethereum-tracker",
+ "fs-err",
+ "fs4",
+ "fungible",
+ "futures",
+ "linera-alloy",
+ "linera-base",
+ "linera-chain",
+ "linera-client",
+ "linera-core",
+ "linera-ethereum",
+ "linera-execution",
+ "linera-rpc",
+ "linera-sdk",
+ "linera-storage",
+ "linera-storage-service",
+ "linera-version",
+ "linera-views",
+ "matching-engine",
+ "native-fungible",
+ "non-fungible",
+ "proptest",
+ "rand",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "social",
+ "test-case",
+ "test-log",
+ "test-strategy",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+]
+
+[[package]]
 name = "linera-core"
 version = "0.12.0"
 dependencies = [
@@ -4490,10 +4542,8 @@ dependencies = [
  "counter",
  "crowd-funding",
  "current_platform",
- "dirs",
  "ethereum-tracker",
  "fs-err",
- "fs4",
  "fs_extra",
  "fungible",
  "futures",
@@ -4504,6 +4554,7 @@ dependencies = [
  "linera-alloy",
  "linera-base",
  "linera-chain",
+ "linera-client",
  "linera-core",
  "linera-ethereum",
  "linera-execution",

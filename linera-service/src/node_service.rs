@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{borrow::Cow, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{
     futures_util::Stream,
@@ -14,7 +14,7 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
 use futures::{
     future::{self},
-    lock::{Mutex, MutexGuard},
+    lock::Mutex,
     Future,
 };
 use linera_base::{
@@ -25,6 +25,10 @@ use linera_base::{
     BcsHexParseError,
 };
 use linera_chain::{data_types::HashedCertificateValue, ChainStateView};
+use linera_client::{
+    chain_clients::ChainClients,
+    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
+};
 use linera_core::{
     client::{ChainClient, ChainClientError},
     data_types::{ClientOutcome, RoundTimeout},
@@ -47,68 +51,12 @@ use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
 
-use crate::{
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
-    util,
-};
+use crate::util;
 
 #[derive(SimpleObject, Serialize, Deserialize, Clone)]
 pub struct Chains {
     pub list: Vec<ChainId>,
     pub default: Option<ChainId>,
-}
-
-pub type ClientMapInner<P, S> = BTreeMap<ChainId, ChainClient<P, S>>;
-pub(crate) struct ChainClients<P, S>(Arc<Mutex<ClientMapInner<P, S>>>)
-where
-    S: Storage,
-    ViewError: From<S::StoreError>;
-
-impl<P, S> Clone for ChainClients<P, S>
-where
-    S: Storage,
-    ViewError: From<S::StoreError>,
-{
-    fn clone(&self) -> Self {
-        ChainClients(self.0.clone())
-    }
-}
-
-impl<P, S> Default for ChainClients<P, S>
-where
-    S: Storage,
-    ViewError: From<S::StoreError>,
-{
-    fn default() -> Self {
-        Self(Arc::new(Mutex::new(BTreeMap::new())))
-    }
-}
-
-impl<P, S> ChainClients<P, S>
-where
-    S: Storage,
-    ViewError: From<S::StoreError>,
-{
-    async fn client(&self, chain_id: &ChainId) -> Option<ChainClient<P, S>> {
-        Some(self.0.lock().await.get(chain_id)?.clone())
-    }
-
-    pub(crate) async fn client_lock(&self, chain_id: &ChainId) -> Option<ChainClient<P, S>> {
-        self.client(chain_id).await
-    }
-
-    pub(crate) async fn try_client_lock(
-        &self,
-        chain_id: &ChainId,
-    ) -> Result<ChainClient<P, S>, Error> {
-        self.client_lock(chain_id)
-            .await
-            .ok_or_else(|| Error::new(format!("Unknown chain ID: {}", chain_id)))
-    }
-
-    pub(crate) async fn map_lock(&self) -> MutexGuard<ClientMapInner<P, S>> {
-        self.0.lock().await
-    }
 }
 
 /// Our root GraphQL query type.

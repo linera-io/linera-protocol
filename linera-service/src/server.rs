@@ -13,6 +13,11 @@ use anyhow::bail;
 use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt, TryFutureExt as _};
 use linera_base::crypto::{CryptoRng, KeyPair};
+use linera_client::{
+    config::{CommitteeConfig, GenesisConfig, ValidatorConfig, ValidatorServerConfig},
+    persistent::{self, Persist},
+    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
+};
 use linera_core::{worker::WorkerState, JoinSetExt as _};
 use linera_execution::{committee::ValidatorName, WasmRuntime, WithWasmDefault};
 use linera_rpc::{
@@ -24,12 +29,7 @@ use linera_rpc::{
 };
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
-use linera_service::{
-    config::{CommitteeConfig, GenesisConfig, ValidatorConfig, ValidatorServerConfig},
-    persistent::{self, Persist},
-    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
-    util,
-};
+use linera_service::util;
 use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde::Deserialize;

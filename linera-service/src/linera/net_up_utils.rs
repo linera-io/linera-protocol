@@ -5,13 +5,13 @@ use std::time::Duration;
 
 use colored::Colorize as _;
 use linera_base::data_types::Amount;
+use linera_client::storage::StorageConfig;
 use linera_execution::ResourceControlPolicy;
 use linera_service::{
     cli_wrappers::{
         local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
-    storage::StorageConfig,
     util::listen_for_shutdown_signals,
 };
 use linera_storage_service::{

@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y \
 COPY examples examples
 COPY linera-base linera-base
 COPY linera-chain linera-chain
+COPY linera-client linera-client
 COPY linera-core linera-core
 COPY linera-ethereum linera-ethereum
 COPY linera-execution linera-execution

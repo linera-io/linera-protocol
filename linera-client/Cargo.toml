@@ -1,0 +1,89 @@
+[package]
+name = "linera-client"
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+edition.workspace = true
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["wasmer", "rocksdb"]
+test = ["linera-views/test", "linera-execution/test"]
+benchmark = ["linera-base/test", "dep:linera-sdk"]
+wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
+wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
+rocksdb = [
+    "linera-views/rocksdb",
+    "linera-core/rocksdb",
+    "linera-storage/rocksdb",
+]
+dynamodb = ["linera-views/dynamodb", "linera-core/dynamodb", "linera-storage/dynamodb"]
+scylladb = [
+    "linera-views/scylladb",
+    "linera-core/scylladb",
+    "linera-storage/scylladb",
+]
+storage_service = []
+kubernetes = []
+
+[dependencies]
+anyhow.workspace = true
+async-graphql.workspace = true
+async-trait.workspace = true
+bcs.workspace = true
+chrono = { workspace = true, features = ["clock"] }
+clap.workspace = true
+colored.workspace = true
+dirs.workspace = true
+fs-err.workspace = true
+fs4.workspace = true
+futures.workspace = true
+linera-base = { workspace = true, features = ["metrics"] }
+linera-chain = { workspace = true, features = ["metrics"] }
+linera-core = { workspace = true, features = ["metrics", "rocksdb", "wasmer"] }
+linera-execution = { workspace = true, features = ["fs", "metrics", "wasmer"] }
+linera-rpc = { workspace = true, features = ["server", "simple-network"] }
+linera-sdk = { workspace = true, optional = true }
+linera-storage = { workspace = true, features = ["metrics", "wasmer"] }
+linera-storage-service.workspace = true
+linera-version.workspace = true
+linera-views = { workspace = true, features = ["metrics"] }
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tokio-stream.workspace = true
+tracing.workspace = true
+
+[build-dependencies]
+cfg_aliases.workspace = true
+
+[dev-dependencies]
+amm.workspace = true
+base64.workspace = true
+counter.workspace = true
+crowd-funding.workspace = true
+ethereum-tracker.workspace = true
+fungible.workspace = true
+linera-alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
+linera-base = { workspace = true, features = ["test"] }
+linera-chain = { workspace = true, features = ["test"] }
+linera-client = { path = ".", features = ["test"] }
+linera-core = { workspace = true, features = ["test"] }
+linera-ethereum.workspace = true
+linera-execution = { workspace = true, features = ["test"] }
+linera-rpc = { workspace = true, features = ["test"] }
+linera-storage = { workspace = true, features = ["test"] }
+linera-views = { workspace = true, features = ["test"] }
+matching-engine.workspace = true
+native-fungible.workspace = true
+non-fungible.workspace = true
+proptest.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+social.workspace = true
+test-case.workspace = true
+test-log = { workspace = true, features = ["trace"] }
+test-strategy.workspace = true
+tokio = { workspace = true, features = ["full", "test-util"] }

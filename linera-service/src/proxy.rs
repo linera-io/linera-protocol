@@ -8,6 +8,10 @@ use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use futures::{FutureExt as _, SinkExt, StreamExt};
+use linera_client::{
+    config::{GenesisConfig, ValidatorServerConfig},
+    storage::{run_with_storage, Runnable, StorageConfigNamespace},
+};
 use linera_core::{node::NodeError, JoinSetExt as _};
 use linera_rpc::{
     config::{
@@ -19,12 +23,7 @@ use linera_rpc::{
 };
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
-use linera_service::{
-    config::{GenesisConfig, ValidatorServerConfig},
-    grpc_proxy::GrpcProxy,
-    storage::{run_with_storage, Runnable, StorageConfigNamespace},
-    util,
-};
+use linera_service::{grpc_proxy::GrpcProxy, util};
 use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use tokio::task::JoinSet;

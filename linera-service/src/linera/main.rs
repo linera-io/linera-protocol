@@ -9,8 +9,6 @@ use std::{collections::HashMap, env, path::PathBuf, sync::Arc, time::Instant};
 use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
 use chrono::Utc;
-use client_context::ClientContext;
-use client_options::ClientOptions;
 use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
@@ -20,6 +18,15 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_chain::data_types::{CertificateValue, ExecutedBlock};
+use linera_client::{
+    chain_listener::ClientContext as _,
+    client_context::ClientContext,
+    client_options::{ClientCommand, ClientOptions, NetCommand, ProjectCommand, WalletCommand},
+    config::{CommitteeConfig, GenesisConfig},
+    persistent::{self, Persist},
+    storage::Runnable,
+    wallet::UserChain,
+};
 use linera_core::{
     client::ChainClientError,
     data_types::{ChainInfoQuery, ClientOutcome},
@@ -34,16 +41,11 @@ use linera_execution::{
     Message, ResourceControlPolicy, SystemMessage,
 };
 use linera_service::{
-    chain_listener::ClientContext as _,
     cli_wrappers,
-    config::{CommitteeConfig, GenesisConfig, WalletState},
     faucet::FaucetService,
     node_service::NodeService,
-    persistent::{self, Persist},
     project::{self, Project},
-    storage::Runnable,
-    util,
-    wallet::UserChain,
+    util, wallet,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -51,8 +53,6 @@ use serde_json::Value;
 use tokio::task::JoinSet;
 use tracing::{debug, info, warn};
 
-mod client_context;
-mod client_options;
 mod net_up_utils;
 
 #[cfg(feature = "benchmark")]
@@ -63,8 +63,6 @@ use {
     std::collections::HashSet,
     tracing::error,
 };
-
-use crate::client_options::{ClientCommand, NetCommand, ProjectCommand, WalletCommand};
 
 #[cfg(feature = "benchmark")]
 fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
@@ -81,7 +79,7 @@ fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
     }
 }
 
-struct Job(ClientOptions, WalletState);
+struct Job(ClientOptions);
 
 fn read_json(string: Option<String>, path: Option<PathBuf>) -> anyhow::Result<Vec<u8>> {
     let value = match (string, path) {
@@ -105,7 +103,8 @@ impl Runnable for Job {
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::StoreError>,
     {
-        let Job(options, wallet) = self;
+        let Job(options) = self;
+        let wallet = options.wallet()?;
         let mut context = ClientContext::new(storage.clone(), options.clone(), wallet);
         let command = options.command;
 
@@ -1243,10 +1242,10 @@ fn main() -> anyhow::Result<()> {
         .enable_all()
         .build()
         .expect("Failed to create Tokio runtime")
-        .block_on(run(options))
+        .block_on(run(&options))
 }
 
-async fn run(options: ClientOptions) -> anyhow::Result<()> {
+async fn run(options: &ClientOptions) -> anyhow::Result<()> {
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();
@@ -1348,7 +1347,9 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
                 let project = Project::from_existing_project(path)?;
                 Ok(project.test().await?)
             }
-            ProjectCommand::PublishAndCreate { .. } => options.run_command_with_storage().await,
+            ProjectCommand::PublishAndCreate { .. } => {
+                options.run_with_storage(Job(options.clone())).await
+            }
         },
 
         ClientCommand::Keygen => {
@@ -1426,7 +1427,7 @@ async fn run(options: ClientOptions) -> anyhow::Result<()> {
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {
             WalletCommand::Show { chain_id } => {
-                options.wallet()?.pretty_print(*chain_id);
+                wallet::pretty_print(&*options.wallet()?, *chain_id);
                 Ok(())
             }
 
@@ -1494,12 +1495,12 @@ Make sure to use a Linera client compatible with this network.
                         faucet.is_some(),
                         "Using --with-new-chain requires --faucet to be set"
                     );
-                    options.run_command_with_storage().await?;
+                    options.run_with_storage(Job(options.clone())).await?;
                 }
                 Ok(())
             }
         },
 
-        _ => options.run_command_with_storage().await,
+        _ => options.run_with_storage(Job(options.clone())).await,
     }
 }

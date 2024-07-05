@@ -15,6 +15,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
 };
+use linera_client::storage::{StorageConfig, StorageConfigNamespace};
 use linera_execution::ResourceControlPolicy;
 #[cfg(all(feature = "storage_service", with_testing))]
 use linera_storage_service::storage_service_test_endpoint;
@@ -33,7 +34,6 @@ use {linera_views::rocks_db::create_rocks_db_test_path, std::ops::Deref};
 
 use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
-    storage::{StorageConfig, StorageConfigNamespace},
     util::ChildExt,
 };
 

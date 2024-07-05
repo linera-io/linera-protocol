@@ -12,6 +12,7 @@ use http::Uri;
 #[cfg(test)]
 use linera_base::command::parse_version_message;
 use linera_base::data_types::TimeDelta;
+pub use linera_client::util::*;
 use tokio::signal::unix;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
@@ -52,6 +53,10 @@ pub async fn listen_for_shutdown_signals(shutdown_sender: CancellationToken) {
         _ = sigterm.recv() => debug!("Received SIGTERM"),
         _ = sighup.recv() => debug!("Received SIGHUP"),
     }
+}
+
+pub fn read_json<T: serde::de::DeserializeOwned>(path: &std::path::Path) -> anyhow::Result<T> {
+    Ok(serde_json::from_reader(fs_err::File::open(path)?)?)
 }
 
 #[cfg(with_testing)]
@@ -181,10 +186,6 @@ pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
 
 pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
     Ok(TimeDelta::from_millis(s.parse()?))
-}
-
-pub fn read_json<T: serde::de::DeserializeOwned>(path: &std::path::Path) -> anyhow::Result<T> {
-    Ok(serde_json::from_reader(fs_err::File::open(path)?)?)
 }
 
 #[test]

@@ -15,21 +15,38 @@ version.workspace = true
 ethereum = []
 default = ["wasmer", "rocksdb"]
 test = ["linera-views/test", "linera-execution/test", "dep:stdext"]
-benchmark = ["linera-base/test", "dep:linera-sdk"]
-wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
-wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
+benchmark = ["linera-base/test", "linera-client/benchmark", "dep:linera-sdk"]
+wasmer = ["linera-client/wasmer", "linera-execution/wasmer", "linera-storage/wasmer"]
+wasmtime = [
+    "linera-client/wasmtime",
+    "linera-execution/wasmtime",
+    "linera-storage/wasmtime",
+]
 rocksdb = [
+    "linera-client/rocksdb",
     "linera-views/rocksdb",
     "linera-core/rocksdb",
     "linera-storage/rocksdb",
 ]
-dynamodb = ["linera-views/dynamodb", "linera-core/dynamodb", "linera-storage/dynamodb"]
+dynamodb = [
+    "linera-client/dynamodb",
+    "linera-views/dynamodb",
+    "linera-core/dynamodb",
+    "linera-storage/dynamodb",
+]
 scylladb = [
+    "linera-client/scylladb",
     "linera-views/scylladb",
     "linera-core/scylladb",
     "linera-storage/scylladb",
 ]
-kubernetes = ["dep:k8s-openapi", "dep:kube", "dep:pathdiff", "dep:fs_extra"]
+kubernetes = [
+    "linera-client/kubernetes",
+    "dep:k8s-openapi",
+    "dep:kube",
+    "dep:pathdiff",
+    "dep:fs_extra",
+]
 remote_net = ["dep:k8s-openapi", "dep:kube"]
 metrics = ["prometheus", "linera-base/metrics"]
 storage_service = []
@@ -51,9 +68,7 @@ clap-markdown.workspace = true
 colored.workspace = true
 comfy-table.workspace = true
 current_platform = "0.2.0"
-dirs.workspace = true
 fs-err.workspace = true
-fs4.workspace = true
 fs_extra = { workspace = true, optional = true }
 futures.workspace = true
 hex.workspace = true
@@ -62,6 +77,7 @@ k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
 linera-base = { workspace = true, features = ["metrics"] }
 linera-chain = { workspace = true, features = ["metrics"] }
+linera-client.workspace = true
 linera-core = { workspace = true, features = ["metrics", "rocksdb", "wasmer"] }
 linera-execution = { workspace = true, features = ["fs", "metrics", "wasmer"] }
 linera-rpc = { workspace = true, features = ["server", "simple-network"] }
@@ -107,6 +123,7 @@ fungible.workspace = true
 linera-alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
 linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
+linera-client = { workspace = true, features = ["test"] }
 linera-core = { workspace = true, features = ["test"] }
 linera-ethereum.workspace = true
 linera-execution = { workspace = true, features = ["test"] }

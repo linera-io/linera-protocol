@@ -25,7 +25,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use tracing::{error, info, warn};
 
-use crate::{node_service::ChainClients, wallet::Wallet};
+use crate::{chain_clients::ChainClients, wallet::Wallet};
 
 #[cfg(test)]
 #[path = "unit_tests/chain_listener.rs"]
@@ -89,7 +89,7 @@ where
     ViewError: From<S::StoreError>,
 {
     /// Creates a new chain listener given client chains.
-    pub(crate) fn new(config: ChainListenerConfig, clients: ChainClients<P, S>) -> Self {
+    pub fn new(config: ChainListenerConfig, clients: ChainClients<P, S>) -> Self {
         Self { config, clients }
     }
 
