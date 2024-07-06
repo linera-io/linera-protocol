@@ -185,7 +185,7 @@ where
             incoming_requests: receiver,
         };
 
-        join_set.spawn_task(actor.run());
+        join_set.spawn_task(actor.run(tracing::Span::current()));
 
         Ok(sender)
     }
@@ -193,6 +193,7 @@ where
     /// Runs the worker until there are no more incoming requests.
     #[instrument(
         name = "ChainWorkerActor",
+        follows_from = [spawner_span],
         skip_all,
         fields(chain_id = format!("{:.8}", self.worker.chain_id())),
     )]
