@@ -191,8 +191,12 @@ where
     }
 
     /// Runs the worker until there are no more incoming requests.
-    #[instrument(skip_all, fields(chain_id = format!("{:.8}", self.worker.chain_id())))]
-    async fn run(mut self) {
+    #[instrument(
+        name = "ChainWorkerActor",
+        skip_all,
+        fields(chain_id = format!("{:.8}", self.worker.chain_id())),
+    )]
+    async fn run(mut self, spawner_span: tracing::Span) {
         trace!("Starting `ChainWorkerActor`");
 
         while let Some(request) = self.incoming_requests.recv().await {
