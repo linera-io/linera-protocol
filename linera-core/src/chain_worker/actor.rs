@@ -3,7 +3,10 @@
 
 //! An actor that runs a chain worker.
 
-use std::sync::Arc;
+use std::{
+    fmt::{self, Debug, Formatter},
+    sync::Arc,
+};
 
 use linera_base::{
     crypto::CryptoHash,
@@ -193,6 +196,8 @@ where
         trace!("Starting `ChainWorkerActor`");
 
         while let Some(request) = self.incoming_requests.recv().await {
+            trace!("Handling `ChainWorkerRequest`: {request:?}");
+
             let responded = match request {
                 #[cfg(with_testing)]
                 ChainWorkerRequest::ReadCertificate { height, callback } => callback
@@ -311,5 +316,127 @@ where
         }
 
         trace!("`ChainWorkerActor` finished");
+    }
+}
+
+impl<Context> Debug for ChainWorkerRequest<Context>
+where
+    Context: linera_views::common::Context + Clone + Send + Sync + 'static,
+    ViewError: From<Context::Error>,
+{
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        match self {
+            #[cfg(with_testing)]
+            ChainWorkerRequest::ReadCertificate {
+                height,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ReadCertificate")
+                .field("height", &height)
+                .finish_non_exhaustive(),
+            #[cfg(with_testing)]
+            ChainWorkerRequest::FindEventInInbox {
+                inbox_id,
+                certificate_hash,
+                height,
+                index,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::FindEventInInbox")
+                .field("inbox_id", &inbox_id)
+                .field("certificate_hash", &certificate_hash)
+                .field("height", &height)
+                .field("index", &index)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::GetChainStateView {
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::GetChainStateView")
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::QueryApplication {
+                query,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::QueryApplication")
+                .field("query", &query)
+                .finish_non_exhaustive(),
+            #[cfg(with_testing)]
+            ChainWorkerRequest::ReadBytecodeLocation {
+                bytecode_id,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ReadBytecodeLocation")
+                .field("bytecode_id", &bytecode_id)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::DescribeApplication {
+                application_id,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::DescribeApplication")
+                .field("application_id", &application_id)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::StageBlockExecution {
+                block,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::StageBlockExecution")
+                .field("block", &block)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::ProcessTimeout {
+                certificate,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ProcessTimeout")
+                .field("certificate", &certificate)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::HandleBlockProposal {
+                proposal,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::HandleBlockProposal")
+                .field("proposal", &proposal)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::ProcessValidatedBlock {
+                certificate,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ProcessValidatedBlock")
+                .field("certificate", &certificate)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::ProcessConfirmedBlock {
+                certificate,
+                hashed_certificate_values,
+                hashed_blobs,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ProcessConfirmedBlock")
+                .field("certificate", &certificate)
+                .field("hashed_certificate_values", &hashed_certificate_values)
+                .field("hashed_blobs", &hashed_blobs)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::ProcessCrossChainUpdate {
+                origin,
+                bundles,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ProcessCrossChainUpdate")
+                .field("origin", &origin)
+                .field("bundles", &bundles)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::ConfirmUpdatedRecipient {
+                latest_heights,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ConfirmUpdatedRecipient")
+                .field("latest_heights", &latest_heights)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::HandleChainInfoQuery {
+                query,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::HandleChainInfoQuery")
+                .field("query", &query)
+                .finish_non_exhaustive(),
+        }
     }
 }
