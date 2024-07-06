@@ -3,7 +3,10 @@
 
 //! An actor that runs a chain worker.
 
-use std::sync::Arc;
+use std::{
+    fmt::{self, Debug, Formatter},
+    sync::Arc,
+};
 
 use linera_base::{
     crypto::CryptoHash,
@@ -26,7 +29,7 @@ use tokio::{
     sync::{mpsc, oneshot, OwnedRwLockReadGuard},
     task::JoinSet,
 };
-use tracing::{instrument, trace};
+use tracing::{instrument, trace, warn};
 #[cfg(with_testing)]
 use {
     linera_base::identifiers::BytecodeId, linera_chain::data_types::Event,
@@ -182,22 +185,29 @@ where
             incoming_requests: receiver,
         };
 
-        join_set.spawn_task(actor.run());
+        join_set.spawn_task(actor.run(tracing::Span::current()));
 
         Ok(sender)
     }
 
     /// Runs the worker until there are no more incoming requests.
-    #[instrument(skip_all, fields(chain_id = format!("{:.8}", self.worker.chain_id())))]
-    async fn run(mut self) {
+    #[instrument(
+        name = "ChainWorkerActor",
+        follows_from = [spawner_span],
+        skip_all,
+        fields(chain_id = format!("{:.8}", self.worker.chain_id())),
+    )]
+    async fn run(mut self, spawner_span: tracing::Span) {
         trace!("Starting `ChainWorkerActor`");
 
         while let Some(request) = self.incoming_requests.recv().await {
-            match request {
+            trace!("Handling `ChainWorkerRequest`: {request:?}");
+
+            let responded = match request {
                 #[cfg(with_testing)]
-                ChainWorkerRequest::ReadCertificate { height, callback } => {
-                    let _ = callback.send(self.worker.read_certificate(height).await);
-                }
+                ChainWorkerRequest::ReadCertificate { height, callback } => callback
+                    .send(self.worker.read_certificate(height).await)
+                    .is_ok(),
                 #[cfg(with_testing)]
                 ChainWorkerRequest::FindEventInInbox {
                     inbox_id,
@@ -205,15 +215,15 @@ where
                     height,
                     index,
                     callback,
-                } => {
-                    let _ = callback.send(
+                } => callback
+                    .send(
                         self.worker
                             .find_event_in_inbox(inbox_id, certificate_hash, height, index)
                             .await,
-                    );
-                }
+                    )
+                    .is_ok(),
                 ChainWorkerRequest::GetChainStateView { callback } => {
-                    let _ = callback.send(self.worker.chain_state_view().await);
+                    callback.send(self.worker.chain_state_view().await).is_ok()
                 }
                 ChainWorkerRequest::QueryApplication { query, callback } => {
                     let (execution_state_sender, execution_state_receiver) =
@@ -234,46 +244,46 @@ where
                     runtime_thread
                         .await
                         .expect("Service runtime thread should not panic");
-                    let _ = callback.send(response);
+                    callback.send(response).is_ok()
                 }
                 #[cfg(with_testing)]
                 ChainWorkerRequest::ReadBytecodeLocation {
                     bytecode_id,
                     callback,
-                } => {
-                    let _ = callback.send(self.worker.read_bytecode_location(bytecode_id).await);
-                }
+                } => callback
+                    .send(self.worker.read_bytecode_location(bytecode_id).await)
+                    .is_ok(),
                 ChainWorkerRequest::DescribeApplication {
                     application_id,
                     callback,
-                } => {
-                    let _ = callback.send(self.worker.describe_application(application_id).await);
-                }
-                ChainWorkerRequest::StageBlockExecution { block, callback } => {
-                    let _ = callback.send(self.worker.stage_block_execution(block).await);
-                }
+                } => callback
+                    .send(self.worker.describe_application(application_id).await)
+                    .is_ok(),
+                ChainWorkerRequest::StageBlockExecution { block, callback } => callback
+                    .send(self.worker.stage_block_execution(block).await)
+                    .is_ok(),
                 ChainWorkerRequest::ProcessTimeout {
                     certificate,
                     callback,
-                } => {
-                    let _ = callback.send(self.worker.process_timeout(certificate).await);
-                }
-                ChainWorkerRequest::HandleBlockProposal { proposal, callback } => {
-                    let _ = callback.send(self.worker.handle_block_proposal(proposal).await);
-                }
+                } => callback
+                    .send(self.worker.process_timeout(certificate).await)
+                    .is_ok(),
+                ChainWorkerRequest::HandleBlockProposal { proposal, callback } => callback
+                    .send(self.worker.handle_block_proposal(proposal).await)
+                    .is_ok(),
                 ChainWorkerRequest::ProcessValidatedBlock {
                     certificate,
                     callback,
-                } => {
-                    let _ = callback.send(self.worker.process_validated_block(certificate).await);
-                }
+                } => callback
+                    .send(self.worker.process_validated_block(certificate).await)
+                    .is_ok(),
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
                     hashed_certificate_values,
                     hashed_blobs,
                     callback,
-                } => {
-                    let _ = callback.send(
+                } => callback
+                    .send(
                         self.worker
                             .process_confirmed_block(
                                 certificate,
@@ -281,32 +291,157 @@ where
                                 &hashed_blobs,
                             )
                             .await,
-                    );
-                }
+                    )
+                    .is_ok(),
                 ChainWorkerRequest::ProcessCrossChainUpdate {
                     origin,
                     bundles,
                     callback,
-                } => {
-                    let _ = callback.send(
+                } => callback
+                    .send(
                         self.worker
                             .process_cross_chain_update(origin, bundles)
                             .await,
-                    );
-                }
+                    )
+                    .is_ok(),
                 ChainWorkerRequest::ConfirmUpdatedRecipient {
                     latest_heights,
                     callback,
-                } => {
-                    let _ =
-                        callback.send(self.worker.confirm_updated_recipient(latest_heights).await);
-                }
-                ChainWorkerRequest::HandleChainInfoQuery { query, callback } => {
-                    let _ = callback.send(self.worker.handle_chain_info_query(query).await);
-                }
+                } => callback
+                    .send(self.worker.confirm_updated_recipient(latest_heights).await)
+                    .is_ok(),
+                ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
+                    .send(self.worker.handle_chain_info_query(query).await)
+                    .is_ok(),
+            };
+
+            if !responded {
+                warn!("Callback for `ChainWorkerActor` was dropped before a response was sent");
             }
         }
 
         trace!("`ChainWorkerActor` finished");
+    }
+}
+
+impl<Context> Debug for ChainWorkerRequest<Context>
+where
+    Context: linera_views::common::Context + Clone + Send + Sync + 'static,
+    ViewError: From<Context::Error>,
+{
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        match self {
+            #[cfg(with_testing)]
+            ChainWorkerRequest::ReadCertificate {
+                height,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ReadCertificate")
+                .field("height", &height)
+                .finish_non_exhaustive(),
+            #[cfg(with_testing)]
+            ChainWorkerRequest::FindEventInInbox {
+                inbox_id,
+                certificate_hash,
+                height,
+                index,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::FindEventInInbox")
+                .field("inbox_id", &inbox_id)
+                .field("certificate_hash", &certificate_hash)
+                .field("height", &height)
+                .field("index", &index)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::GetChainStateView {
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::GetChainStateView")
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::QueryApplication {
+                query,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::QueryApplication")
+                .field("query", &query)
+                .finish_non_exhaustive(),
+            #[cfg(with_testing)]
+            ChainWorkerRequest::ReadBytecodeLocation {
+                bytecode_id,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ReadBytecodeLocation")
+                .field("bytecode_id", &bytecode_id)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::DescribeApplication {
+                application_id,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::DescribeApplication")
+                .field("application_id", &application_id)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::StageBlockExecution {
+                block,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::StageBlockExecution")
+                .field("block", &block)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::ProcessTimeout {
+                certificate,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ProcessTimeout")
+                .field("certificate", &certificate)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::HandleBlockProposal {
+                proposal,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::HandleBlockProposal")
+                .field("proposal", &proposal)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::ProcessValidatedBlock {
+                certificate,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ProcessValidatedBlock")
+                .field("certificate", &certificate)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::ProcessConfirmedBlock {
+                certificate,
+                hashed_certificate_values,
+                hashed_blobs,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ProcessConfirmedBlock")
+                .field("certificate", &certificate)
+                .field("hashed_certificate_values", &hashed_certificate_values)
+                .field("hashed_blobs", &hashed_blobs)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::ProcessCrossChainUpdate {
+                origin,
+                bundles,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ProcessCrossChainUpdate")
+                .field("origin", &origin)
+                .field("bundles", &bundles)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::ConfirmUpdatedRecipient {
+                latest_heights,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::ConfirmUpdatedRecipient")
+                .field("latest_heights", &latest_heights)
+                .finish_non_exhaustive(),
+            ChainWorkerRequest::HandleChainInfoQuery {
+                query,
+                callback: _callback,
+            } => formatter
+                .debug_struct("ChainWorkerRequest::HandleChainInfoQuery")
+                .field("query", &query)
+                .finish_non_exhaustive(),
+        }
     }
 }
