@@ -170,8 +170,8 @@ where
     }
 
     let scores = value_scores
-        .iter()
-        .map(|x| (x.1 .0, x.1 .1.len()))
+        .values()
+        .map(|(weight, values)| (weight, values.len()))
         .collect();
     // If a key has a quorum, return it with its values.
     if let Some((key, (_, values))) = value_scores
