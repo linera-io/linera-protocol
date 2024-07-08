@@ -1129,8 +1129,6 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     )
     .await;
 
-    // Make sure that the cross-chain communication happens fast enough.
-    node_service1.process_inbox(&chain1).await?;
     node_service2.process_inbox(&chain2).await?;
 
     // Checking the NFT is removed from chain1
@@ -1190,8 +1188,6 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     )
     .await;
 
-    // Make sure that the cross-chain communication happens fast enough.
-    node_service1.process_inbox(&chain1).await?;
     node_service2.process_inbox(&chain2).await?;
 
     // Checking the NFT is removed from chain2
@@ -2639,18 +2635,16 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     )
     .await;
 
-    // Verify that the default chain now has 6 and the new one has 4 tokens.
-    for i in 0..10 {
-        tokio::time::sleep(Duration::from_secs(i)).await;
-        let balance1 = app1.get_amount(&owner).await;
-        let balance2 = app2.get_amount(&owner).await;
-        if balance1 == Amount::from_tokens(6) && balance2 == Amount::from_tokens(4) {
-            net.ensure_is_running().await?;
-            net.terminate().await?;
-            return Ok(());
-        }
-    }
-    panic!("Failed to receive new block");
+    node_service.process_inbox(&chain1).await?;
+
+    let balance1 = app1.get_amount(&owner).await;
+    let balance2 = app2.get_amount(&owner).await;
+    assert_eq!(balance1, Amount::from_tokens(6));
+    assert_eq!(balance2, Amount::from_tokens(4));
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
 }
 
 #[cfg(any(
