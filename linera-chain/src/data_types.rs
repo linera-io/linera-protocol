@@ -7,7 +7,7 @@ use std::{borrow::Cow, collections::HashSet};
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
-    data_types::{Amount, BlockHeight, HashedBlob, OracleRecord, Round, Timestamp},
+    data_types::{Amount, BlockHeight, HashedBlob, OracleRecord, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{
         Account, BlobId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
@@ -71,7 +71,7 @@ impl Block {
     }
 
     /// Returns all the blob IDs referred to in this block's operations.
-    pub fn blob_ids(&self) -> HashSet<BlobId> {
+    pub fn published_blob_ids(&self) -> HashSet<BlobId> {
         let mut blob_ids = HashSet::new();
         for operation in &self.operations {
             if let Operation::System(SystemOperation::PublishBlob { blob_id }) = operation {
@@ -743,6 +743,19 @@ impl ExecutedBlock {
             height: self.block.height,
             index,
         }
+    }
+
+    pub fn required_blob_ids(&self) -> HashSet<BlobId> {
+        let mut required_blob_ids = HashSet::new();
+        for record in &self.outcome.oracle_records {
+            for response in &record.responses {
+                if let OracleResponse::Blob(blob_id) = response {
+                    required_blob_ids.insert(*blob_id);
+                }
+            }
+        }
+
+        required_blob_ids
     }
 }
 

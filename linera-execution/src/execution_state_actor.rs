@@ -7,8 +7,8 @@ use std::fmt::{self, Debug, Formatter};
 
 use futures::channel::mpsc;
 use linera_base::{
-    data_types::{Amount, ApplicationPermissions, Timestamp},
-    identifiers::{Account, MessageId, Owner},
+    data_types::{Amount, ApplicationPermissions, HashedBlob, Timestamp},
+    identifiers::{Account, BlobId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 #[cfg(with_metrics)]
@@ -287,6 +287,16 @@ where
                 let bytes = body.as_ref().to_vec();
                 callback.respond(bytes);
             }
+
+            ReadBlob { blob_id, callback } => {
+                let blob = self
+                    .context()
+                    .extra()
+                    .get_blob(blob_id)
+                    .await
+                    .map_err(|_| ExecutionError::BlobNotFoundOnRead(blob_id))?;
+                callback.respond(blob);
+            }
         }
 
         Ok(())
@@ -405,6 +415,11 @@ pub enum ExecutionRequest {
         content_type: String,
         payload: Vec<u8>,
         callback: oneshot::Sender<Vec<u8>>,
+    },
+
+    ReadBlob {
+        blob_id: BlobId,
+        callback: Sender<HashedBlob>,
     },
 }
 
@@ -531,6 +546,11 @@ impl Debug for ExecutionRequest {
                 .debug_struct("ExecutionRequest::HttpPost")
                 .field("url", url)
                 .field("content_type", content_type)
+                .finish_non_exhaustive(),
+
+            ExecutionRequest::ReadBlob { blob_id, .. } => formatter
+                .debug_struct("ExecutionRequest::ReadBlob")
+                .field("blob_id", blob_id)
                 .finish_non_exhaustive(),
         }
     }

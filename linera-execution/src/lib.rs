@@ -23,6 +23,7 @@ use std::{fmt, str::FromStr, sync::Arc};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
+use committee::Epoch;
 use custom_debug_derive::Debug;
 use dashmap::DashMap;
 use derive_more::Display;
@@ -30,12 +31,12 @@ use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Resources,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, Resources,
         SendMessageRequest, Timestamp,
     },
     doc_scalar, hex_debug,
     identifiers::{
-        Account, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
+        Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination,
         GenericApplicationId, MessageId, Owner,
     },
     ownership::ChainOwnership,
@@ -161,6 +162,9 @@ pub enum ExecutionError {
         timestamp: Timestamp,
         local_time: Timestamp,
     },
+
+    #[error("Blob not found on storage read: {0}")]
+    BlobNotFoundOnRead(BlobId),
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -242,6 +246,8 @@ pub trait ExecutionRuntimeContext {
         &self,
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
+
+    async fn get_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ExecutionError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -453,6 +459,9 @@ pub trait BaseRuntime {
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError>;
+
+    /// Reads a blob specified by a given `BlobId`.
+    fn read_blob(&mut self, blob_id: &BlobId) -> Result<HashedBlob, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
@@ -798,6 +807,7 @@ pub struct TestExecutionRuntimeContext {
     execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
+    blobs: Arc<DashMap<BlobId, HashedBlob>>,
 }
 
 #[cfg(with_testing)]
@@ -808,6 +818,7 @@ impl TestExecutionRuntimeContext {
             execution_runtime_config,
             user_contracts: Arc::default(),
             user_services: Arc::default(),
+            blobs: Arc::default(),
         }
     }
 }
@@ -856,6 +867,14 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .ok_or_else(|| {
                 ExecutionError::ApplicationBytecodeNotFound(Box::new(description.clone()))
             })?
+            .clone())
+    }
+
+    async fn get_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ExecutionError> {
+        Ok(self
+            .blobs
+            .get(&blob_id)
+            .ok_or_else(|| ExecutionError::BlobNotFoundOnRead(blob_id))?
             .clone())
     }
 }
@@ -997,6 +1016,15 @@ impl std::fmt::Debug for Bytecode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         f.debug_tuple("Bytecode").finish()
     }
+}
+
+/// The state of a blob of binary data.
+#[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize)]
+pub struct BlobState {
+    /// Hash of the last `Certificate` that published or used this blob.
+    pub last_used_by: CryptoHash,
+    /// Epoch of the `last_used_by` certificate.
+    pub epoch: Epoch,
 }
 
 /// The runtime to use for running the application.

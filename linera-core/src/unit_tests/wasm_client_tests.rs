@@ -114,25 +114,49 @@ where
 
     let contract_blob = HashedBlob::load_from_file(contract_path.clone()).await?;
     let expected_contract_blob_id = contract_blob.id();
-    let (blob_id, _) = publisher
+    let (blob_id, certificate) = publisher
         .publish_blob(contract_blob.clone())
         .await
         .unwrap()
         .unwrap();
     assert_eq!(expected_contract_blob_id, blob_id);
+    assert!(certificate
+        .value()
+        .executed_block()
+        .unwrap()
+        .outcome
+        .oracle_records
+        .iter()
+        .any(|record| record.responses.contains(&OracleResponse::Blob(blob_id))));
 
     let service_blob = HashedBlob::load_from_file(service_path.clone()).await?;
     let expected_service_blob_id = service_blob.id();
-    let (blob_id, _) = publisher.publish_blob(service_blob).await.unwrap().unwrap();
+    let (blob_id, certificate) = publisher.publish_blob(service_blob).await.unwrap().unwrap();
     assert_eq!(expected_service_blob_id, blob_id);
+    assert!(certificate
+        .value()
+        .executed_block()
+        .unwrap()
+        .outcome
+        .oracle_records
+        .iter()
+        .any(|record| record.responses.contains(&OracleResponse::Blob(blob_id))));
 
     // If I try to upload the contract blob again, I should get the same blob ID
-    let (blob_id, _) = publisher
+    let (blob_id, certificate) = publisher
         .publish_blob(contract_blob)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(expected_contract_blob_id, blob_id);
+    assert!(certificate
+        .value()
+        .executed_block()
+        .unwrap()
+        .outcome
+        .oracle_records
+        .iter()
+        .any(|record| record.responses.contains(&OracleResponse::Blob(blob_id))));
 
     let (bytecode_id, cert) = publisher
         .publish_bytecode(

@@ -25,7 +25,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlobState, BlockHeight, HashedBlob, Timestamp},
+    data_types::{Amount, BlockHeight, HashedBlob, Timestamp},
     identifiers::{BlobId, ChainDescription, ChainId, GenericApplicationId},
     ownership::ChainOwnership,
 };
@@ -36,8 +36,9 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::SystemChannel,
-    ChannelSubscription, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime,
+    BlobState, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, UserApplicationDescription, UserApplicationId, UserContractCode,
+    UserServiceCode, WasmRuntime,
 };
 use linera_views::{
     common::Context,
@@ -96,6 +97,9 @@ pub trait Storage: Sized {
     /// Tests existence of a blob with the given hash.
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
+    /// Tests existence of a blob state with the given hash.
+    async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError>;
+
     /// Reads the hashed certificate value with the given hash.
     async fn read_hashed_certificate_value(
         &self,
@@ -122,11 +126,21 @@ pub trait Storage: Sized {
     ) -> Result<(), ViewError>;
 
     /// Writes the given blob.
-    async fn write_hashed_blob(
+    async fn write_hashed_blob(&self, blob: &HashedBlob) -> Result<(), ViewError>;
+
+    /// Writes the given blob state.
+    async fn write_blob_state(
         &self,
-        blob: &HashedBlob,
-        last_used_by: &CryptoHash,
+        blob_id: BlobId,
+        blob_state: &BlobState,
     ) -> Result<(), ViewError>;
+
+    /// Attempts to write the given blob state. Returns the latest `Epoch` to have used this blob.
+    async fn maybe_write_blob_state(
+        &self,
+        blob_id: BlobId,
+        blob_state: BlobState,
+    ) -> Result<Epoch, ViewError>;
 
     /// Writes several hashed certificate values.
     async fn write_hashed_certificate_values(
@@ -135,11 +149,7 @@ pub trait Storage: Sized {
     ) -> Result<(), ViewError>;
 
     /// Writes several blobs.
-    async fn write_hashed_blobs(
-        &self,
-        blobs: &[HashedBlob],
-        last_used_by: &CryptoHash,
-    ) -> Result<(), ViewError>;
+    async fn write_hashed_blobs(&self, blobs: &[HashedBlob]) -> Result<(), ViewError>;
 
     /// Tests existence of the certificate with the given hash.
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
@@ -413,5 +423,9 @@ where
                 Ok(service)
             }
         }
+    }
+
+    async fn get_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ExecutionError> {
+        Ok(self.storage.read_hashed_blob(blob_id).await?)
     }
 }

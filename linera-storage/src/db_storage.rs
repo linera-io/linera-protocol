@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, BlobState, HashedBlob, TimeDelta, Timestamp},
+    data_types::{Blob, HashedBlob, TimeDelta, Timestamp},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -15,7 +15,8 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    ExecutionRuntimeConfig, UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime,
+    committee::Epoch, BlobState, ExecutionRuntimeConfig, UserApplicationId, UserContractCode,
+    UserServiceCode, WasmRuntime,
 };
 use linera_views::{
     batch::Batch,
@@ -57,6 +58,17 @@ static CONTAINS_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "contains_blob",
         "The metric counting how often a blob is tested for existence from storage",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
+
+/// The metric counting how often a blob state is tested for existence from storage
+#[cfg(with_metrics)]
+static CONTAINS_BLOB_STATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "contains_blob_state",
+        "The metric counting how often a blob state is tested for existence from storage",
         &[],
     )
     .expect("Counter creation should not fail")
@@ -428,6 +440,14 @@ where
         Ok(test)
     }
 
+    async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
+        let blob_key = bcs::to_bytes(&BaseKey::BlobStateId(blob_id))?;
+        let test = self.client.client.contains_key(&blob_key).await?;
+        #[cfg(with_metrics)]
+        CONTAINS_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
+        Ok(test)
+    }
+
     async fn read_hashed_certificate_value(
         &self,
         hash: CryptoHash,
@@ -499,13 +519,42 @@ where
         self.write_batch(batch).await
     }
 
-    async fn write_hashed_blob(
+    async fn write_hashed_blob(&self, blob: &HashedBlob) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        self.add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+        self.write_batch(batch).await?;
+        Ok(())
+    }
+
+    async fn maybe_write_blob_state(
         &self,
-        blob: &HashedBlob,
-        last_used_by: &CryptoHash,
+        blob_id: BlobId,
+        blob_state: BlobState,
+    ) -> Result<Epoch, ViewError> {
+        let current_blob_state = self.read_blob_state(blob_id).await;
+        let (should_write, latest_epoch) = match current_blob_state {
+            Ok(current_blob_state) => (
+                current_blob_state.epoch < blob_state.epoch,
+                current_blob_state.epoch.max(blob_state.epoch),
+            ),
+            Err(ViewError::NotFound(_)) => (true, blob_state.epoch),
+            Err(err) => return Err(err),
+        };
+
+        if should_write {
+            self.write_blob_state(blob_id, &blob_state).await?;
+        }
+
+        Ok(latest_epoch)
+    }
+
+    async fn write_blob_state(
+        &self,
+        blob_id: BlobId,
+        blob_state: &BlobState,
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.add_blob_to_batch(&blob.id(), blob, last_used_by, &mut batch)?;
+        self.add_blob_state_to_batch(blob_id, blob_state, &mut batch)?;
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -521,14 +570,10 @@ where
         self.write_batch(batch).await
     }
 
-    async fn write_hashed_blobs(
-        &self,
-        blobs: &[HashedBlob],
-        last_used_by: &CryptoHash,
-    ) -> Result<(), ViewError> {
+    async fn write_hashed_blobs(&self, blobs: &[HashedBlob]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for blob in blobs {
-            self.add_blob_to_batch(&blob.id(), blob, last_used_by, &mut batch)?;
+            self.add_blob_to_batch(&blob.id(), blob, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -611,30 +656,23 @@ where
         &self,
         blob_id: &BlobId,
         blob: &HashedBlob,
-        last_used_by: &CryptoHash,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob_key = bcs::to_bytes(&BaseKey::BlobId(*blob_id))?;
         batch.put_key_value(blob_key.to_vec(), blob)?;
-        self.add_blob_state_to_batch(blob_id, last_used_by, batch)?;
         Ok(())
     }
 
     fn add_blob_state_to_batch(
         &self,
-        blob_id: &BlobId,
-        last_used_by: &CryptoHash,
+        blob_id: BlobId,
+        blob_state: &BlobState,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
-        let blob_state_key = bcs::to_bytes(&BaseKey::BlobStateId(*blob_id))?;
-        batch.put_key_value(
-            blob_state_key.to_vec(),
-            &BlobState {
-                last_used_by: *last_used_by,
-            },
-        )?;
+        let blob_state_key = bcs::to_bytes(&BaseKey::BlobStateId(blob_id))?;
+        batch.put_key_value(blob_state_key.to_vec(), blob_state)?;
         Ok(())
     }
 

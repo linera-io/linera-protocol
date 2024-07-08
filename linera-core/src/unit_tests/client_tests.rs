@@ -1445,6 +1445,16 @@ where
     client_a.synchronize_from_validators().await.unwrap();
     assert_eq!(expected_blob_id, blob_id);
     assert_eq!(certificate.round, Round::MultiLeader(0));
+    assert!(certificate
+        .value()
+        .executed_block()
+        .unwrap()
+        .outcome
+        .oracle_records
+        .iter()
+        .any(|record| record
+            .responses
+            .contains(&OracleResponse::Blob(expected_blob_id))));
     let previous_block_hash = client_a.block_hash().unwrap();
 
     // Validators goes back up

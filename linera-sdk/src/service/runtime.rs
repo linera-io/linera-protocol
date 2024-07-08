@@ -7,8 +7,8 @@ use std::cell::Cell;
 
 use linera_base::{
     abi::ServiceAbi,
-    data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ApplicationId, ChainId, Owner},
+    data_types::{Amount, BlockHeight, HashedBlob, Timestamp},
+    identifiers::{ApplicationId, BlobId, ChainId, Owner},
 };
 
 use super::wit::service_system_api as wit;
@@ -143,5 +143,10 @@ where
         let value = cell.take().unwrap_or_else(fetch);
         cell.set(Some(value.clone()));
         value
+    }
+
+    /// Reads a blob with the given `BlobId` from storage.
+    pub fn read_blob(&mut self, blob_id: BlobId) -> HashedBlob {
+        wit::read_blob(blob_id.into()).into()
     }
 }

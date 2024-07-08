@@ -9,7 +9,10 @@ use std::{
     sync::Arc,
 };
 
-use futures::{future, FutureExt as _};
+use futures::{
+    future::{self, try_join_all},
+    FutureExt as _,
+};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{ArithmeticError, BlockHeight, HashedBlob, Timestamp},
@@ -26,8 +29,8 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    BytecodeLocation, ExecutionRequest, Query, QueryContext, Response, ServiceRuntimeRequest,
-    UserApplicationDescription, UserApplicationId,
+    BlobState, BytecodeLocation, ExecutionRequest, Query, QueryContext, Response,
+    ServiceRuntimeRequest, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::{
@@ -304,13 +307,14 @@ where
     async fn check_no_missing_blobs(
         &self,
         block: &Block,
+        blobs_in_block: HashSet<BlobId>,
         hashed_certificate_values: &[HashedCertificateValue],
         hashed_blobs: &[HashedBlob],
     ) -> Result<(), WorkerError> {
         let missing_bytecodes = self
             .get_missing_bytecodes(block, hashed_certificate_values)
             .await?;
-        let missing_blobs = self.get_missing_blobs(block, hashed_blobs).await?;
+        let missing_blobs = self.get_missing_blobs(blobs_in_block, hashed_blobs).await?;
 
         if missing_bytecodes.is_empty() && missing_blobs.is_empty() {
             return Ok(());
@@ -325,10 +329,9 @@ where
     /// Returns the blobs required by the block that we don't have, or an error if unrelated blobs were provided.
     async fn get_missing_blobs(
         &self,
-        block: &Block,
+        mut required_blob_ids: HashSet<BlobId>,
         hashed_blobs: &[HashedBlob],
     ) -> Result<Vec<BlobId>, WorkerError> {
-        let mut required_blob_ids = block.blob_ids();
         // Find all certificates containing blobs used when executing this block.
         for hashed_blob in hashed_blobs {
             let blob_id = hashed_blob.id();
@@ -339,13 +342,26 @@ where
         }
 
         let pending_blobs = &self.chain.manager.get().pending_blobs;
-        Ok(self
+        let tasks = self
             .recent_hashed_blobs
             .subtract_cached_items_from::<_, Vec<_>>(required_blob_ids, |id| id)
             .await
             .into_iter()
             .filter(|blob_id| !pending_blobs.contains_key(blob_id))
-            .collect())
+            .map(|blob_id| {
+                self.storage
+                    .contains_blob(blob_id)
+                    .map(move |result| (blob_id, result))
+            });
+
+        let mut missing_blobs = vec![];
+        for (blob_id, result) in future::join_all(tasks).await {
+            if !result? {
+                missing_blobs.push(blob_id);
+            }
+        }
+
+        Ok(missing_blobs)
     }
 
     /// Returns the blobs requested by their `blob_ids` that are either in pending in the
@@ -401,10 +417,8 @@ where
             .collect::<Vec<_>>();
         let mut missing_locations = vec![];
         for (location, result) in future::join_all(tasks).await {
-            match result {
-                Ok(true) => {}
-                Ok(false) => missing_locations.push(location),
-                Err(err) => Err(err)?,
+            if !result? {
+                missing_locations.push(location);
             }
         }
 
@@ -677,10 +691,15 @@ where
         // legitimately required.
         // Actual execution happens below, after other validity checks.
         self.0.chain.remove_events_from_inboxes(block).await?;
-        // Verify that all required bytecode hashed certificate values are available, and no
+        // Verify that all required bytecode hashed certificate values and blobs are available, and no
         // unrelated ones provided.
         self.0
-            .check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
+            .check_no_missing_blobs(
+                block,
+                block.published_blob_ids(),
+                hashed_certificate_values,
+                hashed_blobs,
+            )
             .await?;
         // Write the values so that the bytecode is available during execution.
         // TODO(#2199): We should not persist anything in storage before the block is confirmed.
@@ -928,12 +947,12 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
-        let block = match certificate.value() {
-            CertificateValue::ValidatedBlock {
-                executed_block: ExecutedBlock { block, .. },
-            } => block,
+        let executed_block = match certificate.value() {
+            CertificateValue::ValidatedBlock { executed_block } => executed_block,
             _ => panic!("Expecting a validation certificate"),
         };
+
+        let block = &executed_block.block;
         let height = block.height;
         // Check that the chain is active and ready for this validated block.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
@@ -974,6 +993,11 @@ where
             .recent_hashed_certificate_values
             .insert(Cow::Borrowed(&certificate.value))
             .await;
+        // Verify that all required bytecode hashed certificate values and blobs are available, and no
+        // unrelated ones provided.
+        self.state
+            .check_no_missing_blobs(block, executed_block.required_blob_ids(), &[], &[])
+            .await?;
         let old_round = self.state.chain.manager.get().current_round;
         self.state.chain.manager.get_mut().create_final_vote(
             certificate,
@@ -1055,10 +1079,17 @@ where
             tip.block_hash == block.previous_block_hash,
             WorkerError::InvalidBlockChaining
         );
-        // Verify that all required bytecode hashed certificate values are available, and no
+
+        let required_blob_ids = executed_block.required_blob_ids();
+        // Verify that all required bytecode hashed certificate values and blobs are available, and no
         // unrelated ones provided.
         self.state
-            .check_no_missing_blobs(block, hashed_certificate_values, hashed_blobs)
+            .check_no_missing_blobs(
+                block,
+                required_blob_ids.clone(),
+                hashed_certificate_values,
+                hashed_blobs,
+            )
             .await?;
         // Persist certificate and hashed certificate values.
         self.state
@@ -1071,20 +1102,32 @@ where
                 .await;
         }
 
-        let blobs_in_block = self.state.get_blobs(block.blob_ids()).await?;
+        let blobs_in_block = self.state.get_blobs(required_blob_ids.clone()).await?;
         let certificate_hash = certificate.hash();
+
         let (result_hashed_certificate_value, result_blobs, result_certificate) = tokio::join!(
             self.state
                 .storage
                 .write_hashed_certificate_values(hashed_certificate_values),
-            self.state
-                .storage
-                .write_hashed_blobs(&blobs_in_block, &certificate_hash),
+            self.state.storage.write_hashed_blobs(&blobs_in_block),
             self.state.storage.write_certificate(&certificate)
         );
         result_hashed_certificate_value?;
         result_blobs?;
         result_certificate?;
+
+        // Update the blob state with last used certificate hash.
+        try_join_all(required_blob_ids.into_iter().map(|blob_id| {
+            self.state.storage.maybe_write_blob_state(
+                blob_id,
+                BlobState {
+                    last_used_by: certificate_hash,
+                    epoch: certificate.value().epoch(),
+                },
+            )
+        }))
+        .await?;
+
         // Execute the block and update inboxes.
         self.state.chain.remove_events_from_inboxes(block).await?;
         let local_time = self.state.storage.clock().current_time();
