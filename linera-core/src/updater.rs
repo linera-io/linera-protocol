@@ -79,6 +79,10 @@ where
 /// An error result for [`communicate_with_quorum`].
 #[derive(Error, Debug)]
 pub enum CommunicationError<E: fmt::Debug> {
+    /// No consensus is possible since validators returned different possibilities
+    /// for the next block
+    #[error("No error but failed to find a consensus block. Consensus threshold: {}, Proposals: {:?}", .0, .1)]
+    NoConsensus(u64, Vec<(u64, usize)>),
     /// A single error that was returned by a sufficient number of nodes to be trusted as
     /// valid.
     #[error("Failed to communicate with a quorum of validators: {0}")]
@@ -165,12 +169,23 @@ where
         }
     }
 
+    let scores = value_scores
+        .values()
+        .map(|(weight, values)| (*weight, values.len()))
+        .collect();
     // If a key has a quorum, return it with its values.
     if let Some((key, (_, values))) = value_scores
         .into_iter()
         .find(|(_, (score, _))| *score >= committee.quorum_threshold())
     {
         return Ok((key, values));
+    }
+
+    if error_scores.is_empty() {
+        return Err(CommunicationError::NoConsensus(
+            committee.quorum_threshold(),
+            scores,
+        ));
     }
 
     // No specific error is available to report reliably.
