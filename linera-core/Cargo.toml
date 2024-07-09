@@ -74,7 +74,7 @@ test-log = { workspace = true, optional = true }
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio.workspace = true
-tokio-stream.workspace = true
+tokio-stream = { workspace = true, features = ["sync"] }
 tonic.workspace = true
 tracing.workspace = true
 trait-variant.workspace = true
