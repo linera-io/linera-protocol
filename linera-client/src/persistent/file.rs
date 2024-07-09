@@ -110,11 +110,6 @@ impl<T: serde::de::DeserializeOwned> File<T> {
             _lock: lock,
         })
     }
-
-    /// Takes the value out, releasing the lock on the persistent file.
-    pub fn into_value(self) -> T {
-        self.value
-    }
 }
 
 impl<T: serde::Serialize + serde::de::DeserializeOwned> Persist for File<T> {
@@ -149,5 +144,10 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> Persist for File<T> {
         }
         fs_err::rename(&temp_file_path, &this.path)?;
         Ok(())
+    }
+
+    /// Takes the value out, releasing the lock on the persistent file.
+    fn into_value(this: Self) -> T {
+        this.value
     }
 }

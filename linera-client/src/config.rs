@@ -67,20 +67,20 @@ impl CommitteeConfig {
 
 /// The runtime state of the wallet, persisted atomically on change via an instance of
 /// [`Persist`].
-pub struct WalletState {
-    wallet: persistent::File<Wallet>,
+pub struct WalletState<W> {
+    wallet: W,
     prng: Box<dyn CryptoRng>,
 }
 
-impl std::ops::Deref for WalletState {
-    type Target = Wallet;
+impl<W: std::ops::Deref> std::ops::Deref for WalletState<W> {
+    type Target = W::Target;
 
-    fn deref(&self) -> &Wallet {
+    fn deref(&self) -> &Self::Target {
         &self.wallet
     }
 }
 
-impl Persist for WalletState {
+impl<W: Persist<Target = Wallet>> Persist for WalletState<W> {
     type Error = anyhow::Error;
 
     fn persist(this: &mut Self) -> anyhow::Result<()> {
@@ -92,40 +92,40 @@ impl Persist for WalletState {
     fn as_mut(this: &mut Self) -> &mut Wallet {
         Persist::as_mut(&mut this.wallet)
     }
+
+    fn into_value(this: Self) -> Wallet {
+        Persist::into_value(this.wallet)
+    }
 }
 
-impl Extend<UserChain> for WalletState {
+impl<W: Persist<Target = Wallet>> Extend<UserChain> for WalletState<W> {
     fn extend<Chains: IntoIterator<Item = UserChain>>(&mut self, chains: Chains) {
         Persist::mutate(self).extend(chains);
     }
 }
 
-impl WalletState {
-    fn new(wallet: persistent::File<Wallet>) -> Self {
-        Self {
-            prng: wallet.make_prng(),
-            wallet,
-        }
-    }
-
-    pub fn from_file(path: &Path) -> Result<Self, anyhow::Error> {
-        Ok(Self::new(persistent::File::read_or_create(path, || {
-            anyhow::bail!("wallet file not found: {}", path.display())
-        })?))
-    }
-
+impl WalletState<persistent::File<Wallet>> {
     pub fn create(path: &Path, wallet: Wallet) -> Result<Self, anyhow::Error> {
         Ok(Self::new(persistent::File::read_or_create(path, || {
             Ok(wallet)
         })?))
     }
 
-    pub fn generate_key_pair(&mut self) -> KeyPair {
-        KeyPair::generate_from(&mut self.prng)
+    pub fn from_file(path: &Path) -> Result<Self, anyhow::Error> {
+        Ok(Self::new(persistent::File::read(path)?))
+    }
+}
+
+impl<W: Persist<Target = Wallet>> WalletState<W> {
+    pub fn new(wallet: W) -> Self {
+        Self {
+            prng: wallet.make_prng(),
+            wallet,
+        }
     }
 
-    pub fn into_value(self) -> Wallet {
-        self.wallet.into_value()
+    pub fn generate_key_pair(&mut self) -> KeyPair {
+        KeyPair::generate_from(&mut self.prng)
     }
 }
 
