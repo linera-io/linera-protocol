@@ -6,14 +6,13 @@ use std::{
     mem,
     ops::{Deref, DerefMut},
     sync::{Arc, Mutex},
-    vec,
 };
 
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, OracleRecord,
-        OracleResponse, Resources, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, OracleResponse,
+        Resources, SendMessageRequest, Timestamp,
     },
     ensure,
     identifiers::{Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner},
@@ -28,8 +27,9 @@ use crate::{
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, FinalizeContext,
-    MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime,
-    UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
+    MessageContext, OperationContext, OracleResponses, QueryContext, RawExecutionOutcome,
+    ServiceRuntime, UserApplicationDescription, UserApplicationId, UserContractInstance,
+    UserServiceInstance,
 };
 
 #[cfg(test)]
@@ -47,17 +47,6 @@ pub struct SyncRuntimeHandle<UserInstance>(Arc<Mutex<SyncRuntimeInternal<UserIns
 
 pub type ContractSyncRuntimeHandle = SyncRuntimeHandle<UserContractInstance>;
 pub type ServiceSyncRuntimeHandle = SyncRuntimeHandle<UserServiceInstance>;
-
-/// Responses to oracle queries that are being recorded or replayed.
-#[derive(Debug)]
-enum OracleResponses {
-    /// When executing a block _proposal_, oracles can be used and their responses are recorded.
-    Record(Vec<OracleResponse>),
-    /// When re-executing a validated or confirmed block, recorded responses are used.
-    Replay(vec::IntoIter<OracleResponse>),
-    /// In service queries, oracle responses are not recorded.
-    Forget,
-}
 
 /// Runtime data tracked during the execution of a transaction on the synchronous thread.
 #[derive(Debug)]
@@ -1016,8 +1005,8 @@ impl ContractSyncRuntime {
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: UserAction,
-        oracle_record: Option<OracleRecord>,
-    ) -> Result<(Vec<ExecutionOutcome>, OracleRecord, ResourceController), ExecutionError> {
+        oracle_responses: OracleResponses,
+    ) -> Result<(Vec<ExecutionOutcome>, OracleResponses, ResourceController), ExecutionError> {
         let executing_message = match &action {
             UserAction::Message(context, _) => Some(context.into()),
             _ => None,
@@ -1025,11 +1014,6 @@ impl ContractSyncRuntime {
         let signer = action.signer();
         let height = action.height();
         let next_message_index = action.next_message_index();
-        let oracle_record = if let Some(responses) = oracle_record {
-            OracleResponses::Replay(responses.responses.into_iter())
-        } else {
-            OracleResponses::Record(Vec::new())
-        };
         let mut runtime = SyncRuntime(Some(ContractSyncRuntimeHandle::from(
             SyncRuntimeInternal::new(
                 chain_id,
@@ -1041,7 +1025,7 @@ impl ContractSyncRuntime {
                 execution_state_sender,
                 refund_grant_to,
                 resource_controller,
-                oracle_record,
+                oracle_responses,
             ),
         )));
         let finalize_context = FinalizeContext {
@@ -1061,14 +1045,9 @@ impl ContractSyncRuntime {
         let runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        let oracle_record = if let OracleResponses::Record(responses) = runtime.oracle_responses {
-            OracleRecord { responses }
-        } else {
-            OracleRecord::default()
-        };
         Ok((
             runtime.execution_outcomes,
-            oracle_record,
+            runtime.oracle_responses,
             runtime.resource_controller,
         ))
     }

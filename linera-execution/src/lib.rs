@@ -19,7 +19,7 @@ pub mod test_utils;
 mod util;
 mod wasm;
 
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{fmt, str::FromStr, sync::Arc, vec};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
@@ -31,8 +31,8 @@ use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, Resources,
-        SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, OracleRecord,
+        OracleResponse, Resources, SendMessageRequest, Timestamp,
     },
     doc_scalar, hex_debug,
     identifiers::{
@@ -1025,6 +1025,37 @@ pub struct BlobState {
     pub last_used_by: CryptoHash,
     /// Epoch of the `last_used_by` certificate.
     pub epoch: Epoch,
+}
+
+/// Responses to oracle queries that are being recorded or replayed.
+#[derive(Debug)]
+pub enum OracleResponses {
+    /// When executing a block _proposal_, oracles can be used and their responses are recorded.
+    Record(Vec<OracleResponse>),
+    /// When re-executing a validated or confirmed block, recorded responses are used.
+    Replay(vec::IntoIter<OracleResponse>),
+    /// In service queries, oracle responses are not recorded.
+    Forget,
+}
+
+impl OracleResponses {
+    /// Returns an empty `Record` if the argument is `None`, and `Replay` if it is `Some`.
+    pub fn from_record(oracle_record: Option<OracleRecord>) -> Self {
+        if let Some(responses) = oracle_record {
+            OracleResponses::Replay(responses.responses.into_iter())
+        } else {
+            OracleResponses::Record(Vec::new())
+        }
+    }
+
+    /// Returns the oracle record if `self` is `Record` and an empty record otherwise.
+    pub fn into_record(self) -> OracleRecord {
+        if let OracleResponses::Record(responses) = self {
+            OracleRecord { responses }
+        } else {
+            OracleRecord::default()
+        }
+    }
 }
 
 /// The runtime to use for running the application.

@@ -12,9 +12,7 @@ use async_graphql::Enum;
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, OracleRecord, OracleResponse, Timestamp,
-    },
+    data_types::{Amount, ApplicationPermissions, ArithmeticError, OracleResponse, Timestamp},
     ensure, hex_debug,
     identifiers::{Account, BlobId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -39,8 +37,8 @@ use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
-    Destination, MessageContext, MessageKind, OperationContext, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
+    Destination, MessageContext, MessageKind, OperationContext, OracleResponses, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -441,20 +439,17 @@ where
         &mut self,
         context: OperationContext,
         operation: SystemOperation,
+        oracle_responses: &mut OracleResponses,
     ) -> Result<
         (
             RawExecutionOutcome<SystemMessage, Amount>,
             Option<(UserApplicationId, Vec<u8>)>,
-            OracleRecord,
         ),
         SystemExecutionError,
     > {
         use SystemOperation::*;
         let mut outcome = RawExecutionOutcome::default();
         let mut new_application = None;
-        let mut oracle_record = OracleRecord {
-            responses: Vec::new(),
-        };
         match operation {
             OpenChain(config) => {
                 let next_message_id = context.next_message_id();
@@ -679,11 +674,13 @@ where
                 outcome.messages.push(message);
             }
             PublishBlob { blob_id } => {
-                oracle_record.responses.push(OracleResponse::Blob(blob_id));
+                if let OracleResponses::Record(responses) = oracle_responses {
+                    responses.push(OracleResponse::Blob(blob_id));
+                }
             }
         }
 
-        Ok((outcome, new_application, oracle_record))
+        Ok((outcome, new_application))
     }
 
     pub async fn transfer(
@@ -1082,9 +1079,9 @@ mod tests {
             contract: Bytecode::new(vec![]),
             service: Bytecode::new(vec![]),
         };
-        let (result, new_application, _) = view
+        let (result, new_application) = view
             .system
-            .execute_operation(context, operation)
+            .execute_operation(context, operation, &mut OracleResponses::Forget)
             .await
             .unwrap();
         assert_eq!(new_application, None);
@@ -1120,9 +1117,9 @@ mod tests {
             instantiation_argument: vec![],
             required_application_ids: vec![],
         };
-        let (result, new_application, _) = view
+        let (result, new_application) = view
             .system
-            .execute_operation(context, operation)
+            .execute_operation(context, operation, &mut OracleResponses::Forget)
             .await
             .unwrap();
         assert_eq!(
@@ -1157,9 +1154,9 @@ mod tests {
             application_permissions: Default::default(),
         };
         let operation = SystemOperation::OpenChain(config.clone());
-        let (result, new_application, _) = view
+        let (result, new_application) = view
             .system
-            .execute_operation(context, operation)
+            .execute_operation(context, operation, &mut OracleResponses::Forget)
             .await
             .unwrap();
         assert_eq!(new_application, None);
