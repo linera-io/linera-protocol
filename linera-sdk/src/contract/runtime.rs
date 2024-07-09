@@ -8,6 +8,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, HashedBlob, Resources, SendMessageRequest, Timestamp},
     identifiers::{
         Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, MessageId, Owner,
+        StreamName,
     },
     ownership::{ChainOwnership, CloseChainError},
 };
@@ -207,6 +208,11 @@ where
 
         bcs::from_bytes(&response_bytes)
             .expect("Failed to deserialize `Response` type from cross-application call")
+    }
+
+    /// Adds a new item to an event stream.
+    pub fn emit(&mut self, name: StreamName, payload: &[u8]) {
+        wit::emit(&name.into(), payload);
     }
 
     /// Queries our application service as an oracle and returns the response.

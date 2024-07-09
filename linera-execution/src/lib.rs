@@ -37,7 +37,7 @@ use linera_base::{
     doc_scalar, hex_debug,
     identifiers::{
         Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination,
-        GenericApplicationId, MessageId, Owner,
+        GenericApplicationId, MessageId, Owner, StreamName,
     },
     ownership::ChainOwnership,
 };
@@ -531,6 +531,9 @@ pub trait ContractRuntime: BaseRuntime {
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
+    /// Adds a new item to an event stream.
+    fn emit(&mut self, name: StreamName, payload: Vec<u8>) -> Result<(), ExecutionError>;
+
     /// Opens a new chain.
     fn open_chain(
         &mut self,
@@ -670,6 +673,8 @@ pub struct RawExecutionOutcome<Message, Grant = Resources> {
     /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer and including grant with the refund policy described above.
     pub messages: Vec<RawOutgoingMessage<Message, Grant>>,
+    /// Events recorded by contracts' `emit` calls.
+    pub events: Vec<(StreamName, Vec<u8>)>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.
@@ -729,6 +734,7 @@ impl<Message, Grant> Default for RawExecutionOutcome<Message, Grant> {
             authenticated_signer: None,
             refund_grant_to: None,
             messages: Vec::new(),
+            events: Vec::new(),
             subscribe: Vec::new(),
             unsubscribe: Vec::new(),
         }
@@ -766,6 +772,7 @@ impl<Message> RawExecutionOutcome<Message, Resources> {
             authenticated_signer,
             refund_grant_to,
             messages,
+            events,
             subscribe,
             unsubscribe,
         } = self;
@@ -777,6 +784,7 @@ impl<Message> RawExecutionOutcome<Message, Resources> {
             authenticated_signer,
             refund_grant_to,
             messages,
+            events,
             subscribe,
             unsubscribe,
         })

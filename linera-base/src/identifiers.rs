@@ -263,6 +263,23 @@ pub struct BytecodeId<Abi = (), Parameters = (), InstantiationArgument = ()> {
 )]
 pub struct ChannelName(#[serde(with = "serde_bytes")] Vec<u8>);
 
+/// The name of an event stream.
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+)]
+pub struct StreamName(#[serde(with = "serde_bytes")] Vec<u8>);
+
 /// The destination of a message, relative to a particular application.
 #[derive(
     Clone,
@@ -317,7 +334,14 @@ impl From<Vec<u8>> for ChannelName {
 }
 
 impl ChannelName {
-    /// Turns the channel into bytes.
+    /// Turns the channel name into bytes.
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.0
+    }
+}
+
+impl StreamName {
+    /// Turns the stream name into bytes.
     pub fn into_bytes(self) -> Vec<u8> {
         self.0
     }

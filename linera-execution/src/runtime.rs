@@ -16,7 +16,9 @@ use linera_base::{
         Resources, SendMessageRequest, Timestamp,
     },
     ensure,
-    identifiers::{Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner},
+    identifiers::{
+        Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner, StreamName,
+    },
     ownership::ChainOwnership,
 };
 use linera_views::batch::Batch;
@@ -87,6 +89,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     active_applications: HashSet<UserApplicationId>,
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
     execution_outcomes: Vec<ExecutionOutcome>,
+    /// Accumulated events emitted by applications.
+    events: Vec<()>,
     /// Recorded responses to oracle queries.
     recorded_oracle_responses: Vec<OracleResponse>,
     /// Oracle responses that are being replayed.
@@ -316,8 +320,9 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
-            execution_outcomes: Vec::default(),
-            view_user_states: BTreeMap::default(),
+            execution_outcomes: Vec::new(),
+            events: Vec::new(),
+            view_user_states: BTreeMap::new(),
             refund_grant_to,
             resource_controller,
             replaying_oracle_responses,
@@ -1252,6 +1257,13 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         self.inner().finish_call()?;
 
         Ok(value)
+    }
+
+    fn emit(&mut self, name: StreamName, payload: Vec<u8>) -> Result<(), ExecutionError> {
+        let mut this = self.inner();
+        let application = this.current_application_mut();
+        application.outcome.events.push((name, payload));
+        Ok(())
     }
 
     fn open_chain(

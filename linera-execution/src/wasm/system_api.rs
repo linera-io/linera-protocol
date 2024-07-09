@@ -7,7 +7,9 @@ use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, HashedBlob, SendMessageRequest, Timestamp,
     },
-    identifiers::{Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner},
+    identifiers::{
+        Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner, StreamName,
+    },
     ownership::{ChainOwnership, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -299,6 +301,15 @@ where
             .user_data_mut()
             .runtime
             .try_call_application(authenticated, callee_id, argument)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Adds an item to an event stream.
+    fn emit(caller: &mut Caller, name: StreamName, payload: Vec<u8>) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .emit(name, payload)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
