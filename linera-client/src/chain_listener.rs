@@ -152,7 +152,6 @@ where
             client
         };
         let (listener, _listen_handle, mut local_stream) = client.listen().await?;
-        client.synchronize_from_validators().await?;
         tokio::spawn(listener);
         let mut timeout = storage.clock().current_time();
         loop {
