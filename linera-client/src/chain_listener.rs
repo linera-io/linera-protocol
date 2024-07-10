@@ -17,7 +17,7 @@ use linera_base::{
 use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
     client::ChainClient,
-    node::{LocalValidatorNodeProvider, ValidatorNode, ValidatorNodeProvider},
+    node::{ValidatorNode, ValidatorNodeProvider},
     worker::Reason,
 };
 use linera_execution::{Message, SystemMessage};
@@ -43,9 +43,9 @@ pub struct ChainListenerConfig {
 }
 
 #[async_trait]
-pub trait ClientContext {
-    type ValidatorNodeProvider: LocalValidatorNodeProvider;
-    type Storage: Storage;
+pub trait ClientContext: Send + 'static {
+    type ValidatorNodeProvider: ValidatorNodeProvider<Node: ValidatorNode<NotificationStream: Send>> + Send + Sync;
+    type Storage: Storage + Clone + Send + Sync;
 
     fn wallet(&self) -> &Wallet;
 
@@ -72,28 +72,22 @@ pub trait ClientContext {
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
 /// appropriately.
-pub struct ChainListener<P, S>
+pub struct ChainListener
 {
     config: ChainListenerConfig,
-    _phantom: std::marker::PhantomData<(P, S)>,
 }
 
-impl<P, S> ChainListener<P, S>
-where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
-{
+impl ChainListener {
     /// Creates a new chain listener.
     pub fn new(config: ChainListenerConfig) -> Self {
-        Self { config, _phantom: Default::default() }
+        Self { config }
     }
 
     /// Runs the chain listener.
-    pub async fn run<C>(self, context: Arc<Mutex<C>>, storage: S)
+    pub async fn run<C>(self, context: Arc<Mutex<C>>, storage: C::Storage)
     where
-        C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+        C: ClientContext + Send + 'static,
+        ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
     {
         let chain_ids = context.lock().await.wallet().chain_ids();
         let running: Arc<Mutex<HashSet<ChainId>>> = Arc::default();
@@ -111,11 +105,12 @@ where
     fn run_with_chain_id<C>(
         chain_id: ChainId,
         context: Arc<Mutex<C>>,
-        storage: S,
+        storage: C::Storage,
         config: ChainListenerConfig,
         running: Arc<Mutex<HashSet<ChainId>>>,
     ) where
-        C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+        C: ClientContext + Send + 'static,
+        ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
     {
         let _handle = tokio::task::spawn(async move {
             if let Err(err) =
@@ -129,12 +124,13 @@ where
     async fn run_client_stream<C>(
         chain_id: ChainId,
         context: Arc<Mutex<C>>,
-        storage: S,
+        storage: C::Storage,
         config: ChainListenerConfig,
         running: Arc<Mutex<HashSet<ChainId>>>,
     ) -> anyhow::Result<()>
     where
-        C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+        C: ClientContext + Send + 'static,
+        ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
     {
         let chain_client = if running.lock().await.contains(&chain_id) {
             return Ok(());
@@ -159,14 +155,15 @@ where
     async fn process_notifications<C>(
         mut local_stream: impl futures::Stream<Item = linera_core::worker::Notification> + Unpin,
         _listen_handle: linera_core::client::AbortOnDrop,
-        chain_client: ChainClient<P, S>,
+        chain_client: ChainClient<C::ValidatorNodeProvider, C::Storage>,
         context: Arc<Mutex<C>>,
-        storage: S,
+        storage: C::Storage,
         config: ChainListenerConfig,
         running: Arc<Mutex<HashSet<ChainId>>>,
     ) -> anyhow::Result<()>
     where
-        C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+        C: ClientContext + Send + 'static,
+        ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
     {
         let mut timeout = storage.clock().current_time();
         loop {
