@@ -151,14 +151,37 @@ where
             entry.insert(client.clone());
             client
         };
-        let (listener, _listen_handle, mut local_stream) = client.listen().await?;
+        let (listener, listen_handle, local_stream) = client.listen().await?;
         tokio::spawn(listener);
+        Self::process_notifications(
+            local_stream,
+            listen_handle,
+            client,
+            clients,
+            context,
+            storage,
+            config,
+        ).await
+    }
+
+    async fn process_notifications<C>(
+        mut local_stream: impl futures::Stream<Item = linera_core::worker::Notification> + Unpin,
+        _listen_handle: linera_core::client::AbortOnDrop,
+        client: ChainClient<P, S>,
+        clients: ChainClients<P, S>,
+        context: Arc<Mutex<C>>,
+        storage: S,
+        config: ChainListenerConfig,
+    ) -> anyhow::Result<()>
+    where
+        C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+    {
         let mut timeout = storage.clock().current_time();
         loop {
             let sleep = Box::pin(storage.clock().sleep_until(timeout));
             let notification = match future::select(local_stream.next(), sleep).await {
                 Either::Left((Some(notification), _)) => notification,
-                Either::Left((None, _)) => break,
+                Either::Left((None, _)) => return Ok(()),
                 Either::Right(((), _)) => {
                     match client.process_inbox_if_owned().await {
                         Err(error) => {
@@ -239,7 +262,6 @@ where
                 );
             }
         }
-        Ok(())
     }
 
     async fn maybe_sleep(delay_ms: u64) {
