@@ -130,6 +130,14 @@ where
         }
     }
 
+    fn chain_client_options(&self) -> ChainClientOptions {
+        ChainClientOptions {
+            max_pending_messages: self.max_pending_messages,
+            message_policy: self.message_policy,
+            cross_chain_message_delivery: self.cross_chain_message_delivery,
+        }
+    }
+
     /// Returns the storage client used by this client's local node.
     pub fn storage_client(&self) -> &S {
         &self.storage
@@ -140,7 +148,7 @@ where
         &self.local_node
     }
 
-    /// Creates a new `ChainClient`.
+    /// Creates a new `ChainClient` for the given `chain_id`.
     #[allow(clippy::too_many_arguments)]
     pub fn create_chain(
         self: &Arc<Self>,
@@ -161,29 +169,41 @@ where
             .map(|kp| (Owner::from(kp.public()), kp))
             .collect();
 
-        let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) else {
-            panic!("Inserting already-existing chain {chain_id}");
-        };
-        e.insert(ChainState {
-            known_key_pairs,
-            admin_id,
-            block_hash,
-            timestamp,
-            next_block_height,
-            pending_block,
-            pending_blobs,
-            received_certificate_trackers: HashMap::new(),
-            preparing_block: Arc::default(),
-        });
+        if let Some(old_chain) = self.chains.insert(
+            chain_id,
+            ChainState {
+                known_key_pairs,
+                admin_id,
+                block_hash,
+                timestamp,
+                next_block_height,
+                pending_block,
+                pending_blobs,
+                received_certificate_trackers: HashMap::new(),
+                preparing_block: Arc::default(),
+            })
+        {
+            tracing::warn!("Inserting duplicate chain for ID {chain_id} (old height {}, new height {next_block_height})", old_chain.next_block_height);
+        }
 
         ChainClient {
             client: self.clone(),
             chain_id,
-            options: ChainClientOptions {
-                max_pending_messages: self.max_pending_messages,
-                message_policy: self.message_policy,
-                cross_chain_message_delivery: self.cross_chain_message_delivery,
-            },
+            options: self.chain_client_options(),
+        }
+    }
+
+    /// Gets a `ChainClient` for the chain with the given `chain_id` if it is currently
+    /// known to the [`Client`].
+    pub fn chain(self: Arc<Self>, chain_id: ChainId) -> Option<ChainClient<P, S>> {
+        if self.chains.contains_key(&chain_id) {
+            Some(ChainClient {
+                client: self.clone(),
+                chain_id,
+                options: self.chain_client_options(),
+            })
+        } else {
+            None
         }
     }
 
@@ -199,6 +219,14 @@ where
                 }
             })
         })
+    }
+
+    pub fn chain_ids(&self) -> impl Iterator<Item = ChainId> {
+        self.chains.iter().map(|chain| *chain.key()).collect::<Vec<_>>().into_iter()
+    }
+
+    pub fn has_chain(&self, chain_id: ChainId) -> bool {
+        self.chains.contains_key(&chain_id)
     }
 }
 
