@@ -5,7 +5,7 @@ use std::{collections::btree_map, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use futures::{
-    future::{self, Either},
+    future::{self, Either, FutureExt as _},
     lock::Mutex,
     StreamExt,
 };
@@ -152,16 +152,18 @@ where
             client
         };
         let (listener, listen_handle, local_stream) = client.listen().await?;
-        tokio::spawn(listener);
-        Self::process_notifications(
-            local_stream,
-            listen_handle,
-            client,
-            clients,
-            context,
-            storage,
-            config,
-        ).await
+        let ((), ()) = futures::try_join!(
+            listener.map(Ok),
+            Self::process_notifications(
+                local_stream,
+                listen_handle,
+                client,
+                clients,
+                context,
+                storage,
+                config,
+            ))?;
+        Ok(())
     }
 
     async fn process_notifications<C>(
