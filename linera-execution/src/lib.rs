@@ -1029,7 +1029,7 @@ pub struct BlobState {
 
 /// Responses to oracle queries that are being recorded or replayed.
 #[derive(Debug)]
-pub enum OracleResponses {
+pub enum OracleTape {
     /// When executing a block _proposal_, oracles can be used and their responses are recorded.
     Record(Vec<OracleResponse>),
     /// When re-executing a validated or confirmed block, recorded responses are used.
@@ -1038,19 +1038,19 @@ pub enum OracleResponses {
     Forget,
 }
 
-impl OracleResponses {
+impl OracleTape {
     /// Returns an empty `Record` if the argument is `None`, and `Replay` if it is `Some`.
     pub fn from_record(oracle_record: Option<OracleRecord>) -> Self {
         if let Some(responses) = oracle_record {
-            OracleResponses::Replay(responses.responses.into_iter())
+            OracleTape::Replay(responses.responses.into_iter())
         } else {
-            OracleResponses::Record(Vec::new())
+            OracleTape::Record(Vec::new())
         }
     }
 
     /// Returns the oracle record if `self` is `Record` and an empty record otherwise.
     pub fn into_record(self) -> OracleRecord {
-        if let OracleResponses::Record(responses) = self {
+        if let OracleTape::Record(responses) = self {
             OracleRecord { responses }
         } else {
             OracleRecord::default()

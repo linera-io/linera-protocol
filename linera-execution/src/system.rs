@@ -37,7 +37,7 @@ use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
-    Destination, MessageContext, MessageKind, OperationContext, OracleResponses, QueryContext,
+    Destination, MessageContext, MessageKind, OperationContext, OracleTape, QueryContext,
     RawExecutionOutcome, RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
 };
 
@@ -439,7 +439,7 @@ where
         &mut self,
         context: OperationContext,
         operation: SystemOperation,
-        oracle_responses: &mut OracleResponses,
+        oracle_tape: &mut OracleTape,
     ) -> Result<
         (
             RawExecutionOutcome<SystemMessage, Amount>,
@@ -674,7 +674,7 @@ where
                 outcome.messages.push(message);
             }
             PublishBlob { blob_id } => {
-                if let OracleResponses::Record(responses) = oracle_responses {
+                if let OracleTape::Record(responses) = oracle_tape {
                     responses.push(OracleResponse::Blob(blob_id));
                 }
             }
@@ -1081,7 +1081,7 @@ mod tests {
         };
         let (result, new_application) = view
             .system
-            .execute_operation(context, operation, &mut OracleResponses::Forget)
+            .execute_operation(context, operation, &mut OracleTape::Forget)
             .await
             .unwrap();
         assert_eq!(new_application, None);
@@ -1119,7 +1119,7 @@ mod tests {
         };
         let (result, new_application) = view
             .system
-            .execute_operation(context, operation, &mut OracleResponses::Forget)
+            .execute_operation(context, operation, &mut OracleTape::Forget)
             .await
             .unwrap();
         assert_eq!(
@@ -1156,7 +1156,7 @@ mod tests {
         let operation = SystemOperation::OpenChain(config.clone());
         let (result, new_application) = view
             .system
-            .execute_operation(context, operation, &mut OracleResponses::Forget)
+            .execute_operation(context, operation, &mut OracleTape::Forget)
             .await
             .unwrap();
         assert_eq!(new_application, None);

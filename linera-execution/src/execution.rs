@@ -28,7 +28,7 @@ use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
     ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
-    MessageContext, MessageKind, Operation, OperationContext, OracleResponses, Query, QueryContext,
+    MessageContext, MessageKind, Operation, OperationContext, OracleTape, Query, QueryContext,
     RawExecutionOutcome, RawOutgoingMessage, Response, SystemMessage, UserApplicationDescription,
     UserApplicationId,
 };
@@ -94,7 +94,7 @@ where
             action,
             context.refund_grant_to(),
             None,
-            OracleResponses::Forget,
+            OracleTape::Forget,
             &mut resource_controller,
         )
         .await?;
@@ -151,11 +151,11 @@ where
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
-        oracle_responses: OracleResponses,
+        oracle_tape: OracleTape,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<(Vec<ExecutionOutcome>, OracleResponses), ExecutionError> {
+    ) -> Result<(Vec<ExecutionOutcome>, OracleTape), ExecutionError> {
         let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
-        let (execution_outcomes, oracle_responses) = self
+        let (execution_outcomes, oracle_tape) = self
             .run_user_action_with_runtime(
                 application_id,
                 chain_id,
@@ -163,14 +163,14 @@ where
                 action,
                 refund_grant_to,
                 grant,
-                oracle_responses,
+                oracle_tape,
                 resource_controller,
             )
             .await?;
         let execution_outcomes = self
             .update_execution_outcomes_with_app_registrations(execution_outcomes)
             .await?;
-        Ok((execution_outcomes, oracle_responses))
+        Ok((execution_outcomes, oracle_tape))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -182,9 +182,9 @@ where
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
-        oracle_responses: OracleResponses,
+        oracle_tape: OracleTape,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<(Vec<ExecutionOutcome>, OracleResponses), ExecutionError> {
+    ) -> Result<(Vec<ExecutionOutcome>, OracleTape), ExecutionError> {
         let mut cloned_grant = grant.as_ref().map(|x| **x);
         let initial_balance = resource_controller
             .with_state_and_grant(self, cloned_grant.as_mut())
@@ -206,20 +206,19 @@ where
                 refund_grant_to,
                 controller,
                 action,
-                oracle_responses,
+                oracle_tape,
             )
         });
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
         }
-        let (execution_outcomes, oracle_responses, controller) =
-            execution_outcomes_future.await??;
+        let (execution_outcomes, oracle_tape, controller) = execution_outcomes_future.await??;
         resource_controller
             .with_state_and_grant(self, grant)
             .await?
             .merge_balance(initial_balance, controller.balance()?)?;
         resource_controller.tracker = controller.tracker;
-        Ok((execution_outcomes, oracle_responses))
+        Ok((execution_outcomes, oracle_tape))
     }
 
     /// Schedules application registration messages when needed.
@@ -293,19 +292,19 @@ where
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(Vec<ExecutionOutcome>, OracleRecord), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        let mut oracle_responses = OracleResponses::from_record(oracle_record);
+        let mut oracle_tape = OracleTape::from_record(oracle_record);
         match operation {
             Operation::System(op) => {
                 let (mut result, new_application) = self
                     .system
-                    .execute_operation(context, op, &mut oracle_responses)
+                    .execute_operation(context, op, &mut oracle_tape)
                     .await?;
                 result.authenticated_signer = context.authenticated_signer;
                 result.refund_grant_to = context.refund_grant_to();
                 let mut outcomes = vec![ExecutionOutcome::System(result)];
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Instantiate(context, argument);
-                    let (user_outcomes, oracle_responses) = self
+                    let (user_outcomes, oracle_tape) = self
                         .run_user_action(
                             application_id,
                             context.chain_id,
@@ -313,20 +312,20 @@ where
                             user_action,
                             context.refund_grant_to(),
                             None,
-                            oracle_responses,
+                            oracle_tape,
                             resource_controller,
                         )
                         .await?;
                     outcomes.extend(user_outcomes);
-                    return Ok((outcomes, oracle_responses.into_record()));
+                    return Ok((outcomes, oracle_tape.into_record()));
                 }
-                Ok((outcomes, oracle_responses.into_record()))
+                Ok((outcomes, oracle_tape.into_record()))
             }
             Operation::User {
                 application_id,
                 bytes,
             } => {
-                let (outcomes, oracle_responses) = self
+                let (outcomes, oracle_tape) = self
                     .run_user_action(
                         application_id,
                         context.chain_id,
@@ -334,11 +333,11 @@ where
                         UserAction::Operation(context, bytes),
                         context.refund_grant_to(),
                         None,
-                        oracle_responses,
+                        oracle_tape,
                         resource_controller,
                     )
                     .await?;
-                Ok((outcomes, oracle_responses.into_record()))
+                Ok((outcomes, oracle_tape.into_record()))
             }
         }
     }
@@ -365,7 +364,7 @@ where
                 application_id,
                 bytes,
             } => {
-                let (outcomes, oracle_responses) = self
+                let (outcomes, oracle_tape) = self
                     .run_user_action(
                         application_id,
                         context.chain_id,
@@ -373,11 +372,11 @@ where
                         UserAction::Message(context, bytes),
                         context.refund_grant_to,
                         grant,
-                        OracleResponses::from_record(oracle_record),
+                        OracleTape::from_record(oracle_record),
                         resource_controller,
                     )
                     .await?;
-                Ok((outcomes, oracle_responses.into_record()))
+                Ok((outcomes, oracle_tape.into_record()))
             }
         }
     }

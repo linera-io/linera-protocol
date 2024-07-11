@@ -184,7 +184,7 @@ fn create_runtime<Application>() -> (
         execution_state_sender,
         None,
         resource_controller,
-        super::OracleResponses::Record(Vec::new()),
+        super::OracleTape::Record(Vec::new()),
     );
 
     (runtime, execution_state_receiver)
