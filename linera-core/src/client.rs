@@ -181,8 +181,8 @@ where
                 pending_blobs,
                 received_certificate_trackers: HashMap::new(),
                 preparing_block: Arc::default(),
-            })
-        {
+            },
+        ) {
             tracing::warn!("Inserting duplicate chain for ID {chain_id} (old height {}, new height {next_block_height})", old_chain.next_block_height);
         }
 
@@ -222,7 +222,11 @@ where
     }
 
     pub fn chain_ids(&self) -> impl Iterator<Item = ChainId> {
-        self.chains.iter().map(|chain| *chain.key()).collect::<Vec<_>>().into_iter()
+        self.chains
+            .iter()
+            .map(|chain| *chain.key())
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     pub fn has_chain(&self, chain_id: ChainId) -> bool {

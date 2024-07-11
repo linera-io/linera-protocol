@@ -25,13 +25,11 @@ use linera_base::{
     BcsHexParseError,
 };
 use linera_chain::{data_types::HashedCertificateValue, ChainStateView};
-use linera_client::{
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
-};
+use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
 use linera_core::{
     client::{ChainClient, ChainClientError, Client},
     data_types::{ClientOutcome, RoundTimeout},
-    node::{NotificationStream, ValidatorNode, ValidatorNodeProvider},
+    node::{NotificationStream, ValidatorNode},
     worker::{Notification, Reason},
 };
 use linera_execution::{
@@ -164,7 +162,12 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        let client = self.context.lock().await.client().try_chain_client(chain_id)?;
+        let client = self
+            .context
+            .lock()
+            .await
+            .client()
+            .try_chain_client(chain_id)?;
         Ok(client.subscribe().await?)
     }
 }
@@ -197,17 +200,23 @@ where
     /// Applies the given function to the chain client.
     /// Updates the wallet regardless of the outcome. As long as the function returns a round
     /// timeout, it will wait and retry.
-    async fn apply_client_command<F, Fut, T>(
-        &self,
-        chain_id: ChainId,
-        mut f: F,
-    ) -> Result<T, Error>
+    async fn apply_client_command<F, Fut, T>(&self, chain_id: ChainId, mut f: F) -> Result<T, Error>
     where
         F: FnMut(ChainClient<C::ValidatorNodeProvider, C::Storage>) -> Fut,
-        Fut: Future<Output = (Result<ClientOutcome<T>, Error>, ChainClient<C::ValidatorNodeProvider, C::Storage>)>,
+        Fut: Future<
+            Output = (
+                Result<ClientOutcome<T>, Error>,
+                ChainClient<C::ValidatorNodeProvider, C::Storage>,
+            ),
+        >,
     {
         loop {
-            let client = self.context.lock().await.client().try_chain_client(chain_id)?;
+            let client = self
+                .context
+                .lock()
+                .await
+                .client()
+                .try_chain_client(chain_id)?;
             let mut stream = client.subscribe().await?;
             let (result, client) = f(client).await;
             self.context.lock().await.update_wallet(&client).await;
@@ -231,7 +240,12 @@ where
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
         let mut hashes = Vec::new();
         loop {
-            let client = self.context.lock().await.client().try_chain_client(chain_id)?;
+            let client = self
+                .context
+                .lock()
+                .await
+                .client()
+                .try_chain_client(chain_id)?;
             client.synchronize_from_validators().await?;
             let result = client.process_inbox().await;
             self.context.lock().await.update_wallet(&client).await;
@@ -250,7 +264,12 @@ where
 
     /// Retries the pending block that was unsuccessfully proposed earlier.
     async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
-        let client = self.context.lock().await.client().try_chain_client(chain_id)?;
+        let client = self
+            .context
+            .lock()
+            .await
+            .client()
+            .try_chain_client(chain_id)?;
         let outcome = client.process_pending_block().await?;
         self.context.lock().await.update_wallet(&client).await;
         match outcome {
@@ -631,7 +650,12 @@ where
         target_chain_id: Option<ChainId>,
     ) -> Result<CryptoHash, Error> {
         loop {
-            let client = self.context.lock().await.client().try_chain_client(chain_id)?;
+            let client = self
+                .context
+                .lock()
+                .await
+                .client()
+                .try_chain_client(chain_id)?;
             let result = client
                 .request_application(application_id, target_chain_id)
                 .await;
@@ -653,14 +677,27 @@ where
     C: ClientContext + Send + 'static,
     ViewError: From<<C::Storage as Storage>::StoreError>,
 {
-    async fn chain(&self, chain_id: ChainId) -> Result<ChainStateExtendedView<<C::Storage as Storage>::Context>, Error> {
-        let client = self.context.lock().await.client().try_chain_client(chain_id)?;
+    async fn chain(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainStateExtendedView<<C::Storage as Storage>::Context>, Error> {
+        let client = self
+            .context
+            .lock()
+            .await
+            .client()
+            .try_chain_client(chain_id)?;
         let view = client.chain_state_view().await?;
         Ok(ChainStateExtendedView::new(view))
     }
 
     async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
-        let client = self.context.lock().await.client().try_chain_client(chain_id)?;
+        let client = self
+            .context
+            .lock()
+            .await
+            .client()
+            .try_chain_client(chain_id)?;
         let applications = client
             .chain_state_view()
             .await?
@@ -688,7 +725,12 @@ where
         hash: Option<CryptoHash>,
         chain_id: ChainId,
     ) -> Result<Option<HashedCertificateValue>, Error> {
-        let client = self.context.lock().await.client().try_chain_client(chain_id)?;
+        let client = self
+            .context
+            .lock()
+            .await
+            .client()
+            .try_chain_client(chain_id)?;
         let hash = match hash {
             Some(hash) => Some(hash),
             None => {
@@ -710,7 +752,12 @@ where
         chain_id: ChainId,
         limit: Option<u32>,
     ) -> Result<Vec<HashedCertificateValue>, Error> {
-        let client = self.context.lock().await.client().try_chain_client(chain_id)?;
+        let client = self
+            .context
+            .lock()
+            .await
+            .client()
+            .try_chain_client(chain_id)?;
         let limit = limit.unwrap_or(10);
         let from = match from {
             Some(from) => Some(from),
@@ -849,7 +896,9 @@ where
 {
     type ChainClient = ChainClient<P, S>;
     fn try_chain_client(self, chain_id: ChainId) -> Result<Self::ChainClient, Error> {
-        self.clone().chain(chain_id).ok_or_else(|| Error::new(format!("Unknown chain ID: {}", chain_id)))
+        self.clone()
+            .chain(chain_id)
+            .ok_or_else(|| Error::new(format!("Unknown chain ID: {}", chain_id)))
     }
 }
 
@@ -917,7 +966,7 @@ impl<C> Clone for NodeService<C> {
         Self {
             config: self.config.clone(),
             port: self.port,
-            default_chain: self.default_chain.clone(),
+            default_chain: self.default_chain,
             context: self.context.clone(),
         }
     }
@@ -988,7 +1037,8 @@ where
         axum::serve(
             tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?,
             app,
-        ).await?;
+        )
+        .await?;
 
         Ok(())
     }

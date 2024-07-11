@@ -18,8 +18,8 @@ use linera_core::{
     client::{ChainClient, Client},
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{
-        CrossChainMessageDelivery, LocalValidatorNodeProvider, ValidatorNodeProvider, NodeError, NotificationStream,
-        ValidatorNode,
+        CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
+        ValidatorNode, ValidatorNodeProvider,
     },
 };
 use linera_execution::committee::Committee;
@@ -133,19 +133,19 @@ impl ClientContext for DummyContext {
         unimplemented!()
     }
 
-    fn make_chain_client(&self, _: ChainId) -> ChainClient<Self::ValidatorNodeProvider, Self::Storage>
-    {
+    fn make_chain_client(
+        &self,
+        _: ChainId,
+    ) -> ChainClient<Self::ValidatorNodeProvider, Self::Storage> {
         unimplemented!()
     }
 
     fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {}
 
-    async fn update_wallet(&mut self, _: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>)
-    {
+    async fn update_wallet(&mut self, _: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>) {
     }
 
-    fn client(&self) -> std::sync::Arc<Client<Self::ValidatorNodeProvider, Self::Storage>>
-    {
+    fn client(&self) -> std::sync::Arc<Client<Self::ValidatorNodeProvider, Self::Storage>> {
         unimplemented!()
     }
 }

@@ -115,7 +115,9 @@ where
     }
 
     fn client(&self) -> Arc<Client<Self::ValidatorNodeProvider, Self::Storage>>
-    where ViewError: From<<Self::Storage as Storage>::StoreError> {
+    where
+        ViewError: From<<Self::Storage as Storage>::StoreError>,
+    {
         Arc::clone(&self.client)
     }
 }

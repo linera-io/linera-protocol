@@ -44,7 +44,9 @@ pub struct ChainListenerConfig {
 
 #[async_trait]
 pub trait ClientContext: Send {
-    type ValidatorNodeProvider: ValidatorNodeProvider<Node: ValidatorNode<NotificationStream: Send>> + Send + Sync;
+    type ValidatorNodeProvider: ValidatorNodeProvider<Node: ValidatorNode<NotificationStream: Send>>
+        + Send
+        + Sync;
     type Storage: Storage + Clone + Send + Sync;
 
     fn wallet(&self) -> &Wallet;
@@ -70,13 +72,13 @@ pub trait ClientContext: Send {
         ViewError: From<<Self::Storage as Storage>::StoreError>;
 
     fn client(&self) -> Arc<Client<Self::ValidatorNodeProvider, Self::Storage>>
-    where ViewError: From<<Self::Storage as Storage>::StoreError>;
+    where
+        ViewError: From<<Self::Storage as Storage>::StoreError>;
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
 /// appropriately.
-pub struct ChainListener
-{
+pub struct ChainListener {
     config: ChainListenerConfig,
 }
 
@@ -94,7 +96,10 @@ impl ChainListener {
     {
         let (chain_ids, storage) = {
             let context_guard = context.lock().await;
-            (context_guard.wallet().chain_ids(), context_guard.client().storage_client().clone())
+            (
+                context_guard.wallet().chain_ids(),
+                context_guard.client().storage_client().clone(),
+            )
         };
         let running: Arc<Mutex<HashSet<ChainId>>> = Arc::default();
         for chain_id in chain_ids {
@@ -154,7 +159,8 @@ impl ChainListener {
                 storage,
                 config,
                 running,
-            ))?;
+            )
+        )?;
         Ok(())
     }
 

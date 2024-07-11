@@ -97,6 +97,10 @@ impl chain_listener::ClientContext for ClientContext {
     async fn update_wallet(&mut self, client: &ChainClient<TestProvider, TestStorage>) {
         self.wallet.update_from_state(client).await;
     }
+
+    fn client(&self) -> Arc<Client<TestProvider, TestStorage>> {
+        self.client.clone()
+    }
 }
 
 fn make_genesis_config(builder: &TestBuilder<MemoryStorageBuilder>) -> GenesisConfig {
@@ -156,8 +160,8 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let public_key = key_pair.public();
     context.update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time());
     let context = Arc::new(Mutex::new(context));
-    let listener = ChainListener::new(config, Default::default());
-    listener.run(context, storage).await;
+    let listener = ChainListener::new(config);
+    listener.run(context).await;
 
     // Transfer ownership of chain 0 to the chain listener and some other key. The listener will
     // be leader in ~10% of the rounds.
