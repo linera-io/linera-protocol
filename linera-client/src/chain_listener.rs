@@ -16,7 +16,7 @@ use linera_base::{
 };
 use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
-    client::ChainClient,
+    client::{ChainClient, Client},
     node::{ValidatorNode, ValidatorNodeProvider},
     worker::Reason,
 };
@@ -43,7 +43,7 @@ pub struct ChainListenerConfig {
 }
 
 #[async_trait]
-pub trait ClientContext: Send + 'static {
+pub trait ClientContext: Send {
     type ValidatorNodeProvider: ValidatorNodeProvider<Node: ValidatorNode<NotificationStream: Send>> + Send + Sync;
     type Storage: Storage + Clone + Send + Sync;
 
@@ -68,6 +68,9 @@ pub trait ClientContext: Send + 'static {
         client: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
     ) where
         ViewError: From<<Self::Storage as Storage>::StoreError>;
+
+    fn client(&self) -> Arc<Client<Self::ValidatorNodeProvider, Self::Storage>>
+    where ViewError: From<<Self::Storage as Storage>::StoreError>;
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
@@ -84,12 +87,15 @@ impl ChainListener {
     }
 
     /// Runs the chain listener.
-    pub async fn run<C>(self, context: Arc<Mutex<C>>, storage: C::Storage)
+    pub async fn run<C>(self, context: Arc<Mutex<C>>)
     where
         C: ClientContext + Send + 'static,
         ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
     {
-        let chain_ids = context.lock().await.wallet().chain_ids();
+        let (chain_ids, storage) = {
+            let context_guard = context.lock().await;
+            (context_guard.wallet().chain_ids(), context_guard.client().storage_client().clone())
+        };
         let running: Arc<Mutex<HashSet<ChainId>>> = Arc::default();
         for chain_id in chain_ids {
             Self::run_with_chain_id(

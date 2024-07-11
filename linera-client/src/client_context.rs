@@ -113,6 +113,11 @@ where
     async fn update_wallet(&mut self, client: &ChainClient<NodeProvider, S>) {
         self.update_and_save_wallet(client).await;
     }
+
+    fn client(&self) -> Arc<Client<Self::ValidatorNodeProvider, Self::Storage>>
+    where ViewError: From<<Self::Storage as Storage>::StoreError> {
+        Arc::clone(&self.client)
+    }
 }
 
 impl<S, W> ClientContext<S, W>

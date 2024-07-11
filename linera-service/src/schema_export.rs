@@ -18,7 +18,7 @@ use linera_core::{
     client::ChainClient,
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{
-        CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
+        CrossChainMessageDelivery, LocalValidatorNodeProvider, ValidatorNodeProvider, NodeError, NotificationStream,
         ValidatorNode,
     },
 };
@@ -124,7 +124,7 @@ struct DummyContext<P, S> {
 }
 
 #[async_trait]
-impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientContext
+impl<P: ValidatorNodeProvider<Node: ValidatorNode<NotificationStream: Send>> + Send + Sync, S: Storage + Clone + Send + Sync> ClientContext
     for DummyContext<P, S>
 {
     type ValidatorNodeProvider = P;
@@ -147,6 +147,10 @@ impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientConte
     where
         ViewError: From<S::StoreError>,
     {
+    }
+
+    fn client(&self) -> Arc<Client<P, S>> {
+        unimplemented!()
     }
 }
 

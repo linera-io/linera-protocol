@@ -26,11 +26,10 @@ use linera_base::{
 };
 use linera_chain::{data_types::HashedCertificateValue, ChainStateView};
 use linera_client::{
-    chain_clients::ChainClients,
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
 };
 use linera_core::{
-    client::{ChainClient, ChainClientError},
+    client::{ChainClient, ChainClientError, Client},
     data_types::{ClientOutcome, RoundTimeout},
     node::{NotificationStream, ValidatorNode, ValidatorNodeProvider},
     worker::{Notification, Reason},
@@ -60,32 +59,19 @@ pub struct Chains {
 }
 
 /// Our root GraphQL query type.
-pub struct QueryRoot<P, S>
-where
-    S: Storage,
-    ViewError: From<S::StoreError>,
-{
-    clients: ChainClients<P, S>,
+pub struct QueryRoot<C> {
+    context: Arc<Mutex<C>>,
     port: NonZeroU16,
     default_chain: Option<ChainId>,
 }
 
 /// Our root GraphQL subscription type.
-pub struct SubscriptionRoot<P, S>
-where
-    S: Storage,
-    ViewError: From<S::StoreError>,
-{
-    clients: ChainClients<P, S>,
+pub struct SubscriptionRoot<C> {
+    context: Arc<Mutex<C>>,
 }
 
 /// Our root GraphQL mutation type.
-pub struct MutationRoot<P, S, C>
-where
-    S: Storage,
-    ViewError: From<S::StoreError>,
-{
-    clients: ChainClients<P, S>,
+pub struct MutationRoot<C> {
     context: Arc<Mutex<C>>,
 }
 
@@ -168,28 +154,25 @@ impl IntoResponse for NodeServiceError {
 }
 
 #[Subscription]
-impl<P, S> SubscriptionRoot<P, S>
+impl<C> SubscriptionRoot<C>
 where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
+    C: ClientContext + Send + 'static,
+    ViewError: From<<C::Storage as Storage>::StoreError>,
 {
     /// Subscribes to notifications from the specified chain.
     async fn notifications(
         &self,
         chain_id: ChainId,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.context.lock().await.client().try_chain_client(chain_id)?;
         Ok(client.subscribe().await?)
     }
 }
 
-impl<P, S, C> MutationRoot<P, S, C>
+impl<C> MutationRoot<C>
 where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-    ViewError: From<S::StoreError>,
+    C: ClientContext + Send + 'static,
+    ViewError: From<<C::Storage as Storage>::StoreError>,
 {
     async fn execute_system_operation(
         &self,
@@ -197,7 +180,7 @@ where
         chain_id: ChainId,
     ) -> Result<CryptoHash, Error> {
         let certificate = self
-            .apply_client_command(&chain_id, move |client| {
+            .apply_client_command(chain_id, move |client| {
                 let operation = Operation::System(system_operation.clone());
                 async move {
                     let result = client
@@ -216,15 +199,15 @@ where
     /// timeout, it will wait and retry.
     async fn apply_client_command<F, Fut, T>(
         &self,
-        chain_id: &ChainId,
+        chain_id: ChainId,
         mut f: F,
     ) -> Result<T, Error>
     where
-        F: FnMut(ChainClient<P, S>) -> Fut,
-        Fut: Future<Output = (Result<ClientOutcome<T>, Error>, ChainClient<P, S>)>,
+        F: FnMut(ChainClient<C::ValidatorNodeProvider, C::Storage>) -> Fut,
+        Fut: Future<Output = (Result<ClientOutcome<T>, Error>, ChainClient<C::ValidatorNodeProvider, C::Storage>)>,
     {
         loop {
-            let client = self.clients.try_client_lock(chain_id).await?;
+            let client = self.context.lock().await.client().try_chain_client(chain_id)?;
             let mut stream = client.subscribe().await?;
             let (result, client) = f(client).await;
             self.context.lock().await.update_wallet(&client).await;
@@ -239,18 +222,16 @@ where
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<P, S, C> MutationRoot<P, S, C>
+impl<C> MutationRoot<C>
 where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-    ViewError: From<S::StoreError>,
+    C: ClientContext + Send + 'static,
+    ViewError: From<<C::Storage as Storage>::StoreError>,
 {
     /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
         let mut hashes = Vec::new();
         loop {
-            let client = self.clients.try_client_lock(&chain_id).await?;
+            let client = self.context.lock().await.client().try_chain_client(chain_id)?;
             client.synchronize_from_validators().await?;
             let result = client.process_inbox().await;
             self.context.lock().await.update_wallet(&client).await;
@@ -269,7 +250,7 @@ where
 
     /// Retries the pending block that was unsuccessfully proposed earlier.
     async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.context.lock().await.client().try_chain_client(chain_id)?;
         let outcome = client.process_pending_block().await?;
         self.context.lock().await.update_wallet(&client).await;
         match outcome {
@@ -292,7 +273,7 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        self.apply_client_command(&chain_id, move |client| {
+        self.apply_client_command(chain_id, move |client| {
             let user_data = user_data.clone();
             async move {
                 let result = client
@@ -319,7 +300,7 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        self.apply_client_command(&chain_id, move |client| {
+        self.apply_client_command(chain_id, move |client| {
             let user_data = user_data.clone();
             async move {
                 let result = client
@@ -350,7 +331,7 @@ where
         let ownership = ChainOwnership::single(public_key);
         let balance = balance.unwrap_or(Amount::ZERO);
         let message_id = self
-            .apply_client_command(&chain_id, move |client| {
+            .apply_client_command(chain_id, move |client| {
                 let ownership = ownership.clone();
                 async move {
                     let result = client
@@ -421,7 +402,7 @@ where
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds, timeout_config);
         let balance = balance.unwrap_or(Amount::ZERO);
         let message_id = self
-            .apply_client_command(&chain_id, move |client| {
+            .apply_client_command(chain_id, move |client| {
                 let ownership = ownership.clone();
                 let application_permissions = application_permissions.clone().unwrap_or_default();
                 async move {
@@ -440,7 +421,7 @@ where
     /// Closes the chain.
     async fn close_chain(&self, chain_id: ChainId) -> Result<CryptoHash, Error> {
         let certificate = self
-            .apply_client_command(&chain_id, |client| async move {
+            .apply_client_command(chain_id, |client| async move {
                 let result = client.close_chain().await.map_err(Error::from);
                 (result, client)
             })
@@ -580,7 +561,7 @@ where
         contract: Bytecode,
         service: Bytecode,
     ) -> Result<BytecodeId, Error> {
-        self.apply_client_command(&chain_id, move |client| {
+        self.apply_client_command(chain_id, move |client| {
             let contract = contract.clone();
             let service = service.clone();
             async move {
@@ -597,7 +578,7 @@ where
 
     /// Publishes a new blob.
     async fn publish_blob(&self, chain_id: ChainId, blob: Blob) -> Result<BlobId, Error> {
-        self.apply_client_command(&chain_id, move |client| {
+        self.apply_client_command(chain_id, move |client| {
             let blob = blob.clone();
             async move {
                 let result = client
@@ -620,7 +601,7 @@ where
         instantiation_argument: String,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ApplicationId, Error> {
-        self.apply_client_command(&chain_id, move |client| {
+        self.apply_client_command(chain_id, move |client| {
             let parameters = parameters.as_bytes().to_vec();
             let instantiation_argument = instantiation_argument.as_bytes().to_vec();
             let required_application_ids = required_application_ids.clone();
@@ -650,7 +631,7 @@ where
         target_chain_id: Option<ChainId>,
     ) -> Result<CryptoHash, Error> {
         loop {
-            let client = self.clients.try_client_lock(&chain_id).await?;
+            let client = self.context.lock().await.client().try_chain_client(chain_id)?;
             let result = client
                 .request_application(application_id, target_chain_id)
                 .await;
@@ -667,20 +648,19 @@ where
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<P, S> QueryRoot<P, S>
+impl<C> QueryRoot<C>
 where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
+    C: ClientContext + Send + 'static,
+    ViewError: From<<C::Storage as Storage>::StoreError>,
 {
-    async fn chain(&self, chain_id: ChainId) -> Result<ChainStateExtendedView<S::Context>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
+    async fn chain(&self, chain_id: ChainId) -> Result<ChainStateExtendedView<<C::Storage as Storage>::Context>, Error> {
+        let client = self.context.lock().await.client().try_chain_client(chain_id)?;
         let view = client.chain_state_view().await?;
         Ok(ChainStateExtendedView::new(view))
     }
 
     async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.context.lock().await.client().try_chain_client(chain_id)?;
         let applications = client
             .chain_state_view()
             .await?
@@ -698,7 +678,7 @@ where
 
     async fn chains(&self) -> Result<Chains, Error> {
         Ok(Chains {
-            list: self.clients.0.lock().await.keys().cloned().collect(),
+            list: self.context.lock().await.client().chain_ids().collect(),
             default: self.default_chain,
         })
     }
@@ -708,7 +688,7 @@ where
         hash: Option<CryptoHash>,
         chain_id: ChainId,
     ) -> Result<Option<HashedCertificateValue>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.context.lock().await.client().try_chain_client(chain_id)?;
         let hash = match hash {
             Some(hash) => Some(hash),
             None => {
@@ -730,7 +710,7 @@ where
         chain_id: ChainId,
         limit: Option<u32>,
     ) -> Result<Vec<HashedCertificateValue>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.context.lock().await.client().try_chain_client(chain_id)?;
         let limit = limit.unwrap_or(10);
         let from = match from {
             Some(from) => Some(from),
@@ -857,6 +837,22 @@ impl ApplicationOverview {
     }
 }
 
+trait ChainResultExt {
+    type ChainClient;
+    fn try_chain_client(self, chain_id: ChainId) -> Result<Self::ChainClient, Error>;
+}
+
+impl<P, S> ChainResultExt for &'_ Arc<Client<P, S>>
+where
+    S: Storage + Clone,
+    ViewError: From<S::StoreError>,
+{
+    type ChainClient = ChainClient<P, S>;
+    fn try_chain_client(self, chain_id: ChainId) -> Result<Self::ChainClient, Error> {
+        self.clone().chain(chain_id).ok_or_else(|| Error::new(format!("Unknown chain ID: {}", chain_id)))
+    }
+}
+
 /// Given a parsed GraphQL query (or `ExecutableDocument`), returns the `OperationType`.
 ///
 /// Errors:
@@ -909,76 +905,51 @@ fn bytes_from_list(list: &[async_graphql::Value]) -> Option<Vec<u8>> {
 
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
-pub struct NodeService<P, S, C>
+#[derive(Clone)]
+pub struct NodeService<C>
 where
-    S: Storage,
-    ViewError: From<S::StoreError>,
+    C: ClientContext + Send + 'static,
+    ViewError: From<<C::Storage as Storage>::StoreError>,
 {
-    clients: ChainClients<P, S>,
     config: ChainListenerConfig,
     port: NonZeroU16,
     default_chain: Option<ChainId>,
-    storage: S,
     context: Arc<Mutex<C>>,
 }
 
-impl<P, S: Clone, C> Clone for NodeService<P, S, C>
+impl<C> NodeService<C>
 where
-    S: Storage,
-    ViewError: From<S::StoreError>,
-{
-    fn clone(&self) -> Self {
-        Self {
-            clients: self.clients.clone(),
-            config: self.config.clone(),
-            port: self.port,
-            default_chain: self.default_chain,
-            storage: self.storage.clone(),
-            context: self.context.clone(),
-        }
-    }
-}
-
-impl<P, S, C> NodeService<P, S, C>
-where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
-    S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-    ViewError: From<S::StoreError>,
+    C: ClientContext + Clone + Send + 'static,
+    ViewError: From<<C::Storage as Storage>::StoreError>,
 {
     /// Creates a new instance of the node service given a client chain and a port.
     pub fn new(
         config: ChainListenerConfig,
         port: NonZeroU16,
         default_chain: Option<ChainId>,
-        storage: S,
         context: C,
     ) -> Self {
         Self {
-            clients: ChainClients::default(),
             config,
             port,
             default_chain,
-            storage,
             context: Arc::new(Mutex::new(context)),
         }
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S, C>, SubscriptionRoot<P, S>> {
+    pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, SubscriptionRoot<C>> {
         Schema::build(
             QueryRoot {
-                clients: self.clients.clone(),
+                context: self.context.clone(),
                 port: self.port,
                 default_chain: self.default_chain,
             },
             MutationRoot {
-                clients: self.clients.clone(),
                 context: self.context.clone(),
             },
             SubscriptionRoot {
-                clients: self.clients.clone(),
+                context: self.context.clone(),
             },
         )
         .finish()
@@ -1005,8 +976,8 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        ChainListener::new(self.config, self.clients.clone())
-            .run(self.context.clone(), self.storage.clone())
+        ChainListener::new(self.config)
+            .run(self.context.clone())
             .await;
         axum::serve(
             tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?,
@@ -1028,7 +999,7 @@ where
             application_id,
             bytes,
         };
-        let Some(client) = self.clients.client_lock(&chain_id).await else {
+        let Some(client) = self.context.lock().await.client().chain(chain_id) else {
             return Err(NodeServiceError::UnknownChainId {
                 chain_id: chain_id.to_string(),
             });
@@ -1074,7 +1045,7 @@ where
             .collect::<Vec<_>>();
 
         let hash = loop {
-            let Some(client) = self.clients.client_lock(&chain_id).await else {
+            let Some(client) = self.context.lock().await.client().chain(chain_id) else {
                 return Err(NodeServiceError::UnknownChainId {
                     chain_id: chain_id.to_string(),
                 });
