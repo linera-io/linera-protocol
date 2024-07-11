@@ -905,21 +905,27 @@ fn bytes_from_list(list: &[async_graphql::Value]) -> Option<Vec<u8>> {
 
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
-#[derive(Clone)]
-pub struct NodeService<C>
-where
-    C: ClientContext + Send + 'static,
-    ViewError: From<<C::Storage as Storage>::StoreError>,
-{
+pub struct NodeService<C> {
     config: ChainListenerConfig,
     port: NonZeroU16,
     default_chain: Option<ChainId>,
     context: Arc<Mutex<C>>,
 }
 
+impl<C> Clone for NodeService<C> {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            port: self.port,
+            default_chain: self.default_chain.clone(),
+            context: self.context.clone(),
+        }
+    }
+}
+
 impl<C> NodeService<C>
 where
-    C: ClientContext + Clone + Send + 'static,
+    C: ClientContext + Send + 'static,
     ViewError: From<<C::Storage as Storage>::StoreError>,
 {
     /// Creates a new instance of the node service given a client chain and a port.

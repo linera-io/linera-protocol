@@ -15,7 +15,7 @@ use linera_client::{
     wallet::Wallet,
 };
 use linera_core::{
-    client::ChainClient,
+    client::{ChainClient, Client},
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{
         CrossChainMessageDelivery, LocalValidatorNodeProvider, ValidatorNodeProvider, NodeError, NotificationStream,
@@ -24,7 +24,7 @@ use linera_core::{
 };
 use linera_execution::committee::Committee;
 use linera_service::node_service::NodeService;
-use linera_storage::{MemoryStorage, Storage};
+use linera_storage::{MemoryStorage, Storage, WallClock};
 use linera_version::VersionInfo;
 use linera_views::{
     memory::{MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
@@ -119,37 +119,33 @@ impl LocalValidatorNodeProvider for DummyValidatorNodeProvider {
 )]
 struct Options {}
 
-struct DummyContext<P, S> {
-    _phantom: std::marker::PhantomData<(P, S)>,
-}
+#[derive(Clone)]
+struct DummyContext;
+
+type DummyStorage = MemoryStorage<WallClock>;
 
 #[async_trait]
-impl<P: ValidatorNodeProvider<Node: ValidatorNode<NotificationStream: Send>> + Send + Sync, S: Storage + Clone + Send + Sync> ClientContext
-    for DummyContext<P, S>
-{
-    type ValidatorNodeProvider = P;
-    type Storage = S;
+impl ClientContext for DummyContext {
+    type ValidatorNodeProvider = DummyValidatorNodeProvider;
+    type Storage = DummyStorage;
 
     fn wallet(&self) -> &Wallet {
         unimplemented!()
     }
 
-    fn make_chain_client(&self, _: ChainId) -> ChainClient<P, S>
-    where
-        ViewError: From<S::StoreError>,
+    fn make_chain_client(&self, _: ChainId) -> ChainClient<Self::ValidatorNodeProvider, Self::Storage>
     {
         unimplemented!()
     }
 
     fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {}
 
-    async fn update_wallet(&mut self, _: &ChainClient<P, S>)
-    where
-        ViewError: From<S::StoreError>,
+    async fn update_wallet(&mut self, _: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>)
     {
     }
 
-    fn client(&self) -> Arc<Client<P, S>> {
+    fn client(&self) -> std::sync::Arc<Client<Self::ValidatorNodeProvider, Self::Storage>>
+    {
         unimplemented!()
     }
 }
@@ -163,19 +159,14 @@ async fn main() -> std::io::Result<()> {
     let storage = MemoryStorage::new(store_config, namespace, None)
         .await
         .expect("storage");
-    let config = ChainListenerConfig {
-        delay_before_ms: 0,
-        delay_after_ms: 0,
-    };
-    let context = DummyContext {
-        _phantom: std::marker::PhantomData,
-    };
-    let service = NodeService::<DummyValidatorNodeProvider, _, _>::new(
-        config,
+    let service = NodeService::new(
+        ChainListenerConfig {
+            delay_before_ms: 0,
+            delay_after_ms: 0,
+        },
         std::num::NonZeroU16::new(8080).unwrap(),
         None,
-        storage,
-        context,
+        DummyContext,
     );
     let schema = service.schema().sdl();
     print!("{}", schema);
