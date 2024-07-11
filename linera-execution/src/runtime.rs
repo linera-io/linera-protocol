@@ -899,20 +899,21 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         application_id: ApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        if let Some(responses) = &mut self.replaying_oracle_responses {
-            return match responses.next() {
-                Some(OracleResponse::Service(bytes)) => Ok(bytes),
-                Some(_) => Err(ExecutionError::OracleResponseMismatch),
-                None => Err(ExecutionError::MissingOracleResponse),
+        let response = if let Some(responses) = &mut self.replaying_oracle_responses {
+            match responses.next() {
+                Some(OracleResponse::Service(bytes)) => bytes,
+                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                None => return Err(ExecutionError::MissingOracleResponse),
+            }
+        } else {
+            let context = QueryContext {
+                chain_id: self.chain_id,
+                next_block_height: self.height,
+                local_time: self.local_time,
             };
-        }
-        let context = QueryContext {
-            chain_id: self.chain_id,
-            next_block_height: self.height,
-            local_time: self.local_time,
+            let sender = self.execution_state_sender.clone();
+            ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?
         };
-        let sender = self.execution_state_sender.clone();
-        let response = ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
         self.recorded_oracle_responses
             .push(OracleResponse::Service(response.clone()));
         Ok(response)
@@ -924,23 +925,23 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         content_type: String,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        if let Some(responses) = &mut self.replaying_oracle_responses {
-            return match responses.next() {
-                Some(OracleResponse::Post(bytes)) => Ok(bytes),
-                Some(_) => Err(ExecutionError::OracleResponseMismatch),
-                None => Err(ExecutionError::MissingOracleResponse),
-            };
-        }
-        let url = url.to_string();
-        let bytes = self
-            .execution_state_sender
-            .send_request(|callback| ExecutionRequest::HttpPost {
-                url,
-                content_type,
-                payload,
-                callback,
-            })?
-            .recv_response()?;
+        let bytes = if let Some(responses) = &mut self.replaying_oracle_responses {
+            match responses.next() {
+                Some(OracleResponse::Post(bytes)) => bytes,
+                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                None => return Err(ExecutionError::MissingOracleResponse),
+            }
+        } else {
+            let url = url.to_string();
+            self.execution_state_sender
+                .send_request(|callback| ExecutionRequest::HttpPost {
+                    url,
+                    content_type,
+                    payload,
+                    callback,
+                })?
+                .recv_response()?
+        };
         self.recorded_oracle_responses
             .push(OracleResponse::Post(bytes.clone()));
         Ok(bytes)
@@ -948,19 +949,20 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
 
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
         if let Some(responses) = &mut self.replaying_oracle_responses {
-            return match responses.next() {
-                Some(OracleResponse::Assert) => Ok(()),
-                Some(_) => Err(ExecutionError::OracleResponseMismatch),
-                None => Err(ExecutionError::MissingOracleResponse),
-            };
-        }
-        ensure!(
-            self.local_time < timestamp,
-            ExecutionError::AssertBefore {
-                timestamp,
-                local_time: self.local_time,
+            match responses.next() {
+                Some(OracleResponse::Assert) => {}
+                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                None => return Err(ExecutionError::MissingOracleResponse),
             }
-        );
+        } else {
+            ensure!(
+                self.local_time < timestamp,
+                ExecutionError::AssertBefore {
+                    timestamp,
+                    local_time: self.local_time,
+                }
+            );
+        }
         self.recorded_oracle_responses.push(OracleResponse::Assert);
         Ok(())
     }
@@ -968,7 +970,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     fn read_blob(&mut self, blob_id: &BlobId) -> Result<HashedBlob, ExecutionError> {
         if let Some(responses) = &mut self.replaying_oracle_responses {
             match responses.next() {
-                Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == *blob_id => (),
+                Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == *blob_id => {}
                 Some(_) => return Err(ExecutionError::OracleResponseMismatch),
                 None => return Err(ExecutionError::MissingOracleResponse),
             }

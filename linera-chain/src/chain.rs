@@ -824,7 +824,7 @@ where
                 refund_grant_to: message.event.refund_grant_to,
                 next_message_index,
             };
-            let outcomes = match message.action {
+            let (outcomes, oracle_responses) = match message.action {
                 MessageAction::Accept => {
                     let mut grant = message.event.grant;
                     let (mut outcomes, oracle_responses) = self
@@ -846,7 +846,6 @@ where
                         )
                         .await
                         .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-                    new_oracle_responses.push(oracle_responses);
                     if grant > Amount::ZERO {
                         if let Some(refund_grant_to) = message.event.refund_grant_to {
                             let outcome = self
@@ -859,7 +858,7 @@ where
                             outcomes.push(outcome);
                         }
                     }
-                    outcomes
+                    (outcomes, oracle_responses)
                 }
                 MessageAction::Reject => {
                     // If rejecting a message fails, the entire block proposal should be
@@ -873,7 +872,7 @@ where
                             event: message.event.clone(),
                         }
                     );
-                    if message.event.is_tracked() {
+                    let outcomes = if message.event.is_tracked() {
                         // Bounce the message.
                         self.execution_state
                             .bounce_message(
@@ -886,30 +885,31 @@ where
                             .map_err(|err| {
                                 ChainError::ExecutionError(err, chain_execution_context)
                             })?
-                    } else {
+                    } else if message.event.grant > Amount::ZERO {
                         // Nothing to do except maybe refund the grant.
-                        let mut outcomes = Vec::new();
-                        if message.event.grant > Amount::ZERO {
-                            let Some(refund_grant_to) = message.event.refund_grant_to else {
-                                // See OperationContext::refund_grant_to()
-                                return Err(ChainError::InternalError(
-                                    "Messages with grants should have a non-empty `refund_grant_to`".into()
-                                ));
-                            };
-                            // Refund grant.
-                            let outcome = self
-                                .execution_state
-                                .send_refund(context, message.event.grant, refund_grant_to)
-                                .await
-                                .map_err(|err| {
-                                    ChainError::ExecutionError(err, chain_execution_context)
-                                })?;
-                            outcomes.push(outcome);
-                        }
-                        outcomes
-                    }
+                        let Some(refund_grant_to) = message.event.refund_grant_to else {
+                            // See OperationContext::refund_grant_to()
+                            return Err(ChainError::InternalError(
+                                "Messages with grants should have a non-empty `refund_grant_to`"
+                                    .into(),
+                            ));
+                        };
+                        // Refund grant.
+                        let outcome = self
+                            .execution_state
+                            .send_refund(context, message.event.grant, refund_grant_to)
+                            .await
+                            .map_err(|err| {
+                                ChainError::ExecutionError(err, chain_execution_context)
+                            })?;
+                        vec![outcome]
+                    } else {
+                        Vec::new()
+                    };
+                    (outcomes, Vec::new())
                 }
             };
+            new_oracle_responses.push(oracle_responses);
             let messages_out = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
