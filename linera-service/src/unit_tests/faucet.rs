@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_client::{chain_listener, wallet::Wallet};
 use linera_core::{
-    client::ChainClient,
+    client::{ChainClient, Client},
     test_utils::{FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
 };
 use linera_storage::{MemoryStorage, TestClock};
@@ -48,6 +48,10 @@ impl chain_listener::ClientContext for ClientContext {
 
     async fn update_wallet(&mut self, _: &ChainClient<TestProvider, TestStorage>) {
         self.update_calls += 1;
+    }
+
+    fn client(&self) -> Arc<Client<TestProvider, TestStorage>> {
+        unimplemented!()
     }
 }
 

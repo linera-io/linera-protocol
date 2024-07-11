@@ -29,7 +29,7 @@ use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientCo
 use linera_core::{
     client::{ChainClient, ChainClientError, Client},
     data_types::{ClientOutcome, RoundTimeout},
-    node::{NotificationStream, ValidatorNode},
+    node::NotificationStream,
     worker::{Notification, Reason},
 };
 use linera_execution::{

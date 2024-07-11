@@ -24,12 +24,8 @@ use linera_core::{
 };
 use linera_execution::committee::Committee;
 use linera_service::node_service::NodeService;
-use linera_storage::{MemoryStorage, Storage, WallClock};
+use linera_storage::{MemoryStorage, WallClock};
 use linera_version::VersionInfo;
-use linera_views::{
-    memory::{MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
-    views::ViewError,
-};
 
 #[derive(Clone)]
 struct DummyValidatorNode;
@@ -154,11 +150,7 @@ impl ClientContext for DummyContext {
 async fn main() -> std::io::Result<()> {
     let _options = <Options as clap::Parser>::parse();
 
-    let store_config = MemoryStoreConfig::new(TEST_MEMORY_MAX_STREAM_QUERIES);
     let namespace = "schema_export";
-    let storage = MemoryStorage::new(store_config, namespace, None)
-        .await
-        .expect("storage");
     let service = NodeService::new(
         ChainListenerConfig {
             delay_before_ms: 0,
