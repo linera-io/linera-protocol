@@ -19,7 +19,7 @@ pub mod test_utils;
 mod util;
 mod wasm;
 
-use std::{fmt, str::FromStr, sync::Arc, vec};
+use std::{fmt, str::FromStr, sync::Arc};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
@@ -34,7 +34,7 @@ use linera_base::{
         Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, OracleResponse,
         Resources, SendMessageRequest, Timestamp,
     },
-    doc_scalar, hex_debug,
+    doc_scalar, ensure, hex_debug,
     identifiers::{
         Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination,
         GenericApplicationId, MessageId, Owner,
@@ -1033,7 +1033,7 @@ pub enum OracleTape {
     /// When executing a block _proposal_, oracles can be used and their responses are recorded.
     Record(Vec<OracleResponse>),
     /// When re-executing a validated or confirmed block, recorded responses are used.
-    Replay(vec::IntoIter<OracleResponse>),
+    Replay(Vec<OracleResponse>, usize),
     /// In service queries, oracle responses are not recorded.
     Forget,
 }
@@ -1042,18 +1042,41 @@ impl OracleTape {
     /// Returns an empty `Record` if the argument is `None`, and `Replay` if it is `Some`.
     pub fn from_responses(oracle_responses: Option<Vec<OracleResponse>>) -> Self {
         if let Some(responses) = oracle_responses {
-            OracleTape::Replay(responses.into_iter())
+            OracleTape::Replay(responses, 0)
         } else {
             OracleTape::Record(Vec::new())
         }
     }
 
-    /// Returns the oracle responses if `self` is `Record`.
-    pub fn try_into_responses(self) -> Option<Vec<OracleResponse>> {
+    pub fn replay_next(&mut self) -> Result<Option<&OracleResponse>, ExecutionError> {
+        let OracleTape::Replay(responses, index) = self else {
+            return Ok(None);
+        };
+        let response = responses
+            .get(*index)
+            .ok_or_else(|| ExecutionError::MissingOracleResponse)?;
+        *index += 1;
+        Ok(Some(response))
+    }
+
+    pub fn record(&mut self, f: impl Fn() -> OracleResponse) {
         if let OracleTape::Record(responses) = self {
-            Some(responses)
-        } else {
-            None
+            responses.push(f());
+        }
+    }
+
+    /// Returns the oracle responses, or an error if `self` is `Forget`.
+    pub fn into_responses(self) -> Result<Vec<OracleResponse>, ExecutionError> {
+        match self {
+            OracleTape::Record(responses) => Ok(responses),
+            OracleTape::Replay(responses, index) => {
+                ensure!(
+                    index == responses.len(),
+                    ExecutionError::OracleResponseMismatch
+                );
+                Ok(responses)
+            }
+            OracleTape::Forget => Err(ExecutionError::MissingOracleResponse),
         }
     }
 }

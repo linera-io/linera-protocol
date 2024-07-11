@@ -849,7 +849,11 @@ where
                         )
                         .await
                         .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-                    new_oracle_responses.push(oracle_tape.try_into_responses().unwrap_or_default());
+                    new_oracle_responses.push(
+                        oracle_tape.into_responses().map_err(|err| {
+                            ChainError::ExecutionError(err, chain_execution_context)
+                        })?,
+                    );
                     if grant > Amount::ZERO {
                         if let Some(refund_grant_to) = message.event.refund_grant_to {
                             let outcome = self
@@ -964,7 +968,11 @@ where
                 )
                 .await
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-            new_oracle_responses.push(oracle_tape.try_into_responses().unwrap_or_default());
+            new_oracle_responses.push(
+                oracle_tape
+                    .into_responses()
+                    .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?,
+            );
             let messages_out = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;

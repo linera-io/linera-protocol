@@ -896,11 +896,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         application_id: ApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        if let OracleTape::Replay(responses) = &mut self.oracle_tape {
-            return match responses.next() {
-                Some(OracleResponse::Service(bytes)) => Ok(bytes),
-                Some(_) => Err(ExecutionError::OracleResponseMismatch),
-                None => Err(ExecutionError::MissingOracleResponse),
+        if let Some(response) = self.oracle_tape.replay_next()? {
+            return if let OracleResponse::Service(bytes) = response {
+                Ok(bytes.clone())
+            } else {
+                Err(ExecutionError::OracleResponseMismatch)
             };
         }
         let context = QueryContext {
@@ -910,9 +910,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         };
         let sender = self.execution_state_sender.clone();
         let response = ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
-        if let OracleTape::Record(responses) = &mut self.oracle_tape {
-            responses.push(OracleResponse::Service(response.clone()));
-        }
+        self.oracle_tape
+            .record(|| OracleResponse::Service(response.clone()));
         Ok(response)
     }
 
@@ -922,11 +921,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         content_type: String,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        if let OracleTape::Replay(responses) = &mut self.oracle_tape {
-            return match responses.next() {
-                Some(OracleResponse::Post(bytes)) => Ok(bytes),
-                Some(_) => Err(ExecutionError::OracleResponseMismatch),
-                None => Err(ExecutionError::MissingOracleResponse),
+        if let Some(response) = self.oracle_tape.replay_next()? {
+            return if let OracleResponse::Post(bytes) = response {
+                Ok(bytes.clone())
+            } else {
+                Err(ExecutionError::OracleResponseMismatch)
             };
         }
         let url = url.to_string();
@@ -946,12 +945,12 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     }
 
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
-        if let OracleTape::Replay(responses) = &mut self.oracle_tape {
-            return match responses.next() {
-                Some(OracleResponse::Assert) => Ok(()),
-                Some(_) => Err(ExecutionError::OracleResponseMismatch),
-                None => Err(ExecutionError::MissingOracleResponse),
-            };
+        if let Some(response) = self.oracle_tape.replay_next()? {
+            ensure!(
+                OracleResponse::Assert == *response,
+                ExecutionError::OracleResponseMismatch
+            );
+            return Ok(());
         }
         ensure!(
             self.local_time < timestamp,
@@ -967,12 +966,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     }
 
     fn read_blob(&mut self, blob_id: &BlobId) -> Result<HashedBlob, ExecutionError> {
-        if let OracleTape::Replay(responses) = &mut self.oracle_tape {
-            match responses.next() {
-                Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == *blob_id => (),
-                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                None => return Err(ExecutionError::MissingOracleResponse),
-            }
+        if let Some(response) = self.oracle_tape.replay_next()? {
+            ensure!(
+                OracleResponse::Blob(*blob_id) == *response,
+                ExecutionError::OracleResponseMismatch
+            );
         }
         let blob = self
             .execution_state_sender
