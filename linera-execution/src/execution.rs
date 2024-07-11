@@ -295,7 +295,7 @@ where
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
             Operation::System(op) => {
-                let (mut result, new_application, returned_oracle_responses) =
+                let (mut result, new_application, mut returned_oracle_responses) =
                     self.system.execute_operation(context, op).await?;
                 result.authenticated_signer = context.authenticated_signer;
                 result.refund_grant_to = context.refund_grant_to();
@@ -315,7 +315,7 @@ where
                         )
                         .await?;
                     outcomes.extend(user_outcomes);
-                    return Ok((outcomes, oracle_responses));
+                    returned_oracle_responses.extend(oracle_responses);
                 }
                 Ok((outcomes, returned_oracle_responses))
             }
