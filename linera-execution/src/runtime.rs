@@ -48,17 +48,6 @@ pub struct SyncRuntimeHandle<UserInstance>(Arc<Mutex<SyncRuntimeInternal<UserIns
 pub type ContractSyncRuntimeHandle = SyncRuntimeHandle<UserContractInstance>;
 pub type ServiceSyncRuntimeHandle = SyncRuntimeHandle<UserServiceInstance>;
 
-/// Responses to oracle queries that are being recorded or replayed.
-#[derive(Debug)]
-enum OracleResponses {
-    /// When executing a block _proposal_, oracles can be used and their responses are recorded.
-    Record(Vec<OracleResponse>),
-    /// When re-executing a validated or confirmed block, recorded responses are used.
-    Replay(vec::IntoIter<OracleResponse>),
-    /// In service queries, oracle responses are not recorded.
-    Forget,
-}
-
 /// Runtime data tracked during the execution of a transaction on the synchronous thread.
 #[derive(Debug)]
 pub struct SyncRuntimeInternal<UserInstance> {
@@ -94,8 +83,10 @@ pub struct SyncRuntimeInternal<UserInstance> {
     active_applications: HashSet<UserApplicationId>,
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
     execution_outcomes: Vec<ExecutionOutcome>,
-    /// Responses to oracle queries that are being recorded or replayed.
-    oracle_responses: OracleResponses,
+    /// Recorded responses to oracle queries.
+    recorded_oracle_responses: Vec<OracleResponse>,
+    /// Oracle responses that are being replayed.
+    replaying_oracle_responses: Option<vec::IntoIter<OracleResponse>>,
 
     /// Track application states based on views.
     view_user_states: BTreeMap<UserApplicationId, ViewUserState>,
@@ -312,7 +303,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         execution_state_sender: ExecutionStateSender,
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
-        oracle_responses: OracleResponses,
+        replaying_oracle_responses: Option<vec::IntoIter<OracleResponse>>,
     ) -> Self {
         Self {
             chain_id,
@@ -331,7 +322,8 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             view_user_states: BTreeMap::default(),
             refund_grant_to,
             resource_controller,
-            oracle_responses,
+            replaying_oracle_responses,
+            recorded_oracle_responses: Vec::new(),
         }
     }
 
@@ -907,7 +899,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         application_id: ApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
+        if let Some(responses) = &mut self.replaying_oracle_responses {
             return match responses.next() {
                 Some(OracleResponse::Service(bytes)) => Ok(bytes),
                 Some(_) => Err(ExecutionError::OracleResponseMismatch),
@@ -921,9 +913,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         };
         let sender = self.execution_state_sender.clone();
         let response = ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
-        if let OracleResponses::Record(responses) = &mut self.oracle_responses {
-            responses.push(OracleResponse::Service(response.clone()));
-        }
+        self.recorded_oracle_responses
+            .push(OracleResponse::Service(response.clone()));
         Ok(response)
     }
 
@@ -933,7 +924,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         content_type: String,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
+        if let Some(responses) = &mut self.replaying_oracle_responses {
             return match responses.next() {
                 Some(OracleResponse::Post(bytes)) => Ok(bytes),
                 Some(_) => Err(ExecutionError::OracleResponseMismatch),
@@ -950,14 +941,13 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                 callback,
             })?
             .recv_response()?;
-        if let OracleResponses::Record(responses) = &mut self.oracle_responses {
-            responses.push(OracleResponse::Post(bytes.clone()));
-        }
+        self.recorded_oracle_responses
+            .push(OracleResponse::Post(bytes.clone()));
         Ok(bytes)
     }
 
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
-        if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
+        if let Some(responses) = &mut self.replaying_oracle_responses {
             return match responses.next() {
                 Some(OracleResponse::Assert) => Ok(()),
                 Some(_) => Err(ExecutionError::OracleResponseMismatch),
@@ -971,14 +961,12 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                 local_time: self.local_time,
             }
         );
-        if let OracleResponses::Record(responses) = &mut self.oracle_responses {
-            responses.push(OracleResponse::Assert);
-        }
+        self.recorded_oracle_responses.push(OracleResponse::Assert);
         Ok(())
     }
 
     fn read_blob(&mut self, blob_id: &BlobId) -> Result<HashedBlob, ExecutionError> {
-        if let OracleResponses::Replay(responses) = &mut self.oracle_responses {
+        if let Some(responses) = &mut self.replaying_oracle_responses {
             match responses.next() {
                 Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == *blob_id => (),
                 Some(_) => return Err(ExecutionError::OracleResponseMismatch),
@@ -992,9 +980,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                 callback,
             })?
             .recv_response()?;
-        if let OracleResponses::Record(responses) = &mut self.oracle_responses {
-            responses.push(OracleResponse::Blob(*blob_id));
-        }
+        self.recorded_oracle_responses
+            .push(OracleResponse::Blob(*blob_id));
         Ok(blob)
     }
 }
@@ -1032,11 +1019,7 @@ impl ContractSyncRuntime {
         let signer = action.signer();
         let height = action.height();
         let next_message_index = action.next_message_index();
-        let oracle_responses = if let Some(responses) = oracle_responses {
-            OracleResponses::Replay(responses.into_iter())
-        } else {
-            OracleResponses::Record(Vec::new())
-        };
+        let replaying_oracle_responses = oracle_responses.map(Vec::into_iter);
         let mut runtime = SyncRuntime(Some(ContractSyncRuntimeHandle::from(
             SyncRuntimeInternal::new(
                 chain_id,
@@ -1048,7 +1031,7 @@ impl ContractSyncRuntime {
                 execution_state_sender,
                 refund_grant_to,
                 resource_controller,
-                oracle_responses,
+                replaying_oracle_responses,
             ),
         )));
         let finalize_context = FinalizeContext {
@@ -1068,15 +1051,9 @@ impl ContractSyncRuntime {
         let runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        let oracle_responses = if let OracleResponses::Record(responses) = runtime.oracle_responses
-        {
-            responses
-        } else {
-            Vec::default()
-        };
         Ok((
             runtime.execution_outcomes,
-            oracle_responses,
+            runtime.recorded_oracle_responses,
             runtime.resource_controller,
         ))
     }
@@ -1357,7 +1334,7 @@ impl ServiceSyncRuntime {
                 execution_state_sender,
                 None,
                 ResourceController::default(),
-                OracleResponses::Forget,
+                None,
             )
             .into(),
         ))
