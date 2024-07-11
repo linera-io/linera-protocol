@@ -11,9 +11,9 @@ use linera_base::{
 use linera_execution::{
     system::{Recipient, UserData},
     test_utils::SystemExecutionState,
-    ExecutionOutcome, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, ResourceController, Response, SystemMessage, SystemOperation, SystemQuery,
-    SystemResponse,
+    ExecutionOutcome, Message, MessageContext, Operation, OperationContext, OracleTape, Query,
+    QueryContext, RawExecutionOutcome, ResourceController, Response, SystemMessage,
+    SystemOperation, SystemQuery, SystemResponse,
 };
 
 #[tokio::test]
@@ -42,7 +42,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
             context,
             Timestamp::from(0),
             Operation::System(operation),
-            Some(Vec::new()),
+            OracleTape::Forget,
             &mut controller,
         )
         .await
@@ -92,7 +92,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
             Timestamp::from(0),
             Message::System(message),
             None,
-            Some(Vec::new()),
+            OracleTape::Forget,
             &mut controller,
         )
         .await

@@ -16,9 +16,9 @@ use linera_base::{
 };
 use linera_execution::{
     system::SystemMessage, ExecutionOutcome, ExecutionRequest, ExecutionRuntimeContext,
-    ExecutionStateView, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker, Response,
-    ServiceRuntimeRequest, UserApplicationDescription, UserApplicationId,
+    ExecutionStateView, Message, MessageContext, Operation, OperationContext, OracleTape, Query,
+    QueryContext, RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker,
+    Response, ServiceRuntimeRequest, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -826,27 +826,30 @@ where
             };
             let outcomes = match message.action {
                 MessageAction::Accept => {
+                    let oracle_tape = OracleTape::from_responses(
+                        oracle_responses
+                            .as_mut()
+                            .map(|responses| {
+                                responses
+                                    .next()
+                                    .ok_or_else(|| ChainError::MissingOracleResponseList)
+                            })
+                            .transpose()?,
+                    );
                     let mut grant = message.event.grant;
-                    let (mut outcomes, oracle_responses) = self
+                    let (mut outcomes, oracle_tape) = self
                         .execution_state
                         .execute_message(
                             context,
                             local_time,
                             message.event.message.clone(),
                             (grant > Amount::ZERO).then_some(&mut grant),
-                            match &mut oracle_responses {
-                                Some(responses) => Some(
-                                    responses
-                                        .next()
-                                        .ok_or_else(|| ChainError::MissingOracleResponseList)?,
-                                ),
-                                None => None,
-                            },
+                            oracle_tape,
                             &mut resource_controller,
                         )
                         .await
                         .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-                    new_oracle_responses.push(oracle_responses);
+                    new_oracle_responses.push(oracle_tape.try_into_responses().unwrap_or_default());
                     if grant > Amount::ZERO {
                         if let Some(refund_grant_to) = message.event.refund_grant_to {
                             let outcome = self
@@ -940,25 +943,28 @@ where
                 authenticated_caller_id: None,
                 next_message_index,
             };
-            let (outcomes, oracle_responses) = self
+            let oracle_tape = OracleTape::from_responses(
+                oracle_responses
+                    .as_mut()
+                    .map(|responses| {
+                        responses
+                            .next()
+                            .ok_or_else(|| ChainError::MissingOracleResponseList)
+                    })
+                    .transpose()?,
+            );
+            let (outcomes, oracle_tape) = self
                 .execution_state
                 .execute_operation(
                     context,
                     local_time,
                     operation.clone(),
-                    match &mut oracle_responses {
-                        Some(responses) => Some(
-                            responses
-                                .next()
-                                .ok_or_else(|| ChainError::MissingOracleResponseList)?,
-                        ),
-                        None => None,
-                    },
+                    oracle_tape,
                     &mut resource_controller,
                 )
                 .await
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-            new_oracle_responses.push(oracle_responses);
+            new_oracle_responses.push(oracle_tape.try_into_responses().unwrap_or_default());
             let messages_out = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;

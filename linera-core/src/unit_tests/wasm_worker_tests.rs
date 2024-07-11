@@ -32,8 +32,8 @@ use linera_execution::{
     system::{SystemChannel, SystemMessage, SystemOperation},
     test_utils::SystemExecutionState,
     Bytecode, BytecodeLocation, ChannelSubscription, Message, MessageKind, Operation,
-    OperationContext, ResourceController, UserApplicationDescription, UserApplicationId,
-    WasmContractModule, WasmRuntime,
+    OperationContext, OracleTape, ResourceController, UserApplicationDescription,
+    UserApplicationId, WasmContractModule, WasmRuntime,
 };
 #[cfg(feature = "dynamodb")]
 use linera_storage::DynamoDbStorage;
@@ -488,7 +488,7 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            Some(Vec::new()),
+            OracleTape::Forget,
             &mut controller,
         )
         .await?;

@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_execution::{
     test_utils::{register_mock_applications, ExpectedCall, SystemExecutionState},
-    ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
+    ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext, OracleTape,
     RawExecutionOutcome, ResourceControlPolicy, ResourceController,
 };
 use test_case::test_case;
@@ -206,7 +206,7 @@ async fn test_fee_consumption(
             } else {
                 None
             },
-            Some(Vec::new()),
+            OracleTape::Forget,
             &mut controller,
         )
         .await
