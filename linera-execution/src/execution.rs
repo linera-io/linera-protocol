@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryStreamExt};
 use linera_base::{
-    data_types::{Amount, BlockHeight, OracleRecord, Timestamp},
+    data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
     identifiers::{Account, ChainId, Destination, Owner},
 };
 use linera_views::{
@@ -288,11 +288,11 @@ where
         context: OperationContext,
         local_time: Timestamp,
         operation: Operation,
-        oracle_record: Option<OracleRecord>,
+        oracle_responses: Option<Vec<OracleResponse>>,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<(Vec<ExecutionOutcome>, OracleRecord), ExecutionError> {
+    ) -> Result<(Vec<ExecutionOutcome>, Vec<OracleResponse>), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        let mut oracle_tape = OracleTape::from_record(oracle_record);
+        let mut oracle_tape = OracleTape::from_responses(oracle_responses);
         match operation {
             Operation::System(op) => {
                 let (mut result, new_application) = self
@@ -317,9 +317,13 @@ where
                         )
                         .await?;
                     outcomes.extend(user_outcomes);
-                    return Ok((outcomes, oracle_tape.try_into_record().unwrap_or_default()));
+                    let oracle_responses = oracle_tape.try_into_responses().unwrap_or_default();
+                    return Ok((outcomes, oracle_responses));
                 }
-                Ok((outcomes, oracle_tape.try_into_record().unwrap_or_default()))
+                Ok((
+                    outcomes,
+                    oracle_tape.try_into_responses().unwrap_or_default(),
+                ))
             }
             Operation::User {
                 application_id,
@@ -337,7 +341,10 @@ where
                         resource_controller,
                     )
                     .await?;
-                Ok((outcomes, oracle_tape.try_into_record().unwrap_or_default()))
+                Ok((
+                    outcomes,
+                    oracle_tape.try_into_responses().unwrap_or_default(),
+                ))
             }
         }
     }
@@ -348,17 +355,14 @@ where
         local_time: Timestamp,
         message: Message,
         grant: Option<&mut Amount>,
-        oracle_record: Option<OracleRecord>,
+        oracle_responses: Option<Vec<OracleResponse>>,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<(Vec<ExecutionOutcome>, OracleRecord), ExecutionError> {
+    ) -> Result<(Vec<ExecutionOutcome>, Vec<OracleResponse>), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
             Message::System(message) => {
                 let outcome = self.system.execute_message(context, message).await?;
-                Ok((
-                    vec![ExecutionOutcome::System(outcome)],
-                    OracleRecord::default(),
-                ))
+                Ok((vec![ExecutionOutcome::System(outcome)], Vec::new()))
             }
             Message::User {
                 application_id,
@@ -372,11 +376,14 @@ where
                         UserAction::Message(context, bytes),
                         context.refund_grant_to,
                         grant,
-                        OracleTape::from_record(oracle_record),
+                        OracleTape::from_responses(oracle_responses),
                         resource_controller,
                     )
                     .await?;
-                Ok((outcomes, oracle_tape.try_into_record().unwrap_or_default()))
+                Ok((
+                    outcomes,
+                    oracle_tape.try_into_responses().unwrap_or_default(),
+                ))
             }
         }
     }

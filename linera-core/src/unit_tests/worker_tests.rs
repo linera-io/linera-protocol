@@ -296,7 +296,7 @@ where
         }
         Recipient::Burn => messages.push(Vec::new()),
     }
-    let oracle_records = iter::repeat_with(OracleRecord::default)
+    let oracle_responses = iter::repeat_with(Vec::new)
         .take(block.operations.len() + block.incoming_messages.len())
         .collect();
     let state_hash = system_state.into_hash().await;
@@ -304,7 +304,7 @@ where
         BlockExecutionOutcome {
             messages,
             state_hash,
-            oracle_records,
+            oracle_responses,
         }
         .with(block),
     );
@@ -716,7 +716,7 @@ where
                 }
                 .into_hash()
                 .await,
-                oracle_records: vec![OracleRecord::default(); 2],
+                oracle_responses: vec![Vec::new(); 2],
             }
             .with(
                 make_first_block(ChainId::root(1))
@@ -742,7 +742,7 @@ where
                 }
                 .into_hash()
                 .await,
-                oracle_records: vec![OracleRecord::default()],
+                oracle_responses: vec![Vec::new()],
             }
             .with(
                 make_child_block(&certificate0.value)
@@ -1004,7 +1004,7 @@ where
                     }
                     .into_hash()
                     .await,
-                    oracle_records: vec![OracleRecord::default(); 2],
+                    oracle_responses: vec![Vec::new(); 2],
                 }
                 .with(block_proposal.content.block),
             ),
@@ -1287,7 +1287,7 @@ where
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
             state_hash: state.into_hash().await,
-            oracle_records: vec![OracleRecord::default()],
+            oracle_responses: vec![Vec::new()],
         }
         .with(make_first_block(chain_id).with_incoming_message(open_chain_message)),
     );
@@ -2334,7 +2334,7 @@ where
                 }
                 .into_hash()
                 .await,
-                oracle_records: vec![OracleRecord::default()],
+                oracle_responses: vec![Vec::new()],
             }
             .with(make_first_block(admin_id).with_operation(
                 SystemOperation::OpenChain(OpenChainConfig {
@@ -2397,7 +2397,7 @@ where
                 }
                 .into_hash()
                 .await,
-                oracle_records: vec![OracleRecord::default(); 2],
+                oracle_responses: vec![Vec::new(); 2],
             }
             .with(
                 make_child_block(&certificate0.value)
@@ -2432,7 +2432,7 @@ where
                 }
                 .into_hash()
                 .await,
-                oracle_records: vec![OracleRecord::default()],
+                oracle_responses: vec![Vec::new()],
             }
             .with(
                 make_child_block(&certificate1.value)
@@ -2563,7 +2563,7 @@ where
                 }
                 .into_hash()
                 .await,
-                oracle_records: vec![OracleRecord::default(); 4],
+                oracle_responses: vec![Vec::new(); 4],
             }
             .with(
                 make_first_block(user_id)
@@ -2734,7 +2734,7 @@ where
                 }
                 .into_hash()
                 .await,
-                oracle_records: vec![OracleRecord::default()],
+                oracle_responses: vec![Vec::new()],
             }
             .with(make_first_block(user_id).with_simple_transfer(admin_id, Amount::ONE)),
         ),
@@ -2760,7 +2760,7 @@ where
                 }
                 .into_hash()
                 .await,
-                oracle_records: vec![OracleRecord::default()],
+                oracle_responses: vec![Vec::new()],
             }
             .with(
                 make_first_block(admin_id).with_operation(SystemOperation::Admin(
@@ -2862,7 +2862,7 @@ where
                 }
                 .into_hash()
                 .await,
-                oracle_records: vec![OracleRecord::default()],
+                oracle_responses: vec![Vec::new()],
             }
             .with(make_first_block(user_id).with_simple_transfer(admin_id, Amount::ONE)),
         ),
@@ -2895,7 +2895,7 @@ where
                 }
                 .into_hash()
                 .await,
-                oracle_records: vec![OracleRecord::default(); 2],
+                oracle_responses: vec![Vec::new(); 2],
             }
             .with(
                 make_first_block(admin_id)
@@ -2956,7 +2956,7 @@ where
                 }
                 .into_hash()
                 .await,
-                oracle_records: vec![OracleRecord::default()],
+                oracle_responses: vec![Vec::new()],
             }
             .with(
                 make_child_block(&certificate1.value)

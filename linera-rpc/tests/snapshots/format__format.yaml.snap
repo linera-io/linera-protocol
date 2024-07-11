@@ -79,9 +79,10 @@ BlockExecutionOutcome:
             TYPENAME: OutgoingMessage
     - state_hash:
         TYPENAME: CryptoHash
-    - oracle_records:
+    - oracle_responses:
         SEQ:
-          TYPENAME: OracleRecord
+          SEQ:
+            TYPENAME: OracleResponse
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:
@@ -625,11 +626,6 @@ Operation:
           - application_id:
               TYPENAME: ApplicationId
           - bytes: BYTES
-OracleRecord:
-  STRUCT:
-    - responses:
-        SEQ:
-          TYPENAME: OracleResponse
 OracleResponse:
   ENUM:
     0:
@@ -677,10 +673,11 @@ ProposalContent:
         TYPENAME: Block
     - round:
         TYPENAME: Round
-    - forced_oracle_records:
+    - forced_oracle_responses:
         OPTION:
           SEQ:
-            TYPENAME: OracleRecord
+            SEQ:
+              TYPENAME: OracleResponse
 PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

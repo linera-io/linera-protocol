@@ -1450,11 +1450,9 @@ where
         .executed_block()
         .unwrap()
         .outcome
-        .oracle_records
+        .oracle_responses
         .iter()
-        .any(|record| record
-            .responses
-            .contains(&OracleResponse::Blob(expected_blob_id))));
+        .any(|responses| responses.contains(&OracleResponse::Blob(expected_blob_id))));
     let previous_block_hash = client_a.block_hash().unwrap();
 
     // Validators goes back up

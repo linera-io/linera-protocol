@@ -31,8 +31,8 @@ use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, OracleRecord,
-        OracleResponse, Resources, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, OracleResponse,
+        Resources, SendMessageRequest, Timestamp,
     },
     doc_scalar, hex_debug,
     identifiers::{
@@ -1040,18 +1040,18 @@ pub enum OracleTape {
 
 impl OracleTape {
     /// Returns an empty `Record` if the argument is `None`, and `Replay` if it is `Some`.
-    pub fn from_record(oracle_record: Option<OracleRecord>) -> Self {
-        if let Some(responses) = oracle_record {
-            OracleTape::Replay(responses.responses.into_iter())
+    pub fn from_responses(oracle_responses: Option<Vec<OracleResponse>>) -> Self {
+        if let Some(responses) = oracle_responses {
+            OracleTape::Replay(responses.into_iter())
         } else {
             OracleTape::Record(Vec::new())
         }
     }
 
-    /// Returns the oracle record if `self` is `Record` and an empty record otherwise.
-    pub fn try_into_record(self) -> Option<OracleRecord> {
+    /// Returns the oracle responses if `self` is `Record`.
+    pub fn try_into_responses(self) -> Option<Vec<OracleResponse>> {
         if let OracleTape::Record(responses) = self {
-            Some(OracleRecord { responses })
+            Some(responses)
         } else {
             None
         }
