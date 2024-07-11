@@ -1338,7 +1338,7 @@ where
         worker
             .fully_handle_certificate(certificate, vec![], vec![])
             .await,
-        Err(WorkerError::IncorrectStateHash)
+        Err(WorkerError::IncorrectOutcome { .. })
     );
     Ok(())
 }

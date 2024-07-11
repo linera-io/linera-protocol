@@ -20,8 +20,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
-        LiteCertificate, MessageBundle, Origin, OutgoingMessage, Target,
+        Block, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
+        HashedCertificateValue, LiteCertificate, MessageBundle, Origin, Target,
     },
     ChainStateView,
 };
@@ -232,18 +232,16 @@ pub enum WorkerError {
     InvalidCrossChainRequest,
     #[error("The block does contain the hash that we expected for the previous block")]
     InvalidBlockChaining,
-    #[error("The given state hash is not what we computed after executing the block")]
-    IncorrectStateHash,
     #[error(
         "
-        The given messages are not what we computed after executing the block.\n\
+        The given outcome is not what we computed after executing the block.\n\
         Computed: {computed:#?}\n\
         Submitted: {submitted:#?}\n
     "
     )]
-    IncorrectMessages {
-        computed: Vec<Vec<OutgoingMessage>>,
-        submitted: Vec<Vec<OutgoingMessage>>,
+    IncorrectOutcome {
+        computed: BlockExecutionOutcome,
+        submitted: BlockExecutionOutcome,
     },
     #[error("The timestamp of a Tick operation is in the future.")]
     InvalidTimestamp,

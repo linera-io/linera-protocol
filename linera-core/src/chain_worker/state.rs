@@ -1028,11 +1028,6 @@ where
             panic!("Expecting a confirmation certificate");
         };
         let block = &executed_block.block;
-        let BlockExecutionOutcome {
-            messages,
-            state_hash,
-            oracle_responses,
-        } = &executed_block.outcome;
         // Check that the chain is active and ready for this confirmation.
         let tip = self.state.chain.tip_state.get().clone();
         if tip.next_block_height < block.height {
@@ -1135,20 +1130,16 @@ where
         let verified_outcome = Box::pin(self.state.chain.execute_block(
             block,
             local_time,
-            Some(oracle_responses.clone()),
+            Some(executed_block.outcome.oracle_responses.clone()),
         ))
         .await?;
         // We should always agree on the messages and state hash.
         ensure!(
-            *messages == verified_outcome.messages,
-            WorkerError::IncorrectMessages {
-                computed: verified_outcome.messages,
-                submitted: messages.clone(),
+            executed_block.outcome == verified_outcome,
+            WorkerError::IncorrectOutcome {
+                submitted: executed_block.outcome.clone(),
+                computed: verified_outcome,
             }
-        );
-        ensure!(
-            *state_hash == verified_outcome.state_hash,
-            WorkerError::IncorrectStateHash
         );
         // Advance to next block height.
         let tip = self.state.chain.tip_state.get_mut();
@@ -1156,7 +1147,7 @@ where
         tip.next_block_height.try_add_assign_one()?;
         tip.num_incoming_messages += block.incoming_messages.len() as u32;
         tip.num_operations += block.operations.len() as u32;
-        tip.num_outgoing_messages += messages.len() as u32;
+        tip.num_outgoing_messages += executed_block.outcome.messages.len() as u32;
         self.state.chain.confirmed_log.push(certificate.hash());
         let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
         let mut actions = self.state.create_network_actions().await?;
