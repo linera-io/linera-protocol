@@ -1049,11 +1049,11 @@ impl OracleTape {
     }
 
     /// Returns the oracle record if `self` is `Record` and an empty record otherwise.
-    pub fn into_record(self) -> OracleRecord {
+    pub fn try_into_record(self) -> Option<OracleRecord> {
         if let OracleTape::Record(responses) = self {
-            OracleRecord { responses }
+            Some(OracleRecord { responses })
         } else {
-            OracleRecord::default()
+            None
         }
     }
 }

@@ -317,9 +317,9 @@ where
                         )
                         .await?;
                     outcomes.extend(user_outcomes);
-                    return Ok((outcomes, oracle_tape.into_record()));
+                    return Ok((outcomes, oracle_tape.try_into_record().unwrap_or_default()));
                 }
-                Ok((outcomes, oracle_tape.into_record()))
+                Ok((outcomes, oracle_tape.try_into_record().unwrap_or_default()))
             }
             Operation::User {
                 application_id,
@@ -337,7 +337,7 @@ where
                         resource_controller,
                     )
                     .await?;
-                Ok((outcomes, oracle_tape.into_record()))
+                Ok((outcomes, oracle_tape.try_into_record().unwrap_or_default()))
             }
         }
     }
@@ -376,7 +376,7 @@ where
                         resource_controller,
                     )
                     .await?;
-                Ok((outcomes, oracle_tape.into_record()))
+                Ok((outcomes, oracle_tape.try_into_record().unwrap_or_default()))
             }
         }
     }
