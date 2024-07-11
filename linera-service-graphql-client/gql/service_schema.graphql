@@ -112,7 +112,7 @@ type BlockExecutionOutcome {
 	"""
 	The record of oracle responses for each transaction.
 	"""
-	oracleRecords: [OracleRecord!]!
+	oracleResponses: [[OracleResponse!]!]!
 }
 
 """
@@ -655,16 +655,6 @@ scalar Notification
 An operation to be executed in a block
 """
 scalar Operation
-
-"""
-A record of oracle responses from the execution of a transaction.
-"""
-type OracleRecord {
-	"""
-	The list of responses to all the oracle queries made by a transaction.
-	"""
-	responses: [OracleResponse!]!
-}
 
 """
 A record of a single oracle response.

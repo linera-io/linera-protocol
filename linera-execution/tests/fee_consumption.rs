@@ -9,7 +9,7 @@ use std::{sync::Arc, vec};
 
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, OracleRecord, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_execution::{
@@ -206,7 +206,7 @@ async fn test_fee_consumption(
             } else {
                 None
             },
-            Some(OracleRecord::default()),
+            Some(Vec::new()),
             &mut controller,
         )
         .await

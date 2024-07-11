@@ -7,7 +7,7 @@
 use std::fmt;
 
 use anyhow::Context as _;
-use async_graphql::{InputObject, SimpleObject};
+use async_graphql::InputObject;
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -708,22 +708,6 @@ impl ApplicationPermissions {
     /// Returns whether the given application is allowed to close this chain.
     pub fn can_close_chain(&self, app_id: &ApplicationId) -> bool {
         self.close_chain.contains(app_id)
-    }
-}
-
-/// A record of oracle responses from the execution of a transaction.
-#[derive(Debug, Default, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct OracleRecord {
-    /// The list of responses to all the oracle queries made by a transaction.
-    pub responses: Vec<OracleResponse>,
-}
-
-impl OracleRecord {
-    /// Wether an `OracleRecord` is permitted in fast blocks or not.
-    pub fn is_permitted_in_fast_blocks(&self) -> bool {
-        self.responses
-            .iter()
-            .all(|oracle_response| oracle_response.is_permitted_in_fast_blocks())
     }
 }
 

@@ -12,8 +12,8 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, OracleRecord,
-        OracleResponse, Resources, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, OracleResponse,
+        Resources, SendMessageRequest, Timestamp,
     },
     ensure,
     identifiers::{Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner},
@@ -1016,8 +1016,15 @@ impl ContractSyncRuntime {
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: UserAction,
-        oracle_record: Option<OracleRecord>,
-    ) -> Result<(Vec<ExecutionOutcome>, OracleRecord, ResourceController), ExecutionError> {
+        oracle_responses: Option<Vec<OracleResponse>>,
+    ) -> Result<
+        (
+            Vec<ExecutionOutcome>,
+            Vec<OracleResponse>,
+            ResourceController,
+        ),
+        ExecutionError,
+    > {
         let executing_message = match &action {
             UserAction::Message(context, _) => Some(context.into()),
             _ => None,
@@ -1025,8 +1032,8 @@ impl ContractSyncRuntime {
         let signer = action.signer();
         let height = action.height();
         let next_message_index = action.next_message_index();
-        let oracle_record = if let Some(responses) = oracle_record {
-            OracleResponses::Replay(responses.responses.into_iter())
+        let oracle_responses = if let Some(responses) = oracle_responses {
+            OracleResponses::Replay(responses.into_iter())
         } else {
             OracleResponses::Record(Vec::new())
         };
@@ -1041,7 +1048,7 @@ impl ContractSyncRuntime {
                 execution_state_sender,
                 refund_grant_to,
                 resource_controller,
-                oracle_record,
+                oracle_responses,
             ),
         )));
         let finalize_context = FinalizeContext {
@@ -1061,14 +1068,15 @@ impl ContractSyncRuntime {
         let runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        let oracle_record = if let OracleResponses::Record(responses) = runtime.oracle_responses {
-            OracleRecord { responses }
+        let oracle_responses = if let OracleResponses::Record(responses) = runtime.oracle_responses
+        {
+            responses
         } else {
-            OracleRecord::default()
+            Vec::default()
         };
         Ok((
             runtime.execution_outcomes,
-            oracle_record,
+            oracle_responses,
             runtime.resource_controller,
         ))
     }
