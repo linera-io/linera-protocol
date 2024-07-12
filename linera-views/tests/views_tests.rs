@@ -23,7 +23,7 @@ use linera_views::{
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView, ViewContainer},
     log_view::HashedLogView,
     lru_caching::{LruCachingMemoryContext, LruCachingStore},
-    map_view::HashedMapView,
+    map_view::{ByteMapView, HashedMapView},
     memory::{
         create_memory_context, MemoryContext, MemoryStore, MemoryStoreMap,
         TEST_MEMORY_MAX_STREAM_QUERIES,
@@ -701,6 +701,29 @@ where
     Ok(staged_hash)
 }
 
+
+#[derive(CryptoHashRootView)]
+pub struct ByteMapStateView<C> {
+    pub map: ByteMapView<C, u8>,
+}
+
+#[tokio::test]
+async fn test_byte_map_view() -> Result<()> {
+    let context = create_memory_context();
+    {
+        let mut view = ByteMapStateView::load(context.clone()).await?;
+        view.map.insert(vec![0,1], 5);
+        view.save().await?;
+    }
+    {
+        let mut view = ByteMapStateView::load(context.clone()).await?;
+        view.map.remove_by_prefix(vec![0]);
+        let val = view.map.get_mut_or_default(&[0,1]).await?;
+        assert_eq!(*val, 0);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 async fn test_views_in_lru_memory_param(config: &TestConfig) -> Result<()> {
     tracing::warn!("Testing config {:?} with lru memory", config);
@@ -1116,7 +1139,11 @@ async fn compute_hash_view_iter_large() -> Result<()> {
 }
 
 #[cfg(test)]
-async fn check_hash_memoization_persistence<S>(rng: &mut impl RngCore, store: &mut S, key_value_vector: Vec<(Vec<u8>, Vec<u8>)>) -> Result<()>
+async fn check_hash_memoization_persistence<S>(
+    rng: &mut impl RngCore,
+    store: &mut S,
+    key_value_vector: Vec<(Vec<u8>, Vec<u8>)>,
+) -> Result<()>
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
