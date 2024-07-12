@@ -445,10 +445,7 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_reset_entry_to_default(
-        &mut self,
-        short_key: &[u8],
-    ) -> Result<(), ViewError> {
+    pub async fn try_reset_entry_to_default(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
         let mut view = self.try_load_entry_mut(short_key).await?;
         view.clear();
         Ok(())

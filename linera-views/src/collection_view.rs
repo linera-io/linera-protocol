@@ -276,7 +276,10 @@ where
                 match entry {
                     Update::Set(_) => {
                         let guard = RwLockWriteGuard::downgrade(updates);
-                        Ok(Some(ReadGuardedView { guard, short_key: short_key.to_vec() }))
+                        Ok(Some(ReadGuardedView {
+                            guard,
+                            short_key: short_key.to_vec(),
+                        }))
                     }
                     Update::Removed => Ok(None),
                 }
@@ -291,7 +294,10 @@ where
                     let view = W::load(context).await?;
                     entry.insert(Update::Set(view));
                     let guard = RwLockWriteGuard::downgrade(updates);
-                    Ok(Some(ReadGuardedView { guard, short_key: short_key.to_vec() }))
+                    Ok(Some(ReadGuardedView {
+                        guard,
+                        short_key: short_key.to_vec(),
+                    }))
                 } else {
                     Ok(None)
                 }

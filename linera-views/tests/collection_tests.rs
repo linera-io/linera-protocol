@@ -37,7 +37,7 @@ where
 }
 
 #[tokio::test]
-async fn classic_collection_view_check() -> Result<()>{
+async fn classic_collection_view_check() -> Result<()> {
     let context = create_memory_context();
     let mut rng = test_utils::make_deterministic_rng();
     let mut map = BTreeMap::<u8, u32>::new();

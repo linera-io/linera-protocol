@@ -24,15 +24,15 @@ where
     C: Send + Context + Sync,
     ViewError: From<C::Error>,
 {
-    async fn key_values(&self) -> BTreeMap<u8, u32> {
+    async fn key_values(&self) -> Result<BTreeMap<u8, u32>> {
         let mut map = BTreeMap::new();
-        let keys = self.v.indices().await.unwrap();
+        let keys = self.v.indices().await?;
         for key in keys {
-            let subview = self.v.try_load_entry(&key).await.unwrap().unwrap();
+            let subview = self.v.try_load_entry(&key).await?.unwrap();
             let value = subview.get();
             map.insert(key, *value);
         }
-        map
+        Ok(map)
     }
 }
 
@@ -46,7 +46,7 @@ async fn reentrant_collection_view_check() -> Result<()> {
     for _ in 0..n {
         let mut view = StateView::load(context.clone()).await?;
         let hash = view.crypto_hash().await?;
-        let key_values = view.key_values().await;
+        let key_values = view.key_values().await?;
         assert_eq!(key_values, map);
         //
         let save = rng.gen::<bool>();
@@ -112,7 +112,7 @@ async fn reentrant_collection_view_check() -> Result<()> {
                 let n_ins = rng.gen_range(0..5);
                 for _i_ins in 0..n_ins {
                     let pos = rng.gen_range(0..nmax);
-                    let subview: Option<_> = view.v.try_load_entry(&pos).await?;
+                    let subview = view.v.try_load_entry(&pos).await?;
                     match new_map.contains_key(&pos) {
                         true => {
                             let subview = subview.unwrap();
@@ -143,7 +143,7 @@ async fn reentrant_collection_view_check() -> Result<()> {
                 assert_ne!(hash, new_hash);
             }
             // Checking the keys
-            let key_values = view.key_values().await;
+            let key_values = view.key_values().await?;
             assert_eq!(key_values, new_map);
             // Checking the try_load_entries on all indices
             let indices = key_values.into_iter().map(|x| x.0).collect::<Vec<_>>();

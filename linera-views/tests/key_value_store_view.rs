@@ -92,9 +92,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
                 // deleting a prefix
                 let val = rng.gen_range(0..5) as u8;
                 let key_prefix = vec![val];
-                view.store
-                    .remove_by_prefix(key_prefix.clone())
-                    .await?;
+                view.store.remove_by_prefix(key_prefix.clone()).await?;
                 remove_by_prefix(&mut new_state_map, key_prefix);
             }
             if choice == 3 {
