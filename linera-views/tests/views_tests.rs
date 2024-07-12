@@ -8,6 +8,7 @@ use std::{
     sync::Arc,
 };
 
+use anyhow::Result;
 use async_lock::{Mutex, RwLock};
 use async_trait::async_trait;
 #[cfg(with_scylladb)]
@@ -391,67 +392,65 @@ impl TestConfig {
 }
 
 #[cfg(test)]
-async fn test_store<S>(store: &mut S, config: &TestConfig) -> <sha3::Sha3_256 as Hasher>::Output
+async fn test_store<S>(store: &mut S, config: &TestConfig) -> Result<<sha3::Sha3_256 as Hasher>::Output>
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
     let default_hash = {
-        let view = store.load(1).await.unwrap();
-        view.hash().await.unwrap()
+        let view = store.load(1).await?;
+        view.hash().await?
     };
     {
-        let mut view = store.load(1).await.unwrap();
+        let mut view = store.load(1).await?;
         if config.with_x1 {
             assert_eq!(view.x1.extra(), &1);
         }
-        let hash = view.hash().await.unwrap();
+        let hash = view.hash().await?;
         assert_eq!(hash, default_hash);
         if config.with_x1 {
             assert_eq!(view.x1.get(), &0);
             view.x1.set(1);
         }
         view.rollback();
-        assert_eq!(view.hash().await.unwrap(), hash);
+        assert_eq!(view.hash().await?, hash);
         if config.with_x2 {
             view.x2.set(2);
         }
         if config.with_x2 {
-            assert_ne!(view.hash().await.unwrap(), hash);
+            assert_ne!(view.hash().await?, hash);
         }
         if config.with_log {
             view.log.push(4);
         }
         if config.with_queue {
             view.queue.push_back(8);
-            assert_eq!(view.queue.front().await.unwrap(), Some(8));
+            assert_eq!(view.queue.front().await?, Some(8));
             view.queue.push_back(7);
             view.queue.delete_front();
         }
         if config.with_map {
-            view.map.insert("Hello", 5).unwrap();
-            assert_eq!(view.map.indices().await.unwrap(), vec!["Hello".to_string()]);
+            view.map.insert("Hello", 5)?;
+            assert_eq!(view.map.indices().await?, vec!["Hello".to_string()]);
             let mut count = 0;
             view.map
                 .for_each_index(|_index| {
                     count += 1;
                     Ok(())
                 })
-                .await
-                .unwrap();
+                .await?;
             assert_eq!(count, 1);
         }
         if config.with_set {
-            view.set.insert(&42).unwrap();
-            assert_eq!(view.set.indices().await.unwrap(), vec![42]);
+            view.set.insert(&42)?;
+            assert_eq!(view.set.indices().await?, vec![42]);
             let mut count = 0;
             view.set
                 .for_each_index(|_index| {
                     count += 1;
                     Ok(())
                 })
-                .await
-                .unwrap();
+                .await?;
             assert_eq!(count, 1);
         }
         if config.with_x1 {
@@ -461,24 +460,24 @@ where
             assert_eq!(view.x2.get(), &2);
         }
         if config.with_log {
-            assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
+            assert_eq!(view.log.read(0..10).await?, vec![4]);
         }
         if config.with_queue {
-            assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7]);
+            assert_eq!(view.queue.read_front(10).await?, vec![7]);
         }
         if config.with_map {
-            assert_eq!(view.map.get("Hello").await.unwrap(), Some(5));
+            assert_eq!(view.map.get("Hello").await?, Some(5));
         }
         if config.with_set {
-            assert!(view.set.contains(&42).await.unwrap());
+            assert!(view.set.contains(&42).await?);
         }
         if config.with_collection {
             {
-                let subview = view.collection.load_entry_mut("hola").await.unwrap();
+                let subview = view.collection.load_entry_mut("hola").await?;
                 subview.push(17);
                 subview.push(18);
                 assert_eq!(
-                    view.collection.indices().await.unwrap(),
+                    view.collection.indices().await?,
                     vec!["hola".to_string()]
                 );
                 let mut count = 0;
@@ -487,22 +486,20 @@ where
                         count += 1;
                         Ok(())
                     })
-                    .await
-                    .unwrap();
+                    .await?;
                 assert_eq!(count, 1);
             }
             let subview = view
                 .collection
                 .try_load_entry("hola")
-                .await
-                .unwrap()
+                .await?
                 .unwrap();
-            assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
+            assert_eq!(subview.read(0..10).await?, vec![17, 18]);
         }
     };
     let staged_hash = {
-        let mut view = store.load(1).await.unwrap();
-        assert_eq!(view.hash().await.unwrap(), default_hash);
+        let mut view = store.load(1).await?;
+        assert_eq!(view.hash().await?, default_hash);
         if config.with_x1 {
             assert_eq!(view.x1.get(), &0);
         }
@@ -510,22 +507,22 @@ where
             assert_eq!(view.x2.get(), &0);
         }
         if config.with_log {
-            assert_eq!(view.log.read(0..10).await.unwrap(), Vec::<u32>::new());
+            assert_eq!(view.log.read(0..10).await?, Vec::<u32>::new());
         }
         if config.with_queue {
-            assert_eq!(view.queue.read_front(10).await.unwrap(), Vec::<u64>::new());
+            assert_eq!(view.queue.read_front(10).await?, Vec::<u64>::new());
         }
         if config.with_map {
-            assert_eq!(view.map.get("Hello").await.unwrap(), None);
+            assert_eq!(view.map.get("Hello").await?, None);
         }
         if config.with_set {
-            assert!(!view.set.contains(&42).await.unwrap());
+            assert!(!view.set.contains(&42).await?);
         }
         if config.with_collection {
-            let subview = view.collection.load_entry_or_insert("hola").await.unwrap();
-            assert_eq!(subview.read(0..10).await.unwrap(), Vec::<u32>::new());
-            let subview = view.collection2.load_entry_mut("ciao").await.unwrap();
-            let subsubview = subview.load_entry_mut("!").await.unwrap();
+            let subview = view.collection.load_entry_or_insert("hola").await?;
+            assert_eq!(subview.read(0..10).await?, Vec::<u32>::new());
+            let subview = view.collection2.load_entry_mut("ciao").await?;
+            let subsubview = subview.load_entry_mut("!").await?;
             subsubview.set(3);
             assert_eq!(subsubview.get(), &3);
         }
@@ -539,34 +536,34 @@ where
             view.queue.push_back(7);
         }
         if config.with_map {
-            view.map.insert("Hello", 5).unwrap();
-            view.map.insert("Hi", 2).unwrap();
-            view.map.remove("Hi").unwrap();
+            view.map.insert("Hello", 5)?;
+            view.map.insert("Hi", 2)?;
+            view.map.remove("Hi")?;
         }
         if config.with_set {
-            view.set.insert(&42).unwrap();
-            view.set.insert(&59).unwrap();
-            view.set.remove(&59).unwrap();
+            view.set.insert(&42)?;
+            view.set.insert(&59)?;
+            view.set.remove(&59)?;
         }
         if config.with_collection {
-            let subview = view.collection.load_entry_mut("hola").await.unwrap();
+            let subview = view.collection.load_entry_mut("hola").await?;
             subview.push(17);
             subview.push(18);
         }
         if config.with_flush {
-            view.save().await.unwrap();
+            view.save().await?;
         }
-        let hash1 = view.hash().await.unwrap();
-        let hash2 = view.hash().await.unwrap();
-        view.save().await.unwrap();
-        let hash3 = view.hash().await.unwrap();
+        let hash1 = view.hash().await?;
+        let hash2 = view.hash().await?;
+        view.save().await?;
+        let hash3 = view.hash().await?;
         assert_eq!(hash1, hash2);
         assert_eq!(hash1, hash3);
         hash1
     };
     {
-        let mut view = store.load(1).await.unwrap();
-        let stored_hash = view.hash().await.unwrap();
+        let mut view = store.load(1).await?;
+        let stored_hash = view.hash().await?;
         assert_eq!(staged_hash, stored_hash);
         if config.with_x1 {
             assert_eq!(view.x1.get(), &1);
@@ -575,57 +572,56 @@ where
             assert_eq!(view.x2.get(), &0);
         }
         if config.with_log {
-            assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
+            assert_eq!(view.log.read(0..10).await?, vec![4]);
         }
         if config.with_queue {
             view.queue.push_back(8);
-            assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7, 8]);
-            assert_eq!(view.queue.read_front(1).await.unwrap(), vec![7]);
-            assert_eq!(view.queue.read_back(10).await.unwrap(), vec![7, 8]);
-            assert_eq!(view.queue.read_back(1).await.unwrap(), vec![8]);
-            assert_eq!(view.queue.front().await.unwrap(), Some(7));
-            assert_eq!(view.queue.back().await.unwrap(), Some(8));
+            assert_eq!(view.queue.read_front(10).await?, vec![7, 8]);
+            assert_eq!(view.queue.read_front(1).await?, vec![7]);
+            assert_eq!(view.queue.read_back(10).await?, vec![7, 8]);
+            assert_eq!(view.queue.read_back(1).await?, vec![8]);
+            assert_eq!(view.queue.front().await?, Some(7));
+            assert_eq!(view.queue.back().await?, Some(8));
             assert_eq!(view.queue.count(), 2);
             view.queue.delete_front();
-            assert_eq!(view.queue.front().await.unwrap(), Some(8));
+            assert_eq!(view.queue.front().await?, Some(8));
             view.queue.delete_front();
-            assert_eq!(view.queue.front().await.unwrap(), None);
+            assert_eq!(view.queue.front().await?, None);
             assert_eq!(view.queue.count(), 0);
             view.queue.push_back(13);
         }
         if config.with_map {
-            assert_eq!(view.map.get("Hello").await.unwrap(), Some(5));
-            assert_eq!(view.map.get("Hi").await.unwrap(), None);
+            assert_eq!(view.map.get("Hello").await?, Some(5));
+            assert_eq!(view.map.get("Hi").await?, None);
         }
         if config.with_set {
-            assert!(view.set.contains(&42).await.unwrap());
-            assert!(!view.set.contains(&59).await.unwrap());
+            assert!(view.set.contains(&42).await?);
+            assert!(!view.set.contains(&59).await?);
         }
         if config.with_collection {
             let subview = view
                 .collection
                 .try_load_entry("hola")
-                .await
-                .unwrap()
+                .await?
                 .unwrap();
-            assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
-            assert_eq!(subview.read(..).await.unwrap(), vec![17, 18]);
-            assert_eq!(subview.read(1..).await.unwrap(), vec![18]);
-            assert_eq!(subview.read(..=0).await.unwrap(), vec![17]);
+            assert_eq!(subview.read(0..10).await?, vec![17, 18]);
+            assert_eq!(subview.read(..).await?, vec![17, 18]);
+            assert_eq!(subview.read(1..).await?, vec![18]);
+            assert_eq!(subview.read(..=0).await?, vec![17]);
         }
         if config.with_flush {
-            view.save().await.unwrap();
+            view.save().await?;
         }
         if config.with_collection {
-            let subview = view.collection2.load_entry_mut("ciao").await.unwrap();
-            let subsubview = subview.try_load_entry("!").await.unwrap().unwrap();
+            let subview = view.collection2.load_entry_mut("ciao").await?;
+            let subsubview = subview.try_load_entry("!").await?.unwrap();
             assert!(subview.try_load_entry("!").await.is_err());
             assert_eq!(subsubview.get(), &3);
             assert_eq!(
-                view.collection.indices().await.unwrap(),
+                view.collection.indices().await?,
                 vec!["hola".to_string()]
             );
-            view.collection.remove_entry("hola").unwrap();
+            view.collection.remove_entry("hola")?;
         }
         if config.with_x1
             && config.with_x2
@@ -635,22 +631,22 @@ where
             && config.with_log
             && config.with_collection
         {
-            assert_ne!(view.hash().await.unwrap(), stored_hash);
+            assert_ne!(view.hash().await?, stored_hash);
         }
-        view.save().await.unwrap();
+        view.save().await?;
     }
     {
-        let mut view = store.load(1).await.unwrap();
+        let mut view = store.load(1).await?;
         if config.with_collection {
             {
-                let mut subview = view.collection4.try_load_entry_mut("hola").await.unwrap();
-                assert_eq!(subview.read_front(10).await.unwrap(), Vec::<u64>::new());
+                let mut subview = view.collection4.try_load_entry_mut("hola").await?;
+                assert_eq!(subview.read_front(10).await?, Vec::<u64>::new());
                 assert!(view.collection4.try_load_entry_mut("hola").await.is_err());
                 if config.with_queue {
                     subview.push_back(13);
-                    assert_eq!(subview.front().await.unwrap(), Some(13));
+                    assert_eq!(subview.front().await?, Some(13));
                     subview.delete_front();
-                    assert_eq!(subview.front().await.unwrap(), None);
+                    assert_eq!(subview.front().await?, None);
                     assert_eq!(subview.count(), 0);
                 }
             }
@@ -658,8 +654,7 @@ where
                 let subview = view
                     .collection4
                     .try_load_entry("hola")
-                    .await
-                    .unwrap()
+                    .await?
                     .unwrap();
                 assert_eq!(subview.count(), 0);
                 assert!(view.collection4.try_load_entry("hola").await.is_ok());
@@ -668,122 +663,129 @@ where
     }
     if config.with_map {
         {
-            let mut view = store.load(1).await.unwrap();
-            let value = view.map.get_mut_or_default("Geia").await.unwrap();
+            let mut view = store.load(1).await?;
+            let value = view.map.get_mut_or_default("Geia").await?;
             assert_eq!(*value, 0);
             *value = 42;
-            let value = view.map.get_mut_or_default("Geia").await.unwrap();
+            let value = view.map.get_mut_or_default("Geia").await?;
             assert_eq!(*value, 42);
-            view.save().await.unwrap();
+            view.save().await?;
         }
         {
-            let view = store.load(1).await.unwrap();
-            assert_eq!(view.map.get("Geia").await.unwrap(), Some(42));
+            let view = store.load(1).await?;
+            assert_eq!(view.map.get("Geia").await?, Some(42));
         }
         {
-            let mut view = store.load(1).await.unwrap();
-            let value = view.map.get_mut_or_default("Geia").await.unwrap();
+            let mut view = store.load(1).await?;
+            let value = view.map.get_mut_or_default("Geia").await?;
             assert_eq!(*value, 42);
             *value = 43;
             view.rollback();
-            let value = view.map.get_mut_or_default("Geia").await.unwrap();
+            let value = view.map.get_mut_or_default("Geia").await?;
             assert_eq!(*value, 42);
         }
     }
     if config.with_map {
         {
-            let mut view = store.load(1).await.unwrap();
-            view.map.insert("Konnichiwa", 5).unwrap();
-            let value = view.map.get_mut("Konnichiwa").await.unwrap().unwrap();
+            let mut view = store.load(1).await?;
+            view.map.insert("Konnichiwa", 5)?;
+            let value = view.map.get_mut("Konnichiwa").await?.unwrap();
             *value = 6;
-            view.save().await.unwrap();
+            view.save().await?;
         }
         {
-            let view = store.load(1).await.unwrap();
-            assert_eq!(view.map.get("Konnichiwa").await.unwrap(), Some(6));
+            let view = store.load(1).await?;
+            assert_eq!(view.map.get("Konnichiwa").await?, Some(6));
         }
     }
     {
-        let mut view = store.load(1).await.unwrap();
+        let mut view = store.load(1).await?;
         if config.with_collection {
-            let subview = view.collection.load_entry_or_insert("hola").await.unwrap();
-            assert_eq!(subview.read(0..10).await.unwrap(), Vec::<u32>::new());
+            let subview = view.collection.load_entry_or_insert("hola").await?;
+            assert_eq!(subview.read(0..10).await?, Vec::<u32>::new());
         }
         if config.with_queue {
-            assert_eq!(view.queue.front().await.unwrap(), Some(13));
+            assert_eq!(view.queue.front().await?, Some(13));
             view.queue.delete_front();
-            assert_eq!(view.queue.front().await.unwrap(), None);
+            assert_eq!(view.queue.front().await?, None);
             assert_eq!(view.queue.count(), 0);
         }
         view.clear();
-        view.save().await.unwrap();
+        view.save().await?;
     }
-    staged_hash
+    Ok(staged_hash)
 }
 
 #[cfg(test)]
-async fn test_views_in_lru_memory_param(config: &TestConfig) {
+async fn test_views_in_lru_memory_param(config: &TestConfig) ->Result<()> {
     tracing::warn!("Testing config {:?} with lru memory", config);
     let mut store = LruMemoryStore::new().await;
-    test_store(&mut store, config).await;
+    test_store(&mut store, config).await?;
     assert_eq!(store.states.len(), 1);
     let entry = store.states.get(&1).unwrap().clone();
     assert!(entry.lock().await.is_empty());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_views_in_lru_memory() {
+async fn test_views_in_lru_memory() -> Result<()> {
     for config in TestConfig::samples() {
-        test_views_in_lru_memory_param(&config).await
+        test_views_in_lru_memory_param(&config).await?;
     }
+    Ok(())
 }
 
 #[cfg(test)]
-async fn test_views_in_memory_param(config: &TestConfig) {
+async fn test_views_in_memory_param(config: &TestConfig) -> Result<()> {
     tracing::warn!("Testing config {:?} with memory", config);
     let mut store = MemoryTestStore::new().await;
-    test_store(&mut store, config).await;
+    test_store(&mut store, config).await?;
     assert_eq!(store.states.len(), 1);
     let entry = store.states.get(&1).unwrap().clone();
     assert!(entry.lock().await.is_empty());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_views_in_memory() {
+async fn test_views_in_memory() -> Result<()> {
     for config in TestConfig::samples() {
-        test_views_in_memory_param(&config).await
+        test_views_in_memory_param(&config).await?;
     }
+    Ok(())
 }
 
 #[cfg(test)]
-async fn test_views_in_key_value_store_view_memory_param(config: &TestConfig) {
+async fn test_views_in_key_value_store_view_memory_param(config: &TestConfig) -> Result<()> {
     tracing::warn!(
         "Testing config {:?} with key_value_store_view on memory",
         config
     );
     let mut store = KeyValueStoreTestStore::new().await;
-    test_store(&mut store, config).await;
+    test_store(&mut store, config).await?;
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_views_in_key_value_store_view_memory() {
+async fn test_views_in_key_value_store_view_memory() -> Result<()> {
     for config in TestConfig::samples() {
-        test_views_in_key_value_store_view_memory_param(&config).await
+        test_views_in_key_value_store_view_memory_param(&config).await?;
     }
+    Ok(())
 }
 
 #[cfg(with_rocksdb)]
 #[cfg(test)]
-async fn test_views_in_rocks_db_param(config: &TestConfig) {
+async fn test_views_in_rocks_db_param(config: &TestConfig) -> Result<()> {
     tracing::warn!("Testing config {:?} with rocks_db", config);
 
     let mut store = RocksDbTestStore::new().await;
-    let hash = test_store(&mut store, config).await;
+    let hash = test_store(&mut store, config).await?;
     assert_eq!(store.accessed_chains.len(), 1);
 
     let mut store = MemoryTestStore::new().await;
-    let hash2 = test_store(&mut store, config).await;
+    let hash2 = test_store(&mut store, config).await?;
     assert_eq!(hash, hash2);
+    Ok(())
 }
 
 #[cfg(with_rocksdb)]
@@ -796,16 +798,17 @@ async fn test_views_in_rocks_db() {
 
 #[cfg(with_scylladb)]
 #[cfg(test)]
-async fn test_views_in_scylla_db_param(config: &TestConfig) {
+async fn test_views_in_scylla_db_param(config: &TestConfig) -> Result<()> {
     tracing::warn!("Testing config {:?} with scylla_db", config);
 
     let mut store = ScyllaDbTestStore::new().await;
-    let hash = test_store(&mut store, config).await;
+    let hash = test_store(&mut store, config).await?;
     assert_eq!(store.accessed_chains.len(), 1);
 
     let mut store = MemoryTestStore::new().await;
-    let hash2 = test_store(&mut store, config).await;
+    let hash2 = test_store(&mut store, config).await?;
     assert_eq!(hash, hash2);
+    Ok(())
 }
 
 #[cfg(with_scylladb)]
@@ -818,55 +821,56 @@ async fn test_views_in_scylla_db() {
 
 #[cfg(with_dynamodb)]
 #[tokio::test]
-async fn test_views_in_dynamo_db() {
+async fn test_views_in_dynamo_db() -> Result<()> {
     let mut store = DynamoDbTestStore::new().await;
     let config = TestConfig::default();
-    let hash = test_store(&mut store, &config).await;
+    let hash = test_store(&mut store, &config).await?;
     assert_eq!(store.accessed_chains.len(), 1);
 
     let mut store = MemoryTestStore::new().await;
-    let hash2 = test_store(&mut store, &config).await;
+    let hash2 = test_store(&mut store, &config).await?;
     assert_eq!(hash, hash2);
+    Ok(())
 }
 
 #[cfg(with_rocksdb)]
 #[cfg(test)]
-async fn test_store_rollback_kernel<S>(store: &mut S)
+async fn test_store_rollback_kernel<S>(store: &mut S) -> Result<()>
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
     {
-        let mut view = store.load(1).await.unwrap();
+        let mut view = store.load(1).await?;
         view.queue.push_back(8);
-        view.map.insert("Hello", 5).unwrap();
-        let subview = view.collection.load_entry_mut("hola").await.unwrap();
+        view.map.insert("Hello", 5)?;
+        let subview = view.collection.load_entry_mut("hola").await?;
         subview.push(17);
-        view.save().await.unwrap();
+        view.save().await?;
     }
     {
-        let mut view = store.load(1).await.unwrap();
+        let mut view = store.load(1).await?;
         view.queue.push_back(7);
-        view.map.insert("Hello", 4).unwrap();
-        let subview = view.collection.load_entry_mut("DobryDen").await.unwrap();
+        view.map.insert("Hello", 4)?;
+        let subview = view.collection.load_entry_mut("DobryDen").await?;
         subview.push(16);
         view.rollback();
-        view.save().await.unwrap();
+        view.save().await?;
     }
     {
-        let mut view = store.load(1).await.unwrap();
+        let mut view = store.load(1).await?;
         view.queue.clear();
         view.map.clear();
         view.collection.clear();
         view.rollback();
-        view.save().await.unwrap();
+        view.save().await?;
     }
     {
-        let view = store.load(1).await.unwrap();
-        assert_eq!(view.queue.front().await.unwrap(), Some(8));
-        assert_eq!(view.map.get("Hello").await.unwrap(), Some(5));
+        let view = store.load(1).await?;
+        assert_eq!(view.queue.front().await?, Some(8));
+        assert_eq!(view.map.get("Hello").await?, Some(5));
         assert_eq!(
-            view.collection.indices().await.unwrap(),
+            view.collection.indices().await?,
             vec!["hola".to_string()]
         );
     };
@@ -874,16 +878,17 @@ where
 
 #[cfg(with_rocksdb)]
 #[tokio::test]
-async fn test_store_rollback() {
+async fn test_store_rollback() -> Result<()> {
     let mut store = MemoryTestStore::new().await;
-    test_store_rollback_kernel(&mut store).await;
+    test_store_rollback_kernel(&mut store).await?;
 
     let mut store = RocksDbTestStore::new().await;
-    test_store_rollback_kernel(&mut store).await;
+    test_store_rollback_kernel(&mut store).await?;
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_collection_removal() -> anyhow::Result<()> {
+async fn test_collection_removal() -> Result<()> {
     type EntryType = HashedRegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = HashedCollectionView<MemoryContext<()>, u8, EntryType>;
 
@@ -899,7 +904,7 @@ async fn test_collection_removal() -> anyhow::Result<()> {
 
     // Remove the entry from the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
-    collection.remove_entry(&1).unwrap();
+    collection.remove_entry(&1)?;
     let mut batch = Batch::new();
     collection.flush(&mut batch)?;
     collection.context().write_batch(batch).await?;
@@ -914,7 +919,7 @@ async fn test_collection_removal() -> anyhow::Result<()> {
 async fn test_removal_api_first_second_condition(
     first_condition: bool,
     second_condition: bool,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     type EntryType = HashedRegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = HashedCollectionView<MemoryContext<()>, u8, EntryType>;
 
@@ -970,7 +975,7 @@ async fn test_removal_api_first_second_condition(
 }
 
 #[tokio::test]
-async fn test_removal_api() -> anyhow::Result<()> {
+async fn test_removal_api() -> Result<()> {
     for first_condition in [true, false] {
         for second_condition in [true, false] {
             test_removal_api_first_second_condition(first_condition, second_condition).await?;
