@@ -87,7 +87,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
                 let pos = rng.gen_range(0..count);
                 let vec = new_state_vec[pos].clone();
                 let key = vec.0;
-                let result = view.map.get_mut(key.clone()).await.unwrap().unwrap();
+                let result = view.map.get_mut(&key).await.unwrap().unwrap();
                 let new_value = rng.gen::<u8>();
                 *result = new_value;
                 new_state_map.insert(key, new_value);
@@ -112,7 +112,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
                 let test_view = view.map.contains_key(&key).await.unwrap();
                 let test_map = new_state_map.contains_key(&key);
                 assert_eq!(test_view, test_map);
-                let result = view.map.get_mut_or_default(key.clone()).await.unwrap();
+                let result = view.map.get_mut_or_default(&key).await.unwrap();
                 let new_value = rng.gen::<u8>();
                 *result = new_value;
                 new_state_map.insert(key, new_value);
