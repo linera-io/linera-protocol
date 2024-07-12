@@ -639,7 +639,7 @@ where
                 ProposalContent {
                     block,
                     round,
-                    forced_oracle_records,
+                    forced_oracle_responses,
                 },
             owner,
             hashed_certificate_values,
@@ -648,10 +648,10 @@ where
             signature: _,
         } = proposal;
         ensure!(
-            validated_block_certificate.is_some() == forced_oracle_records.is_some(),
+            validated_block_certificate.is_some() == forced_oracle_responses.is_some(),
             WorkerError::InvalidBlockProposal(
                 "Must contain a validation certificate if and only if \
-                 oracle records are forced from a previous round"
+                 oracle responses are forced from a previous round"
                     .to_string()
             )
         );
@@ -717,7 +717,7 @@ where
         let outcome = Box::pin(self.0.chain.execute_block(
             block,
             local_time,
-            forced_oracle_records.clone(),
+            forced_oracle_responses.clone(),
         ))
         .await?;
         if let Some(lite_certificate) = &validated_block_certificate {
@@ -730,9 +730,10 @@ where
         if round.is_fast() {
             ensure!(
                 outcome
-                    .oracle_records
+                    .oracle_responses
                     .iter()
-                    .all(|record| record.is_permitted_in_fast_blocks()),
+                    .flatten()
+                    .all(|response| response.is_permitted_in_fast_blocks()),
                 WorkerError::FastBlockUsingOracles
             );
         }
@@ -1027,11 +1028,6 @@ where
             panic!("Expecting a confirmation certificate");
         };
         let block = &executed_block.block;
-        let BlockExecutionOutcome {
-            messages,
-            state_hash,
-            oracle_records,
-        } = &executed_block.outcome;
         // Check that the chain is active and ready for this confirmation.
         let tip = self.state.chain.tip_state.get().clone();
         if tip.next_block_height < block.height {
@@ -1134,20 +1130,16 @@ where
         let verified_outcome = Box::pin(self.state.chain.execute_block(
             block,
             local_time,
-            Some(oracle_records.clone()),
+            Some(executed_block.outcome.oracle_responses.clone()),
         ))
         .await?;
         // We should always agree on the messages and state hash.
         ensure!(
-            *messages == verified_outcome.messages,
-            WorkerError::IncorrectMessages {
-                computed: verified_outcome.messages,
-                submitted: messages.clone(),
+            executed_block.outcome == verified_outcome,
+            WorkerError::IncorrectOutcome {
+                submitted: executed_block.outcome.clone(),
+                computed: verified_outcome,
             }
-        );
-        ensure!(
-            *state_hash == verified_outcome.state_hash,
-            WorkerError::IncorrectStateHash
         );
         // Advance to next block height.
         let tip = self.state.chain.tip_state.get_mut();
@@ -1155,7 +1147,7 @@ where
         tip.next_block_height.try_add_assign_one()?;
         tip.num_incoming_messages += block.incoming_messages.len() as u32;
         tip.num_operations += block.operations.len() as u32;
-        tip.num_outgoing_messages += messages.len() as u32;
+        tip.num_outgoing_messages += executed_block.outcome.messages.len() as u32;
         self.state.chain.confirmed_log.push(certificate.hash());
         let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
         let mut actions = self.state.create_network_actions().await?;

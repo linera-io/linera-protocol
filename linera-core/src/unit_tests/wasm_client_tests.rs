@@ -19,7 +19,7 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, HashedBlob, OracleRecord, OracleResponse},
+    data_types::{Amount, HashedBlob, OracleResponse},
     identifiers::{AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -125,9 +125,9 @@ where
         .executed_block()
         .unwrap()
         .outcome
-        .oracle_records
+        .oracle_responses
         .iter()
-        .any(|record| record.responses.contains(&OracleResponse::Blob(blob_id))));
+        .any(|responses| responses.contains(&OracleResponse::Blob(blob_id))));
 
     let service_blob = HashedBlob::load_from_file(service_path.clone()).await?;
     let expected_service_blob_id = service_blob.id();
@@ -138,9 +138,9 @@ where
         .executed_block()
         .unwrap()
         .outcome
-        .oracle_records
+        .oracle_responses
         .iter()
-        .any(|record| record.responses.contains(&OracleResponse::Blob(blob_id))));
+        .any(|responses| responses.contains(&OracleResponse::Blob(blob_id))));
 
     // If I try to upload the contract blob again, I should get the same blob ID
     let (blob_id, certificate) = publisher
@@ -154,9 +154,9 @@ where
         .executed_block()
         .unwrap()
         .outcome
-        .oracle_records
+        .oracle_responses
         .iter()
-        .any(|record| record.responses.contains(&OracleResponse::Blob(blob_id))));
+        .any(|responses| responses.contains(&OracleResponse::Blob(blob_id))));
 
     let (bytecode_id, cert) = publisher
         .publish_bytecode(
@@ -389,9 +389,9 @@ where
     receiver.receive_certificate(cert).await.unwrap();
     let (cert, _) = receiver.process_inbox().await.unwrap();
     let executed_block = cert[0].value().executed_block().unwrap();
-    let records = &executed_block.outcome.oracle_records;
-    let [_, OracleRecord { responses }] = &records[..] else {
-        panic!("Unexpected oracle records: {:?}", records);
+    let responses = &executed_block.outcome.oracle_responses;
+    let [_, responses] = &responses[..] else {
+        panic!("Unexpected oracle responses: {:?}", responses);
     };
     let [OracleResponse::Service(json)] = &responses[..] else {
         panic!("Unexpected oracle responses: {:?}", responses);

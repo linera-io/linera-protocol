@@ -12,9 +12,7 @@ use async_graphql::Enum;
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, OracleRecord, OracleResponse, Timestamp,
-    },
+    data_types::{Amount, ApplicationPermissions, ArithmeticError, OracleResponse, Timestamp},
     ensure, hex_debug,
     identifiers::{Account, BlobId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -445,16 +443,14 @@ where
         (
             RawExecutionOutcome<SystemMessage, Amount>,
             Option<(UserApplicationId, Vec<u8>)>,
-            OracleRecord,
+            Vec<OracleResponse>,
         ),
         SystemExecutionError,
     > {
         use SystemOperation::*;
         let mut outcome = RawExecutionOutcome::default();
         let mut new_application = None;
-        let mut oracle_record = OracleRecord {
-            responses: Vec::new(),
-        };
+        let mut oracle_responses = Vec::new();
         match operation {
             OpenChain(config) => {
                 let next_message_id = context.next_message_id();
@@ -679,11 +675,11 @@ where
                 outcome.messages.push(message);
             }
             PublishBlob { blob_id } => {
-                oracle_record.responses.push(OracleResponse::Blob(blob_id));
+                oracle_responses.push(OracleResponse::Blob(blob_id));
             }
         }
 
-        Ok((outcome, new_application, oracle_record))
+        Ok((outcome, new_application, oracle_responses))
     }
 
     pub async fn transfer(

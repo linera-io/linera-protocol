@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use linera_base::{
     crypto::KeyPair,
-    data_types::{Amount, BlockHeight, OracleRecord, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{
         BytecodeId, ChainDescription, ChainId, Destination, GenericApplicationId, MessageId,
     },
@@ -148,7 +148,7 @@ where
                 message: Message::System(publish_message.clone()),
             }]],
             state_hash: publisher_state_hash,
-            oracle_records: vec![OracleRecord::default()],
+            oracle_responses: vec![Vec::new()],
         }
         .with(publish_block),
     );
@@ -217,7 +217,7 @@ where
         BlockExecutionOutcome {
             messages: vec![vec![failing_broadcast_outgoing_message]],
             state_hash: publisher_state_hash,
-            oracle_records: vec![OracleRecord::default()],
+            oracle_responses: vec![Vec::new()],
         }
         .with(broadcast_block.clone()),
     );
@@ -241,7 +241,7 @@ where
         BlockExecutionOutcome {
             messages: vec![vec![broadcast_outgoing_message]],
             state_hash: publisher_state_hash,
-            oracle_records: vec![OracleRecord::default()],
+            oracle_responses: vec![Vec::new()],
         }
         .with(broadcast_block),
     );
@@ -295,7 +295,7 @@ where
                 message: Message::System(subscribe_message.clone()),
             }]],
             state_hash: creator_state.crypto_hash().await?,
-            oracle_records: vec![OracleRecord::default()],
+            oracle_responses: vec![Vec::new()],
         }
         .with(subscribe_block),
     );
@@ -347,7 +347,7 @@ where
                 }),
             }]],
             state_hash: publisher_state_hash,
-            oracle_records: vec![OracleRecord::default()],
+            oracle_responses: vec![Vec::new()],
         }
         .with(accept_block),
     );
@@ -444,7 +444,7 @@ where
                 }],
             ],
             state_hash: creator_state.crypto_hash().await?,
-            oracle_records: vec![OracleRecord::default(); 2],
+            oracle_responses: vec![Vec::new(); 2],
         }
         .with(create_block),
     );
@@ -488,7 +488,7 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            Some(OracleRecord::default()),
+            Some(Vec::new()),
             &mut controller,
         )
         .await?;
@@ -497,7 +497,7 @@ where
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
-            oracle_records: vec![OracleRecord::default()],
+            oracle_responses: vec![Vec::new()],
         }
         .with(run_block),
     );
