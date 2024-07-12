@@ -701,7 +701,6 @@ where
     Ok(staged_hash)
 }
 
-
 #[derive(CryptoHashRootView)]
 pub struct ByteMapStateView<C> {
     pub map: ByteMapView<C, u8>,
@@ -712,23 +711,23 @@ async fn test_byte_map_view() -> Result<()> {
     let context = create_memory_context();
     {
         let mut view = ByteMapStateView::load(context.clone()).await?;
-        view.map.insert(vec![0,1], 5);
-        view.map.insert(vec![2,3], 23);
+        view.map.insert(vec![0, 1], 5);
+        view.map.insert(vec![2, 3], 23);
         view.save().await?;
     }
     {
         let mut view = ByteMapStateView::load(context.clone()).await?;
         view.map.remove_by_prefix(vec![0]);
-        let val = view.map.get_mut_or_default(&[0,1]).await?;
+        let val = view.map.get_mut_or_default(&[0, 1]).await?;
         assert_eq!(*val, 0);
-        let val = view.map.get_mut(&[2,3]).await?;
+        let val = view.map.get_mut(&[2, 3]).await?;
         assert_eq!(val, Some(&mut 23));
         view.save().await?;
     }
     {
         let mut view = ByteMapStateView::load(context.clone()).await?;
         view.map.remove_by_prefix(vec![2]);
-        let val = view.map.get_mut(&[2,3]).await?;
+        let val = view.map.get_mut(&[2, 3]).await?;
         assert_eq!(val, None);
     }
     Ok(())
@@ -808,10 +807,11 @@ async fn test_views_in_rocks_db_param(config: &TestConfig) -> Result<()> {
 
 #[cfg(with_rocksdb)]
 #[tokio::test]
-async fn test_views_in_rocks_db() {
+async fn test_views_in_rocks_db() -> Result<()> {
     for config in TestConfig::samples() {
-        test_views_in_rocks_db_param(&config).await
+        test_views_in_rocks_db_param(&config).await?;
     }
+    Ok(())
 }
 
 #[cfg(with_scylladb)]
@@ -831,10 +831,11 @@ async fn test_views_in_scylla_db_param(config: &TestConfig) -> Result<()> {
 
 #[cfg(with_scylladb)]
 #[tokio::test]
-async fn test_views_in_scylla_db() {
+async fn test_views_in_scylla_db() -> Result<()> {
     for config in TestConfig::samples() {
-        test_views_in_scylla_db_param(&config).await
+        test_views_in_scylla_db_param(&config).await?;
     }
+    Ok(())
 }
 
 #[cfg(with_dynamodb)]
@@ -888,7 +889,8 @@ where
         assert_eq!(view.queue.front().await?, Some(8));
         assert_eq!(view.map.get("Hello").await?, Some(5));
         assert_eq!(view.collection.indices().await?, vec!["hola".to_string()]);
-    };
+    }
+    Ok(())
 }
 
 #[cfg(with_rocksdb)]

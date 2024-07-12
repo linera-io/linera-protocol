@@ -314,7 +314,10 @@ where
     /// # })
     /// ```
     pub async fn get_mut(&mut self, short_key: &[u8]) -> Result<Option<&mut V>, ViewError> {
-        if !self.delete_storage_first && !self.updates.contains_key(short_key) && !contains_key(&self.deleted_prefixes, short_key) {
+        if !self.delete_storage_first
+            && !self.updates.contains_key(short_key)
+            && !contains_key(&self.deleted_prefixes, short_key)
+        {
             let key = self.context.base_index(short_key);
             let value = self.context.read_value(&key).await?;
             if let Some(value) = value {
