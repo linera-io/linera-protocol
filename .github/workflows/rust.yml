@@ -170,7 +170,7 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Install cargo-sort
       run: |
-        cargo install cargo-sort --git https://github.com/Twey/cargo-sort/ --tag linera
+        RUSTFLAGS='' cargo install cargo-sort --git https://github.com/Twey/cargo-sort/ --tag linera
     - name: Check formatting
       run: |
         cargo fmt -- --check
