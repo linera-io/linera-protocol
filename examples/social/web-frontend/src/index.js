@@ -18,8 +18,7 @@ root.render(
     <BrowserRouter>
       <Routes>
         <Route path=":id" element={<GraphQLApp />} />
-        <Route path="/" element={<App />} /> // This is the default route for
-        the app
+        <Route path="/" element={<App />} /> {/* This is the default route */}
       </Routes>
     </BrowserRouter>
   </React.StrictMode>
