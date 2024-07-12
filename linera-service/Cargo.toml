@@ -47,9 +47,9 @@ kubernetes = [
     "dep:pathdiff",
     "dep:fs_extra",
 ]
-remote_net = ["dep:k8s-openapi", "dep:kube"]
+remote-net = ["dep:k8s-openapi", "dep:kube"]
 metrics = ["prometheus", "linera-base/metrics"]
-storage_service = []
+storage-service = []
 
 [dependencies]
 anyhow.workspace = true

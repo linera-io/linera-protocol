@@ -661,7 +661,7 @@ where
     pub fn insert<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.set.insert(short_key);
@@ -683,7 +683,7 @@ where
     pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.set.remove(short_key);
@@ -718,7 +718,7 @@ where
     pub async fn contains<Q>(&self, index: &Q) -> Result<bool, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.set.contains(&short_key).await

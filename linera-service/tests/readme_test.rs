@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(feature = "storage_service")]
+#![cfg(feature = "storage-service")]
 
 mod common;
 

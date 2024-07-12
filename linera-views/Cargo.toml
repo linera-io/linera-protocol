@@ -26,6 +26,7 @@ indexeddb = ["indexed_db_futures", "wasm-bindgen"]
 
 dynamodb = ["aws-config", "aws-sdk-dynamodb", "aws-smithy-types"]
 scylladb = ["scylla"]
+store_timings = []
 
 [dependencies]
 anyhow.workspace = true

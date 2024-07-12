@@ -1354,13 +1354,13 @@ impl<'a> CrossChainUpdateHelper<'a> {
 
     /// Checks basic invariants and deals with repeated heights and deprecated epochs.
     /// * Returns a range of message bundles that are both new to us and not relying on
-    /// an untrusted set of validators.
+    ///   an untrusted set of validators.
     /// * In the case of validators, if the epoch(s) of the highest bundles are not
-    /// trusted, we only accept bundles that contain messages that were already
-    /// executed by anticipation (i.e. received in certified blocks).
+    ///   trusted, we only accept bundles that contain messages that were already
+    ///   executed by anticipation (i.e. received in certified blocks).
     /// * Basic invariants are checked for good measure. We still crucially trust
-    /// the worker of the sending chain to have verified and executed the blocks
-    /// correctly.
+    ///   the worker of the sending chain to have verified and executed the blocks
+    ///   correctly.
     pub fn select_message_bundles(
         &self,
         origin: &'a Origin,

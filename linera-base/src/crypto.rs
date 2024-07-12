@@ -416,7 +416,7 @@ where
 
 impl CryptoHash {
     /// Computes a hash.
-    pub fn new<T: ?Sized + BcsHashable>(value: &T) -> Self {
+    pub fn new<T: BcsHashable>(value: &T) -> Self {
         use sha3::digest::Digest;
 
         let mut hasher = sha3::Sha3_256::default();

@@ -22,7 +22,7 @@ mod kubectl;
 pub mod local_kubernetes_net;
 /// How to run Linera validators locally as native processes.
 pub mod local_net;
-#[cfg(all(with_testing, feature = "remote_net"))]
+#[cfg(all(with_testing, feature = "remote-net"))]
 /// How to connect to running GCP DevNet.
 pub mod remote_net;
 #[cfg(feature = "kubernetes")]

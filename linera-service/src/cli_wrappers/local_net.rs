@@ -17,7 +17,7 @@ use linera_base::{
 };
 use linera_client::storage::{StorageConfig, StorageConfigNamespace};
 use linera_execution::ResourceControlPolicy;
-#[cfg(all(feature = "storage_service", with_testing))]
+#[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::storage_service_test_endpoint;
 #[cfg(all(feature = "scylladb", with_testing))]
 use linera_views::scylla_db::create_scylla_db_test_uri;
@@ -130,13 +130,13 @@ pub async fn get_node_port() -> u16 {
 async fn make_testing_config(database: Database) -> StorageConfig {
     match database {
         Database::Service => {
-            #[cfg(feature = "storage_service")]
+            #[cfg(feature = "storage-service")]
             {
                 let endpoint = storage_service_test_endpoint()
                     .expect("Reading LINERA_STORAGE_SERVICE environment variable");
                 StorageConfig::Service { endpoint }
             }
-            #[cfg(not(feature = "storage_service"))]
+            #[cfg(not(feature = "storage-service"))]
             panic!("Database::Service is selected without the feature storage_service");
         }
         Database::RocksDb => {

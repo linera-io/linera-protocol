@@ -249,7 +249,7 @@ pub struct ChainClientOptions {
 /// implementation.
 /// * The chain being operated is called the "local chain" or just the "chain".
 /// * As a rule, operations are considered successful (and communication may stop) when
-/// they succeeded in gathering a quorum of responses.
+///   they succeeded in gathering a quorum of responses.
 pub struct ChainClient<ValidatorNodeProvider, Storage>
 where
     Storage: linera_storage::Storage,
