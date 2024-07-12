@@ -117,9 +117,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         .extend(context_constraints.predicates);
 
     let mut name_quotes = Vec::new();
-    let mut load_future_quotes = Vec::new();
-    let mut load_ident_quotes = Vec::new();
-    let mut load_result_quotes = Vec::new();
     let mut rollback_quotes = Vec::new();
     let mut flush_quotes = Vec::new();
     let mut test_flush_quotes = Vec::new();
@@ -134,17 +131,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         let test_flush_ident = format_ident!("deleted{}", idx);
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
         let type_ident = get_type_field(e.clone()).expect("Failed to find the type");
-        load_future_quotes.push(quote! {
-            let index = #idx_lit;
-            let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
-            let #fut = #type_ident::load(context.clone_with_base_key(base_key));
-        });
-        load_ident_quotes.push(quote! {
-            #fut
-        });
-        load_result_quotes.push(quote! {
-            let #name = result.#idx_lit?;
-        });
         let g = get_extended_entry(e.ty.clone());
         name_quotes.push(quote! { #name });
         rollback_quotes.push(quote! { self.#name.rollback(); });
