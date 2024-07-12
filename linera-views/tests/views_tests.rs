@@ -392,7 +392,10 @@ impl TestConfig {
 }
 
 #[cfg(test)]
-async fn test_store<S>(store: &mut S, config: &TestConfig) -> Result<<sha3::Sha3_256 as Hasher>::Output>
+async fn test_store<S>(
+    store: &mut S,
+    config: &TestConfig,
+) -> Result<<sha3::Sha3_256 as Hasher>::Output>
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
@@ -476,10 +479,7 @@ where
                 let subview = view.collection.load_entry_mut("hola").await?;
                 subview.push(17);
                 subview.push(18);
-                assert_eq!(
-                    view.collection.indices().await?,
-                    vec!["hola".to_string()]
-                );
+                assert_eq!(view.collection.indices().await?, vec!["hola".to_string()]);
                 let mut count = 0;
                 view.collection
                     .for_each_index(|_index| {
@@ -489,11 +489,7 @@ where
                     .await?;
                 assert_eq!(count, 1);
             }
-            let subview = view
-                .collection
-                .try_load_entry("hola")
-                .await?
-                .unwrap();
+            let subview = view.collection.try_load_entry("hola").await?.unwrap();
             assert_eq!(subview.read(0..10).await?, vec![17, 18]);
         }
     };
@@ -599,11 +595,7 @@ where
             assert!(!view.set.contains(&59).await?);
         }
         if config.with_collection {
-            let subview = view
-                .collection
-                .try_load_entry("hola")
-                .await?
-                .unwrap();
+            let subview = view.collection.try_load_entry("hola").await?.unwrap();
             assert_eq!(subview.read(0..10).await?, vec![17, 18]);
             assert_eq!(subview.read(..).await?, vec![17, 18]);
             assert_eq!(subview.read(1..).await?, vec![18]);
@@ -617,10 +609,7 @@ where
             let subsubview = subview.try_load_entry("!").await?.unwrap();
             assert!(subview.try_load_entry("!").await.is_err());
             assert_eq!(subsubview.get(), &3);
-            assert_eq!(
-                view.collection.indices().await?,
-                vec!["hola".to_string()]
-            );
+            assert_eq!(view.collection.indices().await?, vec!["hola".to_string()]);
             view.collection.remove_entry("hola")?;
         }
         if config.with_x1
@@ -651,11 +640,7 @@ where
                 }
             }
             {
-                let subview = view
-                    .collection4
-                    .try_load_entry("hola")
-                    .await?
-                    .unwrap();
+                let subview = view.collection4.try_load_entry("hola").await?.unwrap();
                 assert_eq!(subview.count(), 0);
                 assert!(view.collection4.try_load_entry("hola").await.is_ok());
             }
@@ -717,7 +702,7 @@ where
 }
 
 #[cfg(test)]
-async fn test_views_in_lru_memory_param(config: &TestConfig) ->Result<()> {
+async fn test_views_in_lru_memory_param(config: &TestConfig) -> Result<()> {
     tracing::warn!("Testing config {:?} with lru memory", config);
     let mut store = LruMemoryStore::new().await;
     test_store(&mut store, config).await?;
@@ -869,10 +854,7 @@ where
         let view = store.load(1).await?;
         assert_eq!(view.queue.front().await?, Some(8));
         assert_eq!(view.map.get("Hello").await?, Some(5));
-        assert_eq!(
-            view.collection.indices().await?,
-            vec!["hola".to_string()]
-        );
+        assert_eq!(view.collection.indices().await?, vec!["hola".to_string()]);
     };
 }
 
@@ -935,7 +917,7 @@ async fn test_removal_api_first_second_condition(
 
     // Reload the collection view and remove the entry, but don't commit yet
     let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
-    collection.remove_entry(&1).unwrap();
+    collection.remove_entry(&1)?;
 
     // Now, read the entry with a different value if a certain condition is true
     if first_condition {
@@ -989,30 +971,30 @@ async fn compute_hash_unordered_put_view<S>(
     rng: &mut impl RngCore,
     store: &mut S,
     key_value_vector: Vec<(Vec<u8>, Vec<u8>)>,
-) -> <sha3::Sha3_256 as Hasher>::Output
+) -> Result<<sha3::Sha3_256 as Hasher>::Output>
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
-    let mut view = store.load(1).await.unwrap();
+    let mut view = store.load(1).await?;
     for key_value in key_value_vector {
         let key = key_value.0;
         let value = key_value.1;
         let key_str = format!("{:?}", &key);
         let value_usize = (*value.first().unwrap()) as usize;
-        view.map.insert(&key_str, value_usize).unwrap();
-        view.key_value_store.insert(key, value).await.unwrap();
+        view.map.insert(&key_str, value_usize)?;
+        view.key_value_store.insert(key, value).await?;
         {
-            let subview = view.collection.load_entry_mut(&key_str).await.unwrap();
+            let subview = view.collection.load_entry_mut(&key_str).await?;
             subview.push(value_usize as u32);
         }
         //
         let choice = rng.gen_range(0..20);
         if choice == 0 {
-            view.save().await.unwrap();
+            view.save().await?;
         }
     }
-    view.hash().await.unwrap()
+    Ok(view.hash().await?)
 }
 
 #[cfg(test)]
@@ -1020,12 +1002,12 @@ async fn compute_hash_unordered_putdelete_view<S>(
     rng: &mut impl RngCore,
     store: &mut S,
     operations: Vec<WriteOperation>,
-) -> <sha3::Sha3_256 as Hasher>::Output
+) -> Result<<sha3::Sha3_256 as Hasher>::Output>
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
-    let mut view = store.load(1).await.unwrap();
+    let mut view = store.load(1).await?;
     for operation in operations {
         match operation {
             Put { key, value } => {
@@ -1036,27 +1018,27 @@ where
                 let mut tmp = *view.x1.get();
                 tmp += first_value_u64;
                 view.x1.set(tmp);
-                view.map.insert(&key_str, first_value_usize).unwrap();
-                view.key_value_store.insert(key, value).await.unwrap();
+                view.map.insert(&key_str, first_value_usize)?;
+                view.key_value_store.insert(key, value).await?;
                 {
-                    let subview = view.collection.load_entry_mut(&key_str).await.unwrap();
+                    let subview = view.collection.load_entry_mut(&key_str).await?;
                     subview.push(first_value as u32);
                 }
             }
             Delete { key } => {
                 let key_str = format!("{:?}", &key);
-                view.map.remove(&key_str).unwrap();
-                view.key_value_store.remove(key).await.unwrap();
+                view.map.remove(&key_str)?;
+                view.key_value_store.remove(key).await?;
             }
             DeletePrefix { key_prefix: _ } => {}
         }
         //
         let choice = rng.gen_range(0..10);
         if choice == 0 {
-            view.save().await.unwrap();
+            view.save().await?;
         }
     }
-    view.hash().await.unwrap()
+    Ok(view.hash().await?)
 }
 
 #[cfg(test)]
@@ -1064,12 +1046,12 @@ async fn compute_hash_ordered_view<S>(
     rng: &mut impl RngCore,
     store: &mut S,
     key_value_vector: Vec<(Vec<u8>, Vec<u8>)>,
-) -> <sha3::Sha3_256 as Hasher>::Output
+) -> Result<<sha3::Sha3_256 as Hasher>::Output>
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
-    let mut view = store.load(1).await.unwrap();
+    let mut view = store.load(1).await?;
     for key_value in key_value_vector {
         let value = key_value.1;
         let value_usize = (*value.first().unwrap()) as usize;
@@ -1078,14 +1060,14 @@ where
         //
         let choice = rng.gen_range(0..20);
         if choice == 0 {
-            view.save().await.unwrap();
+            view.save().await?;
         }
     }
-    view.hash().await.unwrap()
+    Ok(view.hash().await?)
 }
 
 #[cfg(test)]
-async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) {
+async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Result<()> {
     let mut unord1_hashes = Vec::new();
     let mut unord2_hashes = Vec::new();
     let mut ord_hashes = Vec::new();
@@ -1099,13 +1081,13 @@ async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) {
         //
         let mut store1 = MemoryTestStore::new().await;
         unord1_hashes
-            .push(compute_hash_unordered_put_view(rng, &mut store1, key_value_vector_b).await);
+            .push(compute_hash_unordered_put_view(rng, &mut store1, key_value_vector_b).await?);
         let mut store2 = MemoryTestStore::new().await;
         unord2_hashes
-            .push(compute_hash_unordered_putdelete_view(rng, &mut store2, operations).await);
+            .push(compute_hash_unordered_putdelete_view(rng, &mut store2, operations).await?);
         let mut store3 = MemoryTestStore::new().await;
         ord_hashes
-            .push(compute_hash_ordered_view(rng, &mut store3, key_value_vector.clone()).await);
+            .push(compute_hash_ordered_view(rng, &mut store3, key_value_vector.clone()).await?);
     }
     for i in 1..n_iter {
         assert_eq!(
@@ -1118,31 +1100,30 @@ async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) {
         );
         assert_eq!(ord_hashes.first().unwrap(), ord_hashes.get(i).unwrap());
     }
+    Ok(())
 }
 
 #[tokio::test]
-async fn compute_hash_view_iter_large() {
+async fn compute_hash_view_iter_large() -> Result<()> {
     let n_iter = 2;
     let n = 100;
     let k = 30;
     let mut rng = test_utils::make_deterministic_rng();
     for _ in 0..n_iter {
-        compute_hash_view_iter(&mut rng, n, k).await;
+        compute_hash_view_iter(&mut rng, n, k).await?;
     }
+    Ok(())
 }
 
 #[cfg(test)]
-async fn check_hash_memoization_persistence<S>(
-    rng: &mut impl RngCore,
-    store: &mut S,
-    key_value_vector: Vec<(Vec<u8>, Vec<u8>)>,
-) where
+async fn check_hash_memoization_persistence<S>(rng: &mut impl RngCore, store: &mut S, key_value_vector: Vec<(Vec<u8>, Vec<u8>)>) -> Result<()>
+where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
     let mut hash = {
-        let view = store.load(1).await.unwrap();
-        view.hash().await.unwrap()
+        let view = store.load(1).await?;
+        view.hash().await?
     };
     for pair in key_value_vector {
         let str0 = format!("{:?}", &pair.0);
@@ -1151,119 +1132,120 @@ async fn check_hash_memoization_persistence<S>(
         let pair1_first_u8 = *pair.1.first().unwrap();
         let choice = rng.gen_range(0..7);
         if choice < 3 {
-            let mut view = store.load(1).await.unwrap();
+            let mut view = store.load(1).await?;
             view.x1.set(pair0_first_u8 as u64);
             view.x2.set(pair1_first_u8 as u32);
             view.log.push(pair0_first_u8 as u32);
             view.log.push(pair1_first_u8 as u32);
             view.queue.push_back(pair0_first_u8 as u64);
             view.queue.push_back(pair1_first_u8 as u64);
-            view.map.insert(&str0, pair1_first_u8 as usize).unwrap();
-            view.map.insert(&str1, pair0_first_u8 as usize).unwrap();
+            view.map.insert(&str0, pair1_first_u8 as usize)?;
+            view.map.insert(&str1, pair0_first_u8 as usize)?;
             view.key_value_store
                 .insert(pair.0.clone(), pair.1.clone())
-                .await
-                .unwrap();
+                .await?;
             if choice == 0 {
                 view.rollback();
-                let hash_new = view.hash().await.unwrap();
+                let hash_new = view.hash().await?;
                 assert_eq!(hash, hash_new);
             } else {
-                let hash_new = view.hash().await.unwrap();
+                let hash_new = view.hash().await?;
                 assert_ne!(hash, hash_new);
                 if choice == 2 {
-                    view.save().await.unwrap();
+                    view.save().await?;
                     hash = hash_new;
                 }
             }
         }
         if choice == 3 {
-            let view = store.load(1).await.unwrap();
-            let hash_new = view.hash().await.unwrap();
+            let view = store.load(1).await?;
+            let hash_new = view.hash().await?;
             assert_eq!(hash, hash_new);
         }
         if choice == 4 {
-            let mut view = store.load(1).await.unwrap();
-            let subview = view.collection.load_entry_mut(&str0).await.unwrap();
+            let mut view = store.load(1).await?;
+            let subview = view.collection.load_entry_mut(&str0).await?;
             subview.push(pair1_first_u8 as u32);
-            let hash_new = view.hash().await.unwrap();
+            let hash_new = view.hash().await?;
             assert_ne!(hash, hash_new);
-            view.save().await.unwrap();
+            view.save().await?;
             hash = hash_new;
         }
         if choice == 5 {
-            let mut view = store.load(1).await.unwrap();
+            let mut view = store.load(1).await?;
             if view.queue.count() > 0 {
                 view.queue.delete_front();
-                let hash_new = view.hash().await.unwrap();
+                let hash_new = view.hash().await?;
                 assert_ne!(hash, hash_new);
-                view.save().await.unwrap();
+                view.save().await?;
                 hash = hash_new;
             }
         }
         if choice == 6 {
-            let mut view = store.load(1).await.unwrap();
-            let indices = view.collection.indices().await.unwrap();
+            let mut view = store.load(1).await?;
+            let indices = view.collection.indices().await?;
             let size = indices.len();
             if size > 0 {
                 let pos = rng.gen_range(0..size);
                 let x = &indices[pos];
-                view.collection.remove_entry(x).unwrap();
-                let hash_new = view.hash().await.unwrap();
+                view.collection.remove_entry(x)?;
+                let hash_new = view.hash().await?;
                 assert_ne!(hash, hash_new);
-                view.save().await.unwrap();
+                view.save().await?;
                 hash = hash_new;
             }
         }
     }
+    Ok(())
 }
 
 #[tokio::test]
-async fn check_hash_memoization_persistence_large() {
+async fn check_hash_memoization_persistence_large() -> Result<()> {
     let n = 100;
     let mut rng = test_utils::make_deterministic_rng();
     let key_value_vector = get_random_key_values(&mut rng, n);
     let mut store = MemoryTestStore::new().await;
-    check_hash_memoization_persistence(&mut rng, &mut store, key_value_vector).await;
+    check_hash_memoization_persistence(&mut rng, &mut store, key_value_vector).await
 }
 
 #[cfg(test)]
-async fn check_large_write<S>(store: &mut S, vector: Vec<u8>)
+async fn check_large_write<S>(store: &mut S, vector: Vec<u8>) -> Result<()>
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
     let hash1 = {
-        let mut view = store.load(1).await.unwrap();
+        let mut view = store.load(1).await?;
         for val in vector {
             view.log.push(val as u32);
         }
-        let hash = view.hash().await.unwrap();
-        view.save().await.unwrap();
+        let hash = view.hash().await?;
+        view.save().await?;
         hash
     };
-    let view = store.load(1).await.unwrap();
-    let hash2 = view.hash().await.unwrap();
+    let view = store.load(1).await?;
+    let hash2 = view.hash().await?;
     assert_eq!(hash1, hash2);
+    Ok(())
 }
 
 #[tokio::test]
 #[cfg(with_dynamodb)]
-async fn check_large_write_dynamo_db() {
+async fn check_large_write_dynamo_db() -> Result<()> {
     // By writing 1000 elements we seriously check the Amazon journaling
     // writing system.
     let n = 1000;
     let mut rng = test_utils::make_deterministic_rng();
     let vector = get_random_byte_vector(&mut rng, &[], n);
     let mut store = DynamoDbTestStore::new().await;
-    check_large_write(&mut store, vector).await;
+    check_large_write(&mut store, vector).await
 }
 
 #[tokio::test]
-async fn check_large_write_memory() {
+async fn check_large_write_memory() -> Result<()> {
     let n = 1000;
     let mut rng = test_utils::make_deterministic_rng();
     let vector = get_random_byte_vector(&mut rng, &[], n);
     let mut store = MemoryTestStore::new().await;
-    check_large_write(&mut store, vector).await;
+    check_large_write(&mut store, vector).await
 }
