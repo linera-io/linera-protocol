@@ -10,7 +10,7 @@ use async_graphql::SimpleObject;
 use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ArithmeticError, BlockHeight, OracleRecord, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, OracleResponse, Timestamp},
     ensure,
     identifiers::{ChainId, Destination, GenericApplicationId, MessageId},
 };
@@ -720,7 +720,7 @@ where
         &mut self,
         block: &Block,
         local_time: Timestamp,
-        oracle_records: Option<Vec<OracleRecord>>,
+        oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
@@ -801,8 +801,8 @@ where
             mandatory.is_empty(),
             ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
         );
-        let mut oracle_records = oracle_records.map(Vec::into_iter);
-        let mut new_oracle_records = Vec::new();
+        let mut oracle_responses = oracle_responses.map(Vec::into_iter);
+        let mut new_oracle_responses = Vec::new();
         let mut next_message_index = 0;
         for (index, message) in block.incoming_messages.iter().enumerate() {
             #[cfg(with_metrics)]
@@ -824,21 +824,21 @@ where
                 refund_grant_to: message.event.refund_grant_to,
                 next_message_index,
             };
-            let outcomes = match message.action {
+            let (outcomes, oracle_responses) = match message.action {
                 MessageAction::Accept => {
                     let mut grant = message.event.grant;
-                    let (mut outcomes, oracle_record) = self
+                    let (mut outcomes, oracle_responses) = self
                         .execution_state
                         .execute_message(
                             context,
                             local_time,
                             message.event.message.clone(),
                             (grant > Amount::ZERO).then_some(&mut grant),
-                            match &mut oracle_records {
-                                Some(records) => Some(
-                                    records
+                            match &mut oracle_responses {
+                                Some(responses) => Some(
+                                    responses
                                         .next()
-                                        .ok_or_else(|| ChainError::MissingOracleRecord)?,
+                                        .ok_or_else(|| ChainError::MissingOracleResponseList)?,
                                 ),
                                 None => None,
                             },
@@ -846,7 +846,6 @@ where
                         )
                         .await
                         .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-                    new_oracle_records.push(oracle_record);
                     if grant > Amount::ZERO {
                         if let Some(refund_grant_to) = message.event.refund_grant_to {
                             let outcome = self
@@ -859,7 +858,7 @@ where
                             outcomes.push(outcome);
                         }
                     }
-                    outcomes
+                    (outcomes, oracle_responses)
                 }
                 MessageAction::Reject => {
                     // If rejecting a message fails, the entire block proposal should be
@@ -873,7 +872,7 @@ where
                             event: message.event.clone(),
                         }
                     );
-                    if message.event.is_tracked() {
+                    let outcomes = if message.event.is_tracked() {
                         // Bounce the message.
                         self.execution_state
                             .bounce_message(
@@ -886,30 +885,31 @@ where
                             .map_err(|err| {
                                 ChainError::ExecutionError(err, chain_execution_context)
                             })?
-                    } else {
+                    } else if message.event.grant > Amount::ZERO {
                         // Nothing to do except maybe refund the grant.
-                        let mut outcomes = Vec::new();
-                        if message.event.grant > Amount::ZERO {
-                            let Some(refund_grant_to) = message.event.refund_grant_to else {
-                                // See OperationContext::refund_grant_to()
-                                return Err(ChainError::InternalError(
-                                    "Messages with grants should have a non-empty `refund_grant_to`".into()
-                                ));
-                            };
-                            // Refund grant.
-                            let outcome = self
-                                .execution_state
-                                .send_refund(context, message.event.grant, refund_grant_to)
-                                .await
-                                .map_err(|err| {
-                                    ChainError::ExecutionError(err, chain_execution_context)
-                                })?;
-                            outcomes.push(outcome);
-                        }
-                        outcomes
-                    }
+                        let Some(refund_grant_to) = message.event.refund_grant_to else {
+                            // See OperationContext::refund_grant_to()
+                            return Err(ChainError::InternalError(
+                                "Messages with grants should have a non-empty `refund_grant_to`"
+                                    .into(),
+                            ));
+                        };
+                        // Refund grant.
+                        let outcome = self
+                            .execution_state
+                            .send_refund(context, message.event.grant, refund_grant_to)
+                            .await
+                            .map_err(|err| {
+                                ChainError::ExecutionError(err, chain_execution_context)
+                            })?;
+                        vec![outcome]
+                    } else {
+                        Vec::new()
+                    };
+                    (outcomes, Vec::new())
                 }
             };
+            new_oracle_responses.push(oracle_responses);
             let messages_out = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
@@ -940,17 +940,17 @@ where
                 authenticated_caller_id: None,
                 next_message_index,
             };
-            let (outcomes, oracle_record) = self
+            let (outcomes, oracle_responses) = self
                 .execution_state
                 .execute_operation(
                     context,
                     local_time,
                     operation.clone(),
-                    match &mut oracle_records {
-                        Some(records) => Some(
-                            records
+                    match &mut oracle_responses {
+                        Some(responses) => Some(
+                            responses
                                 .next()
-                                .ok_or_else(|| ChainError::MissingOracleRecord)?,
+                                .ok_or_else(|| ChainError::MissingOracleResponseList)?,
                         ),
                         None => None,
                     },
@@ -958,7 +958,7 @@ where
                 )
                 .await
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-            new_oracle_records.push(oracle_record);
+            new_oracle_responses.push(oracle_responses);
             let messages_out = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
@@ -1030,7 +1030,7 @@ where
         Ok(BlockExecutionOutcome {
             messages,
             state_hash,
-            oracle_records: new_oracle_records,
+            oracle_responses: new_oracle_responses,
         })
     }
 

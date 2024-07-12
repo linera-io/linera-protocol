@@ -7,7 +7,7 @@ use std::{borrow::Cow, collections::HashSet};
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
-    data_types::{Amount, BlockHeight, HashedBlob, OracleRecord, OracleResponse, Round, Timestamp},
+    data_types::{Amount, BlockHeight, HashedBlob, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{
         Account, BlobId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
@@ -274,7 +274,7 @@ pub struct BlockExecutionOutcome {
     pub messages: Vec<Vec<OutgoingMessage>>,
     pub state_hash: CryptoHash,
     /// The record of oracle responses for each transaction.
-    pub oracle_records: Vec<OracleRecord>,
+    pub oracle_responses: Vec<Vec<OracleResponse>>,
 }
 
 /// A statement to be certified by the validators.
@@ -747,8 +747,8 @@ impl ExecutedBlock {
 
     pub fn required_blob_ids(&self) -> HashSet<BlobId> {
         let mut required_blob_ids = HashSet::new();
-        for record in &self.outcome.oracle_records {
-            for response in &record.responses {
+        for responses in &self.outcome.oracle_responses {
+            for response in responses {
                 if let OracleResponse::Blob(blob_id) = response {
                     required_blob_ids.insert(*blob_id);
                 }
@@ -833,9 +833,9 @@ pub struct ProposalContent {
     pub block: Block,
     /// The consensus round in which this proposal is made.
     pub round: Round,
-    /// If this is a retry from an earlier round, the oracle records from when the block was
+    /// If this is a retry from an earlier round, the oracle responses from when the block was
     /// first validated. These are reused so the execution outcome remains the same.
-    pub forced_oracle_records: Option<Vec<OracleRecord>>,
+    pub forced_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
 }
 
 impl BlockProposal {
@@ -849,7 +849,7 @@ impl BlockProposal {
         let content = ProposalContent {
             round,
             block,
-            forced_oracle_records: None,
+            forced_oracle_responses: None,
         };
         let signature = Signature::new(&content, secret);
         Self {
@@ -878,7 +878,7 @@ impl BlockProposal {
         let content = ProposalContent {
             block: executed_block.block,
             round,
-            forced_oracle_records: Some(executed_block.outcome.oracle_records),
+            forced_oracle_responses: Some(executed_block.outcome.oracle_responses),
         };
         let signature = Signature::new(&content, secret);
         Self {

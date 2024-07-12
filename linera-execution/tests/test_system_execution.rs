@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, BlockHeight, OracleRecord, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, ChainDescription, ChainId, MessageId},
 };
 use linera_execution::{
@@ -42,7 +42,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
             context,
             Timestamp::from(0),
             Operation::System(operation),
-            Some(OracleRecord::default()),
+            Some(Vec::new()),
             &mut controller,
         )
         .await
@@ -92,7 +92,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
             Timestamp::from(0),
             Message::System(message),
             None,
-            Some(OracleRecord::default()),
+            Some(Vec::new()),
             &mut controller,
         )
         .await

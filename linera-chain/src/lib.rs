@@ -141,7 +141,7 @@ pub enum ChainError {
     #[error("Can't use grant across different broadcast messages")]
     GrantUseOnBroadcast,
     #[error("ExecutedBlock contains fewer oracle responses than requests")]
-    MissingOracleRecord,
+    MissingOracleResponseList,
     #[error("Unexpected hash for CertificateValue! Expected: {expected:?}, Actual: {actual:?}")]
     CertificateValueHashMismatch {
         expected: CryptoHash,

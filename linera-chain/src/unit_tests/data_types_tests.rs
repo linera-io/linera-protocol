@@ -18,7 +18,7 @@ fn test_signed_values() {
     let executed_block = BlockExecutionOutcome {
         messages: vec![Vec::new()],
         state_hash: CryptoHash::test_hash("state"),
-        oracle_records: vec![OracleRecord::default()],
+        oracle_responses: vec![Vec::new()],
     }
     .with(block);
     let value = HashedCertificateValue::new_confirmed(executed_block);
@@ -46,7 +46,7 @@ fn test_certificates() {
     let executed_block = BlockExecutionOutcome {
         messages: vec![Vec::new()],
         state_hash: CryptoHash::test_hash("state"),
-        oracle_records: vec![OracleRecord::default()],
+        oracle_responses: vec![Vec::new()],
     }
     .with(block);
     let value = HashedCertificateValue::new_confirmed(executed_block);
