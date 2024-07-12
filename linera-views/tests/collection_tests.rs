@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use anyhow::Result;
 use linera_views::{
     collection_view::HashedCollectionView,
     common::Context,
@@ -36,15 +37,15 @@ where
 }
 
 #[tokio::test]
-async fn classic_collection_view_check() {
+async fn classic_collection_view_check() -> Result<()>{
     let context = create_memory_context();
     let mut rng = test_utils::make_deterministic_rng();
     let mut map = BTreeMap::<u8, u32>::new();
     let n = 20;
     let nmax: u8 = 25;
     for _ in 0..n {
-        let mut view = StateView::load(context.clone()).await.unwrap();
-        let hash = view.crypto_hash().await.unwrap();
+        let mut view = StateView::load(context.clone()).await?;
+        let hash = view.crypto_hash().await?;
         let save = rng.gen::<bool>();
         //
         let count_oper = rng.gen_range(0..25);
@@ -54,7 +55,7 @@ async fn classic_collection_view_check() {
             if choice == 0 {
                 // deleting random stuff
                 let pos = rng.gen_range(0..nmax);
-                view.v.remove_entry(&pos).unwrap();
+                view.v.remove_entry(&pos)?;
                 new_map.remove(&pos);
             }
             if choice == 1 {
@@ -63,7 +64,7 @@ async fn classic_collection_view_check() {
                 for _i in 0..n_ins {
                     let pos = rng.gen_range(0..nmax);
                     let value = rng.gen::<u32>();
-                    let subview = view.v.load_entry_mut(&pos).await.unwrap();
+                    let subview = view.v.load_entry_mut(&pos).await?;
                     *subview.get_mut() = value;
                     new_map.insert(pos, value);
                 }
@@ -73,7 +74,7 @@ async fn classic_collection_view_check() {
                 let n_load = rng.gen_range(0..5);
                 for _i in 0..n_load {
                     let pos = rng.gen_range(0..nmax);
-                    let _subview = view.v.load_entry_or_insert(&pos).await.unwrap();
+                    let _subview = view.v.load_entry_or_insert(&pos).await?;
                     new_map.entry(pos).or_insert(0);
                 }
             }
@@ -82,7 +83,7 @@ async fn classic_collection_view_check() {
                 let n_reset = rng.gen_range(0..5);
                 for _i in 0..n_reset {
                     let pos = rng.gen_range(0..nmax);
-                    view.v.reset_entry_to_default(&pos).await.unwrap();
+                    view.v.reset_entry_to_default(&pos).await?;
                     new_map.insert(pos, 0);
                 }
             }
@@ -98,7 +99,7 @@ async fn classic_collection_view_check() {
                 new_map = map.clone();
             }
             // Checking the hash
-            let new_hash = view.crypto_hash().await.unwrap();
+            let new_hash = view.crypto_hash().await?;
             if map == new_map {
                 assert_eq!(new_hash, hash);
             } else {
@@ -107,7 +108,7 @@ async fn classic_collection_view_check() {
             // Checking the behavior of "try_load_entry"
             for _ in 0..10 {
                 let pos = rng.gen::<u8>();
-                let test_view = view.v.try_load_entry(&pos).await.unwrap().is_some();
+                let test_view = view.v.try_load_entry(&pos).await?.is_some();
                 let test_map = new_map.contains_key(&pos);
                 assert_eq!(test_view, test_map);
             }
@@ -120,8 +121,9 @@ async fn classic_collection_view_check() {
                 assert!(view.has_pending_changes().await);
             }
             map = new_map.clone();
-            view.save().await.unwrap();
+            view.save().await?;
             assert!(!view.has_pending_changes().await);
         }
     }
+    Ok(())
 }

@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use anyhow::Result;
 use linera_views::{
     common::Context,
     memory::create_memory_context,
@@ -36,15 +37,15 @@ where
 }
 
 #[tokio::test]
-async fn reentrant_collection_view_check() {
+async fn reentrant_collection_view_check() -> Result<()> {
     let context = create_memory_context();
     let mut rng = test_utils::make_deterministic_rng();
     let mut map = BTreeMap::<u8, u32>::new();
     let n = 20;
     let nmax: u8 = 25;
     for _ in 0..n {
-        let mut view = StateView::load(context.clone()).await.unwrap();
-        let hash = view.crypto_hash().await.unwrap();
+        let mut view = StateView::load(context.clone()).await?;
+        let hash = view.crypto_hash().await?;
         let key_values = view.key_values().await;
         assert_eq!(key_values, map);
         //
@@ -56,7 +57,7 @@ async fn reentrant_collection_view_check() {
             if choice == 0 {
                 // Deleting some random stuff
                 let pos = rng.gen_range(0..nmax);
-                view.v.remove_entry(&pos).unwrap();
+                view.v.remove_entry(&pos)?;
                 new_map.remove(&pos);
             }
             if choice == 1 {
@@ -74,7 +75,7 @@ async fn reentrant_collection_view_check() {
                 }
                 // Only if all indices are distinct can the query be acceptable
                 if set_indices.len() == n_ins {
-                    let mut subviews = view.v.try_load_entries_mut(&indices).await.unwrap();
+                    let mut subviews = view.v.try_load_entries_mut(&indices).await?;
                     for i in 0..n_ins {
                         let index = indices[i];
                         let value = values[i];
@@ -89,7 +90,7 @@ async fn reentrant_collection_view_check() {
                 for _i in 0..n_ins {
                     let pos = rng.gen_range(0..nmax);
                     let value = rng.gen::<u32>();
-                    let mut subview = view.v.try_load_entry_mut(&pos).await.unwrap();
+                    let mut subview = view.v.try_load_entry_mut(&pos).await?;
                     *subview.get_mut() = value;
                     new_map.insert(pos, value);
                 }
@@ -99,10 +100,10 @@ async fn reentrant_collection_view_check() {
                 let n_ins = rng.gen_range(0..5);
                 for _i in 0..n_ins {
                     let pos = rng.gen_range(0..nmax);
-                    let test_view = view.v.contains_key(&pos).await.unwrap();
+                    let test_view = view.v.contains_key(&pos).await?;
                     let test_map = new_map.contains_key(&pos);
                     assert_eq!(test_view, test_map);
-                    let _subview = view.v.try_load_entry_or_insert(&pos).await.unwrap();
+                    let _subview = view.v.try_load_entry_or_insert(&pos).await?;
                     new_map.entry(pos).or_insert(0);
                 }
             }
@@ -111,7 +112,7 @@ async fn reentrant_collection_view_check() {
                 let n_ins = rng.gen_range(0..5);
                 for _i_ins in 0..n_ins {
                     let pos = rng.gen_range(0..nmax);
-                    let subview: Option<_> = view.v.try_load_entry(&pos).await.unwrap();
+                    let subview: Option<_> = view.v.try_load_entry(&pos).await?;
                     match new_map.contains_key(&pos) {
                         true => {
                             let subview = subview.unwrap();
@@ -134,7 +135,7 @@ async fn reentrant_collection_view_check() {
                 new_map = map.clone();
             }
             // Checking the hash
-            let new_hash = view.crypto_hash().await.unwrap();
+            let new_hash = view.crypto_hash().await?;
             if new_map == map {
                 assert_eq!(hash, new_hash);
             } else {
@@ -146,7 +147,7 @@ async fn reentrant_collection_view_check() {
             assert_eq!(key_values, new_map);
             // Checking the try_load_entries on all indices
             let indices = key_values.into_iter().map(|x| x.0).collect::<Vec<_>>();
-            let subviews = view.v.try_load_entries(&indices).await.unwrap();
+            let subviews = view.v.try_load_entries(&indices).await?;
             for i in 0..indices.len() {
                 let index = indices[i];
                 let value_view = *subviews[i].get();
@@ -162,8 +163,9 @@ async fn reentrant_collection_view_check() {
                 assert!(view.has_pending_changes().await);
             }
             map = new_map.clone();
-            view.save().await.unwrap();
+            view.save().await?;
             assert!(!view.has_pending_changes().await);
         }
     }
+    Ok(())
 }

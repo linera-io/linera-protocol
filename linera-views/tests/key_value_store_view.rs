@@ -6,6 +6,7 @@ use std::{
     fmt::Debug,
 };
 
+use anyhow::Result;
 use linera_views::{
     key_value_store_view::{KeyValueStoreView, SizeData},
     memory::create_memory_context,
@@ -37,16 +38,16 @@ fn total_size(vec: &Vec<(Vec<u8>, Vec<u8>)>) -> SizeData {
 }
 
 #[tokio::test]
-async fn key_value_store_view_mutability() {
+async fn key_value_store_view_mutability() -> Result<()> {
     let context = create_memory_context();
     let mut rng = test_utils::make_deterministic_rng();
     let mut state_map = BTreeMap::new();
     let n = 200;
     let mut all_keys = BTreeSet::new();
     for _ in 0..n {
-        let mut view = StateView::load(context.clone()).await.unwrap();
+        let mut view = StateView::load(context.clone()).await?;
         let save = rng.gen::<bool>();
-        let read_state = view.store.index_values().await.unwrap();
+        let read_state = view.store.index_values().await?;
         let state_vec = state_map.clone().into_iter().collect::<Vec<_>>();
         assert!(read_state.iter().map(|kv| (&kv.0, &kv.1)).eq(&state_map));
         assert_eq!(total_size(&state_vec), view.store.total_size());
@@ -56,7 +57,7 @@ async fn key_value_store_view_mutability() {
         let mut new_state_vec = state_vec.clone();
         for _ in 0..count_oper {
             let choice = rng.gen_range(0..5);
-            let entry_count = view.store.count().await.unwrap();
+            let entry_count = view.store.count().await?;
             if choice == 0 {
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..10);
@@ -68,11 +69,11 @@ async fn key_value_store_view_mutability() {
                         .collect::<Vec<_>>();
                     all_keys.insert(key.clone());
                     let value = Vec::new();
-                    view.store.insert(key.clone(), value.clone()).await.unwrap();
+                    view.store.insert(key.clone(), value.clone()).await?;
                     new_state_map.insert(key, value);
 
                     new_state_vec = new_state_map.clone().into_iter().collect();
-                    let new_key_values = view.store.index_values().await.unwrap();
+                    let new_key_values = view.store.index_values().await?;
                     assert_eq!(new_state_vec, new_key_values);
                     assert_eq!(total_size(&new_state_vec), view.store.total_size());
                 }
@@ -84,7 +85,7 @@ async fn key_value_store_view_mutability() {
                     let pos = rng.gen_range(0..entry_count);
                     let (key, _) = new_state_vec[pos].clone();
                     new_state_map.remove(&key);
-                    view.store.remove(key).await.unwrap();
+                    view.store.remove(key).await?;
                 }
             }
             if choice == 2 && entry_count > 0 {
@@ -93,8 +94,7 @@ async fn key_value_store_view_mutability() {
                 let key_prefix = vec![val];
                 view.store
                     .remove_by_prefix(key_prefix.clone())
-                    .await
-                    .unwrap();
+                    .await?;
                 remove_by_prefix(&mut new_state_map, key_prefix);
             }
             if choice == 3 {
@@ -109,14 +109,14 @@ async fn key_value_store_view_mutability() {
                 new_state_map = state_map.clone();
             }
             new_state_vec = new_state_map.clone().into_iter().collect();
-            let new_key_values = view.store.index_values().await.unwrap();
+            let new_key_values = view.store.index_values().await?;
             assert_eq!(new_state_vec, new_key_values);
             assert_eq!(total_size(&new_state_vec), view.store.total_size());
             let all_keys_vec = all_keys.clone().into_iter().collect::<Vec<_>>();
-            let tests_multi_get = view.store.multi_get(all_keys_vec).await.unwrap();
+            let tests_multi_get = view.store.multi_get(all_keys_vec).await?;
             for (i, key) in all_keys.clone().into_iter().enumerate() {
                 let test_map = new_state_map.contains_key(&key);
-                let test_view = view.store.get(&key).await.unwrap().is_some();
+                let test_view = view.store.get(&key).await?.is_some();
                 let test_multi_get = tests_multi_get[i].is_some();
                 assert_eq!(test_map, test_view);
                 assert_eq!(test_map, test_multi_get);
@@ -127,8 +127,9 @@ async fn key_value_store_view_mutability() {
                 assert!(view.has_pending_changes().await);
             }
             state_map = new_state_map.clone();
-            view.save().await.unwrap();
+            view.save().await?;
             assert!(!view.has_pending_changes().await);
         }
     }
+    Ok(())
 }

@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Result;
 use linera_views::{
     memory::create_memory_context,
     queue_view::HashedQueueView,
@@ -15,16 +16,16 @@ pub struct StateView<C> {
 }
 
 #[tokio::test]
-async fn queue_view_mutability_check() {
+async fn queue_view_mutability_check() -> Result<()> {
     let context = create_memory_context();
     let mut rng = test_utils::make_deterministic_rng();
     let mut vector = Vec::new();
     let n = 20;
     for _ in 0..n {
-        let mut view = StateView::load(context.clone()).await.unwrap();
-        let hash = view.crypto_hash().await.unwrap();
+        let mut view = StateView::load(context.clone()).await?;
+        let hash = view.crypto_hash().await?;
         let save = rng.gen::<bool>();
-        let elements = view.queue.elements().await.unwrap();
+        let elements = view.queue.elements().await?;
         assert_eq!(elements, vector);
         //
         let count_oper = rng.gen_range(0..25);
@@ -54,7 +55,7 @@ async fn queue_view_mutability_check() {
                 // changing some random entries
                 let pos = rng.gen_range(0..count);
                 let val = rng.gen::<u8>();
-                let mut iter = view.queue.iter_mut().await.unwrap();
+                let mut iter = view.queue.iter_mut().await?;
                 (for _ in 0..pos {
                     iter.next();
                 });
@@ -76,8 +77,8 @@ async fn queue_view_mutability_check() {
                 assert!(!view.has_pending_changes().await);
                 new_vector.clone_from(&vector);
             }
-            let new_elements = view.queue.elements().await.unwrap();
-            let new_hash = view.crypto_hash().await.unwrap();
+            let new_elements = view.queue.elements().await?;
+            let new_hash = view.crypto_hash().await?;
             if elements == new_elements {
                 assert_eq!(new_hash, hash);
             } else {
@@ -91,8 +92,9 @@ async fn queue_view_mutability_check() {
                 assert!(view.has_pending_changes().await);
             }
             vector.clone_from(&new_vector);
-            view.save().await.unwrap();
+            view.save().await?;
             assert!(!view.has_pending_changes().await);
         }
     }
+    Ok(())
 }
