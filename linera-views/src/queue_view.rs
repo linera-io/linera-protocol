@@ -86,6 +86,16 @@ where
         self.new_back_values.clear();
     }
 
+    async fn has_pending_changes(&self) -> bool {
+        if self.delete_storage_first {
+            return true;
+        }
+        if self.front_delete_count > 0 {
+            return true;
+        }
+        !self.new_back_values.is_empty()
+    }
+
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {

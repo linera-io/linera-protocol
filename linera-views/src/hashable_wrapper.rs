@@ -40,7 +40,7 @@ impl<C, W, O> View<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C> + Send,
+    W: HashableView<C> + Send + Sync,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
@@ -68,6 +68,14 @@ where
     fn rollback(&mut self) {
         self.inner.rollback();
         *self.hash.get_mut() = self.stored_hash;
+    }
+
+    async fn has_pending_changes(&self) -> bool {
+        if self.inner.has_pending_changes().await {
+            return true;
+        }
+        let hash = self.hash.lock().await;
+        self.stored_hash != *hash
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
@@ -102,7 +110,7 @@ impl<C, W, O> ClonableView<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C> + ClonableView<C> + Send,
+    W: HashableView<C> + ClonableView<C> + Send + Sync,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
