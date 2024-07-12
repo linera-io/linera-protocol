@@ -713,6 +713,7 @@ async fn test_byte_map_view() -> Result<()> {
     {
         let mut view = ByteMapStateView::load(context.clone()).await?;
         view.map.insert(vec![0,1], 5);
+        view.map.insert(vec![2,3], 23);
         view.save().await?;
     }
     {
@@ -720,6 +721,15 @@ async fn test_byte_map_view() -> Result<()> {
         view.map.remove_by_prefix(vec![0]);
         let val = view.map.get_mut_or_default(&[0,1]).await?;
         assert_eq!(*val, 0);
+        let val = view.map.get_mut(&[2,3]).await?;
+        assert_eq!(val, Some(&mut 23));
+        view.save().await?;
+    }
+    {
+        let mut view = ByteMapStateView::load(context.clone()).await?;
+        view.map.remove_by_prefix(vec![2]);
+        let val = view.map.get_mut(&[2,3]).await?;
+        assert_eq!(val, None);
     }
     Ok(())
 }
