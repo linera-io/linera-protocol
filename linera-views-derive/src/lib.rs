@@ -21,18 +21,6 @@ fn get_seq_parameter(generics: syn::Generics) -> Vec<syn::Ident> {
     generic_vect
 }
 
-fn get_type_field(field: syn::Field) -> Option<syn::Ident> {
-    match field.ty {
-        syn::Type::Path(typepath) => {
-            if let Some(x) = typepath.path.segments.into_iter().next() {
-                return Some(x.ident);
-            }
-            None
-        }
-        _ => None,
-    }
-}
-
 fn custom_attribute(attributes: &[Attribute], key: &str) -> Option<LitStr> {
     attributes
         .iter()
@@ -127,10 +115,8 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut post_load_keys_quotes = Vec::new();
     for (idx, e) in input.fields.into_iter().enumerate() {
         let name = e.clone().ident.unwrap();
-        let fut = format_ident!("{}_fut", name.to_string());
         let test_flush_ident = format_ident!("deleted{}", idx);
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
-        let type_ident = get_type_field(e.clone()).expect("Failed to find the type");
         let g = get_extended_entry(e.ty.clone());
         name_quotes.push(quote! { #name });
         rollback_quotes.push(quote! { self.#name.rollback(); });
