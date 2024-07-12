@@ -121,7 +121,6 @@ async fn classic_collection_view_check() {
             }
             map = new_map.clone();
             view.save().await.unwrap();
-            println!("After SAVE");
             assert!(!view.has_pending_changes().await);
         }
     }

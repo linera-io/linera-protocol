@@ -200,14 +200,14 @@ where
         if !self.updates.is_empty() {
             return true;
         }
+        if self.stored_total_size != self.total_size {
+            return true;
+        }
         if self.sizes.has_pending_changes().await {
             return true;
         }
         let hash = self.hash.lock().await;
-        if self.stored_hash != *hash {
-            return true;
-        }
-        self.stored_total_size != self.total_size
+        self.stored_hash != *hash
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
