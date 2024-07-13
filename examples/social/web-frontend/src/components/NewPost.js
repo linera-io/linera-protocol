@@ -1,39 +1,74 @@
 import React from 'react'
 import UploadImage from '../assets/uploadimage.png'
-function UserInfo() {
+import { gql, useMutation } from '@apollo/client'
+
+function UserInfo({ chainId }) {
   return (
-    <div className="flex items-center mb-3 p-1">
+    <div className="flex items-center mb-3 p-1 w-full">
       <img
         className="w-10 h-10 rounded-full"
         src="https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Ftse1.mm.bing.net%2Fth%3Fid%3DOIP.QV66R5EzC2y_EFSjHKcypAHaFj%26pid%3DApi&f=1&ipt=d78c19ed3c954411d8c4478fd819678df8185d674ef6642af3902080fa0296c2&ipo=images"
         alt="User"
       />
-      <div className="ml-2">
-        <div className="font-semibold">John Doe</div>
+      <div className="ml-2 w-full">
+        <div className="w-fit font-semibold text-xs break-all whitespace-normal">
+          {chainId}
+        </div>
         <div className="text-xs text-gray-500">Software Engineer</div>
       </div>
     </div>
   )
 }
-export default function NewPost() {
+
+export default function NewPost({ chainId }) {
   const [post, setPost] = React.useState({
     message: '',
     image: '',
   })
+  const [createPost] = useMutation(gql`
+    mutation createPost($message: String!, $image: String) {
+      post(text: $message, imageUrl: $image)
+    }
+  `)
+
+  async function handlePost() {
+    if (!post.message) return
+    if (post.image === '') {
+      await createPost({
+        variables: {
+          message: post.message,
+        },
+      })
+    } else {
+      await createPost({
+        variables: {
+          message: post.message,
+          image: post.image,
+        },
+      })
+    }
+    setPost({ message: '', image: '' })
+  }
   const [showImgInput, setShowImgInput] = React.useState(false)
   return (
     <div className="border p-1 bg-slate-100 rounded-xl">
-      <div className="w-[450px] h-full max-h-[600px]">
-        <UserInfo />
+      <div className="w-[450px]">
+        <UserInfo chainId={chainId} />
         <div className="flex flex-col justify-between h-full">
-          <input
-            type="text"
+          <textarea
             value={post.message}
             onChange={(e) => setPost({ ...post, message: e.target.value })}
             placeholder="Write your post..."
-            className="bg-transparent outline-none p-2 rounded-md"
+            className="bg-transparent outline-none p-2 max-w-[400px] resize-none h-10 mb-5 rounded-md"
           />
-          <div className="flex justify-between mt-2">
+          {post.image && (
+            <img
+              src={post.image}
+              alt="post"
+              className="w-full object-cover rounded-md"
+            />
+          )}
+          <div className="flex justify-between mt-2 gap-2">
             {!showImgInput && (
               <button
                 onClick={() => setShowImgInput(!showImgInput)}
@@ -47,13 +82,27 @@ export default function NewPost() {
                 type="text"
                 value={post.image}
                 placeholder="Add img url..."
-                className="mb-0 px-4 py-1 outline-none"
+                className="mb-0 px-4 py-1 outline-none rounded-xl w-full"
                 onChange={(e) => {
                   setPost({ ...post, image: e.target.value })
                 }}
               />
             )}
-            <button className="bg-blue-500 text-sm text-white px-6 rounded-full">
+            {post.image && (
+              <button
+                className="px-4 py-1 text-white text-sm bg-[#fe2b00] rounded-full"
+                onClick={() => {
+                  setShowImgInput(!showImgInput)
+                  setPost({ ...post, image: '' })
+                }}
+              >
+                Clear
+              </button>
+            )}
+            <button
+              onClick={() => handlePost()}
+              className="bg-[#fe2b00] text-sm text-white px-6 rounded-full"
+            >
               Post
             </button>
           </div>
