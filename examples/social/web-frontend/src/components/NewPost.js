@@ -7,7 +7,7 @@ function UserInfo({ chainId }) {
     <div className="flex items-center mb-3 p-1 w-full">
       <img
         className="w-10 h-10 rounded-full"
-        src="https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Ftse1.mm.bing.net%2Fth%3Fid%3DOIP.QV66R5EzC2y_EFSjHKcypAHaFj%26pid%3DApi&f=1&ipt=d78c19ed3c954411d8c4478fd819678df8185d674ef6642af3902080fa0296c2&ipo=images"
+        src="https://img.icons8.com/fluency/48/test-account--v1.png"
         alt="User"
       />
       <div className="ml-2 w-full">
@@ -52,7 +52,7 @@ export default function NewPost({ chainId }) {
   const [showImgInput, setShowImgInput] = React.useState(false)
   return (
     <div className="border p-1 bg-slate-100 rounded-xl">
-      <div className="w-[450px]">
+      <div className="w-[500px]">
         <UserInfo chainId={chainId} />
         <div className="flex flex-col justify-between h-full">
           <textarea
