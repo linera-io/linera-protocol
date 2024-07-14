@@ -190,6 +190,26 @@ where
         *self.hash.get_mut() = self.stored_hash;
     }
 
+    async fn has_pending_changes(&self) -> bool {
+        if self.delete_storage_first {
+            return true;
+        }
+        if !self.deleted_prefixes.is_empty() {
+            return true;
+        }
+        if !self.updates.is_empty() {
+            return true;
+        }
+        if self.stored_total_size != self.total_size {
+            return true;
+        }
+        if self.sizes.has_pending_changes().await {
+            return true;
+        }
+        let hash = self.hash.lock().await;
+        self.stored_hash != *hash
+    }
+
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
