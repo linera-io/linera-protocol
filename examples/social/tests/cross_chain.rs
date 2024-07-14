@@ -45,6 +45,7 @@ async fn test_cross_chain_posting() {
                 application_id,
                 Operation::Post {
                     text: "Linera is the new Mastodon".to_string(),
+                    image_url: None,
                 },
             );
         })
