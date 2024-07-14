@@ -195,11 +195,25 @@ impl ServiceAbi for SocialAbi {
 #[derive(Debug, Serialize, Deserialize, GraphQLMutationRoot)]
 pub enum Operation {
     /// Request to be subscribed to another chain.
-    Subscribe { chain_id: ChainId },
+    Subscribe {
+        chain_id: ChainId,
+    },
     /// Request to be unsubscribed from another chain.
-    Unsubscribe { chain_id: ChainId },
+    Unsubscribe {
+        chain_id: ChainId,
+    },
     /// Send a new post to everyone who subscribed to us.
-    Post { text: String },
+    Post {
+        text: String,
+        image_url: Option<String>,
+    },
+    Like {
+        key: Key,
+    },
+    Comment {
+        key: Key,
+        comment: String,
+    },
 }
 
 /// A message of the application on one chain, to be handled on another chain.
@@ -213,6 +227,14 @@ pub enum Message {
     /// This includes the most recent posts in reverse order, and the total count of posts by the
     /// sender. I.e. the indices of the posts in the `Vec` are `count - 1, count - 2, ...`.
     Posts { count: u64, posts: Vec<OwnPost> },
+    /// A Chain liked a post
+    Like { key: Key },
+    /// A Chain commented on a post
+    Comment {
+        key: Key,
+        chain_id: ChainId,
+        comment: String,
+    },
 }
 
 /// A post's text and timestamp, to use in contexts where author and index are known.
@@ -222,15 +244,32 @@ pub struct OwnPost {
     pub timestamp: Timestamp,
     /// The posted text.
     pub text: String,
+    /// The posted Image_url(optional).
+    pub image_url: Option<String>,
 }
 
 /// A post on the social app.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, SimpleObject)]
 pub struct Post {
     /// The key identifying the post, including the timestamp, author and index.
     pub key: Key,
     /// The post's text content.
     pub text: String,
+    /// The post's image_url(optional).
+    pub image_url: Option<String>,
+    /// The total number of likes
+    pub likes: u32,
+    /// Comments with there ChainId
+    pub comment: Vec<Comment>,
+}
+
+/// A comment on a post
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, SimpleObject)]
+pub struct Comment {
+    /// The comment text
+    pub text: String,
+    /// The ChainId of the commenter
+    pub chain_id: ChainId,
 }
 
 /// A key by which a post is indexed.
