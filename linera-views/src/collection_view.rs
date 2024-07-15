@@ -327,7 +327,7 @@ where
     ///   let subview = view.load_entry_mut(&[0, 1]).await.unwrap();
     ///   let value = subview.get_mut();
     ///   *value = String::from("Hello");
-    ///   view.reset_entry_to_default(&[0, 1]).await.unwrap();
+    ///   view.reset_entry_to_default(&[0, 1]).unwrap();
     ///   let subview = view.load_entry_mut(&[0, 1]).await.unwrap();
     ///   let value = subview.get_mut();
     ///   assert_eq!(*value, String::default());
@@ -812,19 +812,19 @@ where
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get_mut();
     ///   *value = String::from("Hello");
-    ///   view.reset_entry_to_default(&23).await.unwrap();
+    ///   view.reset_entry_to_default(&23).unwrap();
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get_mut();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    pub fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.collection.reset_entry_to_default(&short_key).await
+        self.collection.reset_entry_to_default(&short_key)
     }
 
     /// Removes an entry from the CollectionView. If absent nothing happens.
@@ -1161,19 +1161,19 @@ where
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get_mut();
     ///   *value = String::from("Hello");
-    ///   view.reset_entry_to_default(&23).await.unwrap();
+    ///   view.reset_entry_to_default(&23).unwrap();
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get_mut();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    pub fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
-        self.collection.reset_entry_to_default(&short_key).await
+        self.collection.reset_entry_to_default(&short_key)
     }
 
     /// Removes an entry from the CollectionView. If absent nothing happens.

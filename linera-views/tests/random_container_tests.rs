@@ -87,7 +87,7 @@ async fn classic_collection_view_check() -> Result<()> {
                 let n_reset = rng.gen_range(0..5);
                 for _i in 0..n_reset {
                     let pos = rng.gen_range(0..nmax);
-                    view.v.reset_entry_to_default(&pos).await?;
+                    view.v.reset_entry_to_default(&pos)?;
                     new_map.insert(pos, 0);
                 }
             }
