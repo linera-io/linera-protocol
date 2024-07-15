@@ -736,15 +736,11 @@ where
     /// ```
     pub async fn get_mut_or_default(&mut self, short_key: &[u8]) -> Result<&mut V, ViewError> {
         let update = match self.updates.entry(short_key.to_vec()) {
-            Entry::Vacant(e) if self.delete_storage_first => e.insert(Update::Set(V::default())),
+            Entry::Vacant(e) if self.delete_storage_first || contains_key(&self.deleted_prefixes, short_key) => e.insert(Update::Set(V::default())),
             Entry::Vacant(e) => {
-                if contains_key(&self.deleted_prefixes, short_key) {
-                    e.insert(Update::Set(V::default()))
-                } else {
-                    let key = self.context.base_index(short_key);
-                    let value = self.context.read_value(&key).await?.unwrap_or_default();
-                    e.insert(Update::Set(value))
-                }
+                let key = self.context.base_index(short_key);
+                let value = self.context.read_value(&key).await?.unwrap_or_default();
+                e.insert(Update::Set(value))
             }
             Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
