@@ -30,7 +30,7 @@ pub trait View<C>: Sized {
     /// Creates the keys needed for loading the view
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError>;
 
-    /// Load a view from the values
+    /// Loads a view from the values
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError>;
 
     /// Loads a view
@@ -109,6 +109,10 @@ pub enum ViewError {
     /// The database is corrupt: Some entries are missing
     #[error("Missing database entries")]
     MissingEntries,
+
+    /// The values are incoherent.
+    #[error("Post load values error")]
+    PostLoadValuesError,
 
     /// The value is too large for the client
     #[error("The value is too large for the client")]
