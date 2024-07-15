@@ -23,10 +23,10 @@ impl HelmFile {
         fs_extra::copy_items(&[&chart_dir], temp_dir.path(), &CopyOptions::new())?;
 
         Command::new("helmfile")
-            .current_dir(&temp_dir.path().join("linera-validator"))
+            .current_dir(temp_dir.path().join("linera-validator"))
             .env(
                 "LINERA_HELMFILE_SET_SERVER_CONFIG",
-                &format!("working/server_{server_config_id}.json"),
+                format!("working/server_{server_config_id}.json"),
             )
             .env("LINERA_HELMFILE_SET_NUM_SHARDS", num_shards.to_string())
             .arg("sync")

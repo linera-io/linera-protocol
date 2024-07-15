@@ -165,7 +165,7 @@ impl CrowdFundingContract {
         );
 
         // TODO(#728): Remove this.
-        #[cfg(not(any(test, feature = "test")))]
+        #[cfg(not(test))]
         assert!(
             self.runtime.system_time() >= self.instantiation_argument().deadline,
             "Crowd-funding campaign has not reached its deadline yet"
