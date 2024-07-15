@@ -25,7 +25,7 @@ use linera_base::{
     BcsHexParseError,
 };
 use linera_chain::{data_types::HashedCertificateValue, ChainStateView};
-use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
+use linera_client::chain_listener::{chain_listener, ChainListenerConfig, ClientContext};
 use linera_core::{
     client::{ChainClient, ChainClientError, Client},
     data_types::{ClientOutcome, RoundTimeout},
@@ -1031,9 +1031,7 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        ChainListener::new(self.config)
-            .run(self.context.clone())
-            .await;
+        chain_listener(self.config, self.context.clone()).await;
         axum::serve(
             tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?,
             app,

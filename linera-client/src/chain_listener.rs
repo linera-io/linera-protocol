@@ -78,67 +78,59 @@ pub trait ClientContext: Send {
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
 /// appropriately.
-pub struct ChainListener {
+pub async fn chain_listener<C>(
     config: ChainListenerConfig,
-}
-
-impl ChainListener {
-    /// Creates a new chain listener.
-    pub fn new(config: ChainListenerConfig) -> Self {
-        Self { config }
-    }
-
-    /// Runs the chain listener.
-    pub async fn run<C>(self, context: Arc<Mutex<C>>)
-    where
-        C: ClientContext + Send + 'static,
-        ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
-    {
-        let (chain_ids, storage) = {
-            let context_guard = context.lock().await;
-            (
+    context: Arc<Mutex<C>>,
+)
+where
+    C: ClientContext + Send + 'static,
+    ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
+{
+    let (chain_ids, storage) = {
+        let context_guard = context.lock().await;
+        (
                 context_guard.wallet().chain_ids(),
                 context_guard.client().storage_client().clone(),
-            )
-        };
-        let running: Arc<Mutex<HashSet<ChainId>>> = Arc::default();
-        for chain_id in chain_ids {
-            Self::run_with_chain_id(
-                chain_id,
-                context.clone(),
-                storage.clone(),
-                self.config.clone(),
-                running.clone(),
-            );
-        }
+        )
+    };
+    let running: Arc<Mutex<HashSet<ChainId>>> = Arc::default();
+    for chain_id in chain_ids {
+        run_with_chain_id(
+            chain_id,
+            context.clone(),
+            storage.clone(),
+            config.clone(),
+            running.clone(),
+        );
     }
+}
 
-    fn run_with_chain_id<C>(
-        chain_id: ChainId,
-        context: Arc<Mutex<C>>,
-        storage: C::Storage,
-        config: ChainListenerConfig,
-        running: Arc<Mutex<HashSet<ChainId>>>,
-    ) where
+fn run_with_chain_id<C>(
+    chain_id: ChainId,
+    context: Arc<Mutex<C>>,
+    storage: C::Storage,
+    config: ChainListenerConfig,
+    running: Arc<Mutex<HashSet<ChainId>>>,
+) where
         C: ClientContext + Send + 'static,
         ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
     {
         let _handle = tokio::task::spawn(async move {
             if let Err(err) =
-                Self::run_client_stream(chain_id, context, storage, config, running).await
+                run_client_stream(chain_id, context, storage, config, running).await
             {
                 error!("Stream for chain {} failed: {}", chain_id, err);
             }
         });
     }
 
-    async fn run_client_stream<C>(
-        chain_id: ChainId,
-        context: Arc<Mutex<C>>,
-        storage: C::Storage,
-        config: ChainListenerConfig,
-        running: Arc<Mutex<HashSet<ChainId>>>,
-    ) -> anyhow::Result<()>
+async fn run_client_stream<C>(
+    chain_id: ChainId,
+    context: Arc<Mutex<C>>,
+    storage: C::Storage,
+    config: ChainListenerConfig,
+    running: Arc<Mutex<HashSet<ChainId>>>,
+) -> anyhow::Result<()>
     where
         C: ClientContext + Send + 'static,
         ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
@@ -151,7 +143,7 @@ impl ChainListener {
         let (listener, listen_handle, local_stream) = chain_client.listen().await?;
         let ((), ()) = futures::try_join!(
             listener.map(Ok),
-            Self::process_notifications(
+            process_notifications(
                 local_stream,
                 listen_handle,
                 chain_client,
@@ -164,15 +156,15 @@ impl ChainListener {
         Ok(())
     }
 
-    async fn process_notifications<C>(
-        mut local_stream: impl futures::Stream<Item = linera_core::worker::Notification> + Unpin,
-        _listen_handle: linera_core::client::AbortOnDrop,
-        chain_client: ChainClient<C::ValidatorNodeProvider, C::Storage>,
-        context: Arc<Mutex<C>>,
-        storage: C::Storage,
-        config: ChainListenerConfig,
-        running: Arc<Mutex<HashSet<ChainId>>>,
-    ) -> anyhow::Result<()>
+async fn process_notifications<C>(
+    mut local_stream: impl futures::Stream<Item = linera_core::worker::Notification> + Unpin,
+    _listen_handle: linera_core::client::AbortOnDrop,
+    chain_client: ChainClient<C::ValidatorNodeProvider, C::Storage>,
+    context: Arc<Mutex<C>>,
+    storage: C::Storage,
+    config: ChainListenerConfig,
+    running: Arc<Mutex<HashSet<ChainId>>>,
+) -> anyhow::Result<()>
     where
         C: ClientContext + Send + 'static,
         ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
@@ -197,7 +189,7 @@ impl ChainListener {
                 }
             };
             info!("Received new notification: {:?}", notification);
-            Self::maybe_sleep(config.delay_before_ms).await;
+            maybe_sleep(config.delay_before_ms).await;
             match &notification.reason {
                 Reason::NewIncomingMessage { .. } => timeout = storage.clock().current_time(),
                 Reason::NewBlock { .. } | Reason::NewRound { .. } => {
@@ -210,7 +202,7 @@ impl ChainListener {
                     }
                 }
             }
-            Self::maybe_sleep(config.delay_after_ms).await;
+            maybe_sleep(config.delay_after_ms).await;
             let Reason::NewBlock { hash, .. } = notification.reason else {
                 continue;
             };
@@ -254,7 +246,7 @@ impl ChainListener {
                     .iter()
                     .find_map(|public_key| context_guard.wallet().key_pair_for_pk(public_key));
                 context_guard.update_wallet_for_new_chain(new_id, key_pair, timestamp);
-                Self::run_with_chain_id(
+                run_with_chain_id(
                     new_id,
                     context.clone(),
                     storage.clone(),
@@ -265,9 +257,8 @@ impl ChainListener {
         }
     }
 
-    async fn maybe_sleep(delay_ms: u64) {
-        if delay_ms > 0 {
-            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-        }
+async fn maybe_sleep(delay_ms: u64) {
+    if delay_ms > 0 {
+        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
     }
 }
