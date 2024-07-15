@@ -147,6 +147,7 @@ where
                 kind: MessageKind::Protected,
                 message: Message::System(publish_message.clone()),
             }]],
+            events: vec![Vec::new()],
             state_hash: publisher_state_hash,
             oracle_responses: vec![Vec::new()],
         }
@@ -216,6 +217,7 @@ where
     let failing_broadcast_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![vec![failing_broadcast_outgoing_message]],
+            events: vec![Vec::new()],
             state_hash: publisher_state_hash,
             oracle_responses: vec![Vec::new()],
         }
@@ -240,6 +242,7 @@ where
     let broadcast_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![vec![broadcast_outgoing_message]],
+            events: vec![Vec::new()],
             state_hash: publisher_state_hash,
             oracle_responses: vec![Vec::new()],
         }
@@ -294,6 +297,7 @@ where
                 kind: MessageKind::Protected,
                 message: Message::System(subscribe_message.clone()),
             }]],
+            events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![Vec::new()],
         }
@@ -346,6 +350,7 @@ where
                     id: creator_chain.into(),
                 }),
             }]],
+            events: vec![Vec::new()],
             state_hash: publisher_state_hash,
             oracle_responses: vec![Vec::new()],
         }
@@ -443,6 +448,7 @@ where
                     message: Message::System(SystemMessage::ApplicationCreated),
                 }],
             ],
+            events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![Vec::new(); 2],
         }
@@ -496,6 +502,7 @@ where
     let run_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
+            events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![Vec::new()],
         }

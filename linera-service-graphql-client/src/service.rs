@@ -222,6 +222,7 @@ mod from {
                     messages,
                     state_hash,
                     oracle_responses: oracle_responses.into_iter().map(Into::into).collect(),
+                    events: vec![], // events.into_iter().map(Into::into).collect(),
                 },
             }
         }

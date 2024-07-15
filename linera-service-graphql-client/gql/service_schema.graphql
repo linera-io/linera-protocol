@@ -108,11 +108,18 @@ type BlockExecutionOutcome {
 	The list of outgoing messages for each transaction.
 	"""
 	messages: [[OutgoingMessage!]!]!
+	"""
+	The hash of the chain's execution state after this block.
+	"""
 	stateHash: CryptoHash!
 	"""
 	The record of oracle responses for each transaction.
 	"""
 	oracleResponses: [[OracleResponse!]!]!
+	"""
+	The list of events produced by each transaction.
+	"""
+	events: [[EventRecord!]!]!
 }
 
 """
@@ -376,6 +383,24 @@ A message together with non replayable information to ensure uniqueness in a par
 scalar Event
 
 """
+An event recorded in an executed block.
+"""
+type EventRecord {
+	"""
+	The application that emitted this event.
+	"""
+	applicationId: GenericApplicationId!
+	"""
+	The name of the event stream.
+	"""
+	streamName: StreamName!
+	"""
+	The payload data.
+	"""
+	payload: [Int!]!
+}
+
+"""
 A [`Block`], together with the outcome from its execution.
 """
 type ExecutedBlock {
@@ -387,6 +412,11 @@ type ExecutionStateView {
 	system: SystemExecutionStateView!
 }
 
+
+"""
+A unique identifier for a user application or for the system application
+"""
+scalar GenericApplicationId
 
 type HashedCertificateValue {
 	hash: CryptoHash!
@@ -831,6 +861,11 @@ input ResourceControlPolicy {
 	"""
 	maximumBytesWrittenPerBlock: Int!
 }
+
+"""
+The name of an event stream
+"""
+scalar StreamName
 
 
 type SubscriptionRoot {

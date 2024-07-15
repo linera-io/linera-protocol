@@ -832,6 +832,7 @@ doc_scalar!(
     ChainDescription."
 );
 doc_scalar!(ChannelName, "The name of a subscription channel");
+doc_scalar!(StreamName, "The name of an event stream");
 bcs_scalar!(MessageId, "The index of a message in a chain");
 doc_scalar!(
     Owner,

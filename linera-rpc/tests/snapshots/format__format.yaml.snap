@@ -83,6 +83,10 @@ BlockExecutionOutcome:
         SEQ:
           SEQ:
             TYPENAME: OracleResponse
+    - events:
+        SEQ:
+          SEQ:
+            TYPENAME: EventRecord
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:
@@ -393,6 +397,14 @@ Event:
         TYPENAME: Timestamp
     - message:
         TYPENAME: Message
+EventRecord:
+  STRUCT:
+    - application_id:
+        TYPENAME: GenericApplicationId
+    - stream_name:
+        TYPENAME: StreamName
+    - payload:
+        SEQ: U8
 ExecutedBlock:
   STRUCT:
     - block:
@@ -807,6 +819,8 @@ Signature:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
+StreamName:
+  NEWTYPESTRUCT: BYTES
 SystemChannel:
   ENUM:
     0:
