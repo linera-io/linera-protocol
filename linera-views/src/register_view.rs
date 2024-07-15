@@ -60,7 +60,8 @@ where
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        let value = from_bytes_option_or_default(values.first().unwrap())?;
+        let value =
+            from_bytes_option_or_default(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
         let stored_value = Box::new(value);
         Ok(Self {
             delete_storage_first: false,

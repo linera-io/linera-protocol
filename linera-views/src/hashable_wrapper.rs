@@ -58,10 +58,13 @@ where
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        let hash = from_bytes_option(values.first().unwrap())?;
+        let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
         let base_key = context.base_tag(KeyTag::Inner as u8);
         let context = context.clone_with_base_key(base_key);
-        let inner = W::post_load(context, &values[1..])?;
+        let inner = W::post_load(
+            context,
+            values.get(1..).ok_or(ViewError::PostLoadValuesError)?,
+        )?;
         Ok(Self {
             _phantom: PhantomData,
             stored_hash: hash,

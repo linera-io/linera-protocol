@@ -176,10 +176,14 @@ where
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
-        let total_size = from_bytes_option_or_default(values.get(1).ok_or(ViewError::PostLoadValuesError)?)?;
+        let total_size =
+            from_bytes_option_or_default(values.get(1).ok_or(ViewError::PostLoadValuesError)?)?;
         let base_key = context.base_tag(KeyTag::Sizes as u8);
         let context_sizes = context.clone_with_base_key(base_key);
-        let sizes = ByteMapView::post_load(context_sizes, values.get(2..).ok_or(ViewError::PostLoadValuesError)?)?;
+        let sizes = ByteMapView::post_load(
+            context_sizes,
+            values.get(2..).ok_or(ViewError::PostLoadValuesError)?,
+        )?;
         Ok(Self {
             context,
             delete_storage_first: false,

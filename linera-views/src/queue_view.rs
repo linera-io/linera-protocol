@@ -74,7 +74,8 @@ where
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        let stored_indices = from_bytes_option_or_default(values.first().unwrap())?;
+        let stored_indices =
+            from_bytes_option_or_default(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
         Ok(Self {
             context,
             stored_indices,
