@@ -150,7 +150,6 @@ impl ClientContext for DummyContext {
 async fn main() -> std::io::Result<()> {
     let _options = <Options as clap::Parser>::parse();
 
-    let namespace = "schema_export";
     let service = NodeService::new(
         ChainListenerConfig {
             delay_before_ms: 0,
