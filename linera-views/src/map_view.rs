@@ -327,11 +327,8 @@ where
             Entry::Occupied(e) => Some(e.into_mut()),
         };
         Ok(match update {
-            None => None,
-            Some(update) => match update {
-                Update::Removed => None,
-                Update::Set(value) => Some(value),
-            },
+            Some(Update::Set(value)) => Some(value),
+            _ => None,
         })
     }
 }
