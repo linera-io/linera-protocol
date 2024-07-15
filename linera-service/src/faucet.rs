@@ -5,7 +5,7 @@ use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
-use axum::{http::StatusCode, response, response::IntoResponse, Extension, Router};
+use axum::{Extension, Router};
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
@@ -14,19 +14,13 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_client::{chain_listener::ClientContext, config::GenesisConfig};
-use linera_core::{
-    client::{ChainClient, ChainClientError},
-    data_types::ClientOutcome,
-    node::ValidatorNodeProvider,
-};
+use linera_core::{client::ChainClient, data_types::ClientOutcome, node::ValidatorNodeProvider};
 use linera_execution::committee::ValidatorName;
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::Deserialize;
-use serde_json::json;
-use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::util;
 
@@ -56,18 +50,6 @@ where
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
     start_balance: Amount,
-}
-
-#[derive(Debug, ThisError)]
-#[error(transparent)]
-struct FaucetError(#[from] ChainClientError);
-
-impl IntoResponse for FaucetError {
-    fn into_response(self) -> response::Response {
-        let code = StatusCode::INTERNAL_SERVER_ERROR;
-        let json = json!({"error": self.0.to_string()});
-        (code, json.to_string()).into_response()
-    }
 }
 
 /// The result of a successful `claim` mutation.

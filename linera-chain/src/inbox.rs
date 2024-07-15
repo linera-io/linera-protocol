@@ -28,13 +28,13 @@ mod inbox_tests;
 /// * An inbox is used to track events received and executed locally.
 /// * An `Event` consists of a logical cursor `(height, index)` and some message content `message`.
 /// * On the surface, an inbox looks like a FIFO queue: the main APIs are `add_event` and
-/// `remove_event`.
+///   `remove_event`.
 /// * However, events can also be removed before they are added. When this happens,
-/// the events removed by anticipation are tracked in a separate queue. Any event added
-/// later will be required to match the first removed event and so on.
+///   the events removed by anticipation are tracked in a separate queue. Any event added
+///   later will be required to match the first removed event and so on.
 /// * The cursors of added events (resp. removed events) must be increasing over time.
 /// * Reconciliation of added and removed events is allowed to skip some added events.
-/// However, the opposite is not true: every removed event must be eventually added.
+///   However, the opposite is not true: every removed event must be eventually added.
 #[derive(Debug, ClonableView, View, async_graphql::SimpleObject)]
 pub struct InboxStateView<C>
 where

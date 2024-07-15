@@ -1291,7 +1291,7 @@ where
     pub fn insert<Q>(&mut self, index: &Q, value: V) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
-        Q: Serialize + ?Sized + CustomSerialize,
+        Q: Serialize + CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.map.insert(short_key, value);
@@ -1313,7 +1313,7 @@ where
     pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
-        Q: Serialize + ?Sized + CustomSerialize,
+        Q: Serialize + CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.map.remove(short_key);
@@ -1371,7 +1371,7 @@ where
     pub async fn get<Q>(&self, index: &Q) -> Result<Option<V>, ViewError>
     where
         I: Borrow<Q>,
-        Q: ?Sized + CustomSerialize,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.map.get(&short_key).await
@@ -1394,7 +1394,7 @@ where
     pub async fn get_mut<Q>(&mut self, index: &Q) -> Result<Option<&mut V>, ViewError>
     where
         I: Borrow<Q>,
-        Q: ?Sized + CustomSerialize,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.map.get_mut(short_key).await
@@ -1603,7 +1603,7 @@ where
     pub async fn get_mut_or_default<Q>(&mut self, index: &Q) -> Result<&mut V, ViewError>
     where
         I: Borrow<Q>,
-        Q: Sync + Send + Serialize + ?Sized + CustomSerialize,
+        Q: Sync + Send + Serialize + CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.map.get_mut_or_default(short_key).await

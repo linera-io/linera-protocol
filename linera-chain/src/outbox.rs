@@ -18,9 +18,9 @@ mod outbox_tests;
 /// The state of an outbox
 /// * An outbox is used to send messages to another chain.
 /// * Internally, this is implemented as a FIFO queue of (increasing) block heights.
-/// Messages are contained in blocks, together with destination information, so currently
-/// we just send the certified blocks over and let the receivers figure out what were the
-/// messages for them.
+///   Messages are contained in blocks, together with destination information, so currently
+///   we just send the certified blocks over and let the receivers figure out what were the
+///   messages for them.
 /// * When marking block heights as received, messages at lower heights are also marked (ie. dequeued).
 #[derive(Debug, ClonableView, View, async_graphql::SimpleObject)]
 pub struct OutboxStateView<C>

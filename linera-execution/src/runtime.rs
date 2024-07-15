@@ -184,12 +184,6 @@ impl<T> Promise<T> {
     }
 }
 
-#[derive(Debug, Default)]
-struct SimpleUserState {
-    /// A read query in progress on the internal state, if any.
-    pending_query: Option<Receiver<Vec<u8>>>,
-}
-
 /// Manages a set of pending queries returning values of type `T`.
 #[derive(Debug, Default)]
 struct QueryManager<T> {

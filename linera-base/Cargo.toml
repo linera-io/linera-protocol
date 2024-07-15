@@ -15,6 +15,7 @@ version.workspace = true
 test = ["test-strategy", "proptest"]
 metrics = ["prometheus"]
 web = ["getrandom/js", "rand/getrandom", "rand/std", "rand/std_rng", "web-time"]
+rocksdb = []
 
 [dependencies]
 anyhow.workspace = true

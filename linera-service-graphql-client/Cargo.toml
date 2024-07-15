@@ -16,6 +16,7 @@ default = ["rocksdb"]
 rocksdb = ["linera-service/rocksdb"]
 dynamodb = ["linera-service/dynamodb"]
 scylladb = ["linera-service/scylladb"]
+storage-service = ["linera-service/storage-service"]
 
 [dependencies]
 graphql_client = { version = "0.13", features = [ "reqwest-rustls" ] }

@@ -14,7 +14,7 @@ version.workspace = true
 [features]
 metrics = ["linera-views/metrics"]
 rocksdb = ["linera-views/rocksdb"]
-storage_service = []
+storage-service = []
 test = ["linera-views/test"]
 
 [[bin]]

@@ -1044,7 +1044,7 @@ where
     pub async fn load_entry_mut<Q>(&mut self, index: &Q) -> Result<&mut W, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.collection.load_entry_mut(short_key).await
@@ -1070,7 +1070,7 @@ where
     pub async fn load_entry_or_insert<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.collection.load_entry_or_insert(short_key).await
@@ -1104,7 +1104,7 @@ where
     ) -> Result<Option<ReadGuardedView<W>>, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.collection.try_load_entry(short_key).await
@@ -1131,7 +1131,7 @@ where
     pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.collection.reset_entry_to_default(short_key).await
@@ -1157,7 +1157,7 @@ where
     pub fn remove_entry<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.collection.remove_entry(short_key);

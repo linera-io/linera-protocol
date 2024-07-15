@@ -55,14 +55,15 @@ use {
 
 /// We implement two types:
 /// 1) The first type KeyValueStoreView implements View and the function of KeyValueStore
-/// (though not KeyValueStore).
+///    (though not KeyValueStore).
 ///
 /// 2) The second type ViewContainer encapsulates KeyValueStoreView and provides the following functionalities:
-/// * The Clone trait
-/// * a write_batch that takes a &self instead of a "&mut self"
-/// * a write_batch that writes in the context instead of writing of the view.
+///    * The Clone trait
+///    * a write_batch that takes a &self instead of a "&mut self"
+///    * a write_batch that writes in the context instead of writing of the view.
+///
 /// Currently, that second type is only used for tests.
-
+///
 /// Key tags to create the sub-keys of a KeyValueStoreView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
