@@ -39,7 +39,7 @@ static MAP_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
 
 use std::{
     borrow::Borrow,
-    collections::{BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
     fmt::Debug,
     marker::PhantomData,
     mem,
@@ -298,18 +298,6 @@ where
         Ok(self.context.read_value(&key).await?)
     }
 
-    /// Loads the value in updates if that is at all possible.
-    async fn load_value(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
-        if !self.delete_storage_first && !self.updates.contains_key(short_key) {
-            let key = self.context.base_index(short_key);
-            let value = self.context.read_value(&key).await?;
-            if let Some(value) = value {
-                self.updates.insert(short_key.to_vec(), Update::Set(value));
-            }
-        }
-        Ok(())
-    }
-
     /// Obtains a mutable reference to a value at a given position if available.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -319,22 +307,29 @@ where
     /// # let context = create_memory_context();
     ///   let mut map = ByteMapView::load(context).await.unwrap();
     ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   let value = map.get_mut(vec![0,1]).await.unwrap().unwrap();
+    ///   let value = map.get_mut(&[0,1]).await.unwrap().unwrap();
     ///   assert_eq!(*value, String::from("Hello"));
     ///   *value = String::from("Hola");
     ///   assert_eq!(map.get(&[0,1]).await.unwrap(), Some(String::from("Hola")));
     /// # })
     /// ```
-    pub async fn get_mut(&mut self, short_key: Vec<u8>) -> Result<Option<&mut V>, ViewError> {
-        self.load_value(&short_key).await?;
-        if let Some(update) = self.updates.get_mut(&short_key) {
-            let value = match update {
-                Update::Removed => None,
-                Update::Set(value) => Some(value),
-            };
-            return Ok(value);
-        }
-        Ok(None)
+    pub async fn get_mut(&mut self, short_key: &[u8]) -> Result<Option<&mut V>, ViewError> {
+        let update = match self.updates.entry(short_key.to_vec()) {
+            Entry::Vacant(e) => {
+                if self.delete_storage_first || contains_key(&self.deleted_prefixes, short_key) {
+                    None
+                } else {
+                    let key = self.context.base_index(short_key);
+                    let value = self.context.read_value(&key).await?;
+                    value.map(|value| e.insert(Update::Set(value)))
+                }
+            }
+            Entry::Occupied(e) => Some(e.into_mut()),
+        };
+        Ok(match update {
+            Some(Update::Set(value)) => Some(value),
+            _ => None,
+        })
     }
 }
 
@@ -723,20 +718,22 @@ where
     /// # let context = create_memory_context();
     ///   let mut map = ByteMapView::load(context).await.unwrap();
     ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   assert_eq!(map.get_mut_or_default(vec![7]).await.unwrap(), "");
-    ///   let value = map.get_mut_or_default(vec![0,1]).await.unwrap();
+    ///   assert_eq!(map.get_mut_or_default(&[7]).await.unwrap(), "");
+    ///   let value = map.get_mut_or_default(&[0,1]).await.unwrap();
     ///   assert_eq!(*value, String::from("Hello"));
     ///   *value = String::from("Hola");
     ///   assert_eq!(map.get(&[0,1]).await.unwrap(), Some(String::from("Hola")));
     /// # })
     /// ```
-    pub async fn get_mut_or_default(&mut self, short_key: Vec<u8>) -> Result<&mut V, ViewError> {
-        use std::collections::btree_map::Entry;
-
-        let update = match self.updates.entry(short_key.clone()) {
-            Entry::Vacant(e) if self.delete_storage_first => e.insert(Update::Set(V::default())),
+    pub async fn get_mut_or_default(&mut self, short_key: &[u8]) -> Result<&mut V, ViewError> {
+        let update = match self.updates.entry(short_key.to_vec()) {
+            Entry::Vacant(e)
+                if self.delete_storage_first || contains_key(&self.deleted_prefixes, short_key) =>
+            {
+                e.insert(Update::Set(V::default()))
+            }
             Entry::Vacant(e) => {
-                let key = self.context.base_index(&short_key);
+                let key = self.context.base_index(short_key);
                 let value = self.context.read_value(&key).await?.unwrap_or_default();
                 e.insert(Update::Set(value))
             }
@@ -980,7 +977,7 @@ where
         Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.map.get_mut(short_key).await
+        self.map.get_mut(&short_key).await
     }
 }
 
@@ -1188,7 +1185,7 @@ where
         Q: Sync + Send + Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.map.get_mut_or_default(short_key).await
+        self.map.get_mut_or_default(&short_key).await
     }
 }
 
@@ -1397,7 +1394,7 @@ where
         Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
-        self.map.get_mut(short_key).await
+        self.map.get_mut(&short_key).await
     }
 }
 
@@ -1606,7 +1603,7 @@ where
         Q: Sync + Send + Serialize + CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
-        self.map.get_mut_or_default(short_key).await
+        self.map.get_mut_or_default(&short_key).await
     }
 }
 
