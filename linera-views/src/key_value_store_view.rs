@@ -22,7 +22,7 @@ use {
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        contains_key, from_bytes_opt, get_interval, get_upper_bound, insert_key_prefix, Context,
+        contains_key, from_bytes_option, get_interval, get_upper_bound, insert_key_prefix, Context,
         HasherOutput, KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
     },
     map_view::ByteMapView,
@@ -174,8 +174,8 @@ where
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        let hash = from_bytes_opt(values.first().unwrap())?;
-        let total_size = from_bytes_opt(values.get(1).unwrap())?.unwrap_or_default();
+        let hash = from_bytes_option(values.first().unwrap())?;
+        let total_size = from_bytes_option(values.get(1).unwrap())?.unwrap_or_default();
         let base_key = context.base_tag(KeyTag::Sizes as u8);
         let context_sizes = context.clone_with_base_key(base_key);
         let sizes = ByteMapView::post_load(context_sizes, &values[2..])?;

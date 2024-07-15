@@ -12,7 +12,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
-    common::{from_bytes_opt, Context, MIN_VIEW_TAG},
+    common::{from_bytes_option, Context, MIN_VIEW_TAG},
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
@@ -58,7 +58,7 @@ where
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        let hash = from_bytes_opt(values.first().unwrap())?;
+        let hash = from_bytes_option(values.first().unwrap())?;
         let base_key = context.base_tag(KeyTag::Inner as u8);
         let context = context.clone_with_base_key(base_key);
         let inner = W::post_load(context, &values[1..])?;

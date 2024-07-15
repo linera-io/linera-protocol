@@ -17,7 +17,7 @@ use {
 
 use crate::{
     batch::Batch,
-    common::{from_bytes_opt, Context, HasherOutput, MIN_VIEW_TAG},
+    common::{from_bytes_option, Context, HasherOutput, MIN_VIEW_TAG},
     hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
@@ -72,7 +72,7 @@ where
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        let value = from_bytes_opt(values.first().unwrap())?;
+        let value = from_bytes_option(values.first().unwrap())?;
         let stored_count = value.unwrap_or_default();
         Ok(Self {
             context,
