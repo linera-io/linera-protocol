@@ -22,8 +22,9 @@ use {
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        contains_key, from_bytes_option, get_interval, get_upper_bound, insert_key_prefix, Context,
-        HasherOutput, KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
+        contains_key, from_bytes_option, from_bytes_option_or_default, get_interval,
+        get_upper_bound, insert_key_prefix, Context, HasherOutput, KeyIterable, KeyValueIterable,
+        SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
     },
     map_view::ByteMapView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
@@ -175,7 +176,7 @@ where
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let hash = from_bytes_option(values.first().unwrap())?;
-        let total_size = from_bytes_option(values.get(1).unwrap())?.unwrap_or_default();
+        let total_size = from_bytes_option_or_default(values.get(1).unwrap())?;
         let base_key = context.base_tag(KeyTag::Sizes as u8);
         let context_sizes = context.clone_with_base_key(base_key);
         let sizes = ByteMapView::post_load(context_sizes, &values[2..])?;

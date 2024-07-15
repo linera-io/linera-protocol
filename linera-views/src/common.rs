@@ -116,6 +116,18 @@ where
     }
 }
 
+pub(crate) fn from_bytes_option_or_default<V: DeserializeOwned + Default, E>(
+    key_opt: &Option<Vec<u8>>,
+) -> Result<V, E>
+where
+    E: From<bcs::Error>,
+{
+    match key_opt {
+        Some(bytes) => Ok(bcs::from_bytes(bytes)?),
+        None => Ok(V::default()),
+    }
+}
+
 /// `SuffixClosedSetIterator` iterates over the entries of a container ordered
 /// lexicographically.
 ///
