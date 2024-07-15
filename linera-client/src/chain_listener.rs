@@ -75,11 +75,25 @@ pub trait ClientContext: Send {
         ViewError: From<<Self::Storage as Storage>::StoreError>;
 }
 
+enum Event {
+    Notification(Notification),
+    RoundTimeout(ChainId),
+}
+
+impl Event {
+    fn chain_id(&self) -> ChainId {
+        match self {
+            Event::Notification(Notification { chain_id, .. }) => *chain_id,
+            Event::RoundTimeout(chain_id) => *chain_id,
+        }
+    }
+}
+
 /// Return a stream of notifications from a chain, handling round timeouts as appropriate.
 async fn listener<P, S>(
     config: ChainListenerConfig,
     chain_client: ChainClient<P, S>,
-) -> anyhow::Result<impl Stream<Item = Notification>>
+) -> anyhow::Result<impl Stream<Item = Event>>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
@@ -102,10 +116,13 @@ where
 
             let Either::Left((item, _)) = next.await else {
                 timeout = next_inbox_timeout(&chain_client).await;
+                yield Event::RoundTimeout(chain_client.chain_id());
                 continue;
             };
 
             let Some(notification) = item else { break };
+
+            tracing::info!("Received new notification: {:?}", notification);
 
             maybe_sleep(config.delay_before_ms).await;
             match notification.reason {
@@ -121,7 +138,7 @@ where
             }
             maybe_sleep(config.delay_after_ms).await;
 
-            yield notification;
+            yield Event::Notification(notification);
         }
     })
 }
@@ -143,7 +160,7 @@ where
     }
 }
 
-/// A ‘chain listener’ is a process that listens to notifications from validators and
+/// A ‘chain listener’ is a process that listens to events from validators and
 /// reacts appropriately.
 pub async fn chain_listener<C>(
     config: ChainListenerConfig,
@@ -157,36 +174,42 @@ where
     let storage = client.storage_client().clone();
     let chain_ids = context.lock().await.wallet().chain_ids();
     let mut running: HashSet<ChainId> = HashSet::new();
-    let mut notifications = stream::SelectAll::new();
+    let mut events = stream::SelectAll::new();
 
     for chain_id in chain_ids {
         if !running.contains(&chain_id) {
             running.insert(chain_id);
-            notifications.push(Box::pin(
+            events.push(Box::pin(
                 listener(
                     config.clone(),
-                    client
-                        .chain(chain_id)
-                        .expect("ClientContext should have chain state for all its chains"),
+                    context.lock().await.make_chain_client(chain_id),
                 )
                 .await?,
             ));
         }
     }
 
-    while let Some(notification) = notifications.next().await {
-        let chain_client = client
-            .chain(notification.chain_id)
-            .expect("notifications should come from a known chain");
+    while let Some(event) = events.next().await {
+        let chain_client = context.lock().await.make_chain_client(event.chain_id());
+
+        let notification = match event {
+            Event::Notification(notification) => notification,
+            Event::RoundTimeout(_) => {
+                context.lock().await.update_wallet(&chain_client).await;
+                continue;
+            }
+        };
+
         let Reason::NewBlock { hash, .. } = notification.reason else {
             continue;
         };
-        context.lock().await.update_wallet(&chain_client).await;
+
         let value = storage.read_hashed_certificate_value(hash).await?;
         let Some(executed_block) = value.inner().executed_block() else {
             tracing::error!("NewBlock notification about value without a block: {hash}");
             continue;
         };
+
         let new_chains = executed_block
             .messages()
             .iter()
@@ -210,21 +233,21 @@ where
                 }
             })
             .collect::<Vec<_>>();
+
         if new_chains.is_empty() {
             continue;
         }
+
         let mut context_guard = context.lock().await;
         for (new_id, owners, timestamp) in new_chains {
             let key_pair = owners
                 .iter()
                 .find_map(|public_key| context_guard.wallet().key_pair_for_pk(public_key));
             context_guard.update_wallet_for_new_chain(new_id, key_pair, timestamp);
-            let new_chain_client = client
-                .chain(new_id)
-                .expect("notifications should come from a known chain");
+            let new_chain_client = context_guard.make_chain_client(new_id);
             if !running.contains(&new_id) {
                 running.insert(new_id);
-                notifications.push(Box::pin(listener(config.clone(), new_chain_client).await?));
+                events.push(Box::pin(listener(config.clone(), new_chain_client).await?));
             }
         }
     }
