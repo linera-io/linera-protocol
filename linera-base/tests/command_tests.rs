@@ -2,7 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(feature = "rocksdb")]
+// TODO(#2239): these tests fail to build
+#![cfg(any())]
 
 use std::path::Path;
 

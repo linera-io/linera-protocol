@@ -23,7 +23,7 @@ An `OrderId` is used to uniquely identify an order and enables the following fun
 When inserting an order it goes through the following steps:
 
 - Transfer of tokens from the `fungible` application to the `matching engine` application through a cross-application
-call so that it can be paid to the counterparty.
+  call so that it can be paid to the counterparty.
 
 - The engine selects the matching price levels for the inserted order. It then proceeds
   to clear these levels, executing trades and ensuring that at the end of the process,
