@@ -39,7 +39,7 @@ static MAP_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
 
 use std::{
     borrow::Borrow,
-    collections::{BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
     fmt::Debug,
     marker::PhantomData,
     mem,
@@ -314,24 +314,31 @@ where
     /// # })
     /// ```
     pub async fn get_mut(&mut self, short_key: &[u8]) -> Result<Option<&mut V>, ViewError> {
-        if !self.delete_storage_first
-            && !self.updates.contains_key(short_key)
-            && !contains_key(&self.deleted_prefixes, short_key)
-        {
-            let key = self.context.base_index(short_key);
-            let value = self.context.read_value(&key).await?;
-            if let Some(value) = value {
-                self.updates.insert(short_key.to_vec(), Update::Set(value));
+        let update = match self.updates.entry(short_key.to_vec()) {
+            Entry::Vacant(e) => {
+                if self.delete_storage_first || contains_key(&self.deleted_prefixes, short_key) {
+                    None
+                } else {
+                    let key = self.context.base_index(short_key);
+                    let value: Option<V> = self.context.read_value(&key).await?;
+                    if let Some(value) = value {
+                        Some(e.insert(Update::Set(value)))
+                    } else {
+                        None
+                    }
+                }
+            },
+            Entry::Occupied(e) => {
+                Some(e.into_mut())
             }
-        }
-        if let Some(update) = self.updates.get_mut(short_key) {
-            let value = match update {
+        };
+        Ok(match update {
+            None => None,
+            Some(update) => match update {
                 Update::Removed => None,
                 Update::Set(value) => Some(value),
-            };
-            return Ok(value);
-        }
-        Ok(None)
+            }
+        })
     }
 }
 
@@ -728,8 +735,6 @@ where
     /// # })
     /// ```
     pub async fn get_mut_or_default(&mut self, short_key: &[u8]) -> Result<&mut V, ViewError> {
-        use std::collections::btree_map::Entry;
-
         let update = match self.updates.entry(short_key.to_vec()) {
             Entry::Vacant(e) if self.delete_storage_first => e.insert(Update::Set(V::default())),
             Entry::Vacant(e) => {
