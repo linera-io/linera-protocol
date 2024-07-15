@@ -339,7 +339,9 @@ where
             .base_tag_index(KeyTag::Subview as u8, short_key);
         let context = self.context.clone_with_base_key(key);
         let view = W::new(context)?;
-        self.updates.get_mut().insert(short_key.to_vec(), Update::Set(view));
+        self.updates
+            .get_mut()
+            .insert(short_key.to_vec(), Update::Set(view));
         Ok(())
     }
 

@@ -506,7 +506,9 @@ where
                 btree_map::Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
                     if let Update::Removed = entry {
-                        let key = self.context.base_tag_index(KeyTag::Subview as u8, &short_key);
+                        let key = self
+                            .context
+                            .base_tag_index(KeyTag::Subview as u8, &short_key);
                         let context = self.context.clone_with_base_key(key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
@@ -515,7 +517,9 @@ where
                 }
                 btree_map::Entry::Vacant(entry) => {
                     if self.delete_storage_first {
-                        let key = self.context.base_tag_index(KeyTag::Subview as u8, &short_key);
+                        let key = self
+                            .context
+                            .base_tag_index(KeyTag::Subview as u8, &short_key);
                         let context = self.context.clone_with_base_key(key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
@@ -593,7 +597,9 @@ where
                 btree_map::Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
                     if let Update::Removed = entry {
-                        let key = self.context.base_tag_index(KeyTag::Subview as u8, &short_key);
+                        let key = self
+                            .context
+                            .base_tag_index(KeyTag::Subview as u8, &short_key);
                         let context = self.context.clone_with_base_key(key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
@@ -602,7 +608,9 @@ where
                 }
                 btree_map::Entry::Vacant(entry) => {
                     if self.delete_storage_first {
-                        let key = self.context.base_tag_index(KeyTag::Subview as u8, &short_key);
+                        let key = self
+                            .context
+                            .base_tag_index(KeyTag::Subview as u8, &short_key);
                         let context = self.context.clone_with_base_key(key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
