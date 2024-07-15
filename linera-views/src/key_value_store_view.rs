@@ -22,8 +22,9 @@ use {
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        contains_key, get_interval, get_upper_bound, insert_key_prefix, Context, HasherOutput,
-        KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
+        contains_key, from_bytes_option, from_bytes_option_or_default, get_interval,
+        get_upper_bound, insert_key_prefix, Context, HasherOutput, KeyIterable, KeyValueIterable,
+        SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
     },
     map_view::ByteMapView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
@@ -157,18 +158,32 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
 {
+    const NUM_INIT_KEYS: usize = 2 + ByteMapView::<C, u32>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         &self.context
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let key = context.base_tag(KeyTag::Hash as u8);
-        let hash = context.read_value(&key).await?;
-        let key = context.base_tag(KeyTag::TotalSize as u8);
-        let total_size = context.read_value(&key).await?.unwrap_or_default();
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        let key_hash = context.base_tag(KeyTag::Hash as u8);
+        let key_total_size = context.base_tag(KeyTag::TotalSize as u8);
+        let mut v = vec![key_hash, key_total_size];
         let base_key = context.base_tag(KeyTag::Sizes as u8);
         let context_sizes = context.clone_with_base_key(base_key);
-        let sizes = ByteMapView::load(context_sizes).await?;
+        v.extend(ByteMapView::<C, u32>::pre_load(&context_sizes)?);
+        Ok(v)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
+        let total_size =
+            from_bytes_option_or_default(values.get(1).ok_or(ViewError::PostLoadValuesError)?)?;
+        let base_key = context.base_tag(KeyTag::Sizes as u8);
+        let context_sizes = context.clone_with_base_key(base_key);
+        let sizes = ByteMapView::post_load(
+            context_sizes,
+            values.get(2..).ok_or(ViewError::PostLoadValuesError)?,
+        )?;
         Ok(Self {
             context,
             delete_storage_first: false,
@@ -180,6 +195,12 @@ where
             stored_hash: hash,
             hash: Mutex::new(hash),
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let keys = Self::pre_load(&context)?;
+        let values = context.read_multi_values_bytes(keys).await?;
+        Self::post_load(context, &values)
     }
 
     fn rollback(&mut self) {

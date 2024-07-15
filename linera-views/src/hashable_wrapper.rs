@@ -8,12 +8,11 @@ use std::{
 
 use async_lock::Mutex;
 use async_trait::async_trait;
-use futures::join;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
-    common::{Context, MIN_VIEW_TAG},
+    common::{from_bytes_option, Context, MIN_VIEW_TAG},
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
@@ -44,25 +43,40 @@ where
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
+    const NUM_INIT_KEYS: usize = 1 + W::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.inner.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let hash_key = context.base_tag(KeyTag::Hash as u8);
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        let mut v = vec![context.base_tag(KeyTag::Hash as u8)];
         let base_key = context.base_tag(KeyTag::Inner as u8);
-        let (hash, inner) = join!(
-            context.read_value(&hash_key),
-            W::load(context.clone_with_base_key(base_key))
-        );
-        let hash = hash?;
-        let inner = inner?;
+        let context = context.clone_with_base_key(base_key);
+        v.extend(W::pre_load(&context)?);
+        Ok(v)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
+        let base_key = context.base_tag(KeyTag::Inner as u8);
+        let context = context.clone_with_base_key(base_key);
+        let inner = W::post_load(
+            context,
+            values.get(1..).ok_or(ViewError::PostLoadValuesError)?,
+        )?;
         Ok(Self {
             _phantom: PhantomData,
             stored_hash: hash,
             hash: Mutex::new(hash),
             inner,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let keys = Self::pre_load(&context)?;
+        let values = context.read_multi_values_bytes(keys).await?;
+        Self::post_load(context, &values)
     }
 
     fn rollback(&mut self) {

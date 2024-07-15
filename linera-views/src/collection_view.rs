@@ -89,16 +89,26 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Send + Sync,
 {
+    const NUM_INIT_KEYS: usize = 0;
+
     fn context(&self) -> &C {
         &self.context
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
+    fn pre_load(_context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        Ok(vec![])
+    }
+
+    fn post_load(context: C, _values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         Ok(Self {
             context,
             delete_storage_first: false,
             updates: RwLock::new(BTreeMap::new()),
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
@@ -641,16 +651,26 @@ where
     I: Send + Sync + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
+    const NUM_INIT_KEYS: usize = ByteCollectionView::<C, W>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.collection.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let collection = ByteCollectionView::load(context).await?;
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        ByteCollectionView::<C, W>::pre_load(context)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let collection = ByteCollectionView::post_load(context, values)?;
         Ok(CollectionView {
             collection,
             _phantom: PhantomData,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
@@ -980,16 +1000,26 @@ where
     I: Send + Sync + Debug,
     W: View<C> + Send + Sync,
 {
+    const NUM_INIT_KEYS: usize = ByteCollectionView::<C, W>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.collection.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let collection = ByteCollectionView::load(context).await?;
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        ByteCollectionView::<C, W>::pre_load(context)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let collection = ByteCollectionView::post_load(context, values)?;
         Ok(CustomCollectionView {
             collection,
             _phantom: PhantomData,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {

@@ -102,16 +102,26 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Send + Sync,
 {
+    const NUM_INIT_KEYS: usize = 0;
+
     fn context(&self) -> &C {
         &self.context
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
+    fn pre_load(_context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        Ok(Vec::new())
+    }
+
+    fn post_load(context: C, _values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         Ok(Self {
             context,
             delete_storage_first: false,
             updates: Mutex::new(BTreeMap::new()),
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
@@ -840,16 +850,26 @@ where
     I: Send + Sync + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
+    const NUM_INIT_KEYS: usize = ReentrantByteCollectionView::<C, W>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.collection.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let collection = ReentrantByteCollectionView::load(context).await?;
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        ReentrantByteCollectionView::<C, W>::pre_load(context)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let collection = ReentrantByteCollectionView::post_load(context, values)?;
         Ok(ReentrantCollectionView {
             collection,
             _phantom: PhantomData,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
@@ -1270,16 +1290,26 @@ where
     I: Send + Sync + Debug + CustomSerialize,
     W: View<C> + Send + Sync,
 {
+    const NUM_INIT_KEYS: usize = ReentrantByteCollectionView::<C, W>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.collection.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let collection = ReentrantByteCollectionView::load(context).await?;
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        ReentrantByteCollectionView::<C, W>::pre_load(context)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let collection = ReentrantByteCollectionView::post_load(context, values)?;
         Ok(ReentrantCustomCollectionView {
             collection,
             _phantom: PhantomData,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {

@@ -14,7 +14,7 @@ use {
 
 use crate::{
     batch::Batch,
-    common::{Context, HasherOutput},
+    common::{from_bytes_option_or_default, Context, HasherOutput},
     hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
@@ -49,20 +49,32 @@ where
     ViewError: From<C::Error>,
     T: Default + Send + Sync + Serialize + DeserializeOwned,
 {
+    const NUM_INIT_KEYS: usize = 1;
+
     fn context(&self) -> &C {
         &self.context
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let key = context.base_key();
-        let value = context.read_value(&key).await?;
-        let stored_value = Box::new(value.unwrap_or_default());
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        Ok(vec![context.base_key()])
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let value =
+            from_bytes_option_or_default(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
+        let stored_value = Box::new(value);
         Ok(Self {
             delete_storage_first: false,
             context,
             stored_value,
             update: None,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let keys = Self::pre_load(&context)?;
+        let values = context.read_multi_values_bytes(keys).await?;
+        Self::post_load(context, &values)
     }
 
     fn rollback(&mut self) {

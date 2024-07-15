@@ -60,10 +60,9 @@ The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analo
 #![deny(clippy::large_futures)]
 
 #[cfg(with_metrics)]
-use {
-    linera_base::{prometheus_util, sync::Lazy},
-    prometheus::IntCounterVec,
-};
+pub use linera_base::prometheus_util;
+#[cfg(with_metrics)]
+use {linera_base::sync::Lazy, prometheus::IntCounterVec};
 
 /// The definition of the batches for writing in the database.
 pub mod batch;
@@ -152,6 +151,15 @@ pub fn increment_counter(counter: &Lazy<IntCounterVec>, struct_name: &str, base_
     let labels = [struct_name, &base_key];
     counter.with_label_values(&labels).inc();
 }
+
+/// The metric tracking the latency of the loading of views.
+#[cfg(with_metrics)]
+#[doc(hidden)]
+pub static LOAD_VIEW_LATENCY: Lazy<prometheus::HistogramVec> = Lazy::new(|| {
+    use prometheus::register_histogram_vec;
+    register_histogram_vec!("load_view_latency", "Load view latency", &[])
+        .expect("Load view latency should not fail")
+});
 
 /// The metric counting how often a view is read from storage.
 #[cfg(with_metrics)]
