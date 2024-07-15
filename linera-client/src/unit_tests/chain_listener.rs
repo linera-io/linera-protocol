@@ -30,7 +30,7 @@ use linera_storage::{MemoryStorage, TestClock};
 use rand::SeedableRng as _;
 
 use crate::{
-    chain_listener::{self, ChainListenerConfig, ClientContext as _},
+    chain_listener::{self, chain_listener, ChainListenerConfig, ClientContext as _},
     config::{CommitteeConfig, GenesisConfig, ValidatorConfig},
     wallet::{UserChain, Wallet},
 };
@@ -160,7 +160,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let public_key = key_pair.public();
     context.update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time());
     let context = Arc::new(Mutex::new(context));
-    let listener = chain_listener(config, listener.run(context)).await;
+    tokio::spawn(chain_listener(config, context));
 
     // Transfer ownership of chain 0 to the chain listener and some other key. The listener will
     // be leader in ~10% of the rounds.

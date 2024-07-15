@@ -31,6 +31,7 @@ kubernetes = []
 [dependencies]
 anyhow.workspace = true
 async-graphql.workspace = true
+async-stream.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 chrono = { workspace = true, features = ["clock"] }

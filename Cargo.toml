@@ -43,6 +43,7 @@ async-graphql = "=7.0.2"
 async-graphql-axum = "=7.0.2"
 async-graphql-derive = "=7.0.2"
 async-lock = "3.3.0"
+async-stream = "0.3.5"
 async-trait = "0.1.77"
 async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
 aws-config = "1.1.7"

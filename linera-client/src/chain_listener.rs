@@ -5,9 +5,9 @@ use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use futures::{
-    future::{self, Either, FutureExt as _},
+    future::{self, Either},
     lock::Mutex,
-    StreamExt,
+    stream::{self, Stream, StreamExt as _},
 };
 use linera_base::{
     crypto::KeyPair,
@@ -18,12 +18,11 @@ use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
     client::{ChainClient, Client},
     node::{ValidatorNode, ValidatorNodeProvider},
-    worker::Reason,
+    worker::{Notification, Reason},
 };
 use linera_execution::{Message, SystemMessage};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use tracing::{error, info, warn};
 
 use crate::wallet::Wallet;
 
@@ -76,186 +75,162 @@ pub trait ClientContext: Send {
         ViewError: From<<Self::Storage as Storage>::StoreError>;
 }
 
-/// A `ChainListener` is a process that listens to notifications from validators and reacts
-/// appropriately.
-pub async fn chain_listener<C>(
+/// Return a stream of notifications from a chain, handling round timeouts as appropriate.
+async fn listener<P, S>(
     config: ChainListenerConfig,
-    context: Arc<Mutex<C>>,
-)
+    chain_client: ChainClient<P, S>,
+) -> anyhow::Result<impl Stream<Item = Notification>>
 where
-    C: ClientContext + Send + 'static,
-    ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
+    P: ValidatorNodeProvider + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<S::StoreError>,
 {
-    let (chain_ids, storage) = {
-        let context_guard = context.lock().await;
-        (
-                context_guard.wallet().chain_ids(),
-                context_guard.client().storage_client().clone(),
-        )
-    };
-    let running: Arc<Mutex<HashSet<ChainId>>> = Arc::default();
-    for chain_id in chain_ids {
-        run_with_chain_id(
-            chain_id,
-            context.clone(),
-            storage.clone(),
-            config.clone(),
-            running.clone(),
-        );
-    }
-}
+    let storage = chain_client.storage_client();
+    let (listener, _aborter, mut notifications) = chain_client.listen().await?;
+    let mut listener = Box::pin(listener);
+    let mut timeout = storage.clock().current_time();
 
-fn run_with_chain_id<C>(
-    chain_id: ChainId,
-    context: Arc<Mutex<C>>,
-    storage: C::Storage,
-    config: ChainListenerConfig,
-    running: Arc<Mutex<HashSet<ChainId>>>,
-) where
-        C: ClientContext + Send + 'static,
-        ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
-    {
-        let _handle = tokio::task::spawn(async move {
-            if let Err(err) =
-                run_client_stream(chain_id, context, storage, config, running).await
-            {
-                error!("Stream for chain {} failed: {}", chain_id, err);
-            }
-        });
-    }
-
-async fn run_client_stream<C>(
-    chain_id: ChainId,
-    context: Arc<Mutex<C>>,
-    storage: C::Storage,
-    config: ChainListenerConfig,
-    running: Arc<Mutex<HashSet<ChainId>>>,
-) -> anyhow::Result<()>
-    where
-        C: ClientContext + Send + 'static,
-        ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
-    {
-        let chain_client = if running.lock().await.contains(&chain_id) {
-            return Ok(());
-        } else {
-            context.lock().await.make_chain_client(chain_id)
-        };
-        let (listener, listen_handle, local_stream) = chain_client.listen().await?;
-        let ((), ()) = futures::try_join!(
-            listener.map(Ok),
-            process_notifications(
-                local_stream,
-                listen_handle,
-                chain_client,
-                context,
-                storage,
-                config,
-                running,
-            )
-        )?;
-        Ok(())
-    }
-
-async fn process_notifications<C>(
-    mut local_stream: impl futures::Stream<Item = linera_core::worker::Notification> + Unpin,
-    _listen_handle: linera_core::client::AbortOnDrop,
-    chain_client: ChainClient<C::ValidatorNodeProvider, C::Storage>,
-    context: Arc<Mutex<C>>,
-    storage: C::Storage,
-    config: ChainListenerConfig,
-    running: Arc<Mutex<HashSet<ChainId>>>,
-) -> anyhow::Result<()>
-    where
-        C: ClientContext + Send + 'static,
-        ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
-    {
-        let mut timeout = storage.clock().current_time();
+    Ok(async_stream::stream! {
         loop {
-            let sleep = Box::pin(storage.clock().sleep_until(timeout));
-            let notification = match future::select(local_stream.next(), sleep).await {
-                Either::Left((Some(notification), _)) => notification,
-                Either::Left((None, _)) => return Ok(()),
-                Either::Right(((), _)) => {
-                    match chain_client.process_inbox_if_owned().await {
-                        Err(error) => {
-                            warn!(%error, "Failed to process inbox.");
-                            timeout = Timestamp::from(u64::MAX);
-                        }
-                        Ok((_, None)) => timeout = Timestamp::from(u64::MAX),
-                        Ok((_, Some(new_timeout))) => timeout = new_timeout.timestamp,
-                    }
-                    context.lock().await.update_wallet(&chain_client).await;
-                    continue;
-                }
+            let next = future::select(
+                notifications.next(),
+                future::select(
+                    Box::pin(storage.clock().sleep_until(timeout)),
+                    &mut listener,
+                ),
+            );
+
+            let Either::Left((item, _)) = next.await else {
+                timeout = next_inbox_timeout(&chain_client).await;
+                continue;
             };
-            info!("Received new notification: {:?}", notification);
+
+            let Some(notification) = item else { break };
+
             maybe_sleep(config.delay_before_ms).await;
-            match &notification.reason {
+            match notification.reason {
                 Reason::NewIncomingMessage { .. } => timeout = storage.clock().current_time(),
                 Reason::NewBlock { .. } | Reason::NewRound { .. } => {
                     if let Err(error) = chain_client.update_validators().await {
-                        warn!(
+                        tracing::warn!(
                             "Failed to update validators about the local chain after \
-                            receiving notification {:?} with error: {:?}",
-                            notification, error
+                            receiving notification {notification:?} with error: {error:?}",
                         );
                     }
                 }
             }
             maybe_sleep(config.delay_after_ms).await;
-            let Reason::NewBlock { hash, .. } = notification.reason else {
-                continue;
-            };
-            {
-                context.lock().await.update_wallet(&chain_client).await;
-            }
-            let value = storage.read_hashed_certificate_value(hash).await?;
-            let Some(executed_block) = value.inner().executed_block() else {
-                error!("NewBlock notification about value without a block: {hash}");
-                continue;
-            };
-            let new_chains = executed_block
-                .messages()
-                .iter()
-                .flatten()
-                .filter_map(|outgoing_message| {
-                    if let OutgoingMessage {
-                        destination: Destination::Recipient(new_id),
-                        message: Message::System(SystemMessage::OpenChain(open_chain_config)),
-                        ..
-                    } = outgoing_message
-                    {
-                        let keys = open_chain_config
-                            .ownership
-                            .all_public_keys()
-                            .cloned()
-                            .collect::<Vec<_>>();
-                        let timestamp = executed_block.block.timestamp;
-                        Some((*new_id, keys, timestamp))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            if new_chains.is_empty() {
-                continue;
-            }
-            let mut context_guard = context.lock().await;
-            for (new_id, owners, timestamp) in new_chains {
-                let key_pair = owners
-                    .iter()
-                    .find_map(|public_key| context_guard.wallet().key_pair_for_pk(public_key));
-                context_guard.update_wallet_for_new_chain(new_id, key_pair, timestamp);
-                run_with_chain_id(
-                    new_id,
-                    context.clone(),
-                    storage.clone(),
+
+            yield notification;
+        }
+    })
+}
+
+/// Process the chain client's inbox to get the current round timeout.
+async fn next_inbox_timeout<P, S>(chain_client: &ChainClient<P, S>) -> Timestamp
+where
+    P: ValidatorNodeProvider + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<S::StoreError>,
+{
+    match chain_client.process_inbox_if_owned().await {
+        Err(error) => {
+            tracing::warn!(%error, "Failed to process inbox.");
+            Timestamp::from(u64::MAX)
+        }
+        Ok((_, None)) => Timestamp::from(u64::MAX),
+        Ok((_, Some(timeout))) => timeout.timestamp,
+    }
+}
+
+/// A ‘chain listener’ is a process that listens to notifications from validators and
+/// reacts appropriately.
+pub async fn chain_listener<C>(
+    config: ChainListenerConfig,
+    context: Arc<Mutex<C>>,
+) -> anyhow::Result<()>
+where
+    C: ClientContext + Send + 'static,
+    ViewError: From<<C::Storage as linera_storage::Storage>::StoreError>,
+{
+    let client = context.lock().await.client();
+    let storage = client.storage_client().clone();
+    let chain_ids = context.lock().await.wallet().chain_ids();
+    let mut running: HashSet<ChainId> = HashSet::new();
+    let mut notifications = stream::SelectAll::new();
+
+    for chain_id in chain_ids {
+        if !running.contains(&chain_id) {
+            running.insert(chain_id);
+            notifications.push(Box::pin(
+                listener(
                     config.clone(),
-                    running.clone(),
-                );
+                    client
+                        .chain(chain_id)
+                        .expect("ClientContext should have chain state for all its chains"),
+                )
+                .await?,
+            ));
+        }
+    }
+
+    while let Some(notification) = notifications.next().await {
+        let chain_client = client
+            .chain(notification.chain_id)
+            .expect("notifications should come from a known chain");
+        let Reason::NewBlock { hash, .. } = notification.reason else {
+            continue;
+        };
+        context.lock().await.update_wallet(&chain_client).await;
+        let value = storage.read_hashed_certificate_value(hash).await?;
+        let Some(executed_block) = value.inner().executed_block() else {
+            tracing::error!("NewBlock notification about value without a block: {hash}");
+            continue;
+        };
+        let new_chains = executed_block
+            .messages()
+            .iter()
+            .flatten()
+            .filter_map(|outgoing_message| {
+                if let OutgoingMessage {
+                    destination: Destination::Recipient(new_id),
+                    message: Message::System(SystemMessage::OpenChain(open_chain_config)),
+                    ..
+                } = outgoing_message
+                {
+                    let keys = open_chain_config
+                        .ownership
+                        .all_public_keys()
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    let timestamp = executed_block.block.timestamp;
+                    Some((*new_id, keys, timestamp))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        if new_chains.is_empty() {
+            continue;
+        }
+        let mut context_guard = context.lock().await;
+        for (new_id, owners, timestamp) in new_chains {
+            let key_pair = owners
+                .iter()
+                .find_map(|public_key| context_guard.wallet().key_pair_for_pk(public_key));
+            context_guard.update_wallet_for_new_chain(new_id, key_pair, timestamp);
+            let new_chain_client = client
+                .chain(new_id)
+                .expect("notifications should come from a known chain");
+            if !running.contains(&new_id) {
+                running.insert(new_id);
+                notifications.push(Box::pin(listener(config.clone(), new_chain_client).await?));
             }
         }
     }
+
+    Ok(())
+}
 
 async fn maybe_sleep(delay_ms: u64) {
     if delay_ms > 0 {

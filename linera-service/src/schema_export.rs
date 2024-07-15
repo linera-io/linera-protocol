@@ -19,7 +19,7 @@ use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{
         CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
-        ValidatorNode, ValidatorNodeProvider,
+        ValidatorNode,
     },
 };
 use linera_execution::committee::Committee;

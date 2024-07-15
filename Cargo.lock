@@ -4165,6 +4165,7 @@ dependencies = [
  "amm",
  "anyhow",
  "async-graphql",
+ "async-stream",
  "async-trait",
  "base64 0.22.0",
  "bcs",

@@ -195,7 +195,7 @@ where
 
     /// Gets a `ChainClient` for the chain with the given `chain_id` if it is currently
     /// known to the [`Client`].
-    pub fn chain(self: Arc<Self>, chain_id: ChainId) -> Option<ChainClient<P, S>> {
+    pub fn chain(self: &Arc<Self>, chain_id: ChainId) -> Option<ChainClient<P, S>> {
         if self.chains.contains_key(&chain_id) {
             Some(ChainClient {
                 client: self.clone(),

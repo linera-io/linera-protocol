@@ -12,11 +12,7 @@ use async_graphql::{
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
-use futures::{
-    future::{self},
-    lock::Mutex,
-    Future,
-};
+use futures::{future, lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
     data_types::{Amount, ApplicationPermissions, Blob, TimeDelta, Timestamp},
@@ -1031,13 +1027,12 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        chain_listener(self.config, self.context.clone()).await;
+        tokio::spawn(chain_listener(self.config, self.context.clone()));
         axum::serve(
             tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?,
             app,
         )
         .await?;
-
         Ok(())
     }
 
