@@ -278,7 +278,7 @@ pub struct ChannelName(#[serde(with = "serde_bytes")] Vec<u8>);
     WitStore,
     WitType,
 )]
-pub struct StreamName(#[serde(with = "serde_bytes")] Vec<u8>);
+pub struct StreamName(#[serde(with = "serde_bytes")] pub Vec<u8>);
 
 /// The destination of a message, relative to a particular application.
 #[derive(

@@ -448,7 +448,7 @@ where
                     message: Message::System(SystemMessage::ApplicationCreated),
                 }],
             ],
-            events: vec![Vec::new()],
+            events: vec![Vec::new(); 2],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![Vec::new(); 2],
         }

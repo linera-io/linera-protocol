@@ -712,7 +712,7 @@ where
                         Amount::from_tokens(2),
                     )],
                 ],
-                events: vec![Vec::new(); 3],
+                events: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(sender_key_pair.public()),
@@ -2334,7 +2334,7 @@ where
                         },
                     ),
                 ]],
-                events: vec![Vec::new(); 2],
+                events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(key_pair.public()),

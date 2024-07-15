@@ -13,6 +13,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, HashedBlob, Resources, SendMessageRequest, Timestamp},
     identifiers::{
         Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, MessageId, Owner,
+        StreamName,
     },
     ownership::{ChainOwnership, CloseChainError},
 };
@@ -43,6 +44,7 @@ where
     subscribe_requests: Vec<(ChainId, ChannelName)>,
     unsubscribe_requests: Vec<(ChainId, ChannelName)>,
     outgoing_transfers: HashMap<Account, Amount>,
+    events: Vec<(StreamName, Vec<u8>)>,
     claim_requests: Vec<ClaimRequest>,
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
     expected_post_requests: VecDeque<(String, Vec<u8>, Vec<u8>)>,
@@ -84,6 +86,7 @@ where
             subscribe_requests: Vec::new(),
             unsubscribe_requests: Vec::new(),
             outgoing_transfers: HashMap::new(),
+            events: Vec::new(),
             claim_requests: Vec::new(),
             expected_service_queries: VecDeque::new(),
             expected_post_requests: VecDeque::new(),
@@ -584,6 +587,11 @@ where
 
         bcs::from_bytes(&response_bytes)
             .expect("Failed to deserialize `Response` type from cross-application call")
+    }
+
+    /// Adds a new item to an event stream.
+    pub fn emit(&mut self, name: StreamName, payload: &[u8]) {
+        self.events.push((name, payload.to_vec()));
     }
 
     /// Adds an expected `query_service` call`, and the response it should return in the test.
