@@ -245,10 +245,10 @@ where
         let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
         let context = context.clone_with_base_key(key);
         // Obtain a view and set its pending state to the default (e.g. empty) state
-        let mut view = W::load(context).await?;
-        if delete_storage_first {
-            view.clear();
-        }
+        let view = match delete_storage_first {
+            true => W::new(context)?,
+            false => W::load(context).await?,
+        };
         Ok(Arc::new(RwLock::new(view)))
     }
 
