@@ -322,6 +322,7 @@ pub struct QueryContext {
 pub trait BaseRuntime {
     type Read: fmt::Debug + Send + Sync;
     type ContainsKey: fmt::Debug + Send + Sync;
+    type ContainKeys: fmt::Debug + Send + Sync;
     type ReadMultiValuesBytes: fmt::Debug + Send + Sync;
     type ReadValueBytes: fmt::Debug + Send + Sync;
     type FindKeysByPrefix: fmt::Debug + Send + Sync;
@@ -369,6 +370,19 @@ pub trait BaseRuntime {
 
     /// Tests whether a key exists in the key-value store (wait)
     fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError>;
+
+    /// Tests whether keys exist in the key-value store
+    #[cfg(feature = "test")]
+    fn contain_keys(&mut self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ExecutionError> {
+        let promise = self.contain_keys_new(keys)?;
+        self.contain_keys_wait(&promise)
+    }
+
+    /// Tests whether keys exist in the key-value store (new)
+    fn contain_keys_new(&mut self, keys: Vec<Vec<u8>>) -> Result<Self::ContainKeys, ExecutionError>;
+
+    /// Tests whether keys exist in the key-value store (wait)
+    fn contain_keys_wait(&mut self, promise: &Self::ContainKeys) -> Result<Vec<bool>, ExecutionError>;
 
     /// Reads several keys from the key-value store
     #[cfg(feature = "test")]

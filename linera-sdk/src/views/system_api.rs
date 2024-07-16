@@ -97,6 +97,15 @@ impl ReadableKeyValueStore<ViewError> for KeyValueStore {
         Ok(self.wit_api.contains_key_wait(promise))
     }
 
+    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
+        for key in &keys {
+            ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
+        }
+        let promise = self.wit_api.contain_keys_new(&keys);
+        yield_once().await;
+        Ok(self.wit_api.contain_keys_wait(promise))
+    }
+
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
@@ -187,6 +196,26 @@ impl WitInterface {
             WitInterface::Service => service_wit::contains_key_wait(promise),
             #[cfg(with_testing)]
             WitInterface::Mock { store, .. } => store.contains_key_wait(promise),
+        }
+    }
+
+    /// Calls the `contain_keys_new` WIT function.
+    fn contain_keys_new(&self, keys: &[Vec<u8>]) -> u32 {
+        match self {
+            WitInterface::Contract => contract_wit::contain_keys_new(keys),
+            WitInterface::Service => service_wit::contain_keys_new(keys),
+            #[cfg(with_testing)]
+            WitInterface::Mock { store, .. } => store.contain_keys_new(key),
+        }
+    }
+
+    /// Calls the `contain_keys_wait` WIT function.
+    fn contain_keys_wait(&self, promise: u32) -> Vec<bool> {
+        match self {
+            WitInterface::Contract => contract_wit::contain_keys_wait(promise),
+            WitInterface::Service => service_wit::contain_keys_wait(promise),
+            #[cfg(with_testing)]
+            WitInterface::Mock { store, .. } => store.contain_keys_wait(promise),
         }
     }
 

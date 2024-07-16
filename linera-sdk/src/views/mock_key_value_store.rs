@@ -22,6 +22,7 @@ use linera_views::{
 pub(super) struct MockKeyValueStore {
     store: MemoryStore,
     contains_key_promises: PromiseRegistry<bool>,
+    contain_keys_promises: PromiseRegistry<Vec<bool>>,
     read_multi_promises: PromiseRegistry<Vec<Option<Vec<u8>>>>,
     read_single_promises: PromiseRegistry<Option<Vec<u8>>>,
     find_keys_promises: PromiseRegistry<Vec<Vec<u8>>>,
@@ -33,6 +34,7 @@ impl Default for MockKeyValueStore {
         MockKeyValueStore {
             store: create_memory_store(),
             contains_key_promises: PromiseRegistry::default(),
+            contain_keys_promises: PromiseRegistry::default(),
             read_multi_promises: PromiseRegistry::default(),
             read_single_promises: PromiseRegistry::default(),
             find_keys_promises: PromiseRegistry::default(),
@@ -85,6 +87,23 @@ impl MockKeyValueStore {
     /// Returns if the key used in the respective call to [`contains_key_new`] is present.
     pub(crate) fn contains_key_wait(&self, promise: u32) -> bool {
         self.contains_key_promises.take(promise)
+    }
+
+    /// Checks if `keys` are present in the storage, returning a promise to retrieve the final
+    /// value.
+    pub(crate) fn contain_keys_new(&self, keys: &[Vec<u8>]) -> u32 {
+        self.contain_keys_promises.register(
+            self.store
+                .contain_keys(keys)
+                .now_or_never()
+                .expect("Memory store should never wait for anything")
+                .expect("Memory store should never fail"),
+        )
+    }
+
+    /// Returns if the key used in the respective call to [`contains_key_new`] is present.
+    pub(crate) fn contain_keys_wait(&self, promise: u32) -> Vec<bool> {
+        self.contain_keys_promises.take(promise)
     }
 
     /// Reads the values addressed by `keys` from the store, returning a promise to retrieve

@@ -193,6 +193,12 @@ where
                 callback.respond(result);
             }
 
+            ContainKeys { id, keys, callback } => {
+                let view = self.users.try_load_entry_or_insert(&id).await?;
+                let result = view.contain_keys(keys).await?;
+                callback.respond(result);
+            }
+
             ReadMultiValuesBytes { id, keys, callback } => {
                 let view = self.users.try_load_entry(&id).await?;
                 let values = match view {
@@ -383,6 +389,12 @@ pub enum ExecutionRequest {
         callback: Sender<bool>,
     },
 
+    ContainKeys {
+        id: UserApplicationId,
+        keys: Vec<Vec<u8>>,
+        callback: Sender<Vec<bool>>,
+    },
+
     ReadMultiValuesBytes {
         id: UserApplicationId,
         keys: Vec<Vec<u8>>,
@@ -514,6 +526,12 @@ impl Debug for ExecutionRequest {
                 .debug_struct("ExecutionRequest::ContainsKey")
                 .field("id", id)
                 .field("key", key)
+                .finish_non_exhaustive(),
+
+            ExecutionRequest::ContainKeys { id, keys, .. } => formatter
+                .debug_struct("ExecutionRequest::ContainKeys")
+                .field("id", id)
+                .field("keys", keys)
                 .finish_non_exhaustive(),
 
             ExecutionRequest::ReadMultiValuesBytes { id, keys, .. } => formatter

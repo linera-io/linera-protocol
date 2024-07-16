@@ -245,6 +245,8 @@ type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 struct ViewUserState {
     /// The contains-key queries in progress.
     contains_key_queries: QueryManager<bool>,
+    /// The contain-keys queries in progress.
+    contain_keys_queries: QueryManager<Vec<bool>>,
     /// The read-value queries in progress.
     read_value_queries: QueryManager<Option<Value>>,
     /// The read-multi-values queries in progress.
@@ -258,6 +260,7 @@ struct ViewUserState {
 impl ViewUserState {
     fn force_all_pending_queries(&mut self) -> Result<(), ExecutionError> {
         self.contains_key_queries.force_all()?;
+        self.contain_keys_queries.force_all()?;
         self.read_value_queries.force_all()?;
         self.read_multi_values_queries.force_all()?;
         self.find_keys_queries.force_all()?;
@@ -563,6 +566,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
     type Read = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::Read;
     type ReadValueBytes = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ReadValueBytes;
     type ContainsKey = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ContainsKey;
+    type ContainKeys = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ContainKeys;
     type ReadMultiValuesBytes =
         <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ReadMultiValuesBytes;
     type FindKeysByPrefix = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::FindKeysByPrefix;
@@ -615,6 +619,14 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
 
     fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError> {
         self.inner().contains_key_wait(promise)
+    }
+
+    fn contain_keys_new(&mut self, keys: Vec<Vec<u8>>) -> Result<Self::ContainKeys, ExecutionError> {
+        self.inner().contain_keys_new(keys)
+    }
+
+    fn contain_keys_wait(&mut self, promise: &Self::ContainKeys) -> Result<Vec<bool>, ExecutionError> {
+        self.inner().contain_keys_wait(promise)
     }
 
     fn read_multi_values_bytes_new(
@@ -703,6 +715,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     type Read = ();
     type ReadValueBytes = u32;
     type ContainsKey = u32;
+    type ContainKeys = u32;
     type ReadMultiValuesBytes = u32;
     type FindKeysByPrefix = u32;
     type FindKeyValuesByPrefix = u32;
@@ -773,6 +786,23 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
         let value = state.contains_key_queries.wait(*promise)?;
+        Ok(value)
+    }
+
+    fn contain_keys_new(&mut self, keys: Vec<Vec<u8>>) -> Result<Self::ContainKeys, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        self.resource_controller.track_read_operations(1)?;
+        let receiver = self
+            .execution_state_sender
+            .send_request(move |callback| ExecutionRequest::ContainKeys { id, keys, callback })?;
+        state.contain_keys_queries.register(receiver)
+    }
+
+    fn contain_keys_wait(&mut self, promise: &Self::ContainKeys) -> Result<Vec<bool>, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        let value = state.contain_keys_queries.wait(*promise)?;
         Ok(value)
     }
 
