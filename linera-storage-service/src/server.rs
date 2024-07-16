@@ -25,10 +25,10 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use crate::key_value_store::{
     statement::Operation,
     store_processor_server::{StoreProcessor, StoreProcessorServer},
-    KeyValue, OptValue, ReplyContainsKey, ReplyCreateNamespace, ReplyDeleteAll,
+    KeyValue, OptValue, ReplyContainKeys, ReplyContainsKey, ReplyCreateNamespace, ReplyDeleteAll,
     ReplyDeleteNamespace, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
     ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk,
-    ReplyWriteBatchExtended, RequestContainsKey, RequestCreateNamespace, RequestDeleteAll,
+    ReplyWriteBatchExtended, RequestContainKeys, RequestContainsKey, RequestCreateNamespace, RequestDeleteAll,
     RequestDeleteNamespace, RequestExistsNamespace, RequestFindKeyValuesByPrefix,
     RequestFindKeysByPrefix, RequestListAll, RequestReadMultiValues, RequestReadValue,
     RequestSpecificChunk, RequestWriteBatchExtended,
@@ -85,6 +85,20 @@ impl ServiceStoreServer {
                 .contains_key(key)
                 .await
                 .map_err(|_e| Status::not_found("contains_key")),
+        }
+    }
+
+    pub async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Status> {
+        match &self.store {
+            ServiceStoreServerInternal::Memory(store) => store
+                .contain_keys(keys)
+                .await
+                .map_err(|_e| Status::not_found("contain_keys")),
+            #[cfg(feature = "rocksdb")]
+            ServiceStoreServerInternal::RocksDb(store) => store
+                .contain_keya(keys)
+                .await
+                .map_err(|_e| Status::not_found("contain_keys")),
         }
     }
 
@@ -266,6 +280,18 @@ impl StoreProcessor for ServiceStoreServer {
         let RequestContainsKey { key } = request;
         let test = self.contains_key(&key).await?;
         let response = ReplyContainsKey { test };
+        Ok(Response::new(response))
+    }
+
+    #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().keys.len()))]
+    async fn process_contain_keys(
+        &self,
+        request: Request<RequestContainKeys>,
+    ) -> Result<Response<ReplyContainKeys>, Status> {
+        let request = request.into_inner();
+        let RequestContainKeys { keys } = request;
+        let tests = self.contain_keys(keys).await?;
+        let response = ReplyContainKeys { tests };
         Ok(Response::new(response))
     }
 
