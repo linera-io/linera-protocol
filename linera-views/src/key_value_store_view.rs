@@ -678,11 +678,11 @@ where
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![42]).await.unwrap();
     ///   let keys = vec![vec![0,1], vec![0,2]];
-    ///   let results = view.contain_keys(keys).await.unwrap();
+    ///   let results = view.contains_keys(keys).await.unwrap();
     ///   assert_eq!(results, vec![true, false]);
     /// # })
     /// ```
-    pub async fn contain_keys(&self, indices: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
+    pub async fn contains_keys(&self, indices: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
         let mut results = Vec::with_capacity(indices.len());
         let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
@@ -706,7 +706,7 @@ where
             }
         }
         if !self.delete_storage_first {
-            let values = self.context.contain_keys(vector_query).await?;
+            let values = self.context.contains_keys(vector_query).await?;
             for (i, value) in missed_indices.into_iter().zip(values) {
                 results[i] = value;
             }
@@ -1128,9 +1128,9 @@ where
         view.contains_key(key).await
     }
 
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
         let view = self.view.read().await;
-        view.contain_keys(keys).await
+        view.contains_keys(keys).await
     }
 
     async fn read_multi_values_bytes(

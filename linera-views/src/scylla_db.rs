@@ -200,7 +200,7 @@ impl ScyllaDbClient {
         Ok(values)
     }
 
-    async fn contain_keys_internal(
+    async fn contains_keys_internal(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<bool>, ScyllaDbStoreError> {
@@ -231,8 +231,8 @@ impl ScyllaDbClient {
             "SELECT k FROM kv.{} WHERE dummy = 0 AND k IN ({}) ALLOW FILTERING",
             self.namespace, group_query
         );
-        let contain_keys = Query::new(query);
-        let mut rows = session.query_iter(contain_keys, &unique_keys).await?;
+        let contains_keys = Query::new(query);
+        let mut rows = session.query_iter(contains_keys, &unique_keys).await?;
         let mut values = vec![false; num_keys];
         while let Some(row) = rows.next().await {
             let value = row?.into_typed::<(Vec<u8>,)>()?;
@@ -458,7 +458,7 @@ impl ReadableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStoreInternal {
         store.contains_key_internal(key.to_vec()).await
     }
 
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ScyllaDbStoreError> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ScyllaDbStoreError> {
         if keys.is_empty() {
             return Ok(Vec::new());
         }
@@ -466,7 +466,7 @@ impl ReadableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStoreInternal {
         let _guard = self.acquire().await;
         let handles = keys
             .chunks(MAX_MULTI_KEYS)
-            .map(|keys| store.contain_keys_internal(keys.to_vec()));
+            .map(|keys| store.contains_keys_internal(keys.to_vec()));
         let results: Vec<_> = join_all(handles)
             .await
             .into_iter()
@@ -785,8 +785,8 @@ impl ReadableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStore {
         self.store.contains_key(key).await
     }
 
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ScyllaDbStoreError> {
-        self.store.contain_keys(keys).await
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ScyllaDbStoreError> {
+        self.store.contains_keys(keys).await
     }
 
     async fn read_multi_values_bytes(

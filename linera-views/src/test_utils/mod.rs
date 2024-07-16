@@ -315,7 +315,7 @@ pub async fn run_reads<S: LocalKeyValueStore>(store: S, key_values: Vec<(Vec<u8>
             test_exists.push(store.contains_key(key).await.unwrap());
             values_single_read.push(store.read_value_bytes(key).await.unwrap());
         }
-        let test_exists_direct = store.contain_keys(keys.clone()).await.unwrap();
+        let test_exists_direct = store.contains_keys(keys.clone()).await.unwrap();
         let values_read = store.read_multi_values_bytes(keys).await.unwrap();
         assert_eq!(values, values_read);
         assert_eq!(values, values_single_read);

@@ -328,7 +328,7 @@ pub trait LocalReadableKeyValueStore<E> {
     async fn contains_key(&self, key: &[u8]) -> Result<bool, E>;
 
     /// Test whether a set of keys exist in the database
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, E>;
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, E>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
     async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, E>;
@@ -583,7 +583,7 @@ pub trait Context: Clone {
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
 
     /// Test whether a set of keys exist in the database
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error>;
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
     async fn read_multi_values_bytes(
@@ -787,8 +787,8 @@ where
         log_time_async(self.store.contains_key(key), "contains_key").await
     }
 
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
-        log_time_async(self.store.contain_keys(keys), "contain_keys").await
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
+        log_time_async(self.store.contains_keys(keys), "contains_keys").await
     }
 
     async fn read_multi_values_bytes(

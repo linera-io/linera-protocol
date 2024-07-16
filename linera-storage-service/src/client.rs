@@ -25,9 +25,9 @@ use crate::{
     common::{KeyTag, ServiceStoreConfig, ServiceStoreError, MAX_PAYLOAD_SIZE},
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
-        KeyValueAppend, ReplyContainKeys, ReplyContainsKey, ReplyExistsNamespace,
+        KeyValueAppend, ReplyContainsKeys, ReplyContainsKey, ReplyExistsNamespace,
         ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyReadMultiValues,
-        ReplyReadValue, ReplySpecificChunk, RequestContainKeys, RequestContainsKey,
+        ReplyReadValue, ReplySpecificChunk, RequestContainsKeys, RequestContainsKey,
         RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace, RequestExistsNamespace,
         RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
         RequestReadMultiValues, RequestReadValue, RequestSpecificChunk, RequestWriteBatchExtended,
@@ -107,7 +107,7 @@ impl ReadableKeyValueStore<ServiceStoreError> for ServiceStoreClientInternal {
         Ok(test)
     }
 
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ServiceStoreError> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ServiceStoreError> {
         let mut full_keys = Vec::new();
         for key in keys {
             ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
@@ -115,13 +115,13 @@ impl ReadableKeyValueStore<ServiceStoreError> for ServiceStoreClientInternal {
             full_key.extend(&key);
             full_keys.push(full_key);
         }
-        let query = RequestContainKeys { keys: full_keys };
+        let query = RequestContainsKeys { keys: full_keys };
         let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
         let _guard = self.acquire().await;
-        let response = client.process_contain_keys(request).await?;
+        let response = client.process_contains_keys(request).await?;
         let response = response.into_inner();
-        let ReplyContainKeys { tests } = response;
+        let ReplyContainsKeys { tests } = response;
         Ok(tests)
     }
 
@@ -521,8 +521,8 @@ impl ReadableKeyValueStore<ServiceStoreError> for ServiceStoreClient {
         self.store.contains_key(key).await
     }
 
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ServiceStoreError> {
-        self.store.contain_keys(keys).await
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ServiceStoreError> {
+        self.store.contains_keys(keys).await
     }
 
     async fn read_multi_values_bytes(

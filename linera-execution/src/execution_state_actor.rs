@@ -193,9 +193,9 @@ where
                 callback.respond(result);
             }
 
-            ContainKeys { id, keys, callback } => {
+            ContainsKeys { id, keys, callback } => {
                 let view = self.users.try_load_entry_or_insert(&id).await?;
-                let result = view.contain_keys(keys).await?;
+                let result = view.contains_keys(keys).await?;
                 callback.respond(result);
             }
 
@@ -389,7 +389,7 @@ pub enum ExecutionRequest {
         callback: Sender<bool>,
     },
 
-    ContainKeys {
+    ContainsKeys {
         id: UserApplicationId,
         keys: Vec<Vec<u8>>,
         callback: Sender<Vec<bool>>,
@@ -528,8 +528,8 @@ impl Debug for ExecutionRequest {
                 .field("key", key)
                 .finish_non_exhaustive(),
 
-            ExecutionRequest::ContainKeys { id, keys, .. } => formatter
-                .debug_struct("ExecutionRequest::ContainKeys")
+            ExecutionRequest::ContainsKeys { id, keys, .. } => formatter
+                .debug_struct("ExecutionRequest::ContainsKeys")
                 .field("id", id)
                 .field("keys", keys)
                 .finish_non_exhaustive(),

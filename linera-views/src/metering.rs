@@ -18,7 +18,7 @@ use crate::{
 pub struct KeyValueStoreMetrics {
     read_value_bytes: HistogramVec,
     contains_key: HistogramVec,
-    contain_keys: HistogramVec,
+    contains_keys: HistogramVec,
     read_multi_values_bytes: HistogramVec,
     find_keys_by_prefix: HistogramVec,
     find_key_values_by_prefix: HistogramVec,
@@ -68,9 +68,9 @@ impl KeyValueStoreMetrics {
         let contains_key = register_histogram_vec(&contains_key1, &contains_key2, &[], None)
             .expect("Counter creation should not fail");
 
-        let contain_keys1 = format!("{}_contain_keys", var_name);
-        let contain_keys2 = format!("{} contain keys", title_name);
-        let contain_keys = register_histogram_vec(&contain_keys1, &contain_keys2, &[], None)
+        let contains_keys1 = format!("{}_contains_keys", var_name);
+        let contains_keys2 = format!("{} contains keys", title_name);
+        let contains_keys = register_histogram_vec(&contains_keys1, &contains_keys2, &[], None)
             .expect("Counter creation should not fail");
 
         let read_multi_values1 = format!("{}_read_multi_value_bytes", var_name);
@@ -103,7 +103,7 @@ impl KeyValueStoreMetrics {
         KeyValueStoreMetrics {
             read_value_bytes,
             contains_key,
-            contain_keys,
+            contains_keys,
             read_multi_values_bytes,
             find_keys_by_prefix,
             find_key_values_by_prefix,
@@ -144,9 +144,9 @@ where
         self.store.contains_key(key).await
     }
 
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, E> {
-        let _metric = self.counter.contain_keys.measure_latency();
-        self.store.contain_keys(keys).await
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, E> {
+        let _metric = self.counter.contains_keys.measure_latency();
+        self.store.contains_keys(keys).await
     }
 
     async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, E> {

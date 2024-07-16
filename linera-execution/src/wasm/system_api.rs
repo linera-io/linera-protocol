@@ -595,23 +595,23 @@ where
     }
 
     /// Creates a new promise to check if the `keys` are in storage.
-    fn contain_keys_new(caller: &mut Caller, keys: Vec<Vec<u8>>) -> Result<u32, RuntimeError> {
+    fn contains_keys_new(caller: &mut Caller, keys: Vec<Vec<u8>>) -> Result<u32, RuntimeError> {
         let mut data = caller.user_data_mut();
         let promise = data
             .runtime
-            .contain_keys_new(keys)
+            .contains_keys_new(keys)
             .map_err(|error| RuntimeError::Custom(error.into()))?;
 
         data.register_promise(promise)
     }
 
     /// Waits for the promise to check if the `keys` are in storage.
-    fn contain_keys_wait(caller: &mut Caller, promise_id: u32) -> Result<Vec<bool>, RuntimeError> {
+    fn contains_keys_wait(caller: &mut Caller, promise_id: u32) -> Result<Vec<bool>, RuntimeError> {
         let mut data = caller.user_data_mut();
         let promise = data.take_promise(promise_id)?;
 
         data.runtime
-            .contain_keys_wait(&promise)
+            .contains_keys_wait(&promise)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

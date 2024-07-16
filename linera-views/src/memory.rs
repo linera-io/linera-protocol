@@ -71,7 +71,7 @@ impl ReadableKeyValueStore<MemoryStoreError> for MemoryStore {
         Ok(map.contains_key(key))
     }
 
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, MemoryStoreError> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, MemoryStoreError> {
         let map = self.map.read().await;
         Ok(keys
             .into_iter()

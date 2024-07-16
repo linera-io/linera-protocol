@@ -94,7 +94,7 @@ where
         self.store.contains_key(&big_key).await
     }
 
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, K::Error> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, K::Error> {
         let big_keys = keys
             .into_iter()
             .map(|key| {
@@ -103,7 +103,7 @@ where
                 big_key
             })
             .collect::<Vec<_>>();
-        self.store.contain_keys(big_keys).await
+        self.store.contains_keys(big_keys).await
     }
 
     async fn read_multi_values_bytes(
@@ -368,8 +368,8 @@ impl ReadableKeyValueStore<MemoryStoreError> for TestMemoryStoreInternal {
         self.store.contains_key(key).await
     }
 
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, MemoryStoreError> {
-        self.store.contain_keys(keys).await
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, MemoryStoreError> {
+        self.store.contains_keys(keys).await
     }
 
     async fn read_multi_values_bytes(
@@ -454,8 +454,8 @@ impl ReadableKeyValueStore<MemoryStoreError> for TestMemoryStore {
         self.store.contains_key(key).await
     }
 
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, MemoryStoreError> {
-        self.store.contain_keys(keys).await
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, MemoryStoreError> {
+        self.store.contains_keys(keys).await
     }
 
     async fn read_multi_values_bytes(

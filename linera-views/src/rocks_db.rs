@@ -103,7 +103,7 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
         Ok(self.read_value_bytes(key).await?.is_some())
     }
 
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
         let size = keys.len();
         let mut results = vec![false; size];
         let mut handles = Vec::new();
@@ -434,8 +434,8 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStore {
         self.store.contains_key(key).await
     }
 
-    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
-        self.store.contain_keys(keys).await
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
+        self.store.contains_keys(keys).await
     }
 
     async fn read_multi_values_bytes(
