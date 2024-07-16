@@ -97,7 +97,7 @@ where
 
     fn rollback(&mut self) {
         self.updates.clear();
-        self.delete_prefixes.clear();
+        self.delete_prefixes.rollback();
     }
 
     async fn has_pending_changes(&self) -> bool {
@@ -1457,6 +1457,7 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut map : CustomMapView<MemoryContext<()>, u128, String> = CustomMapView::load(context).await.unwrap();
+    ///   map.insert(&(34 as u128), String::from("Hello"));
     ///   let keys = vec![34 as u128, 37 as u128];
     ///   let values = map.multi_get(&keys).await.unwrap();
     ///   assert_eq!(values, vec![Some(String::from("Hello")), None]);

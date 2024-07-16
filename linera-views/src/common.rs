@@ -58,7 +58,7 @@ impl DeletionPrefixes {
     }
 
     pub fn rollback(&mut self) {
-        self.delete_storage_first = true;
+        self.delete_storage_first = false;
         self.deleted_prefixes.clear();
     }
 
