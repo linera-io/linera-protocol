@@ -257,7 +257,7 @@ pub struct ByteMapStateView<C> {
 async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> {
     let context = create_memory_context();
     let mut state_map = BTreeMap::new();
-    let mut all_keys = BTreeSet::new();
+    let mut keys_set = BTreeSet::new();
     let n = 10;
     for _ in 0..n {
         let mut view = ByteMapStateView::load(context.clone()).await?;
@@ -283,7 +283,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
                         .sample_iter(Uniform::from(0..4))
                         .take(len)
                         .collect::<Vec<_>>();
-                    all_keys.insert(key.clone());
+                    keys_set.insert(key.clone());
                     let value = rng.gen::<u8>();
                     view.map.insert(key.clone(), value);
                     new_state_map.insert(key, value);
@@ -370,10 +370,14 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
                 let part_key_values = view.map.key_values_by_prefix(vec![u]).await?;
                 assert_eq!(part_state_vec, part_key_values);
             }
-            for key in &all_keys {
+            let keys_vec = keys_set.clone().into_iter().collect::<Vec<_>>();
+            let values = view.map.multi_get(keys_vec.clone()).await?;
+            for i in 0..keys_vec.len() {
+                let key = &keys_vec[i];
                 let test_map = new_state_map.contains_key(key);
                 let test_view = view.map.get(key).await?.is_some();
                 assert_eq!(test_map, test_view);
+                assert_eq!(test_map, values[i].is_some());
             }
         }
         if save {
