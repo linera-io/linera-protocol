@@ -449,15 +449,22 @@ where
     ///     let value = subview.get_mut();
     ///     *value = String::from("Hello");
     ///   }
-    ///   view.try_reset_entry_to_default(&[0, 1]).await.unwrap();
+    ///   view.try_reset_entry_to_default(&[0, 1]).unwrap();
     ///   let mut subview = view.try_load_entry_mut(&[0, 1]).await.unwrap();
     ///   let value = subview.get_mut();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_reset_entry_to_default(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
-        let mut view = self.try_load_entry_mut(short_key).await?;
-        view.clear();
+    pub fn try_reset_entry_to_default(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
+        let key = self
+            .context
+            .base_tag_index(KeyTag::Subview as u8, short_key);
+        let context = self.context.clone_with_base_key(key);
+        let view = W::new(context)?;
+        let view = Arc::new(RwLock::new(view));
+        let view = Update::Set(view);
+        let updates = self.updates.get_mut();
+        updates.insert(short_key.to_vec(), view);
         Ok(())
     }
 
@@ -1085,19 +1092,19 @@ where
     ///     let value = subview.get_mut();
     ///     *value = String::from("Hello");
     ///   }
-    ///   view.try_reset_entry_to_default(&23).await.unwrap();
+    ///   view.try_reset_entry_to_default(&23).unwrap();
     ///   let mut subview = view.try_load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get_mut();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    pub fn try_reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.collection.try_reset_entry_to_default(&short_key).await
+        self.collection.try_reset_entry_to_default(&short_key)
     }
 
     /// Gets the extra data.
@@ -1525,20 +1532,20 @@ where
     ///     *value = String::from("Hello");
     ///   }
     ///   {
-    ///     view.try_reset_entry_to_default(&23).await.unwrap();
+    ///     view.try_reset_entry_to_default(&23).unwrap();
     ///     let subview = view.try_load_entry(&23).await.unwrap().unwrap();
     ///     let value = subview.get();
     ///     assert_eq!(*value, String::default());
     ///   }
     /// # })
     /// ```
-    pub async fn try_reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    pub fn try_reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
-        self.collection.try_reset_entry_to_default(&short_key).await
+        self.collection.try_reset_entry_to_default(&short_key)
     }
 
     /// Gets the extra data.
