@@ -120,8 +120,8 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
         .query_application(
             context,
             Query::System(SystemQuery),
-            futures::channel::mpsc::unbounded().1,
-            std::sync::mpsc::channel().0,
+            &mut futures::channel::mpsc::unbounded().1,
+            &mut std::sync::mpsc::channel().0,
         )
         .await
         .unwrap();
