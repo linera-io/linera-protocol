@@ -154,6 +154,30 @@ where
         self.store.contains_key(key).await
     }
 
+    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, K::Error> {
+        if let Some(values) = &self.lru_read_values {
+            let values = values.lock().await;
+            let size = keys.len();
+            let mut results = vec![false; size];
+            let mut indices = Vec::new();
+            let mut keys_red = Vec::new();
+            for i in 0..size {
+                if let Some(value) = values.query(&keys[i]) {
+                    results[i] = value.is_some();
+                } else {
+                    indices.push(i);
+                    keys_red.push(keys[i].clone());
+                }
+            }
+            let results_red = self.store.contain_keys(keys_red).await?;
+            for (index, result) in indices.into_iter().zip(results_red) {
+                results[index] = result;
+            }
+            return Ok(results);
+        }
+        self.store.contain_keys(keys).await
+    }
+
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,

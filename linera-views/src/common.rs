@@ -327,6 +327,9 @@ pub trait LocalReadableKeyValueStore<E> {
     /// Test whether a key exists in the database
     async fn contains_key(&self, key: &[u8]) -> Result<bool, E>;
 
+    /// Test whether keys exist in the database
+    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, E>;
+
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
     async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, E>;
 
