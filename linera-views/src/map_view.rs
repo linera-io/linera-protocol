@@ -996,6 +996,29 @@ where
         self.map.get(&short_key).await
     }
 
+    /// Reads the values at the given positions, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::map_view::MapView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut map : MapView<_, u32,_> = MapView::load(context).await.unwrap();
+    ///   map.insert(&(37 as u32), String::from("Hello"));
+    ///   let keys = vec![37 as u32, 34 as u32];
+    ///   let values = map.multi_get(&keys).await.unwrap();
+    ///   assert_eq!(values, vec![Some(String::from("Hello")), None]);
+    /// # })
+    /// ```
+    pub async fn multi_get<Q>(&self, keys: &[Q]) -> Result<Vec<Option<V>>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + Sized,
+    {
+        let keys = keys.into_iter().map(|x| C::derive_short_key(x)).collect::<Result<_,_>>()?;
+        self.map.multi_get(keys).await
+    }
+
     /// Obtains a mutable reference to a value at a given position if available
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1413,6 +1436,7 @@ where
     ///   let mut map : CustomMapView<MemoryContext<()>, u128, String> = CustomMapView::load(context).await.unwrap();
     ///   map.insert(&(34 as u128), String::from("Hello"));
     ///   assert_eq!(map.get(&(34 as u128)).await.unwrap(), Some(String::from("Hello")));
+    ///   assert_eq!(map.get(&(37 as u128)).await.unwrap(), None);
     /// # })
     /// ```
     pub async fn get<Q>(&self, index: &Q) -> Result<Option<V>, ViewError>
@@ -1422,6 +1446,29 @@ where
     {
         let short_key = index.to_custom_bytes()?;
         self.map.get(&short_key).await
+    }
+
+    /// Reads the value at the given position, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::map_view::CustomMapView;
+    /// # use linera_views::memory::MemoryContext;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut map : CustomMapView<MemoryContext<()>, u128, String> = CustomMapView::load(context).await.unwrap();
+    ///   let keys = vec![34 as u128, 37 as u128];
+    ///   let values = map.multi_get(&keys).await.unwrap();
+    ///   assert_eq!(values, vec![Some(String::from("Hello")), None]);
+    /// # })
+    /// ```
+    pub async fn multi_get<Q>(&self, indices: &[Q]) -> Result<Vec<Option<V>>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let keys = indices.into_iter().map(|x| x.to_custom_bytes()).collect::<Result<_,_>>()?;
+        self.map.multi_get(keys).await
     }
 
     /// Obtains a mutable reference to a value at a given position if available
