@@ -51,8 +51,8 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     batch::Batch,
     common::{
-        get_interval, Context, CustomSerialize, DeletionPrefixes, HasherOutput,
-        KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update,
+        get_interval, Context, CustomSerialize, DeletionPrefixes, HasherOutput, KeyIterable,
+        KeyValueIterable, SuffixClosedSetIterator, Update,
     },
     hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
@@ -315,12 +315,10 @@ where
                 if let Update::Set(value) = update {
                     results[i] = Some(value.clone());
                 }
-            } else {
-                if !self.delete_prefixes.contains_key(&short_key) {
-                    missed_indices.push(i);
-                    let key = self.context.base_index(&short_key);
-                    vector_query.push(key);
-                }
+            } else if !self.delete_prefixes.contains_key(&short_key) {
+                missed_indices.push(i);
+                let key = self.context.base_index(&short_key);
+                vector_query.push(key);
             }
         }
         let values = self.context.read_multi_values(vector_query).await?;
@@ -401,7 +399,10 @@ where
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
         if !self.delete_prefixes.contains_key(&prefix) {
-            let iter = self.delete_prefixes.deleted_prefixes.range(get_interval(prefix.clone()));
+            let iter = self
+                .delete_prefixes
+                .deleted_prefixes
+                .range(get_interval(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = self.context.base_index(&prefix);
             for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
@@ -596,7 +597,10 @@ where
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
         if !self.delete_prefixes.contains_key(&prefix) {
-            let iter = self.delete_prefixes.deleted_prefixes.range(get_interval(prefix.clone()));
+            let iter = self
+                .delete_prefixes
+                .deleted_prefixes
+                .range(get_interval(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = self.context.base_index(&prefix);
             for entry in self
@@ -1015,7 +1019,10 @@ where
         I: Borrow<Q>,
         Q: Serialize + Sized,
     {
-        let keys = keys.into_iter().map(|x| C::derive_short_key(x)).collect::<Result<_,_>>()?;
+        let keys = keys
+            .iter()
+            .map(|x| C::derive_short_key(x))
+            .collect::<Result<_, _>>()?;
         self.map.multi_get(keys).await
     }
 
@@ -1468,7 +1475,10 @@ where
         I: Borrow<Q>,
         Q: CustomSerialize,
     {
-        let keys = indices.into_iter().map(|x| x.to_custom_bytes()).collect::<Result<_,_>>()?;
+        let keys = indices
+            .iter()
+            .map(|x| x.to_custom_bytes())
+            .collect::<Result<_, _>>()?;
         self.map.multi_get(keys).await
     }
 

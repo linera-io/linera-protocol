@@ -49,7 +49,10 @@ pub(crate) struct DeletionPrefixes {
 
 impl DeletionPrefixes {
     pub fn new() -> Self {
-        Self { delete_storage_first: false, deleted_prefixes: BTreeSet::new() }
+        Self {
+            delete_storage_first: false,
+            deleted_prefixes: BTreeSet::new(),
+        }
     }
 
     pub fn clear(&mut self) {
@@ -70,7 +73,7 @@ impl DeletionPrefixes {
     }
 
     pub fn has_pending_changes(&self) -> bool {
-    	if self.delete_storage_first {
+        if self.delete_storage_first {
             return true;
         }
         !self.deleted_prefixes.is_empty()
@@ -82,9 +85,6 @@ impl DeletionPrefixes {
         }
     }
 }
-
-
-
 
 /// The common initialization parameters for the `KeyValueStore`
 #[derive(Debug, Clone)]

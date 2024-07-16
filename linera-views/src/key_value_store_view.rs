@@ -1,12 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    fmt::Debug,
-    mem,
-    ops::Bound::Included,
-};
+use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included};
 
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -22,9 +17,9 @@ use {
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        from_bytes_option, from_bytes_option_or_default, get_interval,
-        get_upper_bound, Context, DeletionPrefixes, HasherOutput, KeyIterable, KeyValueIterable,
-        SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
+        from_bytes_option, from_bytes_option_or_default, get_interval, get_upper_bound, Context,
+        DeletionPrefixes, HasherOutput, KeyIterable, KeyValueIterable, SuffixClosedSetIterator,
+        Update, MIN_VIEW_TAG,
     },
     map_view::ByteMapView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
@@ -354,7 +349,8 @@ where
         let mut updates = self.updates.iter();
         let mut update = updates.next();
         if !self.delete_prefixes.delete_storage_first {
-            let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.delete_prefixes.deleted_prefixes.iter());
+            let mut suffix_closed_set =
+                SuffixClosedSetIterator::new(0, self.delete_prefixes.deleted_prefixes.iter());
             for index in self
                 .context
                 .find_keys_by_prefix(&key_prefix)
@@ -453,7 +449,8 @@ where
         let mut updates = self.updates.iter();
         let mut update = updates.next();
         if !self.delete_prefixes.delete_storage_first {
-            let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.delete_prefixes.deleted_prefixes.iter());
+            let mut suffix_closed_set =
+                SuffixClosedSetIterator::new(0, self.delete_prefixes.deleted_prefixes.iter());
             for entry in self
                 .context
                 .find_key_values_by_prefix(&key_prefix)
@@ -867,7 +864,8 @@ where
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
         if !self.delete_prefixes.delete_storage_first {
-            let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.delete_prefixes.deleted_prefixes.iter());
+            let mut suffix_closed_set =
+                SuffixClosedSetIterator::new(0, self.delete_prefixes.deleted_prefixes.iter());
             for key in self
                 .context
                 .find_keys_by_prefix(&key_prefix_full)
@@ -940,7 +938,8 @@ where
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
         if !self.delete_prefixes.delete_storage_first {
-            let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.delete_prefixes.deleted_prefixes.iter());
+            let mut suffix_closed_set =
+                SuffixClosedSetIterator::new(0, self.delete_prefixes.deleted_prefixes.iter());
             for entry in self
                 .context
                 .find_key_values_by_prefix(&key_prefix_full)
