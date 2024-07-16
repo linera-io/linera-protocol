@@ -1341,12 +1341,21 @@ impl ServiceSyncRuntime {
         while let Ok(request) = incoming_requests.recv() {
             let ServiceRuntimeRequest::Query {
                 application_id,
+                context,
                 query,
                 callback,
             } = request;
 
+            self.prepare_for_query(context);
+
             let _ = callback.send(self.run_query(application_id, query));
         }
+    }
+
+    /// Prepares the runtime to query an application.
+    pub(crate) fn prepare_for_query(&mut self, new_context: QueryContext) {
+        let execution_state_sender = self.handle_mut().inner().execution_state_sender.clone();
+        *self = ServiceSyncRuntime::new(execution_state_sender, new_context);
     }
 
     /// Queries an application specified by its [`UserApplicationId`].
@@ -1361,6 +1370,13 @@ impl ServiceSyncRuntime {
                 "`SyncRuntimeHandle` should be available while `SyncRuntime` hasn't been dropped",
             )
             .try_query_application(application_id, query)
+    }
+
+    /// Obtains the [`SyncRuntimeHandle`] stored in this [`ServiceSyncRuntime`].
+    fn handle_mut(&mut self) -> &mut ServiceSyncRuntimeHandle {
+        self.0.as_mut().expect(
+            "`SyncRuntimeHandle` should be available while `SyncRuntime` hasn't been dropped",
+        )
     }
 }
 
@@ -1414,6 +1430,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
 pub enum ServiceRuntimeRequest {
     Query {
         application_id: UserApplicationId,
+        context: QueryContext,
         query: Vec<u8>,
         callback: oneshot::Sender<Result<Vec<u8>, ExecutionError>>,
     },

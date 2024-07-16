@@ -465,6 +465,7 @@ where
                 let response = self
                     .query_user_application(
                         application_id,
+                        context,
                         bytes,
                         incoming_execution_requests,
                         runtime_request_sender,
@@ -478,6 +479,7 @@ where
     async fn query_user_application(
         &mut self,
         application_id: UserApplicationId,
+        context: QueryContext,
         query: Vec<u8>,
         mut incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<
             ExecutionRequest,
@@ -490,6 +492,7 @@ where
         runtime_request_sender
             .send(ServiceRuntimeRequest::Query {
                 application_id,
+                context,
                 query,
                 callback: response_sender,
             })
