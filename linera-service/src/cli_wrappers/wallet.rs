@@ -398,7 +398,7 @@ impl ClientWrapper {
         let mut command = self.command().await?;
         command.arg("query-validators");
         if let Some(chain_id) = chain_id {
-            command.arg(&chain_id.to_string());
+            command.arg(chain_id.to_string());
         }
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
@@ -473,7 +473,7 @@ impl ClientWrapper {
         self.command()
             .await?
             .arg("sync")
-            .arg(&chain_id.to_string())
+            .arg(chain_id.to_string())
             .spawn_and_wait_for_stdout()
             .await?;
         Ok(())
@@ -484,7 +484,7 @@ impl ClientWrapper {
         self.command()
             .await?
             .arg("process-inbox")
-            .arg(&chain_id.to_string())
+            .arg(chain_id.to_string())
             .spawn_and_wait_for_stdout()
             .await?;
         Ok(())

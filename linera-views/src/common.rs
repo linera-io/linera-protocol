@@ -101,7 +101,7 @@ pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     (Included(key_prefix), upper_bound)
 }
 
-pub(crate) fn from_bytes_opt<V: DeserializeOwned, E>(
+pub(crate) fn from_bytes_option<V: DeserializeOwned, E>(
     key_opt: &Option<Vec<u8>>,
 ) -> Result<Option<V>, E>
 where
@@ -113,6 +113,18 @@ where
             Ok(Some(value))
         }
         None => Ok(None),
+    }
+}
+
+pub(crate) fn from_bytes_option_or_default<V: DeserializeOwned + Default, E>(
+    key_opt: &Option<Vec<u8>>,
+) -> Result<V, E>
+where
+    E: From<bcs::Error>,
+{
+    match key_opt {
+        Some(bytes) => Ok(bcs::from_bytes(bytes)?),
+        None => Ok(V::default()),
     }
 }
 
@@ -337,7 +349,7 @@ pub trait LocalReadableKeyValueStore<E> {
         Self: Sync,
         E: From<bcs::Error>,
     {
-        async { from_bytes_opt(&self.read_value_bytes(key).await?) }
+        async { from_bytes_option(&self.read_value_bytes(key).await?) }
     }
 
     /// Reads multiple `keys` and deserializes the results if present.
@@ -352,7 +364,7 @@ pub trait LocalReadableKeyValueStore<E> {
         async {
             let mut values = Vec::with_capacity(keys.len());
             for entry in self.read_multi_values_bytes(keys).await? {
-                values.push(from_bytes_opt(&entry)?);
+                values.push(from_bytes_option(&entry)?);
             }
             Ok(values)
         }
@@ -656,7 +668,7 @@ pub trait Context: Clone {
     where
         Item: DeserializeOwned,
     {
-        from_bytes_opt(&self.read_value_bytes(key).await?)
+        from_bytes_option(&self.read_value_bytes(key).await?)
     }
 
     /// Reads multiple `keys` and deserializes the results if present.
@@ -669,7 +681,7 @@ pub trait Context: Clone {
     {
         let mut values = Vec::with_capacity(keys.len());
         for entry in self.read_multi_values_bytes(keys).await? {
-            values.push(from_bytes_opt(&entry)?);
+            values.push(from_bytes_option(&entry)?);
         }
         Ok(values)
     }

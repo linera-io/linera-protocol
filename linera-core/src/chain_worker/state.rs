@@ -59,6 +59,8 @@ where
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
+    execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+    runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
     recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
     knows_chain_is_active: bool,
@@ -76,6 +78,8 @@ where
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
         blob_cache: Arc<ValueCache<BlobId, HashedBlob>>,
         chain_id: ChainId,
+        execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 
@@ -84,6 +88,8 @@ where
             storage,
             chain,
             shared_chain_view: None,
+            execution_state_receiver,
+            runtime_request_sender,
             recent_hashed_certificate_values: certificate_value_cache,
             recent_hashed_blobs: blob_cache,
             knows_chain_is_active: false,
@@ -153,11 +159,9 @@ where
     pub(super) async fn query_application(
         &mut self,
         query: Query,
-        incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Response, WorkerError> {
         ChainWorkerStateWithTemporaryChanges(self)
-            .query_application(query, incoming_execution_requests, runtime_request_sender)
+            .query_application(query)
             .await
     }
 
@@ -560,8 +564,6 @@ where
     pub(super) async fn query_application(
         &mut self,
         query: Query,
-        incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Response, WorkerError> {
         self.0.ensure_is_active()?;
         let local_time = self.0.storage.clock().current_time();
@@ -571,8 +573,8 @@ where
             .query_application(
                 local_time,
                 query,
-                incoming_execution_requests,
-                runtime_request_sender,
+                &mut self.0.execution_state_receiver,
+                &mut self.0.runtime_request_sender,
             )
             .await?;
         Ok(response)
@@ -1346,13 +1348,13 @@ impl<'a> CrossChainUpdateHelper<'a> {
 
     /// Checks basic invariants and deals with repeated heights and deprecated epochs.
     /// * Returns a range of message bundles that are both new to us and not relying on
-    /// an untrusted set of validators.
+    ///   an untrusted set of validators.
     /// * In the case of validators, if the epoch(s) of the highest bundles are not
-    /// trusted, we only accept bundles that contain messages that were already
-    /// executed by anticipation (i.e. received in certified blocks).
+    ///   trusted, we only accept bundles that contain messages that were already
+    ///   executed by anticipation (i.e. received in certified blocks).
     /// * Basic invariants are checked for good measure. We still crucially trust
-    /// the worker of the sending chain to have verified and executed the blocks
-    /// correctly.
+    ///   the worker of the sending chain to have verified and executed the blocks
+    ///   correctly.
     pub fn select_message_bundles(
         &self,
         origin: &'a Origin,

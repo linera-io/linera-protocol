@@ -59,7 +59,7 @@ bytes = "1.5.0"
 cargo_metadata = "0.18.1"
 cargo_toml = "0.19.2"
 cfg-if = "1.0.0"
-cfg_aliases = "0.2.0"
+cfg_aliases = "0.2.1"
 chrono = { version = "0.4.35", default-features = false }
 clap = { version = "4", features = ["cargo", "derive", "env"] }
 clap-markdown = "0.1.3"

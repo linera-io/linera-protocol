@@ -40,7 +40,11 @@ mod tests;
 pub struct SyncRuntime<UserInstance>(Option<SyncRuntimeHandle<UserInstance>>);
 
 pub type ContractSyncRuntime = SyncRuntime<UserContractInstance>;
-pub type ServiceSyncRuntime = SyncRuntime<UserServiceInstance>;
+
+pub struct ServiceSyncRuntime {
+    runtime: SyncRuntime<UserServiceInstance>,
+    current_context: QueryContext,
+}
 
 #[derive(Debug)]
 pub struct SyncRuntimeHandle<UserInstance>(Arc<Mutex<SyncRuntimeInternal<UserInstance>>>);
@@ -182,12 +186,6 @@ impl<T> Promise<T> {
             Promise::Ready(value) => Ok(value),
         }
     }
-}
-
-#[derive(Debug, Default)]
-struct SimpleUserState {
-    /// A read query in progress on the internal state, if any.
-    pending_query: Option<Receiver<Vec<u8>>>,
 }
 
 /// Manages a set of pending queries returning values of type `T`.
@@ -1325,7 +1323,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 impl ServiceSyncRuntime {
     /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
     pub fn new(execution_state_sender: ExecutionStateSender, context: QueryContext) -> Self {
-        SyncRuntime(Some(
+        let runtime = SyncRuntime(Some(
             SyncRuntimeInternal::new(
                 context.chain_id,
                 context.next_block_height,
@@ -1339,7 +1337,43 @@ impl ServiceSyncRuntime {
                 None,
             )
             .into(),
-        ))
+        ));
+
+        ServiceSyncRuntime {
+            runtime,
+            current_context: context,
+        }
+    }
+
+    /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
+    pub fn run(&mut self, incoming_requests: std::sync::mpsc::Receiver<ServiceRuntimeRequest>) {
+        while let Ok(request) = incoming_requests.recv() {
+            let ServiceRuntimeRequest::Query {
+                application_id,
+                context,
+                query,
+                callback,
+            } = request;
+
+            self.prepare_for_query(context);
+
+            let _ = callback.send(self.run_query(application_id, query));
+        }
+    }
+
+    /// Prepares the runtime to query an application.
+    pub(crate) fn prepare_for_query(&mut self, new_context: QueryContext) {
+        let expected_context = QueryContext {
+            local_time: new_context.local_time,
+            ..self.current_context
+        };
+
+        if new_context != expected_context {
+            let execution_state_sender = self.handle_mut().inner().execution_state_sender.clone();
+            *self = ServiceSyncRuntime::new(execution_state_sender, new_context);
+        } else {
+            self.handle_mut().inner().local_time = new_context.local_time;
+        }
     }
 
     /// Queries an application specified by its [`UserApplicationId`].
@@ -1348,29 +1382,15 @@ impl ServiceSyncRuntime {
         application_id: UserApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        self.0
-            .as_mut()
-            .expect(
-                "`SyncRuntimeHandle` should be available while `SyncRuntime` hasn't been dropped",
-            )
+        self.handle_mut()
             .try_query_application(application_id, query)
     }
-}
 
-impl ServiceSyncRuntime {
-    /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
-    pub fn run(&mut self, incoming_requests: std::sync::mpsc::Receiver<ServiceRuntimeRequest>) {
-        while let Ok(request) = incoming_requests.recv() {
-            match request {
-                ServiceRuntimeRequest::Query {
-                    application_id,
-                    query,
-                    callback,
-                } => {
-                    let _ = callback.send(self.run_query(application_id, query));
-                }
-            }
-        }
+    /// Obtains the [`SyncRuntimeHandle`] stored in this [`ServiceSyncRuntime`].
+    fn handle_mut(&mut self) -> &mut ServiceSyncRuntimeHandle {
+        self.runtime.0.as_mut().expect(
+            "`SyncRuntimeHandle` should be available while `SyncRuntime` hasn't been dropped",
+        )
     }
 }
 
@@ -1424,6 +1444,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
 pub enum ServiceRuntimeRequest {
     Query {
         application_id: UserApplicationId,
+        context: QueryContext,
         query: Vec<u8>,
         callback: oneshot::Sender<Result<Vec<u8>, ExecutionError>>,
     },

@@ -18,7 +18,7 @@ use {
 
 use crate::{
     batch::Batch,
-    common::{Context, HasherOutput, MIN_VIEW_TAG},
+    common::{from_bytes_option_or_default, Context, HasherOutput, MIN_VIEW_TAG},
     hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
@@ -63,14 +63,19 @@ where
     ViewError: From<C::Error>,
     T: Send + Sync + Serialize,
 {
+    const NUM_INIT_KEYS: usize = 1;
+
     fn context(&self) -> &C {
         &self.context
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let key = context.base_tag(KeyTag::Store as u8);
-        let value = context.read_value(&key).await?;
-        let stored_indices = value.unwrap_or_default();
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        Ok(vec![context.base_tag(KeyTag::Store as u8)])
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let stored_indices =
+            from_bytes_option_or_default(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
         Ok(Self {
             context,
             stored_indices,
@@ -78,6 +83,12 @@ where
             delete_storage_first: false,
             new_back_values: VecDeque::new(),
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let keys = Self::pre_load(&context)?;
+        let values = context.read_multi_values_bytes(keys).await?;
+        Self::post_load(context, &values)
     }
 
     fn rollback(&mut self) {

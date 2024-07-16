@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_testing)]
-use std::path::{Path, PathBuf};
 use std::{num::ParseIntError, time::Duration};
 
 use anyhow::Result;

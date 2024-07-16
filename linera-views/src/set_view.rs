@@ -47,16 +47,26 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
 {
+    const NUM_INIT_KEYS: usize = 0;
+
     fn context(&self) -> &C {
         &self.context
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
+    fn pre_load(_context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        Ok(Vec::new())
+    }
+
+    fn post_load(context: C, _values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         Ok(Self {
             context,
             delete_storage_first: false,
             updates: BTreeMap::new(),
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
@@ -359,16 +369,26 @@ where
     ViewError: From<C::Error>,
     I: Send + Sync + Serialize,
 {
+    const NUM_INIT_KEYS: usize = ByteSetView::<C>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.set.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let set = ByteSetView::load(context).await?;
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        ByteSetView::<C>::pre_load(context)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let set = ByteSetView::post_load(context, values)?;
         Ok(Self {
             set,
             _phantom: PhantomData,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
@@ -612,16 +632,26 @@ where
     ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
 {
+    const NUM_INIT_KEYS: usize = ByteSetView::<C>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.set.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let set = ByteSetView::load(context).await?;
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        ByteSetView::pre_load(context)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let set = ByteSetView::post_load(context, values)?;
         Ok(Self {
             set,
             _phantom: PhantomData,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
@@ -676,7 +706,7 @@ where
     pub fn insert<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.set.insert(short_key);
@@ -698,7 +728,7 @@ where
     pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.set.remove(short_key);
@@ -733,7 +763,7 @@ where
     pub async fn contains<Q>(&self, index: &Q) -> Result<bool, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.set.contains(&short_key).await

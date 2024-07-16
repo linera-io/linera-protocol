@@ -37,12 +37,15 @@ use linera_execution::{
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
-    test_utils::SystemExecutionState,
-    ChannelSubscription, ExecutionError, Message, MessageKind, Query, Response,
-    SystemExecutionError, SystemQuery, SystemResponse,
+    test_utils::{register_mock_applications, ExpectedCall, SystemExecutionState},
+    ChannelSubscription, ExecutionError, Message, MessageKind, Query, QueryContext, Response,
+    SystemExecutionError, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
 use linera_storage::{MemoryStorage, Storage, TestClock};
-use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
+use linera_views::{
+    memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
+    views::{CryptoHashView, RootView, ViewError},
+};
 use test_case::test_case;
 use test_log::test;
 
@@ -3599,7 +3602,7 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "aws", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_fallback<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -3661,5 +3664,246 @@ where
     let validator_key = worker.public_key();
     assert_eq!(manager.current_round, Round::Validator(0));
     assert_eq!(manager.leader, Some(Owner::from(validator_key)));
+    Ok(())
+}
+
+/// Tests if a service is able to handle more than one query without restarting.
+///
+/// If the service is restarted, a new [`MockApplicationInstance`] is created with an empty list of
+/// expected calls, and the test fails because the first [`MockApplicationInstance`] still expects
+/// some calls.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test(start_paused = true))]
+async fn test_long_lived_service<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
+{
+    const NUM_QUERIES: usize = 5;
+
+    let storage = storage_builder.build().await?;
+    let clock = storage_builder.clock();
+    let chain_description = ChainDescription::Root(1);
+    let chain_id = ChainId::from(chain_description);
+    let key_pair = KeyPair::generate();
+    let balance = Amount::ZERO;
+
+    let (_committee, mut worker) = init_worker_with_chain(
+        storage.clone(),
+        chain_description,
+        key_pair.public(),
+        balance,
+    )
+    .await;
+
+    let mut applications;
+    {
+        let mut chain = storage.load_chain(chain_id).await?;
+        applications = register_mock_applications(&mut chain.execution_state, 1).await?;
+        chain.save().await?;
+    }
+
+    let (application_id, application) = applications
+        .next()
+        .expect("Mock application should be registered");
+
+    let query_times = (0..NUM_QUERIES as u64).map(Timestamp::from);
+    let query_contexts = query_times.clone().map(|local_time| QueryContext {
+        chain_id,
+        next_block_height: BlockHeight(0),
+        local_time,
+    });
+
+    for query_context in query_contexts {
+        application.expect_call(ExpectedCall::handle_query(
+            move |_runtime, context, query| {
+                assert_eq!(context, query_context);
+                assert!(query.is_empty());
+                Ok(vec![])
+            },
+        ));
+    }
+
+    let query = Query::User {
+        application_id,
+        bytes: vec![],
+    };
+    for query_time in query_times {
+        clock.set(query_time);
+
+        assert_eq!(
+            worker.query_application(chain_id, query.clone()).await?,
+            Response::User(vec![])
+        );
+    }
+
+    drop(worker);
+    tokio::task::yield_now().await;
+    application.assert_no_more_expected_calls();
+
+    Ok(())
+}
+
+/// Tests if a service is restarted when a block is added to the chain.
+///
+/// A new block must force the service to restart, because the context will have changed and the
+/// application state may have changed.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test(start_paused = true))]
+async fn test_new_block_causes_service_restart<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::StoreError>,
+{
+    const NUM_QUERIES: usize = 2;
+    const BLOCK_TIMESTAMP: u64 = 10;
+
+    let storage = storage_builder.build().await?;
+    let clock = storage_builder.clock();
+    let chain_description = ChainDescription::Root(1);
+    let chain_id = ChainId::from(chain_description);
+    let key_pair = KeyPair::generate();
+    let balance = Amount::ZERO;
+
+    let (committee, mut worker) = init_worker_with_chain(
+        storage.clone(),
+        chain_description,
+        key_pair.public(),
+        balance,
+    )
+    .await;
+
+    let mut applications;
+    {
+        let mut chain = storage.load_chain(chain_id).await?;
+        applications = register_mock_applications(&mut chain.execution_state, 1).await?;
+        chain.save().await?;
+    }
+
+    let (application_id, application) = applications
+        .next()
+        .expect("Mock application should be registered");
+
+    let queries_before_proposal = (0..NUM_QUERIES as u64).map(Timestamp::from);
+    let queries_before_confirmation =
+        (0..NUM_QUERIES as u64).map(|delta| Timestamp::from(NUM_QUERIES as u64 + delta));
+
+    let queries_before_new_block = queries_before_proposal
+        .clone()
+        .chain(queries_before_confirmation.clone());
+    let queries_after_new_block =
+        (1..=NUM_QUERIES as u64).map(|delta| Timestamp::from(BLOCK_TIMESTAMP + delta));
+
+    let query = Query::User {
+        application_id,
+        bytes: vec![],
+    };
+
+    let query_contexts_before_new_block =
+        queries_before_new_block
+            .clone()
+            .map(|local_time| QueryContext {
+                chain_id,
+                next_block_height: BlockHeight(0),
+                local_time,
+            });
+    let query_contexts_after_new_block =
+        queries_after_new_block
+            .clone()
+            .map(|local_time| QueryContext {
+                chain_id,
+                next_block_height: BlockHeight(1),
+                local_time,
+            });
+
+    for query_context in query_contexts_before_new_block {
+        application.expect_call(ExpectedCall::handle_query(
+            move |_runtime, context, query| {
+                assert_eq!(context, query_context);
+                assert!(query.is_empty());
+                Ok(vec![])
+            },
+        ));
+    }
+
+    for local_time in queries_before_proposal {
+        clock.set(local_time);
+
+        assert_eq!(
+            worker.query_application(chain_id, query.clone()).await?,
+            Response::User(vec![])
+        );
+    }
+
+    clock.set(Timestamp::from(BLOCK_TIMESTAMP));
+    let block = make_first_block(chain_id).with_timestamp(Timestamp::from(BLOCK_TIMESTAMP));
+
+    let block_proposal = block.clone().into_fast_proposal(&key_pair);
+    let _ = worker.handle_block_proposal(block_proposal).await?;
+
+    for local_time in queries_before_confirmation {
+        clock.set(local_time);
+
+        assert_eq!(
+            worker.query_application(chain_id, query.clone()).await?,
+            Response::User(vec![])
+        );
+    }
+
+    let epoch = Epoch::ZERO;
+    let admin_id = ChainId::root(0);
+    let mut state = SystemExecutionState {
+        committees: BTreeMap::from_iter([(epoch, committee.clone())]),
+        ownership: ChainOwnership::single(key_pair.public()),
+        balance,
+        timestamp: Timestamp::from(BLOCK_TIMESTAMP),
+        ..SystemExecutionState::new(epoch, chain_description, admin_id)
+    }
+    .into_view()
+    .await;
+    register_mock_applications::<MemoryContext<TestExecutionRuntimeContext>>(&mut state, 1).await?;
+
+    let value = HashedCertificateValue::new_confirmed(
+        BlockExecutionOutcome {
+            messages: vec![],
+            state_hash: state.crypto_hash_mut().await?,
+            oracle_responses: vec![],
+        }
+        .with(block),
+    );
+    let certificate = make_certificate(&committee, &worker, value);
+    worker
+        .handle_certificate(certificate, vec![], vec![], None)
+        .await?;
+
+    for query_context in query_contexts_after_new_block.clone() {
+        application.expect_call(ExpectedCall::handle_query(
+            move |_runtime, context, query| {
+                assert_eq!(context, query_context);
+                assert!(query.is_empty());
+                Ok(vec![])
+            },
+        ));
+    }
+
+    for local_time in queries_after_new_block {
+        clock.set(local_time);
+
+        assert_eq!(
+            worker.query_application(chain_id, query.clone()).await?,
+            Response::User(vec![])
+        );
+    }
+
+    drop(worker);
+    tokio::task::yield_now().await;
+    application.assert_no_more_expected_calls();
+
     Ok(())
 }

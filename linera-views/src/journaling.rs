@@ -315,13 +315,13 @@ where
     ///
     /// NOTE:
     /// * Since a block must contain at least one operation and M bytes of the
-    /// serialization overhead (typically M = 2 or 3 bytes of vector sizes), condition (3)
-    /// requires that each operation in the original batch satisfies:
+    ///   serialization overhead (typically M = 2 or 3 bytes of vector sizes), condition (3)
+    ///   requires that each operation in the original batch satisfies:
     ///     `sizeof(key) + sizeof(value) + M <= K::MAX_VALUE_SIZE`
     ///
     /// * Similarly, a transaction must contain at least one block so it is desirable that
-    /// the maximum size of a block insertion `1 + sizeof(block_key) + K::MAX_VALUE_SIZE`
-    /// plus M bytes of overhead doesn't exceed the threshold of condition (2).
+    ///   the maximum size of a block insertion `1 + sizeof(block_key) + K::MAX_VALUE_SIZE`
+    ///   plus M bytes of overhead doesn't exceed the threshold of condition (2).
     async fn write_journal(
         &self,
         batch: K::Batch,

@@ -35,3 +35,6 @@ thiserror.workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["async-graphql-derive"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(linera_version_building)'] }

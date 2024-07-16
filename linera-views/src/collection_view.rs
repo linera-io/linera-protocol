@@ -89,16 +89,26 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Send + Sync,
 {
+    const NUM_INIT_KEYS: usize = 0;
+
     fn context(&self) -> &C {
         &self.context
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
+    fn pre_load(_context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        Ok(vec![])
+    }
+
+    fn post_load(context: C, _values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         Ok(Self {
             context,
             delete_storage_first: false,
             updates: RwLock::new(BTreeMap::new()),
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
@@ -210,12 +220,12 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
-    ///   let subview = view.load_entry_mut(vec![0, 1]).await.unwrap();
+    ///   let subview = view.load_entry_mut(&[0, 1]).await.unwrap();
     ///   let value = subview.get();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn load_entry_mut(&mut self, short_key: Vec<u8>) -> Result<&mut W, ViewError> {
+    pub async fn load_entry_mut(&mut self, short_key: &[u8]) -> Result<&mut W, ViewError> {
         self.do_load_entry_mut(short_key).await
     }
 
@@ -230,13 +240,13 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
-    ///   view.load_entry_mut(vec![0, 1]).await.unwrap();
-    ///   let subview = view.load_entry_or_insert(vec![0, 1]).await.unwrap();
+    ///   view.load_entry_mut(&[0, 1]).await.unwrap();
+    ///   let subview = view.load_entry_or_insert(&[0, 1]).await.unwrap();
     ///   let value = subview.get();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn load_entry_or_insert(&mut self, short_key: Vec<u8>) -> Result<&W, ViewError> {
+    pub async fn load_entry_or_insert(&mut self, short_key: &[u8]) -> Result<&W, ViewError> {
         Ok(self.do_load_entry_mut(short_key).await?)
     }
 
@@ -252,46 +262,52 @@ where
     /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   {
-    ///     let _subview = view.load_entry_or_insert(vec![0, 1]).await.unwrap();
+    ///     let _subview = view.load_entry_or_insert(&[0, 1]).await.unwrap();
     ///   }
     ///   {
-    ///     let subview = view.try_load_entry(vec![0, 1]).await.unwrap().unwrap();
+    ///     let subview = view.try_load_entry(&[0, 1]).await.unwrap().unwrap();
     ///     let value = subview.get();
     ///     assert_eq!(*value, String::default());
     ///   }
-    ///   assert!(view.try_load_entry(vec![0, 2]).await.unwrap().is_none());
+    ///   assert!(view.try_load_entry(&[0, 2]).await.unwrap().is_none());
     /// # })
     /// ```
     pub async fn try_load_entry(
         &self,
-        short_key: Vec<u8>,
+        short_key: &[u8],
     ) -> Result<Option<ReadGuardedView<W>>, ViewError> {
         let mut updates = self
             .updates
             .try_write()
             .ok_or(ViewError::CannotAcquireCollectionEntry)?;
-        match updates.entry(short_key.clone()) {
+        match updates.entry(short_key.to_vec()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 match entry {
                     Update::Set(_) => {
                         let guard = RwLockWriteGuard::downgrade(updates);
-                        Ok(Some(ReadGuardedView { guard, short_key }))
+                        Ok(Some(ReadGuardedView {
+                            guard,
+                            short_key: short_key.to_vec(),
+                        }))
                     }
                     Update::Removed => Ok(None),
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let key_index = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
+                let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
                 if !self.delete_storage_first && self.context.contains_key(&key_index).await? {
                     let key = self
                         .context
-                        .base_tag_index(KeyTag::Subview as u8, &short_key);
+                        .base_tag_index(KeyTag::Subview as u8, short_key);
                     let context = self.context.clone_with_base_key(key);
                     let view = W::load(context).await?;
                     entry.insert(Update::Set(view));
                     let guard = RwLockWriteGuard::downgrade(updates);
-                    Ok(Some(ReadGuardedView { guard, short_key }))
+                    Ok(Some(ReadGuardedView {
+                        guard,
+                        short_key: short_key.to_vec(),
+                    }))
                 } else {
                     Ok(None)
                 }
@@ -308,16 +324,16 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
-    ///   let subview = view.load_entry_mut(vec![0, 1]).await.unwrap();
+    ///   let subview = view.load_entry_mut(&[0, 1]).await.unwrap();
     ///   let value = subview.get_mut();
     ///   *value = String::from("Hello");
-    ///   view.reset_entry_to_default(vec![0, 1]).await.unwrap();
-    ///   let subview = view.load_entry_mut(vec![0, 1]).await.unwrap();
+    ///   view.reset_entry_to_default(&[0, 1]).await.unwrap();
+    ///   let subview = view.load_entry_mut(&[0, 1]).await.unwrap();
     ///   let value = subview.get_mut();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn reset_entry_to_default(&mut self, short_key: Vec<u8>) -> Result<(), ViewError> {
+    pub async fn reset_entry_to_default(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
         let view = self.load_entry_mut(short_key).await?;
         view.clear();
         Ok(())
@@ -333,7 +349,7 @@ where
     /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   {
-    ///     let _subview = view.load_entry_mut(vec![0, 1]).await.unwrap();
+    ///     let _subview = view.load_entry_mut(&[0, 1]).await.unwrap();
     ///   }
     ///   assert!(view.contains_key(&[0, 1]).await.unwrap());
     ///   assert!(!view.contains_key(&[0, 2]).await.unwrap());
@@ -362,7 +378,7 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
-    ///   let subview = view.load_entry_mut(vec![0, 1]).await.unwrap();
+    ///   let subview = view.load_entry_mut(&[0, 1]).await.unwrap();
     ///   let value = subview.get_mut();
     ///   assert_eq!(*value, String::default());
     ///   view.remove_entry(vec![0, 1]);
@@ -384,8 +400,8 @@ where
         self.context.extra()
     }
 
-    async fn do_load_entry_mut(&mut self, short_key: Vec<u8>) -> Result<&mut W, ViewError> {
-        match self.updates.get_mut().entry(short_key.clone()) {
+    async fn do_load_entry_mut(&mut self, short_key: &[u8]) -> Result<&mut W, ViewError> {
+        match self.updates.get_mut().entry(short_key.to_vec()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 match entry {
@@ -393,7 +409,7 @@ where
                     Update::Removed => {
                         let key = self
                             .context
-                            .base_tag_index(KeyTag::Subview as u8, &short_key);
+                            .base_tag_index(KeyTag::Subview as u8, short_key);
                         let context = self.context.clone_with_base_key(key);
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
@@ -409,7 +425,7 @@ where
             btree_map::Entry::Vacant(entry) => {
                 let key = self
                     .context
-                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                    .base_tag_index(KeyTag::Subview as u8, short_key);
                 let context = self.context.clone_with_base_key(key);
                 let mut view = W::load(context).await?;
                 if self.delete_storage_first {
@@ -441,8 +457,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
-    ///   view.load_entry_mut(vec![0, 1]).await.unwrap();
-    ///   view.load_entry_mut(vec![0, 2]).await.unwrap();
+    ///   view.load_entry_mut(&[0, 1]).await.unwrap();
+    ///   view.load_entry_mut(&[0, 2]).await.unwrap();
     ///   let mut count = 0;
     ///   view.for_each_key_while(|_key| {
     ///     count += 1;
@@ -506,8 +522,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
-    ///   view.load_entry_mut(vec![0, 1]).await.unwrap();
-    ///   view.load_entry_mut(vec![0, 2]).await.unwrap();
+    ///   view.load_entry_mut(&[0, 1]).await.unwrap();
+    ///   view.load_entry_mut(&[0, 2]).await.unwrap();
     ///   let mut count = 0;
     ///   view.for_each_key(|_key| {
     ///     count += 1;
@@ -536,8 +552,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
-    ///   view.load_entry_mut(vec![0, 1]).await.unwrap();
-    ///   view.load_entry_mut(vec![0, 2]).await.unwrap();
+    ///   view.load_entry_mut(&[0, 1]).await.unwrap();
+    ///   view.load_entry_mut(&[0, 2]).await.unwrap();
     ///   let keys = view.keys().await.unwrap();
     ///   assert_eq!(keys, vec![vec![0, 1], vec![0, 2]]);
     /// # })
@@ -635,16 +651,26 @@ where
     I: Send + Sync + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
+    const NUM_INIT_KEYS: usize = ByteCollectionView::<C, W>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.collection.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let collection = ByteCollectionView::load(context).await?;
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        ByteCollectionView::<C, W>::pre_load(context)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let collection = ByteCollectionView::post_load(context, values)?;
         Ok(CollectionView {
             collection,
             _phantom: PhantomData,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
@@ -708,7 +734,7 @@ where
         Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.collection.load_entry_mut(short_key).await
+        self.collection.load_entry_mut(&short_key).await
     }
 
     /// Loads a subview for the data at the given index in the collection. If an entry
@@ -734,7 +760,7 @@ where
         Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.collection.load_entry_or_insert(short_key).await
+        self.collection.load_entry_or_insert(&short_key).await
     }
 
     /// Loads a subview for the data at the given index in the collection. If an entry
@@ -768,7 +794,7 @@ where
         Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.collection.try_load_entry(short_key).await
+        self.collection.try_load_entry(&short_key).await
     }
 
     /// Resets an entry to the default value.
@@ -795,7 +821,7 @@ where
         Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.collection.reset_entry_to_default(short_key).await
+        self.collection.reset_entry_to_default(&short_key).await
     }
 
     /// Removes an entry from the CollectionView. If absent nothing happens.
@@ -974,16 +1000,26 @@ where
     I: Send + Sync + Debug,
     W: View<C> + Send + Sync,
 {
+    const NUM_INIT_KEYS: usize = ByteCollectionView::<C, W>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.collection.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let collection = ByteCollectionView::load(context).await?;
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        ByteCollectionView::<C, W>::pre_load(context)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let collection = ByteCollectionView::post_load(context, values)?;
         Ok(CustomCollectionView {
             collection,
             _phantom: PhantomData,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
@@ -1044,10 +1080,10 @@ where
     pub async fn load_entry_mut<Q>(&mut self, index: &Q) -> Result<&mut W, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
-        self.collection.load_entry_mut(short_key).await
+        self.collection.load_entry_mut(&short_key).await
     }
 
     /// Loads a subview for the data at the given index in the collection. If an entry
@@ -1070,10 +1106,10 @@ where
     pub async fn load_entry_or_insert<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
-        self.collection.load_entry_or_insert(short_key).await
+        self.collection.load_entry_or_insert(&short_key).await
     }
 
     /// Loads a subview for the data at the given index in the collection. If an entry
@@ -1104,10 +1140,10 @@ where
     ) -> Result<Option<ReadGuardedView<W>>, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
-        self.collection.try_load_entry(short_key).await
+        self.collection.try_load_entry(&short_key).await
     }
 
     /// Marks the entry so that it is removed in the next flush.
@@ -1131,10 +1167,10 @@ where
     pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
-        self.collection.reset_entry_to_default(short_key).await
+        self.collection.reset_entry_to_default(&short_key).await
     }
 
     /// Removes an entry from the CollectionView. If absent nothing happens.
@@ -1157,7 +1193,7 @@ where
     pub fn remove_entry<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize + ?Sized,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.collection.remove_entry(short_key);
