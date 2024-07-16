@@ -41,6 +41,46 @@ pub(crate) enum Update<T> {
     Set(T),
 }
 
+pub(crate) struct DeletionPrefixes {
+    delete_storage_first: bool,
+    deleted_prefixes: BTreeSet<Vec<u8>>,
+}
+
+impl DeletionPrefixes {
+    fn clear(&mut self) {
+        self.delete_storage_first = true;
+        self.deleted_prefixes.clear();
+    }
+
+    fn rollback(&mut self) {
+        self.delete_storage_first = true;
+        self.deleted_prefixes.clear();
+    }
+
+    fn contains_key(&self, index: &[u8]) -> bool {
+        if self.delete_storage_first {
+            return true;
+        }
+        contains_key(&self.deleted_prefixes, index)
+    }
+
+    fn has_pending_change(&self) -> bool {
+    	if self.delete_storage_first {
+            return true;
+        }
+        !self.deleted_prefixes.is_empty()
+    }
+
+    fn insert_key_prefix(&mut self, key_prefix: Vec<u8>) {
+        if !self.delete_storage_first {
+            insert_key_prefix(&mut self.deleted_prefixes, key_prefix);
+        }
+    }
+}
+
+
+
+
 /// The common initialization parameters for the `KeyValueStore`
 #[derive(Debug, Clone)]
 pub struct CommonStoreConfig {
