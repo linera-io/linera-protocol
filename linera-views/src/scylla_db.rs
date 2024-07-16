@@ -456,9 +456,19 @@ impl ReadableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStoreInternal {
     }
 
     async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ScyllaDbStoreError> {
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        store.contain_keys_internal(keys).await
+        let handles = keys
+            .chunks(MAX_MULTI_KEYS)
+            .map(|keys| store.contain_keys_internal(keys.to_vec()));
+        let results: Vec<_> = join_all(handles)
+            .await
+            .into_iter()
+            .collect::<Result<_, _>>()?;
+        Ok(results.into_iter().flatten().collect())
     }
 
     async fn read_multi_values_bytes(

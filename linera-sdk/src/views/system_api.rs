@@ -205,7 +205,7 @@ impl WitInterface {
             WitInterface::Contract => contract_wit::contain_keys_new(keys),
             WitInterface::Service => service_wit::contain_keys_new(keys),
             #[cfg(with_testing)]
-            WitInterface::Mock { store, .. } => store.contain_keys_new(key),
+            WitInterface::Mock { store, .. } => store.contain_keys_new(keys),
         }
     }
 

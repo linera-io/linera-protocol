@@ -96,7 +96,7 @@ impl ServiceStoreServer {
                 .map_err(|_e| Status::not_found("contain_keys")),
             #[cfg(feature = "rocksdb")]
             ServiceStoreServerInternal::RocksDb(store) => store
-                .contain_keya(keys)
+                .contain_keys(keys)
                 .await
                 .map_err(|_e| Status::not_found("contain_keys")),
         }
