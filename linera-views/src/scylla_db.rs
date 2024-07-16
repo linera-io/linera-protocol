@@ -200,7 +200,10 @@ impl ScyllaDbClient {
         Ok(values)
     }
 
-    async fn contain_keys_internal(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ScyllaDbStoreError> {
+    async fn contain_keys_internal(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<bool>, ScyllaDbStoreError> {
         let num_keys = keys.len();
         if num_keys == 0 {
             return Ok(Vec::new());

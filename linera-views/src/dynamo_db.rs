@@ -819,10 +819,7 @@ impl ReadableKeyValueStore<DynamoDbStoreError> for DynamoDbStoreInternal {
         self.contains_key_general(key_db).await
     }
 
-    async fn contain_keys(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<bool>, DynamoDbStoreError> {
+    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, DynamoDbStoreError> {
         let mut handles = Vec::new();
         for key in keys {
             ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbStoreError::KeyTooLong);

@@ -621,11 +621,17 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         self.inner().contains_key_wait(promise)
     }
 
-    fn contain_keys_new(&mut self, keys: Vec<Vec<u8>>) -> Result<Self::ContainKeys, ExecutionError> {
+    fn contain_keys_new(
+        &mut self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Self::ContainKeys, ExecutionError> {
         self.inner().contain_keys_new(keys)
     }
 
-    fn contain_keys_wait(&mut self, promise: &Self::ContainKeys) -> Result<Vec<bool>, ExecutionError> {
+    fn contain_keys_wait(
+        &mut self,
+        promise: &Self::ContainKeys,
+    ) -> Result<Vec<bool>, ExecutionError> {
         self.inner().contain_keys_wait(promise)
     }
 
@@ -789,7 +795,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(value)
     }
 
-    fn contain_keys_new(&mut self, keys: Vec<Vec<u8>>) -> Result<Self::ContainKeys, ExecutionError> {
+    fn contain_keys_new(
+        &mut self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Self::ContainKeys, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
         self.resource_controller.track_read_operations(1)?;
@@ -799,7 +808,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         state.contain_keys_queries.register(receiver)
     }
 
-    fn contain_keys_wait(&mut self, promise: &Self::ContainKeys) -> Result<Vec<bool>, ExecutionError> {
+    fn contain_keys_wait(
+        &mut self,
+        promise: &Self::ContainKeys,
+    ) -> Result<Vec<bool>, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
         let value = state.contain_keys_queries.wait(*promise)?;

@@ -95,11 +95,14 @@ where
     }
 
     async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, K::Error> {
-        let big_keys = keys.into_iter().map(|key| {
-            let mut big_key = key.clone();
-            big_key.extend(&[0, 0, 0, 0]);
-            big_key
-        }).collect::<Vec<_>>();
+        let big_keys = keys
+            .into_iter()
+            .map(|key| {
+                let mut big_key = key.clone();
+                big_key.extend(&[0, 0, 0, 0]);
+                big_key
+            })
+            .collect::<Vec<_>>();
         self.store.contain_keys(big_keys).await
     }
 
