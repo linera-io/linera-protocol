@@ -1336,22 +1336,6 @@ impl ServiceSyncRuntime {
         ))
     }
 
-    /// Queries an application specified by its [`UserApplicationId`].
-    pub(crate) fn run_query(
-        &mut self,
-        application_id: UserApplicationId,
-        query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        self.0
-            .as_mut()
-            .expect(
-                "`SyncRuntimeHandle` should be available while `SyncRuntime` hasn't been dropped",
-            )
-            .try_query_application(application_id, query)
-    }
-}
-
-impl ServiceSyncRuntime {
     /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
     pub fn run(&mut self, incoming_requests: std::sync::mpsc::Receiver<ServiceRuntimeRequest>) {
         while let Ok(request) = incoming_requests.recv() {
@@ -1365,6 +1349,20 @@ impl ServiceSyncRuntime {
                 }
             }
         }
+    }
+
+    /// Queries an application specified by its [`UserApplicationId`].
+    pub(crate) fn run_query(
+        &mut self,
+        application_id: UserApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        self.0
+            .as_mut()
+            .expect(
+                "`SyncRuntimeHandle` should be available while `SyncRuntime` hasn't been dropped",
+            )
+            .try_query_application(application_id, query)
     }
 }
 
