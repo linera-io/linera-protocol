@@ -1,5 +1,5 @@
 import Logo from '../assets/linera.png'
-export default function Navbar({ chainId }) {
+export default function Navbar({ chainId }: { chainId: string | undefined }) {
   return (
     <div className="w-full h-[80px] flex justify-center bg-transparent fixed backdrop-blur-xl z-10">
       <div className="w-full px-10 py-5 flex max-w-[1380px] justify-between">

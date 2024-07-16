@@ -1,4 +1,4 @@
-export function convertMillisToDateTime(microseconds) {
+export function convertMillisToDateTime(microseconds: number) {
   const milliseconds = microseconds / 1000
 
   const date = new Date(milliseconds)

@@ -6,12 +6,37 @@ import LeftSideMenu from './components/LeftSideMenu'
 import RightSideMenu from './components/RightSideMenu'
 import { gql, useSubscription, useLazyQuery } from '@apollo/client'
 
+interface Post {
+  value: {
+    key: {
+      timestamp: number
+      author: string
+      index: number
+    }
+    text: string
+    imageUrl: string | null
+    comment: [
+      {
+        text: string
+        chainId: string
+      }
+    ]
+    likes: number
+  }
+}
+
 const NOTIFICATION_SUBSCRIPTION = gql`
-  subscription Notifications($chainId: ID!) {
+  subscription Notifications($chainId: String!) {
     notifications(chainId: $chainId)
   }
 `
-export default function App({ chainId, onwer }) {
+export default function App({
+  chainId,
+  owner,
+}: {
+  chainId: string | undefined
+  owner: string | undefined
+}) {
   const [posts, setPosts] = React.useState([])
   const [receivedPosts, { called }] = useLazyQuery(
     gql`
@@ -62,7 +87,7 @@ export default function App({ chainId, onwer }) {
         <div className="flex flex-col gap-3">
           <NewPost chainId={chainId} />
           {posts &&
-            posts?.map((post, index) => (
+            posts?.map((post: Post, index) => (
               <div key={index}>{<PostCard post={post.value} />}</div>
             ))}
         </div>

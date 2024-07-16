@@ -1,5 +1,6 @@
 import React from 'react'
 import Logo from '../assets/linera.png'
+
 export default function LeftSideMenu() {
   return (
     <div className="w-full min-w-[300px] p-5 h-fit bg-slate-100 border rounded-xl">
@@ -137,7 +138,7 @@ export default function LeftSideMenu() {
             className="bg-slate-300 font-semibold rounded-full text-xs px-3 py-1"
             href="https://discord.com/invite/linera"
           >
-            discord.com/linera
+            discord.gg/linera
           </a>
         </span>
         <div className="flex items-center gap-1">

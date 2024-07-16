@@ -2,7 +2,25 @@ import { gql, useMutation } from '@apollo/client'
 import React from 'react'
 import { convertMillisToDateTime } from '../utils/time'
 
-function UserInfo({ user }) {
+interface Key {
+  timestamp: number
+  author: string
+  index: number
+}
+
+interface Post {
+  key: Key
+  text: string
+  imageUrl: string | null
+  comment: [
+    {
+      text: string
+      chainId: string
+    }
+  ]
+  likes: number
+}
+function UserInfo({ user }: { user: Key }) {
   const { formattedDate, formattedTime } = convertMillisToDateTime(
     user.timestamp
   )
@@ -29,8 +47,8 @@ function UserInfo({ user }) {
   )
 }
 
-export default function PostCard({ post }) {
-  const [showComment, setShowComment] = React.useState('')
+export default function PostCard({ post }: { post: Post }) {
+  const [showComment, setShowComment] = React.useState(false)
   const [comment, setComment] = React.useState('')
 
   const [likeMutation] = useMutation(gql`
@@ -43,7 +61,7 @@ export default function PostCard({ post }) {
       comment(key: $key, comment: $text)
     }
   `)
-  async function handleLike(key) {
+  async function handleLike(key: Key) {
     await likeMutation({
       variables: {
         key: {
@@ -54,7 +72,7 @@ export default function PostCard({ post }) {
       },
     })
   }
-  async function handleComment(key) {
+  async function handleComment(key: Key) {
     await commentMutation({
       variables: {
         key: {

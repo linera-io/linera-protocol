@@ -5,7 +5,6 @@ import {
   InMemoryCache,
   split,
 } from '@apollo/client'
-import React from 'react'
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions'
 import { createClient } from 'graphql-ws'
 import { getMainDefinition } from '@apollo/client/utilities'
@@ -16,6 +15,7 @@ function GraphQLProvider({ chainId, applicationId, port, children }) {
 }
 
 function apolloClient(chainId, applicationId, port) {
+  const graphqlUri = `http://localhost:${port}/chains/${chainId}/applications/${applicationId}`
   const wsLink = new GraphQLWsLink(
     createClient({
       url: `ws://localhost:${port}/ws`,
@@ -23,7 +23,7 @@ function apolloClient(chainId, applicationId, port) {
   )
 
   const httpLink = new HttpLink({
-    uri: `http://localhost:${port}/chains/${chainId}/applications/${applicationId}`,
+    uri: graphqlUri,
   })
 
   const splitLink = split(

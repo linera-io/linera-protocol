@@ -2,7 +2,7 @@ import React from 'react'
 import UploadImage from '../assets/uploadimage.png'
 import { gql, useMutation } from '@apollo/client'
 
-function UserInfo({ chainId }) {
+function UserInfo({ chainId }: { chainId: string | undefined }) {
   return (
     <div className="flex items-center mb-3 p-1 w-full">
       <img
@@ -20,7 +20,7 @@ function UserInfo({ chainId }) {
   )
 }
 
-export default function NewPost({ chainId }) {
+export default function NewPost({ chainId }: { chainId: string | undefined }) {
   const [post, setPost] = React.useState({
     message: '',
     image: '',
