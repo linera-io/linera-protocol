@@ -3,7 +3,7 @@ package linera:app;
 interface view-system-api {
     contains-key-new: func(key: list<u8>) -> u32;
     contains-key-wait: func(promise-id: u32) -> bool;
-    contains-keys-new: func(key: list<list<u8>>) -> u32;
+    contains-keys-new: func(keys: list<list<u8>>) -> u32;
     contains-keys-wait: func(promise-id: u32) -> list<bool>;
     read-multi-values-bytes-new: func(keys: list<list<u8>>) -> u32;
     read-multi-values-bytes-wait: func(promise-id: u32) -> list<option<list<u8>>>;
