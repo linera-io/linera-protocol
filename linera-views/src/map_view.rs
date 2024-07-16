@@ -276,7 +276,7 @@ impl<C, V> ByteMapView<C, V>
 where
     C: Context + Sync,
     ViewError: From<C::Error>,
-    V: Clone + DeserializeOwned + 'static,
+    V: Clone + DeserializeOwned + Send + 'static,
 {
     /// Reads the value at the given position, if any.
     /// ```rust
@@ -306,6 +306,44 @@ where
         }
         let key = self.context.base_index(short_key);
         Ok(self.context.read_value(&key).await?)
+    }
+
+    /// Reads the value at the given position, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::map_view::ByteMapView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut map = ByteMapView::load(context).await.unwrap();
+    ///   map.insert(vec![0,1], String::from("Hello"));
+    ///   let values = map.multi_get(vec![vec![0,1],vec![0,2]]).await.unwrap();
+    ///   assert_eq!(values, vec![Some(String::from("Hello")), None]);
+    /// # })
+    /// ```
+    pub async fn multi_get(&self, short_keys: Vec<Vec<u8>>) -> Result<Vec<Option<V>>, ViewError> {
+        let size = short_keys.len();
+        let mut results = vec![None; size];
+        let mut missed_indices = Vec::new();
+        let mut vector_query = Vec::new();
+        for (i, short_key) in short_keys.into_iter().enumerate() {
+            if let Some(update) = self.updates.get(&short_key) {
+                if let Update::Set(value) = update {
+                    results[i] = Some(value.clone());
+                }
+            } else {
+                if !self.delete_storage_first && !contains_key(&self.deleted_prefixes, &short_key) {
+                    missed_indices.push(i);
+                    let key = self.context.base_index(&short_key);
+                    vector_query.push(key);
+                }
+            }
+        }
+        let values = self.context.read_multi_values(vector_query).await?;
+        for (i, value) in missed_indices.into_iter().zip(values) {
+            results[i] = value;
+        }
+        Ok(results)
     }
 
     /// Obtains a mutable reference to a value at a given position if available.
@@ -952,7 +990,7 @@ where
     C: Context + Sync,
     ViewError: From<C::Error>,
     I: Serialize,
-    V: Clone + DeserializeOwned + 'static,
+    V: Clone + DeserializeOwned + Send + 'static,
 {
     /// Reads the value at the given position, if any.
     /// ```rust
@@ -1380,7 +1418,7 @@ where
     C: Context + Sync,
     ViewError: From<C::Error>,
     I: CustomSerialize,
-    V: Clone + DeserializeOwned + 'static,
+    V: Clone + DeserializeOwned + Send + 'static,
 {
     /// Reads the value at the given position, if any.
     /// ```rust
