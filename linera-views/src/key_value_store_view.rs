@@ -636,7 +636,7 @@ where
         Ok(self.context.read_value_bytes(&key).await?)
     }
 
-    /// Test whether a view contains a specific index.
+    /// Test whether the store contains a specific index.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
@@ -666,6 +666,52 @@ where
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
         Ok(self.context.contains_key(&key).await?)
+    }
+
+    /// Test whether the view contains a range of indices
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
+    ///   view.insert(vec![0,1], vec![42]).await.unwrap();
+    ///   let keys = vec![vec![0,1], vec![0,2]];
+    ///   let results = view.contain_keys(keys).await.unwrap();
+    ///   assert_eq!(results, vec![true, false]);
+    /// # })
+    /// ```
+    pub async fn contain_keys(&self, indices: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
+        let mut results = Vec::with_capacity(indices.len());
+        let mut missed_indices = Vec::new();
+        let mut vector_query = Vec::new();
+        for (i, index) in indices.into_iter().enumerate() {
+            if index.len() > self.max_key_size() {
+                return Err(ViewError::KeyTooLong);
+            }
+            if let Some(update) = self.updates.get(&index) {
+                let value = match update {
+                    Update::Removed => false,
+                    Update::Set(_) => true,
+                };
+                results.push(value);
+            } else {
+                results.push(false);
+                if !contains_key(&self.deleted_prefixes, &index) {
+                    missed_indices.push(i);
+                    let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
+                    vector_query.push(key);
+                }
+            }
+        }
+        if !self.delete_storage_first {
+            let values = self.context.contain_keys(vector_query).await?;
+            for (i, value) in missed_indices.into_iter().zip(values) {
+                results[i] = value;
+            }
+        }
+        Ok(results)
     }
 
     /// Obtains the values of a range of indices
@@ -1080,6 +1126,11 @@ where
     async fn contains_key(&self, key: &[u8]) -> Result<bool, ViewError> {
         let view = self.view.read().await;
         view.contains_key(key).await
+    }
+
+    async fn contain_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
+        let view = self.view.read().await;
+        view.contain_keys(keys).await
     }
 
     async fn read_multi_values_bytes(
