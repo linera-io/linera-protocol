@@ -5,7 +5,7 @@ use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use futures::{
-    future::{self, Either},
+    future::{self, Either, FutureExt as _},
     lock::Mutex,
     stream::{self, Stream, StreamExt as _},
 };
@@ -100,8 +100,8 @@ where
     ViewError: From<S::StoreError>,
 {
     let storage = chain_client.storage_client();
-    let (listener, _aborter, mut notifications) = chain_client.listen().await?;
-    let mut listener = Box::pin(listener);
+    let (listener, aborter, mut notifications) = chain_client.listen().await?;
+    let mut listener = Box::pin(listener.fuse());
     let mut timeout = storage.clock().current_time();
 
     Ok(async_stream::stream! {
@@ -140,6 +140,9 @@ where
 
             yield Event::Notification(notification);
         }
+
+        // Ensure the aborter is owned by the stream.
+        drop(aborter);
     })
 }
 
