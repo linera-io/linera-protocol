@@ -125,11 +125,12 @@ Now make a post [in the 8080 tab](http://localhost:8080/chains/e476187f6ddfeb9d5
 mutation {
     post(
         text: "Linera Social is the new Mastodon!"
+        imageUrl: "https://linera.org/img/logo.svg"  # Optional
     )
 }
 ```
 
-Since 8081 is a subscriber. Let's see if it received any posts:
+Since 8081 is a subscriber. Let's see if it received any posts: # You can see the post on the [web-frontend](./web-frontend/), or follow the steps below.
 
 ```gql,uri=http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
 query { receivedPosts { keys { timestamp author index } } }
@@ -140,27 +141,49 @@ entry, we can see the posted text:
 
 ```gql
 query {
-    receivedPosts {
-        entry(
-            key: {
-                timestamp: 1705504131018960,
-                author: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
-                index: 0
-            }
-        ) { value }
+  receivedPosts {
+    entry(
+      key: {
+        timestamp: 1705504131018960
+        author: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+        index: 0
+      }
+    ) {
+      value {
+        key {
+          timestamp
+          author
+          index
+        }
+        text
+        imageUrl
+        comment {
+          text
+          chainId
+        }
+        likes
+      }
     }
+  }
 }
 ```
 
 ```json
 {
-    "data": {
-        "receivedPosts": {
-            "entry": {
-                "value": "Linera Social is the new Mastodon!"
-            }
+  "data": {
+    "receivedPosts": {
+      "entry": {
+        "value": {
+          "key": {
+            "timestamp": 1705504131018960,
+            "author": "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+            "index": 0
+          },
+          "text": "Linera Social is the new Mastodon!"
         }
+      }
     }
+  }
 }
 ```
 

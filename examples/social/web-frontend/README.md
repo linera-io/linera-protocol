@@ -3,7 +3,15 @@
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
 The application (contract/service) must be deployed on the network, and a Node Service must be running
-on port 8000.
+on port 8000. Also make sure you have performed the operations mentoined in this [README](../README.md)
+
+### Note
+
+The app is an example of a social app built using linera, and will be improved with future updates. Users can see their post by `ownPost` query in GraphiQL IDE.
+
+#### Operations avaiable:
+
+Post, Likes, and Comments (only by the creation chain).
 
 To access the social app for a given Application Id, append the Application Id and port to the URI as so:
 
