@@ -1339,15 +1339,13 @@ impl ServiceSyncRuntime {
     /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
     pub fn run(&mut self, incoming_requests: std::sync::mpsc::Receiver<ServiceRuntimeRequest>) {
         while let Ok(request) = incoming_requests.recv() {
-            match request {
-                ServiceRuntimeRequest::Query {
-                    application_id,
-                    query,
-                    callback,
-                } => {
-                    let _ = callback.send(self.run_query(application_id, query));
-                }
-            }
+            let ServiceRuntimeRequest::Query {
+                application_id,
+                query,
+                callback,
+            } = request;
+
+            let _ = callback.send(self.run_query(application_id, query));
         }
     }
 
