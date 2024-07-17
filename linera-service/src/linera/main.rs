@@ -2,6 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![recursion_limit = "256"]
 #![deny(clippy::large_futures)]
 
 use std::{collections::HashMap, env, path::PathBuf, sync::Arc, time::Instant};
