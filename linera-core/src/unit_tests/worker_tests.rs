@@ -3740,6 +3740,7 @@ where
         );
     }
 
+    // TODO(#2249): Split the assertion in two
     drop(worker);
     tokio::time::sleep(Duration::from_millis(10)).await;
     application.assert_no_more_expected_calls();
@@ -3901,6 +3902,7 @@ where
         );
     }
 
+    // TODO(#2249): Split the assertion in two
     drop(worker);
     tokio::time::sleep(Duration::from_millis(10)).await;
     application.assert_no_more_expected_calls();
