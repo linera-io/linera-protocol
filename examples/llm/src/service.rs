@@ -7,7 +7,10 @@ mod random;
 mod state;
 mod token;
 
-use std::io::{Cursor, Seek, SeekFrom};
+use std::{
+    io::{Cursor, Seek, SeekFrom},
+    sync::Arc,
+};
 
 use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Request, Response, Schema};
 use candle_core::{
@@ -25,7 +28,7 @@ use tokenizers::Tokenizer;
 use crate::token::TokenOutputStream;
 
 pub struct LlmService {
-    runtime: ServiceRuntime<Self>,
+    model_context: Arc<ModelContext>,
 }
 
 linera_sdk::service!(LlmService);
@@ -39,7 +42,7 @@ struct QueryRoot {}
 #[Object]
 impl QueryRoot {
     async fn prompt(&self, ctx: &Context<'_>, prompt: String) -> String {
-        let model_context = ctx.data::<ModelContext>().unwrap();
+        let model_context = ctx.data::<Arc<ModelContext>>().unwrap();
         model_context.run_model(&prompt).unwrap()
     }
 }
@@ -73,23 +76,24 @@ impl Service for LlmService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        LlmService { runtime }
+        let raw_weights = runtime
+            .fetch_url("https://huggingface.co/karpathy/tinyllamas/resolve/main/stories42M.bin");
+        info!("got weights: {}B", raw_weights.len());
+        let tokenizer_bytes = runtime.fetch_url(
+            "https://huggingface.co/spaces/lmz/candle-llama2/resolve/main/tokenizer.json",
+        );
+        let model_context = Arc::new(ModelContext {
+            model: raw_weights,
+            tokenizer: tokenizer_bytes,
+        });
+        LlmService { model_context }
     }
 
     async fn handle_query(&self, request: Request) -> Response {
         let query_string = &request.query;
         info!("query: {}", query_string);
-        let raw_weights = self.runtime.fetch_url("http://localhost:10001/model.bin");
-        info!("got weights: {}B", raw_weights.len());
-        let tokenizer_bytes = self
-            .runtime
-            .fetch_url("http://localhost:10001/tokenizer.json");
-        let model_context = ModelContext {
-            model: raw_weights,
-            tokenizer: tokenizer_bytes,
-        };
         let schema = Schema::build(QueryRoot {}, EmptyMutation, EmptySubscription)
-            .data(model_context)
+            .data(self.model_context.clone())
             .finish();
         schema.execute(request).await
     }
