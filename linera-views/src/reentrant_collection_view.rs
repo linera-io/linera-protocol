@@ -481,54 +481,31 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Send + Sync + 'static,
 {
-    /// Load multiple entries for writing at once.
-    /// The entries in short_keys have to be all distinct.
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
-    ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
-    ///   {
-    ///     let mut subview = view.try_load_entry_mut(&[0, 1]).await.unwrap();
-    ///     *subview.get_mut() = "Bonjour".to_string();
-    ///   }
-    ///   let short_keys = vec![vec![0, 1], vec![2, 3],];
-    ///   let subviews = view.try_load_entries_mut(short_keys).await.unwrap();
-    ///   let value1 = subviews[0].get();
-    ///   let value2 = subviews[1].get();
-    ///   assert_eq!(*value1, "Bonjour".to_string());
-    ///   assert_eq!(*value2, String::default());
-    /// # })
-    /// ```
-    pub async fn try_load_entries_mut(
-        &mut self,
+    async fn do_load_entries(
+        context: &C,
+        updates: &mut BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
+        delete_storage_first: bool,
         short_keys: Vec<Vec<u8>>,
     ) -> Result<Vec<WriteGuardedView<W>>, ViewError> {
         let mut selected_short_keys = Vec::new();
-        let updates = self.updates.get_mut();
         for short_key in &short_keys {
             match updates.entry(short_key.to_vec()) {
                 btree_map::Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
                     if let Update::Removed = entry {
-                        let key = self
-                            .context
+                        let key = context
                             .base_tag_index(KeyTag::Subview as u8, &short_key);
-                        let context = self.context.clone_with_base_key(key);
+                        let context = context.clone_with_base_key(key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
                         *entry = Update::Set(view);
                     }
                 }
                 btree_map::Entry::Vacant(entry) => {
-                    if self.delete_storage_first {
-                        let key = self
-                            .context
+                    if delete_storage_first {
+                        let key = context
                             .base_tag_index(KeyTag::Subview as u8, &short_key);
-                        let context = self.context.clone_with_base_key(key);
+                        let context = context.clone_with_base_key(key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
                         entry.insert(Update::Set(view));
@@ -540,11 +517,9 @@ where
         }
         let mut handles = Vec::new();
         for short_key in &selected_short_keys {
-            let short_key = short_key.clone();
-            let context = self.context.clone();
+            let key = context.base_tag_index(KeyTag::Subview as u8, &short_key);
+            let context = context.clone_with_base_key(key);
             handles.push(tokio::spawn(async move {
-                let key = context.base_tag_index(KeyTag::Subview as u8, &short_key);
-                let context = context.clone_with_base_key(key);
                 W::load(context).await
             }));
         }
@@ -573,6 +548,38 @@ where
                 }
             })
             .collect()
+    }
+
+
+    
+    /// Load multiple entries for writing at once.
+    /// The entries in short_keys have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
+    ///   {
+    ///     let mut subview = view.try_load_entry_mut(&[0, 1]).await.unwrap();
+    ///     *subview.get_mut() = "Bonjour".to_string();
+    ///   }
+    ///   let short_keys = vec![vec![0, 1], vec![2, 3],];
+    ///   let subviews = view.try_load_entries_mut(short_keys).await.unwrap();
+    ///   let value1 = subviews[0].get();
+    ///   let value2 = subviews[1].get();
+    ///   assert_eq!(*value1, "Bonjour".to_string());
+    ///   assert_eq!(*value2, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries_mut(
+        &mut self,
+        short_keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<WriteGuardedView<W>>, ViewError> {
+        let updates = self.updates.get_mut();
+        Self::do_load_entries(&self.context, updates, self.delete_storage_first, short_keys).await
     }
 
     /// Load multiple entries for reading at once.
