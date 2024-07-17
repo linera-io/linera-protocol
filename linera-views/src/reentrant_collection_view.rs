@@ -493,7 +493,7 @@ where
                 btree_map::Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
                     if let Update::Removed = entry {
-                        let key = context.base_tag_index(KeyTag::Subview as u8, &short_key);
+                        let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
                         let context = context.clone_with_base_key(key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
@@ -502,7 +502,7 @@ where
                 }
                 btree_map::Entry::Vacant(entry) => {
                     if delete_storage_first {
-                        let key = context.base_tag_index(KeyTag::Subview as u8, &short_key);
+                        let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
                         let context = context.clone_with_base_key(key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
@@ -515,7 +515,7 @@ where
         }
         let mut handles = Vec::new();
         for short_key in &selected_short_keys {
-            let key = context.base_tag_index(KeyTag::Subview as u8, &short_key);
+            let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
             let context = context.clone_with_base_key(key);
             handles.push(tokio::spawn(async move { W::load(context).await }));
         }
