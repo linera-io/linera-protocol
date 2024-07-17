@@ -3676,7 +3676,7 @@ where
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
-#[test_log::test(tokio::test(start_paused = true))]
+#[test_log::test(tokio::test)]
 async fn test_long_lived_service<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
@@ -3740,8 +3740,9 @@ where
         );
     }
 
+    // TODO(#2249): Split the assertion in two
     drop(worker);
-    tokio::task::yield_now().await;
+    tokio::time::sleep(Duration::from_millis(10)).await;
     application.assert_no_more_expected_calls();
 
     Ok(())
@@ -3755,7 +3756,7 @@ where
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
-#[test_log::test(tokio::test(start_paused = true))]
+#[test_log::test(tokio::test)]
 async fn test_new_block_causes_service_restart<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
@@ -3901,8 +3902,9 @@ where
         );
     }
 
+    // TODO(#2249): Split the assertion in two
     drop(worker);
-    tokio::task::yield_now().await;
+    tokio::time::sleep(Duration::from_millis(10)).await;
     application.assert_no_more_expected_calls();
 
     Ok(())
