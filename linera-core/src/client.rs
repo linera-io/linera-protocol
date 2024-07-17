@@ -51,7 +51,7 @@ use serde::Serialize;
 use thiserror::Error;
 use tokio::sync::{Mutex, OwnedRwLockReadGuard};
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, Instrument as _};
 
 use crate::{
     data_types::{
@@ -2647,7 +2647,7 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self), fields(chain_id = ?self.chain_id))]
     /// Spawns a task that listens to notifications about the current chain from all validators,
     /// and synchronizes the local state accordingly.
     pub async fn listen(
@@ -2658,7 +2658,6 @@ where
     {
         use future::FutureExt as _;
 
-        #[tracing::instrument(level = "trace", skip(future, background_work))]
         async fn await_while_polling<F: FusedFuture>(
             future: F,
             background_work: impl FusedStream<Item = ()>,
@@ -2719,7 +2718,8 @@ where
             }
 
             let () = process_notifications.collect().await;
-        };
+        }
+        .in_current_span();
 
         Ok((update_streams, AbortOnDrop(abort), notifications))
     }

@@ -1241,6 +1241,12 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run(options: &ClientOptions) -> anyhow::Result<()> {
+    let span = tracing::info_span!("run");
+    if let Some(wallet_id) = options.with_wallet {
+        span.record("wallet_id", wallet_id);
+    }
+    let _entered = span.enter();
+
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();

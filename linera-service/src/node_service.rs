@@ -991,6 +991,9 @@ where
         let application_handler =
             axum::routing::get(util::graphiql).post(Self::application_handler);
 
+        let span = tracing::info_span!("node_service", port);
+        let _entered = span.enter();
+
         let app = Router::new()
             .route("/", index_handler)
             .route(
