@@ -1,4 +1,4 @@
-name: Docker
+name: Write comment
 
 on:
   push:
@@ -17,17 +17,17 @@ permissions:
   pull-requests: write
 
 jobs:
-  build:
+  comment:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
-      - uses: actions/github-script@v6
+      - uses: actions/github-script@v7
         with:
           script: |
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '👋 I'm a comment!'
+              body: '👋 Thanks for reporting!'
             })
