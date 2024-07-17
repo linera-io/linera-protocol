@@ -379,8 +379,10 @@ pub trait BaseRuntime {
     }
 
     /// Tests whether keys exist in the key-value store (new)
-    fn contains_keys_new(&mut self, keys: Vec<Vec<u8>>)
-        -> Result<Self::ContainsKeys, ExecutionError>;
+    fn contains_keys_new(
+        &mut self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Self::ContainsKeys, ExecutionError>;
 
     /// Tests whether keys exist in the key-value store (wait)
     fn contains_keys_wait(

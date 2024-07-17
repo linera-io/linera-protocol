@@ -25,9 +25,9 @@ use crate::{
     common::{KeyTag, ServiceStoreConfig, ServiceStoreError, MAX_PAYLOAD_SIZE},
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
-        KeyValueAppend, ReplyContainsKeys, ReplyContainsKey, ReplyExistsNamespace,
+        KeyValueAppend, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
         ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyReadMultiValues,
-        ReplyReadValue, ReplySpecificChunk, RequestContainsKeys, RequestContainsKey,
+        ReplyReadValue, ReplySpecificChunk, RequestContainsKey, RequestContainsKeys,
         RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace, RequestExistsNamespace,
         RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
         RequestReadMultiValues, RequestReadValue, RequestSpecificChunk, RequestWriteBatchExtended,
