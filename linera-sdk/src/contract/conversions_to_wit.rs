@@ -8,7 +8,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{
         Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination, MessageId,
-        Owner,
+        Owner, StreamName,
     },
 };
 
@@ -145,6 +145,14 @@ impl From<Destination> for wit_system_api::Destination {
 impl From<ChannelName> for wit_system_api::ChannelName {
     fn from(name: ChannelName) -> Self {
         wit_system_api::ChannelName {
+            inner0: name.into_bytes(),
+        }
+    }
+}
+
+impl From<StreamName> for wit_system_api::StreamName {
+    fn from(name: StreamName) -> Self {
+        wit_system_api::StreamName {
             inner0: name.into_bytes(),
         }
     }

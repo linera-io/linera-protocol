@@ -20,10 +20,13 @@ use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
     data_types::{Amount, HashedBlob, OracleResponse},
-    identifiers::{AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner},
+    identifiers::{
+        AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner, StreamId,
+        StreamName,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
 };
-use linera_chain::data_types::{CertificateValue, MessageAction, OutgoingMessage};
+use linera_chain::data_types::{CertificateValue, EventRecord, MessageAction, OutgoingMessage};
 use linera_execution::{
     Bytecode, Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage,
     UserApplicationDescription, WasmRuntime,
@@ -367,7 +370,7 @@ where
         .await
         .unwrap()
         .unwrap();
-    let (application_id2, _) = creator
+    let (application_id2, certificate) = creator
         .create_application(
             bytecode_id2,
             &application_id1,
@@ -377,6 +380,20 @@ where
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(
+        certificate.value().executed_block().unwrap().outcome.events,
+        vec![
+            Vec::new(),
+            vec![EventRecord {
+                stream_id: StreamId {
+                    application_id: application_id2.forget_abi().into(),
+                    stream_name: StreamName(b"announcements".to_vec()),
+                },
+                key: b"updates".to_vec(),
+                value: b"instantiated".to_vec(),
+            }]
+        ]
+    );
 
     let mut operation = meta_counter::Operation::increment(receiver_id, 5);
     operation.fuel_grant = 1000000;

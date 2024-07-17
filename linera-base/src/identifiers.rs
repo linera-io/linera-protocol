@@ -10,6 +10,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
+use async_graphql::SimpleObject;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 
@@ -211,7 +212,21 @@ pub struct ApplicationId<A = ()> {
 }
 
 /// A unique identifier for an application.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Copy,
+    Clone,
+    Hash,
+    Debug,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+)]
 pub enum GenericApplicationId {
     /// The system application.
     System,
@@ -262,6 +277,46 @@ pub struct BytecodeId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     WitType,
 )]
 pub struct ChannelName(#[serde(with = "serde_bytes")] Vec<u8>);
+
+/// The name of an event stream.
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+)]
+pub struct StreamName(#[serde(with = "serde_bytes")] pub Vec<u8>);
+
+/// An event stream ID.
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+    SimpleObject,
+)]
+pub struct StreamId {
+    /// The application that can add events to this stream.
+    pub application_id: GenericApplicationId,
+    /// The name of this stream: an application can have multiple streams with different names.
+    pub stream_name: StreamName,
+}
 
 /// The destination of a message, relative to a particular application.
 #[derive(
@@ -317,7 +372,14 @@ impl From<Vec<u8>> for ChannelName {
 }
 
 impl ChannelName {
-    /// Turns the channel into bytes.
+    /// Turns the channel name into bytes.
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.0
+    }
+}
+
+impl StreamName {
+    /// Turns the stream name into bytes.
     pub fn into_bytes(self) -> Vec<u8> {
         self.0
     }
@@ -808,6 +870,7 @@ doc_scalar!(
     ChainDescription."
 );
 doc_scalar!(ChannelName, "The name of a subscription channel");
+doc_scalar!(StreamName, "The name of an event stream");
 bcs_scalar!(MessageId, "The index of a message in a chain");
 doc_scalar!(
     Owner,

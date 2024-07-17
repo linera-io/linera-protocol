@@ -299,13 +299,14 @@ where
         }
         Recipient::Burn => messages.push(Vec::new()),
     }
-    let oracle_responses = iter::repeat_with(Vec::new)
-        .take(block.operations.len() + block.incoming_messages.len())
-        .collect();
+    let tx_count = block.operations.len() + block.incoming_messages.len();
+    let oracle_responses = iter::repeat_with(Vec::new).take(tx_count).collect();
+    let events = iter::repeat_with(Vec::new).take(tx_count).collect();
     let state_hash = system_state.into_hash().await;
     let value = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages,
+            events,
             state_hash,
             oracle_responses,
         }
@@ -711,6 +712,7 @@ where
                         Amount::from_tokens(2),
                     )],
                 ],
+                events: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(sender_key_pair.public()),
@@ -738,6 +740,7 @@ where
                     ChainId::root(2),
                     Amount::from_tokens(3),
                 )]],
+                events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(sender_key_pair.public()),
@@ -1000,6 +1003,7 @@ where
                         Vec::new(),
                         vec![direct_credit_message(ChainId::root(3), Amount::ONE)],
                     ],
+                    events: vec![Vec::new(); 2],
                     state_hash: SystemExecutionState {
                         committees: [(epoch, committee.clone())].into_iter().collect(),
                         ownership: ChainOwnership::single(recipient_key_pair.public()),
@@ -1289,6 +1293,7 @@ where
     let value = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
+            events: vec![Vec::new()],
             state_hash: state.into_hash().await,
             oracle_responses: vec![Vec::new()],
         }
@@ -2329,6 +2334,7 @@ where
                         },
                     ),
                 ]],
+                events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(key_pair.public()),
@@ -2392,6 +2398,7 @@ where
                     })],
                     vec![direct_credit_message(user_id, Amount::from_tokens(2))],
                 ],
+                events: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
                     // The root chain knows both committees at the end.
                     committees: committees2.clone(),
@@ -2427,6 +2434,7 @@ where
                     MessageKind::Protected,
                     SystemMessage::Notify { id: user_id },
                 )]],
+                events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     // The root chain knows both committees at the end.
                     committees: committees2.clone(),
@@ -2551,6 +2559,7 @@ where
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
                 messages: vec![Vec::new(); 4],
+                events: vec![Vec::new(); 4],
                 state_hash: SystemExecutionState {
                     subscriptions: [ChannelSubscription {
                         chain_id: admin_id,
@@ -2729,6 +2738,7 @@ where
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
                 messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
+                events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(key_pair1.public()),
@@ -2756,6 +2766,7 @@ where
                     epoch: Epoch::from(1),
                     committees: committees2.clone(),
                 })]],
+                events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees2.clone(),
                     ownership: ChainOwnership::single(key_pair0.public()),
@@ -2857,6 +2868,7 @@ where
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
                 messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
+                events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(key_pair1.public()),
@@ -2891,6 +2903,7 @@ where
                         committees: committees3.clone(),
                     })],
                 ],
+                events: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
                     committees: committees3.clone(),
                     ownership: ChainOwnership::single(key_pair0.public()),
@@ -2951,6 +2964,7 @@ where
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
                 messages: vec![Vec::new()],
+                events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees3.clone(),
                     ownership: ChainOwnership::single(key_pair0.public()),
@@ -3873,6 +3887,7 @@ where
     let value = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![],
+            events: vec![],
             state_hash: state.crypto_hash_mut().await?,
             oracle_responses: vec![],
         }
