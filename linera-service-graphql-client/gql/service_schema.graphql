@@ -387,13 +387,9 @@ An event recorded in an executed block.
 """
 type EventRecord {
 	"""
-	The application that emitted this event.
+	The ID of the stream this event belongs to.
 	"""
-	applicationId: GenericApplicationId!
-	"""
-	The name of the event stream.
-	"""
-	streamName: StreamName!
+	streamId: StreamId!
 	"""
 	The payload data.
 	"""
@@ -860,6 +856,20 @@ input ResourceControlPolicy {
 	The maximum data to write per block
 	"""
 	maximumBytesWrittenPerBlock: Int!
+}
+
+"""
+An event stream ID.
+"""
+type StreamId {
+	"""
+	The application that can add events to this stream.
+	"""
+	applicationId: GenericApplicationId!
+	"""
+	The name of this stream: an application can have multiple streams with different names.
+	"""
+	streamName: StreamName!
 }
 
 """

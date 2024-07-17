@@ -11,7 +11,7 @@ use linera_base::{
     doc_scalar, ensure,
     identifiers::{
         Account, BlobId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
-        StreamName,
+        StreamId,
     },
 };
 use linera_execution::{
@@ -284,10 +284,8 @@ pub struct BlockExecutionOutcome {
 /// An event recorded in an executed block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct EventRecord {
-    /// The application that emitted this event.
-    pub application_id: GenericApplicationId,
-    /// The name of the event stream.
-    pub stream_name: StreamName,
+    /// The ID of the stream this event belongs to.
+    pub stream_id: StreamId,
     /// The payload data.
     pub payload: Vec<u8>,
 }

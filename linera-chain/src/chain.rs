@@ -12,7 +12,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, OracleResponse, Timestamp},
     ensure,
-    identifiers::{ChainId, Destination, GenericApplicationId, MessageId},
+    identifiers::{ChainId, Destination, GenericApplicationId, MessageId, StreamId},
 };
 use linera_execution::{
     system::SystemMessage, ExecutionOutcome, ExecutionRequest, ExecutionRuntimeContext,
@@ -1096,8 +1096,10 @@ where
                 .events
                 .into_iter()
                 .map(|(stream_name, payload)| EventRecord {
-                    application_id,
-                    stream_name,
+                    stream_id: StreamId {
+                        application_id,
+                        stream_name,
+                    },
                     payload,
                 }),
         );

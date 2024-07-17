@@ -10,6 +10,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
+use async_graphql::SimpleObject;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 
@@ -211,7 +212,21 @@ pub struct ApplicationId<A = ()> {
 }
 
 /// A unique identifier for an application.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Copy,
+    Clone,
+    Hash,
+    Debug,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+)]
 pub enum GenericApplicationId {
     /// The system application.
     System,
@@ -279,6 +294,29 @@ pub struct ChannelName(#[serde(with = "serde_bytes")] Vec<u8>);
     WitType,
 )]
 pub struct StreamName(#[serde(with = "serde_bytes")] pub Vec<u8>);
+
+/// An event stream ID.
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+    SimpleObject,
+)]
+pub struct StreamId {
+    /// The application that can add events to this stream.
+    pub application_id: GenericApplicationId,
+    /// The name of this stream: an application can have multiple streams with different names.
+    pub stream_name: StreamName,
+}
 
 /// The destination of a message, relative to a particular application.
 #[derive(

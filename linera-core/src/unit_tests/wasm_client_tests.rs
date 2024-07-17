@@ -21,7 +21,8 @@ use counter::CounterAbi;
 use linera_base::{
     data_types::{Amount, HashedBlob, OracleResponse},
     identifiers::{
-        AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner, StreamName,
+        AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner, StreamId,
+        StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -384,8 +385,10 @@ where
         vec![
             Vec::new(),
             vec![EventRecord {
-                application_id: application_id2.forget_abi().into(),
-                stream_name: StreamName(b"announcements".to_vec()),
+                stream_id: StreamId {
+                    application_id: application_id2.forget_abi().into(),
+                    stream_name: StreamName(b"announcements".to_vec()),
+                },
                 payload: b"instantiated".to_vec(),
             }]
         ]

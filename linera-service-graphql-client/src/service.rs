@@ -7,7 +7,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
     identifiers::{
         Account, ChainDescription, ChainId, ChannelName, Destination, GenericApplicationId, Owner,
-        StreamName,
+        StreamId, StreamName,
     },
 };
 
@@ -238,9 +238,17 @@ mod from {
     impl From<block::BlockBlockValueExecutedBlockOutcomeEvents> for EventRecord {
         fn from(event: block::BlockBlockValueExecutedBlockOutcomeEvents) -> Self {
             EventRecord {
-                application_id: event.application_id,
-                stream_name: event.stream_name,
+                stream_id: event.stream_id.into(),
                 payload: event.payload.into_iter().map(|byte| byte as u8).collect(),
+            }
+        }
+    }
+
+    impl From<block::BlockBlockValueExecutedBlockOutcomeEventsStreamId> for StreamId {
+        fn from(stream_id: block::BlockBlockValueExecutedBlockOutcomeEventsStreamId) -> Self {
+            StreamId {
+                application_id: stream_id.application_id,
+                stream_name: stream_id.stream_name,
             }
         }
     }

@@ -399,10 +399,8 @@ Event:
         TYPENAME: Message
 EventRecord:
   STRUCT:
-    - application_id:
-        TYPENAME: GenericApplicationId
-    - stream_name:
-        TYPENAME: StreamName
+    - stream_id:
+        TYPENAME: StreamId
     - payload:
         SEQ: U8
 ExecutedBlock:
@@ -819,6 +817,12 @@ Signature:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
+StreamId:
+  STRUCT:
+    - application_id:
+        TYPENAME: GenericApplicationId
+    - stream_name:
+        TYPENAME: StreamName
 StreamName:
   NEWTYPESTRUCT: BYTES
 SystemChannel:

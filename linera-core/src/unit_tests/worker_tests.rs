@@ -3887,6 +3887,7 @@ where
     let value = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![],
+            events: vec![],
             state_hash: state.crypto_hash_mut().await?,
             oracle_responses: vec![],
         }
