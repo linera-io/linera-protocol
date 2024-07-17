@@ -75,6 +75,8 @@ pub use crate::{
 
 /// The maximum length of an event key in bytes.
 const MAX_EVENT_KEY_LEN: usize = 64;
+/// The maximum length of a stream name.
+const MAX_STREAM_NAME_LEN: usize = 64;
 
 /// An implementation of [`UserContractModule`].
 pub type UserContractCode = Arc<dyn UserContractModule + Send + Sync + 'static>;
@@ -170,6 +172,8 @@ pub enum ExecutionError {
     BlobNotFoundOnRead(BlobId),
     #[error("Event keys can be at most {MAX_EVENT_KEY_LEN} bytes.")]
     EventKeyTooLong,
+    #[error("Stream names can be at most {MAX_STREAM_NAME_LEN} bytes.")]
+    StreamNameTooLong,
 }
 
 /// The public entry points provided by the contract part of an application.

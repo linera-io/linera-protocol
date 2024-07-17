@@ -32,7 +32,7 @@ use crate::{
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, FinalizeContext,
     MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime,
     UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
-    MAX_EVENT_KEY_LEN,
+    MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -1270,6 +1270,10 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         ensure!(
             key.len() <= MAX_EVENT_KEY_LEN,
             ExecutionError::EventKeyTooLong
+        );
+        ensure!(
+            name.0.len() <= MAX_STREAM_NAME_LEN,
+            ExecutionError::StreamNameTooLong
         );
         let application = this.current_application_mut();
         application.outcome.events.push((name, key, value));
