@@ -305,11 +305,16 @@ where
     }
 
     /// Adds an item to an event stream.
-    fn emit(caller: &mut Caller, name: StreamName, payload: Vec<u8>) -> Result<(), RuntimeError> {
+    fn emit(
+        caller: &mut Caller,
+        name: StreamName,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<(), RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .emit(name, payload)
+            .emit(name, key, value)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

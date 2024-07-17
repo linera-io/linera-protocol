@@ -286,8 +286,10 @@ pub struct BlockExecutionOutcome {
 pub struct EventRecord {
     /// The ID of the stream this event belongs to.
     pub stream_id: StreamId,
+    /// The event key.
+    pub key: Vec<u8>,
     /// The payload data.
-    pub payload: Vec<u8>,
+    pub value: Vec<u8>,
 }
 
 /// A statement to be certified by the validators.

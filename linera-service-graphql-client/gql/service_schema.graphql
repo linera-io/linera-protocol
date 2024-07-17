@@ -391,9 +391,13 @@ type EventRecord {
 	"""
 	streamId: StreamId!
 	"""
+	The event key.
+	"""
+	key: [Int!]!
+	"""
 	The payload data.
 	"""
-	payload: [Int!]!
+	value: [Int!]!
 }
 
 """

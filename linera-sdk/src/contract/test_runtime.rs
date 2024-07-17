@@ -44,7 +44,7 @@ where
     subscribe_requests: Vec<(ChainId, ChannelName)>,
     unsubscribe_requests: Vec<(ChainId, ChannelName)>,
     outgoing_transfers: HashMap<Account, Amount>,
-    events: Vec<(StreamName, Vec<u8>)>,
+    events: Vec<(StreamName, Vec<u8>, Vec<u8>)>,
     claim_requests: Vec<ClaimRequest>,
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
     expected_post_requests: VecDeque<(String, Vec<u8>, Vec<u8>)>,
@@ -590,8 +590,8 @@ where
     }
 
     /// Adds a new item to an event stream.
-    pub fn emit(&mut self, name: StreamName, payload: &[u8]) {
-        self.events.push((name, payload.to_vec()));
+    pub fn emit(&mut self, name: StreamName, key: &[u8], value: &[u8]) {
+        self.events.push((name, key.to_vec(), value.to_vec()));
     }
 
     /// Adds an expected `query_service` call`, and the response it should return in the test.

@@ -532,7 +532,12 @@ pub trait ContractRuntime: BaseRuntime {
     ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Adds a new item to an event stream.
-    fn emit(&mut self, name: StreamName, payload: Vec<u8>) -> Result<(), ExecutionError>;
+    fn emit(
+        &mut self,
+        name: StreamName,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<(), ExecutionError>;
 
     /// Opens a new chain.
     fn open_chain(
@@ -674,7 +679,7 @@ pub struct RawExecutionOutcome<Message, Grant = Resources> {
     /// signer and including grant with the refund policy described above.
     pub messages: Vec<RawOutgoingMessage<Message, Grant>>,
     /// Events recorded by contracts' `emit` calls.
-    pub events: Vec<(StreamName, Vec<u8>)>,
+    pub events: Vec<(StreamName, Vec<u8>, Vec<u8>)>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.

@@ -211,8 +211,8 @@ where
     }
 
     /// Adds a new item to an event stream.
-    pub fn emit(&mut self, name: StreamName, payload: &[u8]) {
-        wit::emit(&name.into(), payload);
+    pub fn emit(&mut self, name: StreamName, key: &[u8], value: &[u8]) {
+        wit::emit(&name.into(), key, value);
     }
 
     /// Queries our application service as an oracle and returns the response.

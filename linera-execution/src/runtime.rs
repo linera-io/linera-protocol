@@ -1259,10 +1259,15 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(value)
     }
 
-    fn emit(&mut self, name: StreamName, payload: Vec<u8>) -> Result<(), ExecutionError> {
+    fn emit(
+        &mut self,
+        name: StreamName,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<(), ExecutionError> {
         let mut this = self.inner();
         let application = this.current_application_mut();
-        application.outcome.events.push((name, payload));
+        application.outcome.events.push((name, key, value));
         Ok(())
     }
 

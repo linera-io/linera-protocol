@@ -239,7 +239,8 @@ mod from {
         fn from(event: block::BlockBlockValueExecutedBlockOutcomeEvents) -> Self {
             EventRecord {
                 stream_id: event.stream_id.into(),
-                payload: event.payload.into_iter().map(|byte| byte as u8).collect(),
+                key: event.key.into_iter().map(|byte| byte as u8).collect(),
+                value: event.value.into_iter().map(|byte| byte as u8).collect(),
             }
         }
     }

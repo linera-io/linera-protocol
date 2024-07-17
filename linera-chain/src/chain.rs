@@ -1095,12 +1095,13 @@ where
             raw_outcome
                 .events
                 .into_iter()
-                .map(|(stream_name, payload)| EventRecord {
+                .map(|(stream_name, key, value)| EventRecord {
                     stream_id: StreamId {
                         application_id,
                         stream_name,
                     },
-                    payload,
+                    key,
+                    value,
                 }),
         );
         let max_stream_queries = self.context().max_stream_queries();

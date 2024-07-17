@@ -187,7 +187,8 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
               applicationId
               streamName
             }
-            payload
+            key
+            value
           }
         }
       }
@@ -231,7 +232,8 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
               applicationId
               streamName
             }
-            payload
+            key
+            value
           }
         }
       }
