@@ -7,7 +7,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
     identifiers::{
         Account, ChainDescription, ChainId, ChannelName, Destination, GenericApplicationId, Owner,
-        StreamId, StreamName,
+        StreamName,
     },
 };
 
@@ -132,6 +132,7 @@ pub struct Transfer;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
+    use linera_base::identifiers::StreamId;
     use linera_chain::data_types::{
         BlockExecutionOutcome, EventRecord, ExecutedBlock, HashedCertificateValue, IncomingMessage,
         OutgoingMessage,

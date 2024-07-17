@@ -73,6 +73,9 @@ pub use crate::{
     },
 };
 
+/// The maximum length of an event key in bytes.
+const MAX_EVENT_KEY_LEN: usize = 64;
+
 /// An implementation of [`UserContractModule`].
 pub type UserContractCode = Arc<dyn UserContractModule + Send + Sync + 'static>;
 
@@ -165,6 +168,8 @@ pub enum ExecutionError {
 
     #[error("Blob not found on storage read: {0}")]
     BlobNotFoundOnRead(BlobId),
+    #[error("Event keys can be at most {MAX_EVENT_KEY_LEN} bytes.")]
+    EventKeyTooLong,
 }
 
 /// The public entry points provided by the contract part of an application.
