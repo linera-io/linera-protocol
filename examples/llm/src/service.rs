@@ -23,9 +23,22 @@ use candle_transformers::{
 };
 use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime};
 use log::info;
+use sha3::{Digest as _, Sha3_256};
 use tokenizers::Tokenizer;
 
 use crate::token::TokenOutputStream;
+
+/// The SHA3-256 hash of the model weights to use.
+const WEIGHTS_HASH: &[u8] = &[
+    0x23, 0x42, 0x71, 0xe1, 0xf8, 0x3b, 0x6e, 0xec, 0xf1, 0x9b, 0xa4, 0xb7, 0xf4, 0x52, 0x49, 0xe7,
+    0xd9, 0xc6, 0x86, 0x57, 0xbc, 0xa0, 0x2d, 0xa3, 0x9b, 0xdb, 0xb1, 0x49, 0xcd, 0x53, 0x10, 0x01,
+];
+
+/// The SHA3-256 hash of the tokenizer to use.
+const TOKENIZER_HASH: &[u8] = &[
+    0x4a, 0x33, 0x4c, 0x71, 0x85, 0x96, 0xca, 0x0b, 0x0a, 0x03, 0x11, 0x56, 0x0a, 0x50, 0x25, 0xfd,
+    0xfc, 0x36, 0x8f, 0x33, 0x64, 0x17, 0x2b, 0x74, 0x01, 0xbb, 0x89, 0xbf, 0x30, 0x99, 0x20, 0x0b,
+];
 
 pub struct LlmService {
     model_context: Arc<ModelContext>,
@@ -78,10 +91,22 @@ impl Service for LlmService {
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let raw_weights = runtime
             .fetch_url("https://huggingface.co/karpathy/tinyllamas/resolve/main/stories42M.bin");
+        assert_eq!(
+            Sha3_256::digest(&raw_weights).as_slice(),
+            WEIGHTS_HASH,
+            "Incorrect model was fetched"
+        );
         info!("got weights: {}B", raw_weights.len());
+
         let tokenizer_bytes = runtime.fetch_url(
             "https://huggingface.co/spaces/lmz/candle-llama2/resolve/main/tokenizer.json",
         );
+        assert_eq!(
+            Sha3_256::digest(&tokenizer_bytes).as_slice(),
+            TOKENIZER_HASH,
+            "Incorrect tokenizer was fetched"
+        );
+
         let model_context = Arc::new(ModelContext {
             model: raw_weights,
             tokenizer: tokenizer_bytes,
