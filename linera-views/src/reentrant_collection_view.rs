@@ -509,8 +509,8 @@ where
     ) -> Result<Vec<WriteGuardedView<W>>, ViewError> {
         let mut selected_short_keys = Vec::new();
         let updates = self.updates.get_mut();
-        for short_key in short_keys.clone() {
-            match updates.entry(short_key.clone()) {
+        for short_key in &short_keys {
+            match updates.entry(short_key.to_vec()) {
                 btree_map::Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
                     if let Update::Removed = entry {
@@ -533,7 +533,7 @@ where
                         let view = Arc::new(RwLock::new(view));
                         entry.insert(Update::Set(view));
                     } else {
-                        selected_short_keys.push(short_key);
+                        selected_short_keys.push(short_key.to_vec());
                     }
                 }
             }
@@ -549,11 +549,10 @@ where
             }));
         }
         let response = futures::future::join_all(handles).await;
-        for (i, view) in response.into_iter().enumerate() {
-            let short_key = &selected_short_keys[i];
+        for (short_key, view) in selected_short_keys.into_iter().zip(response) {
             let view = view??;
             let wrapped_view = Arc::new(RwLock::new(view));
-            updates.insert(short_key.clone(), Update::Set(wrapped_view));
+            updates.insert(short_key, Update::Set(wrapped_view));
         }
 
         short_keys
@@ -600,8 +599,8 @@ where
     ) -> Result<Vec<ReadGuardedView<W>>, ViewError> {
         let mut selected_short_keys = Vec::new();
         let mut updates = self.updates.lock().await;
-        for short_key in short_keys.clone() {
-            match updates.entry(short_key.clone()) {
+        for short_key in &short_keys {
+            match updates.entry(short_key.to_vec()) {
                 btree_map::Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
                     if let Update::Removed = entry {
@@ -624,7 +623,7 @@ where
                         let view = Arc::new(RwLock::new(view));
                         entry.insert(Update::Set(view));
                     } else {
-                        selected_short_keys.push(short_key);
+                        selected_short_keys.push(short_key.to_vec());
                     }
                 }
             }
@@ -640,11 +639,10 @@ where
             }));
         }
         let response = futures::future::join_all(handles).await;
-        for (i, view) in response.into_iter().enumerate() {
-            let short_key = &selected_short_keys[i];
+        for (short_key, view) in selected_short_keys.into_iter().zip(response) {
             let view = view??;
             let wrapped_view = Arc::new(RwLock::new(view));
-            updates.insert(short_key.clone(), Update::Set(wrapped_view));
+            updates.insert(short_key, Update::Set(wrapped_view));
         }
         let mut result = Vec::new();
         for short_key in short_keys {
