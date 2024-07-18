@@ -12,7 +12,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, OracleResponse, Timestamp},
     ensure,
-    identifiers::{ChainId, Destination, GenericApplicationId, MessageId},
+    identifiers::{ChainId, Destination, GenericApplicationId, MessageId, StreamId},
 };
 use linera_execution::{
     system::SystemMessage, ExecutionOutcome, ExecutionRequest, ExecutionRuntimeContext,
@@ -35,8 +35,8 @@ use {linera_base::identifiers::BytecodeId, linera_execution::BytecodeLocation};
 
 use crate::{
     data_types::{
-        Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, IncomingMessage,
-        MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
+        Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, EventRecord,
+        IncomingMessage, MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -805,6 +805,7 @@ where
         );
         let mut oracle_responses = oracle_responses.map(Vec::into_iter);
         let mut new_oracle_responses = Vec::new();
+        let mut events = Vec::new();
         let mut next_message_index = 0;
         for (index, message) in block.incoming_messages.iter().enumerate() {
             #[cfg(with_metrics)]
@@ -912,7 +913,7 @@ where
                 }
             };
             new_oracle_responses.push(oracle_responses);
-            let messages_out = self
+            let (messages_out, new_events) = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
             if let MessageAction::Accept = message.action {
@@ -927,6 +928,7 @@ where
             next_message_index +=
                 u32::try_from(messages_out.len()).map_err(|_| ArithmeticError::Overflow)?;
             messages.push(messages_out);
+            events.push(new_events);
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
@@ -961,7 +963,7 @@ where
                 .await
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             new_oracle_responses.push(oracle_responses);
-            let messages_out = self
+            let (messages_out, new_events) = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
             resource_controller
@@ -979,6 +981,7 @@ where
             next_message_index +=
                 u32::try_from(messages_out.len()).map_err(|_| ArithmeticError::Overflow)?;
             messages.push(messages_out);
+            events.push(new_events);
         }
 
         // Finally, charge for the block fee, except if the chain is closed. Closed chains should
@@ -1033,6 +1036,7 @@ where
             messages,
             state_hash,
             oracle_responses: new_oracle_responses,
+            events,
         })
     }
 
@@ -1040,8 +1044,9 @@ where
         &mut self,
         height: BlockHeight,
         results: Vec<ExecutionOutcome>,
-    ) -> Result<Vec<OutgoingMessage>, ChainError> {
+    ) -> Result<(Vec<OutgoingMessage>, Vec<EventRecord>), ChainError> {
         let mut messages = Vec::new();
+        let mut events = Vec::new();
         for result in results {
             match result {
                 ExecutionOutcome::System(result) => {
@@ -1049,6 +1054,7 @@ where
                         GenericApplicationId::System,
                         Message::System,
                         &mut messages,
+                        &mut events,
                         height,
                         result,
                     )
@@ -1062,6 +1068,7 @@ where
                             bytes,
                         },
                         &mut messages,
+                        &mut events,
                         height,
                         result,
                     )
@@ -1069,7 +1076,7 @@ where
                 }
             }
         }
-        Ok(messages)
+        Ok((messages, events))
     }
 
     async fn process_raw_execution_outcome<E, F>(
@@ -1077,12 +1084,26 @@ where
         application_id: GenericApplicationId,
         lift: F,
         messages: &mut Vec<OutgoingMessage>,
+        events: &mut Vec<EventRecord>,
         height: BlockHeight,
         raw_outcome: RawExecutionOutcome<E, Amount>,
     ) -> Result<(), ChainError>
     where
         F: Fn(E) -> Message,
     {
+        events.extend(
+            raw_outcome
+                .events
+                .into_iter()
+                .map(|(stream_name, key, value)| EventRecord {
+                    stream_id: StreamId {
+                        application_id,
+                        stream_name,
+                    },
+                    key,
+                    value,
+                }),
+        );
         let max_stream_queries = self.context().max_stream_queries();
         // Record the messages of the execution. Messages are understood within an
         // application.

@@ -5,7 +5,10 @@ use graphql_client::GraphQLQuery;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
-    identifiers::{Account, ChainDescription, ChainId, ChannelName, Destination, Owner},
+    identifiers::{
+        Account, ChainDescription, ChainId, ChannelName, Destination, GenericApplicationId, Owner,
+        StreamName,
+    },
 };
 
 pub type JSONObject = serde_json::Value;
@@ -129,8 +132,9 @@ pub struct Transfer;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
+    use linera_base::identifiers::StreamId;
     use linera_chain::data_types::{
-        BlockExecutionOutcome, ExecutedBlock, HashedCertificateValue, IncomingMessage,
+        BlockExecutionOutcome, EventRecord, ExecutedBlock, HashedCertificateValue, IncomingMessage,
         OutgoingMessage,
     };
 
@@ -210,6 +214,7 @@ mod from {
                         messages,
                         state_hash,
                         oracle_responses,
+                        events,
                     },
             } = val;
             let messages = messages
@@ -222,7 +227,30 @@ mod from {
                     messages,
                     state_hash,
                     oracle_responses: oracle_responses.into_iter().map(Into::into).collect(),
+                    events: events
+                        .into_iter()
+                        .map(|events| events.into_iter().map(Into::into).collect())
+                        .collect(),
                 },
+            }
+        }
+    }
+
+    impl From<block::BlockBlockValueExecutedBlockOutcomeEvents> for EventRecord {
+        fn from(event: block::BlockBlockValueExecutedBlockOutcomeEvents) -> Self {
+            EventRecord {
+                stream_id: event.stream_id.into(),
+                key: event.key.into_iter().map(|byte| byte as u8).collect(),
+                value: event.value.into_iter().map(|byte| byte as u8).collect(),
+            }
+        }
+    }
+
+    impl From<block::BlockBlockValueExecutedBlockOutcomeEventsStreamId> for StreamId {
+        fn from(stream_id: block::BlockBlockValueExecutedBlockOutcomeEventsStreamId) -> Self {
+            StreamId {
+                application_id: stream_id.application_id,
+                stream_name: stream_id.stream_name,
             }
         }
     }

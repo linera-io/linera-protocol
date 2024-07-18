@@ -37,7 +37,7 @@ use linera_base::{
     doc_scalar, hex_debug,
     identifiers::{
         Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination,
-        GenericApplicationId, MessageId, Owner,
+        GenericApplicationId, MessageId, Owner, StreamName,
     },
     ownership::ChainOwnership,
 };
@@ -72,6 +72,11 @@ pub use crate::{
         SystemQuery, SystemResponse,
     },
 };
+
+/// The maximum length of an event key in bytes.
+const MAX_EVENT_KEY_LEN: usize = 64;
+/// The maximum length of a stream name.
+const MAX_STREAM_NAME_LEN: usize = 64;
 
 /// An implementation of [`UserContractModule`].
 pub type UserContractCode = Arc<dyn UserContractModule + Send + Sync + 'static>;
@@ -165,6 +170,10 @@ pub enum ExecutionError {
 
     #[error("Blob not found on storage read: {0}")]
     BlobNotFoundOnRead(BlobId),
+    #[error("Event keys can be at most {MAX_EVENT_KEY_LEN} bytes.")]
+    EventKeyTooLong,
+    #[error("Stream names can be at most {MAX_STREAM_NAME_LEN} bytes.")]
+    StreamNameTooLong,
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -531,6 +540,14 @@ pub trait ContractRuntime: BaseRuntime {
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
+    /// Adds a new item to an event stream.
+    fn emit(
+        &mut self,
+        name: StreamName,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<(), ExecutionError>;
+
     /// Opens a new chain.
     fn open_chain(
         &mut self,
@@ -670,6 +687,8 @@ pub struct RawExecutionOutcome<Message, Grant = Resources> {
     /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer and including grant with the refund policy described above.
     pub messages: Vec<RawOutgoingMessage<Message, Grant>>,
+    /// Events recorded by contracts' `emit` calls.
+    pub events: Vec<(StreamName, Vec<u8>, Vec<u8>)>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.
@@ -729,6 +748,7 @@ impl<Message, Grant> Default for RawExecutionOutcome<Message, Grant> {
             authenticated_signer: None,
             refund_grant_to: None,
             messages: Vec::new(),
+            events: Vec::new(),
             subscribe: Vec::new(),
             unsubscribe: Vec::new(),
         }
@@ -766,6 +786,7 @@ impl<Message> RawExecutionOutcome<Message, Resources> {
             authenticated_signer,
             refund_grant_to,
             messages,
+            events,
             subscribe,
             unsubscribe,
         } = self;
@@ -777,6 +798,7 @@ impl<Message> RawExecutionOutcome<Message, Resources> {
             authenticated_signer,
             refund_grant_to,
             messages,
+            events,
             subscribe,
             unsubscribe,
         })
