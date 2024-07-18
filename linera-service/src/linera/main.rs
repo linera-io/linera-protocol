@@ -2,6 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![recursion_limit = "256"]
 #![deny(clippy::large_futures)]
 
 use std::{collections::HashMap, env, path::PathBuf, sync::Arc, time::Instant};
@@ -51,7 +52,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde_json::Value;
 use tokio::task::JoinSet;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, warn, Instrument as _};
 
 mod net_up_utils;
 
@@ -1216,13 +1217,8 @@ impl Job {
 }
 
 fn main() -> anyhow::Result<()> {
-    let env_filter = tracing_subscriber::EnvFilter::builder()
-        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
-        .from_env_lossy();
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_env_filter(env_filter)
-        .init();
+    linera_base::tracing::init();
+
     let options = ClientOptions::init()?;
 
     let mut runtime = if options.tokio_threads == Some(1) {
@@ -1237,11 +1233,16 @@ fn main() -> anyhow::Result<()> {
         builder
     };
 
+    let span = tracing::info_span!("run");
+    if let Some(wallet_id) = options.with_wallet {
+        span.record("wallet_id", wallet_id);
+    }
+
     runtime
         .enable_all()
         .build()
         .expect("Failed to create Tokio runtime")
-        .block_on(run(&options))
+        .block_on(run(&options).instrument(span))
 }
 
 async fn run(options: &ClientOptions) -> anyhow::Result<()> {

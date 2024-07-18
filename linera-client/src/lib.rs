@@ -3,6 +3,8 @@
 
 //! This module provides a convenient library for writing a Linera client application.
 
+#![recursion_limit = "256"]
+
 pub mod chain_clients;
 pub mod chain_listener;
 pub mod client_context;
