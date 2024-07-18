@@ -54,6 +54,11 @@ where
     /// Creates a new [`ChainWorkerStateWithAttemptedChanges`] instance to change the
     /// `state`.
     pub(super) async fn new(state: &'state mut ChainWorkerState<StorageClient>) -> Self {
+        assert!(
+            !state.chain.has_pending_changes().await,
+            "`ChainStateView` has unexpected leftover changes"
+        );
+
         ChainWorkerStateWithAttemptedChanges {
             state,
             succeeded: false,
