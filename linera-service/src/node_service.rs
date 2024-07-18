@@ -985,14 +985,12 @@ where
     }
 
     /// Runs the node service.
+    #[tracing::instrument(name = "node_service", level = "info", skip(self), fields(port = ?self.port))]
     pub async fn run(self) -> Result<(), anyhow::Error> {
         let port = self.port.get();
         let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
         let application_handler =
             axum::routing::get(util::graphiql).post(Self::application_handler);
-
-        let span = tracing::info_span!("node_service", port);
-        let _entered = span.enter();
 
         let app = Router::new()
             .route("/", index_handler)

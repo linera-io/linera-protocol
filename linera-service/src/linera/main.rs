@@ -52,7 +52,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde_json::Value;
 use tokio::task::JoinSet;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, warn, Instrument as _};
 
 mod net_up_utils;
 
@@ -1233,20 +1233,19 @@ fn main() -> anyhow::Result<()> {
         builder
     };
 
-    runtime
-        .enable_all()
-        .build()
-        .expect("Failed to create Tokio runtime")
-        .block_on(run(&options))
-}
-
-async fn run(options: &ClientOptions) -> anyhow::Result<()> {
     let span = tracing::info_span!("run");
     if let Some(wallet_id) = options.with_wallet {
         span.record("wallet_id", wallet_id);
     }
-    let _entered = span.enter();
 
+    runtime
+        .enable_all()
+        .build()
+        .expect("Failed to create Tokio runtime")
+        .block_on(run(&options).instrument(span))
+}
+
+async fn run(options: &ClientOptions) -> anyhow::Result<()> {
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();
