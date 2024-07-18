@@ -32,17 +32,23 @@ use crate::{
 
 /// Wrapper type that rolls back changes to the `chain` state when dropped.
 pub struct ChainWorkerStateWithTemporaryChanges<'state, StorageClient>(
-    pub &'state mut ChainWorkerState<StorageClient>,
+    &'state mut ChainWorkerState<StorageClient>,
 )
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
     ViewError: From<StorageClient::StoreError>;
 
-impl<StorageClient> ChainWorkerStateWithTemporaryChanges<'_, StorageClient>
+impl<'state, StorageClient> ChainWorkerStateWithTemporaryChanges<'state, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
     ViewError: From<StorageClient::StoreError>,
 {
+    /// Creates a new [`ChainWorkerStateWithAttemptedChanges`] instance to temporarily change the
+    /// `state`.
+    pub(super) async fn new(state: &'state mut ChainWorkerState<StorageClient>) -> Self {
+        ChainWorkerStateWithTemporaryChanges(state)
+    }
+
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
     #[cfg(with_testing)]
     pub(super) async fn read_certificate(
