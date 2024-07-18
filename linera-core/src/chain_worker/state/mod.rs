@@ -201,7 +201,8 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        ChainWorkerStateWithAttemptedChanges::from(self)
+        ChainWorkerStateWithAttemptedChanges::new(self)
+            .await
             .process_timeout(certificate)
             .await
     }
@@ -216,7 +217,8 @@ where
             .await?;
 
         let actions = if let Some((outcome, local_time)) = validation_outcome {
-            ChainWorkerStateWithAttemptedChanges::from(&mut *self)
+            ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+                .await
                 .vote_for_block_proposal(proposal, outcome, local_time)
                 .await?;
             // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
@@ -237,7 +239,8 @@ where
         hashed_certificate_values: &[HashedCertificateValue],
         hashed_blobs: &[HashedBlob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
-        ChainWorkerStateWithAttemptedChanges::from(self)
+        ChainWorkerStateWithAttemptedChanges::new(self)
+            .await
             .process_validated_block(certificate, hashed_certificate_values, hashed_blobs)
             .await
     }
@@ -249,7 +252,8 @@ where
         hashed_certificate_values: &[HashedCertificateValue],
         hashed_blobs: &[HashedBlob],
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        ChainWorkerStateWithAttemptedChanges::from(self)
+        ChainWorkerStateWithAttemptedChanges::new(self)
+            .await
             .process_confirmed_block(certificate, hashed_certificate_values, hashed_blobs)
             .await
     }
@@ -260,7 +264,8 @@ where
         origin: Origin,
         bundles: Vec<MessageBundle>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
-        ChainWorkerStateWithAttemptedChanges::from(self)
+        ChainWorkerStateWithAttemptedChanges::new(self)
+            .await
             .process_cross_chain_update(origin, bundles)
             .await
     }
@@ -270,7 +275,8 @@ where
         &mut self,
         latest_heights: Vec<(Target, BlockHeight)>,
     ) -> Result<BlockHeight, WorkerError> {
-        ChainWorkerStateWithAttemptedChanges::from(self)
+        ChainWorkerStateWithAttemptedChanges::new(self)
+            .await
             .confirm_updated_recipient(latest_heights)
             .await
     }
@@ -281,12 +287,14 @@ where
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         if query.request_leader_timeout {
-            ChainWorkerStateWithAttemptedChanges::from(&mut *self)
+            ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+                .await
                 .vote_for_leader_timeout()
                 .await?;
         }
         if query.request_fallback {
-            ChainWorkerStateWithAttemptedChanges::from(&mut *self)
+            ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+                .await
                 .vote_for_fallback()
                 .await?;
         }

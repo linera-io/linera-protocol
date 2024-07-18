@@ -46,25 +46,20 @@ where
     succeeded: bool,
 }
 
-impl<'state, StorageClient> From<&'state mut ChainWorkerState<StorageClient>>
-    for ChainWorkerStateWithAttemptedChanges<'state, StorageClient>
+impl<'state, StorageClient> ChainWorkerStateWithAttemptedChanges<'state, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
     ViewError: From<StorageClient::StoreError>,
 {
-    fn from(state: &'state mut ChainWorkerState<StorageClient>) -> Self {
+    /// Creates a new [`ChainWorkerStateWithAttemptedChanges`] instance to change the
+    /// `state`.
+    pub(super) async fn new(state: &'state mut ChainWorkerState<StorageClient>) -> Self {
         ChainWorkerStateWithAttemptedChanges {
             state,
             succeeded: false,
         }
     }
-}
 
-impl<StorageClient> ChainWorkerStateWithAttemptedChanges<'_, StorageClient>
-where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
-{
     /// Processes a leader timeout issued for this multi-owner chain.
     pub(super) async fn process_timeout(
         &mut self,
