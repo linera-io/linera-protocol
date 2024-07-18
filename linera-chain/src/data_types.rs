@@ -94,13 +94,6 @@ impl Block {
     }
 }
 
-/// A chain ID with a block height.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, SimpleObject)]
-pub struct ChainAndHeight {
-    pub chain_id: ChainId,
-    pub height: BlockHeight,
-}
-
 /// A message received from a block of another chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct IncomingMessage {

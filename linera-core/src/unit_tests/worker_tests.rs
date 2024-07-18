@@ -25,8 +25,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, Certificate, ChainAndHeight, ChannelFullName,
-        Event, HashedCertificateValue, IncomingMessage, LiteVote, Medium, MessageAction, Origin,
+        Block, BlockExecutionOutcome, BlockProposal, Certificate, ChannelFullName, Event,
+        HashedCertificateValue, IncomingMessage, LiteVote, Medium, MessageAction, Origin,
         OutgoingMessage, SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt, VoteTestExt},
@@ -1850,7 +1850,7 @@ where
         })
     );
 
-    let certificate = make_simple_transfer_certificate(
+    let transfer_certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
         ChainId::root(2),
@@ -1864,13 +1864,13 @@ where
     .await;
 
     let info = worker
-        .fully_handle_certificate(certificate.clone(), vec![], vec![])
+        .fully_handle_certificate(transfer_certificate.clone(), vec![], vec![])
         .await?
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
     assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
-    assert_eq!(Some(certificate.hash()), info.block_hash);
+    assert_eq!(Some(transfer_certificate.hash()), info.block_hash);
     assert!(info.manager.pending.is_none());
     assert_eq!(
         worker
@@ -1891,7 +1891,7 @@ where
         vec![IncomingMessage {
             origin: Origin::chain(ChainId::root(1)),
             event: Event {
-                certificate_hash: certificate.hash(),
+                certificate_hash: transfer_certificate.hash(),
                 height: BlockHeight::ZERO,
                 index: 0,
                 authenticated_signer: None,
@@ -1950,10 +1950,7 @@ where
     assert_eq!(response.info.requested_received_log.len(), 1);
     assert_eq!(
         response.info.requested_received_log[0],
-        ChainAndHeight {
-            chain_id: ChainId::root(1),
-            height: BlockHeight::ZERO
-        }
+        transfer_certificate.hash()
     );
     Ok(())
 }

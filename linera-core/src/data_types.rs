@@ -10,7 +10,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Owner},
 };
 use linera_chain::{
-    data_types::{ChainAndHeight, IncomingMessage, Medium, MessageBundle},
+    data_types::{IncomingMessage, Medium, MessageBundle},
     manager::ChainManagerInfo,
     ChainStateView,
 };
@@ -162,7 +162,7 @@ pub struct ChainInfo {
     /// The current number of received certificates (useful for `request_received_log_excluding_first_nth`)
     pub count_received_log: usize,
     /// The response to `request_received_certificates_excluding_first_nth`
-    pub requested_received_log: Vec<ChainAndHeight>,
+    pub requested_received_log: Vec<CryptoHash>,
 }
 
 /// The response to an `ChainInfoQuery`

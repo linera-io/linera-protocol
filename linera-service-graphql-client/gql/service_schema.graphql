@@ -144,14 +144,6 @@ type CertificateValue {
 }
 
 """
-A chain ID with a block height.
-"""
-type ChainAndHeight {
-	chainId: ChainId!
-	height: BlockHeight!
-}
-
-"""
 How to create a chain
 """
 scalar ChainDescription
@@ -195,9 +187,9 @@ type ChainStateExtendedView {
 	"""
 	confirmedLog: LogView_CryptoHash_b0541e41!
 	"""
-	Sender chain and height of all certified blocks known as a receiver (local ordering).
+	The hash of all the certified blocks known as a receiver (local ordering).
 	"""
-	receivedLog: LogView_ChainAndHeight_de85b393!
+	receivedLog: LogView_CryptoHash_b0541e41!
 	"""
 	Mailboxes used to receive messages indexed by their origin.
 	"""
@@ -495,10 +487,6 @@ type IncomingMessage {
 A scalar that can represent any JSON Object value.
 """
 scalar JSONObject
-
-type LogView_ChainAndHeight_de85b393 {
-	entries(start: Int, end: Int): [ChainAndHeight!]!
-}
 
 type LogView_CryptoHash_b0541e41 {
 	entries(start: Int, end: Int): [CryptoHash!]!

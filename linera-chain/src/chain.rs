@@ -35,8 +35,8 @@ use {linera_base::identifiers::BytecodeId, linera_execution::BytecodeLocation};
 
 use crate::{
     data_types::{
-        Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, EventRecord,
-        IncomingMessage, MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
+        Block, BlockExecutionOutcome, ChannelFullName, Event, EventRecord, IncomingMessage,
+        MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -252,8 +252,8 @@ where
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
     pub confirmed_log: LogView<C, CryptoHash>,
-    /// Sender chain and height of all certified blocks known as a receiver (local ordering).
-    pub received_log: LogView<C, ChainAndHeight>,
+    /// The hash of all the certified blocks known as a receiver (local ordering).
+    pub received_log: LogView<C, CryptoHash>,
 
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, Origin, InboxStateView<C>>,
@@ -630,10 +630,7 @@ where
             }
         }
         // Remember the certificate for future validator/client synchronizations.
-        self.received_log.push(ChainAndHeight {
-            chain_id: origin.sender,
-            height: bundle.height,
-        });
+        self.received_log.push(bundle.hash);
         Ok(())
     }
 

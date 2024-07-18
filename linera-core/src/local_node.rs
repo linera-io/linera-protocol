@@ -9,6 +9,7 @@ use futures::{
     lock::{Mutex, MutexGuard},
 };
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{ArithmeticError, Blob, BlockHeight, HashedBlob},
     identifiers::{BlobId, ChainId, MessageId},
 };
@@ -186,6 +187,12 @@ where
     pub(crate) async fn storage_client(&self) -> S {
         let node = self.lock_node().await;
         node.state.storage_client().clone()
+    }
+
+    #[tracing::instrument(level = "trace", skip_all)]
+    pub(crate) async fn has_certificate(&self, hash: CryptoHash) -> Result<bool, LocalNodeError> {
+        let client = self.storage_client().await;
+        Ok(client.contains_certificate(hash).await?)
     }
 }
 

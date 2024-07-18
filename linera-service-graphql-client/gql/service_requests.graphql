@@ -93,10 +93,7 @@ query Chain(
       entries
     }
     receivedLog {
-      entries {
-        chainId
-        height
-      }
+      entries
     }
     inboxes {
       keys

@@ -54,9 +54,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, info, Instrument as _};
 
 use crate::{
-    data_types::{
-        BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout,
-    },
+    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout},
     local_node::{LocalNodeClient, LocalNodeError},
     node::{
         CrossChainMessageDelivery, LocalValidatorNode, LocalValidatorNodeProvider, NodeError,
@@ -1071,31 +1069,16 @@ where
         response.check(name)?;
         let mut certificates = Vec::new();
         let mut new_tracker = tracker;
-        for entry in response.info.requested_received_log {
-            let query = ChainInfoQuery::new(entry.chain_id)
-                .with_sent_certificate_hashes_in_range(BlockHeightRange::single(entry.height));
-            let local_response = node_client
-                .handle_chain_info_query(query.clone())
-                .await
-                .map_err(|error| NodeError::LocalNodeQuery {
+        for hash in response.info.requested_received_log {
+            if node_client.has_certificate(hash).await.map_err(|error| {
+                NodeError::LocalNodeQuery {
                     error: error.to_string(),
-                })?;
-            if !local_response
-                .info
-                .requested_sent_certificate_hashes
-                .is_empty()
-            {
-                new_tracker += 1;
+                }
+            })? {
+                // Certificates present in storage have been executed already.
                 continue;
             }
-
-            let mut response = node.handle_chain_info_query(query).await?;
-            let Some(certificate_hash) = response.info.requested_sent_certificate_hashes.pop()
-            else {
-                break;
-            };
-
-            let certificate = node.download_certificate(certificate_hash).await?;
+            let certificate = node.download_certificate(hash).await?;
             let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value()
             else {
                 return Err(NodeError::InvalidChainInfoResponse);
