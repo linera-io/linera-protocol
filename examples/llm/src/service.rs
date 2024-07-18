@@ -89,6 +89,7 @@ impl Service for LlmService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
+        info!("Downloading model");
         let raw_weights = runtime
             .fetch_url("https://huggingface.co/karpathy/tinyllamas/resolve/main/stories42M.bin");
         assert_eq!(
@@ -96,8 +97,9 @@ impl Service for LlmService {
             WEIGHTS_HASH,
             "Incorrect model was fetched"
         );
-        info!("got weights: {}B", raw_weights.len());
+        info!("Downloaded model weights: {} bytes", raw_weights.len());
 
+        info!("Downloading tokenizer");
         let tokenizer_bytes = runtime.fetch_url(
             "https://huggingface.co/spaces/lmz/candle-llama2/resolve/main/tokenizer.json",
         );
@@ -106,6 +108,7 @@ impl Service for LlmService {
             TOKENIZER_HASH,
             "Incorrect tokenizer was fetched"
         );
+        info!("Downloaded tokenizer: {} bytes", tokenizer_bytes.len());
 
         let model_context = Arc::new(ModelContext {
             model: raw_weights,
