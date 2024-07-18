@@ -187,7 +187,6 @@ pub trait Storage: Sized {
     {
         let mut tasks = Vec::new();
         for key in keys {
-            // TODO: remove clone using scoped threads
             let client = self.clone();
             tasks.push(tokio::task::spawn(async move {
                 client.read_certificate(key).await
