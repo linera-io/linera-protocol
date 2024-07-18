@@ -15,9 +15,12 @@ CAVEAT:
   ([#1981](https://github.com/linera-io/linera-protocol/issues/1981)) or in an external
   decentralized storage.
 
-* We should also not download the model at every query ([#1999](https://github.com/linera-io/linera-protocol/issues/1999)).
-
 * Running larger LLMs with acceptable performance will likely require hardware acceleration ([#1931](https://github.com/linera-io/linera-protocol/issues/1931)).
+
+* The service currently is restarted when the wallet receives a new block for the chain where the
+  application is running from. That means it fetches the model again, which is inefficient. The
+  service should be allowed to continue executing in that case
+  ([#2160](https://github.com/linera-io/linera-protocol/issues/2160)).
 
 
 # How It Works
@@ -28,8 +31,8 @@ at `model.bin` and `tokenizer.json`.
 The application's service exposes a single GraphQL field called `prompt` which takes a prompt
 as input and returns a response.
 
-When a prompt is submitted, the application's service uses the `fetch_url`
-system API to inject the model and tokenizer. Subsequently, the model bytes are converted
+When the first prompt is submitted, the application's service uses the `fetch_url`
+system API to fetch the model and tokenizer. Subsequently, the model bytes are converted
 to the GGUF format where it can be used for inference.
 
 # Usage
