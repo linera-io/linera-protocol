@@ -1,27 +1,15 @@
 import { gql, useMutation } from '@apollo/client'
 import React from 'react'
-import { convertMillisToDateTime } from '../utils/time'
+import { convertMicrosToDateTime } from '../utils/time'
+import {
+  CommentOnPostMutationVariables,
+  Key,
+  LikePostMutationVariables,
+  Post,
+} from '../__generated__/graphql'
 
-interface Key {
-  timestamp: number
-  author: string
-  index: number
-}
-
-interface Post {
-  key: Key
-  text: string
-  imageUrl: string | null
-  comment: [
-    {
-      text: string
-      chainId: string
-    }
-  ]
-  likes: number
-}
 function UserInfo({ user }: { user: Key }) {
-  const { formattedDate, formattedTime } = convertMillisToDateTime(
+  const { formattedDate, formattedTime } = convertMicrosToDateTime(
     user.timestamp
   )
   return (
@@ -48,15 +36,15 @@ function UserInfo({ user }: { user: Key }) {
 }
 
 export default function PostCard({ post }: { post: Post }) {
-  const [showComment, setShowComment] = React.useState(false)
-  const [comment, setComment] = React.useState('')
+  const [showComment, setShowComment] = React.useState<boolean>(false)
+  const [comment, setComment] = React.useState<string>('')
 
-  const [likeMutation] = useMutation(gql`
+  const [likeMutation] = useMutation<LikePostMutationVariables>(gql`
     mutation likePost($key: KeyInput!) {
       like(key: $key)
     }
   `)
-  const [commentMutation] = useMutation(gql`
+  const [commentMutation] = useMutation<CommentOnPostMutationVariables>(gql`
     mutation CommentOnPost($key: KeyInput!, $text: String!) {
       comment(key: $key, comment: $text)
     }
@@ -72,6 +60,7 @@ export default function PostCard({ post }: { post: Post }) {
       },
     })
   }
+
   async function handleComment(key: Key) {
     await commentMutation({
       variables: {

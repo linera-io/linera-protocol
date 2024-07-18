@@ -1,4 +1,3 @@
-import React from 'react'
 import Logo from '../assets/linera.png'
 
 export default function LeftSideMenu() {

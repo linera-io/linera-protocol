@@ -1,8 +1,9 @@
 import React from 'react'
 import UploadImage from '../assets/uploadimage.png'
 import { gql, useMutation } from '@apollo/client'
+import { CreatePostMutationVariables } from '../__generated__/graphql'
 
-function UserInfo({ chainId }: { chainId: string | undefined }) {
+function UserInfo({ chainId }: { chainId: string }) {
   return (
     <div className="flex items-center mb-3 p-1 w-full">
       <img
@@ -20,36 +21,28 @@ function UserInfo({ chainId }: { chainId: string | undefined }) {
   )
 }
 
-export default function NewPost({ chainId }: { chainId: string | undefined }) {
-  const [post, setPost] = React.useState({
+export default function NewPost({ chainId }: { chainId: string }) {
+  const [showImgInput, setShowImgInput] = React.useState<boolean>(false)
+  const [post, setPost] = React.useState<CreatePostMutationVariables>({
     message: '',
     image: '',
   })
-  const [createPost] = useMutation(gql`
+  const [createPost] = useMutation<CreatePostMutationVariables>(gql`
     mutation createPost($message: String!, $image: String) {
       post(text: $message, imageUrl: $image)
     }
   `)
 
   async function handlePost() {
-    if (!post.message) return
-    if (post.image === '') {
-      await createPost({
-        variables: {
-          message: post.message,
-        },
-      })
-    } else {
-      await createPost({
-        variables: {
-          message: post.message,
-          image: post.image,
-        },
-      })
-    }
+    await createPost({
+      variables: {
+        message: post.message,
+        image: post.image,
+      },
+    })
+
     setPost({ message: '', image: '' })
   }
-  const [showImgInput, setShowImgInput] = React.useState(false)
   return (
     <div className="border p-1 bg-slate-100 rounded-xl">
       <div className="w-[500px]">
@@ -80,7 +73,7 @@ export default function NewPost({ chainId }: { chainId: string | undefined }) {
             {showImgInput && (
               <input
                 type="text"
-                value={post.image}
+                value={post.image ?? ''}
                 placeholder="Add img url..."
                 className="mb-0 px-4 py-1 outline-none rounded-xl w-full"
                 onChange={(e) => {

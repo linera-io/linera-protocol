@@ -5,66 +5,46 @@ import PostCard from './components/PostCard'
 import LeftSideMenu from './components/LeftSideMenu'
 import RightSideMenu from './components/RightSideMenu'
 import { gql, useSubscription, useLazyQuery } from '@apollo/client'
+import { ReceivedPosts } from './types'
+import { Post } from './__generated__/graphql'
 
-interface Post {
-  value: {
-    key: {
-      timestamp: number
-      author: string
-      index: number
-    }
-    text: string
-    imageUrl: string | null
-    comment: [
-      {
-        text: string
-        chainId: string
+export const RECEIVED_POSTS = gql`
+  query {
+    receivedPosts {
+      entries {
+        value {
+          key {
+            timestamp
+            author
+            index
+          }
+          text
+          imageUrl
+          comment {
+            text
+            chainId
+          }
+          likes
+        }
       }
-    ]
-    likes: number
+    }
   }
-}
+`
 
 const NOTIFICATION_SUBSCRIPTION = gql`
   subscription Notifications($chainId: String!) {
     notifications(chainId: $chainId)
   }
 `
-export default function App({
-  chainId,
-  owner,
-}: {
-  chainId: string | undefined
-  owner: string | undefined
-}) {
-  const [posts, setPosts] = React.useState([])
-  const [receivedPosts, { called }] = useLazyQuery(
-    gql`
-      query {
-        receivedPosts {
-          entries {
-            value {
-              key {
-                timestamp
-                author
-                index
-              }
-              text
-              imageUrl
-              comment {
-                text
-                chainId
-              }
-              likes
-            }
-          }
-        }
-      }
-    `,
+export default function App({ chainId }: { chainId: string }) {
+  const [posts, setPosts] = React.useState<Post[]>([])
+  const [receivedPosts, { called }] = useLazyQuery<ReceivedPosts>(
+    RECEIVED_POSTS,
     {
       onCompleted: (data) => {
-        console.log('data', data)
-        setPosts(data.receivedPosts.entries)
+        console.log('Data loaded', data.value)
+        if (data.value !== null && data.value !== undefined)
+          setPosts([data.value])
       },
       fetchPolicy: 'network-only',
     }
@@ -88,7 +68,7 @@ export default function App({
           <NewPost chainId={chainId} />
           {posts &&
             posts?.map((post: Post, index) => (
-              <div key={index}>{<PostCard post={post.value} />}</div>
+              <div key={index}>{post && <PostCard post={post} />}</div>
             ))}
         </div>
         <div className="h-fit w-[410px] fixed right-[50px]">
