@@ -3762,6 +3762,7 @@ dependencies = [
  "log",
  "rand",
  "serde",
+ "sha3",
  "tokenizers",
  "tokio",
 ]
