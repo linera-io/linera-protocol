@@ -93,7 +93,7 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::StoreError>,
 {
-    #[tracing::instrument(level = "trace", skip(self, proposal))]
+    #[tracing::instrument(level = "trace", skip_all)]
     pub async fn handle_block_proposal(
         &self,
         proposal: BlockProposal,
@@ -104,7 +104,7 @@ where
         Ok(response)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, certificate, notifications))]
+    #[tracing::instrument(level = "trace", skip_all)]
     pub async fn handle_lite_certificate(
         &self,
         certificate: LiteCertificate<'_>,
@@ -124,16 +124,7 @@ where
         Ok(response)
     }
 
-    #[tracing::instrument(
-        level = "trace",
-        skip(
-            self,
-            certificate,
-            hashed_certificate_values,
-            hashed_blobs,
-            notifications
-        )
-    )]
+    #[tracing::instrument(level = "trace", skip_all)]
     pub async fn handle_certificate(
         &self,
         certificate: Certificate,
@@ -154,7 +145,7 @@ where
         Ok(response)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, query))]
+    #[tracing::instrument(level = "trace", skip_all)]
     pub async fn handle_chain_info_query(
         &self,
         query: ChainInfoQuery,
@@ -171,7 +162,7 @@ where
     S: Storage,
     ViewError: From<S::StoreError>,
 {
-    #[tracing::instrument(level = "trace", skip(state))]
+    #[tracing::instrument(level = "trace", skip_all)]
     pub fn new(state: WorkerState<S>) -> Self {
         let node = LocalNode { state };
 
@@ -180,7 +171,7 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(level = "trace", skip_all)]
     async fn lock_node(&self) -> MutexGuard<LocalNode<S>> {
         self.node.lock().await
     }
@@ -191,7 +182,7 @@ where
     S: Storage + Clone,
     ViewError: From<S::StoreError>,
 {
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(level = "trace", skip_all)]
     pub(crate) async fn storage_client(&self) -> S {
         let node = self.lock_node().await;
         node.state.storage_client().clone()
@@ -203,7 +194,7 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::StoreError>,
 {
-    #[tracing::instrument(level = "trace", skip(self, block))]
+    #[tracing::instrument(level = "trace", skip_all)]
     pub async fn stage_block_execution(
         &self,
         block: Block,
@@ -213,7 +204,7 @@ where
         Ok((executed_block, info))
     }
 
-    #[tracing::instrument(level = "trace", skip(self, locations, node, name))]
+    #[tracing::instrument(level = "trace", skip_all)]
     async fn find_missing_application_bytecodes<A>(
         &self,
         locations: &[BytecodeLocation],
@@ -235,7 +226,7 @@ where
         .collect::<Vec<_>>()
     }
 
-    #[tracing::instrument(level = "trace", skip(self, blob_ids, node, name))]
+    #[tracing::instrument(level = "trace", skip_all)]
     async fn find_missing_blobs<A>(
         &self,
         blob_ids: &[BlobId],
@@ -255,10 +246,7 @@ where
         .collect::<Vec<_>>()
     }
 
-    #[tracing::instrument(
-        level = "trace",
-        skip(self, name, node, chain_id, certificates, notifications)
-    )]
+    #[tracing::instrument(level = "trace", skip_all)]
     async fn try_process_certificates<A>(
         &self,
         name: ValidatorName,
@@ -313,7 +301,7 @@ where
         info
     }
 
-    #[tracing::instrument(level = "trace", skip(self, chain_id))]
+    #[tracing::instrument(level = "trace", skip(self))]
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
     /// [`ChainId`].
     ///
@@ -327,7 +315,7 @@ where
         node.state.chain_state_view(chain_id).await
     }
 
-    #[tracing::instrument(level = "trace", skip(self, chain_id))]
+    #[tracing::instrument(level = "trace", skip(self))]
     pub(crate) async fn local_chain_info(
         &self,
         chain_id: ChainId,
@@ -336,7 +324,7 @@ where
         Ok(self.handle_chain_info_query(query).await?.info)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, chain_id, query))]
+    #[tracing::instrument(level = "trace", skip(self, query))]
     pub async fn query_application(
         &self,
         chain_id: ChainId,
@@ -347,7 +335,7 @@ where
         Ok(response)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, chain_id, application_id))]
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn describe_application(
         &self,
         chain_id: ChainId,
@@ -361,7 +349,7 @@ where
         Ok(response)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, blob_id))]
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn recent_blob(&self, blob_id: &BlobId) -> Option<HashedBlob> {
         let mut node = self.lock_node().await;
         node.state.recent_blob(blob_id).await
@@ -373,7 +361,7 @@ where
         node.state.recent_hashed_blobs()
     }
 
-    #[tracing::instrument(level = "trace", skip(self, hashed_blob))]
+    #[tracing::instrument(level = "trace", skip(self, hashed_blob), fields(blob_id = ?hashed_blob.id))]
     pub async fn cache_recent_blob(&self, hashed_blob: &HashedBlob) -> bool {
         let mut node = self.lock_node().await;
         node.state
@@ -381,10 +369,7 @@ where
             .await
     }
 
-    #[tracing::instrument(
-        level = "trace",
-        skip(self, validators, chain_id, target_next_block_height, notifications)
-    )]
+    #[tracing::instrument(level = "trace", skip(self, validators, notifications))]
     pub async fn download_certificates<A>(
         &self,
         mut validators: Vec<(ValidatorName, A)>,
@@ -423,10 +408,7 @@ where
         }
     }
 
-    #[tracing::instrument(
-        level = "trace",
-        skip(self, validators, hashed_certificate_value_locations)
-    )]
+    #[tracing::instrument(level = "trace", skip_all)]
     /// Downloads and stores the specified hashed certificate values, unless they are already in the cache or storage.
     ///
     /// Does not fail if a hashed certificate value can't be downloaded; it just gets omitted from the result.
@@ -473,7 +455,7 @@ where
         Ok(values)
     }
 
-    #[tracing::instrument(level = "trace", skip(storage, validators, location))]
+    #[tracing::instrument(level = "trace", skip_all)]
     pub async fn read_or_download_hashed_certificate_value<A>(
         storage: S,
         validators: Vec<(ValidatorName, A)>,
@@ -501,7 +483,7 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self, message_id))]
+    #[tracing::instrument(level = "trace", skip(self))]
     /// Obtains the certificate containing the specified message.
     pub async fn certificate_for(
         &self,
@@ -524,10 +506,7 @@ where
         Ok(certificate)
     }
 
-    #[tracing::instrument(
-        level = "trace",
-        skip(self, name, node, chain_id, start, stop, notifications)
-    )]
+    #[tracing::instrument(level = "trace", skip_all)]
     async fn try_download_certificates_from<A>(
         &self,
         name: ValidatorName,
@@ -564,7 +543,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace", skip(self, name, node, chain_id, start, limit))]
+    #[tracing::instrument(level = "trace", skip_all)]
     async fn try_query_certificates_from<A>(
         &self,
         name: ValidatorName,
@@ -603,7 +582,7 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self, validators, chain_id, notifications))]
+    #[tracing::instrument(level = "trace", skip_all)]
     pub async fn synchronize_chain_state<A>(
         &self,
         validators: Vec<(ValidatorName, A)>,
@@ -731,7 +710,7 @@ where
         None
     }
 
-    #[tracing::instrument(level = "trace", skip(validators, blob_id))]
+    #[tracing::instrument(level = "trace", skip(validators))]
     pub async fn download_blob<A>(
         mut validators: Vec<(ValidatorName, A)>,
         blob_id: BlobId,
@@ -749,7 +728,7 @@ where
         None
     }
 
-    #[tracing::instrument(level = "trace", skip(name, node, blob_id))]
+    #[tracing::instrument(level = "trace", skip(name, node))]
     async fn try_download_blob_from<A>(
         name: ValidatorName,
         node: &mut A,
@@ -771,7 +750,7 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(node, name, location))]
+    #[tracing::instrument(level = "trace", skip_all)]
     async fn try_download_hashed_certificate_value_from<A>(
         node: &mut A,
         name: ValidatorName,
