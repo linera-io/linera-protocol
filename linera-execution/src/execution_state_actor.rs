@@ -185,19 +185,22 @@ where
             }
 
             ContainsKey { id, key, callback } => {
-                let view = self.users.try_load_entry_or_insert(&id).await?;
+                let view = self.users.try_load_entry(&id).await?;
+                let view = view.unwrap();
                 let result = view.contains_key(&key).await?;
                 callback.respond(result);
             }
 
             ReadMultiValuesBytes { id, keys, callback } => {
-                let view = self.users.try_load_entry_or_insert(&id).await?;
+                let view = self.users.try_load_entry(&id).await?;
+                let view = view.unwrap();
                 let values = view.multi_get(keys).await?;
                 callback.respond(values);
             }
 
             ReadValueBytes { id, key, callback } => {
-                let view = self.users.try_load_entry_or_insert(&id).await?;
+                let view = self.users.try_load_entry(&id).await?;
+                let view = view.unwrap();
                 let result = view.get(&key).await?;
                 callback.respond(result);
             }
@@ -207,7 +210,8 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.users.try_load_entry_or_insert(&id).await?;
+                let view = self.users.try_load_entry(&id).await?;
+                let view = view.unwrap();
                 let result = view.find_keys_by_prefix(&key_prefix).await?;
                 callback.respond(result);
             }
@@ -217,7 +221,8 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.users.try_load_entry_or_insert(&id).await?;
+                let view = self.users.try_load_entry(&id).await?;
+                let view = view.unwrap();
                 let result = view.find_key_values_by_prefix(&key_prefix).await?;
                 callback.respond(result);
             }

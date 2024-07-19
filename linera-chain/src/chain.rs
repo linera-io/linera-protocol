@@ -522,18 +522,24 @@ where
         &mut self,
         origin: &Origin,
     ) -> Result<BlockHeight, ChainError> {
-        let inbox = self.inboxes.try_load_entry_or_insert(origin).await?;
-        inbox.next_block_height_to_receive()
+        let inbox = self.inboxes.try_load_entry(origin).await?;
+        match inbox {
+            Some(inbox) => inbox.next_block_height_to_receive(),
+            None => Ok(BlockHeight::from(0)),
+        }
     }
 
     pub async fn last_anticipated_block_height(
         &mut self,
         origin: &Origin,
     ) -> Result<Option<BlockHeight>, ChainError> {
-        let inbox = self.inboxes.try_load_entry_or_insert(origin).await?;
-        match inbox.removed_events.back().await? {
-            Some(event) => Ok(Some(event.height)),
-            None => Ok(None),
+        let inbox = self.inboxes.try_load_entry(origin).await?;
+        match inbox {
+            Some(inbox) => match inbox.removed_events.back().await? {
+                Some(event) => Ok(Some(event.height)),
+                None => Ok(None),
+            },
+            None => Ok(None)
         }
     }
 
