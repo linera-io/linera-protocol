@@ -119,7 +119,6 @@ impl ActiveChain {
 
         self.validator
             .worker()
-            .await
             .fully_handle_certificate(certificate.clone(), vec![], vec![])
             .await
             .expect("Rejected certificate");
@@ -138,7 +137,6 @@ impl ActiveChain {
         let (information, _) = self
             .validator
             .worker()
-            .await
             .handle_chain_info_query(ChainInfoQuery::new(chain_id).with_pending_messages())
             .await
             .expect("Failed to query chain's pending messages");
@@ -387,7 +385,6 @@ impl ActiveChain {
     ) -> bool {
         self.validator
             .worker()
-            .await
             .read_bytecode_location(self.id(), bytecode_id.forget_abi())
             .await
             .expect("Failed to check known bytecode locations")
@@ -403,7 +400,6 @@ impl ActiveChain {
             let certificate = self
                 .validator
                 .worker()
-                .await
                 .read_certificate(bytecode_id.message_id.chain_id, height.into())
                 .await
                 .expect("Failed to load certificate to search for bytecode location")
@@ -472,7 +468,6 @@ impl ActiveChain {
         let description_result = self
             .validator
             .worker()
-            .await
             .describe_application(self.id(), application_id.forget_abi())
             .await;
 
@@ -509,7 +504,6 @@ impl ActiveChain {
         let response = self
             .validator
             .worker()
-            .await
             .query_application(
                 self.id(),
                 Query::User {

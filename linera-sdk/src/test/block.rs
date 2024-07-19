@@ -196,7 +196,6 @@ impl BlockBuilder {
         let (executed_block, _) = self
             .validator
             .worker()
-            .await
             .stage_block_execution(self.block)
             .await?;
 
@@ -230,7 +229,6 @@ impl BlockBuilder {
             let mut message = self
                 .validator
                 .worker()
-                .await
                 .find_incoming_message(chain_id, message_id)
                 .await
                 .expect("Failed to find message to receive in block")
