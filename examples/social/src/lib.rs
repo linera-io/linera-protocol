@@ -195,25 +195,18 @@ impl ServiceAbi for SocialAbi {
 #[derive(Debug, Serialize, Deserialize, GraphQLMutationRoot)]
 pub enum Operation {
     /// Request to be subscribed to another chain.
-    Subscribe {
-        chain_id: ChainId,
-    },
+    Subscribe { chain_id: ChainId },
     /// Request to be unsubscribed from another chain.
-    Unsubscribe {
-        chain_id: ChainId,
-    },
+    Unsubscribe { chain_id: ChainId },
     /// Send a new post to everyone who subscribed to us.
     Post {
         text: String,
         image_url: Option<String>,
     },
-    Like {
-        key: Key,
-    },
-    Comment {
-        key: Key,
-        comment: String,
-    },
+    /// Like a post
+    Like { key: Key },
+    /// Comment on a post
+    Comment { key: Key, comment: String },
 }
 
 /// A message of the application on one chain, to be handled on another chain.
@@ -260,7 +253,7 @@ pub struct Post {
     /// The total number of likes
     pub likes: u32,
     /// Comments with there ChainId
-    pub comment: Vec<Comment>,
+    pub comments: Vec<Comment>,
 }
 
 /// A comment on a post

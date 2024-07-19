@@ -160,7 +160,7 @@ impl SocialContract {
                 text: post.text,
                 image_url: post.image_url,
                 likes: 0,
-                comment: vec![],
+                comments: vec![],
             };
 
             self.state
@@ -199,7 +199,7 @@ impl SocialContract {
             text: comment,
         };
 
-        post.comment.push(comment);
+        post.comments.push(comment);
 
         self.state
             .received_posts

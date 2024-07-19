@@ -137,7 +137,7 @@ query { receivedPosts { keys { timestamp author index } } }
 ```
 
 This should now list one entry, with timestamp, author and an index. If we view that
-entry, we can see the posted text:
+entry, we can see the posted text as well as other null/empty values:
 
 ```gql
 query {
@@ -157,7 +157,7 @@ query {
         }
         text
         imageUrl
-        comment {
+        comments {
           text
           chainId
         }
@@ -179,7 +179,10 @@ query {
             "author": "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
             "index": 0
           },
-          "text": "Linera Social is the new Mastodon!"
+          "text": "Linera Social is the new Mastodon!",
+          "imageUrl": null,
+          "comments": [],
+          "likes": 0
         }
       }
     }

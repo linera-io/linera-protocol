@@ -7,7 +7,7 @@ on port 8000. Also make sure you have performed the operations mentoined in this
 
 ### Note
 
-The app is an example of a social app built using linera, and will be improved with future updates. Users can see their post by `ownPost` query in GraphiQL IDE.
+The app is an example of a social app, and will be improved with future updates. Users can see their post by `ownPost` query in GraphiQL IDE.
 
 #### Operations avaiable:
 
@@ -28,6 +28,10 @@ In the project directory, you can run:
 Runs the tailwind CLI build process
 
 Open [tailwindcss](https://tailwindcss.com/docs/installation) to learn more about tailwindcss.
+
+### `npm run compile`
+
+Generates necessary graphql types `codegen.ts`
 
 ### `npm start`
 
