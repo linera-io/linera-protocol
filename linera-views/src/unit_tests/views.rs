@@ -23,7 +23,8 @@ use crate::{
     common::Context,
     memory::{create_memory_context, MemoryContext},
     queue_view::QueueView,
-    register_view::HashedRegisterView,
+    reentrant_collection_view::ReentrantCollectionView,
+    register_view::{HashedRegisterView, RegisterView},
     test_utils::test_views::{
         TestCollectionView, TestLogView, TestMapView, TestRegisterView, TestView,
     },
@@ -372,6 +373,42 @@ async fn test_clearing_of_cached_stored_hash() -> anyhow::Result<()> {
 
     assert_eq!(view.hash().await?, empty_hash);
     assert_eq!(view.hash_mut().await?, empty_hash);
+
+    Ok(())
+}
+
+/// Check if a [`ReentrantCollectionView`] doesn't have pending changes after loading its
+/// entries.
+#[tokio::test]
+async fn test_reentrant_collection_view_has_no_pending_changes_after_try_load_entries(
+) -> anyhow::Result<()> {
+    let context = create_memory_context();
+    let mut view =
+        ReentrantCollectionView::<_, u8, RegisterView<_, String>>::load(context.clone()).await?;
+
+    assert!(!view.has_pending_changes().await);
+
+    {
+        let mut first_entry = view.try_load_entry_mut(&1).await?;
+        let mut second_entry = view.try_load_entry_mut(&2).await?;
+        first_entry.set("first".to_owned());
+        second_entry.set("second".to_owned());
+    }
+
+    assert!(view.has_pending_changes().await);
+
+    save_view(&context, &mut view).await?;
+
+    assert!(!view.has_pending_changes().await);
+
+    let entries = view.try_load_entries(vec![&1, &2]).await?;
+    assert_eq!(entries.len(), 2);
+    assert!(entries[0].is_some());
+    assert!(entries[1].is_some());
+    assert_eq!(entries[0].as_ref().unwrap().get(), "first");
+    assert_eq!(entries[1].as_ref().unwrap().get(), "second");
+
+    assert!(!view.has_pending_changes().await);
 
     Ok(())
 }
