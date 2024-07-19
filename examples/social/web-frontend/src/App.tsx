@@ -3,10 +3,12 @@ import Navbar from './components/Navbar'
 import NewPost from './components/NewPost'
 import PostCard from './components/PostCard'
 import LeftSideMenu from './components/LeftSideMenu'
-import RightSideMenu from './components/RightSideMenu'
 import { gql, useSubscription, useLazyQuery } from '@apollo/client'
-import { ReceivedPosts } from './types'
-import { Post } from './__generated__/graphql'
+import { Post, Social } from './__generated__/graphql'
+
+interface ReceivedPosts {
+  value: Post
+}
 
 export const RECEIVED_POSTS = gql`
   query {
@@ -20,7 +22,7 @@ export const RECEIVED_POSTS = gql`
           }
           text
           imageUrl
-          comment {
+          comments {
             text
             chainId
           }
@@ -37,18 +39,13 @@ const NOTIFICATION_SUBSCRIPTION = gql`
   }
 `
 export default function App({ chainId }: { chainId: string }) {
-  const [posts, setPosts] = React.useState<Post[]>([])
-  const [receivedPosts, { called }] = useLazyQuery<ReceivedPosts>(
-    RECEIVED_POSTS,
-    {
-      onCompleted: (data) => {
-        console.log('Data loaded', data.value)
-        if (data.value !== null && data.value !== undefined)
-          setPosts([data.value])
-      },
-      fetchPolicy: 'network-only',
-    }
-  )
+  const [posts, setPosts] = React.useState<ReceivedPosts[]>([])
+  const [receivedPosts, { called }] = useLazyQuery<Social>(RECEIVED_POSTS, {
+    onCompleted: (data) => {
+      setPosts(data.receivedPosts.entries as ReceivedPosts[])
+    },
+    fetchPolicy: 'network-only',
+  })
   useSubscription(NOTIFICATION_SUBSCRIPTION, {
     variables: { chainId },
     onData: () => receivedPosts(),
@@ -67,12 +64,11 @@ export default function App({ chainId }: { chainId: string }) {
         <div className="flex flex-col gap-3">
           <NewPost chainId={chainId} />
           {posts &&
-            posts?.map((post: Post, index) => (
-              <div key={index}>{post && <PostCard post={post} />}</div>
+            posts?.map((post: ReceivedPosts, index) => (
+              <div key={index}>
+                {post.value && <PostCard post={post.value} />}
+              </div>
             ))}
-        </div>
-        <div className="h-fit w-[410px] fixed right-[50px]">
-          <RightSideMenu />
         </div>
       </div>
     </div>

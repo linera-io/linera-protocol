@@ -15,7 +15,6 @@ function GraphQLProvider({ chainId, applicationId, port, children }) {
 }
 
 function apolloClient(chainId, applicationId, port) {
-  const graphqlUri = `http://localhost:${port}/chains/${chainId}/applications/${applicationId}`
   const wsLink = new GraphQLWsLink(
     createClient({
       url: `ws://localhost:${port}/ws`,
@@ -23,7 +22,7 @@ function apolloClient(chainId, applicationId, port) {
   )
 
   const httpLink = new HttpLink({
-    uri: graphqlUri,
+    uri: `http://localhost:${port}/chains/${chainId}/applications/${applicationId}`,
   })
 
   const splitLink = split(

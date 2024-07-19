@@ -138,11 +138,11 @@ export default function PostCard({ post }: { post: Post }) {
                 Send
               </button>
             </div>
-            {post.comment.length > 0 && (
+            {post.comments.length > 0 && (
               <div className="mt-4 w-full">
-                <h1>{post.comment.length} Comments</h1>
+                <h1>{post.comments.length} Comments</h1>
                 <div className="mt-2 text-sm font-semibold max-h-[200px] overflow-y-auto h-full">
-                  {post.comment.map((comment, index) => (
+                  {post.comments.map((comment, index) => (
                     <div key={index} className="flex items-center py-2">
                       <div className="w-full flex items-center gap-2">
                         <img

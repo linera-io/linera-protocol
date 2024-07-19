@@ -149,7 +149,7 @@ export type OwnPost = {
 export type Post = {
   __typename?: 'Post';
   /** Comments with there ChainId */
-  comment: Array<Comment>;
+  comments: Array<Comment>;
   /** The post's image_url(optional). */
   imageUrl?: Maybe<Scalars['String']['output']>;
   /** The key identifying the post, including the timestamp, author and index. */

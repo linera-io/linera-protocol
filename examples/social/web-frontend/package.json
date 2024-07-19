@@ -13,7 +13,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.24.1",
-    "react-scripts": "^5.0.1",
+    "react-scripts": "^3.0.1",
     "tailwind-styled-components": "^2.2.0"
   },
   "scripts": {
