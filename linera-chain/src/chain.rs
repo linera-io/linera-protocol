@@ -519,7 +519,7 @@ where
     }
 
     pub async fn next_block_height_to_receive(
-        &mut self,
+        &self,
         origin: &Origin,
     ) -> Result<BlockHeight, ChainError> {
         let inbox = self.inboxes.try_load_entry(origin).await?;
@@ -530,7 +530,7 @@ where
     }
 
     pub async fn last_anticipated_block_height(
-        &mut self,
+        &self,
         origin: &Origin,
     ) -> Result<Option<BlockHeight>, ChainError> {
         let inbox = self.inboxes.try_load_entry(origin).await?;
