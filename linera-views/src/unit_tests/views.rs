@@ -462,6 +462,49 @@ async fn test_reentrant_collection_view_has_pending_changes_after_try_load_entry
     Ok(())
 }
 
+/// Check if a acquiring multiple write-locks to sub-views causes the collection to have pending
+/// changes.
+#[tokio::test]
+async fn test_reentrant_collection_view_has_pending_changes_after_try_load_entries_mut(
+) -> anyhow::Result<()> {
+    let context = create_memory_context();
+    let values = [
+        (1, "first".to_owned()),
+        (2, "second".to_owned()),
+        (3, "third".to_owned()),
+        (4, "fourth".to_owned()),
+    ];
+    let mut view =
+        ReentrantCollectionView::<_, u8, RegisterView<_, String>>::load(context.clone()).await?;
+
+    populate_reentrant_collection_view(&mut view, values.clone()).await?;
+    save_view(&context, &mut view).await?;
+    assert!(!view.has_pending_changes().await);
+
+    let entries = view.try_load_entries([&2, &3]).await?;
+    assert_eq!(entries.len(), 2);
+    assert!(entries[0].is_some());
+    assert!(entries[1].is_some());
+    assert_eq!(entries[0].as_ref().unwrap().get(), &values[1].1);
+    assert_eq!(entries[1].as_ref().unwrap().get(), &values[2].1);
+    assert!(!entries[0].as_ref().unwrap().has_pending_changes().await);
+    assert!(!entries[1].as_ref().unwrap().has_pending_changes().await);
+
+    assert!(!view.has_pending_changes().await);
+
+    drop(entries);
+    let entries = view.try_load_entries_mut([&2, &3]).await?;
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].get(), &values[1].1);
+    assert_eq!(entries[1].get(), &values[2].1);
+    assert!(!entries[0].has_pending_changes().await);
+    assert!(!entries[1].has_pending_changes().await);
+
+    assert!(view.has_pending_changes().await);
+
+    Ok(())
+}
+
 /// Saves a [`View`] into the [`MemoryContext<()>`] storage simulation.
 async fn save_view<C>(context: &C, view: &mut impl View<C>) -> anyhow::Result<()>
 where
