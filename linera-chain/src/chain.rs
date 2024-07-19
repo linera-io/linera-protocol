@@ -539,7 +539,7 @@ where
                 Some(event) => Ok(Some(event.height)),
                 None => Ok(None),
             },
-            None => Ok(None)
+            None => Ok(None),
         }
     }
 

@@ -219,7 +219,7 @@ where
                 let view = self.users.try_load_entry(&id).await?;
                 let result = match view {
                     Some(view) => view.find_keys_by_prefix(&key_prefix).await?,
-                    None => Vec::new()
+                    None => Vec::new(),
                 };
                 callback.respond(result);
             }
