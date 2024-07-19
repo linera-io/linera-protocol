@@ -1,9 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::VecDeque, marker::PhantomData};
+use std::{collections::VecDeque, fmt::Debug, marker::PhantomData};
 
 use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Serialize};
 use test_case::test_case;
 #[cfg(with_rocksdb)]
 use {
@@ -383,30 +384,22 @@ async fn test_clearing_of_cached_stored_hash() -> anyhow::Result<()> {
 async fn test_reentrant_collection_view_has_no_pending_changes_after_try_load_entries(
 ) -> anyhow::Result<()> {
     let context = create_memory_context();
+    let values = [(1, "first".to_owned()), (2, "second".to_owned())];
     let mut view =
         ReentrantCollectionView::<_, u8, RegisterView<_, String>>::load(context.clone()).await?;
 
     assert!(!view.has_pending_changes().await);
-
-    {
-        let mut first_entry = view.try_load_entry_mut(&1).await?;
-        let mut second_entry = view.try_load_entry_mut(&2).await?;
-        first_entry.set("first".to_owned());
-        second_entry.set("second".to_owned());
-    }
-
+    populate_reentrant_collection_view(&mut view, values.clone()).await?;
     assert!(view.has_pending_changes().await);
-
     save_view(&context, &mut view).await?;
-
     assert!(!view.has_pending_changes().await);
 
     let entries = view.try_load_entries(vec![&1, &2]).await?;
     assert_eq!(entries.len(), 2);
     assert!(entries[0].is_some());
     assert!(entries[1].is_some());
-    assert_eq!(entries[0].as_ref().unwrap().get(), "first");
-    assert_eq!(entries[1].as_ref().unwrap().get(), "second");
+    assert_eq!(entries[0].as_ref().unwrap().get(), &values[0].1);
+    assert_eq!(entries[1].as_ref().unwrap().get(), &values[1].1);
 
     assert!(!view.has_pending_changes().await);
 
@@ -421,5 +414,24 @@ where
     let mut batch = Batch::new();
     view.flush(&mut batch)?;
     context.write_batch(batch).await?;
+    Ok(())
+}
+
+/// Populates a [`ReentrantCollectionView`] with some `entries`.
+async fn populate_reentrant_collection_view<C, Key, Value>(
+    collection: &mut ReentrantCollectionView<C, Key, RegisterView<C, Value>>,
+    entries: impl IntoIterator<Item = (Key, Value)>,
+) -> anyhow::Result<()>
+where
+    C: Context + Send + Sync,
+    Key: Serialize + DeserializeOwned + Clone + Debug + Default + Send + Sync,
+    Value: Serialize + DeserializeOwned + Default + Send + Sync,
+    ViewError: From<C::Error>,
+{
+    for (key, value) in entries {
+        let mut entry = collection.try_load_entry_mut(&key).await?;
+        entry.set(value);
+    }
+
     Ok(())
 }
