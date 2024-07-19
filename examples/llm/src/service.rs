@@ -7,7 +7,10 @@ mod random;
 mod state;
 mod token;
 
-use std::io::{Cursor, Seek, SeekFrom};
+use std::{
+    io::{Cursor, Seek, SeekFrom},
+    sync::Arc,
+};
 
 use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Request, Response, Schema};
 use candle_core::{
@@ -19,13 +22,26 @@ use candle_transformers::{
     models::{llama2_c, llama2_c::Llama, llama2_c_weights, quantized_llama::ModelWeights},
 };
 use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime};
-use log::info;
+use log::{debug, info};
+use sha3::{Digest as _, Sha3_256};
 use tokenizers::Tokenizer;
 
 use crate::token::TokenOutputStream;
 
+/// The SHA3-256 hash of the model weights to use.
+const WEIGHTS_HASH: &[u8] = &[
+    0x23, 0x42, 0x71, 0xe1, 0xf8, 0x3b, 0x6e, 0xec, 0xf1, 0x9b, 0xa4, 0xb7, 0xf4, 0x52, 0x49, 0xe7,
+    0xd9, 0xc6, 0x86, 0x57, 0xbc, 0xa0, 0x2d, 0xa3, 0x9b, 0xdb, 0xb1, 0x49, 0xcd, 0x53, 0x10, 0x01,
+];
+
+/// The SHA3-256 hash of the tokenizer to use.
+const TOKENIZER_HASH: &[u8] = &[
+    0x4a, 0x33, 0x4c, 0x71, 0x85, 0x96, 0xca, 0x0b, 0x0a, 0x03, 0x11, 0x56, 0x0a, 0x50, 0x25, 0xfd,
+    0xfc, 0x36, 0x8f, 0x33, 0x64, 0x17, 0x2b, 0x74, 0x01, 0xbb, 0x89, 0xbf, 0x30, 0x99, 0x20, 0x0b,
+];
+
 pub struct LlmService {
-    runtime: ServiceRuntime<Self>,
+    model_context: Arc<ModelContext>,
 }
 
 linera_sdk::service!(LlmService);
@@ -39,7 +55,7 @@ struct QueryRoot {}
 #[Object]
 impl QueryRoot {
     async fn prompt(&self, ctx: &Context<'_>, prompt: String) -> String {
-        let model_context = ctx.data::<ModelContext>().unwrap();
+        let model_context = ctx.data::<Arc<ModelContext>>().unwrap();
         model_context.run_model(&prompt).unwrap()
     }
 }
@@ -73,23 +89,39 @@ impl Service for LlmService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        LlmService { runtime }
+        info!("Downloading model");
+        let raw_weights = runtime
+            .fetch_url("https://huggingface.co/karpathy/tinyllamas/resolve/main/stories42M.bin");
+        assert_eq!(
+            Sha3_256::digest(&raw_weights).as_slice(),
+            WEIGHTS_HASH,
+            "Incorrect model was fetched"
+        );
+        info!("Downloaded model weights: {} bytes", raw_weights.len());
+
+        info!("Downloading tokenizer");
+        let tokenizer_bytes = runtime.fetch_url(
+            "https://huggingface.co/spaces/lmz/candle-llama2/resolve/main/tokenizer.json",
+        );
+        assert_eq!(
+            Sha3_256::digest(&tokenizer_bytes).as_slice(),
+            TOKENIZER_HASH,
+            "Incorrect tokenizer was fetched"
+        );
+        info!("Downloaded tokenizer: {} bytes", tokenizer_bytes.len());
+
+        let model_context = Arc::new(ModelContext {
+            model: raw_weights,
+            tokenizer: tokenizer_bytes,
+        });
+        LlmService { model_context }
     }
 
     async fn handle_query(&self, request: Request) -> Response {
         let query_string = &request.query;
-        info!("query: {}", query_string);
-        let raw_weights = self.runtime.fetch_url("http://localhost:10001/model.bin");
-        info!("got weights: {}B", raw_weights.len());
-        let tokenizer_bytes = self
-            .runtime
-            .fetch_url("http://localhost:10001/tokenizer.json");
-        let model_context = ModelContext {
-            model: raw_weights,
-            tokenizer: tokenizer_bytes,
-        };
+        debug!("query: {}", query_string);
         let schema = Schema::build(QueryRoot {}, EmptyMutation, EmptySubscription)
-            .data(model_context)
+            .data(self.model_context.clone())
             .finish();
         schema.execute(request).await
     }
@@ -97,7 +129,7 @@ impl Service for LlmService {
 
 impl ModelContext {
     fn try_load_gguf(cursor: &mut Cursor<Vec<u8>>) -> Result<ModelWeights, candle_core::Error> {
-        info!("trying to load model assuming gguf");
+        debug!("trying to load model assuming gguf");
         let model_contents = gguf_file::Content::read(cursor)?;
         let mut total_size_in_bytes = 0;
         for (_, tensor) in model_contents.tensor_infos.iter() {
@@ -106,7 +138,7 @@ impl ModelContext {
                 elem_count * tensor.ggml_dtype.type_size() / tensor.ggml_dtype.block_size();
         }
 
-        info!(
+        debug!(
             "loaded {:?} tensors ({}B) ",
             model_contents.tensor_infos.len(),
             total_size_in_bytes,
@@ -116,7 +148,7 @@ impl ModelContext {
     }
 
     fn try_load_ggml(cursor: &mut Cursor<Vec<u8>>) -> Result<ModelWeights, candle_core::Error> {
-        info!("trying to load model assuming ggml");
+        debug!("trying to load model assuming ggml");
         let model_contents = ggml_file::Content::read(cursor, &Device::Cpu)?;
         let mut total_size_in_bytes = 0;
         for (_, tensor) in model_contents.tensors.iter() {
@@ -125,7 +157,7 @@ impl ModelContext {
                 elem_count * tensor.dtype().type_size() / tensor.dtype().block_size();
         }
 
-        info!(
+        debug!(
             "loaded {:?} tensors ({}B) ",
             model_contents.tensors.len(),
             total_size_in_bytes,

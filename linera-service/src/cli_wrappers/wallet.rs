@@ -144,6 +144,10 @@ impl ClientWrapper {
         let mut command = Command::new(path);
         command
             .current_dir(self.path_provider.path())
+            .env(
+                "RUST_LOG",
+                std::env::var("RUST_LOG").unwrap_or(String::from("linera=default")),
+            )
             .args(["--wallet", &self.wallet])
             .args(["--storage", &self.storage])
             .args([

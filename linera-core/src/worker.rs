@@ -264,6 +264,7 @@ pub enum WorkerError {
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
+    #[tracing::instrument(level = "trace", skip(chain_error))]
     fn from(chain_error: linera_chain::ChainError) -> Self {
         WorkerError::ChainError(Box::new(chain_error))
     }
@@ -307,6 +308,7 @@ where
     StorageClient: Storage,
     ViewError: From<StorageClient::StoreError>,
 {
+    #[tracing::instrument(level = "trace", skip(nickname, key_pair, storage))]
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
         WorkerState {
             nickname,
@@ -320,21 +322,25 @@ where
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(nickname, storage))]
     pub fn new_for_client(nickname: String, storage: StorageClient) -> Self {
         Self::new(nickname, None, storage)
     }
 
+    #[tracing::instrument(level = "trace", skip(self, value))]
     pub fn with_allow_inactive_chains(mut self, value: bool) -> Self {
         self.chain_worker_config.allow_inactive_chains = value;
         self
     }
 
+    #[tracing::instrument(level = "trace", skip(self, value))]
     pub fn with_allow_messages_from_deprecated_epochs(mut self, value: bool) -> Self {
         self.chain_worker_config
             .allow_messages_from_deprecated_epochs = value;
         self
     }
 
+    #[tracing::instrument(level = "trace", skip(self, grace_period))]
     /// Returns an instance with the specified grace period, in microseconds.
     ///
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
@@ -344,20 +350,24 @@ where
         self
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn nickname(&self) -> &str {
         &self.nickname
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn recent_hashed_blobs(&self) -> Arc<ValueCache<BlobId, HashedBlob>> {
         self.recent_hashed_blobs.clone()
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     /// Returns the storage client so that it can be manipulated or queried.
     #[cfg(not(feature = "test"))]
     pub(crate) fn storage_client(&self) -> &StorageClient {
         &self.storage
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     /// Returns the storage client so that it can be manipulated or queried by tests in other
     /// crates.
     #[cfg(feature = "test")]
@@ -365,6 +375,7 @@ where
         &self.storage
     }
 
+    #[tracing::instrument(level = "trace", skip(self, key_pair))]
     #[cfg(test)]
     pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<KeyPair>>) -> Self {
         self.chain_worker_config.key_pair = key_pair;
@@ -372,6 +383,7 @@ where
         self
     }
 
+    #[tracing::instrument(level = "trace", skip(self, certificate))]
     pub(crate) async fn full_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
@@ -381,6 +393,7 @@ where
             .await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, hash))]
     pub(crate) async fn recent_hashed_certificate_value(
         &mut self,
         hash: &CryptoHash,
@@ -388,6 +401,7 @@ where
         self.recent_hashed_certificate_values.get(hash).await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, blob_id))]
     pub(crate) async fn recent_blob(&mut self, blob_id: &BlobId) -> Option<HashedBlob> {
         self.recent_hashed_blobs.get(blob_id).await
     }
@@ -399,6 +413,10 @@ where
     ViewError: From<StorageClient::StoreError>,
 {
     // NOTE: This only works for non-sharded workers!
+    #[tracing::instrument(
+        level = "trace",
+        skip(self, certificate, hashed_certificate_values, hashed_blobs)
+    )]
     #[cfg(with_testing)]
     pub async fn fully_handle_certificate(
         &mut self,
@@ -415,6 +433,16 @@ where
         .await
     }
 
+    #[tracing::instrument(
+        level = "trace",
+        skip(
+            self,
+            certificate,
+            hashed_certificate_values,
+            hashed_blobs,
+            notifications
+        )
+    )]
     #[inline]
     pub(crate) async fn fully_handle_certificate_with_notifications(
         &mut self,
@@ -440,6 +468,7 @@ where
         Ok(response)
     }
 
+    #[tracing::instrument(level = "trace", skip(self, block))]
     /// Tries to execute a block proposal without any verification other than block execution.
     pub async fn stage_block_execution(
         &mut self,
@@ -452,6 +481,10 @@ where
     }
 
     // Schedule a notification when cross-chain messages are delivered up to the given height.
+    #[tracing::instrument(
+        level = "trace",
+        skip(self, chain_id, height, actions, notify_when_messages_are_delivered)
+    )]
     async fn register_delivery_notifier(
         &mut self,
         chain_id: ChainId,
@@ -483,6 +516,7 @@ where
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(self, chain_id, query))]
     /// Executes a [`Query`] for an application's state on a specific chain.
     pub async fn query_application(
         &mut self,
@@ -495,6 +529,7 @@ where
         .await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, chain_id, bytecode_id))]
     #[cfg(with_testing)]
     pub async fn read_bytecode_location(
         &mut self,
@@ -510,6 +545,7 @@ where
         .await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, chain_id, application_id))]
     pub async fn describe_application(
         &mut self,
         chain_id: ChainId,
@@ -524,6 +560,16 @@ where
         .await
     }
 
+    #[tracing::instrument(
+        level = "trace",
+        skip(
+            self,
+            certificate,
+            hashed_certificate_values,
+            hashed_blobs,
+            notify_when_messages_are_delivered
+        )
+    )]
     /// Processes a confirmed block (aka a commit).
     async fn process_confirmed_block(
         &mut self,
@@ -563,6 +609,7 @@ where
         Ok((response, actions))
     }
 
+    #[tracing::instrument(level = "trace", skip(self, certificate))]
     /// Processes a validated block issued from a multi-owner chain.
     async fn process_validated_block(
         &mut self,
@@ -583,6 +630,7 @@ where
         .await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, certificate))]
     /// Processes a leader timeout issued from a multi-owner chain.
     async fn process_timeout(
         &mut self,
@@ -600,6 +648,7 @@ where
         .await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, origin, recipient, bundles))]
     async fn process_cross_chain_update(
         &mut self,
         origin: Origin,
@@ -616,6 +665,7 @@ where
         .await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, value))]
     /// Inserts a [`HashedCertificateValue`] into the worker's cache.
     pub(crate) async fn cache_recent_hashed_certificate_value<'a>(
         &mut self,
@@ -624,11 +674,13 @@ where
         self.recent_hashed_certificate_values.insert(value).await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, hashed_blob))]
     /// Inserts a [`HashedBlob`] into the worker's cache.
     pub async fn cache_recent_blob<'a>(&mut self, hashed_blob: Cow<'a, HashedBlob>) -> bool {
         self.recent_hashed_blobs.insert(hashed_blob).await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, chain_id, height))]
     /// Returns a stored [`Certificate`] for a chain's block.
     #[cfg(with_testing)]
     pub async fn read_certificate(
@@ -642,6 +694,7 @@ where
         .await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, chain_id, message_id))]
     /// Returns an [`IncomingMessage`] that's awaiting to be received by the chain specified by
     /// `chain_id`.
     #[cfg(with_testing)]
@@ -698,6 +751,7 @@ where
         }))
     }
 
+    #[tracing::instrument(level = "trace", skip(self, chain_id))]
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
     /// [`ChainId`].
     ///
@@ -713,6 +767,7 @@ where
         .await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, chain_id, request_builder))]
     /// Sends a request to the [`ChainWorker`] for a [`ChainId`] and waits for the `Response`.
     async fn query_chain_worker<Response>(
         &self,
@@ -733,6 +788,7 @@ where
             .expect("`ChainWorkerActor` stopped executing without responding")
     }
 
+    #[tracing::instrument(level = "trace", skip(self, chain_id))]
     /// Retrieves an endpoint to a [`ChainWorkerActor`] from the cache, creating one and adding it
     /// to the cache if needed.
     async fn get_chain_worker_endpoint(
@@ -771,6 +827,7 @@ where
     StorageClient: Storage,
     ViewError: From<StorageClient::StoreError>,
 {
+    #[tracing::instrument(level = "trace", skip(self))]
     /// Gets a reference to the validator's [`PublicKey`].
     ///
     /// # Panics

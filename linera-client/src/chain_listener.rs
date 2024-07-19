@@ -23,7 +23,7 @@ use linera_core::{
 use linera_execution::{Message, SystemMessage};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use tracing::{error, info, warn};
+use tracing::{error, info, warn, Instrument as _};
 
 use crate::{chain_clients::ChainClients, wallet::Wallet};
 
@@ -110,6 +110,7 @@ where
         }
     }
 
+    #[tracing::instrument(level = "trace", skip_all, fields(?chain_id))]
     fn run_with_chain_id<C>(
         chain_id: ChainId,
         clients: ChainClients<P, S>,
@@ -119,15 +120,19 @@ where
     ) where
         C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     {
-        let _handle = tokio::task::spawn(async move {
-            if let Err(err) =
-                Self::run_client_stream(chain_id, clients, context, storage, config).await
-            {
-                error!("Stream for chain {} failed: {}", chain_id, err);
+        let _handle = tokio::task::spawn(
+            async move {
+                if let Err(err) =
+                    Self::run_client_stream(chain_id, clients, context, storage, config).await
+                {
+                    error!("Stream for chain {} failed: {}", chain_id, err);
+                }
             }
-        });
+            .in_current_span(),
+        );
     }
 
+    #[tracing::instrument(level = "trace", skip_all, fields(?chain_id))]
     async fn run_client_stream<C>(
         chain_id: ChainId,
         clients: ChainClients<P, S>,
@@ -153,7 +158,7 @@ where
         };
         let (listener, _listen_handle, mut local_stream) = client.listen().await?;
         client.synchronize_from_validators().await?;
-        tokio::spawn(listener);
+        tokio::spawn(listener.in_current_span());
         let mut timeout = storage.clock().current_time();
         loop {
             let sleep = Box::pin(storage.clock().sleep_until(timeout));

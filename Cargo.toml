@@ -87,6 +87,7 @@ http = "1.1.0"
 glob = "0.3.1"
 indexed_db_futures = "0.4.1"
 insta = "1.36.1"
+is-terminal = "0.4.12"
 linera-alloy = { version = "0.1.0", default-features = false }
 log = "0.4.21"
 lru = "0.12.3"
@@ -143,7 +144,7 @@ tokio-util = "0.7.10"
 toml = "0.8.10"
 tower-http = "0.5.2"
 tower = "0.4.13"
-tracing = "0.1.40"
+tracing = { version = "0.1.40", features = ["release_max_level_debug"] }
 tracing-subscriber = { version = "0.3.18", default-features = false, features = ["env-filter"] }
 trait-variant = "0.1.1"
 url = "2.4"
