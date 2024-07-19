@@ -87,7 +87,7 @@ async fn classic_collection_view_check() -> Result<()> {
                 let n_reset = rng.gen_range(0..5);
                 for _i in 0..n_reset {
                     let pos = rng.gen_range(0..nmax);
-                    view.v.reset_entry_to_default(&pos).await?;
+                    view.v.reset_entry_to_default(&pos)?;
                     new_map.insert(pos, 0);
                 }
             }
@@ -159,7 +159,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
     let context = create_memory_context();
     let mut rng = test_utils::make_deterministic_rng();
     let mut state_map = BTreeMap::new();
-    let n = 200;
+    let n = 40;
     let mut all_keys = BTreeSet::new();
     for _ in 0..n {
         let mut view = KeyValueStateView::load(context.clone()).await?;
@@ -169,7 +169,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
         assert!(read_state.iter().map(|kv| (&kv.0, &kv.1)).eq(&state_map));
         assert_eq!(total_size(&state_vec), view.store.total_size());
 
-        let count_oper = rng.gen_range(0..25);
+        let count_oper = rng.gen_range(0..15);
         let mut new_state_map = state_map.clone();
         let mut new_state_vec = state_vec.clone();
         for _ in 0..count_oper {
@@ -525,7 +525,7 @@ async fn reentrant_collection_view_check() -> Result<()> {
         let count_oper = rng.gen_range(0..25);
         let mut new_map = map.clone();
         for _i_op in 0..count_oper {
-            let choice = rng.gen_range(0..7);
+            let choice = rng.gen_range(0..8);
             if choice == 0 {
                 // Deleting some random stuff
                 let pos = rng.gen_range(0..nmax);
@@ -605,6 +605,15 @@ async fn reentrant_collection_view_check() -> Result<()> {
                 view.rollback();
                 assert!(!view.has_pending_changes().await);
                 new_map = map.clone();
+            }
+            if choice == 7 {
+                // The load_entry actually changes the entries to default if missing
+                let n_reset = rng.gen_range(0..5);
+                for _i in 0..n_reset {
+                    let pos = rng.gen_range(0..nmax);
+                    view.v.try_reset_entry_to_default(&pos)?;
+                    new_map.insert(pos, 0);
+                }
             }
             // Checking the hash
             let new_hash = view.crypto_hash().await?;

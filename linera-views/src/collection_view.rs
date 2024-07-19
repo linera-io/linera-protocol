@@ -327,15 +327,21 @@ where
     ///   let subview = view.load_entry_mut(&[0, 1]).await.unwrap();
     ///   let value = subview.get_mut();
     ///   *value = String::from("Hello");
-    ///   view.reset_entry_to_default(&[0, 1]).await.unwrap();
+    ///   view.reset_entry_to_default(&[0, 1]).unwrap();
     ///   let subview = view.load_entry_mut(&[0, 1]).await.unwrap();
     ///   let value = subview.get_mut();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn reset_entry_to_default(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
-        let view = self.load_entry_mut(short_key).await?;
-        view.clear();
+    pub fn reset_entry_to_default(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
+        let key = self
+            .context
+            .base_tag_index(KeyTag::Subview as u8, short_key);
+        let context = self.context.clone_with_base_key(key);
+        let view = W::new(context)?;
+        self.updates
+            .get_mut()
+            .insert(short_key.to_vec(), Update::Set(view));
         Ok(())
     }
 
@@ -412,8 +418,7 @@ where
                             .base_tag_index(KeyTag::Subview as u8, short_key);
                         let context = self.context.clone_with_base_key(key);
                         // Obtain a view and set its pending state to the default (e.g. empty) state
-                        let mut view = W::load(context).await?;
-                        view.clear();
+                        let view = W::new(context)?;
                         *entry = Update::Set(view);
                         let Update::Set(view) = entry else {
                             unreachable!();
@@ -427,10 +432,11 @@ where
                     .context
                     .base_tag_index(KeyTag::Subview as u8, short_key);
                 let context = self.context.clone_with_base_key(key);
-                let mut view = W::load(context).await?;
-                if self.delete_storage_first {
-                    view.clear();
-                }
+                let view = if self.delete_storage_first {
+                    W::new(context)?
+                } else {
+                    W::load(context).await?
+                };
                 let Update::Set(view) = entry.insert(Update::Set(view)) else {
                     unreachable!();
                 };
@@ -809,19 +815,19 @@ where
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get_mut();
     ///   *value = String::from("Hello");
-    ///   view.reset_entry_to_default(&23).await.unwrap();
+    ///   view.reset_entry_to_default(&23).unwrap();
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get_mut();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    pub fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.collection.reset_entry_to_default(&short_key).await
+        self.collection.reset_entry_to_default(&short_key)
     }
 
     /// Removes an entry from the CollectionView. If absent nothing happens.
@@ -1158,19 +1164,19 @@ where
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get_mut();
     ///   *value = String::from("Hello");
-    ///   view.reset_entry_to_default(&23).await.unwrap();
+    ///   view.reset_entry_to_default(&23).unwrap();
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get_mut();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    pub fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
-        self.collection.reset_entry_to_default(&short_key).await
+        self.collection.reset_entry_to_default(&short_key)
     }
 
     /// Removes an entry from the CollectionView. If absent nothing happens.
