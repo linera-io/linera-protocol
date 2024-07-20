@@ -483,15 +483,17 @@ where
     ) -> Result<Vec<WriteGuardedView<W>>, ViewError> {
         let updates = self.updates.get_mut();
         let mut selected_short_keys = Vec::new();
+        let num_init_keys = W::NUM_INIT_KEYS;
+        let mut keys = Vec::new();
         for short_key in &short_keys {
+            let key = self
+                .context
+                .base_tag_index(KeyTag::Subview as u8, short_key);
+            let context = self.context.clone_with_base_key(key);
             match updates.entry(short_key.to_vec()) {
                 btree_map::Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
                     if let Update::Removed = entry {
-                        let key = self
-                            .context
-                            .base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = self.context.clone_with_base_key(key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
                         *entry = Update::Set(view);
@@ -499,32 +501,28 @@ where
                 }
                 btree_map::Entry::Vacant(entry) => {
                     if self.delete_storage_first {
-                        let key = self
-                            .context
-                            .base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = self.context.clone_with_base_key(key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
                         entry.insert(Update::Set(view));
                     } else {
+                        keys.extend(W::pre_load(&context)?);
                         selected_short_keys.push(short_key.to_vec());
                     }
                 }
             }
         }
-        let mut handles = Vec::new();
-        for short_key in &selected_short_keys {
+        let values = self.context.read_multi_values_bytes(keys).await?;
+        for (i_key, short_key) in selected_short_keys.iter().enumerate() {
             let key = self
                 .context
                 .base_tag_index(KeyTag::Subview as u8, short_key);
             let context = self.context.clone_with_base_key(key);
-            handles.push(tokio::spawn(async move { W::load(context).await }));
-        }
-        let response = futures::future::join_all(handles).await;
-        for (short_key, view) in selected_short_keys.into_iter().zip(response) {
-            let view = view??;
+            let view = W::post_load(
+                context,
+                &values[i_key * num_init_keys..(i_key + 1) * num_init_keys],
+            )?;
             let wrapped_view = Arc::new(RwLock::new(view));
-            updates.insert(short_key, Update::Set(wrapped_view));
+            updates.insert(short_key.to_vec(), Update::Set(wrapped_view));
         }
 
         short_keys
