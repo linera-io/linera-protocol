@@ -588,7 +588,9 @@ where
                     if !self.delete_storage_first {
                         let context = self.context.clone();
                         let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-                        handles.push(tokio::spawn(async move { context.contains_key(&key_index).await }));
+                        handles.push(tokio::spawn(async move {
+                            context.contains_key(&key_index).await
+                        }));
                         test_indices.push(i_key);
                     }
                 }

@@ -442,7 +442,7 @@ where
         for (target, outbox) in targets.into_iter().zip(outboxes) {
             let heights = match outbox {
                 Some(outbox) => outbox.queue.elements().await?,
-                None => Vec::new()
+                None => Vec::new(),
             };
             heights_by_recipient
                 .entry(target.recipient)
