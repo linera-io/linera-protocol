@@ -564,69 +564,81 @@ where
     pub async fn try_load_entries(
         &self,
         short_keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<ReadGuardedView<W>>, ViewError> {
+    ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError> {
+        let num_keys = short_keys.len();
+        let mut results = Vec::new();
+        for _ in 0..num_keys {
+            results.push(None);
+        }
         let mut updates = self.updates.lock().await;
-        let mut selected_short_keys = Vec::new();
-        for short_key in &short_keys {
+        let mut selected_indices = Vec::new();
+        let mut handles = Vec::new();
+        let mut test_indices = Vec::new();
+        for (i_key, short_key) in short_keys.iter().enumerate() {
             match updates.entry(short_key.to_vec()) {
                 btree_map::Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
-                    if let Update::Removed = entry {
-                        let key = self
-                            .context
-                            .base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = self.context.clone_with_base_key(key);
-                        let view = W::new(context)?;
-                        let view = Arc::new(RwLock::new(view));
-                        *entry = Update::Set(view);
+                    if let Update::Set(_entry) = entry {
+                        selected_indices.push(i_key);
                     }
                 }
-                btree_map::Entry::Vacant(entry) => {
-                    if self.delete_storage_first {
-                        let key = self
-                            .context
-                            .base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = self.context.clone_with_base_key(key);
-                        let view = W::new(context)?;
-                        let view = Arc::new(RwLock::new(view));
-                        entry.insert(Update::Set(view));
-                    } else {
-                        selected_short_keys.push(short_key.to_vec());
+                btree_map::Entry::Vacant(_entry) => {
+                    if !self.delete_storage_first {
+                        let context = self.context.clone();
+                        let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
+                        handles.push(tokio::spawn(async move { context.contains_key(&key_index).await }));
+                        test_indices.push(i_key);
                     }
                 }
             }
         }
-        let mut handles = Vec::new();
-        for short_key in &selected_short_keys {
+        let response = futures::future::join_all(handles).await;
+        let num_init_keys = W::NUM_INIT_KEYS;
+        let mut keys = Vec::new();
+        let mut selected_indices_load = Vec::new();
+        for (test, i_key) in response.into_iter().zip(test_indices) {
+            let test = test??;
+            if test {
+                selected_indices_load.push(i_key);
+                let short_key = &short_keys[i_key];
+                let key = self
+                    .context
+                    .base_tag_index(KeyTag::Subview as u8, short_key);
+                let context = self.context.clone_with_base_key(key);
+                keys.extend(W::pre_load(&context)?);
+            }
+        }
+        let values = self.context.read_multi_values_bytes(keys).await?;
+        for i_key in selected_indices_load {
+            selected_indices.push(i_key);
+            let short_key = &short_keys[i_key];
             let key = self
                 .context
                 .base_tag_index(KeyTag::Subview as u8, short_key);
             let context = self.context.clone_with_base_key(key);
-            handles.push(tokio::spawn(async move { W::load(context).await }));
-        }
-        let response = futures::future::join_all(handles).await;
-        for (short_key, view) in selected_short_keys.into_iter().zip(response) {
-            let view = view??;
+            let view = W::post_load(
+                context,
+                &values[i_key * num_init_keys..(i_key + 1) * num_init_keys],
+            )?;
             let wrapped_view = Arc::new(RwLock::new(view));
-            updates.insert(short_key, Update::Set(wrapped_view));
+            updates.insert(short_key.to_vec(), Update::Set(wrapped_view));
         }
-
-        short_keys
-            .into_iter()
-            .map(|short_key| {
-                let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) else {
-                    unreachable!()
-                };
-                let Update::Set(view) = entry.into_mut() else {
-                    unreachable!()
-                };
-                Ok(ReadGuardedView(
-                    view.clone()
-                        .try_read_arc()
-                        .ok_or_else(|| ViewError::TryLockError(short_key))?,
-                ))
-            })
-            .collect()
+        for i_key in selected_indices {
+            let short_key = &short_keys[i_key];
+            let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) else {
+                unreachable!()
+            };
+            let Update::Set(view) = entry.into_mut() else {
+                unreachable!()
+            };
+            let guard = ReadGuardedView(
+                view.clone()
+                    .try_read_arc()
+                    .ok_or_else(|| ViewError::TryLockError(short_key.clone()))?,
+            );
+            results[i_key] = Some(guard);
+        }
+        Ok(results)
     }
 }
 
@@ -1112,7 +1124,7 @@ where
     pub async fn try_load_entries<'a, Q>(
         &'a self,
         indices: impl IntoIterator<Item = &'a Q>,
-    ) -> Result<Vec<ReadGuardedView<W>>, ViewError>
+    ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + 'a,
@@ -1527,7 +1539,7 @@ where
     pub async fn try_load_entries<Q>(
         &self,
         indices: impl IntoIterator<Item = Q>,
-    ) -> Result<Vec<ReadGuardedView<W>>, ViewError>
+    ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize,
