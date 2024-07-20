@@ -12,7 +12,7 @@ use dashmap::DashMap;
 use futures::FutureExt as _;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{ApplicationPermissions, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId},
     ownership::ChainOwnership,
 };
@@ -186,7 +186,7 @@ impl TestValidator {
                 .collect(),
             admin_id,
             epoch: Epoch::ZERO,
-            balance: 0.into(),
+            balance: Amount::ZERO,
             application_permissions: ApplicationPermissions::default(),
         };
 
