@@ -455,65 +455,6 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Send + Sync + 'static,
 {
-    async fn do_load_entries(
-        context: &C,
-        updates: &mut BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
-        delete_storage_first: bool,
-        short_keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<(Vec<u8>, Arc<RwLock<W>>)>, ViewError> {
-        let mut selected_short_keys = Vec::new();
-        for short_key in &short_keys {
-            match updates.entry(short_key.to_vec()) {
-                btree_map::Entry::Occupied(entry) => {
-                    let entry = entry.into_mut();
-                    if let Update::Removed = entry {
-                        let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = context.clone_with_base_key(key);
-                        let view = W::new(context)?;
-                        let view = Arc::new(RwLock::new(view));
-                        *entry = Update::Set(view);
-                    }
-                }
-                btree_map::Entry::Vacant(entry) => {
-                    if delete_storage_first {
-                        let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = context.clone_with_base_key(key);
-                        let view = W::new(context)?;
-                        let view = Arc::new(RwLock::new(view));
-                        entry.insert(Update::Set(view));
-                    } else {
-                        selected_short_keys.push(short_key.to_vec());
-                    }
-                }
-            }
-        }
-        let mut handles = Vec::new();
-        for short_key in &selected_short_keys {
-            let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
-            let context = context.clone_with_base_key(key);
-            handles.push(tokio::spawn(async move { W::load(context).await }));
-        }
-        let response = futures::future::join_all(handles).await;
-        for (short_key, view) in selected_short_keys.into_iter().zip(response) {
-            let view = view??;
-            let wrapped_view = Arc::new(RwLock::new(view));
-            updates.insert(short_key, Update::Set(wrapped_view));
-        }
-
-        Ok(short_keys
-            .into_iter()
-            .map(|short_key| {
-                let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) else {
-                    unreachable!()
-                };
-                let Update::Set(view) = entry.into_mut() else {
-                    unreachable!()
-                };
-                (short_key, view.clone())
-            })
-            .collect())
-    }
-
     /// Load multiple entries for writing at once.
     /// The entries in short_keys have to be all distinct.
     /// ```rust
@@ -541,18 +482,63 @@ where
         short_keys: Vec<Vec<u8>>,
     ) -> Result<Vec<WriteGuardedView<W>>, ViewError> {
         let updates = self.updates.get_mut();
-        let entries = Self::do_load_entries(
-            &self.context,
-            updates,
-            self.delete_storage_first,
-            short_keys,
-        )
-        .await?;
-        entries
+        let mut selected_short_keys = Vec::new();
+        for short_key in &short_keys {
+            match updates.entry(short_key.to_vec()) {
+                btree_map::Entry::Occupied(entry) => {
+                    let entry = entry.into_mut();
+                    if let Update::Removed = entry {
+                        let key = self
+                            .context
+                            .base_tag_index(KeyTag::Subview as u8, short_key);
+                        let context = self.context.clone_with_base_key(key);
+                        let view = W::new(context)?;
+                        let view = Arc::new(RwLock::new(view));
+                        *entry = Update::Set(view);
+                    }
+                }
+                btree_map::Entry::Vacant(entry) => {
+                    if self.delete_storage_first {
+                        let key = self
+                            .context
+                            .base_tag_index(KeyTag::Subview as u8, short_key);
+                        let context = self.context.clone_with_base_key(key);
+                        let view = W::new(context)?;
+                        let view = Arc::new(RwLock::new(view));
+                        entry.insert(Update::Set(view));
+                    } else {
+                        selected_short_keys.push(short_key.to_vec());
+                    }
+                }
+            }
+        }
+        let mut handles = Vec::new();
+        for short_key in &selected_short_keys {
+            let key = self
+                .context
+                .base_tag_index(KeyTag::Subview as u8, short_key);
+            let context = self.context.clone_with_base_key(key);
+            handles.push(tokio::spawn(async move { W::load(context).await }));
+        }
+        let response = futures::future::join_all(handles).await;
+        for (short_key, view) in selected_short_keys.into_iter().zip(response) {
+            let view = view??;
+            let wrapped_view = Arc::new(RwLock::new(view));
+            updates.insert(short_key, Update::Set(wrapped_view));
+        }
+
+        short_keys
             .into_iter()
-            .map(|(short_key, view)| {
+            .map(|short_key| {
+                let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) else {
+                    unreachable!()
+                };
+                let Update::Set(view) = entry.into_mut() else {
+                    unreachable!()
+                };
                 Ok(WriteGuardedView(
-                    view.try_write_arc()
+                    view.clone()
+                        .try_write_arc()
                         .ok_or_else(|| ViewError::TryLockError(short_key))?,
                 ))
             })
@@ -582,18 +568,63 @@ where
         short_keys: Vec<Vec<u8>>,
     ) -> Result<Vec<ReadGuardedView<W>>, ViewError> {
         let mut updates = self.updates.lock().await;
-        let entries = Self::do_load_entries(
-            &self.context,
-            &mut updates,
-            self.delete_storage_first,
-            short_keys,
-        )
-        .await?;
-        entries
+        let mut selected_short_keys = Vec::new();
+        for short_key in &short_keys {
+            match updates.entry(short_key.to_vec()) {
+                btree_map::Entry::Occupied(entry) => {
+                    let entry = entry.into_mut();
+                    if let Update::Removed = entry {
+                        let key = self
+                            .context
+                            .base_tag_index(KeyTag::Subview as u8, short_key);
+                        let context = self.context.clone_with_base_key(key);
+                        let view = W::new(context)?;
+                        let view = Arc::new(RwLock::new(view));
+                        *entry = Update::Set(view);
+                    }
+                }
+                btree_map::Entry::Vacant(entry) => {
+                    if self.delete_storage_first {
+                        let key = self
+                            .context
+                            .base_tag_index(KeyTag::Subview as u8, short_key);
+                        let context = self.context.clone_with_base_key(key);
+                        let view = W::new(context)?;
+                        let view = Arc::new(RwLock::new(view));
+                        entry.insert(Update::Set(view));
+                    } else {
+                        selected_short_keys.push(short_key.to_vec());
+                    }
+                }
+            }
+        }
+        let mut handles = Vec::new();
+        for short_key in &selected_short_keys {
+            let key = self
+                .context
+                .base_tag_index(KeyTag::Subview as u8, short_key);
+            let context = self.context.clone_with_base_key(key);
+            handles.push(tokio::spawn(async move { W::load(context).await }));
+        }
+        let response = futures::future::join_all(handles).await;
+        for (short_key, view) in selected_short_keys.into_iter().zip(response) {
+            let view = view??;
+            let wrapped_view = Arc::new(RwLock::new(view));
+            updates.insert(short_key, Update::Set(wrapped_view));
+        }
+
+        short_keys
             .into_iter()
-            .map(|(short_key, view)| {
+            .map(|short_key| {
+                let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) else {
+                    unreachable!()
+                };
+                let Update::Set(view) = entry.into_mut() else {
+                    unreachable!()
+                };
                 Ok(ReadGuardedView(
-                    view.try_read_arc()
+                    view.clone()
+                        .try_read_arc()
                         .ok_or_else(|| ViewError::TryLockError(short_key))?,
                 ))
             })
