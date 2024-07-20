@@ -9,6 +9,7 @@ import {
 } from '../__generated__/graphql'
 
 function UserInfo({ user }: { user: Key }) {
+  // eslint-disable-next-line
   const { formattedDate, formattedTime } = convertMicrosToDateTime(
     user.timestamp
   )

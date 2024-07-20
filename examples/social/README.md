@@ -180,7 +180,7 @@ query {
             "index": 0
           },
           "text": "Linera Social is the new Mastodon!",
-          "imageUrl": null,
+          "imageUrl": "https://linera.org/img/logo.svg",
           "comments": [],
           "likes": 0
         }
