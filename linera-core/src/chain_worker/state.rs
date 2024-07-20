@@ -440,7 +440,10 @@ where
         let targets = self.chain.outboxes.indices().await?;
         let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
-            let heights = outbox.queue.elements().await?;
+            let heights = match outbox {
+                Some(outbox) => outbox.queue.elements().await?,
+                None => Vec::new()
+            };
             heights_by_recipient
                 .entry(target.recipient)
                 .or_default()
@@ -783,12 +786,14 @@ where
                 MessageAction::Accept
             };
             for (origin, inbox) in origins.into_iter().zip(inboxes) {
-                for event in inbox.added_events.elements().await? {
-                    messages.push(IncomingMessage {
-                        origin: origin.clone(),
-                        event: event.clone(),
-                        action,
-                    });
+                if let Some(inbox) = inbox {
+                    for event in inbox.added_events.elements().await? {
+                        messages.push(IncomingMessage {
+                            origin: origin.clone(),
+                            event: event.clone(),
+                            action,
+                        });
+                    }
                 }
             }
 
