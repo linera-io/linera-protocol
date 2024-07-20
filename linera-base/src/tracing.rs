@@ -8,7 +8,7 @@ use tracing_subscriber::fmt::format::FmtSpan;
 
 fn fmt_span_from_str(events: &str) -> FmtSpan {
     let mut fmt_span = FmtSpan::NONE;
-    for event in events.split(",") {
+    for event in events.split(',') {
         fmt_span |= match event {
             "new" => FmtSpan::NEW,
             "enter" => FmtSpan::ENTER,
