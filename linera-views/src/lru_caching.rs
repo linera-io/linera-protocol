@@ -175,7 +175,7 @@ where
         for (index, result) in indices.into_iter().zip(key_results) {
             results[index] = result;
         }
-        return Ok(results);
+        Ok(results)
     }
 
     async fn read_multi_values_bytes(
