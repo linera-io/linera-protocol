@@ -159,10 +159,7 @@ async fn main() -> std::io::Result<()> {
     let storage = MemoryStorage::new(store_config, namespace, None)
         .await
         .expect("storage");
-    let config = ChainListenerConfig {
-        delay_before_ms: 0,
-        delay_after_ms: 0,
-    };
+    let config = ChainListenerConfig::default();
     let context = DummyContext {
         _phantom: std::marker::PhantomData,
     };
