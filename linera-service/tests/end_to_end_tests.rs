@@ -992,7 +992,6 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Result<()> {
     use non_fungible::{NftOutput, NonFungibleTokenAbi};
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1103,8 +1102,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     .await;
 
     // Make sure that the cross-chain communication happens fast enough.
-    node_service1.process_inbox(&chain1).await?;
     node_service2.process_inbox(&chain2).await?;
+    node_service1.process_inbox(&chain1).await?;
 
     // Checking the NFT is removed from chain2
     assert!(app2.get_nft(&nft1_id).await.is_err());
