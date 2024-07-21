@@ -179,7 +179,7 @@ enum WitInterface {
 }
 
 impl WitInterface {
-    /// Calls the `contains_key_new` WIT function.
+    /// Creates a promise for testing if a key exist in the key-value store
     fn contains_key_new(&self, key: &[u8]) -> u32 {
         match self {
             WitInterface::Contract => contract_wit::contains_key_new(key),
@@ -189,7 +189,7 @@ impl WitInterface {
         }
     }
 
-    /// Calls the `contains_key_wait` WIT function.
+    /// Resolves a promise for testing if a key exist in the key-value store
     fn contains_key_wait(&self, promise: u32) -> bool {
         match self {
             WitInterface::Contract => contract_wit::contains_key_wait(promise),
@@ -199,7 +199,7 @@ impl WitInterface {
         }
     }
 
-    /// Calls the `contains_keys_new` WIT function.
+    /// Creates a promise for testing if multiple keys exist in the key-value store
     fn contains_keys_new(&self, keys: &[Vec<u8>]) -> u32 {
         match self {
             WitInterface::Contract => contract_wit::contains_keys_new(keys),
@@ -209,7 +209,7 @@ impl WitInterface {
         }
     }
 
-    /// Calls the `contains_keys_wait` WIT function.
+    /// Resolves a promise for testing if multiple keys exist in the key-value store
     fn contains_keys_wait(&self, promise: u32) -> Vec<bool> {
         match self {
             WitInterface::Contract => contract_wit::contains_keys_wait(promise),
@@ -219,7 +219,7 @@ impl WitInterface {
         }
     }
 
-    /// Calls the `read_multi_values_bytes_new` WIT function.
+    /// Creates a promise for reading multiple keys in the key-value store
     fn read_multi_values_bytes_new(&self, keys: &[Vec<u8>]) -> u32 {
         match self {
             WitInterface::Contract => contract_wit::read_multi_values_bytes_new(keys),
@@ -229,7 +229,7 @@ impl WitInterface {
         }
     }
 
-    /// Calls the `read_multi_values_bytes_wait` WIT function.
+    /// Resolves a promise for reading multiple keys in the key-value store
     fn read_multi_values_bytes_wait(&self, promise: u32) -> Vec<Option<Vec<u8>>> {
         match self {
             WitInterface::Contract => contract_wit::read_multi_values_bytes_wait(promise),
@@ -239,7 +239,7 @@ impl WitInterface {
         }
     }
 
-    /// Calls the `read_value_bytes_new` WIT function.
+    /// Creates a promise for reading a key in the key-value store
     fn read_value_bytes_new(&self, key: &[u8]) -> u32 {
         match self {
             WitInterface::Contract => contract_wit::read_value_bytes_new(key),
@@ -249,7 +249,7 @@ impl WitInterface {
         }
     }
 
-    /// Calls the `read_value_bytes_wait` WIT function.
+    /// Resolves a promise for reading a key in the key-value store
     fn read_value_bytes_wait(&self, promise: u32) -> Option<Vec<u8>> {
         match self {
             WitInterface::Contract => contract_wit::read_value_bytes_wait(promise),
@@ -259,7 +259,7 @@ impl WitInterface {
         }
     }
 
-    /// Calls the `find_keys_new` WIT function.
+    /// Creates a promise for finding keys having a specified prefix in the key-value store
     fn find_keys_new(&self, key_prefix: &[u8]) -> u32 {
         match self {
             WitInterface::Contract => contract_wit::find_keys_new(key_prefix),
@@ -269,7 +269,7 @@ impl WitInterface {
         }
     }
 
-    /// Calls the `find_keys_wait` WIT function.
+    /// Resolves a promise for finding keys having a specified prefix in the key-value store
     fn find_keys_wait(&self, promise: u32) -> Vec<Vec<u8>> {
         match self {
             WitInterface::Contract => contract_wit::find_keys_wait(promise),
@@ -279,7 +279,7 @@ impl WitInterface {
         }
     }
 
-    /// Calls the `find_key_values_new` WIT function.
+    /// Creates a promise for finding the key/values having a specified prefix in the key-value store
     fn find_key_values_new(&self, key_prefix: &[u8]) -> u32 {
         match self {
             WitInterface::Contract => contract_wit::find_key_values_new(key_prefix),
@@ -289,7 +289,7 @@ impl WitInterface {
         }
     }
 
-    /// Calls the `find_key_values_wait` WIT function.
+    /// Resolves a promise for finding the key/values having a specified prefix in the key-value store
     fn find_key_values_wait(&self, promise: u32) -> Vec<(Vec<u8>, Vec<u8>)> {
         match self {
             WitInterface::Contract => contract_wit::find_key_values_wait(promise),

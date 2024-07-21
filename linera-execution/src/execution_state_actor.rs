@@ -194,8 +194,11 @@ where
             }
 
             ContainsKeys { id, keys, callback } => {
-                let view = self.users.try_load_entry_or_insert(&id).await?;
-                let result = view.contains_keys(keys).await?;
+                let view = self.users.try_load_entry(&id).await?;
+                let result = match view {
+                    Some(view) => view.contains_keys(keys).await?,
+                    None => vec![false; keys.len()],
+                };
                 callback.respond(result);
             }
 

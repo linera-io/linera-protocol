@@ -636,7 +636,7 @@ where
         Ok(self.context.read_value_bytes(&key).await?)
     }
 
-    /// Test whether the store contains a specific index.
+    /// Tests whether the store contains a specific index.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
@@ -668,7 +668,7 @@ where
         Ok(self.context.contains_key(&key).await?)
     }
 
-    /// Test whether the view contains a range of indices
+    /// Tests whether the view contains a range of indices
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;

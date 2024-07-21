@@ -190,10 +190,9 @@ impl ScyllaDbClient {
         let mut rows = session.query_iter(read_multi_value, &unique_keys).await?;
         let mut values = vec![None; num_keys];
         while let Some(row) = rows.next().await {
-            let value = row?.into_typed::<(Vec<u8>, Vec<u8>)>()?;
-            let key = value.0;
+            let (key,value) = row?.into_typed::<(Vec<u8>, Vec<u8>)>()?;
             for i_key in map.get(&key).unwrap().clone() {
-                let value = Some(value.1.clone());
+                let value = Some(value.clone());
                 *values.get_mut(i_key).expect("an entry in values") = value;
             }
         }
@@ -235,8 +234,7 @@ impl ScyllaDbClient {
         let mut rows = session.query_iter(contains_keys, &unique_keys).await?;
         let mut values = vec![false; num_keys];
         while let Some(row) = rows.next().await {
-            let value = row?.into_typed::<(Vec<u8>,)>()?;
-            let key = value.0;
+            let (key,) = row?.into_typed::<(Vec<u8>,)>()?;
             for i_key in map.get(&key).unwrap().clone() {
                 *values.get_mut(i_key).expect("an entry in values") = true;
             }
@@ -320,8 +318,8 @@ impl ScyllaDbClient {
         };
         let mut keys = Vec::new();
         while let Some(row) = rows.next().await {
-            let key = row?.into_typed::<(Vec<u8>,)>()?;
-            let short_key = key.0[len..].to_vec();
+            let (key,) = row?.into_typed::<(Vec<u8>,)>()?;
+            let short_key = key[len..].to_vec();
             keys.push(short_key);
         }
         Ok(keys)
@@ -352,9 +350,9 @@ impl ScyllaDbClient {
         };
         let mut key_values = Vec::new();
         while let Some(row) = rows.next().await {
-            let key = row?.into_typed::<(Vec<u8>, Vec<u8>)>()?;
-            let short_key = key.0[len..].to_vec();
-            key_values.push((short_key, key.1));
+            let (key, value) = row?.into_typed::<(Vec<u8>, Vec<u8>)>()?;
+            let short_key = key[len..].to_vec();
+            key_values.push((short_key, value));
         }
         Ok(key_values)
     }

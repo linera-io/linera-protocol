@@ -371,20 +371,20 @@ pub trait BaseRuntime {
     /// Tests whether a key exists in the key-value store (wait)
     fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError>;
 
-    /// Tests whether keys exist in the key-value store
+    /// Tests whether multiple keys exist in the key-value store
     #[cfg(feature = "test")]
     fn contains_keys(&mut self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ExecutionError> {
         let promise = self.contains_keys_new(keys)?;
         self.contains_keys_wait(&promise)
     }
 
-    /// Tests whether keys exist in the key-value store (new)
+    /// Tests whether multiple keys exist in the key-value store (new)
     fn contains_keys_new(
         &mut self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Self::ContainsKeys, ExecutionError>;
 
-    /// Tests whether keys exist in the key-value store (wait)
+    /// Tests whether multiple keys exist in the key-value store (wait)
     fn contains_keys_wait(
         &mut self,
         promise: &Self::ContainsKeys,
