@@ -49,9 +49,9 @@ pub enum ServiceStoreError {
     #[error("Not matching entry")]
     NotMatchingEntry,
 
-    /// Failed to find the storage_service_server binary
-    #[error("Failed to find the storage_service_server binary")]
-    FailedToFindStorageServiceServerBinary,
+    /// Failed to find the linera-storage-server binary
+    #[error("Failed to find the linera-storage-server binary")]
+    FailedToFindStorageServerBinary,
 
     /// gRPC error
     #[error(transparent)]
@@ -108,13 +108,13 @@ pub struct ServiceStoreConfig {
 /// The path depends whether the test are run in the directory "linera-storage-service"
 /// or in the main directory
 pub async fn get_service_storage_binary() -> Result<PathBuf, ServiceStoreError> {
-    let binary = resolve_binary("storage_service_server", "linera-storage-service").await;
+    let binary = resolve_binary("linera-storage-server", "linera-storage-service").await;
     if let Ok(binary) = binary {
         return Ok(binary);
     }
-    let binary = resolve_binary("../storage_service_server", "linera-storage-service").await;
+    let binary = resolve_binary("../linera-storage-server", "linera-storage-service").await;
     if let Ok(binary) = binary {
         return Ok(binary);
     }
-    Err(ServiceStoreError::FailedToFindStorageServiceServerBinary)
+    Err(ServiceStoreError::FailedToFindStorageServerBinary)
 }
