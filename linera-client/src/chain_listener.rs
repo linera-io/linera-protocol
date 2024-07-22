@@ -23,7 +23,7 @@ use linera_core::{
 use linera_execution::{Message, SystemMessage};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use tracing::{error, info, warn, Instrument as _};
+use tracing::{debug, error, info, warn, Instrument as _};
 
 use crate::{chain_clients::ChainClients, wallet::Wallet};
 
@@ -33,12 +33,28 @@ mod tests;
 
 #[derive(Debug, Default, Clone, clap::Args)]
 pub struct ChainListenerConfig {
+    /// Do not create blocks automatically to receive incoming messages. Instead, wait for
+    /// an explicit mutation `processInbox`.
+    #[arg(
+        long = "listener-skip-process-inbox",
+        env = "LINERA_LISTENER_SKIP_PROCESS_INBOX"
+    )]
+    pub skip_process_inbox: bool,
+
     /// Wait before processing any notification (useful for testing).
-    #[arg(long = "listener-delay-before-ms", default_value = "0")]
+    #[arg(
+        long = "listener-delay-before-ms",
+        default_value = "0",
+        env = "LINERA_LISTENER_DELAY_BEFORE"
+    )]
     pub delay_before_ms: u64,
 
     /// Wait after processing any notification (useful for rate limiting).
-    #[arg(long = "listener-delay-after-ms", default_value = "0")]
+    #[arg(
+        long = "listener-delay-after-ms",
+        default_value = "0",
+        env = "LINERA_LISTENER_DELAY_AFTER"
+    )]
     pub delay_after_ms: u64,
 }
 
@@ -166,13 +182,26 @@ where
                 Either::Left((Some(notification), _)) => notification,
                 Either::Left((None, _)) => break,
                 Either::Right(((), _)) => {
+                    if config.skip_process_inbox {
+                        debug!("Not processing inbox due to listener configuration");
+                        timeout = Timestamp::from(u64::MAX);
+                        continue;
+                    }
+                    debug!("Processing inbox");
                     match client.process_inbox_if_owned().await {
                         Err(error) => {
                             warn!(%error, "Failed to process inbox.");
                             timeout = Timestamp::from(u64::MAX);
                         }
-                        Ok((_, None)) => timeout = Timestamp::from(u64::MAX),
-                        Ok((_, Some(new_timeout))) => timeout = new_timeout.timestamp,
+                        Ok((certs, None)) => {
+                            info!("Done processing inbox ({} blocks created)", certs.len());
+                            timeout = Timestamp::from(u64::MAX);
+                        }
+                        Ok((certs, Some(new_timeout))) => {
+                            info!("Done processing inbox ({} blocks created)", certs.len());
+                            info!("I will try processing the inbox later based on the given round timeout: {:?}", new_timeout);
+                            timeout = new_timeout.timestamp;
+                        }
                     }
                     context.lock().await.update_wallet(&client).await;
                     continue;
