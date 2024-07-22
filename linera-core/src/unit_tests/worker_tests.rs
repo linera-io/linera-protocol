@@ -62,7 +62,7 @@ use crate::{
     worker::{
         Notification,
         Reason::{self, NewBlock, NewIncomingMessage},
-        ValidatorWorker, WorkerError, WorkerState,
+        WorkerError, WorkerState,
     },
 };
 
@@ -397,7 +397,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (_, mut worker) = init_worker_with_chains(
+    let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
             (
@@ -443,7 +443,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (_, mut worker) = init_worker_with_chains(
+    let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
             (
@@ -499,7 +499,7 @@ where
     let balance = Amount::from_tokens(5);
     let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
     let epoch = Epoch::ZERO;
-    let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
+    let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     {
         let block_proposal = make_first_block(ChainId::root(1))
@@ -565,7 +565,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (_, mut worker) = init_worker_with_chains(
+    let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
             (
@@ -608,7 +608,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(1),
@@ -681,7 +681,7 @@ where
 {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
             (
@@ -1070,7 +1070,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (_, mut worker) = init_worker_with_chains(
+    let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
             (
@@ -1118,7 +1118,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (_, mut worker) = init_worker_with_chains(
+    let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(1),
@@ -1154,7 +1154,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (_, mut worker) = init_worker_with_chains(
+    let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
             (
@@ -1196,7 +1196,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
@@ -1237,7 +1237,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
@@ -1319,7 +1319,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
@@ -1362,7 +1362,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
             (
@@ -1413,7 +1413,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
             (
@@ -1515,7 +1515,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
             (
@@ -1586,7 +1586,7 @@ where
     let storage = storage_builder.build().await?;
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
-    let (committee, mut worker) =
+    let (committee, worker) =
         init_worker_with_chain(storage, ChainDescription::Root(1), name, Amount::ONE).await;
 
     let certificate = make_simple_transfer_certificate(
@@ -1651,7 +1651,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
@@ -1727,7 +1727,7 @@ where
 {
     let storage = storage_builder.build().await?;
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker(storage, /* is_client */ false);
+    let (committee, worker) = init_worker(storage, /* is_client */ false);
     let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -1765,7 +1765,7 @@ where
 {
     let storage = storage_builder.build().await?;
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker(storage, /* is_client */ true);
+    let (committee, worker) = init_worker(storage, /* is_client */ true);
     let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -1815,7 +1815,7 @@ where
 {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
             (
@@ -1971,7 +1971,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(1),
@@ -2031,7 +2031,7 @@ where
         owner: Some(recipient),
     };
 
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
             (
@@ -2275,7 +2275,7 @@ where
     ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(0),
@@ -2714,7 +2714,7 @@ where
 {
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
             (ChainDescription::Root(0), key_pair0.public(), Amount::ZERO),
@@ -2844,7 +2844,7 @@ where
 {
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
             (ChainDescription::Root(0), key_pair0.public(), Amount::ZERO),
@@ -3234,7 +3234,7 @@ where
     let key_pairs = generate_key_pairs(2);
     let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
     let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
-    let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
+    let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     // Add another owner and use the leader-based protocol in all rounds.
     let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
@@ -3410,7 +3410,7 @@ where
     // from a past round.
     let certificate =
         make_certificate_with_round(&committee, &worker, value1, Round::SingleLeader(7));
-    let mut worker = worker.with_key_pair(None).await; // Forget validator keys.
+    let worker = worker.with_key_pair(None).await; // Forget validator keys.
     worker
         .handle_certificate(certificate.clone(), vec![], vec![], None)
         .await?;
@@ -3438,7 +3438,7 @@ where
     let key_pairs = generate_key_pairs(2);
     let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
     let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
-    let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
+    let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     // Add another owner and configure two multi-leader rounds.
     let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
@@ -3526,7 +3526,7 @@ where
     let key_pairs = generate_key_pairs(2);
     let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
     let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
-    let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
+    let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     // Add another owner and configure two multi-leader rounds.
     let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
@@ -3630,7 +3630,7 @@ where
     let key_pair = KeyPair::generate();
     let balance = Amount::from_tokens(5);
     let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
-    let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
+    let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     // At time 0 we don't vote for fallback mode.
     let query = ChainInfoQuery::new(chain_id).with_fallback();
@@ -3705,7 +3705,7 @@ where
     let key_pair = KeyPair::generate();
     let balance = Amount::ZERO;
 
-    let (_committee, mut worker) = init_worker_with_chain(
+    let (_committee, worker) = init_worker_with_chain(
         storage.clone(),
         chain_description,
         key_pair.public(),
@@ -3786,7 +3786,7 @@ where
     let key_pair = KeyPair::generate();
     let balance = Amount::ZERO;
 
-    let (committee, mut worker) = init_worker_with_chain(
+    let (committee, worker) = init_worker_with_chain(
         storage.clone(),
         chain_description,
         key_pair.public(),

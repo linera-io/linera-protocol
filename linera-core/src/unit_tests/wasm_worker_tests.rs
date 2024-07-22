@@ -103,7 +103,7 @@ where
     let publisher_chain = ChainDescription::Root(1);
     let creator_key_pair = KeyPair::generate();
     let creator_chain = ChainDescription::Root(2);
-    let (committee, mut worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage,
         vec![
             (publisher_chain, publisher_key_pair.public(), Amount::ZERO),

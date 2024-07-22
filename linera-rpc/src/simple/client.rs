@@ -47,10 +47,7 @@ impl SimpleClient {
         }
     }
 
-    async fn send_recv_internal(
-        &self,
-        message: RpcMessage,
-    ) -> Result<RpcMessage, codec::Error> {
+    async fn send_recv_internal(&self, message: RpcMessage) -> Result<RpcMessage, codec::Error> {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         // Send message

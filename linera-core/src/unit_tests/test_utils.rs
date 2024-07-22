@@ -58,7 +58,7 @@ use crate::{
         ValidatorNode,
     },
     notifier::Notifier,
-    worker::{Notification, ValidatorWorker, WorkerState},
+    worker::{Notification, WorkerState},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -104,7 +104,7 @@ where
     type NotificationStream = NotificationStream;
 
     async fn handle_block_proposal(
-        &mut self,
+        &self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
@@ -114,7 +114,7 @@ where
     }
 
     async fn handle_lite_certificate(
-        &mut self,
+        &self,
         certificate: LiteCertificate<'_>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
@@ -126,7 +126,7 @@ where
     }
 
     async fn handle_certificate(
-        &mut self,
+        &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
@@ -144,7 +144,7 @@ where
     }
 
     async fn handle_chain_info_query(
-        &mut self,
+        &self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
@@ -153,22 +153,22 @@ where
         .await
     }
 
-    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+    async fn subscribe(&self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         self.spawn_and_receive(move |validator, sender| validator.do_subscribe(chains, sender))
             .await
     }
 
-    async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError> {
+    async fn get_version_info(&self) -> Result<VersionInfo, NodeError> {
         Ok(Default::default())
     }
 
-    async fn download_blob(&mut self, blob_id: BlobId) -> Result<Blob, NodeError> {
+    async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError> {
         self.spawn_and_receive(move |validator, sender| validator.do_download_blob(blob_id, sender))
             .await
     }
 
     async fn download_certificate_value(
-        &mut self,
+        &self,
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
@@ -177,14 +177,14 @@ where
         .await
     }
 
-    async fn download_certificate(&mut self, hash: CryptoHash) -> Result<Certificate, NodeError> {
+    async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_download_certificate(hash, sender)
         })
         .await
     }
 
-    async fn blob_last_used_by(&mut self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
+    async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_blob_last_used_by(blob_id, sender)
         })
@@ -240,7 +240,7 @@ where
         proposal: BlockProposal,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let mut validator = self.client.lock().await;
+        let validator = self.client.lock().await;
         let result = match validator.fault_type {
             FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
                 error: "offline".to_string(),
@@ -261,7 +261,7 @@ where
         certificate: LiteCertificate<'_>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let mut validator = self.client.lock().await;
+        let validator = self.client.lock().await;
         let result = async move {
             let mut notifications = Vec::new();
             let cert = validator.state.full_certificate(certificate).await?;
@@ -299,7 +299,7 @@ where
         hashed_blobs: Vec<HashedBlob>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let mut validator = self.client.lock().await;
+        let validator = self.client.lock().await;
         let mut notifications = Vec::new();
         let result = match validator.fault_type {
             FaultType::NoConfirm if certificate.value().is_validated() => {
@@ -752,7 +752,7 @@ where
             });
         let mut count = 0;
         let mut certificate = None;
-        for mut validator in self.validator_clients.clone() {
+        for validator in self.validator_clients.clone() {
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
                 if response.check(validator.name).is_ok() {
                     let ChainInfo {
@@ -789,7 +789,7 @@ where
     ) {
         let query = ChainInfoQuery::new(chain_id);
         let mut count = 0;
-        for mut validator in self.validator_clients.clone() {
+        for validator in self.validator_clients.clone() {
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
                 if response.info.manager.current_round == round
                     && response.info.next_block_height == block_height

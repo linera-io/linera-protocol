@@ -190,10 +190,7 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn subscribe(
-        &self,
-        chains: Vec<ChainId>,
-    ) -> Result<Self::NotificationStream, NodeError> {
+    async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError> {
         let notification_retry_delay = self.notification_retry_delay;
         let notification_retries = self.notification_retries;
         let mut retry_count = 0;
@@ -264,7 +261,13 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn get_version_info(&self) -> Result<VersionInfo, NodeError> {
-        Ok(self.client.clone().get_version_info(()).await?.into_inner().into())
+        Ok(self
+            .client
+            .clone()
+            .get_version_info(())
+            .await?
+            .into_inner()
+            .into())
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]

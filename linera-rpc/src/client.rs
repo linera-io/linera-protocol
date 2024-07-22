@@ -125,10 +125,7 @@ impl ValidatorNode for Client {
         }
     }
 
-    async fn subscribe(
-        &self,
-        chains: Vec<ChainId>,
-    ) -> Result<Self::NotificationStream, NodeError> {
+    async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => Box::pin(grpc_client.subscribe(chains).await?),
 

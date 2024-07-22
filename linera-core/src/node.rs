@@ -76,10 +76,7 @@ pub trait LocalValidatorNode {
     async fn get_version_info(&self) -> Result<VersionInfo, NodeError>;
 
     /// Subscribes to receiving notifications for a collection of chains.
-    async fn subscribe(
-        &self,
-        chains: Vec<ChainId>,
-    ) -> Result<Self::NotificationStream, NodeError>;
+    async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError>;
 
     async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError>;
 

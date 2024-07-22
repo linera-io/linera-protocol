@@ -107,7 +107,8 @@ where
         notifications: &mut impl Extend<Notification>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let full_cert = self.node.state.full_certificate(certificate).await?;
-        let response = self.node
+        let response = self
+            .node
             .state
             .fully_handle_certificate_with_notifications(
                 full_cert,
@@ -199,12 +200,14 @@ where
     where
         A: LocalValidatorNode + Clone + 'static,
     {
-        future::join_all(locations.iter().map(|location| {
-            let node = node.clone();
-            async move {
-                Self::try_download_hashed_certificate_value_from(&node, name, *location).await
-            }
-        }))
+        future::join_all(
+            locations.iter().map(|location| {
+                let node = node.clone();
+                async move {
+                    Self::try_download_hashed_certificate_value_from(&node, name, *location).await
+                }
+            }),
+        )
         .await
         .into_iter()
         .flatten()
@@ -324,7 +327,8 @@ where
         chain_id: ChainId,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, LocalNodeError> {
-        let response = self.node
+        let response = self
+            .node
             .state
             .describe_application(chain_id, application_id)
             .await?;
@@ -343,7 +347,8 @@ where
 
     #[tracing::instrument(level = "trace", skip(self, hashed_blob), fields(blob_id = ?hashed_blob.id))]
     pub async fn cache_recent_blob(&self, hashed_blob: &HashedBlob) -> bool {
-        self.node.state
+        self.node
+            .state
             .cache_recent_blob(Cow::Borrowed(hashed_blob))
             .await
     }
@@ -423,7 +428,8 @@ where
         let results = future::join_all(tasks).await;
         for result in results {
             if let Some(value) = result? {
-                self.node.state
+                self.node
+                    .state
                     .cache_recent_hashed_certificate_value(Cow::Borrowed(&value))
                     .await;
                 values.push(value);
@@ -486,7 +492,7 @@ where
     async fn try_download_certificates_from<A>(
         &self,
         name: ValidatorName,
-        mut node: A,
+        node: A,
         chain_id: ChainId,
         mut start: BlockHeight,
         stop: BlockHeight,
@@ -502,13 +508,13 @@ where
                 .ok_or(ArithmeticError::Overflow)?
                 .min(1000);
             let Some(certificates) = self
-                .try_query_certificates_from(name, &mut node, chain_id, start, limit)
+                .try_query_certificates_from(name, &node, chain_id, start, limit)
                 .await?
             else {
                 break;
             };
             let Some(info) = self
-                .try_process_certificates(name, &mut node, chain_id, certificates, notifications)
+                .try_process_certificates(name, &node, chain_id, certificates, notifications)
                 .await
             else {
                 break;
@@ -598,7 +604,7 @@ where
     pub async fn try_synchronize_chain_state_from<A>(
         &self,
         name: ValidatorName,
-        mut node: A,
+        node: A,
         chain_id: ChainId,
         notifications: &mut impl Extend<Notification>,
     ) -> Result<(), LocalNodeError>
@@ -638,7 +644,7 @@ where
 
         if !certificates.is_empty()
             && self
-                .try_process_certificates(name, &mut node, chain_id, certificates, notifications)
+                .try_process_certificates(name, &node, chain_id, certificates, notifications)
                 .await
                 .is_none()
         {
@@ -676,9 +682,9 @@ where
     {
         // Sequentially try each validator in random order, to improve efficiency.
         validators.shuffle(&mut rand::thread_rng());
-        for (name, mut node) in validators {
+        for (name, node) in validators {
             if let Some(value) =
-                Self::try_download_hashed_certificate_value_from(&mut node, name, location).await
+                Self::try_download_hashed_certificate_value_from(&node, name, location).await
             {
                 return Some(value);
             }
@@ -696,8 +702,8 @@ where
     {
         // Sequentially try each validator in random order.
         validators.shuffle(&mut rand::thread_rng());
-        for (name, mut node) in validators {
-            if let Some(blob) = Self::try_download_blob_from(name, &mut node, blob_id).await {
+        for (name, node) in validators {
+            if let Some(blob) = Self::try_download_blob_from(name, &node, blob_id).await {
                 return Some(blob);
             }
         }
