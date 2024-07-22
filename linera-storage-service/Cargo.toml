@@ -18,7 +18,7 @@ storage-service = []
 test = ["linera-views/test"]
 
 [[bin]]
-name = "storage_service_server"
+name = "linera-storage-server"
 path = "src/server.rs"
 
 [dependencies]
