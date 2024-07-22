@@ -25,11 +25,11 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use crate::key_value_store::{
     statement::Operation,
     store_processor_server::{StoreProcessor, StoreProcessorServer},
-    KeyValue, OptValue, ReplyContainsKey, ReplyCreateNamespace, ReplyDeleteAll,
+    KeyValue, OptValue, ReplyContainsKey, ReplyContainsKeys, ReplyCreateNamespace, ReplyDeleteAll,
     ReplyDeleteNamespace, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
     ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk,
-    ReplyWriteBatchExtended, RequestContainsKey, RequestCreateNamespace, RequestDeleteAll,
-    RequestDeleteNamespace, RequestExistsNamespace, RequestFindKeyValuesByPrefix,
+    ReplyWriteBatchExtended, RequestContainsKey, RequestContainsKeys, RequestCreateNamespace,
+    RequestDeleteAll, RequestDeleteNamespace, RequestExistsNamespace, RequestFindKeyValuesByPrefix,
     RequestFindKeysByPrefix, RequestListAll, RequestReadMultiValues, RequestReadValue,
     RequestSpecificChunk, RequestWriteBatchExtended,
 };
@@ -65,12 +65,12 @@ impl ServiceStoreServer {
             ServiceStoreServerInternal::Memory(store) => store
                 .read_value_bytes(key)
                 .await
-                .map_err(|_e| Status::not_found("read_value_bytes")),
+                .map_err(|e| Status::unknown(format!("Memory error {:?} at read_value_bytes", e))),
             #[cfg(feature = "rocksdb")]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .read_value_bytes(key)
                 .await
-                .map_err(|_e| Status::not_found("read_value_bytes")),
+                .map_err(|e| Status::unknown(format!("RocksDB error {:?} at read_value_bytes", e))),
         }
     }
 
@@ -79,12 +79,26 @@ impl ServiceStoreServer {
             ServiceStoreServerInternal::Memory(store) => store
                 .contains_key(key)
                 .await
-                .map_err(|_e| Status::not_found("contains_key")),
+                .map_err(|e| Status::unknown(format!("Memory error {:?} at contains_key", e))),
             #[cfg(feature = "rocksdb")]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .contains_key(key)
                 .await
-                .map_err(|_e| Status::not_found("contains_key")),
+                .map_err(|e| Status::unknown(format!("RocksDB error {:?} at contains_key", e))),
+        }
+    }
+
+    pub async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Status> {
+        match &self.store {
+            ServiceStoreServerInternal::Memory(store) => store
+                .contains_keys(keys)
+                .await
+                .map_err(|e| Status::unknown(format!("Memory error {:?} at contains_keys", e))),
+            #[cfg(feature = "rocksdb")]
+            ServiceStoreServerInternal::RocksDb(store) => store
+                .contains_keys(keys)
+                .await
+                .map_err(|e| Status::unknown(format!("RocksDB error {:?} at contains_keys", e))),
         }
     }
 
@@ -93,29 +107,33 @@ impl ServiceStoreServer {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Status> {
         match &self.store {
-            ServiceStoreServerInternal::Memory(store) => store
-                .read_multi_values_bytes(keys)
-                .await
-                .map_err(|_e| Status::not_found("read_multi_values_bytes")),
+            ServiceStoreServerInternal::Memory(store) => {
+                store.read_multi_values_bytes(keys).await.map_err(|e| {
+                    Status::unknown(format!("Memory error {:?} at read_multi_values_bytes", e))
+                })
+            }
             #[cfg(feature = "rocksdb")]
-            ServiceStoreServerInternal::RocksDb(store) => store
-                .read_multi_values_bytes(keys)
-                .await
-                .map_err(|_e| Status::not_found("read_multi_values_bytes")),
+            ServiceStoreServerInternal::RocksDb(store) => {
+                store.read_multi_values_bytes(keys).await.map_err(|e| {
+                    Status::unknown(format!("RocksDB error {:?} at read_multi_values_bytes", e))
+                })
+            }
         }
     }
 
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Status> {
         match &self.store {
-            ServiceStoreServerInternal::Memory(store) => store
-                .find_keys_by_prefix(key_prefix)
-                .await
-                .map_err(|_e| Status::not_found("find_keys_by_prefix")),
+            ServiceStoreServerInternal::Memory(store) => {
+                store.find_keys_by_prefix(key_prefix).await.map_err(|e| {
+                    Status::unknown(format!("Memory error {:?} at find_keys_by_prefix", e))
+                })
+            }
             #[cfg(feature = "rocksdb")]
-            ServiceStoreServerInternal::RocksDb(store) => store
-                .find_keys_by_prefix(key_prefix)
-                .await
-                .map_err(|_e| Status::not_found("find_keys_by_prefix")),
+            ServiceStoreServerInternal::RocksDb(store) => {
+                store.find_keys_by_prefix(key_prefix).await.map_err(|e| {
+                    Status::unknown(format!("RocksDB error {:?} at find_keys_by_prefix", e))
+                })
+            }
         }
     }
 
@@ -127,12 +145,19 @@ impl ServiceStoreServer {
             ServiceStoreServerInternal::Memory(store) => store
                 .find_key_values_by_prefix(key_prefix)
                 .await
-                .map_err(|_e| Status::not_found("find_key_values_by_prefix")),
+                .map_err(|e| {
+                    Status::unknown(format!("Memory error {:?} at find_key_values_by_prefix", e))
+                }),
             #[cfg(feature = "rocksdb")]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .find_key_values_by_prefix(key_prefix)
                 .await
-                .map_err(|_e| Status::not_found("find_key_values_by_prefix")),
+                .map_err(|e| {
+                    Status::unknown(format!(
+                        "RocksDB error {:?} at find_key_values_by_prefix",
+                        e
+                    ))
+                }),
         }
     }
 
@@ -141,12 +166,12 @@ impl ServiceStoreServer {
             ServiceStoreServerInternal::Memory(store) => store
                 .write_batch(batch, &[])
                 .await
-                .map_err(|_e| Status::not_found("write_batch")),
+                .map_err(|e| Status::unknown(format!("Memory error {:?} at write_batch", e))),
             #[cfg(feature = "rocksdb")]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .write_batch(batch, &[])
                 .await
-                .map_err(|_e| Status::not_found("write_batch")),
+                .map_err(|e| Status::unknown(format!("RocksDB error {:?} at write_batch", e))),
         }
     }
 
@@ -266,6 +291,18 @@ impl StoreProcessor for ServiceStoreServer {
         let RequestContainsKey { key } = request;
         let test = self.contains_key(&key).await?;
         let response = ReplyContainsKey { test };
+        Ok(Response::new(response))
+    }
+
+    #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().keys.len()))]
+    async fn process_contains_keys(
+        &self,
+        request: Request<RequestContainsKeys>,
+    ) -> Result<Response<ReplyContainsKeys>, Status> {
+        let request = request.into_inner();
+        let RequestContainsKeys { keys } = request;
+        let tests = self.contains_keys(keys).await?;
+        let response = ReplyContainsKeys { tests };
         Ok(Response::new(response))
     }
 

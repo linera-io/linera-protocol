@@ -8,6 +8,7 @@ use std::{
     sync::Arc,
 };
 
+use futures::future::join_all;
 use linera_base::ensure;
 use thiserror::Error;
 #[cfg(with_testing)]
@@ -100,6 +101,35 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
             return Ok(false);
         }
         Ok(self.read_value_bytes(key).await?.is_some())
+    }
+
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
+        let size = keys.len();
+        let mut results = vec![false; size];
+        let mut handles = Vec::new();
+        for key in keys.clone() {
+            ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
+            let client = self.clone();
+            let handle = tokio::task::spawn_blocking(move || client.db.key_may_exist(&key));
+            handles.push(handle);
+        }
+        let may_results: Vec<_> = join_all(handles)
+            .await
+            .into_iter()
+            .collect::<Result<_, _>>()?;
+        let mut indices = Vec::new();
+        let mut keys_red = Vec::new();
+        for (i, key) in keys.into_iter().enumerate() {
+            if may_results[i] {
+                indices.push(i);
+                keys_red.push(key);
+            }
+        }
+        let values_red = self.read_multi_values_bytes(keys_red).await?;
+        for (index, value) in indices.into_iter().zip(values_red) {
+            results[index] = value.is_some();
+        }
+        Ok(results)
     }
 
     async fn read_multi_values_bytes(
@@ -402,6 +432,10 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStore {
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, RocksDbStoreError> {
         self.store.contains_key(key).await
+    }
+
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
+        self.store.contains_keys(keys).await
     }
 
     async fn read_multi_values_bytes(
