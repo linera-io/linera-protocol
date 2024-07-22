@@ -4,10 +4,7 @@
 
 use std::{borrow::Cow, sync::Arc};
 
-use futures::{
-    future,
-    lock::{Mutex, MutexGuard},
-};
+use futures::future;
 use linera_base::{
     data_types::{ArithmeticError, Blob, BlockHeight, HashedBlob},
     identifiers::{BlobId, ChainId, MessageId},
@@ -51,7 +48,7 @@ where
     S: Storage,
     ViewError: From<S::StoreError>,
 {
-    node: Arc<Mutex<LocalNode<S>>>,
+    node: Arc<LocalNode<S>>,
 }
 
 /// Error type for the operations on a local node.
@@ -98,9 +95,8 @@ where
         &self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        let node = self.lock_node().await;
         // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
-        let (response, _actions) = node.state.handle_block_proposal(proposal).await?;
+        let (response, _actions) = self.node.state.handle_block_proposal(proposal).await?;
         Ok(response)
     }
 
@@ -110,9 +106,8 @@ where
         certificate: LiteCertificate<'_>,
         notifications: &mut impl Extend<Notification>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        let node = self.lock_node().await;
-        let full_cert = node.state.full_certificate(certificate).await?;
-        let response = node
+        let full_cert = self.node.state.full_certificate(certificate).await?;
+        let response = self.node
             .state
             .fully_handle_certificate_with_notifications(
                 full_cert,
@@ -132,8 +127,8 @@ where
         hashed_blobs: Vec<HashedBlob>,
         notifications: &mut impl Extend<Notification>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        let node = self.lock_node().await;
-        let response = node
+        let response = self
+            .node
             .state
             .fully_handle_certificate_with_notifications(
                 certificate,
@@ -150,9 +145,8 @@ where
         &self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        let node = self.lock_node().await;
         // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
-        let (response, _actions) = node.state.handle_chain_info_query(query).await?;
+        let (response, _actions) = self.node.state.handle_chain_info_query(query).await?;
         Ok(response)
     }
 }
@@ -164,16 +158,9 @@ where
 {
     #[tracing::instrument(level = "trace", skip_all)]
     pub fn new(state: WorkerState<S>) -> Self {
-        let node = LocalNode { state };
-
         Self {
-            node: Arc::new(Mutex::new(node)),
+            node: Arc::new(LocalNode { state }),
         }
-    }
-
-    #[tracing::instrument(level = "trace", skip_all)]
-    async fn lock_node(&self) -> MutexGuard<LocalNode<S>> {
-        self.node.lock().await
     }
 }
 
@@ -183,9 +170,8 @@ where
     ViewError: From<S::StoreError>,
 {
     #[tracing::instrument(level = "trace", skip_all)]
-    pub(crate) async fn storage_client(&self) -> S {
-        let node = self.lock_node().await;
-        node.state.storage_client().clone()
+    pub(crate) fn storage_client(&self) -> S {
+        self.node.state.storage_client().clone()
     }
 }
 
@@ -199,8 +185,7 @@ where
         &self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
-        let node = self.lock_node().await;
-        let (executed_block, info) = node.state.stage_block_execution(block).await?;
+        let (executed_block, info) = self.node.state.stage_block_execution(block).await?;
         Ok((executed_block, info))
     }
 
@@ -311,8 +296,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, WorkerError> {
-        let node = self.lock_node().await;
-        node.state.chain_state_view(chain_id).await
+        self.node.state.chain_state_view(chain_id).await
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -330,8 +314,7 @@ where
         chain_id: ChainId,
         query: Query,
     ) -> Result<Response, LocalNodeError> {
-        let node = self.lock_node().await;
-        let response = node.state.query_application(chain_id, query).await?;
+        let response = self.node.state.query_application(chain_id, query).await?;
         Ok(response)
     }
 
@@ -341,8 +324,7 @@ where
         chain_id: ChainId,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, LocalNodeError> {
-        let node = self.lock_node().await;
-        let response = node
+        let response = self.node
             .state
             .describe_application(chain_id, application_id)
             .await?;
@@ -351,20 +333,17 @@ where
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn recent_blob(&self, blob_id: &BlobId) -> Option<HashedBlob> {
-        let node = self.lock_node().await;
-        node.state.recent_blob(blob_id).await
+        self.node.state.recent_blob(blob_id).await
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn recent_hashed_blobs(&self) -> Arc<ValueCache<BlobId, HashedBlob>> {
-        let node = self.lock_node().await;
-        node.state.recent_hashed_blobs()
+        self.node.state.recent_hashed_blobs()
     }
 
     #[tracing::instrument(level = "trace", skip(self, hashed_blob), fields(blob_id = ?hashed_blob.id))]
     pub async fn cache_recent_blob(&self, hashed_blob: &HashedBlob) -> bool {
-        let node = self.lock_node().await;
-        node.state
+        self.node.state
             .cache_recent_blob(Cow::Borrowed(hashed_blob))
             .await
     }
@@ -422,9 +401,9 @@ where
     {
         let mut values = vec![];
         let mut tasks = vec![];
-        let node = self.lock_node().await;
         for location in hashed_certificate_value_locations {
-            if let Some(value) = node
+            if let Some(value) = self
+                .node
                 .state
                 .recent_hashed_certificate_value(&location.certificate_hash)
                 .await
@@ -432,21 +411,19 @@ where
                 values.push(value);
             } else {
                 let validators = validators.clone();
-                let storage = node.state.storage_client().clone();
+                let storage = self.storage_client();
                 tasks.push(Self::read_or_download_hashed_certificate_value(
                     storage, validators, location,
                 ));
             }
         }
-        drop(node); // Free the lock while awaiting the tasks.
         if tasks.is_empty() {
             return Ok(values);
         }
         let results = future::join_all(tasks).await;
-        let node = self.lock_node().await;
         for result in results {
             if let Some(value) = result? {
-                node.state
+                self.node.state
                     .cache_recent_hashed_certificate_value(Cow::Borrowed(&value))
                     .await;
                 values.push(value);
@@ -494,7 +471,6 @@ where
         let info = self.handle_chain_info_query(query).await?.info;
         let certificates = self
             .storage_client()
-            .await
             .read_certificates(info.requested_sent_certificate_hashes)
             .await?;
         let certificate = certificates
