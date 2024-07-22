@@ -212,7 +212,7 @@ where
 
         match Self::try_proxy_message(
             message,
-            shard,
+            shard.clone(),
             protocol,
             self.send_timeout,
             self.recv_timeout,
@@ -221,7 +221,7 @@ where
         {
             Ok(maybe_response) => maybe_response,
             Err(error) => {
-                error!(error = %error, "Failed to proxy message");
+                error!(error = %error, "Failed to proxy message to {}", shard.address());
                 None
             }
         }

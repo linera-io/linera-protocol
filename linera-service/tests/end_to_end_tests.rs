@@ -2440,9 +2440,12 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     client.query_validators(None).await?;
 
-    // Restart the first shard for the 4th validator.
-    net.terminate_server(3, 0).await?;
-    net.start_server(3, 0).await?;
+    // Restart the first shard for the 4th validator. The proxy currently only
+    // re-establishes the connection with gRPC.
+    if matches!(network, Network::Grpc) {
+        net.terminate_server(3, 0).await?;
+        net.start_server(3, 0).await?;
+    }
 
     // Create configurations for two more validators
     net.generate_validator_config(4).await?;
@@ -2461,13 +2464,8 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client.query_validators(Some(chain_1)).await?;
 
     // Add 6th validator
-    // TODO(#2212): Use weight 100.
     client
-        .set_validator(
-            net.validator_name(5).unwrap(),
-            LocalNet::proxy_port(5),
-            10000,
-        )
+        .set_validator(net.validator_name(5).unwrap(), LocalNet::proxy_port(5), 100)
         .await?;
 
     // Remove 5th validator
@@ -2478,17 +2476,22 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     client.query_validators(None).await?;
     client.query_validators(Some(chain_1)).await?;
+    if let Some(service) = &node_service_2 {
+        service.process_inbox(&chain_2).await?;
+    } else {
+        client_2.process_inbox(chain_2).await?;
+    }
 
     // Remove the first 4 validators, so only the last one remains.
     for i in 0..4 {
         let name = net.validator_name(i).unwrap();
         client.remove_validator(name).await?;
-        net.remove_validator(i)?;
         if let Some(service) = &node_service_2 {
             service.process_inbox(&chain_2).await?;
         } else {
             client_2.process_inbox(chain_2).await?;
         }
+        net.remove_validator(i)?;
     }
 
     let recipient = Owner::from(KeyPair::generate().public());
