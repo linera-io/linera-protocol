@@ -128,16 +128,13 @@ where
         hashed_blobs: Vec<HashedBlob>,
         notifications: &mut impl Extend<Notification>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        let response = self
-            .node
-            .state
-            .fully_handle_certificate_with_notifications(
-                certificate,
-                hashed_certificate_values,
-                hashed_blobs,
-                Some(notifications),
-            )
-            .await?;
+        let response = Box::pin(self.node.state.fully_handle_certificate_with_notifications(
+            certificate,
+            hashed_certificate_values,
+            hashed_blobs,
+            Some(notifications),
+        ))
+        .await?;
         Ok(response)
     }
 
