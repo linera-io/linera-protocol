@@ -32,7 +32,7 @@ use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{LocalValidatorNode, NodeError},
     value_cache::ValueCache,
-    worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
+    worker::{Notification, WorkerError, WorkerState},
 };
 
 /// A local node with a single worker, typically used by clients.
