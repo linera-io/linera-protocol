@@ -216,7 +216,7 @@ impl TestValidator {
                 ChainId::root(0),
                 description,
                 key_pair.public(),
-                0.into(),
+                Amount::MAX,
                 Timestamp::from(0),
             )
             .await
