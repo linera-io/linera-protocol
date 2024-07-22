@@ -455,8 +455,8 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Send + Sync + 'static,
 {
-    /// Load multiple entries for writing at once.
-    /// The entries in short_keys have to be all distinct.
+    /// Loads multiple entries for writing at once.
+    /// The entries in `short_keys` have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -482,7 +482,7 @@ where
         short_keys: Vec<Vec<u8>>,
     ) -> Result<Vec<WriteGuardedView<W>>, ViewError> {
         let updates = self.updates.get_mut();
-        let mut selected_short_keys = Vec::new();
+        let mut short_keys_to_load = Vec::new();
         let num_init_keys = W::NUM_INIT_KEYS;
         let mut keys = Vec::new();
         for short_key in &short_keys {
@@ -506,13 +506,13 @@ where
                         entry.insert(Update::Set(view));
                     } else {
                         keys.extend(W::pre_load(&context)?);
-                        selected_short_keys.push(short_key.to_vec());
+                        short_keys_to_load.push(short_key.to_vec());
                     }
                 }
             }
         }
         let values = self.context.read_multi_values_bytes(keys).await?;
-        for (i_key, short_key) in selected_short_keys.iter().enumerate() {
+        for (i_key, short_key) in short_keys_to_load.iter().enumerate() {
             let key = self
                 .context
                 .base_tag_index(KeyTag::Subview as u8, short_key);
@@ -528,10 +528,7 @@ where
         short_keys
             .into_iter()
             .map(|short_key| {
-                let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) else {
-                    unreachable!()
-                };
-                let Update::Set(view) = entry.into_mut() else {
+                let Some(Update::Set(view)) = updates.get(&short_key) else {
                     unreachable!()
                 };
                 Ok(WriteGuardedView(
@@ -573,18 +570,17 @@ where
             results.push(None);
         }
         let mut updates = self.updates.lock().await;
-        let mut selected_indices = Vec::new();
+        let mut present_indices = Vec::new();
         let mut handles = Vec::new();
         let mut test_indices = Vec::new();
         for (i_key, short_key) in short_keys.iter().enumerate() {
-            match updates.entry(short_key.to_vec()) {
-                btree_map::Entry::Occupied(entry) => {
-                    let entry = entry.into_mut();
+            match updates.get(short_key) {
+                Some(entry) => {
                     if let Update::Set(_entry) = entry {
-                        selected_indices.push(i_key);
+                        present_indices.push(i_key);
                     }
                 }
-                btree_map::Entry::Vacant(_entry) => {
+                None => {
                     if !self.delete_storage_first {
                         let context = self.context.clone();
                         let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
@@ -599,11 +595,11 @@ where
         let response = futures::future::join_all(handles).await;
         let num_init_keys = W::NUM_INIT_KEYS;
         let mut keys = Vec::new();
-        let mut selected_indices_load = Vec::new();
-        for (test, i_key) in response.into_iter().zip(test_indices) {
-            let test = test??;
-            if test {
-                selected_indices_load.push(i_key);
+        let mut indices_to_load = Vec::new();
+        for (key_exists, i_key) in response.into_iter().zip(test_indices) {
+            let key_exists = key_exists??;
+            if key_exists {
+                indices_to_load.push(i_key);
                 let short_key = &short_keys[i_key];
                 let key = self
                     .context
@@ -613,8 +609,8 @@ where
             }
         }
         let values = self.context.read_multi_values_bytes(keys).await?;
-        for (index, i_key) in selected_indices_load.into_iter().enumerate() {
-            selected_indices.push(i_key);
+        for (index, i_key) in indices_to_load.into_iter().enumerate() {
+            present_indices.push(i_key);
             let short_key = &short_keys[i_key];
             let key = self
                 .context
@@ -627,12 +623,9 @@ where
             let wrapped_view = Arc::new(RwLock::new(view));
             updates.insert(short_key.to_vec(), Update::Set(wrapped_view));
         }
-        for i_key in selected_indices {
+        for i_key in present_indices {
             let short_key = &short_keys[i_key];
-            let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) else {
-                unreachable!()
-            };
-            let Update::Set(view) = entry.into_mut() else {
+            let Some(Update::Set(view)) = updates.get(short_key) else {
                 unreachable!()
             };
             let guard = ReadGuardedView(
