@@ -98,7 +98,7 @@ where
         &self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        let mut node = self.lock_node().await;
+        let node = self.lock_node().await;
         // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
         let (response, _actions) = node.state.handle_block_proposal(proposal).await?;
         Ok(response)
@@ -110,7 +110,7 @@ where
         certificate: LiteCertificate<'_>,
         notifications: &mut impl Extend<Notification>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        let mut node = self.lock_node().await;
+        let node = self.lock_node().await;
         let full_cert = node.state.full_certificate(certificate).await?;
         let response = node
             .state
@@ -132,7 +132,7 @@ where
         hashed_blobs: Vec<HashedBlob>,
         notifications: &mut impl Extend<Notification>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        let mut node = self.lock_node().await;
+        let node = self.lock_node().await;
         let response = node
             .state
             .fully_handle_certificate_with_notifications(
@@ -199,7 +199,7 @@ where
         &self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
-        let mut node = self.lock_node().await;
+        let node = self.lock_node().await;
         let (executed_block, info) = node.state.stage_block_execution(block).await?;
         Ok((executed_block, info))
     }
@@ -208,16 +208,16 @@ where
     async fn find_missing_application_bytecodes<A>(
         &self,
         locations: &[BytecodeLocation],
-        node: &mut A,
+        node: &A,
         name: ValidatorName,
     ) -> Vec<HashedCertificateValue>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
         future::join_all(locations.iter().map(|location| {
-            let mut node = node.clone();
+            let node = node.clone();
             async move {
-                Self::try_download_hashed_certificate_value_from(&mut node, name, *location).await
+                Self::try_download_hashed_certificate_value_from(&node, name, *location).await
             }
         }))
         .await
@@ -230,15 +230,15 @@ where
     async fn find_missing_blobs<A>(
         &self,
         blob_ids: &[BlobId],
-        node: &mut A,
+        node: &A,
         name: ValidatorName,
     ) -> Vec<HashedBlob>
     where
         A: LocalValidatorNode + Clone + 'static,
     {
         future::join_all(blob_ids.iter().map(|blob_id| {
-            let mut node = node.clone();
-            async move { Self::try_download_blob_from(name, &mut node, *blob_id).await }
+            let node = node.clone();
+            async move { Self::try_download_blob_from(name, &node, *blob_id).await }
         }))
         .await
         .into_iter()
@@ -250,7 +250,7 @@ where
     async fn try_process_certificates<A>(
         &self,
         name: ValidatorName,
-        node: &mut A,
+        node: &A,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
         notifications: &mut impl Extend<Notification>,
@@ -330,7 +330,7 @@ where
         chain_id: ChainId,
         query: Query,
     ) -> Result<Response, LocalNodeError> {
-        let mut node = self.lock_node().await;
+        let node = self.lock_node().await;
         let response = node.state.query_application(chain_id, query).await?;
         Ok(response)
     }
@@ -341,7 +341,7 @@ where
         chain_id: ChainId,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, LocalNodeError> {
-        let mut node = self.lock_node().await;
+        let node = self.lock_node().await;
         let response = node
             .state
             .describe_application(chain_id, application_id)
@@ -351,7 +351,7 @@ where
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn recent_blob(&self, blob_id: &BlobId) -> Option<HashedBlob> {
-        let mut node = self.lock_node().await;
+        let node = self.lock_node().await;
         node.state.recent_blob(blob_id).await
     }
 
@@ -363,7 +363,7 @@ where
 
     #[tracing::instrument(level = "trace", skip(self, hashed_blob), fields(blob_id = ?hashed_blob.id))]
     pub async fn cache_recent_blob(&self, hashed_blob: &HashedBlob) -> bool {
-        let mut node = self.lock_node().await;
+        let node = self.lock_node().await;
         node.state
             .cache_recent_blob(Cow::Borrowed(hashed_blob))
             .await
@@ -422,7 +422,7 @@ where
     {
         let mut values = vec![];
         let mut tasks = vec![];
-        let mut node = self.lock_node().await;
+        let node = self.lock_node().await;
         for location in hashed_certificate_value_locations {
             if let Some(value) = node
                 .state
@@ -443,7 +443,7 @@ where
             return Ok(values);
         }
         let results = future::join_all(tasks).await;
-        let mut node = self.lock_node().await;
+        let node = self.lock_node().await;
         for result in results {
             if let Some(value) = result? {
                 node.state
@@ -547,7 +547,7 @@ where
     async fn try_query_certificates_from<A>(
         &self,
         name: ValidatorName,
-        node: &mut A,
+        node: &A,
         chain_id: ChainId,
         start: BlockHeight,
         limit: u64,
@@ -572,7 +572,7 @@ where
 
             let certificates =
                 future::try_join_all(requested_sent_certificate_hashes.into_iter().map(|hash| {
-                    let mut node = node.clone();
+                    let node = node.clone();
                     async move { node.download_certificate(hash).await }
                 }))
                 .await?;
@@ -654,7 +654,7 @@ where
             info.requested_sent_certificate_hashes
                 .into_iter()
                 .map(|hash| {
-                    let mut node = node.clone();
+                    let node = node.clone();
                     async move { node.download_certificate(hash).await }
                 }),
         )
@@ -731,7 +731,7 @@ where
     #[tracing::instrument(level = "trace", skip(name, node))]
     async fn try_download_blob_from<A>(
         name: ValidatorName,
-        node: &mut A,
+        node: &A,
         blob_id: BlobId,
     ) -> Option<HashedBlob>
     where
@@ -752,7 +752,7 @@ where
 
     #[tracing::instrument(level = "trace", skip_all)]
     async fn try_download_hashed_certificate_value_from<A>(
-        node: &mut A,
+        node: &A,
         name: ValidatorName,
         location: BytecodeLocation,
     ) -> Option<HashedCertificateValue>

@@ -21,7 +21,7 @@ pub enum MassClientError {
 #[async_trait]
 pub trait MassClient {
     async fn send(
-        &mut self,
+        &self,
         requests: Vec<RpcMessage>,
         max_in_flight: usize,
     ) -> Result<Vec<RpcMessage>, MassClientError>;

@@ -38,14 +38,14 @@ impl ValidatorNode for DummyValidatorNode {
     type NotificationStream = NotificationStream;
 
     async fn handle_block_proposal(
-        &mut self,
+        &self,
         _: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
     async fn handle_lite_certificate(
-        &mut self,
+        &self,
         _: LiteCertificate<'_>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
@@ -53,7 +53,7 @@ impl ValidatorNode for DummyValidatorNode {
     }
 
     async fn handle_certificate(
-        &mut self,
+        &self,
         _: Certificate,
         _: Vec<HashedCertificateValue>,
         _: Vec<HashedBlob>,
@@ -63,36 +63,36 @@ impl ValidatorNode for DummyValidatorNode {
     }
 
     async fn handle_chain_info_query(
-        &mut self,
+        &self,
         _: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn subscribe(&mut self, _: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+    async fn subscribe(&self, _: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError> {
+    async fn get_version_info(&self) -> Result<VersionInfo, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn download_blob(&mut self, _: BlobId) -> Result<Blob, NodeError> {
+    async fn download_blob(&self, _: BlobId) -> Result<Blob, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
     async fn download_certificate_value(
-        &mut self,
+        &self,
         _: CryptoHash,
     ) -> Result<HashedCertificateValue, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn download_certificate(&mut self, _: CryptoHash) -> Result<Certificate, NodeError> {
+    async fn download_certificate(&self, _: CryptoHash) -> Result<Certificate, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn blob_last_used_by(&mut self, _: BlobId) -> Result<CryptoHash, NodeError> {
+    async fn blob_last_used_by(&self, _: BlobId) -> Result<CryptoHash, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 }

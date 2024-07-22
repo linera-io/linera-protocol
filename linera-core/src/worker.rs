@@ -340,7 +340,7 @@ where
 
     #[tracing::instrument(level = "trace", skip(self, certificate))]
     pub(crate) async fn full_certificate(
-        &mut self,
+        &self,
         certificate: LiteCertificate<'_>,
     ) -> Result<Certificate, WorkerError> {
         self.recent_hashed_certificate_values
@@ -350,14 +350,14 @@ where
 
     #[tracing::instrument(level = "trace", skip(self, hash))]
     pub(crate) async fn recent_hashed_certificate_value(
-        &mut self,
+        &self,
         hash: &CryptoHash,
     ) -> Option<HashedCertificateValue> {
         self.recent_hashed_certificate_values.get(hash).await
     }
 
     #[tracing::instrument(level = "trace", skip(self, blob_id))]
-    pub(crate) async fn recent_blob(&mut self, blob_id: &BlobId) -> Option<HashedBlob> {
+    pub(crate) async fn recent_blob(&self, blob_id: &BlobId) -> Option<HashedBlob> {
         self.recent_hashed_blobs.get(blob_id).await
     }
 }
@@ -374,7 +374,7 @@ where
     )]
     #[cfg(with_testing)]
     pub async fn fully_handle_certificate(
-        &mut self,
+        &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
@@ -400,7 +400,7 @@ where
     )]
     #[inline]
     pub(crate) async fn fully_handle_certificate_with_notifications(
-        &mut self,
+        &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
@@ -426,7 +426,7 @@ where
     #[tracing::instrument(level = "trace", skip(self, block))]
     /// Tries to execute a block proposal without any verification other than block execution.
     pub async fn stage_block_execution(
-        &mut self,
+        &self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         self.query_chain_worker(block.chain_id, move |callback| {
@@ -441,7 +441,7 @@ where
         skip(self, chain_id, height, actions, notify_when_messages_are_delivered)
     )]
     async fn register_delivery_notifier(
-        &mut self,
+        &self,
         chain_id: ChainId,
         height: BlockHeight,
         actions: &NetworkActions,
@@ -474,7 +474,7 @@ where
     #[tracing::instrument(level = "trace", skip(self, chain_id, query))]
     /// Executes a [`Query`] for an application's state on a specific chain.
     pub async fn query_application(
-        &mut self,
+        &self,
         chain_id: ChainId,
         query: Query,
     ) -> Result<Response, WorkerError> {
@@ -487,7 +487,7 @@ where
     #[tracing::instrument(level = "trace", skip(self, chain_id, bytecode_id))]
     #[cfg(with_testing)]
     pub async fn read_bytecode_location(
-        &mut self,
+        &self,
         chain_id: ChainId,
         bytecode_id: BytecodeId,
     ) -> Result<Option<BytecodeLocation>, WorkerError> {
@@ -502,7 +502,7 @@ where
 
     #[tracing::instrument(level = "trace", skip(self, chain_id, application_id))]
     pub async fn describe_application(
-        &mut self,
+        &self,
         chain_id: ChainId,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, WorkerError> {
@@ -527,7 +527,7 @@ where
     )]
     /// Processes a confirmed block (aka a commit).
     async fn process_confirmed_block(
-        &mut self,
+        &self,
         certificate: Certificate,
         hashed_certificate_values: &[HashedCertificateValue],
         hashed_blobs: &[HashedBlob],
@@ -567,7 +567,7 @@ where
     #[tracing::instrument(level = "trace", skip(self, certificate))]
     /// Processes a validated block issued from a multi-owner chain.
     async fn process_validated_block(
-        &mut self,
+        &self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let CertificateValue::ValidatedBlock {
@@ -588,7 +588,7 @@ where
     #[tracing::instrument(level = "trace", skip(self, certificate))]
     /// Processes a leader timeout issued from a multi-owner chain.
     async fn process_timeout(
-        &mut self,
+        &self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let CertificateValue::Timeout { chain_id, .. } = certificate.value() else {
@@ -605,7 +605,7 @@ where
 
     #[tracing::instrument(level = "trace", skip(self, origin, recipient, bundles))]
     async fn process_cross_chain_update(
-        &mut self,
+        &self,
         origin: Origin,
         recipient: ChainId,
         bundles: Vec<MessageBundle>,
@@ -623,7 +623,7 @@ where
     #[tracing::instrument(level = "trace", skip(self, value))]
     /// Inserts a [`HashedCertificateValue`] into the worker's cache.
     pub(crate) async fn cache_recent_hashed_certificate_value<'a>(
-        &mut self,
+        &self,
         value: Cow<'a, HashedCertificateValue>,
     ) -> bool {
         self.recent_hashed_certificate_values.insert(value).await
@@ -631,7 +631,7 @@ where
 
     #[tracing::instrument(level = "trace", skip(self, hashed_blob))]
     /// Inserts a [`HashedBlob`] into the worker's cache.
-    pub async fn cache_recent_blob<'a>(&mut self, hashed_blob: Cow<'a, HashedBlob>) -> bool {
+    pub async fn cache_recent_blob<'a>(&self, hashed_blob: Cow<'a, HashedBlob>) -> bool {
         self.recent_hashed_blobs.insert(hashed_blob).await
     }
 
@@ -781,7 +781,7 @@ where
         height = %proposal.content.block.height,
     ))]
     pub async fn handle_block_proposal(
-        &mut self,
+        &self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, proposal);
@@ -803,7 +803,7 @@ where
     #[instrument(skip_all, fields(hash = %certificate.value.value_hash))]
     /// Processes a certificate, e.g. to extend a chain with a confirmed block.
     pub async fn handle_lite_certificate<'a>(
-        &mut self,
+        &self,
         certificate: LiteCertificate<'a>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -824,7 +824,7 @@ where
         height = %certificate.value().height(),
     ))]
     pub async fn handle_certificate(
-        &mut self,
+        &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
@@ -918,7 +918,7 @@ where
         chain_id = format!("{:.8}", request.target_chain_id())
     ))]
     pub async fn handle_cross_chain_request(
-        &mut self,
+        &self,
         request: CrossChainRequest,
     ) -> Result<NetworkActions, WorkerError> {
         trace!("{} <-- {:?}", self.nickname, request);

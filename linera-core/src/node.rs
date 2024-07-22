@@ -46,20 +46,20 @@ pub trait LocalValidatorNode {
 
     /// Proposes a new block.
     async fn handle_block_proposal(
-        &mut self,
+        &self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a certificate without a value.
     async fn handle_lite_certificate(
-        &mut self,
+        &self,
         certificate: LiteCertificate<'_>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a certificate.
     async fn handle_certificate(
-        &mut self,
+        &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
@@ -68,30 +68,30 @@ pub trait LocalValidatorNode {
 
     /// Handles information queries for this chain.
     async fn handle_chain_info_query(
-        &mut self,
+        &self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Gets the version info for this validator node.
-    async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError>;
+    async fn get_version_info(&self) -> Result<VersionInfo, NodeError>;
 
     /// Subscribes to receiving notifications for a collection of chains.
     async fn subscribe(
-        &mut self,
+        &self,
         chains: Vec<ChainId>,
     ) -> Result<Self::NotificationStream, NodeError>;
 
-    async fn download_blob(&mut self, blob_id: BlobId) -> Result<Blob, NodeError>;
+    async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError>;
 
     async fn download_certificate_value(
-        &mut self,
+        &self,
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, NodeError>;
 
-    async fn download_certificate(&mut self, hash: CryptoHash) -> Result<Certificate, NodeError>;
+    async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError>;
 
     /// Returns the hash of the `Certificate` that last used a blob.
-    async fn blob_last_used_by(&mut self, blob_id: BlobId) -> Result<CryptoHash, NodeError>;
+    async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError>;
 }
 
 /// Turn an address into a validator node.

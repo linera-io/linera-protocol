@@ -1058,7 +1058,7 @@ where
         tracker: u64,
         committees: BTreeMap<Epoch, Committee>,
         max_epoch: Epoch,
-        mut node: A,
+        node: A,
         node_client: LocalNodeClient<S>,
     ) -> Result<(ValidatorName, u64, Vec<Certificate>), NodeError>
     where
@@ -2725,7 +2725,7 @@ where
         });
         // Add tasks for new validators.
         let validator_tasks = FuturesUnordered::new();
-        for (name, mut node) in nodes {
+        for (name, node) in nodes {
             let hash_map::Entry::Vacant(entry) = senders.entry(name) else {
                 continue;
             };
