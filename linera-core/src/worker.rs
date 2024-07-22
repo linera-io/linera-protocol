@@ -143,7 +143,7 @@ pub enum Reason {
     },
 }
 
-/// Error type for [`ValidatorWorker`].
+/// Error type for worker operations..
 #[derive(Debug, Error)]
 pub enum WorkerError {
     #[error(transparent)]
