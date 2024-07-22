@@ -504,12 +504,14 @@ where
         let max_stream_queries = self.context().max_stream_queries();
         let stream = stream::iter(stream)
             .map(|(origin, inbox)| async move {
-                if let Some(event) = inbox.removed_events.front().await? {
-                    return Err(ChainError::MissingCrossChainUpdate {
-                        chain_id,
-                        origin: origin.into(),
-                        height: event.height,
-                    });
+                if let Some(inbox) = inbox {
+                    if let Some(event) = inbox.removed_events.front().await? {
+                        return Err(ChainError::MissingCrossChainUpdate {
+                            chain_id,
+                            origin: origin.into(),
+                            height: event.height,
+                        });
+                    }
                 }
                 Ok::<(), ChainError>(())
             })

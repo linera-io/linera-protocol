@@ -440,11 +440,13 @@ where
         let targets = self.chain.outboxes.indices().await?;
         let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
-            let heights = outbox.queue.elements().await?;
-            heights_by_recipient
-                .entry(target.recipient)
-                .or_default()
-                .insert(target.medium, heights);
+            if let Some(outbox) = outbox {
+                let heights = outbox.queue.elements().await?;
+                heights_by_recipient
+                    .entry(target.recipient)
+                    .or_default()
+                    .insert(target.medium, heights);
+            }
         }
         let mut actions = NetworkActions::default();
         for (recipient, height_map) in heights_by_recipient {
@@ -783,12 +785,14 @@ where
                 MessageAction::Accept
             };
             for (origin, inbox) in origins.into_iter().zip(inboxes) {
-                for event in inbox.added_events.elements().await? {
-                    messages.push(IncomingMessage {
-                        origin: origin.clone(),
-                        event: event.clone(),
-                        action,
-                    });
+                if let Some(inbox) = inbox {
+                    for event in inbox.added_events.elements().await? {
+                        messages.push(IncomingMessage {
+                            origin: origin.clone(),
+                            event: event.clone(),
+                            action,
+                        });
+                    }
                 }
             }
 
