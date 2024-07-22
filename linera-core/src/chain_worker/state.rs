@@ -440,14 +440,13 @@ where
         let targets = self.chain.outboxes.indices().await?;
         let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
-            let heights = match outbox {
-                Some(outbox) => outbox.queue.elements().await?,
-                None => Vec::new(),
-            };
-            heights_by_recipient
-                .entry(target.recipient)
-                .or_default()
-                .insert(target.medium, heights);
+            if let Some(outbox) = outbox {
+                let heights = outbox.queue.elements().await?;
+                heights_by_recipient
+                    .entry(target.recipient)
+                    .or_default()
+                    .insert(target.medium, heights);
+            }
         }
         let mut actions = NetworkActions::default();
         for (recipient, height_map) in heights_by_recipient {
