@@ -190,7 +190,7 @@ impl ScyllaDbClient {
         let mut rows = session.query_iter(read_multi_value, &unique_keys).await?;
         let mut values = vec![None; num_keys];
         while let Some(row) = rows.next().await {
-            let (key,value) = row?.into_typed::<(Vec<u8>, Vec<u8>)>()?;
+            let (key, value) = row?.into_typed::<(Vec<u8>, Vec<u8>)>()?;
             for i_key in map.get(&key).unwrap().clone() {
                 let value = Some(value.clone());
                 *values.get_mut(i_key).expect("an entry in values") = value;

@@ -687,9 +687,7 @@ where
         let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
         for (i, index) in indices.into_iter().enumerate() {
-            if index.len() > self.max_key_size() {
-                return Err(ViewError::KeyTooLong);
-            }
+            ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
             if let Some(update) = self.updates.get(&index) {
                 let value = match update {
                     Update::Removed => false,
@@ -734,9 +732,7 @@ where
         let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
         for (i, index) in indices.into_iter().enumerate() {
-            if index.len() > self.max_key_size() {
-                return Err(ViewError::KeyTooLong);
-            }
+            ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
             if let Some(update) = self.updates.get(&index) {
                 let value = match update {
                     Update::Removed => None,
