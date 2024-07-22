@@ -32,10 +32,10 @@ use crate::ContractAbi;
 ///
 /// ```rust
 /// # use linera_sdk::test::*;
-/// # use linera_base::identifiers::ChainId;
+/// # use linera_base::{data_types::BlockHeight, identifiers::ChainId};
 /// # tokio_test::block_on(async {
 /// let validator = TestValidator::new().await;
-/// assert_eq!(validator.new_chain().await.get_tip_height(), BlockHeight(0));
+/// assert_eq!(validator.new_chain().await.get_tip_height().await, BlockHeight(0));
 /// # });
 /// ```
 pub struct TestValidator {
