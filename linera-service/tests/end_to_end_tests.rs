@@ -2440,8 +2440,8 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     client.query_validators(None).await?;
 
-    // Restart the first shard for the 4th validator. The proxy currently only
-    // re-establishes the connection with gRPC.
+    // Restart the first shard for the 4th validator.
+    // TODO(#2286): The proxy currently only re-establishes the connection with gRPC.
     if matches!(network, Network::Grpc) {
         net.terminate_server(3, 0).await?;
         net.start_server(3, 0).await?;
