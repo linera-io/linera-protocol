@@ -4542,6 +4542,7 @@ dependencies = [
  "colored",
  "comfy-table",
  "counter",
+ "criterion",
  "crowd-funding",
  "current_platform",
  "ethereum-tracker",
