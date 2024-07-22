@@ -18,6 +18,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera sync-balance`↴](#linera-sync-balance)
 * [`linera sync`↴](#linera-sync)
 * [`linera process-inbox`↴](#linera-process-inbox)
+* [`linera query-new-validator`↴](#linera-query-new-validator)
 * [`linera query-validators`↴](#linera-query-validators)
 * [`linera set-validator`↴](#linera-set-validator)
 * [`linera remove-validator`↴](#linera-remove-validator)
@@ -69,6 +70,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `sync-balance` — (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the local balance
 * `sync` — Synchronize the local state of the chain with a quorum validators
 * `process-inbox` — Process all pending incoming messages from the inbox of the given chain by creating as many blocks as needed to execute all (non-failing) messages. Failing messages will be marked as rejected and may bounce to their sender depending on their configuration
+* `query-new-validator` — Show the version of a new validator, and print a warning if it is incompatible
 * `query-validators` — Show the current set of validators for a chain
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
@@ -364,6 +366,18 @@ Process all pending incoming messages from the inbox of the given chain by creat
 
 
 
+## `linera query-new-validator`
+
+Show the version of a new validator, and print a warning if it is incompatible
+
+**Usage:** `linera query-new-validator <ADDRESS>`
+
+###### **Arguments:**
+
+* `<ADDRESS>` — The new validator's address
+
+
+
 ## `linera query-validators`
 
 Show the current set of validators for a chain
@@ -389,6 +403,7 @@ Add or modify a validator (admin only)
 * `--votes <VOTES>` — Voting power
 
   Default value: `1`
+* `--force` — Set the validator even if the version or genesis config check fails
 
 
 
