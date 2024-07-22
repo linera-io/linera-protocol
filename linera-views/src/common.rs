@@ -572,17 +572,17 @@ pub trait Context: Clone {
     /// Returns type for key-value search operations.
     type KeyValues: KeyValueIterable<Self::Error>;
 
-    /// Retrieve the number of stream queries.
+    /// Retrieves the number of stream queries.
     fn max_stream_queries(&self) -> usize;
 
     /// Retrieves a `Vec<u8>` from the database using the provided `key` prefixed by the current
     /// context.
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    /// Test whether a key exists in the database
+    /// Tests whether a key exists in the database
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
 
-    /// Test whether a set of keys exist in the database
+    /// Tests whether a set of keys exist in the database
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
