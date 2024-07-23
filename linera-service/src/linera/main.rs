@@ -431,8 +431,8 @@ impl Runnable for Job {
             QueryNewValidator { address } => {
                 use linera_core::node::ValidatorNode as _;
 
-                let node_provider = context.make_node_provider();
-                match node_provider.make_node(&address)?.get_version_info().await {
+                let mut node = context.make_node_provider().make_node(&address)?;
+                match node.get_version_info().await {
                     Ok(version_info)
                         if version_info.is_compatible_with(&linera_version::VERSION_INFO) =>
                     {
@@ -445,6 +445,17 @@ impl Runnable for Job {
                     ),
                     Err(error) => {
                         warn!("Failed to get version information for new validator:\n{error}")
+                    }
+                }
+                let genesis_config_hash = context.wallet().genesis_config().hash();
+                match node.get_genesis_config_hash().await {
+                    Ok(hash) if hash == genesis_config_hash => {}
+                    Ok(hash) => warn!(
+                        "Validator's genesis config hash {} does not match our own: {}.",
+                        hash, genesis_config_hash
+                    ),
+                    Err(error) => {
+                        warn!("Failed to get genesis config hash for new validator:\n{error}")
                     }
                 }
             }
@@ -522,6 +533,25 @@ impl Runnable for Job {
                         ),
                         Err(error) => bail!(
                             "Failed to get version information for validator {name:?}:\n{error}"
+                        ),
+                    }
+                    let genesis_config_hash = context.wallet().genesis_config().hash();
+                    match node.get_genesis_config_hash().await {
+                        Ok(hash) if hash == genesis_config_hash => {}
+                        Ok(hash) if *force => warn!(
+                            "Validator's genesis config hash {} does not match our own: {}.",
+                            hash, genesis_config_hash
+                        ),
+                        Ok(hash) => bail!(
+                            "Validator's genesis config hash {} does not match our own: {}.",
+                            hash,
+                            genesis_config_hash
+                        ),
+                        Err(error) if *force => warn!(
+                            "Failed to get genesis config hash for validator {name:?}:\n{error}"
+                        ),
+                        Err(error) => bail!(
+                            "Failed to get genesis config hash for validator {name:?}:\n{error}"
                         ),
                     }
                 }

@@ -70,7 +70,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `sync-balance` — (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the local balance
 * `sync` — Synchronize the local state of the chain with a quorum validators
 * `process-inbox` — Process all pending incoming messages from the inbox of the given chain by creating as many blocks as needed to execute all (non-failing) messages. Failing messages will be marked as rejected and may bounce to their sender depending on their configuration
-* `query-new-validator` — Show the version of a new validator, and print a warning if it is incompatible
+* `query-new-validator` — Show the version and genesis config hash of a new validator, and print a warning if it is incompatible
 * `query-validators` — Show the current set of validators for a chain
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
@@ -368,7 +368,7 @@ Process all pending incoming messages from the inbox of the given chain by creat
 
 ## `linera query-new-validator`
 
-Show the version of a new validator, and print a warning if it is incompatible
+Show the version and genesis config hash of a new validator, and print a warning if it is incompatible
 
 **Usage:** `linera query-new-validator <ADDRESS>`
 

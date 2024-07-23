@@ -384,7 +384,8 @@ pub enum ClientCommand {
         chain_id: Option<ChainId>,
     },
 
-    /// Show the version of a new validator, and print a warning if it is incompatible.
+    /// Show the version and genesis config hash of a new validator, and print a warning if it is
+    /// incompatible.
     QueryNewValidator {
         /// The new validator's address.
         address: String,
