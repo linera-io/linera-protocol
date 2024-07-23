@@ -10,8 +10,7 @@ use std::{
 };
 
 use futures::{
-    future::{self, try_join_all},
-    FutureExt as _,
+    future::try_join_all,
 };
 use linera_base::{
     crypto::CryptoHash,
@@ -401,7 +400,7 @@ where
                 WorkerError::UnneededValue { value_hash }
             );
         }
-        let tasks = self
+        let locations = self
             .recent_hashed_certificate_values
             .subtract_cached_items_from::<_, Vec<_>>(
                 required_locations_left.into_values(),
@@ -409,15 +408,14 @@ where
             )
             .await
             .into_iter()
-            .map(|location| {
-                self.storage
-                    .contains_hashed_certificate_value(location.certificate_hash)
-                    .map(move |result| (location, result))
-            })
             .collect::<Vec<_>>();
+        let hashes = locations.iter()
+            .map(|location| location.certificate_hash.clone())
+            .collect::<Vec<_>>();
+        let results = self.storage.contains_hashed_certificate_values(hashes).await?;
         let mut missing_locations = vec![];
-        for (location, result) in future::join_all(tasks).await {
-            if !result? {
+        for (location, result) in locations.into_iter().zip(results) {
+            if !result {
                 missing_locations.push(location);
             }
         }
