@@ -20,7 +20,7 @@ use linera_execution::{
 };
 use linera_views::{
     batch::Batch,
-    common::{AdminKeyValueStore, ContextFromStore, KeyValueStore},
+    common::{from_bytes_option, AdminKeyValueStore, ContextFromStore, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
@@ -581,32 +581,27 @@ where
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let (cert_test, value_test) = tokio::join!(
-            self.client.client.contains_key(&cert_key),
-            self.client.client.contains_key(&value_key)
-        );
+        let keys = vec![cert_key, value_key];
+        let results = self.client.client.contains_keys(keys).await?;
         #[cfg(with_metrics)]
         CONTAINS_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
-        Ok(cert_test? && value_test?)
+        Ok(results[0] && results[1])
     }
 
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let (cert_result, value_result) = tokio::join!(
-            self.client.client.read_value::<LiteCertificate>(&cert_key),
-            self.client
-                .client
-                .read_value::<CertificateValue>(&value_key)
-        );
-        if value_result.is_ok() {
+        let keys = vec![cert_key, value_key];
+        let values = self.client.client.read_multi_values_bytes(keys).await;
+        if values.is_ok() {
             #[cfg(with_metrics)]
             READ_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         }
-        let value: CertificateValue =
-            value_result?.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-        let cert: LiteCertificate =
-            cert_result?.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
+        let values = values?;
+        let cert_result = from_bytes_option::<LiteCertificate,_>(&values[0])?;
+        let value_result = from_bytes_option::<CertificateValue,_>(&values[1])?;
+        let value = value_result.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
+        let cert = cert_result.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
         Ok(cert
             .with_value(value.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)?)
