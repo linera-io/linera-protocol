@@ -54,13 +54,7 @@ enum Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let env_filter = tracing_subscriber::EnvFilter::builder()
-        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
-        .from_env_lossy();
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_env_filter(env_filter)
-        .init();
+    linera_base::tracing::init();
 
     let args = Args::parse();
     match args {
