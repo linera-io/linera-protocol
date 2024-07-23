@@ -411,9 +411,9 @@ pub enum ClientCommand {
         #[arg(long, default_value = "1")]
         votes: u64,
 
-        /// Set the validator even if the version or genesis config check fails.
+        /// Skip the version and genesis config checks.
         #[arg(long)]
-        force: bool,
+        skip_online_check: bool,
     },
 
     /// Remove a validator (admin only)

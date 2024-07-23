@@ -403,7 +403,7 @@ Add or modify a validator (admin only)
 * `--votes <VOTES>` — Voting power
 
   Default value: `1`
-* `--force` — Set the validator even if the version or genesis config check fails
+* `--skip-online-check` — Skip the version and genesis config checks
 
 
 

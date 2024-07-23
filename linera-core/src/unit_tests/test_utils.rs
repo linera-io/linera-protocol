@@ -162,7 +162,7 @@ where
         Ok(Default::default())
     }
 
-    async fn get_genesis_config_hash(&mut self) -> Result<CryptoHash, NodeError> {
+    async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
         Ok(CryptoHash::test_hash("genesis config"))
     }
 

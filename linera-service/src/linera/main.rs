@@ -431,7 +431,7 @@ impl Runnable for Job {
             QueryValidator { address } => {
                 use linera_core::node::ValidatorNode as _;
 
-                let mut node = context.make_node_provider().make_node(&address)?;
+                let node = context.make_node_provider().make_node(&address)?;
                 match node.get_version_info().await {
                     Ok(version_info)
                         if version_info.is_compatible_with(&linera_version::VERSION_INFO) =>
@@ -512,25 +512,17 @@ impl Runnable for Job {
                     name,
                     address,
                     votes: _,
-                    force,
+                    skip_online_check: false,
                 } = &command
                 {
                     let node = context.make_node_provider().make_node(address)?;
                     match node.get_version_info().await {
                         Ok(version_info)
                             if version_info.is_compatible_with(&linera_version::VERSION_INFO) => {}
-                        Ok(version_info) if *force => warn!(
-                            "Validator version {} is not compatible with local version {}.",
-                            version_info,
-                            linera_version::VERSION_INFO
-                        ),
                         Ok(version_info) => bail!(
                             "Validator version {} is not compatible with local version {}.",
                             version_info,
                             linera_version::VERSION_INFO
-                        ),
-                        Err(error) if *force => warn!(
-                            "Failed to get version information for validator {name:?}:\n{error}"
                         ),
                         Err(error) => bail!(
                             "Failed to get version information for validator {name:?}:\n{error}"
@@ -539,17 +531,10 @@ impl Runnable for Job {
                     let genesis_config_hash = context.wallet().genesis_config().hash();
                     match node.get_genesis_config_hash().await {
                         Ok(hash) if hash == genesis_config_hash => {}
-                        Ok(hash) if *force => warn!(
-                            "Validator's genesis config hash {} does not match our own: {}.",
-                            hash, genesis_config_hash
-                        ),
                         Ok(hash) => bail!(
                             "Validator's genesis config hash {} does not match our own: {}.",
                             hash,
                             genesis_config_hash
-                        ),
-                        Err(error) if *force => warn!(
-                            "Failed to get genesis config hash for validator {name:?}:\n{error}"
                         ),
                         Err(error) => bail!(
                             "Failed to get genesis config hash for validator {name:?}:\n{error}"
@@ -579,7 +564,7 @@ impl Runnable for Job {
                                     name,
                                     address,
                                     votes,
-                                    force: _,
+                                    skip_online_check: _,
                                 } => {
                                     validators.insert(
                                         name,

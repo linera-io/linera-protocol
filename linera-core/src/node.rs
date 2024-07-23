@@ -76,7 +76,7 @@ pub trait LocalValidatorNode {
     async fn get_version_info(&self) -> Result<VersionInfo, NodeError>;
 
     /// Gets the network's genesis config hash.
-    async fn get_genesis_config_hash(&mut self) -> Result<CryptoHash, NodeError>;
+    async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError>;
 
     /// Subscribes to receiving notifications for a collection of chains.
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError>;

@@ -271,9 +271,10 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn get_genesis_config_hash(&mut self) -> Result<CryptoHash, NodeError> {
+    async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
         Ok(self
             .client
+            .clone()
             .get_genesis_config_hash(())
             .await?
             .into_inner()

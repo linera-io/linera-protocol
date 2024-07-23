@@ -143,7 +143,7 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn get_genesis_config_hash(&mut self) -> Result<CryptoHash, NodeError> {
+    async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.get_genesis_config_hash().await?,
 

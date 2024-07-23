@@ -77,7 +77,7 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn get_genesis_config_hash(&mut self) -> Result<CryptoHash, NodeError> {
+    async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
