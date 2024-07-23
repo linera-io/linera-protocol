@@ -454,7 +454,10 @@ where
         Ok(test)
     }
 
-    async fn contains_hashed_certificate_values(&self, hashes: Vec<CryptoHash>) -> Result<Vec<bool>, ViewError> {
+    async fn contains_hashed_certificate_values(
+        &self,
+        hashes: Vec<CryptoHash>,
+    ) -> Result<Vec<bool>, ViewError> {
         let mut keys = Vec::new();
         for hash in hashes {
             let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
@@ -663,8 +666,8 @@ where
             READ_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         }
         let values = values?;
-        let cert_result = from_bytes_option::<LiteCertificate,_>(&values[0])?;
-        let value_result = from_bytes_option::<CertificateValue,_>(&values[1])?;
+        let cert_result = from_bytes_option::<LiteCertificate, _>(&values[0])?;
+        let value_result = from_bytes_option::<CertificateValue, _>(&values[1])?;
         let value = value_result.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         let cert = cert_result.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
         Ok(cert

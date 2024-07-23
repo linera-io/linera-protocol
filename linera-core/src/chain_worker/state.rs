@@ -9,9 +9,7 @@ use std::{
     sync::Arc,
 };
 
-use futures::{
-    future::try_join_all,
-};
+use futures::future::try_join_all;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{ArithmeticError, BlockHeight, HashedBlob, Timestamp},
@@ -409,10 +407,14 @@ where
             .await
             .into_iter()
             .collect::<Vec<_>>();
-        let hashes = locations.iter()
-            .map(|location| location.certificate_hash.clone())
+        let hashes = locations
+            .iter()
+            .map(|location| location.certificate_hash)
             .collect::<Vec<_>>();
-        let results = self.storage.contains_hashed_certificate_values(hashes).await?;
+        let results = self
+            .storage
+            .contains_hashed_certificate_values(hashes)
+            .await?;
         let mut missing_locations = vec![];
         for (location, result) in locations.into_iter().zip(results) {
             if !result {
@@ -1101,7 +1103,14 @@ where
         let blobs_in_block = self.state.get_blobs(required_blob_ids.clone()).await?;
         let certificate_hash = certificate.hash();
 
-        self.state.storage.write_hashed_certificate_values_hashed_blobs_certificate(hashed_certificate_values, &blobs_in_block, &certificate).await?;
+        self.state
+            .storage
+            .write_hashed_certificate_values_hashed_blobs_certificate(
+                hashed_certificate_values,
+                &blobs_in_block,
+                &certificate,
+            )
+            .await?;
 
         // Update the blob state with last used certificate hash.
         try_join_all(required_blob_ids.into_iter().map(|blob_id| {
