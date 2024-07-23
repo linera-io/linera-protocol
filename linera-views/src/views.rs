@@ -52,6 +52,14 @@ pub trait View<C>: Sized {
     /// changes are simply lost.
     /// The returned boolean indicates whether the operation removes the view or not.
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError>;
+
+    /// Builds a trivial view that is already deleted
+    fn new(context: C) -> Result<Self, ViewError> {
+        let values = vec![None; Self::NUM_INIT_KEYS];
+        let mut view = Self::post_load(context, &values)?;
+        view.clear();
+        Ok(view)
+    }
 }
 
 /// Main error type for the crate.

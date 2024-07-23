@@ -109,6 +109,7 @@ macro_rules! client_delegate {
         let request = Request::new(request_inner);
         match $self
             .client
+            .clone()
             .$handler(request)
             .await
             .map_err(|s| NodeError::GrpcError {
@@ -142,7 +143,7 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn handle_block_proposal(
-        &mut self,
+        &self,
         proposal: data_types::BlockProposal,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         client_delegate!(self, handle_block_proposal, proposal)
@@ -150,7 +151,7 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip_all, fields(address = self.address))]
     async fn handle_lite_certificate(
-        &mut self,
+        &self,
         certificate: data_types::LiteCertificate<'_>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
@@ -164,7 +165,7 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn handle_certificate(
-        &mut self,
+        &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<data_types::HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
@@ -182,17 +183,14 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn handle_chain_info_query(
-        &mut self,
+        &self,
         query: linera_core::data_types::ChainInfoQuery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         client_delegate!(self, handle_chain_info_query, query)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn subscribe(
-        &mut self,
-        chains: Vec<ChainId>,
-    ) -> Result<Self::NotificationStream, NodeError> {
+    async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError> {
         let notification_retry_delay = self.notification_retry_delay;
         let notification_retries = self.notification_retries;
         let mut retry_count = 0;
@@ -262,14 +260,21 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError> {
-        Ok(self.client.get_version_info(()).await?.into_inner().into())
+    async fn get_version_info(&self) -> Result<VersionInfo, NodeError> {
+        Ok(self
+            .client
+            .clone()
+            .get_version_info(())
+            .await?
+            .into_inner()
+            .into())
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn download_blob(&mut self, blob_id: BlobId) -> Result<Blob, NodeError> {
+    async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError> {
         Ok(self
             .client
+            .clone()
             .download_blob(<BlobId as Into<api::BlobId>>::into(blob_id))
             .await?
             .into_inner()
@@ -278,11 +283,12 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn download_certificate_value(
-        &mut self,
+        &self,
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, NodeError> {
         let certificate_value: CertificateValue = self
             .client
+            .clone()
             .download_certificate_value(<CryptoHash as Into<api::CryptoHash>>::into(hash))
             .await?
             .into_inner()
@@ -291,9 +297,10 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn download_certificate(&mut self, hash: CryptoHash) -> Result<Certificate, NodeError> {
+    async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError> {
         Ok(self
             .client
+            .clone()
             .download_certificate(<CryptoHash as Into<api::CryptoHash>>::into(hash))
             .await?
             .into_inner()
@@ -301,9 +308,10 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn blob_last_used_by(&mut self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
+    async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
         Ok(self
             .client
+            .clone()
             .blob_last_used_by(<BlobId as Into<api::BlobId>>::into(blob_id))
             .await?
             .into_inner()
@@ -316,11 +324,11 @@ impl ValidatorNode for GrpcClient {
 impl mass_client::MassClient for GrpcClient {
     #[tracing::instrument(skip_all, err)]
     async fn send(
-        &mut self,
+        &self,
         requests: Vec<RpcMessage>,
         max_in_flight: usize,
     ) -> Result<Vec<RpcMessage>, mass_client::MassClientError> {
-        let client = &mut self.client;
+        let client = self.client.clone();
         let responses = stream::iter(requests)
             .map(|request| {
                 let mut client = client.clone();

@@ -117,6 +117,7 @@ cfg_aliases.workspace = true
 amm.workspace = true
 base64.workspace = true
 counter.workspace = true
+criterion = { workspace = true, features = ["async_tokio"] }
 crowd-funding.workspace = true
 ethereum-tracker.workspace = true
 fungible.workspace = true
@@ -128,12 +129,14 @@ linera-core = { workspace = true, features = ["test"] }
 linera-ethereum.workspace = true
 linera-execution = { workspace = true, features = ["test"] }
 linera-rpc = { workspace = true, features = ["test"] }
+linera-sdk = { workspace = true, features = ["wasmer", "test"] }
 linera-service = { path = ".", features = ["test"] }
 linera-storage = { workspace = true, features = ["test"] }
 linera-views = { workspace = true, features = ["test"] }
 matching-engine.workspace = true
 native-fungible.workspace = true
 non-fungible.workspace = true
+prometheus.workspace = true
 proptest.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 social.workspace = true
@@ -166,3 +169,7 @@ path = "src/schema_export.rs"
 name = "linera-benchmark"
 path = "src/benchmark.rs"
 required-features = ["benchmark"]
+
+[[bench]]
+name = "transfers"
+harness = false

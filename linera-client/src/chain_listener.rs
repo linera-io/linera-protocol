@@ -23,6 +23,7 @@ use linera_core::{
 use linera_execution::{Message, SystemMessage};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
+use tracing::Instrument as _;
 
 use crate::wallet::Wallet;
 
@@ -32,12 +33,28 @@ mod tests;
 
 #[derive(Debug, Default, Clone, clap::Args)]
 pub struct ChainListenerConfig {
+    /// Do not create blocks automatically to receive incoming messages. Instead, wait for
+    /// an explicit mutation `processInbox`.
+    #[arg(
+        long = "listener-skip-process-inbox",
+        env = "LINERA_LISTENER_SKIP_PROCESS_INBOX"
+    )]
+    pub skip_process_inbox: bool,
+
     /// Wait before processing any notification (useful for testing).
-    #[arg(long = "listener-delay-before-ms", default_value = "0")]
+    #[arg(
+        long = "listener-delay-before-ms",
+        default_value = "0",
+        env = "LINERA_LISTENER_DELAY_BEFORE"
+    )]
     pub delay_before_ms: u64,
 
     /// Wait after processing any notification (useful for rate limiting).
-    #[arg(long = "listener-delay-after-ms", default_value = "0")]
+    #[arg(
+        long = "listener-delay-after-ms",
+        default_value = "0",
+        env = "LINERA_LISTENER_DELAY_AFTER"
+    )]
     pub delay_after_ms: u64,
 }
 

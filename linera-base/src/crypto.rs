@@ -474,13 +474,13 @@ impl Signature {
     pub fn check_optional_signature<T>(
         signature: Option<&Self>,
         value: &T,
-        author: PublicKey,
+        author: &PublicKey,
     ) -> Result<(), CryptoError>
     where
         T: BcsSignable + std::fmt::Debug,
     {
         match signature {
-            Some(sig) => sig.check(value, author),
+            Some(sig) => sig.check(value, *author),
             None => Err(CryptoError::MissingSignature {
                 type_name: T::type_name().to_string(),
             }),

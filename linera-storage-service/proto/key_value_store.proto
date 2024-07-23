@@ -46,6 +46,15 @@ message ReplyContainsKey {
 }
 
 
+message RequestContainsKeys {
+  repeated bytes keys = 1;
+}
+
+message ReplyContainsKeys {
+  repeated bool tests = 1;
+}
+
+
 message RequestReadMultiValues {
   repeated bytes keys = 1;
 }
@@ -139,6 +148,7 @@ message ReplyDeleteAll {
 service StoreProcessor {
   rpc ProcessReadValue (RequestReadValue) returns (ReplyReadValue) {}
   rpc ProcessContainsKey (RequestContainsKey) returns (ReplyContainsKey) {}
+  rpc ProcessContainsKeys (RequestContainsKeys) returns (ReplyContainsKeys) {}
   rpc ProcessReadMultiValues (RequestReadMultiValues) returns (ReplyReadMultiValues) {}
   rpc ProcessFindKeysByPrefix (RequestFindKeysByPrefix) returns (ReplyFindKeysByPrefix) {}
   rpc ProcessFindKeyValuesByPrefix (RequestFindKeyValuesByPrefix) returns (ReplyFindKeyValuesByPrefix) {}

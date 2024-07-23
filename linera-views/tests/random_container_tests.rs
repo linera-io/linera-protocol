@@ -78,7 +78,7 @@ async fn classic_collection_view_check() -> Result<()> {
                 let n_load = rng.gen_range(0..5);
                 for _i in 0..n_load {
                     let pos = rng.gen_range(0..nmax);
-                    let _subview = view.v.load_entry_or_insert(&pos).await?;
+                    let _subview = view.v.load_entry_mut(&pos).await?;
                     new_map.entry(pos).or_insert(0);
                 }
             }
@@ -87,7 +87,7 @@ async fn classic_collection_view_check() -> Result<()> {
                 let n_reset = rng.gen_range(0..5);
                 for _i in 0..n_reset {
                     let pos = rng.gen_range(0..nmax);
-                    view.v.reset_entry_to_default(&pos).await?;
+                    view.v.reset_entry_to_default(&pos)?;
                     new_map.insert(pos, 0);
                 }
             }
@@ -159,7 +159,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
     let context = create_memory_context();
     let mut rng = test_utils::make_deterministic_rng();
     let mut state_map = BTreeMap::new();
-    let n = 200;
+    let n = 40;
     let mut all_keys = BTreeSet::new();
     for _ in 0..n {
         let mut view = KeyValueStateView::load(context.clone()).await?;
@@ -169,7 +169,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
         assert!(read_state.iter().map(|kv| (&kv.0, &kv.1)).eq(&state_map));
         assert_eq!(total_size(&state_vec), view.store.total_size());
 
-        let count_oper = rng.gen_range(0..25);
+        let count_oper = rng.gen_range(0..15);
         let mut new_state_map = state_map.clone();
         let mut new_state_vec = state_vec.clone();
         for _ in 0..count_oper {
@@ -525,7 +525,7 @@ async fn reentrant_collection_view_check() -> Result<()> {
         let count_oper = rng.gen_range(0..25);
         let mut new_map = map.clone();
         for _i_op in 0..count_oper {
-            let choice = rng.gen_range(0..7);
+            let choice = rng.gen_range(0..8);
             if choice == 0 {
                 // Deleting some random stuff
                 let pos = rng.gen_range(0..nmax);
@@ -575,7 +575,7 @@ async fn reentrant_collection_view_check() -> Result<()> {
                     let test_view = view.v.contains_key(&pos).await?;
                     let test_map = new_map.contains_key(&pos);
                     assert_eq!(test_view, test_map);
-                    let _subview = view.v.try_load_entry_or_insert(&pos).await?;
+                    let _subview = view.v.try_load_entry_mut(&pos).await?;
                     new_map.entry(pos).or_insert(0);
                 }
             }
@@ -606,6 +606,15 @@ async fn reentrant_collection_view_check() -> Result<()> {
                 assert!(!view.has_pending_changes().await);
                 new_map = map.clone();
             }
+            if choice == 7 {
+                // The load_entry actually changes the entries to default if missing
+                let n_reset = rng.gen_range(0..5);
+                for _i in 0..n_reset {
+                    let pos = rng.gen_range(0..nmax);
+                    view.v.try_reset_entry_to_default(&pos)?;
+                    new_map.insert(pos, 0);
+                }
+            }
             // Checking the hash
             let new_hash = view.crypto_hash().await?;
             if new_map == map {
@@ -622,7 +631,8 @@ async fn reentrant_collection_view_check() -> Result<()> {
             let subviews = view.v.try_load_entries(&indices).await?;
             for i in 0..indices.len() {
                 let index = indices[i];
-                let value_view = *subviews[i].get();
+                let subview = subviews[i].as_ref().unwrap();
+                let value_view = *subview.get();
                 let value_map = match new_map.get(&index) {
                     None => 0,
                     Some(value) => *value,

@@ -11,6 +11,7 @@ use linera_base::{
     doc_scalar, ensure,
     identifiers::{
         Account, BlobId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
+        StreamId,
     },
 };
 use linera_execution::{
@@ -272,9 +273,23 @@ pub struct ExecutedBlock {
 pub struct BlockExecutionOutcome {
     /// The list of outgoing messages for each transaction.
     pub messages: Vec<Vec<OutgoingMessage>>,
+    /// The hash of the chain's execution state after this block.
     pub state_hash: CryptoHash,
     /// The record of oracle responses for each transaction.
     pub oracle_responses: Vec<Vec<OracleResponse>>,
+    /// The list of events produced by each transaction.
+    pub events: Vec<Vec<EventRecord>>,
+}
+
+/// An event recorded in an executed block.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct EventRecord {
+    /// The ID of the stream this event belongs to.
+    pub stream_id: StreamId,
+    /// The event key.
+    pub key: Vec<u8>,
+    /// The payload data.
+    pub value: Vec<u8>,
 }
 
 /// A statement to be certified by the validators.

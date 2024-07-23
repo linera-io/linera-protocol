@@ -16,7 +16,9 @@ use linera_base::{
         Resources, SendMessageRequest, Timestamp,
     },
     ensure,
-    identifiers::{Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner},
+    identifiers::{
+        Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner, StreamName,
+    },
     ownership::ChainOwnership,
 };
 use linera_views::batch::Batch;
@@ -30,6 +32,7 @@ use crate::{
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, FinalizeContext,
     MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime,
     UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
+    MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -40,7 +43,11 @@ mod tests;
 pub struct SyncRuntime<UserInstance>(Option<SyncRuntimeHandle<UserInstance>>);
 
 pub type ContractSyncRuntime = SyncRuntime<UserContractInstance>;
-pub type ServiceSyncRuntime = SyncRuntime<UserServiceInstance>;
+
+pub struct ServiceSyncRuntime {
+    runtime: SyncRuntime<UserServiceInstance>,
+    current_context: QueryContext,
+}
 
 #[derive(Debug)]
 pub struct SyncRuntimeHandle<UserInstance>(Arc<Mutex<SyncRuntimeInternal<UserInstance>>>);
@@ -83,6 +90,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     active_applications: HashSet<UserApplicationId>,
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
     execution_outcomes: Vec<ExecutionOutcome>,
+    /// Accumulated events emitted by applications.
+    events: Vec<()>,
     /// Recorded responses to oracle queries.
     recorded_oracle_responses: Vec<OracleResponse>,
     /// Oracle responses that are being replayed.
@@ -236,6 +245,8 @@ type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 struct ViewUserState {
     /// The contains-key queries in progress.
     contains_key_queries: QueryManager<bool>,
+    /// The contains-keys queries in progress.
+    contains_keys_queries: QueryManager<Vec<bool>>,
     /// The read-value queries in progress.
     read_value_queries: QueryManager<Option<Value>>,
     /// The read-multi-values queries in progress.
@@ -249,6 +260,7 @@ struct ViewUserState {
 impl ViewUserState {
     fn force_all_pending_queries(&mut self) -> Result<(), ExecutionError> {
         self.contains_key_queries.force_all()?;
+        self.contains_keys_queries.force_all()?;
         self.read_value_queries.force_all()?;
         self.read_multi_values_queries.force_all()?;
         self.find_keys_queries.force_all()?;
@@ -312,8 +324,9 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
-            execution_outcomes: Vec::default(),
-            view_user_states: BTreeMap::default(),
+            execution_outcomes: Vec::new(),
+            events: Vec::new(),
+            view_user_states: BTreeMap::new(),
             refund_grant_to,
             resource_controller,
             replaying_oracle_responses,
@@ -553,6 +566,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
     type Read = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::Read;
     type ReadValueBytes = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ReadValueBytes;
     type ContainsKey = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ContainsKey;
+    type ContainsKeys = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ContainsKeys;
     type ReadMultiValuesBytes =
         <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ReadMultiValuesBytes;
     type FindKeysByPrefix = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::FindKeysByPrefix;
@@ -605,6 +619,20 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
 
     fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError> {
         self.inner().contains_key_wait(promise)
+    }
+
+    fn contains_keys_new(
+        &mut self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Self::ContainsKeys, ExecutionError> {
+        self.inner().contains_keys_new(keys)
+    }
+
+    fn contains_keys_wait(
+        &mut self,
+        promise: &Self::ContainsKeys,
+    ) -> Result<Vec<bool>, ExecutionError> {
+        self.inner().contains_keys_wait(promise)
     }
 
     fn read_multi_values_bytes_new(
@@ -693,6 +721,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     type Read = ();
     type ReadValueBytes = u32;
     type ContainsKey = u32;
+    type ContainsKeys = u32;
     type ReadMultiValuesBytes = u32;
     type FindKeysByPrefix = u32;
     type FindKeyValuesByPrefix = u32;
@@ -763,6 +792,29 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
         let value = state.contains_key_queries.wait(*promise)?;
+        Ok(value)
+    }
+
+    fn contains_keys_new(
+        &mut self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Self::ContainsKeys, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        self.resource_controller.track_read_operations(1)?;
+        let receiver = self
+            .execution_state_sender
+            .send_request(move |callback| ExecutionRequest::ContainsKeys { id, keys, callback })?;
+        state.contains_keys_queries.register(receiver)
+    }
+
+    fn contains_keys_wait(
+        &mut self,
+        promise: &Self::ContainsKeys,
+    ) -> Result<Vec<bool>, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        let value = state.contains_keys_queries.wait(*promise)?;
         Ok(value)
     }
 
@@ -1250,6 +1302,26 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(value)
     }
 
+    fn emit(
+        &mut self,
+        name: StreamName,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<(), ExecutionError> {
+        let mut this = self.inner();
+        ensure!(
+            key.len() <= MAX_EVENT_KEY_LEN,
+            ExecutionError::EventKeyTooLong
+        );
+        ensure!(
+            name.0.len() <= MAX_STREAM_NAME_LEN,
+            ExecutionError::StreamNameTooLong
+        );
+        let application = this.current_application_mut();
+        application.outcome.events.push((name, key, value));
+        Ok(())
+    }
+
     fn open_chain(
         &mut self,
         ownership: ChainOwnership,
@@ -1319,7 +1391,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 impl ServiceSyncRuntime {
     /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
     pub fn new(execution_state_sender: ExecutionStateSender, context: QueryContext) -> Self {
-        SyncRuntime(Some(
+        let runtime = SyncRuntime(Some(
             SyncRuntimeInternal::new(
                 context.chain_id,
                 context.next_block_height,
@@ -1333,7 +1405,43 @@ impl ServiceSyncRuntime {
                 None,
             )
             .into(),
-        ))
+        ));
+
+        ServiceSyncRuntime {
+            runtime,
+            current_context: context,
+        }
+    }
+
+    /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
+    pub fn run(&mut self, incoming_requests: std::sync::mpsc::Receiver<ServiceRuntimeRequest>) {
+        while let Ok(request) = incoming_requests.recv() {
+            let ServiceRuntimeRequest::Query {
+                application_id,
+                context,
+                query,
+                callback,
+            } = request;
+
+            self.prepare_for_query(context);
+
+            let _ = callback.send(self.run_query(application_id, query));
+        }
+    }
+
+    /// Prepares the runtime to query an application.
+    pub(crate) fn prepare_for_query(&mut self, new_context: QueryContext) {
+        let expected_context = QueryContext {
+            local_time: new_context.local_time,
+            ..self.current_context
+        };
+
+        if new_context != expected_context {
+            let execution_state_sender = self.handle_mut().inner().execution_state_sender.clone();
+            *self = ServiceSyncRuntime::new(execution_state_sender, new_context);
+        } else {
+            self.handle_mut().inner().local_time = new_context.local_time;
+        }
     }
 
     /// Queries an application specified by its [`UserApplicationId`].
@@ -1342,29 +1450,15 @@ impl ServiceSyncRuntime {
         application_id: UserApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        self.0
-            .as_mut()
-            .expect(
-                "`SyncRuntimeHandle` should be available while `SyncRuntime` hasn't been dropped",
-            )
+        self.handle_mut()
             .try_query_application(application_id, query)
     }
-}
 
-impl ServiceSyncRuntime {
-    /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
-    pub fn run(&mut self, incoming_requests: std::sync::mpsc::Receiver<ServiceRuntimeRequest>) {
-        while let Ok(request) = incoming_requests.recv() {
-            match request {
-                ServiceRuntimeRequest::Query {
-                    application_id,
-                    query,
-                    callback,
-                } => {
-                    let _ = callback.send(self.run_query(application_id, query));
-                }
-            }
-        }
+    /// Obtains the [`SyncRuntimeHandle`] stored in this [`ServiceSyncRuntime`].
+    fn handle_mut(&mut self) -> &mut ServiceSyncRuntimeHandle {
+        self.runtime.0.as_mut().expect(
+            "`SyncRuntimeHandle` should be available while `SyncRuntime` hasn't been dropped",
+        )
     }
 }
 
@@ -1418,6 +1512,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
 pub enum ServiceRuntimeRequest {
     Query {
         application_id: UserApplicationId,
+        context: QueryContext,
         query: Vec<u8>,
         callback: oneshot::Sender<Result<Vec<u8>, ExecutionError>>,
     },

@@ -124,26 +124,12 @@ review` to update the staged snapshot, or manually move the `.snap.new` file int
 The support of Wasm is controlled by the features `wasmer` and the `wasmtime`, and
 currently defaults to `wasmer` only.
 
-Testing the Wasm application examples requires configuring a custom test runner included with
-`linera-sdk`. First it has to be built:
-
-```
-cargo build --release --bin linera-wasm-test-runner
-```
-
-After that, the Wasm tests can be executed with:
+Wasm tests can be executed with:
 
 ```
 cd examples
-cargo test --target wasm32-unknown-unknown
+cargo test
 ```
-
-Note that this works because we declared the linera-wasm-test-runner in `.cargo/config.toml` with
-```
-[target.wasm32-unknown-unknown]
-runner = "/path/to/repository/target/release/linera-wasm-test-runner"
-```
-(See the [documentation of Cargo](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure) for more context.)
 
 Some tests require the application examples from `examples` to be compiled. If needed, this
 can be done manually with

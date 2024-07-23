@@ -12,7 +12,7 @@ use dashmap::DashMap;
 use futures::FutureExt as _;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{ApplicationPermissions, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId},
     ownership::ChainOwnership,
 };
@@ -24,7 +24,6 @@ use linera_execution::{
 };
 use linera_storage::{MemoryStorage, Storage, TestClock};
 use serde::Serialize;
-use tokio::sync::{Mutex, MutexGuard};
 
 use super::ActiveChain;
 use crate::ContractAbi;
@@ -33,16 +32,16 @@ use crate::ContractAbi;
 ///
 /// ```rust
 /// # use linera_sdk::test::*;
-/// # use linera_base::identifiers::ChainId;
+/// # use linera_base::{data_types::BlockHeight, identifiers::ChainId};
 /// # tokio_test::block_on(async {
 /// let validator = TestValidator::new().await;
-/// assert_eq!(validator.new_chain().await.get_tip_height(), BlockHeight(0));
+/// assert_eq!(validator.new_chain().await.get_tip_height().await, BlockHeight(0));
 /// # });
 /// ```
 pub struct TestValidator {
     key_pair: KeyPair,
     committee: Committee,
-    worker: Arc<Mutex<WorkerState<MemoryStorage<TestClock>>>>,
+    worker: WorkerState<MemoryStorage<TestClock>>,
     clock: TestClock,
     chains: Arc<DashMap<ChainId, ActiveChain>>,
 }
@@ -78,7 +77,7 @@ impl TestValidator {
         let validator = TestValidator {
             key_pair,
             committee,
-            worker: Arc::new(Mutex::new(worker)),
+            worker,
             clock,
             chains: Arc::default(),
         };
@@ -133,8 +132,8 @@ impl TestValidator {
     }
 
     /// Returns the locked [`WorkerState`] of this validator.
-    pub(crate) async fn worker(&self) -> MutexGuard<WorkerState<MemoryStorage<TestClock>>> {
-        self.worker.lock().await
+    pub(crate) fn worker(&self) -> WorkerState<MemoryStorage<TestClock>> {
+        self.worker.clone()
     }
 
     /// Returns the [`TestClock`] of this validator.
@@ -187,7 +186,7 @@ impl TestValidator {
                 .collect(),
             admin_id,
             epoch: Epoch::ZERO,
-            balance: 0.into(),
+            balance: Amount::ZERO,
             application_permissions: ApplicationPermissions::default(),
         };
 
@@ -211,14 +210,13 @@ impl TestValidator {
         let description = ChainDescription::Root(0);
 
         self.worker()
-            .await
             .storage_client()
             .create_chain(
                 self.committee.clone(),
                 ChainId::root(0),
                 description,
                 key_pair.public(),
-                0.into(),
+                Amount::MAX,
                 Timestamp::from(0),
             )
             .await

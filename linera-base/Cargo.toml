@@ -29,6 +29,7 @@ ed25519-dalek.workspace = true
 generic-array.workspace = true
 getrandom = { workspace = true, optional = true }
 hex.workspace = true
+is-terminal.workspace = true
 linera-witty = { workspace = true, features = ["macros"] }
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true, features = ["alloc"] }
@@ -39,13 +40,14 @@ serde_bytes.workspace = true
 sha3.workspace = true
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["json", "fmt", "ansi"] }
 web-time = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono.workspace = true
 rand = { workspace = true, features = ["getrandom", "std", "std_rng"] }
 tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
-tracing.workspace = true
 prometheus.workspace = true
 
 [dev-dependencies]

@@ -9,7 +9,10 @@ use std::{
     collections::VecDeque,
     fmt::{self, Display, Formatter},
     mem,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use crate::{
@@ -25,6 +28,7 @@ use crate::{
 #[derive(Clone, Default)]
 pub struct MockApplication {
     expected_calls: Arc<Mutex<VecDeque<ExpectedCall>>>,
+    active_instances: Arc<AtomicUsize>,
 }
 
 /// A mocked implementation of a user application instance.
@@ -33,6 +37,7 @@ pub struct MockApplication {
 pub struct MockApplicationInstance<Runtime> {
     expected_calls: VecDeque<ExpectedCall>,
     runtime: Runtime,
+    active_instances: Arc<AtomicUsize>,
 }
 
 impl MockApplication {
@@ -49,9 +54,34 @@ impl MockApplication {
         &self,
         runtime: Runtime,
     ) -> MockApplicationInstance<Runtime> {
+        self.active_instances.fetch_add(1, Ordering::AcqRel);
+
         MockApplicationInstance {
             expected_calls: mem::take(&mut self.expected_calls.lock().expect("Mutex is poisoned")),
             runtime,
+            active_instances: self.active_instances.clone(),
+        }
+    }
+
+    /// Panics if there are still expected calls in one of the [`MockApplicationInstance`]s created
+    /// from this [`MockApplication`].
+    pub fn assert_no_more_expected_calls(&self) {
+        assert!(
+            self.expected_calls.lock().unwrap().is_empty(),
+            "Missing call to instantiate a `MockApplicationInstance`"
+        );
+        assert_eq!(
+            self.active_instances.load(Ordering::Acquire),
+            0,
+            "`MockApplicationInstance` is still waiting for expected calls"
+        );
+    }
+}
+
+impl<Runtime> Drop for MockApplicationInstance<Runtime> {
+    fn drop(&mut self) {
+        if self.expected_calls.is_empty() {
+            self.active_instances.fetch_sub(1, Ordering::AcqRel);
         }
     }
 }

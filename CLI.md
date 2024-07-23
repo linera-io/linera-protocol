@@ -513,6 +513,7 @@ Run a GraphQL service to explore and extend the chains of the wallet
 
 ###### **Options:**
 
+* `--listener-skip-process-inbox` — Do not create blocks automatically to receive incoming messages. Instead, wait for an explicit mutation `processInbox`
 * `--listener-delay-before-ms <DELAY_BEFORE_MS>` — Wait before processing any notification (useful for testing)
 
   Default value: `0`

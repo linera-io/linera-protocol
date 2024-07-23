@@ -10,7 +10,6 @@ use std::{
     time::Duration,
 };
 
-use async_trait::async_trait;
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
     data_types::{ArithmeticError, BlockHeight, HashedBlob, Round},
@@ -105,50 +104,6 @@ static NUM_BLOCKS: Lazy<IntCounterVec> = Lazy::new(|| {
         .expect("Counter creation should not fail")
 });
 
-/// Interface provided by each physical shard (aka "worker") of a validator or a local node.
-/// * All commands return either the current chain info or an error.
-/// * Repeating commands produces no changes and returns no error.
-/// * Some handlers may return cross-chain requests, that is, messages
-///   to be communicated to other workers of the same validator.
-#[cfg_attr(not(web), async_trait)]
-#[cfg_attr(web, async_trait(?Send))]
-pub trait ValidatorWorker {
-    /// Proposes a new block. In case of success, the chain info contains a vote on the new
-    /// block.
-    async fn handle_block_proposal(
-        &mut self,
-        proposal: BlockProposal,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
-
-    /// Processes a certificate, e.g. to extend a chain with a confirmed block.
-    async fn handle_lite_certificate<'a>(
-        &mut self,
-        certificate: LiteCertificate<'a>,
-        notify_message_delivery: Option<oneshot::Sender<()>>,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
-
-    /// Processes a certificate, e.g. to extend a chain with a confirmed block.
-    async fn handle_certificate(
-        &mut self,
-        certificate: Certificate,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
-        notify_message_delivery: Option<oneshot::Sender<()>>,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
-
-    /// Handles information queries on chains.
-    async fn handle_chain_info_query(
-        &self,
-        query: ChainInfoQuery,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
-
-    /// Handles a (trusted!) cross-chain request.
-    async fn handle_cross_chain_request(
-        &mut self,
-        request: CrossChainRequest,
-    ) -> Result<NetworkActions, WorkerError>;
-}
-
 /// Instruct the networking layer to send cross-chain requests and/or push notifications.
 #[derive(Default, Debug)]
 pub struct NetworkActions {
@@ -188,7 +143,7 @@ pub enum Reason {
     },
 }
 
-/// Error type for [`ValidatorWorker`].
+/// Error type for worker operations..
 #[derive(Debug, Error)]
 pub enum WorkerError {
     #[error(transparent)]
@@ -264,6 +219,7 @@ pub enum WorkerError {
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
+    #[tracing::instrument(level = "trace", skip(chain_error))]
     fn from(chain_error: linera_chain::ChainError) -> Self {
         WorkerError::ChainError(Box::new(chain_error))
     }
@@ -307,6 +263,7 @@ where
     StorageClient: Storage,
     ViewError: From<StorageClient::StoreError>,
 {
+    #[tracing::instrument(level = "trace", skip(nickname, key_pair, storage))]
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
         WorkerState {
             nickname,
@@ -320,15 +277,18 @@ where
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(nickname, storage))]
     pub fn new_for_client(nickname: String, storage: StorageClient) -> Self {
         Self::new(nickname, None, storage)
     }
 
+    #[tracing::instrument(level = "trace", skip(self, value))]
     pub fn with_allow_inactive_chains(mut self, value: bool) -> Self {
         self.chain_worker_config.allow_inactive_chains = value;
         self
     }
 
+    #[tracing::instrument(level = "trace", skip(self, value))]
     pub fn with_allow_messages_from_deprecated_epochs(mut self, value: bool) -> Self {
         self.chain_worker_config
             .allow_messages_from_deprecated_epochs = value;
@@ -339,20 +299,24 @@ where
     ///
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
+    #[tracing::instrument(level = "trace", skip(self, grace_period))]
     pub fn with_grace_period(mut self, grace_period: Duration) -> Self {
         self.chain_worker_config.grace_period = grace_period;
         self
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn nickname(&self) -> &str {
         &self.nickname
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn recent_hashed_blobs(&self) -> Arc<ValueCache<BlobId, HashedBlob>> {
         self.recent_hashed_blobs.clone()
     }
 
     /// Returns the storage client so that it can be manipulated or queried.
+    #[tracing::instrument(level = "trace", skip(self))]
     #[cfg(not(feature = "test"))]
     pub(crate) fn storage_client(&self) -> &StorageClient {
         &self.storage
@@ -360,11 +324,13 @@ where
 
     /// Returns the storage client so that it can be manipulated or queried by tests in other
     /// crates.
+    #[tracing::instrument(level = "trace", skip(self))]
     #[cfg(feature = "test")]
     pub fn storage_client(&self) -> &StorageClient {
         &self.storage
     }
 
+    #[tracing::instrument(level = "trace", skip(self, key_pair))]
     #[cfg(test)]
     pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<KeyPair>>) -> Self {
         self.chain_worker_config.key_pair = key_pair;
@@ -372,8 +338,9 @@ where
         self
     }
 
+    #[tracing::instrument(level = "trace", skip(self, certificate))]
     pub(crate) async fn full_certificate(
-        &mut self,
+        &self,
         certificate: LiteCertificate<'_>,
     ) -> Result<Certificate, WorkerError> {
         self.recent_hashed_certificate_values
@@ -381,14 +348,16 @@ where
             .await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, hash))]
     pub(crate) async fn recent_hashed_certificate_value(
-        &mut self,
+        &self,
         hash: &CryptoHash,
     ) -> Option<HashedCertificateValue> {
         self.recent_hashed_certificate_values.get(hash).await
     }
 
-    pub(crate) async fn recent_blob(&mut self, blob_id: &BlobId) -> Option<HashedBlob> {
+    #[tracing::instrument(level = "trace", skip(self, blob_id))]
+    pub(crate) async fn recent_blob(&self, blob_id: &BlobId) -> Option<HashedBlob> {
         self.recent_hashed_blobs.get(blob_id).await
     }
 }
@@ -399,9 +368,13 @@ where
     ViewError: From<StorageClient::StoreError>,
 {
     // NOTE: This only works for non-sharded workers!
+    #[tracing::instrument(
+        level = "trace",
+        skip(self, certificate, hashed_certificate_values, hashed_blobs)
+    )]
     #[cfg(with_testing)]
     pub async fn fully_handle_certificate(
-        &mut self,
+        &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
@@ -415,9 +388,19 @@ where
         .await
     }
 
+    #[tracing::instrument(
+        level = "trace",
+        skip(
+            self,
+            certificate,
+            hashed_certificate_values,
+            hashed_blobs,
+            notifications
+        )
+    )]
     #[inline]
     pub(crate) async fn fully_handle_certificate_with_notifications(
-        &mut self,
+        &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
@@ -441,8 +424,9 @@ where
     }
 
     /// Tries to execute a block proposal without any verification other than block execution.
+    #[tracing::instrument(level = "trace", skip(self, block))]
     pub async fn stage_block_execution(
-        &mut self,
+        &self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         self.query_chain_worker(block.chain_id, move |callback| {
@@ -452,8 +436,12 @@ where
     }
 
     // Schedule a notification when cross-chain messages are delivered up to the given height.
+    #[tracing::instrument(
+        level = "trace",
+        skip(self, chain_id, height, actions, notify_when_messages_are_delivered)
+    )]
     async fn register_delivery_notifier(
-        &mut self,
+        &self,
         chain_id: ChainId,
         height: BlockHeight,
         actions: &NetworkActions,
@@ -484,8 +472,9 @@ where
     }
 
     /// Executes a [`Query`] for an application's state on a specific chain.
+    #[tracing::instrument(level = "trace", skip(self, chain_id, query))]
     pub async fn query_application(
-        &mut self,
+        &self,
         chain_id: ChainId,
         query: Query,
     ) -> Result<Response, WorkerError> {
@@ -495,9 +484,10 @@ where
         .await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, chain_id, bytecode_id))]
     #[cfg(with_testing)]
     pub async fn read_bytecode_location(
-        &mut self,
+        &self,
         chain_id: ChainId,
         bytecode_id: BytecodeId,
     ) -> Result<Option<BytecodeLocation>, WorkerError> {
@@ -510,8 +500,9 @@ where
         .await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, chain_id, application_id))]
     pub async fn describe_application(
-        &mut self,
+        &self,
         chain_id: ChainId,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, WorkerError> {
@@ -525,8 +516,18 @@ where
     }
 
     /// Processes a confirmed block (aka a commit).
+    #[tracing::instrument(
+        level = "trace",
+        skip(
+            self,
+            certificate,
+            hashed_certificate_values,
+            hashed_blobs,
+            notify_when_messages_are_delivered
+        )
+    )]
     async fn process_confirmed_block(
-        &mut self,
+        &self,
         certificate: Certificate,
         hashed_certificate_values: &[HashedCertificateValue],
         hashed_blobs: &[HashedBlob],
@@ -564,8 +565,9 @@ where
     }
 
     /// Processes a validated block issued from a multi-owner chain.
+    #[tracing::instrument(level = "trace", skip(self, certificate))]
     async fn process_validated_block(
-        &mut self,
+        &self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let CertificateValue::ValidatedBlock {
@@ -584,8 +586,9 @@ where
     }
 
     /// Processes a leader timeout issued from a multi-owner chain.
+    #[tracing::instrument(level = "trace", skip(self, certificate))]
     async fn process_timeout(
-        &mut self,
+        &self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let CertificateValue::Timeout { chain_id, .. } = certificate.value() else {
@@ -600,8 +603,9 @@ where
         .await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, origin, recipient, bundles))]
     async fn process_cross_chain_update(
-        &mut self,
+        &self,
         origin: Origin,
         recipient: ChainId,
         bundles: Vec<MessageBundle>,
@@ -617,19 +621,22 @@ where
     }
 
     /// Inserts a [`HashedCertificateValue`] into the worker's cache.
+    #[tracing::instrument(level = "trace", skip(self, value))]
     pub(crate) async fn cache_recent_hashed_certificate_value<'a>(
-        &mut self,
+        &self,
         value: Cow<'a, HashedCertificateValue>,
     ) -> bool {
         self.recent_hashed_certificate_values.insert(value).await
     }
 
     /// Inserts a [`HashedBlob`] into the worker's cache.
-    pub async fn cache_recent_blob<'a>(&mut self, hashed_blob: Cow<'a, HashedBlob>) -> bool {
+    #[tracing::instrument(level = "trace", skip(self, hashed_blob))]
+    pub async fn cache_recent_blob<'a>(&self, hashed_blob: Cow<'a, HashedBlob>) -> bool {
         self.recent_hashed_blobs.insert(hashed_blob).await
     }
 
     /// Returns a stored [`Certificate`] for a chain's block.
+    #[tracing::instrument(level = "trace", skip(self, chain_id, height))]
     #[cfg(with_testing)]
     pub async fn read_certificate(
         &self,
@@ -644,6 +651,7 @@ where
 
     /// Returns an [`IncomingMessage`] that's awaiting to be received by the chain specified by
     /// `chain_id`.
+    #[tracing::instrument(level = "trace", skip(self, chain_id, message_id))]
     #[cfg(with_testing)]
     pub async fn find_incoming_message(
         &self,
@@ -703,6 +711,7 @@ where
     ///
     /// The returned view holds a lock on the chain state, which prevents the worker from changing
     /// the state of that chain.
+    #[tracing::instrument(level = "trace", skip(self, chain_id))]
     pub async fn chain_state_view(
         &self,
         chain_id: ChainId,
@@ -713,6 +722,7 @@ where
         .await
     }
 
+    #[tracing::instrument(level = "trace", skip(self, chain_id, request_builder))]
     /// Sends a request to the [`ChainWorker`] for a [`ChainId`] and waits for the `Response`.
     async fn query_chain_worker<Response>(
         &self,
@@ -735,6 +745,7 @@ where
 
     /// Retrieves an endpoint to a [`ChainWorkerActor`] from the cache, creating one and adding it
     /// to the cache if needed.
+    #[tracing::instrument(level = "trace", skip(self, chain_id))]
     async fn get_chain_worker_endpoint(
         &self,
         chain_id: ChainId,
@@ -763,44 +774,14 @@ where
             )
             .clone())
     }
-}
 
-#[cfg(with_testing)]
-impl<StorageClient> WorkerState<StorageClient>
-where
-    StorageClient: Storage,
-    ViewError: From<StorageClient::StoreError>,
-{
-    /// Gets a reference to the validator's [`PublicKey`].
-    ///
-    /// # Panics
-    ///
-    /// If the validator doesn't have a key pair assigned to it.
-    pub fn public_key(&self) -> PublicKey {
-        self.chain_worker_config
-            .key_pair()
-            .expect(
-                "Test validator should have a key pair assigned to it \
-                in order to obtain it's public key",
-            )
-            .public()
-    }
-}
-
-#[cfg_attr(not(web), async_trait)]
-#[cfg_attr(web, async_trait(?Send))]
-impl<StorageClient> ValidatorWorker for WorkerState<StorageClient>
-where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
-{
     #[instrument(skip_all, fields(
         nick = self.nickname,
         chain_id = format!("{:.8}", proposal.content.block.chain_id),
         height = %proposal.content.block.height,
     ))]
-    async fn handle_block_proposal(
-        &mut self,
+    pub async fn handle_block_proposal(
+        &self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, proposal);
@@ -818,11 +799,11 @@ where
         Ok(response)
     }
 
+    /// Processes a certificate, e.g. to extend a chain with a confirmed block.
     // Other fields will be included in handle_certificate's span.
     #[instrument(skip_all, fields(hash = %certificate.value.value_hash))]
-    /// Processes a certificate, e.g. to extend a chain with a confirmed block.
-    async fn handle_lite_certificate<'a>(
-        &mut self,
+    pub async fn handle_lite_certificate<'a>(
+        &self,
         certificate: LiteCertificate<'a>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -842,8 +823,8 @@ where
         chain_id = format!("{:.8}", certificate.value().chain_id()),
         height = %certificate.value().height(),
     ))]
-    async fn handle_certificate(
-        &mut self,
+    pub async fn handle_certificate(
+        &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
@@ -918,7 +899,7 @@ where
         nick = self.nickname,
         chain_id = format!("{:.8}", query.chain_id)
     ))]
-    async fn handle_chain_info_query(
+    pub async fn handle_chain_info_query(
         &self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -936,8 +917,8 @@ where
         nick = self.nickname,
         chain_id = format!("{:.8}", request.target_chain_id())
     ))]
-    async fn handle_cross_chain_request(
-        &mut self,
+    pub async fn handle_cross_chain_request(
+        &self,
         request: CrossChainRequest,
     ) -> Result<NetworkActions, WorkerError> {
         trace!("{} <-- {:?}", self.nickname, request);
@@ -1019,5 +1000,28 @@ where
                 Ok(NetworkActions::default())
             }
         }
+    }
+}
+
+#[cfg(with_testing)]
+impl<StorageClient> WorkerState<StorageClient>
+where
+    StorageClient: Storage,
+    ViewError: From<StorageClient::StoreError>,
+{
+    /// Gets a reference to the validator's [`PublicKey`].
+    ///
+    /// # Panics
+    ///
+    /// If the validator doesn't have a key pair assigned to it.
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn public_key(&self) -> PublicKey {
+        self.chain_worker_config
+            .key_pair()
+            .expect(
+                "Test validator should have a key pair assigned to it \
+                in order to obtain it's public key",
+            )
+            .public()
     }
 }

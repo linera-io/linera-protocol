@@ -67,7 +67,7 @@ jobs:
     - name: Run end-to-end tests
       run: |
         cargo build --release -p linera-storage-service
-        RUST_LOG=info target/release/storage_service_server memory --endpoint $LINERA_STORAGE_SERVICE &
+        RUST_LOG=info target/release/linera-storage-server memory --endpoint $LINERA_STORAGE_SERVICE &
         RUST_LOG=info cargo test --features storage-service -- storage_service --nocapture
     - name: Run Ethereum tests
       run: |

@@ -258,8 +258,8 @@ impl ChainInfoResponse {
         self.signature = Some(Signature::new(&*self.info, key_pair));
     }
 
-    pub fn check(&self, name: ValidatorName) -> Result<(), CryptoError> {
-        Signature::check_optional_signature(self.signature.as_ref(), &*self.info, name.0)
+    pub fn check(&self, name: &ValidatorName) -> Result<(), CryptoError> {
+        Signature::check_optional_signature(self.signature.as_ref(), &*self.info, &name.0)
     }
 
     /// Returns the committee in the latest epoch.

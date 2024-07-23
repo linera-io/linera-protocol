@@ -7,7 +7,9 @@ use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, HashedBlob, SendMessageRequest, Timestamp,
     },
-    identifiers::{Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner},
+    identifiers::{
+        Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner, StreamName,
+    },
     ownership::{ChainOwnership, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -302,6 +304,20 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Adds an item to an event stream.
+    fn emit(
+        caller: &mut Caller,
+        name: StreamName,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .emit(name, key, value)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Queries a service and returns the response.
     fn query_service(
         caller: &mut Caller,
@@ -575,6 +591,27 @@ where
 
         data.runtime
             .contains_key_wait(&promise)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Creates a new promise to check if the `keys` are in storage.
+    fn contains_keys_new(caller: &mut Caller, keys: Vec<Vec<u8>>) -> Result<u32, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data
+            .runtime
+            .contains_keys_new(keys)
+            .map_err(|error| RuntimeError::Custom(error.into()))?;
+
+        data.register_promise(promise)
+    }
+
+    /// Waits for the promise to check if the `keys` are in storage.
+    fn contains_keys_wait(caller: &mut Caller, promise_id: u32) -> Result<Vec<bool>, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data.take_promise(promise_id)?;
+
+        data.runtime
+            .contains_keys_wait(&promise)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

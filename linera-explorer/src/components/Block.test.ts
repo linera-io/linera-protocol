@@ -56,6 +56,7 @@ test('Block mounting', () => {
                   }
                 }
               }]],
+              events: [[]],
               stateHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
               oracleResponses: []
             }

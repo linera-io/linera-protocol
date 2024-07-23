@@ -182,6 +182,14 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           }
           stateHash
           oracleResponses
+          events {
+            streamId {
+              applicationId
+              streamName
+            }
+            key
+            value
+          }
         }
       }
     }
@@ -219,6 +227,14 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
           }
           stateHash
           oracleResponses
+          events {
+            streamId {
+              applicationId
+              streamName
+            }
+            key
+            value
+          }
         }
       }
     }

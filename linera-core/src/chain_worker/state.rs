@@ -59,6 +59,8 @@ where
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
+    execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+    runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
     recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
     knows_chain_is_active: bool,
@@ -76,6 +78,8 @@ where
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
         blob_cache: Arc<ValueCache<BlobId, HashedBlob>>,
         chain_id: ChainId,
+        execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 
@@ -84,6 +88,8 @@ where
             storage,
             chain,
             shared_chain_view: None,
+            execution_state_receiver,
+            runtime_request_sender,
             recent_hashed_certificate_values: certificate_value_cache,
             recent_hashed_blobs: blob_cache,
             knows_chain_is_active: false,
@@ -153,11 +159,9 @@ where
     pub(super) async fn query_application(
         &mut self,
         query: Query,
-        incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Response, WorkerError> {
         ChainWorkerStateWithTemporaryChanges(self)
-            .query_application(query, incoming_execution_requests, runtime_request_sender)
+            .query_application(query)
             .await
     }
 
@@ -436,11 +440,13 @@ where
         let targets = self.chain.outboxes.indices().await?;
         let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
-            let heights = outbox.queue.elements().await?;
-            heights_by_recipient
-                .entry(target.recipient)
-                .or_default()
-                .insert(target.medium, heights);
+            if let Some(outbox) = outbox {
+                let heights = outbox.queue.elements().await?;
+                heights_by_recipient
+                    .entry(target.recipient)
+                    .or_default()
+                    .insert(target.medium, heights);
+            }
         }
         let mut actions = NetworkActions::default();
         for (recipient, height_map) in heights_by_recipient {
@@ -560,8 +566,6 @@ where
     pub(super) async fn query_application(
         &mut self,
         query: Query,
-        incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Response, WorkerError> {
         self.0.ensure_is_active()?;
         let local_time = self.0.storage.clock().current_time();
@@ -571,8 +575,8 @@ where
             .query_application(
                 local_time,
                 query,
-                incoming_execution_requests,
-                runtime_request_sender,
+                &mut self.0.execution_state_receiver,
+                &mut self.0.runtime_request_sender,
             )
             .await?;
         Ok(response)
@@ -781,12 +785,14 @@ where
                 MessageAction::Accept
             };
             for (origin, inbox) in origins.into_iter().zip(inboxes) {
-                for event in inbox.added_events.elements().await? {
-                    messages.push(IncomingMessage {
-                        origin: origin.clone(),
-                        event: event.clone(),
-                        action,
-                    });
+                if let Some(inbox) = inbox {
+                    for event in inbox.added_events.elements().await? {
+                        messages.push(IncomingMessage {
+                            origin: origin.clone(),
+                            event: event.clone(),
+                            action,
+                        });
+                    }
                 }
             }
 

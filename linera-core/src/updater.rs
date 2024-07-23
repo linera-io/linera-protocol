@@ -257,7 +257,7 @@ where
             warn!("locations requested by validator contain duplicates");
             return Err(NodeError::InvalidChainInfoResponse);
         }
-        let storage = self.local_node.storage_client().await;
+        let storage = self.local_node.storage_client();
         Ok(future::join_all(
             unique_locations
                 .into_iter()
@@ -323,7 +323,7 @@ where
             }
         }
 
-        let storage = self.local_node.storage_client().await;
+        let storage = self.local_node.storage_client();
         missing_blobs.extend(
             future::join_all(
                 unique_blob_ids_to_find
@@ -359,7 +359,7 @@ where
             _ => result,
         }?;
 
-        response.check(self.name)?;
+        response.check(&self.name)?;
         // Succeed
         Ok(response.info)
     }
@@ -399,7 +399,7 @@ where
                 return Err(e);
             }
         };
-        response.check(self.name)?;
+        response.check(&self.name)?;
         Ok(response.info)
     }
 
@@ -413,7 +413,7 @@ where
         let query = ChainInfoQuery::new(chain_id);
         let initial_block_height = match self.node.handle_chain_info_query(query).await {
             Ok(response) => {
-                response.check(self.name)?;
+                response.check(&self.name)?;
                 response.info.next_block_height
             }
             Err(error) => {
@@ -437,7 +437,7 @@ where
         if !keys.is_empty() {
             // Send the requested certificates in order.
             let storage = self.local_node.storage_client();
-            let certs = storage.await.read_certificates(keys.into_iter()).await?;
+            let certs = storage.read_certificates(keys.into_iter()).await?;
             for cert in certs {
                 self.send_certificate(cert, delivery).await?;
             }
@@ -461,10 +461,12 @@ where
             let origins = chain.inboxes.indices().await?;
             let inboxes = chain.inboxes.try_load_entries(&origins).await?;
             for (origin, inbox) in origins.into_iter().zip(inboxes) {
-                let next_height = sender_heights.entry(origin.sender).or_default();
-                let inbox_next_height = inbox.next_block_height_to_receive()?;
-                if inbox_next_height > *next_height {
-                    *next_height = inbox_next_height;
+                if let Some(inbox) = inbox {
+                    let next_height = sender_heights.entry(origin.sender).or_default();
+                    let inbox_next_height = inbox.next_block_height_to_receive()?;
+                    if inbox_next_height > *next_height {
+                        *next_height = inbox_next_height;
+                    }
                 }
             }
         }

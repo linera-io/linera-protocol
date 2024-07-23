@@ -22,7 +22,7 @@ use linera_core::{
         ValidatorNode,
     },
 };
-use linera_execution::committee::Committee;
+use linera_execution::committee::{Committee, ValidatorName};
 use linera_service::node_service::NodeService;
 use linera_storage::{MemoryStorage, WallClock};
 use linera_version::VersionInfo;
@@ -34,14 +34,14 @@ impl ValidatorNode for DummyValidatorNode {
     type NotificationStream = NotificationStream;
 
     async fn handle_block_proposal(
-        &mut self,
+        &self,
         _: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
     async fn handle_lite_certificate(
-        &mut self,
+        &self,
         _: LiteCertificate<'_>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
@@ -49,7 +49,7 @@ impl ValidatorNode for DummyValidatorNode {
     }
 
     async fn handle_certificate(
-        &mut self,
+        &self,
         _: Certificate,
         _: Vec<HashedCertificateValue>,
         _: Vec<HashedBlob>,
@@ -59,36 +59,36 @@ impl ValidatorNode for DummyValidatorNode {
     }
 
     async fn handle_chain_info_query(
-        &mut self,
+        &self,
         _: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn subscribe(&mut self, _: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+    async fn subscribe(&self, _: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError> {
+    async fn get_version_info(&self) -> Result<VersionInfo, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn download_blob(&mut self, _: BlobId) -> Result<Blob, NodeError> {
+    async fn download_blob(&self, _: BlobId) -> Result<Blob, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
     async fn download_certificate_value(
-        &mut self,
+        &self,
         _: CryptoHash,
     ) -> Result<HashedCertificateValue, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn download_certificate(&mut self, _: CryptoHash) -> Result<Certificate, NodeError> {
+    async fn download_certificate(&self, _: CryptoHash) -> Result<Certificate, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn blob_last_used_by(&mut self, _: BlobId) -> Result<CryptoHash, NodeError> {
+    async fn blob_last_used_by(&self, _: BlobId) -> Result<CryptoHash, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 }
@@ -98,12 +98,15 @@ struct DummyValidatorNodeProvider;
 impl LocalValidatorNodeProvider for DummyValidatorNodeProvider {
     type Node = DummyValidatorNode;
 
-    fn make_node(&self, _: &str) -> Result<Self::Node, NodeError> {
+    fn make_node(&self, _address: &str) -> Result<Self::Node, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
-    fn make_nodes<I>(&self, _: &Committee) -> Result<I, NodeError> {
-        Err(NodeError::UnexpectedMessage)
+    fn make_nodes(
+        &self,
+        _committee: &Committee,
+    ) -> Result<impl Iterator<Item = (ValidatorName, Self::Node)> + '_, NodeError> {
+        Err::<std::iter::Empty<_>, _>(NodeError::UnexpectedMessage)
     }
 }
 
@@ -151,10 +154,7 @@ async fn main() -> std::io::Result<()> {
     let _options = <Options as clap::Parser>::parse();
 
     let service = NodeService::new(
-        ChainListenerConfig {
-            delay_before_ms: 0,
-            delay_after_ms: 0,
-        },
+        ChainListenerConfig::default(),
         std::num::NonZeroU16::new(8080).unwrap(),
         None,
         DummyContext,

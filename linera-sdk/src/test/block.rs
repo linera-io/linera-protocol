@@ -9,7 +9,7 @@ use std::mem;
 
 use linera_base::{
     crypto::PublicKey,
-    data_types::{ApplicationPermissions, Round, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Round, Timestamp},
     identifiers::{ApplicationId, ChainId, MessageId, Owner},
     ownership::TimeoutConfig,
 };
@@ -17,7 +17,10 @@ use linera_chain::data_types::{
     Block, Certificate, HashedCertificateValue, IncomingMessage, LiteVote, MessageAction,
     SignatureAggregator,
 };
-use linera_execution::{system::SystemOperation, Operation};
+use linera_execution::{
+    system::{Recipient, SystemOperation, UserData},
+    Operation,
+};
 
 use super::TestValidator;
 use crate::ToBcsBytes;
@@ -79,6 +82,21 @@ impl BlockBuilder {
     pub fn with_timestamp(&mut self, timestamp: Timestamp) -> &mut Self {
         self.block.timestamp = timestamp;
         self
+    }
+
+    /// Adds a native token transfer to this block.
+    pub fn with_native_token_transfer(
+        &mut self,
+        sender: Option<Owner>,
+        recipient: Recipient,
+        amount: Amount,
+    ) -> &mut Self {
+        self.with_system_operation(SystemOperation::Transfer {
+            owner: sender,
+            recipient,
+            amount,
+            user_data: UserData(None),
+        })
     }
 
     /// Adds a [`SystemOperation`] to this block.
@@ -196,7 +214,6 @@ impl BlockBuilder {
         let (executed_block, _) = self
             .validator
             .worker()
-            .await
             .stage_block_execution(self.block)
             .await?;
 
@@ -230,7 +247,6 @@ impl BlockBuilder {
             let mut message = self
                 .validator
                 .worker()
-                .await
                 .find_incoming_message(chain_id, message_id)
                 .await
                 .expect("Failed to find message to receive in block")
