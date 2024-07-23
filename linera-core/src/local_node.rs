@@ -188,21 +188,31 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
-    async fn find_missing_application_bytecodes<A>(
+    async fn find_missing_application_bytecodes(
         &self,
         locations: &[BytecodeLocation],
-        node: &A,
-        name: ValidatorName,
-    ) -> Vec<HashedCertificateValue>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
+        node: &impl LocalValidatorNode,
+        name: &ValidatorName,
+    ) -> Vec<HashedCertificateValue> {
+        future::join_all(locations.iter().map(|location| async move {
+            Self::try_download_hashed_certificate_value_from(node, name, *location).await
+        }))
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+    }
+
+    #[tracing::instrument(level = "trace", skip_all)]
+    async fn find_missing_blobs(
+        &self,
+        blob_ids: &[BlobId],
+        node: &impl LocalValidatorNode,
+        name: &ValidatorName,
+    ) -> Vec<HashedBlob> {
         future::join_all(
-            locations.iter().map(|location| {
-                let node = node.clone();
-                async move {
-                    Self::try_download_hashed_certificate_value_from(&node, name, *location).await
-                }
+            blob_ids.iter().map(|blob_id| async move {
+                Self::try_download_blob_from(name, node, *blob_id).await
             }),
         )
         .await
@@ -212,37 +222,14 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
-    async fn find_missing_blobs<A>(
+    async fn try_process_certificates(
         &self,
-        blob_ids: &[BlobId],
-        node: &A,
-        name: ValidatorName,
-    ) -> Vec<HashedBlob>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
-        future::join_all(blob_ids.iter().map(|blob_id| {
-            let node = node.clone();
-            async move { Self::try_download_blob_from(name, &node, *blob_id).await }
-        }))
-        .await
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-    }
-
-    #[tracing::instrument(level = "trace", skip_all)]
-    async fn try_process_certificates<A>(
-        &self,
-        name: ValidatorName,
-        node: &A,
+        name: &ValidatorName,
+        node: &impl LocalValidatorNode,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
         notifications: &mut impl Extend<Notification>,
-    ) -> Option<Box<ChainInfo>>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
+    ) -> Option<Box<ChainInfo>> {
         let mut info = None;
         for certificate in certificates {
             let hash = certificate.hash();
@@ -351,17 +338,15 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(self, validators, notifications))]
-    pub async fn download_certificates<A>(
+    pub async fn download_certificates(
         &self,
-        mut validators: Vec<(ValidatorName, A)>,
+        validators: &[(ValidatorName, impl LocalValidatorNode)],
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
         notifications: &mut impl Extend<Notification>,
-    ) -> Result<Box<ChainInfo>, LocalNodeError>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
+    ) -> Result<Box<ChainInfo>, LocalNodeError> {
         // Sequentially try each validator in random order.
+        let mut validators: Vec<_> = validators.iter().collect();
         validators.shuffle(&mut rand::thread_rng());
         for (name, node) in validators {
             let info = self.local_chain_info(chain_id).await?;
@@ -393,14 +378,11 @@ where
     /// Downloads and stores the specified hashed certificate values, unless they are already in the cache or storage.
     ///
     /// Does not fail if a hashed certificate value can't be downloaded; it just gets omitted from the result.
-    pub async fn read_or_download_hashed_certificate_values<A>(
+    pub async fn read_or_download_hashed_certificate_values(
         &self,
-        validators: Vec<(ValidatorName, A)>,
+        validators: &[(ValidatorName, impl LocalValidatorNode)],
         hashed_certificate_value_locations: impl IntoIterator<Item = BytecodeLocation>,
-    ) -> Result<Vec<HashedCertificateValue>, LocalNodeError>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
+    ) -> Result<Vec<HashedCertificateValue>, LocalNodeError> {
         let mut values = vec![];
         let mut tasks = vec![];
         for location in hashed_certificate_value_locations {
@@ -412,10 +394,10 @@ where
             {
                 values.push(value);
             } else {
-                let validators = validators.clone();
-                let storage = self.storage_client();
                 tasks.push(Self::read_or_download_hashed_certificate_value(
-                    storage, validators, location,
+                    self.storage_client(),
+                    validators,
+                    location,
                 ));
             }
         }
@@ -436,14 +418,11 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
-    pub async fn read_or_download_hashed_certificate_value<A>(
+    pub async fn read_or_download_hashed_certificate_value(
         storage: S,
-        validators: Vec<(ValidatorName, A)>,
+        validators: &[(ValidatorName, impl LocalValidatorNode)],
         location: BytecodeLocation,
-    ) -> Result<Option<HashedCertificateValue>, LocalNodeError>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
+    ) -> Result<Option<HashedCertificateValue>, LocalNodeError> {
         match storage
             .read_hashed_certificate_value(location.certificate_hash)
             .await
@@ -486,18 +465,15 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
-    async fn try_download_certificates_from<A>(
+    async fn try_download_certificates_from(
         &self,
-        name: ValidatorName,
-        node: A,
+        name: &ValidatorName,
+        node: &impl LocalValidatorNode,
         chain_id: ChainId,
         mut start: BlockHeight,
         stop: BlockHeight,
         notifications: &mut impl Extend<Notification>,
-    ) -> Result<(), LocalNodeError>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
+    ) -> Result<(), LocalNodeError> {
         while start < stop {
             // TODO(#2045): Analyze network errors instead of guessing the batch size.
             let limit = u64::from(stop)
@@ -505,13 +481,13 @@ where
                 .ok_or(ArithmeticError::Overflow)?
                 .min(1000);
             let Some(certificates) = self
-                .try_query_certificates_from(name, &node, chain_id, start, limit)
+                .try_query_certificates_from(name, node, chain_id, start, limit)
                 .await?
             else {
                 break;
             };
             let Some(info) = self
-                .try_process_certificates(name, &node, chain_id, certificates, notifications)
+                .try_process_certificates(name, node, chain_id, certificates, notifications)
                 .await
             else {
                 break;
@@ -523,17 +499,14 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
-    async fn try_query_certificates_from<A>(
+    async fn try_query_certificates_from(
         &self,
-        name: ValidatorName,
-        node: &A,
+        name: &ValidatorName,
+        node: &impl LocalValidatorNode,
         chain_id: ChainId,
         start: BlockHeight,
         limit: u64,
-    ) -> Result<Option<Vec<Certificate>>, LocalNodeError>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
+    ) -> Result<Option<Vec<Certificate>>, LocalNodeError> {
         tracing::debug!(?name, ?chain_id, ?start, ?limit, "Querying certificates");
         let range = BlockHeightRange {
             start,
@@ -549,12 +522,12 @@ where
                 ..
             } = *response.info;
 
-            let certificates =
-                future::try_join_all(requested_sent_certificate_hashes.into_iter().map(|hash| {
-                    let node = node.clone();
-                    async move { node.download_certificate(hash).await }
-                }))
-                .await?;
+            let certificates = future::try_join_all(
+                requested_sent_certificate_hashes
+                    .into_iter()
+                    .map(|hash| node.download_certificate(hash)),
+            )
+            .await?;
             Ok(Some(certificates))
         } else {
             Ok(None)
@@ -562,15 +535,12 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
-    pub async fn synchronize_chain_state<A>(
+    pub async fn synchronize_chain_state(
         &self,
-        validators: Vec<(ValidatorName, A)>,
+        validators: &[(ValidatorName, impl LocalValidatorNode)],
         chain_id: ChainId,
         notifications: &mut impl Extend<Notification>,
-    ) -> Result<Box<ChainInfo>, LocalNodeError>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
+    ) -> Result<Box<ChainInfo>, LocalNodeError> {
         let mut futures = vec![];
 
         for (name, node) in validators {
@@ -598,16 +568,13 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(self, name, node, chain_id, notifications))]
-    pub async fn try_synchronize_chain_state_from<A>(
+    pub async fn try_synchronize_chain_state_from(
         &self,
-        name: ValidatorName,
-        node: A,
+        name: &ValidatorName,
+        node: &impl LocalValidatorNode,
         chain_id: ChainId,
         notifications: &mut impl Extend<Notification>,
-    ) -> Result<(), LocalNodeError>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
+    ) -> Result<(), LocalNodeError> {
         let local_info = self.local_chain_info(chain_id).await?;
         let range = BlockHeightRange {
             start: local_info.next_block_height,
@@ -632,16 +599,13 @@ where
         let certificates = future::try_join_all(
             info.requested_sent_certificate_hashes
                 .into_iter()
-                .map(|hash| {
-                    let node = node.clone();
-                    async move { node.download_certificate(hash).await }
-                }),
+                .map(move |hash| async move { node.download_certificate(hash).await }),
         )
         .await?;
 
         if !certificates.is_empty()
             && self
-                .try_process_certificates(name, &node, chain_id, certificates, notifications)
+                .try_process_certificates(name, node, chain_id, certificates, notifications)
                 .await
                 .is_none()
         {
@@ -670,18 +634,16 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(validators, location))]
-    pub async fn download_hashed_certificate_value<A>(
-        mut validators: Vec<(ValidatorName, A)>,
+    pub async fn download_hashed_certificate_value(
+        validators: &[(ValidatorName, impl LocalValidatorNode)],
         location: BytecodeLocation,
-    ) -> Option<HashedCertificateValue>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
+    ) -> Option<HashedCertificateValue> {
         // Sequentially try each validator in random order, to improve efficiency.
+        let mut validators: Vec<_> = validators.iter().collect();
         validators.shuffle(&mut rand::thread_rng());
         for (name, node) in validators {
             if let Some(value) =
-                Self::try_download_hashed_certificate_value_from(&node, name, location).await
+                Self::try_download_hashed_certificate_value_from(node, name, location).await
             {
                 return Some(value);
             }
@@ -690,17 +652,15 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(validators))]
-    pub async fn download_blob<A>(
-        mut validators: Vec<(ValidatorName, A)>,
+    pub async fn download_blob(
+        validators: &[(ValidatorName, impl LocalValidatorNode)],
         blob_id: BlobId,
-    ) -> Option<HashedBlob>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
+    ) -> Option<HashedBlob> {
         // Sequentially try each validator in random order.
+        let mut validators: Vec<_> = validators.iter().collect();
         validators.shuffle(&mut rand::thread_rng());
         for (name, node) in validators {
-            if let Some(blob) = Self::try_download_blob_from(name, &node, blob_id).await {
+            if let Some(blob) = Self::try_download_blob_from(name, node, blob_id).await {
                 return Some(blob);
             }
         }
@@ -708,14 +668,11 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(name, node))]
-    async fn try_download_blob_from<A>(
-        name: ValidatorName,
-        node: &A,
+    async fn try_download_blob_from(
+        name: &ValidatorName,
+        node: &impl LocalValidatorNode,
         blob_id: BlobId,
-    ) -> Option<HashedBlob>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
+    ) -> Option<HashedBlob> {
         match node.download_blob(blob_id).await.map(Blob::into_hashed) {
             Ok(hashed_blob) if hashed_blob.id() == blob_id => Some(hashed_blob),
             Ok(_) => {
@@ -730,14 +687,11 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
-    async fn try_download_hashed_certificate_value_from<A>(
-        node: &A,
-        name: ValidatorName,
+    async fn try_download_hashed_certificate_value_from(
+        node: &impl LocalValidatorNode,
+        name: &ValidatorName,
         location: BytecodeLocation,
-    ) -> Option<HashedCertificateValue>
-    where
-        A: LocalValidatorNode + Clone + 'static,
-    {
+    ) -> Option<HashedCertificateValue> {
         match node
             .download_certificate_value(location.certificate_hash)
             .await

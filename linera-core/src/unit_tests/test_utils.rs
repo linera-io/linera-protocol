@@ -435,31 +435,30 @@ where
 {
     type Node = LocalValidatorClient<S>;
 
-    fn make_node(&self, _: &str) -> Result<Self::Node, NodeError> {
+    fn make_node(&self, _name: &str) -> Result<Self::Node, NodeError> {
         unimplemented!()
     }
 
-    fn make_nodes_from_list<I, A>(
+    fn make_nodes_from_list<A>(
         &self,
         validators: impl IntoIterator<Item = (ValidatorName, A)>,
-    ) -> Result<I, NodeError>
+    ) -> Result<impl Iterator<Item = (ValidatorName, Self::Node)>, NodeError>
     where
-        I: FromIterator<(ValidatorName, Self::Node)>,
         A: AsRef<str>,
     {
-        validators
+        Ok(validators
             .into_iter()
             .map(|(name, address)| {
-                let client = self
-                    .0
+                self.0
                     .get(&name)
                     .ok_or_else(|| NodeError::CannotResolveValidatorAddress {
                         address: address.as_ref().to_string(),
-                    })?
-                    .clone();
-                Ok((name, LocalValidatorClient { name, client }))
+                    })
+                    .cloned()
+                    .map(|client| (name, LocalValidatorClient { name, client }))
             })
-            .collect()
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter())
     }
 }
 
@@ -754,7 +753,7 @@ where
         let mut certificate = None;
         for validator in self.validator_clients.clone() {
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
-                if response.check(validator.name).is_ok() {
+                if response.check(&validator.name).is_ok() {
                     let ChainInfo {
                         mut requested_sent_certificate_hashes,
                         ..
@@ -793,7 +792,7 @@ where
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
                 if response.info.manager.current_round == round
                     && response.info.next_block_height == block_height
-                    && response.check(validator.name).is_ok()
+                    && response.check(&validator.name).is_ok()
                 {
                     count += 1;
                 }

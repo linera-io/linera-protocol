@@ -678,7 +678,11 @@ where
     /// Obtains the validators trusted by the local chain.
     async fn validator_nodes(&self) -> Result<Vec<(ValidatorName, P::Node)>, ChainClientError> {
         match self.local_committee().await {
-            Ok(committee) => Ok(self.client.validator_node_provider.make_nodes(&committee)?),
+            Ok(committee) => Ok(self
+                .client
+                .validator_node_provider
+                .make_nodes(&committee)?
+                .collect()),
             Err(LocalNodeError::InactiveChain(_)) => Ok(Vec::new()),
             Err(LocalNodeError::WorkerError(WorkerError::ChainError(error)))
                 if matches!(*error, ChainError::InactiveChain(_)) =>
@@ -758,7 +762,7 @@ where
         let mut info = self
             .client
             .local_node
-            .download_certificates(nodes, self.chain_id, next_block_height, &mut notifications)
+            .download_certificates(&nodes, self.chain_id, next_block_height, &mut notifications)
             .await?;
         self.handle_notifications(&mut notifications);
         if info.next_block_height == next_block_height {
@@ -779,7 +783,7 @@ where
             info = self
                 .client
                 .local_node
-                .synchronize_chain_state(nodes, self.chain_id, &mut notifications)
+                .synchronize_chain_state(&nodes, self.chain_id, &mut notifications)
                 .await?;
             self.handle_notifications(&mut notifications);
         }
@@ -855,7 +859,11 @@ where
     ) -> Result<(), ChainClientError> {
         let local_node = self.client.local_node.clone();
         let chain_manager_pending_blobs = self.chain_managers_pending_blobs().await?;
-        let nodes: Vec<_> = self.client.validator_node_provider.make_nodes(committee)?;
+        let nodes: Vec<_> = self
+            .client
+            .validator_node_provider
+            .make_nodes(committee)?
+            .collect();
         communicate_with_quorum(
             &nodes,
             committee,
@@ -892,7 +900,11 @@ where
     ) -> Result<Certificate, ChainClientError> {
         let local_node = self.client.local_node.clone();
         let chain_manager_pending_blobs = self.chain_managers_pending_blobs().await?;
-        let nodes: Vec<_> = self.client.validator_node_provider.make_nodes(committee)?;
+        let nodes: Vec<_> = self
+            .client
+            .validator_node_provider
+            .make_nodes(committee)?
+            .collect();
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
             &nodes,
             committee,
@@ -940,7 +952,7 @@ where
         nodes: &[(ValidatorName, <P as LocalValidatorNodeProvider>::Node)],
     ) -> Vec<HashedCertificateValue> {
         future::join_all(locations.iter().map(|location| {
-            LocalNodeClient::<S>::download_hashed_certificate_value(nodes.to_owned(), *location)
+            LocalNodeClient::<S>::download_hashed_certificate_value(nodes, *location)
         }))
         .await
         .into_iter()
@@ -957,7 +969,7 @@ where
         future::join_all(
             blob_ids
                 .iter()
-                .map(|blob_id| LocalNodeClient::<S>::download_blob(nodes.to_owned(), *blob_id)),
+                .map(|blob_id| LocalNodeClient::<S>::download_blob(nodes, *blob_id)),
         )
         .await
         .into_iter()
@@ -994,16 +1006,12 @@ where
         let nodes: Vec<_> = self
             .client
             .validator_node_provider
-            .make_nodes(remote_committee)?;
+            .make_nodes(remote_committee)?
+            .collect();
         let mut notifications = vec![];
         self.client
             .local_node
-            .download_certificates(
-                nodes.clone(),
-                block.chain_id,
-                block.height,
-                &mut notifications,
-            )
+            .download_certificates(&nodes, block.chain_id, block.height, &mut notifications)
             .await?;
         self.handle_notifications(&mut notifications);
         // Process the received operations. Download required hashed certificate values if necessary.
@@ -1068,7 +1076,7 @@ where
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_nth(tracker);
         let response = node.handle_chain_info_query(query).await?;
         // Responses are authenticated for accountability.
-        response.check(name)?;
+        response.check(&name)?;
         let mut certificates = Vec::new();
         let mut new_tracker = tracker;
         for entry in response.info.requested_received_log {
@@ -1187,12 +1195,13 @@ where
         let nodes: Vec<_> = self
             .client
             .validator_node_provider
-            .make_nodes(&local_committee)?;
+            .make_nodes(&local_committee)?
+            .collect();
         let mut notifications = vec![];
         // Synchronize the state of the admin chain from the network.
         self.client
             .local_node
-            .synchronize_chain_state(nodes.clone(), self.admin_id(), &mut notifications)
+            .synchronize_chain_state(&nodes, self.admin_id(), &mut notifications)
             .await?;
         self.handle_notifications(&mut notifications);
         let node_client = self.client.local_node.clone();
@@ -1502,14 +1511,15 @@ where
         };
         // Collect the hashed certificate values required for execution.
         let committee = self.local_committee().await?;
-        let nodes = self
+        let nodes: Vec<_> = self
             .client
             .validator_node_provider
-            .make_nodes::<Vec<_>>(&committee)?;
+            .make_nodes(&committee)?
+            .collect();
         let values = self
             .client
             .local_node
-            .read_or_download_hashed_certificate_values(nodes.clone(), block.bytecode_locations())
+            .read_or_download_hashed_certificate_values(&nodes, block.bytecode_locations())
             .await?;
         let hashed_blobs = self.read_local_blobs(block.published_blob_ids()).await?;
         // Create the final block proposal.
@@ -2586,7 +2596,7 @@ where
                     debug!("Accepting redundant notification for new block");
                 }
                 local_node
-                    .try_synchronize_chain_state_from(name, node, chain_id, &mut notifications)
+                    .try_synchronize_chain_state_from(&name, &node, chain_id, &mut notifications)
                     .await
                     .unwrap_or_else(|e| {
                         error!("Fail to process notification: {e}");
@@ -2608,7 +2618,7 @@ where
                     }
                 }
                 if let Err(error) = local_node
-                    .try_synchronize_chain_state_from(name, node, chain_id, &mut notifications)
+                    .try_synchronize_chain_state_from(&name, &node, chain_id, &mut notifications)
                     .await
                 {
                     error!("Fail to process notification: {error}");
@@ -2712,8 +2722,11 @@ where
     {
         let (chain_id, nodes, local_node) = {
             let committee = self.local_committee().await?;
-            let nodes: HashMap<_, _> =
-                self.client.validator_node_provider.make_nodes(&committee)?;
+            let nodes: HashMap<_, _> = self
+                .client
+                .validator_node_provider
+                .make_nodes(&committee)?
+                .collect();
             (self.chain_id, nodes, self.client.local_node.clone())
         };
         // Drop removed validators.

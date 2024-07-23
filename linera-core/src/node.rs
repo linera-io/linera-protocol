@@ -98,25 +98,29 @@ pub trait LocalValidatorNodeProvider {
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 
-    fn make_nodes<I>(&self, committee: &Committee) -> Result<I, NodeError>
-    where
-        I: FromIterator<(ValidatorName, Self::Node)>,
-    {
-        self.make_nodes_from_list(committee.validator_addresses())
+    fn make_nodes(
+        &self,
+        committee: &Committee,
+    ) -> Result<impl Iterator<Item = (ValidatorName, Self::Node)> + '_, NodeError> {
+        let validator_addresses: Vec<_> = committee
+            .validator_addresses()
+            .map(|(node, name)| (node, name.to_owned()))
+            .collect();
+        self.make_nodes_from_list(validator_addresses)
     }
 
-    fn make_nodes_from_list<I, A>(
+    fn make_nodes_from_list<A>(
         &self,
         validators: impl IntoIterator<Item = (ValidatorName, A)>,
-    ) -> Result<I, NodeError>
+    ) -> Result<impl Iterator<Item = (ValidatorName, Self::Node)>, NodeError>
     where
-        I: FromIterator<(ValidatorName, Self::Node)>,
         A: AsRef<str>,
     {
-        validators
+        Ok(validators
             .into_iter()
             .map(|(name, address)| Ok((name, self.make_node(address.as_ref())?)))
-            .collect()
+            .collect::<Result<Vec<_>, NodeError>>()?
+            .into_iter())
     }
 }
 

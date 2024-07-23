@@ -1104,22 +1104,26 @@ impl Job {
         // Take the latest committee we know of.
         let admin_chain_id = context.wallet.genesis_admin_chain();
         let query = ChainInfoQuery::new(admin_chain_id).with_committees();
-        let nodes = if let Some(validators) = validators {
+        let nodes: Vec<_> = if let Some(validators) = validators {
             context
                 .make_node_provider()
                 .make_nodes_from_list(validators)?
+                .collect()
         } else {
             let info = node_client.handle_chain_info_query(query).await?;
             let committee = info
                 .latest_committee()
                 .context("Invalid chain info response; missing latest committee")?;
-            context.make_node_provider().make_nodes(committee)?
+            context
+                .make_node_provider()
+                .make_nodes(committee)?
+                .collect()
         };
 
         // Download the parent chain.
         let target_height = message_id.height.try_add_one()?;
         node_client
-            .download_certificates(nodes, message_id.chain_id, target_height, &mut vec![])
+            .download_certificates(&nodes, message_id.chain_id, target_height, &mut vec![])
             .await
             .context("Failed to download parent chain")?;
 

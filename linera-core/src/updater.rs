@@ -359,7 +359,7 @@ where
             _ => result,
         }?;
 
-        response.check(self.name)?;
+        response.check(&self.name)?;
         // Succeed
         Ok(response.info)
     }
@@ -399,7 +399,7 @@ where
                 return Err(e);
             }
         };
-        response.check(self.name)?;
+        response.check(&self.name)?;
         Ok(response.info)
     }
 
@@ -413,7 +413,7 @@ where
         let query = ChainInfoQuery::new(chain_id);
         let initial_block_height = match self.node.handle_chain_info_query(query).await {
             Ok(response) => {
-                response.check(self.name)?;
+                response.check(&self.name)?;
                 response.info.next_block_height
             }
             Err(error) => {

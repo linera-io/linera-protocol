@@ -22,7 +22,7 @@ use linera_core::{
         ValidatorNode,
     },
 };
-use linera_execution::committee::Committee;
+use linera_execution::committee::{Committee, ValidatorName};
 use linera_service::node_service::NodeService;
 use linera_storage::{MemoryStorage, Storage};
 use linera_version::VersionInfo;
@@ -102,12 +102,15 @@ struct DummyValidatorNodeProvider;
 impl LocalValidatorNodeProvider for DummyValidatorNodeProvider {
     type Node = DummyValidatorNode;
 
-    fn make_node(&self, _: &str) -> Result<Self::Node, NodeError> {
+    fn make_node(&self, _address: &str) -> Result<Self::Node, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
-    fn make_nodes<I>(&self, _: &Committee) -> Result<I, NodeError> {
-        Err(NodeError::UnexpectedMessage)
+    fn make_nodes(
+        &self,
+        _committee: &Committee,
+    ) -> Result<impl Iterator<Item = (ValidatorName, Self::Node)> + '_, NodeError> {
+        Err::<std::iter::Empty<_>, _>(NodeError::UnexpectedMessage)
     }
 }
 

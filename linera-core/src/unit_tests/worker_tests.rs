@@ -1132,7 +1132,7 @@ where
         .into_fast_proposal(&sender_key_pair);
 
     let (chain_info_response, _actions) = worker.handle_block_proposal(block_proposal).await?;
-    chain_info_response.check(ValidatorName(worker.public_key()))?;
+    chain_info_response.check(&ValidatorName(worker.public_key()))?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
     let pending_value = chain.manager.get().pending().unwrap().lite();
@@ -1175,7 +1175,7 @@ where
         .into_fast_proposal(&sender_key_pair);
 
     let (response, _actions) = worker.handle_block_proposal(block_proposal.clone()).await?;
-    response.check(ValidatorName(worker.public_key()))?;
+    response.check(&ValidatorName(worker.public_key()))?;
     let (replay_response, _actions) = worker.handle_block_proposal(block_proposal).await?;
     // Workaround lack of equality.
     assert_eq!(
