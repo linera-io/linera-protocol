@@ -498,20 +498,16 @@ where
     /// have been properly received by now.
     pub async fn validate_incoming_messages(&self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
-        let origins = self.inboxes.indices().await?;
-        let inboxes = self.inboxes.try_load_entries(&origins).await?;
-        let stream = origins.into_iter().zip(inboxes);
+        let pairs = self.inboxes.try_load_all_entries().await?;
         let max_stream_queries = self.context().max_stream_queries();
-        let stream = stream::iter(stream)
+        let stream = stream::iter(pairs.into_iter())
             .map(|(origin, inbox)| async move {
-                if let Some(inbox) = inbox {
-                    if let Some(event) = inbox.removed_events.front().await? {
-                        return Err(ChainError::MissingCrossChainUpdate {
-                            chain_id,
-                            origin: origin.into(),
-                            height: event.height,
-                        });
-                    }
+                if let Some(event) = inbox.removed_events.front().await? {
+                    return Err(ChainError::MissingCrossChainUpdate {
+                        chain_id,
+                        origin: origin.into(),
+                        height: event.height,
+                    });
                 }
                 Ok::<(), ChainError>(())
             })

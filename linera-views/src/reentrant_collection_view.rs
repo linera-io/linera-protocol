@@ -647,8 +647,7 @@ where
         let mut short_keys_to_load = Vec::new();
         for short_key in short_keys {
             if updates.get(short_key).is_none() {
-                let key = context
-                    .base_tag_index(KeyTag::Subview as u8, short_key);
+                let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
                 let context = context.clone_with_base_key(key);
                 keys.extend(W::pre_load(&context)?);
                 short_keys_to_load.push(short_key.to_vec());
@@ -657,8 +656,7 @@ where
         let values = context.read_multi_values_bytes(keys).await?;
         let num_init_keys = W::NUM_INIT_KEYS;
         for (i_key, short_key) in short_keys_to_load.into_iter().enumerate() {
-            let key = context
-                .base_tag_index(KeyTag::Subview as u8, &short_key);
+            let key = context.base_tag_index(KeyTag::Subview as u8, &short_key);
             let context = context.clone_with_base_key(key);
             let view = W::post_load(
                 context,
@@ -688,7 +686,7 @@ where
     /// ```
     pub async fn try_load_all_entries(
         &self,
-    ) -> Result<Vec<(Vec<u8>,ReadGuardedView<W>)>, ViewError> {
+    ) -> Result<Vec<(Vec<u8>, ReadGuardedView<W>)>, ViewError> {
         let short_keys = self.keys().await?;
         let mut updates = self.updates.lock().await;
         if !self.delete_storage_first {
@@ -728,7 +726,7 @@ where
     /// ```
     pub async fn try_load_all_entries_mut(
         &self,
-    ) -> Result<Vec<(Vec<u8>,WriteGuardedView<W>)>, ViewError> {
+    ) -> Result<Vec<(Vec<u8>, WriteGuardedView<W>)>, ViewError> {
         let short_keys = self.keys().await?;
         let mut updates = self.updates.lock().await;
         if !self.delete_storage_first {
@@ -1276,7 +1274,7 @@ where
             .into_iter()
             .map(|(short_key, view)| {
                 let index = C::deserialize_value(&short_key)?;
-                Ok((index,view))
+                Ok((index, view))
             })
             .collect()
     }
@@ -1300,7 +1298,7 @@ where
     /// ```
     pub async fn try_load_all_entries<'a, Q>(
         &'a self,
-    ) -> Result<Vec<(I,ReadGuardedView<W>)>, ViewError>
+    ) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + 'a,
@@ -1310,7 +1308,7 @@ where
             .into_iter()
             .map(|(short_key, view)| {
                 let index = C::deserialize_value(&short_key)?;
-                Ok((index,view))
+                Ok((index, view))
             })
             .collect()
     }
@@ -1761,7 +1759,7 @@ where
             .into_iter()
             .map(|(short_key, view)| {
                 let index = I::from_custom_bytes(&short_key)?;
-                Ok((index,view))
+                Ok((index, view))
             })
             .collect()
     }
@@ -1783,9 +1781,7 @@ where
     ///   assert_eq!(subviews.len(), 1);
     /// # })
     /// ```
-    pub async fn try_load_all_entries<Q>(
-        &self,
-    ) -> Result<Vec<(I,ReadGuardedView<W>)>, ViewError>
+    pub async fn try_load_all_entries<Q>(&self) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize,
@@ -1795,7 +1791,7 @@ where
             .into_iter()
             .map(|(short_key, view)| {
                 let index = I::from_custom_bytes(&short_key)?;
-                Ok((index,view))
+                Ok((index, view))
             })
             .collect()
     }

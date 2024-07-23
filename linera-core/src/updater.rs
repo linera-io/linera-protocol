@@ -458,15 +458,12 @@ where
         let mut sender_heights = BTreeMap::new();
         {
             let chain = self.local_node.chain_state_view(chain_id).await?;
-            let origins = chain.inboxes.indices().await?;
-            let inboxes = chain.inboxes.try_load_entries(&origins).await?;
-            for (origin, inbox) in origins.into_iter().zip(inboxes) {
-                if let Some(inbox) = inbox {
-                    let next_height = sender_heights.entry(origin.sender).or_default();
-                    let inbox_next_height = inbox.next_block_height_to_receive()?;
-                    if inbox_next_height > *next_height {
-                        *next_height = inbox_next_height;
-                    }
+            let pairs = chain.inboxes.try_load_all_entries().await?;
+            for (origin, inbox) in pairs.into_iter() {
+                let next_height = sender_heights.entry(origin.sender).or_default();
+                let inbox_next_height = inbox.next_block_height_to_receive()?;
+                if inbox_next_height > *next_height {
+                    *next_height = inbox_next_height;
                 }
             }
         }
