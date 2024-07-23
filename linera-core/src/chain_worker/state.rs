@@ -346,21 +346,17 @@ where
         }
 
         let pending_blobs = &self.chain.manager.get().pending_blobs;
-        let tasks = self
+        let blob_ids = self
             .recent_hashed_blobs
             .subtract_cached_items_from::<_, Vec<_>>(required_blob_ids, |id| id)
             .await
             .into_iter()
             .filter(|blob_id| !pending_blobs.contains_key(blob_id))
-            .map(|blob_id| {
-                self.storage
-                    .contains_blob(blob_id)
-                    .map(move |result| (blob_id, result))
-            });
-
+            .collect::<Vec<_>>();
+        let results = self.storage.contains_blobs(blob_ids.clone()).await?;
         let mut missing_blobs = vec![];
-        for (blob_id, result) in future::join_all(tasks).await {
-            if !result? {
+        for (blob_id, result) in blob_ids.into_iter().zip(results) {
+            if !result {
                 missing_blobs.push(blob_id);
             }
         }
