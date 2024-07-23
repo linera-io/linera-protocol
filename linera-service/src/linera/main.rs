@@ -458,6 +458,7 @@ impl Runnable for Job {
                         warn!("Failed to get genesis config hash for new validator:\n{error}")
                     }
                 }
+                println!("{}", genesis_config_hash);
             }
 
             QueryValidators { chain_id } => {

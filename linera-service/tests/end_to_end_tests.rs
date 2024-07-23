@@ -2455,6 +2455,16 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     net.start_validator(4).await?;
     net.start_validator(5).await?;
 
+    let address = format!(
+        "{}:localhost:{}",
+        network.external_short(),
+        LocalNet::proxy_port(4)
+    );
+    assert_eq!(
+        client.query_new_validator(&address).await?,
+        net.genesis_config()?.hash()
+    );
+
     // Add 5th validator
     client
         .set_validator(net.validator_name(4).unwrap(), LocalNet::proxy_port(4), 100)

@@ -444,6 +444,12 @@ impl LocalNet {
         Ok(command)
     }
 
+    #[cfg(with_testing)]
+    pub fn genesis_config(&self) -> Result<linera_client::config::GenesisConfig> {
+        let path = self.path_provider.path();
+        crate::util::read_json(path.join("genesis.json"))
+    }
+
     pub fn proxy_port(validator: usize) -> usize {
         9000 + validator * 100
     }

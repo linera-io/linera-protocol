@@ -81,7 +81,7 @@ impl Network {
         }
     }
 
-    fn external_short(&self) -> &'static str {
+    pub fn external_short(&self) -> &'static str {
         match self {
             Network::Grpc => "grpc",
             Network::Tcp => "tcp",
