@@ -626,6 +626,23 @@ where
         self.write_batch(batch).await
     }
 
+    async fn write_hashed_certificate_values_hashed_blobs_certificate(
+        &self,
+        values: &[HashedCertificateValue],
+        blobs: &[HashedBlob],
+        certificate: &Certificate,
+    ) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        for value in values {
+            self.add_hashed_cert_value_to_batch(value, &mut batch)?;
+        }
+        for blob in blobs {
+            self.add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+        }
+        Self::add_certificate_to_batch(certificate, &mut batch)?;
+        self.write_batch(batch).await
+    }
+
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
@@ -657,14 +674,14 @@ where
 
     async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.add_certificate_to_batch(certificate, &mut batch)?;
+        Self::add_certificate_to_batch(certificate, &mut batch)?;
         self.write_batch(batch).await
     }
 
     async fn write_certificates(&self, certificates: &[Certificate]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for certificate in certificates {
-            self.add_certificate_to_batch(certificate, &mut batch)?;
+            Self::add_certificate_to_batch(certificate, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -720,7 +737,6 @@ where
     }
 
     fn add_certificate_to_batch(
-        &self,
         certificate: &Certificate,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {

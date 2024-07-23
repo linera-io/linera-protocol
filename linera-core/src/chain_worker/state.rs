@@ -1101,16 +1101,7 @@ where
         let blobs_in_block = self.state.get_blobs(required_blob_ids.clone()).await?;
         let certificate_hash = certificate.hash();
 
-        let (result_hashed_certificate_value, result_blobs, result_certificate) = tokio::join!(
-            self.state
-                .storage
-                .write_hashed_certificate_values(hashed_certificate_values),
-            self.state.storage.write_hashed_blobs(&blobs_in_block),
-            self.state.storage.write_certificate(&certificate)
-        );
-        result_hashed_certificate_value?;
-        result_blobs?;
-        result_certificate?;
+        self.state.storage.write_hashed_certificate_values_hashed_blobs_certificate(hashed_certificate_values, &blobs_in_block, &certificate).await?;
 
         // Update the blob state with last used certificate hash.
         try_join_all(required_blob_ids.into_iter().map(|blob_id| {

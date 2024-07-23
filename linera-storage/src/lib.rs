@@ -134,6 +134,14 @@ pub trait Storage: Sized {
     /// Writes the given blob.
     async fn write_hashed_blob(&self, blob: &HashedBlob) -> Result<(), ViewError>;
 
+    /// Writes hashed certificates, hashed blobs and certificate
+    async fn write_hashed_certificate_values_hashed_blobs_certificate(
+        &self,
+	values: &[HashedCertificateValue],
+        blobs: &[HashedBlob],
+        certificate: &Certificate,
+    ) -> Result<(), ViewError>;
+
     /// Writes the given blob state.
     async fn write_blob_state(
         &self,
