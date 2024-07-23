@@ -350,15 +350,7 @@ where
             .into_iter()
             .filter(|blob_id| !pending_blobs.contains_key(blob_id))
             .collect::<Vec<_>>();
-        let results = self.storage.contains_blobs(blob_ids.clone()).await?;
-        let mut missing_blobs = vec![];
-        for (blob_id, result) in blob_ids.into_iter().zip(results) {
-            if !result {
-                missing_blobs.push(blob_id);
-            }
-        }
-
-        Ok(missing_blobs)
+        Ok(self.storage.missing_blobs(blob_ids.clone()).await?)
     }
 
     /// Returns the blobs requested by their `blob_ids` that are either in pending in the

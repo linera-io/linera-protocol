@@ -479,16 +479,22 @@ where
         Ok(test)
     }
 
-    async fn contains_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<bool>, ViewError> {
+    async fn missing_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, ViewError> {
         let mut keys = Vec::new();
-        for blob_id in blob_ids {
+        for blob_id in blob_ids.clone() {
             let key = bcs::to_bytes(&BaseKey::BlobId(blob_id))?;
             keys.push(key);
         }
-        let test = self.client.client.contains_keys(keys).await?;
+        let results = self.client.client.contains_keys(keys).await?;
+        let mut missing_blobs = Vec::new();
+        for (blob_id, result) in blob_ids.into_iter().zip(results) {
+            if !result {
+                missing_blobs.push(blob_id);
+            }
+        }
         #[cfg(with_metrics)]
         CONTAINS_BLOBS_COUNTER.with_label_values(&[]).inc();
-        Ok(test)
+        Ok(missing_blobs)
     }
 
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {

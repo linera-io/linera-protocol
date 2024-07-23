@@ -103,8 +103,8 @@ pub trait Storage: Sized {
     /// Tests existence of a blob with the given hash.
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
-    /// Tests existence of several blobs with the given hashes.
-    async fn contains_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<bool>, ViewError>;
+    /// List the missing blobs from the storage.
+    async fn missing_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, ViewError>;
 
     /// Tests existence of a blob state with the given hash.
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError>;
