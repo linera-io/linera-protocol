@@ -94,6 +94,9 @@ pub trait Storage: Sized {
     /// Tests existence of a hashed certificate value with the given hash.
     async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError>;
 
+    /// Tests existence of hashed certificate values with given hashes.
+    async fn contains_hashed_certificate_values(&self, hash: Vec<CryptoHash>) -> Result<Vec<bool>, ViewError>;
+
     /// Tests existence of a blob with the given hash.
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 

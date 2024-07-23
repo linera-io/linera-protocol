@@ -52,6 +52,17 @@ static CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::ne
     .expect("Counter creation should not fail")
 });
 
+/// The metric counting how often hashed certificate values are tested for existence from storage.
+#[cfg(with_metrics)]
+static CONTAINS_HASHED_CERTIFICATE_VALUES_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "contains_hashed_certificate_values",
+        "The metric counting how often hashed certificate values are tested for existence from storage",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
+
 /// The metric counting how often a blob is tested for existence from storage
 #[cfg(with_metrics)]
 static CONTAINS_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
@@ -438,6 +449,20 @@ where
         let test = self.client.client.contains_key(&value_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER
+            .with_label_values(&[])
+            .inc();
+        Ok(test)
+    }
+
+    async fn contains_hashed_certificate_values(&self, hashes: Vec<CryptoHash>) -> Result<Vec<bool>, ViewError> {
+        let mut keys = Vec::new();
+        for hash in hashes {
+            let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+            keys.push(value_key);
+        }
+        let test = self.client.client.contains_keys(keys).await?;
+        #[cfg(with_metrics)]
+        CONTAINS_HASHED_CERTIFICATE_VALUES_COUNTER
             .with_label_values(&[])
             .inc();
         Ok(test)
