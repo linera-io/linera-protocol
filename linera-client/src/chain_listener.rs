@@ -23,7 +23,6 @@ use linera_core::{
 use linera_execution::{Message, SystemMessage};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use tracing::Instrument as _;
 
 use crate::wallet::Wallet;
 
