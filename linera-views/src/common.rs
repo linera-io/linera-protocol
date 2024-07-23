@@ -86,7 +86,6 @@ impl DeletionSet {
     }
 }
 
-
 /// The common initialization parameters for the `KeyValueStore`
 #[derive(Debug, Clone)]
 pub struct CommonStoreConfig {

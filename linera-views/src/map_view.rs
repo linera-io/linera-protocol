@@ -363,7 +363,10 @@ where
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
         if !self.deletion_set.contains_key(&prefix) {
-            let iter = self.deletion_set.deleted_prefixes.range(get_interval(prefix.clone()));
+            let iter = self
+                .deletion_set
+                .deleted_prefixes
+                .range(get_interval(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = self.context.base_index(&prefix);
             for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
@@ -558,7 +561,10 @@ where
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
         if !self.deletion_set.contains_key(&prefix) {
-            let iter = self.deletion_set.deleted_prefixes.range(get_interval(prefix.clone()));
+            let iter = self
+                .deletion_set
+                .deleted_prefixes
+                .range(get_interval(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = self.context.base_index(&prefix);
             for entry in self
