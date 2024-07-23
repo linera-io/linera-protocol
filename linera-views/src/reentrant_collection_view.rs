@@ -1258,7 +1258,7 @@ where
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   {
-    ///     let _subview = ivew.try_load_entry(&23).await.unwrap();
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
     ///   }
     ///   let subviews = view.try_load_all_entries_mut().await.unwrap();
     ///   assert_eq!(subviews.len(), 1);
@@ -1295,7 +1295,7 @@ where
     ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
     ///   }
     ///   let subviews = view.try_load_all_entries().await.unwrap();
-    ///   assert!(subviews.len(), 1);
+    ///   assert_eq!(subviews.len(), 1);
     /// # })
     /// ```
     pub async fn try_load_all_entries<'a, Q>(
@@ -1743,7 +1743,7 @@ where
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   {
-    ///     let _subview = ivew.try_load_entry(&23).await.unwrap();
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
     ///   }
     ///   let subviews = view.try_load_all_entries_mut().await.unwrap();
     ///   assert_eq!(subviews.len(), 1);
@@ -1780,7 +1780,7 @@ where
     ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
     ///   }
     ///   let subviews = view.try_load_all_entries().await.unwrap();
-    ///   assert!(subviews.len(), 1);
+    ///   assert_eq!(subviews.len(), 1);
     /// # })
     /// ```
     pub async fn try_load_all_entries<Q>(
