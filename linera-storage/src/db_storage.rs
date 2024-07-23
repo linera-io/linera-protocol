@@ -74,7 +74,7 @@ static CONTAINS_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-/// The metric counting how often multiple blob are tested for existence from storage
+/// The metric counting how often multiple blobs are tested for existence from storage
 #[cfg(with_metrics)]
 static CONTAINS_BLOBS_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
@@ -566,13 +566,13 @@ where
         value: &HashedCertificateValue,
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.add_hashed_cert_value_to_batch(value, &mut batch)?;
+        Self::add_hashed_cert_value_to_batch(value, &mut batch)?;
         self.write_batch(batch).await
     }
 
     async fn write_hashed_blob(&self, blob: &HashedBlob) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+        Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -605,7 +605,7 @@ where
         blob_state: &BlobState,
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.add_blob_state_to_batch(blob_id, blob_state, &mut batch)?;
+        Self::add_blob_state_to_batch(blob_id, blob_state, &mut batch)?;
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -616,7 +616,7 @@ where
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for value in values {
-            self.add_hashed_cert_value_to_batch(value, &mut batch)?;
+            Self::add_hashed_cert_value_to_batch(value, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -624,7 +624,7 @@ where
     async fn write_hashed_blobs(&self, blobs: &[HashedBlob]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for blob in blobs {
-            self.add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+            Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -637,10 +637,10 @@ where
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for value in values {
-            self.add_hashed_cert_value_to_batch(value, &mut batch)?;
+            Self::add_hashed_cert_value_to_batch(value, &mut batch)?;
         }
         for blob in blobs {
-            self.add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+            Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
         }
         Self::add_certificate_to_batch(certificate, &mut batch)?;
         self.write_batch(batch).await
@@ -702,7 +702,6 @@ where
     <Client as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
     fn add_hashed_cert_value_to_batch(
-        &self,
         value: &HashedCertificateValue,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
@@ -716,7 +715,6 @@ where
     }
 
     fn add_blob_to_batch(
-        &self,
         blob_id: &BlobId,
         blob: &HashedBlob,
         batch: &mut Batch,
@@ -729,7 +727,6 @@ where
     }
 
     fn add_blob_state_to_batch(
-        &self,
         blob_id: BlobId,
         blob_state: &BlobState,
         batch: &mut Batch,
