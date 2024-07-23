@@ -143,6 +143,15 @@ impl ValidatorNode for Client {
         })
     }
 
+    async fn get_genesis_config_hash(&mut self) -> Result<CryptoHash, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.get_genesis_config_hash().await?,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.get_genesis_config_hash().await?,
+        })
+    }
+
     async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.download_blob(blob_id).await?,

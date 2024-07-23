@@ -503,7 +503,7 @@ impl Runnable for Job {
                     force,
                 } = &command
                 {
-                    let mut node = context.make_node_provider().make_node(address)?;
+                    let node = context.make_node_provider().make_node(address)?;
                     match node.get_version_info().await {
                         Ok(version_info)
                             if version_info.is_compatible_with(&linera_version::VERSION_INFO) => {}

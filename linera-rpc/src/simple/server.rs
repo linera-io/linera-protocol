@@ -310,6 +310,8 @@ where
             | RpcMessage::Error(_)
             | RpcMessage::ChainInfoResponse(_)
             | RpcMessage::VersionInfoResponse(_)
+            | RpcMessage::GenesisConfigHashQuery
+            | RpcMessage::GenesisConfigHashResponse(_)
             | RpcMessage::DownloadBlob(_)
             | RpcMessage::DownloadBlobResponse(_)
             | RpcMessage::DownloadCertificateValue(_)
