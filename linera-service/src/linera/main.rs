@@ -428,7 +428,7 @@ impl Runnable for Job {
                 );
             }
 
-            QueryNewValidator { address } => {
+            QueryValidator { address } => {
                 use linera_core::node::ValidatorNode as _;
 
                 let mut node = context.make_node_provider().make_node(&address)?;

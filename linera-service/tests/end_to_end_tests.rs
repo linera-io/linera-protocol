@@ -2461,7 +2461,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         LocalNet::proxy_port(4)
     );
     assert_eq!(
-        client.query_new_validator(&address).await?,
+        client.query_validator(&address).await?,
         net.genesis_config()?.hash()
     );
 

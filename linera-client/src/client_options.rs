@@ -386,7 +386,7 @@ pub enum ClientCommand {
 
     /// Show the version and genesis config hash of a new validator, and print a warning if it is
     /// incompatible.
-    QueryNewValidator {
+    QueryValidator {
         /// The new validator's address.
         address: String,
     },

@@ -397,10 +397,10 @@ impl ClientWrapper {
         bail!("Failed to start node service");
     }
 
-    /// Runs `linera query-new-validator`
-    pub async fn query_new_validator(&self, address: &str) -> Result<CryptoHash> {
+    /// Runs `linera query-validator`
+    pub async fn query_validator(&self, address: &str) -> Result<CryptoHash> {
         let mut command = self.command().await?;
-        command.arg("query-new-validator").arg(address);
+        command.arg("query-validator").arg(address);
         let stdout = command.spawn_and_wait_for_stdout().await?;
         let hash = stdout
             .trim()
