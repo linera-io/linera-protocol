@@ -63,6 +63,17 @@ static CONTAINS_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+/// The metric counting how often multiple blob are tested for existence from storage
+#[cfg(with_metrics)]
+static CONTAINS_BLOBS_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "contains_blobs",
+        "The metric counting how often multiple blobs are tested for existence from storage",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
+
 /// The metric counting how often a blob state is tested for existence from storage
 #[cfg(with_metrics)]
 static CONTAINS_BLOB_STATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
@@ -437,6 +448,18 @@ where
         let test = self.client.client.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
+        Ok(test)
+    }
+
+    async fn contains_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<bool>, ViewError> {
+        let mut keys = Vec::new();
+        for blob_id in blob_ids {
+            let key = bcs::to_bytes(&BaseKey::BlobId(blob_id))?;
+            keys.push(key);
+        }
+        let test = self.client.client.contains_keys(keys).await?;
+        #[cfg(with_metrics)]
+        CONTAINS_BLOBS_COUNTER.with_label_values(&[]).inc();
         Ok(test)
     }
 
