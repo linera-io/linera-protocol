@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::{channel::mpsc, stream::StreamExt};
 use linera_core::{
     node::NodeError,
-    worker::{NetworkActions, ValidatorWorker, WorkerError, WorkerState},
+    worker::{NetworkActions, WorkerError, WorkerState},
     JoinSetExt as _,
 };
 use linera_storage::Storage;

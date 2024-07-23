@@ -47,10 +47,7 @@ impl SimpleClient {
         }
     }
 
-    async fn send_recv_internal(
-        &mut self,
-        message: RpcMessage,
-    ) -> Result<RpcMessage, codec::Error> {
+    async fn send_recv_internal(&self, message: RpcMessage) -> Result<RpcMessage, codec::Error> {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         // Send message
@@ -65,7 +62,7 @@ impl SimpleClient {
             .ok_or_else(|| codec::Error::Io(std::io::ErrorKind::UnexpectedEof.into()))
     }
 
-    async fn query<Response>(&mut self, query: RpcMessage) -> Result<Response, Response::Error>
+    async fn query<Response>(&self, query: RpcMessage) -> Result<Response, Response::Error>
     where
         Response: TryFrom<RpcMessage>,
         Response::Error: From<codec::Error>,
@@ -79,7 +76,7 @@ impl ValidatorNode for SimpleClient {
 
     /// Initiates a new block.
     async fn handle_block_proposal(
-        &mut self,
+        &self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.query(proposal.into()).await
@@ -87,7 +84,7 @@ impl ValidatorNode for SimpleClient {
 
     /// Processes a hash certificate.
     async fn handle_lite_certificate(
-        &mut self,
+        &self,
         certificate: LiteCertificate<'_>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
@@ -101,7 +98,7 @@ impl ValidatorNode for SimpleClient {
 
     /// Processes a certificate.
     async fn handle_certificate(
-        &mut self,
+        &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
@@ -119,31 +116,31 @@ impl ValidatorNode for SimpleClient {
 
     /// Handles information queries for this chain.
     async fn handle_chain_info_query(
-        &mut self,
+        &self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.query(query.into()).await
     }
 
     fn subscribe(
-        &mut self,
+        &self,
         _chains: Vec<ChainId>,
     ) -> impl Future<Output = Result<NotificationStream, NodeError>> + Send {
         let transport = self.network.protocol.to_string();
         async { Err(NodeError::SubscriptionError { transport }) }
     }
 
-    async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError> {
+    async fn get_version_info(&self) -> Result<VersionInfo, NodeError> {
         self.query(RpcMessage::VersionInfoQuery).await
     }
 
-    async fn download_blob(&mut self, blob_id: BlobId) -> Result<Blob, NodeError> {
+    async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError> {
         self.query(RpcMessage::DownloadBlob(Box::new(blob_id)))
             .await
     }
 
     async fn download_certificate_value(
-        &mut self,
+        &self,
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, NodeError> {
         let certificate_value: CertificateValue = self
@@ -152,12 +149,12 @@ impl ValidatorNode for SimpleClient {
         Ok(certificate_value.with_hash_checked(hash)?)
     }
 
-    async fn download_certificate(&mut self, hash: CryptoHash) -> Result<Certificate, NodeError> {
+    async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError> {
         self.query(RpcMessage::DownloadCertificate(Box::new(hash)))
             .await
     }
 
-    async fn blob_last_used_by(&mut self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
+    async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
         self.query(RpcMessage::BlobLastUsedBy(Box::new(blob_id)))
             .await
     }
@@ -187,7 +184,7 @@ impl SimpleMassClient {
 #[async_trait]
 impl mass_client::MassClient for SimpleMassClient {
     async fn send(
-        &mut self,
+        &self,
         requests: Vec<RpcMessage>,
         max_in_flight: usize,
     ) -> Result<Vec<RpcMessage>, mass_client::MassClientError> {
