@@ -45,6 +45,7 @@ pub fn init() {
         match format.as_str() {
             "json" => subscriber.json().init(),
             "pretty" => subscriber.pretty().init(),
+            "plain" => subscriber.init(),
             _ => {
                 panic!("Invalid RUST_LOG_FORMAT: `{format}`.  Valid values are `json` or `pretty`.")
             }
