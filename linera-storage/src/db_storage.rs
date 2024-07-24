@@ -281,9 +281,9 @@ pub struct DbStorage<Client, Clock> {
 enum BaseKey {
     ChainState(ChainId),
     Certificate(CryptoHash),
-    Value(CryptoHash),
-    BlobId(BlobId),
-    BlobStateId(BlobId),
+    CertificateValue(CryptoHash),
+    Blob(BlobId),
+    BlobState(BlobId),
 }
 
 /// A clock that can be used to get the current `Timestamp`.
@@ -445,7 +445,7 @@ where
     }
 
     async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError> {
-        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let test = self.client.client.contains_key(&value_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER
@@ -460,7 +460,7 @@ where
     ) -> Result<Vec<bool>, ViewError> {
         let mut keys = Vec::new();
         for hash in hashes {
-            let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+            let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
             keys.push(value_key);
         }
         let test = self.client.client.contains_keys(keys).await?;
@@ -472,7 +472,7 @@ where
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let blob_key = bcs::to_bytes(&BaseKey::BlobId(blob_id))?;
+        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let test = self.client.client.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
@@ -482,7 +482,7 @@ where
     async fn missing_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, ViewError> {
         let mut keys = Vec::new();
         for blob_id in blob_ids.clone() {
-            let key = bcs::to_bytes(&BaseKey::BlobId(blob_id))?;
+            let key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
             keys.push(key);
         }
         let results = self.client.client.contains_keys(keys).await?;
@@ -498,7 +498,7 @@ where
     }
 
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let blob_key = bcs::to_bytes(&BaseKey::BlobStateId(blob_id))?;
+        let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
         let test = self.client.client.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
@@ -509,7 +509,7 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, ViewError> {
-        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let maybe_value = self
             .client
             .client
@@ -524,7 +524,7 @@ where
     }
 
     async fn read_hashed_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ViewError> {
-        let blob_key = bcs::to_bytes(&BaseKey::BlobId(blob_id))?;
+        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let maybe_blob = self.client.client.read_value::<Blob>(&blob_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
@@ -533,7 +533,7 @@ where
     }
 
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError> {
-        let blob_state_key = bcs::to_bytes(&BaseKey::BlobStateId(blob_id))?;
+        let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
         let maybe_blob_state = self
             .client
             .client
@@ -654,7 +654,7 @@ where
 
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let keys = vec![cert_key, value_key];
         let results = self.client.client.contains_keys(keys).await?;
         #[cfg(with_metrics)]
@@ -664,7 +664,7 @@ where
 
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let keys = vec![cert_key, value_key];
         let values = self.client.client.read_multi_values_bytes(keys).await;
         if values.is_ok() {
@@ -715,7 +715,7 @@ where
         WRITE_HASHED_CERTIFICATE_VALUE_COUNTER
             .with_label_values(&[])
             .inc();
-        let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
+        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(value.hash()))?;
         batch.put_key_value(value_key.to_vec(), value)?;
         Ok(())
     }
@@ -727,7 +727,7 @@ where
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_key = bcs::to_bytes(&BaseKey::BlobId(*blob_id))?;
+        let blob_key = bcs::to_bytes(&BaseKey::Blob(*blob_id))?;
         batch.put_key_value(blob_key.to_vec(), blob)?;
         Ok(())
     }
@@ -737,7 +737,7 @@ where
         blob_state: &BlobState,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
-        let blob_state_key = bcs::to_bytes(&BaseKey::BlobStateId(blob_id))?;
+        let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
         batch.put_key_value(blob_state_key.to_vec(), blob_state)?;
         Ok(())
     }
@@ -750,7 +750,7 @@ where
         WRITE_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         let hash = certificate.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
         batch.put_key_value(value_key.to_vec(), &certificate.value)?;
         Ok(())
