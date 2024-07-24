@@ -78,7 +78,7 @@ impl<T> std::ops::DerefMut for WriteGuardedView<T> {
 pub struct ReentrantByteCollectionView<C, W> {
     context: C,
     delete_storage_first: bool,
-    updates: Mutex<BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>>,
+    updates: BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
     cached_entries: Mutex<BTreeMap<Vec<u8>, Arc<RwLock<W>>>>,
 }
 
@@ -118,7 +118,7 @@ where
         Ok(Self {
             context,
             delete_storage_first: false,
-            updates: Mutex::new(BTreeMap::new()),
+            updates: BTreeMap::new(),
             cached_entries: Mutex::new(BTreeMap::new()),
         })
     }
@@ -129,15 +129,14 @@ where
 
     fn rollback(&mut self) {
         self.delete_storage_first = false;
-        self.updates.get_mut().clear();
+        self.updates.clear();
     }
 
     async fn has_pending_changes(&self) -> bool {
         if self.delete_storage_first {
             return true;
         }
-        let updates = self.updates.lock().await;
-        !updates.is_empty()
+        !self.updates.is_empty()
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
@@ -145,7 +144,7 @@ where
         if self.delete_storage_first {
             delete_view = true;
             batch.delete_key_prefix(self.context.base_key());
-            for (index, update) in mem::take(self.updates.get_mut()) {
+            for (index, update) in mem::take(&mut self.updates) {
                 if let Update::Set(view) = update {
                     let mut view = Arc::try_unwrap(view)
                         .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
@@ -156,7 +155,7 @@ where
                 }
             }
         } else {
-            for (index, update) in mem::take(self.updates.get_mut()) {
+            for (index, update) in mem::take(&mut self.updates) {
                 match update {
                     Update::Set(view) => {
                         let mut view = Arc::try_unwrap(view)
@@ -180,7 +179,7 @@ where
 
     fn clear(&mut self) {
         self.delete_storage_first = true;
-        self.updates.get_mut().clear();
+        self.updates.clear();
         self.cached_entries.get_mut().clear();
     }
 }
@@ -194,7 +193,6 @@ where
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         let cloned_updates = self
             .updates
-            .get_mut()
             .iter()
             .map(|(key, value)| {
                 let cloned_value = match value {
@@ -214,7 +212,7 @@ where
         Ok(ReentrantByteCollectionView {
             context: self.context.clone(),
             delete_storage_first: self.delete_storage_first,
-            updates: Mutex::new(cloned_updates),
+            updates: cloned_updates,
             cached_entries: Mutex::new(BTreeMap::new()),
         })
     }
@@ -262,8 +260,7 @@ where
     /// If the entry is missing, then it is set to default.
     async fn try_load_view_mut(&mut self, short_key: &[u8]) -> Result<Arc<RwLock<W>>, ViewError> {
         use btree_map::Entry::*;
-        let updates = self.updates.get_mut();
-        Ok(match updates.entry(short_key.to_owned()) {
+        Ok(match self.updates.entry(short_key.to_owned()) {
             Occupied(mut entry) => match entry.get_mut() {
                 Update::Set(view) => view.clone(),
                 entry @ Update::Removed => {
@@ -290,8 +287,7 @@ where
     /// If missing, then the entry is loaded from storage and if
     /// missing there an error is reported.
     async fn try_load_view(&self, short_key: &[u8]) -> Result<Option<Arc<RwLock<W>>>, ViewError> {
-        let updates = self.updates.lock().await;
-        Ok(if let Some(entry) = updates.get(short_key) {
+        Ok(if let Some(entry) = self.updates.get(short_key) {
             match entry {
                 Update::Set(view) => Some(view.clone()),
                 _entry @ Update::Removed => None,
@@ -390,8 +386,7 @@ where
     /// # })
     /// ```
     pub async fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
-        let updates = self.updates.lock().await;
-        Ok(if let Some(entry) = updates.get(short_key) {
+        Ok(if let Some(entry) = self.updates.get(short_key) {
             match entry {
                 Update::Set(_view) => true,
                 Update::Removed => false,
@@ -427,9 +422,9 @@ where
         self.cached_entries.get_mut().remove(&short_key);
         if self.delete_storage_first {
             // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
-            self.updates.get_mut().remove(&short_key);
+            self.updates.remove(&short_key);
         } else {
-            self.updates.get_mut().insert(short_key, Update::Removed);
+            self.updates.insert(short_key, Update::Removed);
         }
     }
 
@@ -461,8 +456,7 @@ where
         let view = W::new(context)?;
         let view = Arc::new(RwLock::new(view));
         let view = Update::Set(view);
-        let updates = self.updates.get_mut();
-        updates.insert(short_key.to_vec(), view);
+        self.updates.insert(short_key.to_vec(), view);
         self.cached_entries.get_mut().remove(short_key);
         Ok(())
     }
@@ -505,7 +499,6 @@ where
         &mut self,
         short_keys: Vec<Vec<u8>>,
     ) -> Result<Vec<WriteGuardedView<W>>, ViewError> {
-        let updates = self.updates.get_mut();
         let cached_entries = self.cached_entries.get_mut();
         let mut short_keys_to_load = Vec::new();
         let num_init_keys = W::NUM_INIT_KEYS;
@@ -515,7 +508,7 @@ where
                 .context
                 .base_tag_index(KeyTag::Subview as u8, short_key);
             let context = self.context.clone_with_base_key(key);
-            match updates.entry(short_key.to_vec()) {
+            match self.updates.entry(short_key.to_vec()) {
                 btree_map::Entry::Occupied(mut entry) => {
                     if let Update::Removed = entry.get() {
                         let view = W::new(context)?;
@@ -550,13 +543,14 @@ where
                 &values[i_key * num_init_keys..(i_key + 1) * num_init_keys],
             )?;
             let wrapped_view = Arc::new(RwLock::new(view));
-            updates.insert(short_key.to_vec(), Update::Set(wrapped_view));
+            self.updates
+                .insert(short_key.to_vec(), Update::Set(wrapped_view));
         }
 
         short_keys
             .into_iter()
             .map(|short_key| {
-                let Some(Update::Set(view)) = updates.get(&short_key) else {
+                let Some(Update::Set(view)) = self.updates.get(&short_key) else {
                     unreachable!()
                 };
                 Ok(WriteGuardedView(
@@ -596,11 +590,10 @@ where
         let mut keys_to_check = Vec::new();
         let mut keys_to_check_metadata = Vec::new();
 
-        let updates = self.updates.lock().await;
         let mut cached_entries = self.cached_entries.lock().await;
 
         for (position, short_key) in short_keys.into_iter().enumerate() {
-            if let Some(update) = updates.get(&short_key) {
+            if let Some(update) = self.updates.get(&short_key) {
                 if let Update::Set(view) = update {
                     results[position] = Some((short_key, view.clone()));
                 }
@@ -854,8 +847,7 @@ where
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
-        let updates = self.updates.lock().await;
-        let mut updates = updates.iter();
+        let mut updates = self.updates.iter();
         let mut update = updates.next();
         if !self.delete_storage_first {
             let base = self.get_index_key(&[]);
@@ -942,11 +934,10 @@ where
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
         hasher.update_with_bcs_bytes(&keys.len())?;
-        let updates = self.updates.get_mut();
         let cached_entries = self.cached_entries.get_mut();
         for key in keys {
             hasher.update_with_bytes(&key)?;
-            let hash = if let Some(entry) = updates.get_mut(&key) {
+            let hash = if let Some(entry) = self.updates.get_mut(&key) {
                 let Update::Set(view) = entry else {
                     unreachable!();
                 };
@@ -976,11 +967,10 @@ where
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
         hasher.update_with_bcs_bytes(&keys.len())?;
-        let updates = self.updates.lock().await;
         let cached_entries = self.cached_entries.lock().await;
         for key in keys {
             hasher.update_with_bytes(&key)?;
-            let hash = if let Some(entry) = updates.get(&key) {
+            let hash = if let Some(entry) = self.updates.get(&key) {
                 let Update::Set(view) = entry else {
                     unreachable!();
                 };
