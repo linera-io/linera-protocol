@@ -30,7 +30,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::{Certificate, ChannelFullName, HashedCertificateValue},
+    data_types::{Certificate, ChannelFullName, EventId, HashedCertificateValue},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -185,6 +185,12 @@ pub trait Storage: Sized {
 
     /// Writes a vector of certificates.
     async fn write_certificates(&self, certificate: &[Certificate]) -> Result<(), ViewError>;
+
+    /// Reads the event with the given ID.
+    async fn read_event(&self, id: EventId) -> Result<Vec<u8>, ViewError>;
+
+    /// Writes a vector of events.
+    async fn write_events(&self, events: &[(EventId, Vec<u8>)]) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
     async fn load_active_chain(

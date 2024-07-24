@@ -13,7 +13,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
-    data_types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
+    data_types::{Certificate, CertificateValue, EventId, HashedCertificateValue, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{
@@ -190,6 +190,30 @@ pub static WRITE_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(||
     .expect("Counter creation should not fail")
 });
 
+/// The metric counting how often an event is read from storage.
+#[cfg(with_metrics)]
+#[doc(hidden)]
+pub static READ_EVENT_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "read_event",
+        "The metric counting how often an event is read from storage",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
+
+/// The metric counting how often an event is written to storage.
+#[cfg(with_metrics)]
+#[doc(hidden)]
+pub static WRITE_EVENT_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "write_event",
+        "The metric counting how often an event is written to storage",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
+
 /// The latency to load a chain state.
 #[cfg(with_metrics)]
 #[doc(hidden)]
@@ -283,6 +307,7 @@ enum BaseKey {
     CertificateValue(CryptoHash),
     Blob(BlobId),
     BlobState(BlobId),
+    Event(EventId),
 }
 
 /// A clock that can be used to get the current `Timestamp`.
@@ -719,6 +744,22 @@ where
         self.write_batch(batch).await
     }
 
+    async fn read_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
+        let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
+        let maybe_value = self.client.client.read_value::<Vec<u8>>(&event_key).await?;
+        #[cfg(with_metrics)]
+        READ_EVENT_COUNTER.with_label_values(&[]).inc();
+        maybe_value.ok_or_else(|| ViewError::not_found("value for event ID", event_id))
+    }
+
+    async fn write_events(&self, events: &[(EventId, Vec<u8>)]) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        for (event_id, value) in events {
+            Self::add_event_to_batch(event_id, value, &mut batch)?;
+        }
+        self.write_batch(batch).await
+    }
+
     fn wasm_runtime(&self) -> Option<WasmRuntime> {
         self.client.wasm_runtime
     }
@@ -777,6 +818,18 @@ where
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
         batch.put_key_value(value_key.to_vec(), &certificate.value)?;
+        Ok(())
+    }
+
+    fn add_event_to_batch(
+        event_id: &EventId,
+        value: &[u8],
+        batch: &mut Batch,
+    ) -> Result<(), ViewError> {
+        #[cfg(with_metrics)]
+        WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
+        let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
+        batch.put_key_value_bytes(event_key.to_vec(), value.to_vec());
         Ok(())
     }
 
