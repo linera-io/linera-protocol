@@ -384,6 +384,13 @@ pub enum ClientCommand {
         chain_id: Option<ChainId>,
     },
 
+    /// Show the version and genesis config hash of a new validator, and print a warning if it is
+    /// incompatible.
+    QueryValidator {
+        /// The new validator's address.
+        address: String,
+    },
+
     /// Show the current set of validators for a chain.
     QueryValidators {
         /// The chain to query. If omitted, query the default chain of the wallet.
@@ -403,6 +410,10 @@ pub enum ClientCommand {
         /// Voting power
         #[arg(long, default_value = "1")]
         votes: u64,
+
+        /// Skip the version and genesis config checks.
+        #[arg(long)]
+        skip_online_check: bool,
     },
 
     /// Remove a validator (admin only)

@@ -162,6 +162,10 @@ where
         Ok(Default::default())
     }
 
+    async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
+        Ok(CryptoHash::test_hash("genesis config"))
+    }
+
     async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError> {
         self.spawn_and_receive(move |validator, sender| validator.do_download_blob(blob_id, sender))
             .await

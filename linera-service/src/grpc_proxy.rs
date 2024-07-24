@@ -17,6 +17,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::identifiers::ChainId;
+use linera_client::config::GenesisConfig;
 use linera_core::{notifier::Notifier, JoinSetExt as _};
 use linera_rpc::{
     config::{
@@ -149,6 +150,7 @@ pub struct GrpcProxy<S>(Arc<GrpcProxyInner<S>>);
 struct GrpcProxyInner<S> {
     public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
+    genesis_config: GenesisConfig,
     worker_connection_pool: GrpcConnectionPool,
     notifier: Notifier<Result<Notification, Status>>,
     tls: TlsConfig,
@@ -162,6 +164,7 @@ where
     pub fn new(
         public_config: ValidatorPublicNetworkConfig,
         internal_config: ValidatorInternalNetworkConfig,
+        genesis_config: GenesisConfig,
         connect_timeout: Duration,
         timeout: Duration,
         tls: TlsConfig,
@@ -170,6 +173,7 @@ where
         Self(Arc::new(GrpcProxyInner {
             public_config,
             internal_config,
+            genesis_config,
             worker_connection_pool: GrpcConnectionPool::default()
                 .with_connect_timeout(connect_timeout)
                 .with_timeout(timeout),
@@ -398,6 +402,14 @@ where
     ) -> Result<Response<VersionInfo>, Status> {
         // We assume each shard is running the same version as the proxy
         Ok(Response::new(linera_version::VersionInfo::default().into()))
+    }
+
+    #[instrument(skip_all, err(Display))]
+    async fn get_genesis_config_hash(
+        &self,
+        _request: Request<()>,
+    ) -> Result<Response<CryptoHash>, Status> {
+        Ok(Response::new(self.0.genesis_config.hash().into()))
     }
 
     #[instrument(skip_all, err(Display))]
