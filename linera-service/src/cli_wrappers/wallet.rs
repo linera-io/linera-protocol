@@ -59,7 +59,6 @@ pub struct ClientWrapper {
     max_pending_messages: usize,
     network: Network,
     pub path_provider: PathProvider,
-    deterministic: bool,
 }
 
 impl ClientWrapper {
@@ -68,7 +67,6 @@ impl ClientWrapper {
         network: Network,
         testing_prng_seed: Option<u64>,
         id: usize,
-        deterministic: bool,
     ) -> Self {
         let storage = format!(
             "rocksdb:{}/client_{}.db",
@@ -83,7 +81,6 @@ impl ClientWrapper {
             max_pending_messages: 10_000,
             network,
             path_provider,
-            deterministic,
         }
     }
 
@@ -373,11 +370,15 @@ impl ClientWrapper {
     }
 
     /// Runs `linera service`.
-    pub async fn run_node_service(&self, port: impl Into<Option<u16>>) -> Result<NodeService> {
+    pub async fn run_node_service(
+        &self,
+        port: impl Into<Option<u16>>,
+        skip_process_inbox: bool,
+    ) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
         command.arg("service");
-        if self.deterministic {
+        if skip_process_inbox {
             command.arg("--listener-skip-process-inbox");
         }
         if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {

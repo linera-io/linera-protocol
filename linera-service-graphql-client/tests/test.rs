@@ -77,7 +77,11 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
         .await
         .unwrap();
 
-    let mut node_service = client.run_node_service(None).await.unwrap();
+    let skip_process_inbox = false;
+    let mut node_service = client
+        .run_node_service(None, skip_process_inbox)
+        .await
+        .unwrap();
     let req_client = &reqwest_client();
     let url = &format!("http://localhost:{}/", node_service.port());
 

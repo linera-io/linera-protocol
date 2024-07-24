@@ -228,7 +228,6 @@ pub struct LocalNetConfig {
     pub policy: ResourceControlPolicy,
     pub storage_config_builder: StorageConfigBuilder,
     pub path_provider: PathProvider,
-    pub deterministic: bool,
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -245,7 +244,6 @@ pub struct LocalNet {
     set_init: HashSet<(usize, usize)>,
     storage_config: StorageConfig,
     path_provider: PathProvider,
-    deterministic: bool,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -314,7 +312,7 @@ impl Validator {
 
 #[cfg(with_testing)]
 impl LocalNetConfig {
-    fn new(database: Database, network: Network, deterministic: bool) -> Self {
+    pub fn new_test(database: Database, network: Network) -> Self {
         let num_shards = match database {
             Database::RocksDb => 1,
             _ => 4,
@@ -333,16 +331,7 @@ impl LocalNetConfig {
             num_shards,
             storage_config_builder,
             path_provider,
-            deterministic,
         }
-    }
-
-    pub fn new_test(database: Database, network: Network) -> Self {
-        Self::new(database, network, false)
-    }
-
-    pub fn deterministic(database: Database, network: Network) -> Self {
-        Self::new(database, network, true)
     }
 }
 
@@ -365,7 +354,6 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_shards,
             server_config,
             self.path_provider,
-            self.deterministic,
         )?;
         let client = net.make_client().await;
         ensure!(
@@ -405,7 +393,6 @@ impl LineraNet for LocalNet {
             self.network,
             self.testing_prng_seed,
             self.next_client_id,
-            self.deterministic,
         );
         if let Some(seed) = self.testing_prng_seed {
             self.testing_prng_seed = Some(seed + 1);
@@ -433,7 +420,6 @@ impl LocalNet {
         num_shards: usize,
         storage_config: StorageConfig,
         path_provider: PathProvider,
-        deterministic: bool,
     ) -> Result<Self> {
         Ok(Self {
             database,
@@ -448,7 +434,6 @@ impl LocalNet {
             set_init: HashSet::new(),
             storage_config,
             path_provider,
-            deterministic,
         })
     }
 

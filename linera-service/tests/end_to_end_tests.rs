@@ -397,9 +397,9 @@ async fn test_storage_service_wallet_lock() -> Result<()> {
     feature = "scylladb",
     feature = "storage-service"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> Result<()> {
     use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
@@ -458,7 +458,8 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
         )
         .await?;
     let port = get_node_port().await;
-    let node_service = client.run_node_service(port).await?;
+    let skip_process_inbox = true;
+    let node_service = client.run_node_service(port, skip_process_inbox).await?;
 
     let app = EthereumTrackerApp(
         node_service
@@ -493,9 +494,9 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc); "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -523,7 +524,8 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
         )
         .await?;
     let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port).await?;
+    let skip_process_inbox = true;
+    let mut node_service = client.run_node_service(port, skip_process_inbox).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -546,9 +548,9 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -573,7 +575,8 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
         .create_application(&bytecode_id, &(), &original_counter_value, &[], None)
         .await?;
     let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port).await?;
+    let skip_process_inbox = true;
+    let mut node_service = client.run_node_service(port, skip_process_inbox).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -626,8 +629,9 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1).await?;
-    let mut node_service2 = client2.run_node_service(port2).await?;
+    let skip_process_inbox = false;
+    let mut node_service1 = client1.run_node_service(port1, skip_process_inbox).await?;
+    let mut node_service2 = client2.run_node_service(port2, skip_process_inbox).await?;
 
     // Request the application so chain 2 has it, too.
     node_service2
@@ -687,12 +691,12 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
 
 // TODO(#2051): Enable the test `test_wasm_end_to_end_fungible::scylladb_grpc` that is frequently failing.
 // The failure is `Error: Could not find application URI: .... after 15 tries`.
-//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc), "fungible" ; "storage_service_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc), "native-fungible" ; "native_storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
+//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "storage_service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "fungible" ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "native-fungible" ; "native_kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None), "fungible" ; "remote_net_grpc"))]
@@ -747,8 +751,9 @@ async fn test_wasm_end_to_end_fungible(
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1).await?;
-    let mut node_service2 = client2.run_node_service(port2).await?;
+    let skip_process_inbox = true;
+    let mut node_service1 = client1.run_node_service(port1, skip_process_inbox).await?;
+    let mut node_service2 = client2.run_node_service(port2, skip_process_inbox).await?;
 
     let app1 = FungibleApp(
         node_service1
@@ -851,12 +856,12 @@ async fn test_wasm_end_to_end_fungible(
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc), "fungible" ; "storage_service_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc), "native-fungible" ; "native_storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "storage_service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "fungible" ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "native-fungible" ; "native_kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None), "fungible" ; "remote_net_grpc"))]
@@ -918,7 +923,8 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         .await?;
 
     let port = get_node_port().await;
-    let mut node_service = client1.run_node_service(port).await?;
+    let skip_process_inbox = true;
+    let mut node_service = client1.run_node_service(port, skip_process_inbox).await?;
 
     let app1 = FungibleApp(
         node_service
@@ -985,9 +991,9 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     feature = "kubernetes",
     feature = "remote-net"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -1016,8 +1022,9 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1).await?;
-    let mut node_service2 = client2.run_node_service(port2).await?;
+    let skip_process_inbox = true;
+    let mut node_service1 = client1.run_node_service(port1, skip_process_inbox).await?;
+    let mut node_service2 = client2.run_node_service(port2, skip_process_inbox).await?;
 
     let app1 = NonFungibleApp(
         node_service1
@@ -1248,9 +1255,9 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -1317,8 +1324,9 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1).await?;
-    let mut node_service2 = client2.run_node_service(port2).await?;
+    let skip_process_inbox = true;
+    let mut node_service1 = client1.run_node_service(port1, skip_process_inbox).await?;
+    let mut node_service2 = client2.run_node_service(port2, skip_process_inbox).await?;
 
     let app_fungible1 = FungibleApp(
         node_service1
@@ -1383,13 +1391,13 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
 }
 
 // TODO(#1159): We should enable the matching engine on other storages.
-// #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-// #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+// #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+// #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 // #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 // #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[cfg(feature = "storage-service")]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-// #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::deterministic(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+// #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
@@ -1459,9 +1467,12 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
     let port3 = get_node_port().await;
-    let mut node_service_admin = client_admin.run_node_service(port1).await?;
-    let mut node_service_a = client_a.run_node_service(port2).await?;
-    let mut node_service_b = client_b.run_node_service(port3).await?;
+    let skip_process_inbox = true;
+    let mut node_service_admin = client_admin
+        .run_node_service(port1, skip_process_inbox)
+        .await?;
+    let mut node_service_a = client_a.run_node_service(port2, skip_process_inbox).await?;
+    let mut node_service_b = client_b.run_node_service(port3, skip_process_inbox).await?;
 
     node_service_a
         .request_application(&chain_a, &token1)
@@ -1660,9 +1671,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -1700,9 +1711,12 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
     let port3 = get_node_port().await;
-    let mut node_service_amm = client_amm.run_node_service(port1).await?;
-    let mut node_service0 = client0.run_node_service(port2).await?;
-    let mut node_service1 = client1.run_node_service(port3).await?;
+    let skip_process_inbox = true;
+    let mut node_service_amm = client_amm
+        .run_node_service(port1, skip_process_inbox)
+        .await?;
+    let mut node_service0 = client0.run_node_service(port2, skip_process_inbox).await?;
+    let mut node_service1 = client1.run_node_service(port3, skip_process_inbox).await?;
 
     // Amounts of token0 that will be owned by each user
     let state_fungible0 = fungible::InitialState {
@@ -2402,19 +2416,19 @@ async fn test_resolve_binary() -> Result<()> {
 
 // TODO(#1655): Make the scylladb_udp / rocksdb_udp test work.
 // TODO(#2051): Enable the `test_end_to_end_reconfiguration::scylladb_grpc` that is sometimes failing due to runtime exhaustion.
-//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
-//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
+//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg(any(
     feature = "dynamodb",
     feature = "scylladb",
     feature = "storage-service"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     use linera_base::{crypto::KeyPair, identifiers::Owner};
@@ -2433,8 +2447,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .open_and_assign(&client_2, Amount::from_tokens(3))
         .await?;
     let port = get_node_port().await;
+    let skip_process_inbox = true;
     let node_service_2 = match network {
-        Network::Grpc => Some(client_2.run_node_service(port).await?),
+        Network::Grpc => Some(client_2.run_node_service(port, skip_process_inbox).await?),
         Network::Tcp | Network::Udp => None,
     };
 
@@ -2584,7 +2599,8 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
         ?;
 
     let port = get_node_port().await;
-    let node_service = client.run_node_service(port).await?;
+    let skip_process_inbox = false;
+    let node_service = client.run_node_service(port, skip_process_inbox).await?;
 
     // Open a new chain with the same public key.
     // The node service should automatically create a client for it internally.
@@ -2666,9 +2682,9 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     feature = "scylladb",
     feature = "storage-service"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -2683,7 +2699,8 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let port = get_node_port().await;
-    let mut node_service2 = client2.run_node_service(port).await?;
+    let skip_process_inbox = true;
+    let mut node_service2 = client2.run_node_service(port, skip_process_inbox).await?;
     let response = node_service2
         .query_node(format!(
             "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
@@ -2727,9 +2744,9 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -2777,8 +2794,7 @@ async fn test_project_new() -> Result<()> {
     let _rustflags_override = override_disable_warnings_as_errors();
     let path_provider = PathProvider::create_temporary_directory()?;
     let id = 0;
-    let deterministic = false;
-    let client = ClientWrapper::new(path_provider, Network::Grpc, None, id, deterministic);
+    let client = ClientWrapper::new(path_provider, Network::Grpc, None, id);
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
         .parent()
@@ -2796,8 +2812,7 @@ async fn test_project_new() -> Result<()> {
 async fn test_project_test() -> Result<()> {
     let path_provider = PathProvider::create_temporary_directory()?;
     let id = 0;
-    let deterministic = false;
-    let client = ClientWrapper::new(path_provider, Network::Grpc, None, id, deterministic);
+    let client = ClientWrapper::new(path_provider, Network::Grpc, None, id);
     client
         .project_test(&ClientWrapper::example_path("counter")?)
         .await?;
@@ -2840,7 +2855,8 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     let port = get_node_port().await;
-    let node_service = client.run_node_service(port).await?;
+    let skip_process_inbox = true;
+    let node_service = client.run_node_service(port, skip_process_inbox).await?;
 
     assert_eq!(
         node_service.try_get_applications_uri(&chain).await?.len(),
@@ -2928,7 +2944,8 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     let port = get_node_port().await;
-    let node_service = client.run_node_service(port).await?;
+    let skip_process_inbox = true;
+    let node_service = client.run_node_service(port, skip_process_inbox).await?;
 
     assert_eq!(
         node_service.try_get_applications_uri(&chain).await?.len(),
@@ -2941,9 +2958,9 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -3010,9 +3027,9 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -3052,9 +3069,9 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -3098,9 +3115,9 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -3175,9 +3192,9 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
 }
 
 #[cfg(feature = "benchmark")]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -3225,9 +3242,9 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) -> Res
     feature = "scylladb",
     feature = "storage-service"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -3272,12 +3289,12 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
     feature = "scylladb",
     feature = "storage-service"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
@@ -3343,9 +3360,9 @@ impl Drop for RestoreVarOnDrop {
     }
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]

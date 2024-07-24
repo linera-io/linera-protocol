@@ -85,27 +85,14 @@ async fn benchmark_with_fungible(
 ) -> Result<()> {
     info!("Creating the clients and initializing the wallets");
     let path_provider = PathProvider::create_temporary_directory().unwrap();
-    let deterministic = false;
-    let publisher = ClientWrapper::new(
-        path_provider,
-        Network::Grpc,
-        None,
-        num_wallets,
-        deterministic,
-    );
+    let publisher = ClientWrapper::new(path_provider, Network::Grpc, None, num_wallets);
     publisher
         .wallet_init(&[], FaucetOption::NewChain(&faucet))
         .await?;
     let clients = (0..num_wallets)
         .map(|n| {
             let path_provider = PathProvider::create_temporary_directory().unwrap();
-            Ok(ClientWrapper::new(
-                path_provider,
-                Network::Grpc,
-                None,
-                n,
-                deterministic,
-            ))
+            Ok(ClientWrapper::new(path_provider, Network::Grpc, None, n))
         })
         .collect::<Result<Vec<_>, anyhow::Error>>()?;
     try_join_all(
@@ -128,10 +115,13 @@ async fn benchmark_with_fungible(
     info!("Starting the node services and subscribing to the publisher chain.");
     let publisher_chain_id = publisher.default_chain().context("missing default chain")?;
     let mut services = Vec::new();
+    let skip_process_inbox = false;
     for client in &clients {
         let free_port = random_free_tcp_port().context("no free TCP port")?;
         let chain_id = client.default_chain().context("missing default chain")?;
-        let node_service = client.run_node_service(free_port).await?;
+        let node_service = client
+            .run_node_service(free_port, skip_process_inbox)
+            .await?;
         let channel = SystemChannel::PublishedBytecodes;
         node_service
             .subscribe(chain_id, publisher_chain_id, channel)
