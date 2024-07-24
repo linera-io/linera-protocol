@@ -67,6 +67,7 @@ web-sys = { workspace = true, features = ["console"] }
 wasm-bindgen-test.workspace = true
 
 [dev-dependencies]
+criterion = { workspace = true, features = ["async_tokio"] }
 linera-views = { path = ".", features = ["test"] }
 rand.workspace = true
 test-case.workspace = true
@@ -74,3 +75,7 @@ tokio-test.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
+
+[[bench]]
+name = "reentrant_collection_view"
+harness = false
