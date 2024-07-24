@@ -500,7 +500,7 @@ where
         let chain_id = self.chain_id();
         let pairs = self.inboxes.try_load_all_entries().await?;
         let max_stream_queries = self.context().max_stream_queries();
-        let stream = stream::iter(pairs.into_iter())
+        let stream = stream::iter(pairs)
             .map(|(origin, inbox)| async move {
                 if let Some(event) = inbox.removed_events.front().await? {
                     return Err(ChainError::MissingCrossChainUpdate {

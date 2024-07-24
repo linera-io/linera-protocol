@@ -438,7 +438,7 @@ where
     async fn create_network_actions(&self) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
         let pairs = self.chain.outboxes.try_load_all_entries().await?;
-        for (target, outbox) in pairs.into_iter() {
+        for (target, outbox) in pairs {
             let heights = outbox.queue.elements().await?;
             heights_by_recipient
                 .entry(target.recipient)
@@ -780,7 +780,7 @@ where
             } else {
                 MessageAction::Accept
             };
-            for (origin, inbox) in pairs.into_iter() {
+            for (origin, inbox) in pairs {
                 for event in inbox.added_events.elements().await? {
                     messages.push(IncomingMessage {
                         origin: origin.clone(),

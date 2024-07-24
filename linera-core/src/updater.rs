@@ -459,7 +459,7 @@ where
         {
             let chain = self.local_node.chain_state_view(chain_id).await?;
             let pairs = chain.inboxes.try_load_all_entries().await?;
-            for (origin, inbox) in pairs.into_iter() {
+            for (origin, inbox) in pairs {
                 let next_height = sender_heights.entry(origin.sender).or_default();
                 let inbox_next_height = inbox.next_block_height_to_receive()?;
                 if inbox_next_height > *next_height {
