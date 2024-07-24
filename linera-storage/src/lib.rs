@@ -190,7 +190,7 @@ pub trait Storage: Sized {
     async fn read_event(&self, id: EventId) -> Result<Vec<u8>, ViewError>;
 
     /// Writes a vector of events.
-    async fn write_events(&self, events: &[(EventId, Vec<u8>)]) -> Result<(), ViewError>;
+    async fn write_events(&self, events: &[(EventId, &[u8])]) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
     async fn load_active_chain(

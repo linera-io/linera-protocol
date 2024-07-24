@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
+        BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, EventId,
         HashedCertificateValue, MessageBundle, Origin, Target,
     },
     manager, ChainStateView,
@@ -317,6 +317,17 @@ where
 
         let blobs_in_block = self.state.get_blobs(required_blob_ids.clone()).await?;
         let certificate_hash = certificate.hash();
+        let events_iter = executed_block.outcome.events.iter().flatten();
+        let events = events_iter
+            .map(|event| {
+                let event_id = EventId {
+                    chain_id: block.chain_id,
+                    stream_id: event.stream_id.clone(),
+                    key: event.key.clone(),
+                };
+                (event_id, &event.value[..])
+            })
+            .collect::<Vec<_>>();
 
         self.state
             .storage
@@ -326,6 +337,7 @@ where
                 &certificate,
             )
             .await?;
+        self.state.storage.write_events(&events).await?;
 
         // Update the blob state with last used certificate hash.
         try_join_all(required_blob_ids.into_iter().map(|blob_id| {

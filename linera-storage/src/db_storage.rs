@@ -193,7 +193,7 @@ pub static WRITE_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(||
 /// The metric counting how often an event is read from storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static READ_EVENT_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+pub static READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "read_event",
         "The metric counting how often an event is read from storage",
@@ -205,7 +205,7 @@ pub static READ_EVENT_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 /// The metric counting how often an event is written to storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static WRITE_EVENT_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+pub static WRITE_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "write_event",
         "The metric counting how often an event is written to storage",
@@ -752,7 +752,7 @@ where
         maybe_value.ok_or_else(|| ViewError::not_found("value for event ID", event_id))
     }
 
-    async fn write_events(&self, events: &[(EventId, Vec<u8>)]) -> Result<(), ViewError> {
+    async fn write_events(&self, events: &[(EventId, &[u8])]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for (event_id, value) in events {
             Self::add_event_to_batch(event_id, value, &mut batch)?;
