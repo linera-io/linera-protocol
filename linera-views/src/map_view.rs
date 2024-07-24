@@ -101,10 +101,7 @@ where
     }
 
     async fn has_pending_changes(&self) -> bool {
-        if self.deletion_set.has_pending_changes() {
-            return true;
-        }
-        !self.updates.is_empty()
+        self.deletion_set.has_pending_changes() || !self.updates.is_empty()
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
@@ -191,8 +188,8 @@ where
     /// # })
     /// ```
     pub fn remove(&mut self, short_key: Vec<u8>) {
-        if self.deletion_set.contains_key(&short_key) {
-            // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
+        if self.deletion_set.contains_prefix_of(&short_key) {
+            // Optimization: No need to mark `short_key` for deletion as we are going to remove a range of keys containing it.
             self.updates.remove(&short_key);
         } else {
             self.updates.insert(short_key, Update::Removed);
@@ -251,7 +248,7 @@ where
             };
             return Ok(test);
         }
-        if self.deletion_set.contains_key(short_key) {
+        if self.deletion_set.contains_prefix_of(short_key) {
             return Ok(false);
         }
         let key = self.context.base_index(short_key);
@@ -285,7 +282,7 @@ where
             };
             return Ok(value);
         }
-        if self.deletion_set.contains_key(short_key) {
+        if self.deletion_set.contains_prefix_of(short_key) {
             return Ok(None);
         }
         let key = self.context.base_index(short_key);
@@ -310,7 +307,7 @@ where
     pub async fn get_mut(&mut self, short_key: &[u8]) -> Result<Option<&mut V>, ViewError> {
         let update = match self.updates.entry(short_key.to_vec()) {
             Entry::Vacant(e) => {
-                if self.deletion_set.contains_key(short_key) {
+                if self.deletion_set.contains_prefix_of(short_key) {
                     None
                 } else {
                     let key = self.context.base_index(short_key);
@@ -362,7 +359,7 @@ where
         let prefix_len = prefix.len();
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
-        if !self.deletion_set.contains_key(&prefix) {
+        if !self.deletion_set.contains_prefix_of(&prefix) {
             let iter = self
                 .deletion_set
                 .deleted_prefixes
@@ -560,7 +557,7 @@ where
         let prefix_len = prefix.len();
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
-        if !self.deletion_set.contains_key(&prefix) {
+        if !self.deletion_set.contains_prefix_of(&prefix) {
             let iter = self
                 .deletion_set
                 .deleted_prefixes
@@ -727,7 +724,7 @@ where
     /// ```
     pub async fn get_mut_or_default(&mut self, short_key: &[u8]) -> Result<&mut V, ViewError> {
         let update = match self.updates.entry(short_key.to_vec()) {
-            Entry::Vacant(e) if self.deletion_set.contains_key(short_key) => {
+            Entry::Vacant(e) if self.deletion_set.contains_prefix_of(short_key) => {
                 e.insert(Update::Set(V::default()))
             }
             Entry::Vacant(e) => {

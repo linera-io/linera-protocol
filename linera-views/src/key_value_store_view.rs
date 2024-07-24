@@ -615,7 +615,7 @@ where
             };
             return Ok(value);
         }
-        if self.deletion_set.contains_key(index) {
+        if self.deletion_set.contains_prefix_of(index) {
             return Ok(None);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
@@ -644,7 +644,7 @@ where
             };
             return Ok(test);
         }
-        if self.deletion_set.contains_key(index) {
+        if self.deletion_set.contains_prefix_of(index) {
             return Ok(false);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
@@ -679,7 +679,7 @@ where
                 results.push(value);
             } else {
                 results.push(false);
-                if !self.deletion_set.contains_key(&index) {
+                if !self.deletion_set.contains_prefix_of(&index) {
                     missed_indices.push(i);
                     let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                     vector_query.push(key);
@@ -722,7 +722,7 @@ where
                 result.push(value);
             } else {
                 result.push(None);
-                if !self.deletion_set.contains_key(&index) {
+                if !self.deletion_set.contains_prefix_of(&index) {
                     missed_indices.push(i);
                     let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                     vector_query.push(key);
@@ -769,7 +769,7 @@ where
                         self.total_size.sub_assign(entry_size);
                     }
                     self.sizes.remove(key.clone());
-                    if self.deletion_set.contains_key(&key) {
+                    if self.deletion_set.contains_prefix_of(&key) {
                         // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
                         self.updates.remove(&key);
                     } else {

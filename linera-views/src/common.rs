@@ -65,18 +65,12 @@ impl DeletionSet {
         self.deleted_prefixes.clear();
     }
 
-    pub fn contains_key(&self, index: &[u8]) -> bool {
-        if self.delete_storage_first {
-            return true;
-        }
-        contains_key(&self.deleted_prefixes, index)
+    pub fn contains_prefix_of(&self, index: &[u8]) -> bool {
+        self.delete_storage_first || contains_prefix_of(&self.deleted_prefixes, index)
     }
 
     pub fn has_pending_changes(&self) -> bool {
-        if self.delete_storage_first {
-            return true;
-        }
-        !self.deleted_prefixes.is_empty()
+        self.delete_storage_first || !self.deleted_prefixes.is_empty()
     }
 
     pub fn insert_key_prefix(&mut self, key_prefix: Vec<u8>) {
@@ -230,14 +224,14 @@ where
     }
 }
 
-pub(crate) fn contains_key(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
+pub(crate) fn contains_prefix_of(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
     let iter = prefixes.iter();
     let mut suffix_closed_set = SuffixClosedSetIterator::new(0, iter);
     suffix_closed_set.find_key(key)
 }
 
 pub(crate) fn insert_key_prefix(prefixes: &mut BTreeSet<Vec<u8>>, prefix: Vec<u8>) {
-    if !contains_key(prefixes, &prefix) {
+    if !contains_prefix_of(prefixes, &prefix) {
         let key_prefix_list = prefixes
             .range(get_interval(prefix.clone()))
             .map(|x| x.to_vec())
