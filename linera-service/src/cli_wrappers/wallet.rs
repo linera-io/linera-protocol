@@ -378,6 +378,7 @@ impl ClientWrapper {
             command.args(var.split_whitespace());
         }
         let child = command
+            .arg("--listener-skip-process-inbox")
             .args(["--port".to_string(), port.to_string()])
             .spawn_into()?;
         let client = reqwest_client();

@@ -397,9 +397,9 @@ async fn test_storage_service_wallet_lock() -> Result<()> {
     feature = "scylladb",
     feature = "storage-service"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> Result<()> {
     use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
@@ -493,9 +493,9 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc); "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -546,9 +546,9 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -687,12 +687,12 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
 
 // TODO(#2051): Enable the test `test_wasm_end_to_end_fungible::scylladb_grpc` that is frequently failing.
 // The failure is `Error: Could not find application URI: .... after 15 tries`.
-//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "storage_service_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
+//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc), "fungible" ; "storage_service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc), "native-fungible" ; "native_storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "fungible" ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "native-fungible" ; "native_kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None), "fungible" ; "remote_net_grpc"))]
@@ -851,12 +851,12 @@ async fn test_wasm_end_to_end_fungible(
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "storage_service_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc), "fungible" ; "storage_service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc), "native-fungible" ; "native_storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "fungible" ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "native-fungible" ; "native_kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None), "fungible" ; "remote_net_grpc"))]
@@ -985,9 +985,9 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     feature = "kubernetes",
     feature = "remote-net"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -1248,9 +1248,9 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -1383,13 +1383,13 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
 }
 
 // TODO(#1159): We should enable the matching engine on other storages.
-// #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-// #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+// #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+// #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 // #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 // #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[cfg(feature = "storage-service")]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-// #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+// #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::deterministic(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
@@ -1660,9 +1660,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -2402,19 +2402,19 @@ async fn test_resolve_binary() -> Result<()> {
 
 // TODO(#1655): Make the scylladb_udp / rocksdb_udp test work.
 // TODO(#2051): Enable the `test_end_to_end_reconfiguration::scylladb_grpc` that is sometimes failing due to runtime exhaustion.
-//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
-//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
+//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg(any(
     feature = "dynamodb",
     feature = "scylladb",
     feature = "storage-service"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     use linera_base::{crypto::KeyPair, identifiers::Owner};
@@ -2671,9 +2671,9 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     feature = "scylladb",
     feature = "storage-service"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -2732,9 +2732,9 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -2942,9 +2942,9 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -3011,9 +3011,9 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -3053,9 +3053,9 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -3099,9 +3099,9 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -3176,9 +3176,9 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
 }
 
 #[cfg(feature = "benchmark")]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
@@ -3226,9 +3226,9 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) -> Res
     feature = "scylladb",
     feature = "storage-service"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -3273,12 +3273,12 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
     feature = "scylladb",
     feature = "storage-service"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
@@ -3344,9 +3344,9 @@ impl Drop for RestoreVarOnDrop {
     }
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::deterministic(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::deterministic(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::deterministic(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]

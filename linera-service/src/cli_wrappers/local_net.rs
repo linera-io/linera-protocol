@@ -312,7 +312,7 @@ impl Validator {
 
 #[cfg(with_testing)]
 impl LocalNetConfig {
-    pub fn new_test(database: Database, network: Network) -> Self {
+    fn new(database: Database, network: Network, deterministic: bool) -> Self {
         let num_shards = match database {
             Database::RocksDb => 1,
             _ => 4,
@@ -333,6 +333,15 @@ impl LocalNetConfig {
             path_provider,
         }
     }
+
+    pub fn new_test(database: Database, network: Network) -> Self {
+        Self::new(database, network, false)
+    }
+
+    pub fn deterministic(database: Database, network: Network) -> Self {
+        Self::new(database, network, true)
+    }
+
 }
 
 #[async_trait]
