@@ -59,6 +59,7 @@ pub struct ClientWrapper {
     max_pending_messages: usize,
     network: Network,
     pub path_provider: PathProvider,
+    deterministic: bool,
 }
 
 impl ClientWrapper {
@@ -67,6 +68,7 @@ impl ClientWrapper {
         network: Network,
         testing_prng_seed: Option<u64>,
         id: usize,
+        deterministic: bool,
     ) -> Self {
         let storage = format!(
             "rocksdb:{}/client_{}.db",
@@ -81,6 +83,7 @@ impl ClientWrapper {
             max_pending_messages: 10_000,
             network,
             path_provider,
+            deterministic,
         }
     }
 
@@ -374,11 +377,13 @@ impl ClientWrapper {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
         command.arg("service");
+        if self.deterministic {
+            command.arg("--listener-skip-process-inbox");
+        }
         if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
             command.args(var.split_whitespace());
         }
         let child = command
-            .arg("--listener-skip-process-inbox")
             .args(["--port".to_string(), port.to_string()])
             .spawn_into()?;
         let client = reqwest_client();

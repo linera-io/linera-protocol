@@ -109,6 +109,7 @@ pub async fn handle_net_up_service(
         policy,
         storage_config_builder,
         path_provider,
+        deterministic: false,
     };
     let (mut net, client1) = config.instantiate().await?;
     net_up(extra_wallets, &mut net, client1).await?;

@@ -2781,7 +2781,9 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Resul
 async fn test_project_new() -> Result<()> {
     let _rustflags_override = override_disable_warnings_as_errors();
     let path_provider = PathProvider::create_temporary_directory()?;
-    let client = ClientWrapper::new(path_provider, Network::Grpc, None, 0);
+    let id = 0;
+    let deterministic = false;
+    let client = ClientWrapper::new(path_provider, Network::Grpc, None, id, deterministic);
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
         .parent()
@@ -2798,7 +2800,9 @@ async fn test_project_new() -> Result<()> {
 #[test_log::test(tokio::test)]
 async fn test_project_test() -> Result<()> {
     let path_provider = PathProvider::create_temporary_directory()?;
-    let client = ClientWrapper::new(path_provider, Network::Grpc, None, 0);
+    let id = 0;
+    let deterministic = false;
+    let client = ClientWrapper::new(path_provider, Network::Grpc, None, id, deterministic);
     client
         .project_test(&ClientWrapper::example_path("counter")?)
         .await?;
