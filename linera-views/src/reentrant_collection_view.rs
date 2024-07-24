@@ -571,8 +571,8 @@ where
         }
         let mut updates = self.updates.lock().await;
         let mut present_indices = Vec::new();
-        let mut handles = Vec::new();
         let mut test_indices = Vec::new();
+        let mut test_keys = Vec::new();
         for (i_key, short_key) in short_keys.iter().enumerate() {
             match updates.get(short_key) {
                 Some(entry) => {
@@ -582,22 +582,18 @@ where
                 }
                 None => {
                     if !self.delete_storage_first {
-                        let context = self.context.clone();
                         let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-                        handles.push(tokio::spawn(async move {
-                            context.contains_key(&key_index).await
-                        }));
+                        test_keys.push(key_index);
                         test_indices.push(i_key);
                     }
                 }
             }
         }
-        let response = futures::future::join_all(handles).await;
+        let response = self.context.contains_keys(test_keys).await?;
         let num_init_keys = W::NUM_INIT_KEYS;
         let mut keys = Vec::new();
         let mut indices_to_load = Vec::new();
         for (key_exists, i_key) in response.into_iter().zip(test_indices) {
-            let key_exists = key_exists??;
             if key_exists {
                 indices_to_load.push(i_key);
                 let short_key = &short_keys[i_key];

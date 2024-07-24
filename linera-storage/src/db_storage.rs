@@ -20,7 +20,7 @@ use linera_execution::{
 };
 use linera_views::{
     batch::Batch,
-    common::{AdminKeyValueStore, ContextFromStore, KeyValueStore},
+    common::{from_bytes_option, AdminKeyValueStore, ContextFromStore, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
@@ -52,12 +52,34 @@ static CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::ne
     .expect("Counter creation should not fail")
 });
 
+/// The metric counting how often hashed certificate values are tested for existence from storage.
+#[cfg(with_metrics)]
+static CONTAINS_HASHED_CERTIFICATE_VALUES_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "contains_hashed_certificate_values",
+        "The metric counting how often hashed certificate values are tested for existence from storage",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
+
 /// The metric counting how often a blob is tested for existence from storage
 #[cfg(with_metrics)]
 static CONTAINS_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "contains_blob",
         "The metric counting how often a blob is tested for existence from storage",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
+
+/// The metric counting how often multiple blobs are tested for existence from storage
+#[cfg(with_metrics)]
+static CONTAINS_BLOBS_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "contains_blobs",
+        "The metric counting how often multiple blobs are tested for existence from storage",
         &[],
     )
     .expect("Counter creation should not fail")
@@ -432,12 +454,47 @@ where
         Ok(test)
     }
 
+    async fn contains_hashed_certificate_values(
+        &self,
+        hashes: Vec<CryptoHash>,
+    ) -> Result<Vec<bool>, ViewError> {
+        let mut keys = Vec::new();
+        for hash in hashes {
+            let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+            keys.push(value_key);
+        }
+        let test = self.client.client.contains_keys(keys).await?;
+        #[cfg(with_metrics)]
+        CONTAINS_HASHED_CERTIFICATE_VALUES_COUNTER
+            .with_label_values(&[])
+            .inc();
+        Ok(test)
+    }
+
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::BlobId(blob_id))?;
         let test = self.client.client.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(test)
+    }
+
+    async fn missing_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, ViewError> {
+        let mut keys = Vec::new();
+        for blob_id in blob_ids.clone() {
+            let key = bcs::to_bytes(&BaseKey::BlobId(blob_id))?;
+            keys.push(key);
+        }
+        let results = self.client.client.contains_keys(keys).await?;
+        let mut missing_blobs = Vec::new();
+        for (blob_id, result) in blob_ids.into_iter().zip(results) {
+            if !result {
+                missing_blobs.push(blob_id);
+            }
+        }
+        #[cfg(with_metrics)]
+        CONTAINS_BLOBS_COUNTER.with_label_values(&[]).inc();
+        Ok(missing_blobs)
     }
 
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
@@ -515,13 +572,13 @@ where
         value: &HashedCertificateValue,
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.add_hashed_cert_value_to_batch(value, &mut batch)?;
+        Self::add_hashed_cert_value_to_batch(value, &mut batch)?;
         self.write_batch(batch).await
     }
 
     async fn write_hashed_blob(&self, blob: &HashedBlob) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+        Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -554,7 +611,7 @@ where
         blob_state: &BlobState,
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.add_blob_state_to_batch(blob_id, blob_state, &mut batch)?;
+        Self::add_blob_state_to_batch(blob_id, blob_state, &mut batch)?;
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -565,7 +622,7 @@ where
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for value in values {
-            self.add_hashed_cert_value_to_batch(value, &mut batch)?;
+            Self::add_hashed_cert_value_to_batch(value, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -573,40 +630,52 @@ where
     async fn write_hashed_blobs(&self, blobs: &[HashedBlob]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for blob in blobs {
-            self.add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+            Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
         }
+        self.write_batch(batch).await
+    }
+
+    async fn write_hashed_certificate_values_hashed_blobs_certificate(
+        &self,
+        values: &[HashedCertificateValue],
+        blobs: &[HashedBlob],
+        certificate: &Certificate,
+    ) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        for value in values {
+            Self::add_hashed_cert_value_to_batch(value, &mut batch)?;
+        }
+        for blob in blobs {
+            Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+        }
+        Self::add_certificate_to_batch(certificate, &mut batch)?;
         self.write_batch(batch).await
     }
 
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let (cert_test, value_test) = tokio::join!(
-            self.client.client.contains_key(&cert_key),
-            self.client.client.contains_key(&value_key)
-        );
+        let keys = vec![cert_key, value_key];
+        let results = self.client.client.contains_keys(keys).await?;
         #[cfg(with_metrics)]
         CONTAINS_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
-        Ok(cert_test? && value_test?)
+        Ok(results[0] && results[1])
     }
 
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let (cert_result, value_result) = tokio::join!(
-            self.client.client.read_value::<LiteCertificate>(&cert_key),
-            self.client
-                .client
-                .read_value::<CertificateValue>(&value_key)
-        );
-        if value_result.is_ok() {
+        let keys = vec![cert_key, value_key];
+        let values = self.client.client.read_multi_values_bytes(keys).await;
+        if values.is_ok() {
             #[cfg(with_metrics)]
             READ_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         }
-        let value: CertificateValue =
-            value_result?.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-        let cert: LiteCertificate =
-            cert_result?.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
+        let values = values?;
+        let cert_result = from_bytes_option::<LiteCertificate, _>(&values[0])?;
+        let value_result = from_bytes_option::<CertificateValue, _>(&values[1])?;
+        let value = value_result.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
+        let cert = cert_result.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
         Ok(cert
             .with_value(value.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)?)
@@ -614,14 +683,14 @@ where
 
     async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.add_certificate_to_batch(certificate, &mut batch)?;
+        Self::add_certificate_to_batch(certificate, &mut batch)?;
         self.write_batch(batch).await
     }
 
     async fn write_certificates(&self, certificates: &[Certificate]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for certificate in certificates {
-            self.add_certificate_to_batch(certificate, &mut batch)?;
+            Self::add_certificate_to_batch(certificate, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -639,7 +708,6 @@ where
     <Client as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
     fn add_hashed_cert_value_to_batch(
-        &self,
         value: &HashedCertificateValue,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
@@ -653,7 +721,6 @@ where
     }
 
     fn add_blob_to_batch(
-        &self,
         blob_id: &BlobId,
         blob: &HashedBlob,
         batch: &mut Batch,
@@ -666,7 +733,6 @@ where
     }
 
     fn add_blob_state_to_batch(
-        &self,
         blob_id: BlobId,
         blob_state: &BlobState,
         batch: &mut Batch,
@@ -677,7 +743,6 @@ where
     }
 
     fn add_certificate_to_batch(
-        &self,
         certificate: &Certificate,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
