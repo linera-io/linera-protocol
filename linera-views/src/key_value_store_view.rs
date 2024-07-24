@@ -1,12 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt::Debug,
-    mem,
-    ops::Bound::Included,
-};
+use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included};
 
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -22,9 +17,9 @@ use {
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        contains_key, from_bytes_option, from_bytes_option_or_default, get_interval,
-        get_upper_bound, insert_key_prefix, Context, HasherOutput, KeyIterable, KeyValueIterable,
-        SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
+        from_bytes_option, from_bytes_option_or_default, get_interval, get_upper_bound, Context,
+        DeletionSet, HasherOutput, KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update,
+        MIN_VIEW_TAG,
     },
     map_view::ByteMapView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
@@ -142,12 +137,11 @@ impl SizeData {
 #[derive(Debug)]
 pub struct KeyValueStoreView<C> {
     context: C,
-    delete_storage_first: bool,
+    deletion_set: DeletionSet,
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
     stored_total_size: SizeData,
     total_size: SizeData,
     sizes: ByteMapView<C, u32>,
-    deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
 }
@@ -186,12 +180,11 @@ where
         )?;
         Ok(Self {
             context,
-            delete_storage_first: false,
+            deletion_set: DeletionSet::new(),
             updates: BTreeMap::new(),
             stored_total_size: total_size,
             total_size,
             sizes,
-            deleted_prefixes: BTreeSet::new(),
             stored_hash: hash,
             hash: Mutex::new(hash),
         })
@@ -204,19 +197,15 @@ where
     }
 
     fn rollback(&mut self) {
-        self.delete_storage_first = false;
+        self.deletion_set.rollback();
         self.updates.clear();
-        self.deleted_prefixes.clear();
         self.total_size = self.stored_total_size;
         self.sizes.rollback();
         *self.hash.get_mut() = self.stored_hash;
     }
 
     async fn has_pending_changes(&self) -> bool {
-        if self.delete_storage_first {
-            return true;
-        }
-        if !self.deleted_prefixes.is_empty() {
+        if self.deletion_set.has_pending_changes() {
             return true;
         }
         if !self.updates.is_empty() {
@@ -234,7 +223,7 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
-        if self.delete_storage_first {
+        if self.deletion_set.delete_storage_first {
             delete_view = true;
             self.stored_total_size = SizeData::default();
             batch.delete_key_prefix(self.context.base_key());
@@ -247,7 +236,7 @@ where
             }
             self.stored_hash = None
         } else {
-            for index in mem::take(&mut self.deleted_prefixes) {
+            for index in mem::take(&mut self.deletion_set.deleted_prefixes) {
                 let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                 batch.delete_key_prefix(key);
             }
@@ -274,14 +263,13 @@ where
             batch.put_key_value(key, &self.total_size)?;
             self.stored_total_size = self.total_size;
         }
-        self.delete_storage_first = false;
+        self.deletion_set.delete_storage_first = false;
         Ok(delete_view)
     }
 
     fn clear(&mut self) {
-        self.delete_storage_first = true;
+        self.deletion_set.clear();
         self.updates.clear();
-        self.deleted_prefixes.clear();
         self.total_size = SizeData::default();
         self.sizes.clear();
         *self.hash.get_mut() = None;
@@ -296,12 +284,11 @@ where
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(KeyValueStoreView {
             context: self.context.clone(),
-            delete_storage_first: self.delete_storage_first,
+            deletion_set: self.deletion_set.clone(),
             updates: self.updates.clone(),
             stored_total_size: self.stored_total_size,
             total_size: self.total_size,
             sizes: self.sizes.clone_unchecked()?,
-            deleted_prefixes: self.deleted_prefixes.clone(),
             stored_hash: self.stored_hash,
             hash: Mutex::new(*self.hash.get_mut()),
         })
@@ -361,8 +348,9 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
-        if !self.delete_storage_first {
+        if !self.deletion_set.delete_storage_first {
+            let mut suffix_closed_set =
+                SuffixClosedSetIterator::new(0, self.deletion_set.deleted_prefixes.iter());
             for index in self
                 .context
                 .find_keys_by_prefix(&key_prefix)
@@ -460,8 +448,9 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
-        if !self.delete_storage_first {
+        if !self.deletion_set.delete_storage_first {
+            let mut suffix_closed_set =
+                SuffixClosedSetIterator::new(0, self.deletion_set.deleted_prefixes.iter());
             for entry in self
                 .context
                 .find_key_values_by_prefix(&key_prefix)
@@ -626,10 +615,7 @@ where
             };
             return Ok(value);
         }
-        if self.delete_storage_first {
-            return Ok(None);
-        }
-        if contains_key(&self.deleted_prefixes, index) {
+        if self.deletion_set.contains_prefix_of(index) {
             return Ok(None);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
@@ -658,10 +644,7 @@ where
             };
             return Ok(test);
         }
-        if self.delete_storage_first {
-            return Ok(false);
-        }
-        if contains_key(&self.deleted_prefixes, index) {
+        if self.deletion_set.contains_prefix_of(index) {
             return Ok(false);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
@@ -696,18 +679,16 @@ where
                 results.push(value);
             } else {
                 results.push(false);
-                if !contains_key(&self.deleted_prefixes, &index) {
+                if !self.deletion_set.contains_prefix_of(&index) {
                     missed_indices.push(i);
                     let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                     vector_query.push(key);
                 }
             }
         }
-        if !self.delete_storage_first {
-            let values = self.context.contains_keys(vector_query).await?;
-            for (i, value) in missed_indices.into_iter().zip(values) {
-                results[i] = value;
-            }
+        let values = self.context.contains_keys(vector_query).await?;
+        for (i, value) in missed_indices.into_iter().zip(values) {
+            results[i] = value;
         }
         Ok(results)
     }
@@ -741,18 +722,16 @@ where
                 result.push(value);
             } else {
                 result.push(None);
-                if !contains_key(&self.deleted_prefixes, &index) {
+                if !self.deletion_set.contains_prefix_of(&index) {
                     missed_indices.push(i);
                     let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                     vector_query.push(key);
                 }
             }
         }
-        if !self.delete_storage_first {
-            let values = self.context.read_multi_values_bytes(vector_query).await?;
-            for (i, value) in missed_indices.into_iter().zip(values) {
-                result[i] = value;
-            }
+        let values = self.context.read_multi_values_bytes(vector_query).await?;
+        for (i, value) in missed_indices.into_iter().zip(values) {
+            result[i] = value;
         }
         Ok(result)
     }
@@ -790,7 +769,7 @@ where
                         self.total_size.sub_assign(entry_size);
                     }
                     self.sizes.remove(key.clone());
-                    if self.delete_storage_first {
+                    if self.deletion_set.contains_prefix_of(&key) {
                         // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
                         self.updates.remove(&key);
                     } else {
@@ -834,9 +813,7 @@ where
                         self.sizes.remove(key);
                     }
                     self.sizes.remove_by_prefix(key_prefix.clone());
-                    if !self.delete_storage_first {
-                        insert_key_prefix(&mut self.deleted_prefixes, key_prefix);
-                    }
+                    self.deletion_set.insert_key_prefix(key_prefix);
                 }
             }
         }
@@ -926,8 +903,9 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
-        if !self.delete_storage_first {
+        if !self.deletion_set.delete_storage_first {
+            let mut suffix_closed_set =
+                SuffixClosedSetIterator::new(0, self.deletion_set.deleted_prefixes.iter());
             for key in self
                 .context
                 .find_keys_by_prefix(&key_prefix_full)
@@ -999,8 +977,9 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
-        if !self.delete_storage_first {
+        if !self.deletion_set.delete_storage_first {
+            let mut suffix_closed_set =
+                SuffixClosedSetIterator::new(0, self.deletion_set.deleted_prefixes.iter());
             for entry in self
                 .context
                 .find_key_values_by_prefix(&key_prefix_full)
