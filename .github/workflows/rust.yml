@@ -29,7 +29,7 @@ env:
   RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links -D warnings
   RUSTFLAGS: -D warnings
   RUSTUP_MAX_RETRIES: 10
-  RUST_LOG: debug
+  RUST_LOG: linera=debug
   RUST_LOG_FORMAT: plain
 
 permissions:
