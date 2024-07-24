@@ -51,11 +51,11 @@ done
 ENDPOINT="127.0.0.1:$PORT"
 
 # Run Storage Service Server
-./storage_service_server memory --endpoint "$ENDPOINT" &
+./linera-storage-server memory --endpoint "$ENDPOINT" &
 SERVER_PID=$!
 sleep 2  # Wait a moment to ensure the server starts properly
 if ! kill -0 $SERVER_PID 2>/dev/null; then
-    echo "Failed to start storage_service_server. Exiting."
+    echo "Failed to start linera-storage-server. Exiting."
     exit 1
 fi
 

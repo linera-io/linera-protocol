@@ -1,0 +1,32 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 10
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 20
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Clear up some space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run benchmarks
+      run: |
+        cargo bench -p linera-service

@@ -16,7 +16,7 @@ use futures::{
 use linera_base::identifiers::ChainId;
 use linera_core::{
     node::NodeError,
-    worker::{NetworkActions, Notification, ValidatorWorker, WorkerError, WorkerState},
+    worker::{NetworkActions, Notification, WorkerError, WorkerState},
     JoinSetExt as _, TaskHandle,
 };
 use linera_storage::Storage;

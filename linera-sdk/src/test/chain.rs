@@ -18,10 +18,7 @@ use linera_base::{
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
 };
 use linera_chain::{data_types::Certificate, ChainError, ChainExecutionContext};
-use linera_core::{
-    data_types::ChainInfoQuery,
-    worker::{ValidatorWorker, WorkerError},
-};
+use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
     system::{SystemChannel, SystemExecutionError, SystemMessage, SystemOperation},
     Bytecode, ExecutionError, Message, Query, Response,

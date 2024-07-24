@@ -185,20 +185,38 @@ where
             }
 
             ContainsKey { id, key, callback } => {
-                let view = self.users.try_load_entry_or_insert(&id).await?;
-                let result = view.contains_key(&key).await?;
+                let view = self.users.try_load_entry(&id).await?;
+                let result = match view {
+                    Some(view) => view.contains_key(&key).await?,
+                    None => false,
+                };
+                callback.respond(result);
+            }
+
+            ContainsKeys { id, keys, callback } => {
+                let view = self.users.try_load_entry(&id).await?;
+                let result = match view {
+                    Some(view) => view.contains_keys(keys).await?,
+                    None => vec![false; keys.len()],
+                };
                 callback.respond(result);
             }
 
             ReadMultiValuesBytes { id, keys, callback } => {
-                let view = self.users.try_load_entry_or_insert(&id).await?;
-                let values = view.multi_get(keys).await?;
+                let view = self.users.try_load_entry(&id).await?;
+                let values = match view {
+                    Some(view) => view.multi_get(keys).await?,
+                    None => vec![None; keys.len()],
+                };
                 callback.respond(values);
             }
 
             ReadValueBytes { id, key, callback } => {
-                let view = self.users.try_load_entry_or_insert(&id).await?;
-                let result = view.get(&key).await?;
+                let view = self.users.try_load_entry(&id).await?;
+                let result = match view {
+                    Some(view) => view.get(&key).await?,
+                    None => None,
+                };
                 callback.respond(result);
             }
 
@@ -207,8 +225,11 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.users.try_load_entry_or_insert(&id).await?;
-                let result = view.find_keys_by_prefix(&key_prefix).await?;
+                let view = self.users.try_load_entry(&id).await?;
+                let result = match view {
+                    Some(view) => view.find_keys_by_prefix(&key_prefix).await?,
+                    None => Vec::new(),
+                };
                 callback.respond(result);
             }
 
@@ -217,8 +238,11 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.users.try_load_entry_or_insert(&id).await?;
-                let result = view.find_key_values_by_prefix(&key_prefix).await?;
+                let view = self.users.try_load_entry(&id).await?;
+                let result = match view {
+                    Some(view) => view.find_key_values_by_prefix(&key_prefix).await?,
+                    None => Vec::new(),
+                };
                 callback.respond(result);
             }
 
@@ -368,6 +392,12 @@ pub enum ExecutionRequest {
         callback: Sender<bool>,
     },
 
+    ContainsKeys {
+        id: UserApplicationId,
+        keys: Vec<Vec<u8>>,
+        callback: Sender<Vec<bool>>,
+    },
+
     ReadMultiValuesBytes {
         id: UserApplicationId,
         keys: Vec<Vec<u8>>,
@@ -499,6 +529,12 @@ impl Debug for ExecutionRequest {
                 .debug_struct("ExecutionRequest::ContainsKey")
                 .field("id", id)
                 .field("key", key)
+                .finish_non_exhaustive(),
+
+            ExecutionRequest::ContainsKeys { id, keys, .. } => formatter
+                .debug_struct("ExecutionRequest::ContainsKeys")
+                .field("id", id)
+                .field("keys", keys)
                 .finish_non_exhaustive(),
 
             ExecutionRequest::ReadMultiValuesBytes { id, keys, .. } => formatter

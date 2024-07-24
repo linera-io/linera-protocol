@@ -779,38 +779,44 @@ RpcMessage:
     8:
       VersionInfoQuery: UNIT
     9:
+      GenesisConfigHashQuery: UNIT
+    10:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    10:
+    11:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    11:
+    12:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    12:
+    13:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    13:
+    14:
+      GenesisConfigHashResponse:
+        NEWTYPE:
+          TYPENAME: CryptoHash
+    15:
       DownloadBlobResponse:
         NEWTYPE:
           TYPENAME: Blob
-    14:
+    16:
       DownloadCertificateValueResponse:
         NEWTYPE:
           TYPENAME: CertificateValue
-    15:
+    17:
       DownloadCertificateResponse:
         NEWTYPE:
           TYPENAME: Certificate
-    16:
+    18:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    17:
+    19:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest

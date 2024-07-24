@@ -326,34 +326,6 @@ where
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
-    /// If an entry is absent then a default entry is added to the collection. The resulting view
-    /// cannot be modified.
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
-    ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
-    ///   let subview = view.try_load_entry_or_insert(&[0, 1]).await.unwrap();
-    ///   let value = subview.get();
-    ///   assert_eq!(*value, String::default());
-    /// # })
-    /// ```
-    pub async fn try_load_entry_or_insert(
-        &mut self,
-        short_key: &[u8],
-    ) -> Result<ReadGuardedView<W>, ViewError> {
-        Ok(ReadGuardedView(
-            self.try_load_view_mut(short_key)
-                .await?
-                .try_read_arc()
-                .ok_or_else(|| ViewError::TryLockError(short_key.to_vec()))?,
-        ))
-    }
-
-    /// Loads a subview at the given index in the collection and gives read-only access to the data.
     /// If an entry is absent then `None` is returned.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -363,7 +335,9 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
-    ///   let _subview = view.try_load_entry_or_insert(&[0, 1]).await.unwrap();
+    ///   {
+    ///     let _subview = view.try_load_entry_mut(&[0, 1]).await.unwrap();
+    ///   }
     ///   let subview = view.try_load_entry(&[0, 1]).await.unwrap().unwrap();
     ///   let value = subview.get();
     ///   assert_eq!(*value, String::default());
@@ -391,7 +365,7 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
-    ///   let _subview = view.try_load_entry_or_insert(&[0, 1]).await.unwrap();
+    ///   let _subview = view.try_load_entry_mut(&[0, 1]).await.unwrap();
     ///   assert!(view.contains_key(&[0, 1]).await.unwrap());
     ///   assert!(!view.contains_key(&[0, 2]).await.unwrap());
     /// # })
@@ -481,67 +455,8 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Send + Sync + 'static,
 {
-    async fn do_load_entries(
-        context: &C,
-        updates: &mut BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
-        delete_storage_first: bool,
-        short_keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<(Vec<u8>, Arc<RwLock<W>>)>, ViewError> {
-        let mut selected_short_keys = Vec::new();
-        for short_key in &short_keys {
-            match updates.entry(short_key.to_vec()) {
-                btree_map::Entry::Occupied(entry) => {
-                    let entry = entry.into_mut();
-                    if let Update::Removed = entry {
-                        let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = context.clone_with_base_key(key);
-                        let view = W::new(context)?;
-                        let view = Arc::new(RwLock::new(view));
-                        *entry = Update::Set(view);
-                    }
-                }
-                btree_map::Entry::Vacant(entry) => {
-                    if delete_storage_first {
-                        let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = context.clone_with_base_key(key);
-                        let view = W::new(context)?;
-                        let view = Arc::new(RwLock::new(view));
-                        entry.insert(Update::Set(view));
-                    } else {
-                        selected_short_keys.push(short_key.to_vec());
-                    }
-                }
-            }
-        }
-        let mut handles = Vec::new();
-        for short_key in &selected_short_keys {
-            let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
-            let context = context.clone_with_base_key(key);
-            handles.push(tokio::spawn(async move { W::load(context).await }));
-        }
-        let response = futures::future::join_all(handles).await;
-        for (short_key, view) in selected_short_keys.into_iter().zip(response) {
-            let view = view??;
-            let wrapped_view = Arc::new(RwLock::new(view));
-            updates.insert(short_key, Update::Set(wrapped_view));
-        }
-
-        Ok(short_keys
-            .into_iter()
-            .map(|short_key| {
-                let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) else {
-                    unreachable!()
-                };
-                let Update::Set(view) = entry.into_mut() else {
-                    unreachable!()
-                };
-                (short_key, view.clone())
-            })
-            .collect())
-    }
-
-    /// Load multiple entries for writing at once.
-    /// The entries in short_keys have to be all distinct.
+    /// Loads multiple entries for writing at once.
+    /// The entries in `short_keys` have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -567,18 +482,58 @@ where
         short_keys: Vec<Vec<u8>>,
     ) -> Result<Vec<WriteGuardedView<W>>, ViewError> {
         let updates = self.updates.get_mut();
-        let entries = Self::do_load_entries(
-            &self.context,
-            updates,
-            self.delete_storage_first,
-            short_keys,
-        )
-        .await?;
-        entries
+        let mut short_keys_to_load = Vec::new();
+        let num_init_keys = W::NUM_INIT_KEYS;
+        let mut keys = Vec::new();
+        for short_key in &short_keys {
+            let key = self
+                .context
+                .base_tag_index(KeyTag::Subview as u8, short_key);
+            let context = self.context.clone_with_base_key(key);
+            match updates.entry(short_key.to_vec()) {
+                btree_map::Entry::Occupied(entry) => {
+                    let entry = entry.into_mut();
+                    if let Update::Removed = entry {
+                        let view = W::new(context)?;
+                        let view = Arc::new(RwLock::new(view));
+                        *entry = Update::Set(view);
+                    }
+                }
+                btree_map::Entry::Vacant(entry) => {
+                    if self.delete_storage_first {
+                        let view = W::new(context)?;
+                        let view = Arc::new(RwLock::new(view));
+                        entry.insert(Update::Set(view));
+                    } else {
+                        keys.extend(W::pre_load(&context)?);
+                        short_keys_to_load.push(short_key.to_vec());
+                    }
+                }
+            }
+        }
+        let values = self.context.read_multi_values_bytes(keys).await?;
+        for (i_key, short_key) in short_keys_to_load.iter().enumerate() {
+            let key = self
+                .context
+                .base_tag_index(KeyTag::Subview as u8, short_key);
+            let context = self.context.clone_with_base_key(key);
+            let view = W::post_load(
+                context,
+                &values[i_key * num_init_keys..(i_key + 1) * num_init_keys],
+            )?;
+            let wrapped_view = Arc::new(RwLock::new(view));
+            updates.insert(short_key.to_vec(), Update::Set(wrapped_view));
+        }
+
+        short_keys
             .into_iter()
-            .map(|(short_key, view)| {
+            .map(|short_key| {
+                let Some(Update::Set(view)) = updates.get(&short_key) else {
+                    unreachable!()
+                };
                 Ok(WriteGuardedView(
-                    view.try_write_arc()
+                    view.clone()
+                        .try_write_arc()
                         .ok_or_else(|| ViewError::TryLockError(short_key))?,
                 ))
             })
@@ -595,35 +550,88 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
+    ///   {
+    ///     let _subview = view.try_load_entry_mut(&[0,1]).await.unwrap();
+    ///   }
     ///   let short_keys = vec![vec![0, 1], vec![2, 3]];
     ///   let subviews = view.try_load_entries(short_keys).await.unwrap();
-    ///   let value1 = subviews[0].get();
-    ///   let value2 = subviews[1].get();
-    ///   assert_eq!(*value1, String::default());
-    ///   assert_eq!(*value2, String::default());
+    ///   assert!(subviews[1].is_none());
+    ///   let value0 = subviews[0].as_ref().unwrap().get();
+    ///   assert_eq!(*value0, String::default());
     /// # })
     /// ```
     pub async fn try_load_entries(
         &self,
         short_keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<ReadGuardedView<W>>, ViewError> {
+    ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError> {
+        let num_keys = short_keys.len();
+        let mut results = Vec::new();
+        for _ in 0..num_keys {
+            results.push(None);
+        }
         let mut updates = self.updates.lock().await;
-        let entries = Self::do_load_entries(
-            &self.context,
-            &mut updates,
-            self.delete_storage_first,
-            short_keys,
-        )
-        .await?;
-        entries
-            .into_iter()
-            .map(|(short_key, view)| {
-                Ok(ReadGuardedView(
-                    view.try_read_arc()
-                        .ok_or_else(|| ViewError::TryLockError(short_key))?,
-                ))
-            })
-            .collect()
+        let mut present_indices = Vec::new();
+        let mut test_indices = Vec::new();
+        let mut test_keys = Vec::new();
+        for (i_key, short_key) in short_keys.iter().enumerate() {
+            match updates.get(short_key) {
+                Some(entry) => {
+                    if let Update::Set(_entry) = entry {
+                        present_indices.push(i_key);
+                    }
+                }
+                None => {
+                    if !self.delete_storage_first {
+                        let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
+                        test_keys.push(key_index);
+                        test_indices.push(i_key);
+                    }
+                }
+            }
+        }
+        let response = self.context.contains_keys(test_keys).await?;
+        let num_init_keys = W::NUM_INIT_KEYS;
+        let mut keys = Vec::new();
+        let mut indices_to_load = Vec::new();
+        for (key_exists, i_key) in response.into_iter().zip(test_indices) {
+            if key_exists {
+                indices_to_load.push(i_key);
+                let short_key = &short_keys[i_key];
+                let key = self
+                    .context
+                    .base_tag_index(KeyTag::Subview as u8, short_key);
+                let context = self.context.clone_with_base_key(key);
+                keys.extend(W::pre_load(&context)?);
+            }
+        }
+        let values = self.context.read_multi_values_bytes(keys).await?;
+        for (index, i_key) in indices_to_load.into_iter().enumerate() {
+            present_indices.push(i_key);
+            let short_key = &short_keys[i_key];
+            let key = self
+                .context
+                .base_tag_index(KeyTag::Subview as u8, short_key);
+            let context = self.context.clone_with_base_key(key);
+            let view = W::post_load(
+                context,
+                &values[index * num_init_keys..(index + 1) * num_init_keys],
+            )?;
+            let wrapped_view = Arc::new(RwLock::new(view));
+            updates.insert(short_key.to_vec(), Update::Set(wrapped_view));
+        }
+        for i_key in present_indices {
+            let short_key = &short_keys[i_key];
+            let Some(Update::Set(view)) = updates.get(short_key) else {
+                unreachable!()
+            };
+            let guard = ReadGuardedView(
+                view.clone()
+                    .try_read_arc()
+                    .ok_or_else(|| ViewError::TryLockError(short_key.clone()))?,
+            );
+            results[i_key] = Some(guard);
+        }
+        Ok(results)
     }
 }
 
@@ -934,34 +942,6 @@ where
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
-    /// If an entry is absent, then a default entry is inserted into the collection. The obtained view
-    /// cannot be modified.
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
-    ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
-    ///   let subview = view.try_load_entry_or_insert(&23).await.unwrap();
-    ///   let value = subview.get();
-    ///   assert_eq!(*value, String::default());
-    /// # })
-    /// ```
-    pub async fn try_load_entry_or_insert<Q>(
-        &mut self,
-        index: &Q,
-    ) -> Result<ReadGuardedView<W>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + ?Sized,
-    {
-        let short_key = C::derive_short_key(index)?;
-        self.collection.try_load_entry_or_insert(&short_key).await
-    }
-
-    /// Loads a subview at the given index in the collection and gives read-only access to the data.
     /// If an entry is absent then `None` is returned.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -971,7 +951,9 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
-    ///   let _subview = view.try_load_entry_or_insert(&23).await.unwrap();
+    ///   {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    ///   }
     ///   let subview = view.try_load_entry(&23).await.unwrap().unwrap();
     ///   let value = subview.get();
     ///   assert_eq!(*value, String::default());
@@ -998,7 +980,7 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
-    ///   let _subview = view.try_load_entry_or_insert(&23).await.unwrap();
+    ///   let _subview = view.try_load_entry_mut(&23).await.unwrap();
     ///   assert!(view.contains_key(&23).await.unwrap());
     ///   assert!(!view.contains_key(&24).await.unwrap());
     /// # })
@@ -1124,18 +1106,20 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
+    ///   {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    ///   }
     ///   let indices = vec![23, 42];
     ///   let subviews = view.try_load_entries(&indices).await.unwrap();
-    ///   let value1 = subviews[0].get();
-    ///   let value2 = subviews[1].get();
-    ///   assert_eq!(*value1, String::default());
-    ///   assert_eq!(*value2, String::default());
+    ///   assert!(subviews[1].is_none());
+    ///   let value0 = subviews[0].as_ref().unwrap().get();
+    ///   assert_eq!(*value0, String::default());
     /// # })
     /// ```
     pub async fn try_load_entries<'a, Q>(
         &'a self,
         indices: impl IntoIterator<Item = &'a Q>,
-    ) -> Result<Vec<ReadGuardedView<W>>, ViewError>
+    ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + 'a,
@@ -1373,34 +1357,6 @@ where
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
-    /// If an entry is absent before then a default entry is put in the collection on this index.
-    /// The obtained view cannot be modified.
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
-    ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
-    ///   let subview = view.try_load_entry_or_insert(&23).await.unwrap();
-    ///   let value = subview.get();
-    ///   assert_eq!(*value, String::default());
-    /// # })
-    /// ```
-    pub async fn try_load_entry_or_insert<Q>(
-        &mut self,
-        index: &Q,
-    ) -> Result<ReadGuardedView<W>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: CustomSerialize,
-    {
-        let short_key = index.to_custom_bytes()?;
-        self.collection.try_load_entry_or_insert(&short_key).await
-    }
-
-    /// Loads a subview at the given index in the collection and gives read-only access to the data.
     /// If an entry is absent then `None` is returned.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1410,7 +1366,9 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
-    ///   let _subview = view.try_load_entry_or_insert(&23).await.unwrap();
+    ///   {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    ///   }
     ///   let subview = view.try_load_entry(&23).await.unwrap().unwrap();
     ///   let value = subview.get();
     ///   assert_eq!(*value, String::default());
@@ -1437,7 +1395,7 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
-    ///   let _subview = view.try_load_entry_or_insert(&23).await.unwrap();
+    ///   let _subview = view.try_load_entry_mut(&23).await.unwrap();
     ///   assert!(view.contains_key(&23).await.unwrap());
     ///   assert!(!view.contains_key(&24).await.unwrap());
     /// # })
@@ -1565,18 +1523,20 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
+    ///   {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    ///   }
     ///   let indices = vec![23, 42];
     ///   let subviews = view.try_load_entries(indices).await.unwrap();
-    ///   let value1 = subviews[0].get();
-    ///   let value2 = subviews[1].get();
-    ///   assert_eq!(*value1, String::default());
-    ///   assert_eq!(*value2, String::default());
+    ///   assert!(subviews[1].is_none());
+    ///   let value0 = subviews[0].as_ref().unwrap().get();
+    ///   assert_eq!(*value0, String::default());
     /// # })
     /// ```
     pub async fn try_load_entries<Q>(
         &self,
         indices: impl IntoIterator<Item = Q>,
-    ) -> Result<Vec<ReadGuardedView<W>>, ViewError>
+    ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize,

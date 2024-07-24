@@ -697,7 +697,7 @@ where
         info!("Broadcasting {} {}", proposals.len(), phase);
         let mut join_set = JoinSet::new();
         let mut handles = Vec::new();
-        for mut client in self.make_validator_mass_clients() {
+        for client in self.make_validator_mass_clients() {
             let proposals = proposals.clone();
             let handle = join_set.spawn_task(async move {
                 debug!("Sending {} requests", proposals.len());

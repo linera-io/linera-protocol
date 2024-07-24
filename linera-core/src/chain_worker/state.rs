@@ -9,10 +9,7 @@ use std::{
     sync::Arc,
 };
 
-use futures::{
-    future::{self, try_join_all},
-    FutureExt as _,
-};
+use futures::future::try_join_all;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{ArithmeticError, BlockHeight, HashedBlob, Timestamp},
@@ -346,26 +343,14 @@ where
         }
 
         let pending_blobs = &self.chain.manager.get().pending_blobs;
-        let tasks = self
+        let blob_ids = self
             .recent_hashed_blobs
             .subtract_cached_items_from::<_, Vec<_>>(required_blob_ids, |id| id)
             .await
             .into_iter()
             .filter(|blob_id| !pending_blobs.contains_key(blob_id))
-            .map(|blob_id| {
-                self.storage
-                    .contains_blob(blob_id)
-                    .map(move |result| (blob_id, result))
-            });
-
-        let mut missing_blobs = vec![];
-        for (blob_id, result) in future::join_all(tasks).await {
-            if !result? {
-                missing_blobs.push(blob_id);
-            }
-        }
-
-        Ok(missing_blobs)
+            .collect::<Vec<_>>();
+        Ok(self.storage.missing_blobs(blob_ids.clone()).await?)
     }
 
     /// Returns the blobs requested by their `blob_ids` that are either in pending in the
@@ -405,7 +390,7 @@ where
                 WorkerError::UnneededValue { value_hash }
             );
         }
-        let tasks = self
+        let locations = self
             .recent_hashed_certificate_values
             .subtract_cached_items_from::<_, Vec<_>>(
                 required_locations_left.into_values(),
@@ -413,15 +398,18 @@ where
             )
             .await
             .into_iter()
-            .map(|location| {
-                self.storage
-                    .contains_hashed_certificate_value(location.certificate_hash)
-                    .map(move |result| (location, result))
-            })
             .collect::<Vec<_>>();
+        let hashes = locations
+            .iter()
+            .map(|location| location.certificate_hash)
+            .collect::<Vec<_>>();
+        let results = self
+            .storage
+            .contains_hashed_certificate_values(hashes)
+            .await?;
         let mut missing_locations = vec![];
-        for (location, result) in future::join_all(tasks).await {
-            if !result? {
+        for (location, result) in locations.into_iter().zip(results) {
+            if !result {
                 missing_locations.push(location);
             }
         }
@@ -440,11 +428,13 @@ where
         let targets = self.chain.outboxes.indices().await?;
         let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
-            let heights = outbox.queue.elements().await?;
-            heights_by_recipient
-                .entry(target.recipient)
-                .or_default()
-                .insert(target.medium, heights);
+            if let Some(outbox) = outbox {
+                let heights = outbox.queue.elements().await?;
+                heights_by_recipient
+                    .entry(target.recipient)
+                    .or_default()
+                    .insert(target.medium, heights);
+            }
         }
         let mut actions = NetworkActions::default();
         for (recipient, height_map) in heights_by_recipient {
@@ -783,12 +773,14 @@ where
                 MessageAction::Accept
             };
             for (origin, inbox) in origins.into_iter().zip(inboxes) {
-                for event in inbox.added_events.elements().await? {
-                    messages.push(IncomingMessage {
-                        origin: origin.clone(),
-                        event: event.clone(),
-                        action,
-                    });
+                if let Some(inbox) = inbox {
+                    for event in inbox.added_events.elements().await? {
+                        messages.push(IncomingMessage {
+                            origin: origin.clone(),
+                            event: event.clone(),
+                            action,
+                        });
+                    }
                 }
             }
 
@@ -1103,16 +1095,14 @@ where
         let blobs_in_block = self.state.get_blobs(required_blob_ids.clone()).await?;
         let certificate_hash = certificate.hash();
 
-        let (result_hashed_certificate_value, result_blobs, result_certificate) = tokio::join!(
-            self.state
-                .storage
-                .write_hashed_certificate_values(hashed_certificate_values),
-            self.state.storage.write_hashed_blobs(&blobs_in_block),
-            self.state.storage.write_certificate(&certificate)
-        );
-        result_hashed_certificate_value?;
-        result_blobs?;
-        result_certificate?;
+        self.state
+            .storage
+            .write_hashed_certificate_values_hashed_blobs_certificate(
+                hashed_certificate_values,
+                &blobs_in_block,
+                &certificate,
+            )
+            .await?;
 
         // Update the blob state with last used certificate hash.
         try_join_all(required_blob_ids.into_iter().map(|blob_id| {

@@ -18,6 +18,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera sync-balance`↴](#linera-sync-balance)
 * [`linera sync`↴](#linera-sync)
 * [`linera process-inbox`↴](#linera-process-inbox)
+* [`linera query-validator`↴](#linera-query-validator)
 * [`linera query-validators`↴](#linera-query-validators)
 * [`linera set-validator`↴](#linera-set-validator)
 * [`linera remove-validator`↴](#linera-remove-validator)
@@ -69,6 +70,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `sync-balance` — (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the local balance
 * `sync` — Synchronize the local state of the chain with a quorum validators
 * `process-inbox` — Process all pending incoming messages from the inbox of the given chain by creating as many blocks as needed to execute all (non-failing) messages. Failing messages will be marked as rejected and may bounce to their sender depending on their configuration
+* `query-validator` — Show the version and genesis config hash of a new validator, and print a warning if it is incompatible
 * `query-validators` — Show the current set of validators for a chain
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
@@ -364,6 +366,18 @@ Process all pending incoming messages from the inbox of the given chain by creat
 
 
 
+## `linera query-validator`
+
+Show the version and genesis config hash of a new validator, and print a warning if it is incompatible
+
+**Usage:** `linera query-validator <ADDRESS>`
+
+###### **Arguments:**
+
+* `<ADDRESS>` — The new validator's address
+
+
+
 ## `linera query-validators`
 
 Show the current set of validators for a chain
@@ -389,6 +403,7 @@ Add or modify a validator (admin only)
 * `--votes <VOTES>` — Voting power
 
   Default value: `1`
+* `--skip-online-check` — Skip the version and genesis config checks
 
 
 
@@ -513,6 +528,7 @@ Run a GraphQL service to explore and extend the chains of the wallet
 
 ###### **Options:**
 
+* `--listener-skip-process-inbox` — Do not create blocks automatically to receive incoming messages. Instead, wait for an explicit mutation `processInbox`
 * `--listener-delay-before-ms <DELAY_BEFORE_MS>` — Wait before processing any notification (useful for testing)
 
   Default value: `0`

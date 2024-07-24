@@ -5,7 +5,7 @@
 use std::{iter::IntoIterator, path::Path};
 
 use linera_base::{
-    crypto::{BcsSignable, CryptoRng, KeyPair, PublicKey},
+    crypto::{BcsSignable, CryptoHash, CryptoRng, KeyPair, PublicKey},
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
@@ -183,5 +183,9 @@ impl GenesisConfig {
 
     pub fn create_committee(&self) -> Committee {
         self.committee.clone().into_committee(self.policy.clone())
+    }
+
+    pub fn hash(&self) -> CryptoHash {
+        CryptoHash::new(self)
     }
 }

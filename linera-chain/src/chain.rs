@@ -504,12 +504,14 @@ where
         let max_stream_queries = self.context().max_stream_queries();
         let stream = stream::iter(stream)
             .map(|(origin, inbox)| async move {
-                if let Some(event) = inbox.removed_events.front().await? {
-                    return Err(ChainError::MissingCrossChainUpdate {
-                        chain_id,
-                        origin: origin.into(),
-                        height: event.height,
-                    });
+                if let Some(inbox) = inbox {
+                    if let Some(event) = inbox.removed_events.front().await? {
+                        return Err(ChainError::MissingCrossChainUpdate {
+                            chain_id,
+                            origin: origin.into(),
+                            height: event.height,
+                        });
+                    }
                 }
                 Ok::<(), ChainError>(())
             })
@@ -519,20 +521,26 @@ where
     }
 
     pub async fn next_block_height_to_receive(
-        &mut self,
+        &self,
         origin: &Origin,
     ) -> Result<BlockHeight, ChainError> {
-        let inbox = self.inboxes.try_load_entry_or_insert(origin).await?;
-        inbox.next_block_height_to_receive()
+        let inbox = self.inboxes.try_load_entry(origin).await?;
+        match inbox {
+            Some(inbox) => inbox.next_block_height_to_receive(),
+            None => Ok(BlockHeight::from(0)),
+        }
     }
 
     pub async fn last_anticipated_block_height(
-        &mut self,
+        &self,
         origin: &Origin,
     ) -> Result<Option<BlockHeight>, ChainError> {
-        let inbox = self.inboxes.try_load_entry_or_insert(origin).await?;
-        match inbox.removed_events.back().await? {
-            Some(event) => Ok(Some(event.height)),
+        let inbox = self.inboxes.try_load_entry(origin).await?;
+        match inbox {
+            Some(inbox) => match inbox.removed_events.back().await? {
+                Some(event) => Ok(Some(event.height)),
+                None => Ok(None),
+            },
             None => Ok(None),
         }
     }

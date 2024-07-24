@@ -81,12 +81,13 @@ enum Proxy<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    Simple(SimpleProxy<S>),
+    Simple(Box<SimpleProxy<S>>),
     Grpc(GrpcProxy<S>),
 }
 
 struct ProxyContext {
     config: ValidatorServerConfig,
+    genesis_config: GenesisConfig,
     send_timeout: Duration,
     recv_timeout: Duration,
 }
@@ -94,10 +95,12 @@ struct ProxyContext {
 impl ProxyContext {
     pub fn from_options(options: &ProxyOptions) -> Result<Self> {
         let config = util::read_json(&options.config_path)?;
+        let genesis_config = util::read_json(&options.genesis_config_path)?;
         Ok(Self {
             config,
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
+            genesis_config,
         })
     }
 }
@@ -134,6 +137,7 @@ where
                 Self::Grpc(GrpcProxy::new(
                     context.config.validator.network,
                     context.config.internal_network,
+                    context.genesis_config,
                     context.send_timeout,
                     context.recv_timeout,
                     tls,
@@ -143,7 +147,7 @@ where
             (
                 NetworkProtocol::Simple(internal_transport),
                 NetworkProtocol::Simple(public_transport),
-            ) => Self::Simple(SimpleProxy {
+            ) => Self::Simple(Box::new(SimpleProxy {
                 internal_config: context
                     .config
                     .internal_network
@@ -153,10 +157,11 @@ where
                     .validator
                     .network
                     .clone_with_protocol(public_transport),
+                genesis_config: context.genesis_config,
                 send_timeout: context.send_timeout,
                 recv_timeout: context.recv_timeout,
                 storage,
-            }),
+            })),
             _ => {
                 bail!(
                     "network protocol mismatch: cannot have {} and {} ",
@@ -177,6 +182,7 @@ where
 {
     public_config: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     internal_config: ValidatorInternalNetworkPreConfig<TransportProtocol>,
+    genesis_config: GenesisConfig,
     send_timeout: Duration,
     recv_timeout: Duration,
     storage: S,
@@ -212,7 +218,7 @@ where
 
         match Self::try_proxy_message(
             message,
-            shard,
+            shard.clone(),
             protocol,
             self.send_timeout,
             self.recv_timeout,
@@ -221,7 +227,7 @@ where
         {
             Ok(maybe_response) => maybe_response,
             Err(error) => {
-                error!(error = %error, "Failed to proxy message");
+                error!(error = %error, "Failed to proxy message to {}", shard.address());
                 None
             }
         }
@@ -288,6 +294,9 @@ where
                 // We assume each shard is running the same version as the proxy
                 Ok(Some(linera_version::VersionInfo::default().into()))
             }
+            GenesisConfigHashQuery => Ok(Some(RpcMessage::GenesisConfigHashResponse(
+                self.genesis_config.hash().into(),
+            ))),
             DownloadBlob(blob_id) => Ok(Some(
                 self.storage
                     .read_hashed_blob(*blob_id)
@@ -317,6 +326,7 @@ where
             | Error(_)
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
+            | GenesisConfigHashResponse(_)
             | DownloadBlobResponse(_)
             | BlobLastUsedByResponse(_)
             | DownloadCertificateValueResponse(_)

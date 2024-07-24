@@ -12,7 +12,7 @@ use dashmap::DashMap;
 use futures::FutureExt as _;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{ApplicationPermissions, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId},
     ownership::ChainOwnership,
 };
@@ -32,10 +32,10 @@ use crate::ContractAbi;
 ///
 /// ```rust
 /// # use linera_sdk::test::*;
-/// # use linera_base::identifiers::ChainId;
+/// # use linera_base::{data_types::BlockHeight, identifiers::ChainId};
 /// # tokio_test::block_on(async {
 /// let validator = TestValidator::new().await;
-/// assert_eq!(validator.new_chain().await.get_tip_height(), BlockHeight(0));
+/// assert_eq!(validator.new_chain().await.get_tip_height().await, BlockHeight(0));
 /// # });
 /// ```
 pub struct TestValidator {
@@ -186,7 +186,7 @@ impl TestValidator {
                 .collect(),
             admin_id,
             epoch: Epoch::ZERO,
-            balance: 0.into(),
+            balance: Amount::ZERO,
             application_permissions: ApplicationPermissions::default(),
         };
 
@@ -216,7 +216,7 @@ impl TestValidator {
                 ChainId::root(0),
                 description,
                 key_pair.public(),
-                0.into(),
+                Amount::MAX,
                 Timestamp::from(0),
             )
             .await

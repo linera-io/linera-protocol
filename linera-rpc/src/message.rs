@@ -30,12 +30,14 @@ pub enum RpcMessage {
     DownloadCertificate(Box<CryptoHash>),
     BlobLastUsedBy(Box<BlobId>),
     VersionInfoQuery,
+    GenesisConfigHashQuery,
 
     // Outbound
     Vote(Box<LiteVote>),
     ChainInfoResponse(Box<ChainInfoResponse>),
     Error(Box<NodeError>),
     VersionInfoResponse(Box<VersionInfo>),
+    GenesisConfigHashResponse(Box<CryptoHash>),
     DownloadBlobResponse(Box<Blob>),
     DownloadCertificateValueResponse(Box<CertificateValue>),
     DownloadCertificateResponse(Box<Certificate>),
@@ -63,6 +65,8 @@ impl RpcMessage {
             | ChainInfoResponse(_)
             | VersionInfoQuery
             | VersionInfoResponse(_)
+            | GenesisConfigHashQuery
+            | GenesisConfigHashResponse(_)
             | DownloadBlob(_)
             | DownloadBlobResponse(_)
             | DownloadCertificateValue(_)
@@ -85,6 +89,7 @@ impl RpcMessage {
 
         match self {
             VersionInfoQuery
+            | GenesisConfigHashQuery
             | DownloadBlob(_)
             | DownloadCertificateValue(_)
             | BlobLastUsedBy(_)
@@ -98,6 +103,7 @@ impl RpcMessage {
             | Error(_)
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
+            | GenesisConfigHashResponse(_)
             | DownloadBlobResponse(_)
             | DownloadCertificateValueResponse(_)
             | BlobLastUsedByResponse(_)
@@ -172,6 +178,7 @@ impl TryFrom<RpcMessage> for CryptoHash {
         use RpcMessage::*;
         match message {
             BlobLastUsedByResponse(hash) => Ok(*hash),
+            GenesisConfigHashResponse(hash) => Ok(*hash),
             Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }

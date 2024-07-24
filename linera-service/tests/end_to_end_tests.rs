@@ -191,6 +191,7 @@ impl FungibleApp {
 }
 
 #[cfg(any(
+    feature = "storage-service",
     feature = "scylladb",
     feature = "dynamodb",
     feature = "kubernetes",
@@ -199,6 +200,7 @@ impl FungibleApp {
 struct NonFungibleApp(ApplicationWrapper<non_fungible::NonFungibleTokenAbi>);
 
 #[cfg(any(
+    feature = "storage-service",
     feature = "scylladb",
     feature = "dynamodb",
     feature = "kubernetes",
@@ -976,15 +978,14 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     Ok(())
 }
 
-// TODO(#2051): The test `test_wasm_end_to_end_non_fungible::service_grpc` is frequently failing
-// with the error `Error: Could not find application URI: .... after 15 tries`.
-//#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg(any(
+    feature = "storage-service",
     feature = "scylladb",
     feature = "dynamodb",
     feature = "kubernetes",
     feature = "remote-net"
 ))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
@@ -992,7 +993,6 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Result<()> {
     use non_fungible::{NftOutput, NonFungibleTokenAbi};
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1103,8 +1103,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     .await;
 
     // Make sure that the cross-chain communication happens fast enough.
-    node_service1.process_inbox(&chain1).await?;
     node_service2.process_inbox(&chain2).await?;
+    node_service1.process_inbox(&chain1).await?;
 
     // Checking the NFT is removed from chain2
     assert!(app2.get_nft(&nft1_id).await.is_err());
@@ -2441,8 +2441,11 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client.query_validators(None).await?;
 
     // Restart the first shard for the 4th validator.
-    net.terminate_server(3, 0).await?;
-    net.start_server(3, 0).await?;
+    // TODO(#2286): The proxy currently only re-establishes the connection with gRPC.
+    if matches!(network, Network::Grpc) {
+        net.terminate_server(3, 0).await?;
+        net.start_server(3, 0).await?;
+    }
 
     // Create configurations for two more validators
     net.generate_validator_config(4).await?;
@@ -2451,6 +2454,16 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     // Start the validators
     net.start_validator(4).await?;
     net.start_validator(5).await?;
+
+    let address = format!(
+        "{}:localhost:{}",
+        network.external_short(),
+        LocalNet::proxy_port(4)
+    );
+    assert_eq!(
+        client.query_validator(&address).await?,
+        net.genesis_config()?.hash()
+    );
 
     // Add 5th validator
     client
@@ -2461,13 +2474,8 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client.query_validators(Some(chain_1)).await?;
 
     // Add 6th validator
-    // TODO(#2212): Use weight 100.
     client
-        .set_validator(
-            net.validator_name(5).unwrap(),
-            LocalNet::proxy_port(5),
-            10000,
-        )
+        .set_validator(net.validator_name(5).unwrap(), LocalNet::proxy_port(5), 100)
         .await?;
 
     // Remove 5th validator
@@ -2478,17 +2486,22 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     client.query_validators(None).await?;
     client.query_validators(Some(chain_1)).await?;
+    if let Some(service) = &node_service_2 {
+        service.process_inbox(&chain_2).await?;
+    } else {
+        client_2.process_inbox(chain_2).await?;
+    }
 
     // Remove the first 4 validators, so only the last one remains.
     for i in 0..4 {
         let name = net.validator_name(i).unwrap();
         client.remove_validator(name).await?;
-        net.remove_validator(i)?;
         if let Some(service) = &node_service_2 {
             service.process_inbox(&chain_2).await?;
         } else {
             client_2.process_inbox(chain_2).await?;
         }
+        net.remove_validator(i)?;
     }
 
     let recipient = Owner::from(KeyPair::generate().public());

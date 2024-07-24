@@ -101,9 +101,8 @@ pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     (Included(key_prefix), upper_bound)
 }
 
-pub(crate) fn from_bytes_option<V: DeserializeOwned, E>(
-    key_opt: &Option<Vec<u8>>,
-) -> Result<Option<V>, E>
+/// Deserializes an Optional vector of u8
+pub fn from_bytes_option<V: DeserializeOwned, E>(key_opt: &Option<Vec<u8>>) -> Result<Option<V>, E>
 where
     E: From<bcs::Error>,
 {
@@ -324,8 +323,11 @@ pub trait LocalReadableKeyValueStore<E> {
     /// Retrieves a `Vec<u8>` from the database using the provided `key`.
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, E>;
 
-    /// Test whether a key exists in the database
+    /// Tests whether a key exists in the database
     async fn contains_key(&self, key: &[u8]) -> Result<bool, E>;
+
+    /// Tests whether a list of keys exist in the database
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, E>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
     async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, E>;
@@ -569,15 +571,18 @@ pub trait Context: Clone {
     /// Returns type for key-value search operations.
     type KeyValues: KeyValueIterable<Self::Error>;
 
-    /// Retrieve the number of stream queries.
+    /// Retrieves the number of stream queries.
     fn max_stream_queries(&self) -> usize;
 
     /// Retrieves a `Vec<u8>` from the database using the provided `key` prefixed by the current
     /// context.
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    /// Test whether a key exists in the database
+    /// Tests whether a key exists in the database
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
+
+    /// Tests whether a set of keys exist in the database
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
     async fn read_multi_values_bytes(
@@ -779,6 +784,10 @@ where
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
         log_time_async(self.store.contains_key(key), "contains_key").await
+    }
+
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
+        log_time_async(self.store.contains_keys(keys), "contains_keys").await
     }
 
     async fn read_multi_values_bytes(

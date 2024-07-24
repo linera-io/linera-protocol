@@ -322,6 +322,7 @@ pub struct QueryContext {
 pub trait BaseRuntime {
     type Read: fmt::Debug + Send + Sync;
     type ContainsKey: fmt::Debug + Send + Sync;
+    type ContainsKeys: fmt::Debug + Send + Sync;
     type ReadMultiValuesBytes: fmt::Debug + Send + Sync;
     type ReadValueBytes: fmt::Debug + Send + Sync;
     type FindKeysByPrefix: fmt::Debug + Send + Sync;
@@ -364,11 +365,30 @@ pub trait BaseRuntime {
         self.contains_key_wait(&promise)
     }
 
-    /// Tests whether a key exists in the key-value store (new)
+    /// Creates the promise to test whether a key exists in the key-value store
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError>;
 
-    /// Tests whether a key exists in the key-value store (wait)
+    /// Resolves the promise to test whether a key exists in the key-value store
     fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError>;
+
+    /// Tests whether multiple keys exist in the key-value store
+    #[cfg(feature = "test")]
+    fn contains_keys(&mut self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ExecutionError> {
+        let promise = self.contains_keys_new(keys)?;
+        self.contains_keys_wait(&promise)
+    }
+
+    /// Creates the promise to test whether multiple keys exist in the key-value store
+    fn contains_keys_new(
+        &mut self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Self::ContainsKeys, ExecutionError>;
+
+    /// Resolves the promise to test whether multiple keys exist in the key-value store
+    fn contains_keys_wait(
+        &mut self,
+        promise: &Self::ContainsKeys,
+    ) -> Result<Vec<bool>, ExecutionError>;
 
     /// Reads several keys from the key-value store
     #[cfg(feature = "test")]
@@ -380,13 +400,13 @@ pub trait BaseRuntime {
         self.read_multi_values_bytes_wait(&promise)
     }
 
-    /// Reads several keys from the key-value store (new)
+    /// Creates the promise to access several keys from the key-value store
     fn read_multi_values_bytes_new(
         &mut self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Self::ReadMultiValuesBytes, ExecutionError>;
 
-    /// Reads several keys from the key-value store (wait)
+    /// Resolves the promise to access several keys from the key-value store
     fn read_multi_values_bytes_wait(
         &mut self,
         promise: &Self::ReadMultiValuesBytes,
@@ -399,25 +419,25 @@ pub trait BaseRuntime {
         self.read_value_bytes_wait(&promise)
     }
 
-    /// Reads the key from the key-value store (new)
+    /// Creates the promise to access a key from the key-value store
     fn read_value_bytes_new(
         &mut self,
         key: Vec<u8>,
     ) -> Result<Self::ReadValueBytes, ExecutionError>;
 
-    /// Reads the key from the key-value store (wait)
+    /// Resolves the promise to access a key from the key-value store
     fn read_value_bytes_wait(
         &mut self,
         promise: &Self::ReadValueBytes,
     ) -> Result<Option<Vec<u8>>, ExecutionError>;
 
-    /// Reads the data from the keys having a specific prefix (new).
+    /// Creates the promise to access keys having a specific prefix
     fn find_keys_by_prefix_new(
         &mut self,
         key_prefix: Vec<u8>,
     ) -> Result<Self::FindKeysByPrefix, ExecutionError>;
 
-    /// Reads the data from the keys having a specific prefix (wait).
+    /// Resolves the promise to access keys having a specific prefix
     fn find_keys_by_prefix_wait(
         &mut self,
         promise: &Self::FindKeysByPrefix,
@@ -434,13 +454,13 @@ pub trait BaseRuntime {
         self.find_key_values_by_prefix_wait(&promise)
     }
 
-    /// Reads the data from the key/values having a specific prefix (new).
+    /// Creates the promise to access key/values having a specific prefix
     fn find_key_values_by_prefix_new(
         &mut self,
         key_prefix: Vec<u8>,
     ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError>;
 
-    /// Reads the data from the key/values having a specific prefix (wait).
+    /// Resolves the promise to access key/values having a specific prefix
     #[allow(clippy::type_complexity)]
     fn find_key_values_by_prefix_wait(
         &mut self,

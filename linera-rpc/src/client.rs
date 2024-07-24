@@ -48,7 +48,7 @@ impl ValidatorNode for Client {
     type NotificationStream = NotificationStream;
 
     async fn handle_block_proposal(
-        &mut self,
+        &self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
@@ -60,7 +60,7 @@ impl ValidatorNode for Client {
     }
 
     async fn handle_lite_certificate(
-        &mut self,
+        &self,
         certificate: LiteCertificate<'_>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
@@ -81,7 +81,7 @@ impl ValidatorNode for Client {
     }
 
     async fn handle_certificate(
-        &mut self,
+        &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
         hashed_blobs: Vec<HashedBlob>,
@@ -114,7 +114,7 @@ impl ValidatorNode for Client {
     }
 
     async fn handle_chain_info_query(
-        &mut self,
+        &self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
@@ -125,10 +125,7 @@ impl ValidatorNode for Client {
         }
     }
 
-    async fn subscribe(
-        &mut self,
-        chains: Vec<ChainId>,
-    ) -> Result<Self::NotificationStream, NodeError> {
+    async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => Box::pin(grpc_client.subscribe(chains).await?),
 
@@ -137,7 +134,7 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn get_version_info(&mut self) -> Result<linera_version::VersionInfo, NodeError> {
+    async fn get_version_info(&self) -> Result<linera_version::VersionInfo, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.get_version_info().await?,
 
@@ -146,7 +143,16 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn download_blob(&mut self, blob_id: BlobId) -> Result<Blob, NodeError> {
+    async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.get_genesis_config_hash().await?,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.get_genesis_config_hash().await?,
+        })
+    }
+
+    async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.download_blob(blob_id).await?,
 
@@ -156,7 +162,7 @@ impl ValidatorNode for Client {
     }
 
     async fn download_certificate_value(
-        &mut self,
+        &self,
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, NodeError> {
         Ok(match self {
@@ -167,7 +173,7 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn download_certificate(&mut self, hash: CryptoHash) -> Result<Certificate, NodeError> {
+    async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.download_certificate(hash).await?,
 
@@ -176,7 +182,7 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn blob_last_used_by(&mut self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
+    async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.blob_last_used_by(blob_id).await?,
 

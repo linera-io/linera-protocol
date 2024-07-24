@@ -78,7 +78,7 @@ async fn classic_collection_view_check() -> Result<()> {
                 let n_load = rng.gen_range(0..5);
                 for _i in 0..n_load {
                     let pos = rng.gen_range(0..nmax);
-                    let _subview = view.v.load_entry_or_insert(&pos).await?;
+                    let _subview = view.v.load_entry_mut(&pos).await?;
                     new_map.entry(pos).or_insert(0);
                 }
             }
@@ -575,7 +575,7 @@ async fn reentrant_collection_view_check() -> Result<()> {
                     let test_view = view.v.contains_key(&pos).await?;
                     let test_map = new_map.contains_key(&pos);
                     assert_eq!(test_view, test_map);
-                    let _subview = view.v.try_load_entry_or_insert(&pos).await?;
+                    let _subview = view.v.try_load_entry_mut(&pos).await?;
                     new_map.entry(pos).or_insert(0);
                 }
             }
@@ -631,7 +631,8 @@ async fn reentrant_collection_view_check() -> Result<()> {
             let subviews = view.v.try_load_entries(&indices).await?;
             for i in 0..indices.len() {
                 let index = indices[i];
-                let value_view = *subviews[i].get();
+                let subview = subviews[i].as_ref().unwrap();
+                let value_view = *subview.get();
                 let value_map = match new_map.get(&index) {
                     None => 0,
                     Some(value) => *value,
