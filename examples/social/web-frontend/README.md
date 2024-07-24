@@ -13,10 +13,12 @@ The app is an example of a social app, and will be improved with future updates.
 
 Post, Likes, and Comments (only by the creation chain).
 
-To access the social app for a given Application Id, append the Application Id and port to the URI as so:
+To access the social app for a given Chain and Application Id, append the Chain, Application Id and port to the URI as so:
 
 ```
-http://localhost:3000/7817752ff06b8266d77df8febf5c4b524cec096bd83dc54f989074fb94f833737ae984f32be2cee1dfab766fe2d0c726503c4d97117eb59023e9cc65a8ecd1f7000000000000000000000000000000007817752ff06b8266d77df8febf5c4b524cec096bd83dc54f989074fb94f833737ae984f32be2cee1dfab766fe2d0c726503c4d97117eb59023e9cc65a8ecd1f702000000000000000000000000000000&port=8000
+http://localhost:3000/$CHAIN_1/$APP_ID/$OWNER_1/$PORT"
+
+http://localhost:3000/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65?app=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65000000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65020000000000000000000000&owner=019d0849200869c4c88493db9966afad44194714cf76ed5d0639a7cdc37cb286&port=8080
 ```
 
 ## Available Scripts
