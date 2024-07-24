@@ -252,11 +252,13 @@ impl LineraNet for LocalKubernetesNet {
         let path_provider = PathProvider::TemporaryDirectory {
             tmp_dir: self.tmp_dir.clone(),
         };
+        let deterministic = false;
         let client = ClientWrapper::new(
             path_provider,
             self.network,
             self.testing_prng_seed,
             self.next_client_id,
+            deterministic,
         );
         if let Some(seed) = self.testing_prng_seed {
             self.testing_prng_seed = Some(seed + 1);

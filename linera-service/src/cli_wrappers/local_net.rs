@@ -344,7 +344,6 @@ impl LocalNetConfig {
     pub fn deterministic(database: Database, network: Network) -> Self {
         Self::new(database, network, true)
     }
-
 }
 
 #[async_trait]

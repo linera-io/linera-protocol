@@ -2514,6 +2514,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .await?;
 
     if let Some(node_service_2) = node_service_2 {
+        node_service_2.process_inbox(&chain_2).await?;
         let query = format!(
             "query {{ chain(chainId:\"{chain_2}\") {{
                 executionState {{ system {{ balances {{
@@ -2521,15 +2522,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
                 }} }} }}
             }} }}"
         );
-        for i in 0.. {
-            tokio::time::sleep(Duration::from_secs(i)).await;
-            let response = node_service_2.query_node(query.clone()).await?;
-            let balances = &response["chain"]["executionState"]["system"]["balances"];
-            if balances["entry"]["value"].as_str() == Some("5.") {
-                break;
-            }
-            assert!(i < 3, "Failed to receive new block");
-        }
+        let response = node_service_2.query_node(query.clone()).await?;
+        let balances = &response["chain"]["executionState"]["system"]["balances"];
+        assert_eq!(balances["entry"]["value"].as_str(), Some("5."));
     } else {
         client_2.sync(chain_2).await?;
         client_2.process_inbox(chain_2).await?;
