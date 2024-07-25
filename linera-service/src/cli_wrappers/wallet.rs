@@ -146,7 +146,7 @@ impl ClientWrapper {
             .current_dir(self.path_provider.path())
             .env(
                 "RUST_LOG",
-                std::env::var("RUST_LOG").unwrap_or(String::from("linera=default")),
+                std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
             )
             .args(["--wallet", &self.wallet])
             .args(["--storage", &self.storage])
