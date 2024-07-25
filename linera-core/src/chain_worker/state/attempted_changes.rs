@@ -9,11 +9,11 @@ use futures::future::try_join_all;
 use linera_base::{
     data_types::{BlockHeight, HashedBlob, Timestamp},
     ensure,
-    identifiers::ChainId,
+    identifiers::{ChainId, EventId},
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, EventId,
+        BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
         HashedCertificateValue, MessageBundle, Origin, Target,
     },
     manager, ChainStateView,

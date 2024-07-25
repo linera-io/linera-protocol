@@ -281,17 +281,6 @@ pub struct BlockExecutionOutcome {
     pub events: Vec<Vec<EventRecord>>,
 }
 
-/// An event identifier.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct EventId {
-    /// The ID of the chain that generated this event.
-    pub chain_id: ChainId,
-    /// The ID of the stream this event belongs to.
-    pub stream_id: StreamId,
-    /// The event key.
-    pub key: Vec<u8>,
-}
-
 /// An event recorded in an executed block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct EventRecord {

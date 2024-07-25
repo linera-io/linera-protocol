@@ -26,11 +26,11 @@ use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight, HashedBlob, Timestamp},
-    identifiers::{BlobId, ChainDescription, ChainId, GenericApplicationId},
+    identifiers::{BlobId, ChainDescription, ChainId, EventId, GenericApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::{Certificate, ChannelFullName, EventId, HashedCertificateValue},
+    data_types::{Certificate, ChannelFullName, HashedCertificateValue},
     ChainError, ChainStateView,
 };
 use linera_execution::{

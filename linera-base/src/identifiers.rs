@@ -318,6 +318,29 @@ pub struct StreamId {
     pub stream_name: StreamName,
 }
 
+/// An event identifier.
+#[derive(
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Clone,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+    SimpleObject,
+)]
+pub struct EventId {
+    /// The ID of the chain that generated this event.
+    pub chain_id: ChainId,
+    /// The ID of the stream this event belongs to.
+    pub stream_id: StreamId,
+    /// The event key.
+    pub key: Vec<u8>,
+}
+
 /// The destination of a message, relative to a particular application.
 #[derive(
     Clone,
