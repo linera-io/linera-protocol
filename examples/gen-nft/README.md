@@ -30,18 +30,6 @@ NFTs can be transferred to various destinations, including:
 
 ## Setting Up
 
-First, ensure you have the model and tokenizer locally by running:
-
-```bash,ignore
-wget -O model.bin -c https://huggingface.co/karpathy/tinyllamas/resolve/main/stories42M.bin
-wget -c https://huggingface.co/spaces/lmz/candle-llama2/resolve/main/tokenizer.json
-```
-
-Then, run the Python server to serve models locally:
-```bash,ignore
-python3 -m http.server 10001 &
-```
-
 Most of this can be referred to the [fungible app README](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#setting-up), except for at the end when compiling and publishing the bytecode, what you'll need to do will be slightly different.
 
 ```bash
@@ -54,7 +42,7 @@ linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37
 Compile the `non-fungible` application WebAssembly binaries, and publish them as an application bytecode:
 
 ```bash
-(cd examples/gen-nft && cargo build --release --target wasm32-unknown-unknown)
+(cd examples/gen-nft && cargo build --release)
 
 BYTECODE_ID=$(linera publish-bytecode \
     examples/target/wasm32-unknown-unknown/release/gen_nft_{contract,service}.wasm)
@@ -94,6 +82,55 @@ First, a node service for the current wallet has to be started:
 ```bash
 PORT=8080
 linera service --port $PORT &
+```
+
+### Using GraphiQL
+
+- Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`.
+- To mint an NFT, run the query:
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    mutation {
+        mint(
+            minter: "User:289c661d6da9b5d1a54c50642b9129f0115f762e60c6568f9db5c3ac71996d32",
+            prompt: "Hello!"
+        )
+    }
+```
+- To check that it's there, run the query:
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    query {
+        nft(tokenId: "kSIB3o59Ut8wioJdISqZwWedPGUlHK2HapnkOLqLSRA") {
+            tokenId,
+            owner,
+            prompt,
+            minter,
+        }
+    }
+```
+- To check that it's assigned to the owner, run the query:
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    query {
+        ownedNfts(owner: "User:289c661d6da9b5d1a54c50642b9129f0115f762e60c6568f9db5c3ac71996d32")
+    }
+```
+- To check everything that it's there, run the query:
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    query {
+        nfts
+    }
+```
+- To transfer the NFT to user `$OWNER_2`, still on chain `$CHAIN_1`, run the query:
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    mutation {
+        transfer(
+            sourceOwner: "User:289c661d6da9b5d1a54c50642b9129f0115f762e60c6568f9db5c3ac71996d32",
+            tokenId: "kSIB3o59Ut8wioJdISqZwWedPGUlHK2HapnkOLqLSRA",
+            targetAccount: {
+                chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+                owner: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
+            }
+        )
+    }
 ```
 
 ### Using Web Frontend
