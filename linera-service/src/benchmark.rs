@@ -14,7 +14,8 @@ use linera_base::{
 use linera_execution::system::SystemChannel;
 use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
 use linera_service::cli_wrappers::{
-    local_net::PathProvider, ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, Network,
+    local_net::{PathProvider, ProcessInbox},
+    ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, Network,
 };
 use port_selector::random_free_tcp_port;
 use rand::{Rng as _, SeedableRng};
@@ -115,12 +116,11 @@ async fn benchmark_with_fungible(
     info!("Starting the node services and subscribing to the publisher chain.");
     let publisher_chain_id = publisher.default_chain().context("missing default chain")?;
     let mut services = Vec::new();
-    let skip_process_inbox = false;
     for client in &clients {
         let free_port = random_free_tcp_port().context("no free TCP port")?;
         let chain_id = client.default_chain().context("missing default chain")?;
         let node_service = client
-            .run_node_service(free_port, skip_process_inbox)
+            .run_node_service(free_port, ProcessInbox::Skip)
             .await?;
         let channel = SystemChannel::PublishedBytecodes;
         node_service

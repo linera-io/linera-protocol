@@ -15,7 +15,7 @@ use linera_indexer_graphql_client::{
     operations::{get_operation, GetOperation, OperationKey},
 };
 use linera_service::cli_wrappers::{
-    local_net::{Database, LocalNetConfig, PathProvider},
+    local_net::{Database, LocalNetConfig, PathProvider, ProcessInbox},
     LineraNet, LineraNetConfig, Network,
 };
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
@@ -95,9 +95,8 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client) = config.instantiate().await.unwrap();
-    let skip_process_inbox = false;
     let mut node_service = client
-        .run_node_service(None, skip_process_inbox)
+        .run_node_service(None, ProcessInbox::Skip)
         .await
         .unwrap();
     let mut indexer = run_indexer(&client.path_provider).await;

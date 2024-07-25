@@ -12,7 +12,7 @@ use std::{collections::BTreeMap, io::Read, str::FromStr, time::Duration};
 use fungible::{FungibleTokenAbi, InitialState};
 use linera_base::{command::resolve_binary, data_types::Amount, identifiers::ChainId, sync::Lazy};
 use linera_service::cli_wrappers::{
-    local_net::{Database, LocalNetConfig},
+    local_net::{Database, LocalNetConfig, ProcessInbox},
     LineraNet, LineraNetConfig, Network,
 };
 use linera_service_graphql_client::{
@@ -77,9 +77,8 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
         .await
         .unwrap();
 
-    let skip_process_inbox = false;
     let mut node_service = client
-        .run_node_service(None, skip_process_inbox)
+        .run_node_service(None, ProcessInbox::Skip)
         .await
         .unwrap();
     let req_client = &reqwest_client();
