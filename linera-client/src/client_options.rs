@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{env, iter, num::NonZeroU16, path::PathBuf, time::Duration};
+use std::{collections::HashSet, env, iter, num::NonZeroU16, path::PathBuf, time::Duration};
 
 use chrono::{DateTime, Utc};
 use linera_base::{
@@ -10,7 +10,7 @@ use linera_base::{
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
-use linera_core::client::MessagePolicy;
+use linera_core::client::BlanketMessagePolicy;
 use linera_execution::{
     committee::ValidatorName, system::SystemChannel, ResourceControlPolicy, UserApplicationId,
     WasmRuntime, WithWasmDefault as _,
@@ -101,7 +101,13 @@ pub struct ClientOptions {
 
     /// The policy for handling incoming messages.
     #[arg(long, default_value = "accept")]
-    pub message_policy: MessagePolicy,
+    pub blanket_message_policy: BlanketMessagePolicy,
+
+    /// A set of chains to restrict incoming messages from. By default, messages
+    /// from all chains are accepted. To reject messages from all chains, specify
+    /// an empty string.
+    #[arg(long, value_parser = util::parse_chain_set)]
+    pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 }
 
 impl ClientOptions {

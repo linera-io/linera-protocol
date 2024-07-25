@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{hash_map, BTreeMap, HashMap},
+    collections::{hash_map, BTreeMap, HashMap, HashSet},
     convert::Infallible,
     iter,
     ops::{Deref, DerefMut},
@@ -119,7 +119,7 @@ where
             local_node,
             chains: DashMap::new(),
             max_pending_messages,
-            message_policy: MessagePolicy::Accept,
+            message_policy: MessagePolicy::new(BlanketMessagePolicy::Accept, None),
             cross_chain_message_delivery,
             notifier: Arc::new(Notifier::default()),
             storage,
@@ -180,18 +180,24 @@ where
             chain_id,
             options: ChainClientOptions {
                 max_pending_messages: self.max_pending_messages,
-                message_policy: self.message_policy,
+                message_policy: self.message_policy.clone(),
                 cross_chain_message_delivery: self.cross_chain_message_delivery,
             },
         }
     }
 }
 
-/// Policies for automatically handling incoming messages.
-///
-/// These apply to all messages except for the initial `OpenChain`, which is always accepted.
+/// Policies also include a collection of chains which restrict the origin of messages to be
+/// accepted. `Option::None` means that messages from all chains are accepted. And empty
+/// `HashSet` denotes that messages from no chains are accepted.
+#[derive(Clone, Debug)]
+pub struct MessagePolicy {
+    blanket: BlanketMessagePolicy,
+    restrict_chain_ids_to: Option<HashSet<ChainId>>,
+}
+
 #[derive(Copy, Clone, Debug, clap::ValueEnum)]
-pub enum MessagePolicy {
+pub enum BlanketMessagePolicy {
     /// Automatically accept all incoming messages. Reject them only if execution fails.
     Accept,
     /// Automatically reject tracked messages, ignore or skip untracked messages, but accept
@@ -203,14 +209,33 @@ pub enum MessagePolicy {
 }
 
 impl MessagePolicy {
+    pub fn new(
+        blanket: BlanketMessagePolicy,
+        restrict_chain_ids_to: Option<HashSet<ChainId>>,
+    ) -> Self {
+        Self {
+            blanket,
+            restrict_chain_ids_to,
+        }
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    fn accepts(&self, message: &IncomingMessage) -> bool {
+        let sender = message.origin.sender;
+        match &self.restrict_chain_ids_to {
+            None => true,
+            Some(chains) => chains.contains(&sender),
+        }
+    }
+
     #[tracing::instrument(level = "trace", skip(self))]
     fn is_ignore(&self) -> bool {
-        matches!(self, Self::Ignore)
+        matches!(self.blanket, BlanketMessagePolicy::Ignore)
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
     fn is_reject(&self) -> bool {
-        matches!(self, Self::Reject)
+        matches!(self.blanket, BlanketMessagePolicy::Reject)
     }
 }
 
@@ -614,6 +639,9 @@ where
                 {
                     continue; // These applications are already registered; skip register message.
                 }
+            }
+            if !self.options.message_policy.accepts(&message) {
+                continue;
             }
             pending_messages.push(message);
         }
