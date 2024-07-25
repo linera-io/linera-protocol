@@ -39,7 +39,10 @@ use crate::test_utils::ScyllaDbStorageBuilder;
 #[cfg(feature = "storage-service")]
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
-    client::{ChainClient, ChainClientError, ClientOutcome, MessageAction, MessagePolicy},
+    client::{
+        BlanketMessagePolicy, ChainClient, ChainClientError, ClientOutcome, MessageAction,
+        MessagePolicy,
+    },
     local_node::LocalNodeError,
     node::{
         CrossChainMessageDelivery,
@@ -2490,7 +2493,7 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.options_mut().message_policy = MessagePolicy::Ignore;
+    receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Ignore, None);
     receiver
         .receive_certificate_and_update_validators(cert)
         .await?;
@@ -2503,7 +2506,7 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.options_mut().message_policy = MessagePolicy::Reject;
+    receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Reject, None);
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     sender
