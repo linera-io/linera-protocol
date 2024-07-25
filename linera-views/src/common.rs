@@ -14,6 +14,7 @@ use std::{
     collections::BTreeSet,
     fmt::{Debug, Display},
     future::Future,
+    mem,
     ops::{
         Bound,
         Bound::{Excluded, Included, Unbounded},
@@ -43,8 +44,8 @@ pub(crate) enum Update<T> {
 
 #[derive(Clone, Debug)]
 pub(crate) struct DeletionSet {
-    pub delete_storage_first: bool,
-    pub deleted_prefixes: BTreeSet<Vec<u8>>,
+    delete_storage_first: bool,
+    deleted_prefixes: BTreeSet<Vec<u8>>,
 }
 
 impl DeletionSet {
@@ -77,6 +78,22 @@ impl DeletionSet {
         if !self.delete_storage_first {
             insert_key_prefix(&mut self.deleted_prefixes, key_prefix);
         }
+    }
+
+    pub fn delete_storage_first(&self) -> bool {
+        self.delete_storage_first
+    }
+
+    pub fn delete_storage_first_mut(&mut self) -> &mut bool {
+        &mut self.delete_storage_first
+    }
+
+    pub fn deleted_prefixes_mut(&mut self) -> BTreeSet<Vec<u8>> {
+        mem::take(&mut self.deleted_prefixes)
+    }
+
+    pub fn deleted_prefixes(&self) -> &BTreeSet<Vec<u8>> {
+        &self.deleted_prefixes
     }
 }
 

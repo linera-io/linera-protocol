@@ -106,7 +106,7 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
-        if self.deletion_set.delete_storage_first {
+        if self.deletion_set.delete_storage_first() {
             delete_view = true;
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
@@ -117,7 +117,7 @@ where
                 }
             }
         } else {
-            for index in mem::take(&mut self.deletion_set.deleted_prefixes) {
+            for index in self.deletion_set.deleted_prefixes_mut() {
                 let key = self.context.base_index(&index);
                 batch.delete_key_prefix(key);
             }
@@ -129,7 +129,7 @@ where
                 }
             }
         }
-        self.deletion_set.delete_storage_first = false;
+        *self.deletion_set.delete_storage_first_mut() = false;
         Ok(delete_view)
     }
 
@@ -362,7 +362,7 @@ where
         if !self.deletion_set.contains_prefix_of(&prefix) {
             let iter = self
                 .deletion_set
-                .deleted_prefixes
+                .deleted_prefixes()
                 .range(get_interval(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = self.context.base_index(&prefix);
@@ -560,7 +560,7 @@ where
         if !self.deletion_set.contains_prefix_of(&prefix) {
             let iter = self
                 .deletion_set
-                .deleted_prefixes
+                .deleted_prefixes()
                 .range(get_interval(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = self.context.base_index(&prefix);
