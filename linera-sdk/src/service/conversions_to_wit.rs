@@ -6,7 +6,10 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
-    identifiers::{ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{
+        ApplicationId, BlobId, BytecodeId, ChainId, EventId, GenericApplicationId, MessageId,
+        Owner, StreamId, StreamName,
+    },
 };
 
 use super::wit::service_system_api as wit_system_api;
@@ -91,6 +94,53 @@ impl From<MessageId> for wit_system_api::MessageId {
             chain_id: message_id.chain_id.into(),
             height: message_id.height.into(),
             index: message_id.index,
+        }
+    }
+}
+
+impl From<EventId> for wit_system_api::EventId {
+    fn from(event_id: EventId) -> Self {
+        let EventId {
+            chain_id,
+            stream_id,
+            key,
+        } = event_id;
+        Self {
+            chain_id: chain_id.into(),
+            stream_id: stream_id.into(),
+            key,
+        }
+    }
+}
+
+impl From<StreamId> for wit_system_api::StreamId {
+    fn from(stream_id: StreamId) -> Self {
+        let StreamId {
+            application_id,
+            stream_name,
+        } = stream_id;
+        Self {
+            application_id: application_id.into(),
+            stream_name: stream_name.into(),
+        }
+    }
+}
+
+impl From<StreamName> for wit_system_api::StreamName {
+    fn from(name: StreamName) -> Self {
+        wit_system_api::StreamName {
+            inner0: name.into_bytes(),
+        }
+    }
+}
+
+impl From<GenericApplicationId> for wit_system_api::GenericApplicationId {
+    fn from(app_id: GenericApplicationId) -> Self {
+        match app_id {
+            GenericApplicationId::System => wit_system_api::GenericApplicationId::System,
+            GenericApplicationId::User(app_id) => {
+                wit_system_api::GenericApplicationId::User(app_id.into())
+            }
         }
     }
 }

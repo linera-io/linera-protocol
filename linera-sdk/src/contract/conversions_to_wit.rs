@@ -10,8 +10,8 @@ use linera_base::{
         Timestamp,
     },
     identifiers::{
-        Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination, MessageId,
-        Owner, StreamName,
+        Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination, EventId,
+        GenericApplicationId, MessageId, Owner, StreamId, StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -154,14 +154,6 @@ impl From<ChannelName> for wit_system_api::ChannelName {
     }
 }
 
-impl From<StreamName> for wit_system_api::StreamName {
-    fn from(name: StreamName) -> Self {
-        wit_system_api::StreamName {
-            inner0: name.into_bytes(),
-        }
-    }
-}
-
 impl From<Resources> for wit_system_api::Resources {
     fn from(resources: Resources) -> Self {
         wit_system_api::Resources {
@@ -262,6 +254,53 @@ impl From<ChainOwnership> for wit_system_api::ChainOwnership {
                 .collect(),
             multi_leader_rounds,
             timeout_config: timeout_config.into(),
+        }
+    }
+}
+
+impl From<EventId> for wit_system_api::EventId {
+    fn from(event_id: EventId) -> Self {
+        let EventId {
+            chain_id,
+            stream_id,
+            key,
+        } = event_id;
+        Self {
+            chain_id: chain_id.into(),
+            stream_id: stream_id.into(),
+            key,
+        }
+    }
+}
+
+impl From<StreamId> for wit_system_api::StreamId {
+    fn from(stream_id: StreamId) -> Self {
+        let StreamId {
+            application_id,
+            stream_name,
+        } = stream_id;
+        Self {
+            application_id: application_id.into(),
+            stream_name: stream_name.into(),
+        }
+    }
+}
+
+impl From<StreamName> for wit_system_api::StreamName {
+    fn from(name: StreamName) -> Self {
+        wit_system_api::StreamName {
+            inner0: name.into_bytes(),
+        }
+    }
+}
+
+impl From<GenericApplicationId> for wit_system_api::GenericApplicationId {
+    fn from(app_id: GenericApplicationId) -> Self {
+        match app_id {
+            GenericApplicationId::System => wit_system_api::GenericApplicationId::System,
+            GenericApplicationId::User(app_id) => {
+                wit_system_api::GenericApplicationId::User(app_id.into())
+            }
         }
     }
 }

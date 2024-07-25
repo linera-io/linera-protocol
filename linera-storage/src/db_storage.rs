@@ -3,7 +3,7 @@
 
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
-use std::{fmt::Debug, sync::Arc};
+use std::{borrow::Cow, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -301,13 +301,13 @@ pub struct DbStorage<Client, Clock> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum BaseKey {
+enum BaseKey<'a> {
     ChainState(ChainId),
     Certificate(CryptoHash),
     CertificateValue(CryptoHash),
     Blob(BlobId),
     BlobState(BlobId),
-    Event(EventId),
+    Event(Cow<'a, EventId>),
 }
 
 /// A clock that can be used to get the current `Timestamp`.
@@ -744,8 +744,8 @@ where
         self.write_batch(batch).await
     }
 
-    async fn read_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
-        let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
+    async fn read_event(&self, event_id: &EventId) -> Result<Vec<u8>, ViewError> {
+        let event_key = bcs::to_bytes(&BaseKey::Event(Cow::Borrowed(event_id)))?;
         let maybe_value = self.client.client.read_value::<Vec<u8>>(&event_key).await?;
         #[cfg(with_metrics)]
         READ_EVENT_COUNTER.with_label_values(&[]).inc();
@@ -828,7 +828,7 @@ where
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
-        let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
+        let event_key = bcs::to_bytes(&BaseKey::Event(Cow::Borrowed(event_id)))?;
         batch.put_key_value_bytes(event_key.to_vec(), value.to_vec());
         Ok(())
     }

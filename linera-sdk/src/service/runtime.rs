@@ -8,7 +8,7 @@ use std::cell::Cell;
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, HashedBlob, Timestamp},
-    identifiers::{ApplicationId, BlobId, ChainId, Owner},
+    identifiers::{ApplicationId, BlobId, ChainId, EventId, Owner},
 };
 
 use super::wit::service_system_api as wit;
@@ -148,5 +148,10 @@ where
     /// Reads a blob with the given `BlobId` from storage.
     pub fn read_blob(&mut self, blob_id: BlobId) -> HashedBlob {
         wit::read_blob(blob_id.into()).into()
+    }
+
+    /// Reads an event with the given ID from storage.
+    pub fn read_event(event_id: EventId) -> Vec<u8> {
+        wit::read_event(&event_id.into())
     }
 }

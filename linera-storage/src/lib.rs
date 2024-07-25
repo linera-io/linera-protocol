@@ -187,7 +187,7 @@ pub trait Storage: Sized {
     async fn write_certificates(&self, certificate: &[Certificate]) -> Result<(), ViewError>;
 
     /// Reads the event with the given ID.
-    async fn read_event(&self, id: EventId) -> Result<Vec<u8>, ViewError>;
+    async fn read_event(&self, event_id: &EventId) -> Result<Vec<u8>, ViewError>;
 
     /// Writes a vector of events.
     async fn write_events(&self, events: &[(EventId, &[u8])]) -> Result<(), ViewError>;
@@ -456,5 +456,9 @@ where
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ExecutionError> {
         Ok(self.storage.read_hashed_blob(blob_id).await?)
+    }
+
+    async fn get_event(&self, event_id: &EventId) -> Result<Vec<u8>, ExecutionError> {
+        Ok(self.storage.read_event(event_id).await?)
     }
 }

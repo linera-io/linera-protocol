@@ -12,7 +12,7 @@ use futures::channel::mpsc;
 use linera_base::prometheus_util::{self, MeasureLatency as _};
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, HashedBlob, Timestamp},
-    identifiers::{Account, BlobId, MessageId, Owner},
+    identifiers::{Account, BlobId, EventId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{
@@ -315,6 +315,16 @@ where
                 let blob = self.system.read_blob(blob_id).await?;
                 callback.respond(blob);
             }
+
+            ReadEvent { event_id, callback } => {
+                let blob = self
+                    .context()
+                    .extra()
+                    .get_event(&event_id)
+                    .await
+                    .map_err(|_| ExecutionError::EventNotFound(Box::new(event_id)))?;
+                callback.respond(blob);
+            }
         }
 
         Ok(())
@@ -444,6 +454,11 @@ pub enum ExecutionRequest {
     ReadBlob {
         blob_id: BlobId,
         callback: Sender<HashedBlob>,
+    },
+
+    ReadEvent {
+        event_id: EventId,
+        callback: oneshot::Sender<Vec<u8>>,
     },
 }
 
@@ -581,6 +596,11 @@ impl Debug for ExecutionRequest {
             ExecutionRequest::ReadBlob { blob_id, .. } => formatter
                 .debug_struct("ExecutionRequest::ReadBlob")
                 .field("blob_id", blob_id)
+                .finish_non_exhaustive(),
+
+            ExecutionRequest::ReadEvent { event_id, .. } => formatter
+                .debug_struct("ExecutionRequest::ReadEvent")
+                .field("event_id", event_id)
                 .finish_non_exhaustive(),
         }
     }

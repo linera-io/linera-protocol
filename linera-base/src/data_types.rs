@@ -16,7 +16,7 @@ use thiserror::Error;
 use crate::{
     crypto::{BcsHashable, CryptoHash},
     doc_scalar,
-    identifiers::{ApplicationId, BlobId, Destination, GenericApplicationId},
+    identifiers::{ApplicationId, BlobId, Destination, EventId, GenericApplicationId},
     time::{Duration, SystemTime},
 };
 
@@ -720,6 +720,8 @@ pub enum OracleResponse {
     Post(Vec<u8>),
     /// A successful read or write of a blob.
     Blob(BlobId),
+    /// A successful read of an event.
+    Event(EventId, Vec<u8>),
     /// An assertion oracle that passed.
     Assert,
 }
@@ -739,6 +741,12 @@ impl fmt::Display for OracleResponse {
             }
             OracleResponse::Post(bytes) => write!(f, "Post:{}", STANDARD_NO_PAD.encode(bytes))?,
             OracleResponse::Blob(blob_id) => write!(f, "Blob:{}", blob_id)?,
+            OracleResponse::Event(event_id, event_value) => write!(
+                f,
+                "Event:{}:{}",
+                event_id,
+                STANDARD_NO_PAD.encode(event_value)
+            )?,
             OracleResponse::Assert => write!(f, "Assert")?,
         };
 

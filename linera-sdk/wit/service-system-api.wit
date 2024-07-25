@@ -15,6 +15,7 @@ interface service-system-api {
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
     http-post: func(query: string, content-type: string, payload: list<u8>) -> list<u8>;
     read-blob: func(blob-id: blob-id) -> hashed-blob;
+    read-event: func(event-id: event-id) -> list<u8>;
     assert-before: func(timestamp: timestamp);
     log: func(message: string, level: log-level);
 
@@ -54,6 +55,17 @@ interface service-system-api {
         part4: u64,
     }
 
+    record event-id {
+        chain-id: chain-id,
+        stream-id: stream-id,
+        key: list<u8>,
+    }
+
+    variant generic-application-id {
+        system,
+        user(application-id),
+    }
+
     record hashed-blob {
         id: blob-id,
         blob: blob,
@@ -75,6 +87,15 @@ interface service-system-api {
 
     record owner {
         inner0: crypto-hash,
+    }
+
+    record stream-id {
+        application-id: generic-application-id,
+        stream-name: stream-name,
+    }
+
+    record stream-name {
+        inner0: list<u8>,
     }
 
     record timestamp {

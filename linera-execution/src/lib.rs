@@ -36,7 +36,7 @@ use linera_base::{
     },
     doc_scalar, hex_debug,
     identifiers::{
-        Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination,
+        Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination, EventId,
         GenericApplicationId, MessageId, Owner, StreamName,
     },
     ownership::ChainOwnership,
@@ -175,6 +175,8 @@ pub enum ExecutionError {
     EventKeyTooLong,
     #[error("Stream names can be at most {MAX_STREAM_NAME_LEN} bytes.")]
     StreamNameTooLong,
+    #[error("Event not found: {0}")]
+    EventNotFound(Box<EventId>),
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -258,6 +260,8 @@ pub trait ExecutionRuntimeContext {
     ) -> Result<UserServiceCode, ExecutionError>;
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ExecutionError>;
+
+    async fn get_event(&self, event_id: &EventId) -> Result<Vec<u8>, ExecutionError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -492,6 +496,9 @@ pub trait BaseRuntime {
 
     /// Reads a blob specified by a given `BlobId`.
     fn read_blob(&mut self, blob_id: &BlobId) -> Result<HashedBlob, ExecutionError>;
+
+    /// Reads an event.
+    fn read_event(&mut self, event_id: EventId) -> Result<Vec<u8>, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
@@ -851,6 +858,7 @@ pub struct TestExecutionRuntimeContext {
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
     blobs: Arc<DashMap<BlobId, HashedBlob>>,
+    events: Arc<DashMap<EventId, Vec<u8>>>,
 }
 
 #[cfg(with_testing)]
@@ -862,6 +870,7 @@ impl TestExecutionRuntimeContext {
             user_contracts: Arc::default(),
             user_services: Arc::default(),
             blobs: Arc::default(),
+            events: Arc::default(),
         }
     }
 }
@@ -918,6 +927,14 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .blobs
             .get(&blob_id)
             .ok_or_else(|| SystemExecutionError::BlobNotFoundOnRead(blob_id))?
+            .clone())
+    }
+
+    async fn get_event(&self, event_id: &EventId) -> Result<Vec<u8>, ExecutionError> {
+        Ok(self
+            .events
+            .get(event_id)
+            .ok_or_else(|| ExecutionError::EventNotFound(Box::new(event_id.clone())))?
             .clone())
     }
 }

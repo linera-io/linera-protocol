@@ -8,7 +8,7 @@ use linera_base::{
         Amount, ApplicationPermissions, BlockHeight, HashedBlob, SendMessageRequest, Timestamp,
     },
     identifiers::{
-        Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner, StreamName,
+        Account, ApplicationId, BlobId, ChainId, ChannelName, EventId, MessageId, Owner, StreamName,
     },
     ownership::{ChainOwnership, CloseChainError},
 };
@@ -365,6 +365,15 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Reads an event from storage.
+    fn read_event(caller: &mut Caller, event_id: EventId) -> Result<Vec<u8>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_event(event_id)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Logs a `message` with the provided information `level`.
     fn log(_caller: &mut Caller, message: String, level: log::Level) -> Result<(), RuntimeError> {
         match level {
@@ -536,6 +545,15 @@ where
             .user_data_mut()
             .runtime
             .read_blob(&blob_id)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Reads an event from storage.
+    fn read_event(caller: &mut Caller, event_id: EventId) -> Result<Vec<u8>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_event(event_id)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

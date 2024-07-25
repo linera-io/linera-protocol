@@ -10,8 +10,8 @@ use std::{
 
 use linera_base::{
     abi::ServiceAbi,
-    data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ApplicationId, ChainId, Owner},
+    data_types::{Amount, BlockHeight, HashedBlob, Timestamp},
+    identifiers::{ApplicationId, BlobId, ChainId, EventId, Owner},
 };
 
 use crate::{KeyValueStore, Service};
@@ -365,6 +365,16 @@ where
         let value = cell.take().expect(message);
         cell.set(Some(value.clone()));
         value
+    }
+
+    /// Reads a blob with the given `BlobId` from storage.
+    pub fn read_blob(&mut self, _blob_id: &BlobId) -> HashedBlob {
+        panic!("Unexpected read_blob call");
+    }
+
+    /// Reads an event with the given ID from storage.
+    pub fn read_event(_event_id: EventId) -> Vec<u8> {
+        panic!("Unexpected read_event call");
     }
 }
 

@@ -17,7 +17,7 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner, StreamName,
+        Account, ApplicationId, BlobId, ChainId, ChannelName, EventId, MessageId, Owner, StreamName,
     },
     ownership::ChainOwnership,
 };
@@ -715,6 +715,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
     fn read_blob(&mut self, blob_id: &BlobId) -> Result<HashedBlob, ExecutionError> {
         self.inner().read_blob(blob_id)
     }
+
+    fn read_event(&mut self, event_id: EventId) -> Result<Vec<u8>, ExecutionError> {
+        self.inner().read_event(event_id)
+    }
 }
 
 impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
@@ -1031,6 +1035,26 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         self.recorded_oracle_responses
             .push(OracleResponse::Blob(*blob_id));
         Ok(blob)
+    }
+
+    fn read_event(&mut self, event_id: EventId) -> Result<Vec<u8>, ExecutionError> {
+        let event_value = if let Some(responses) = &mut self.replaying_oracle_responses {
+            match responses.next() {
+                Some(OracleResponse::Event(id, bytes)) if id == event_id => bytes,
+                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                None => return Err(ExecutionError::MissingOracleResponse),
+            }
+        } else {
+            self.execution_state_sender
+                .send_request(|callback| ExecutionRequest::ReadEvent {
+                    event_id: event_id.clone(),
+                    callback,
+                })?
+                .recv_response()?
+        };
+        self.recorded_oracle_responses
+            .push(OracleResponse::Event(event_id, event_value.clone()));
+        Ok(event_value)
     }
 }
 

@@ -12,8 +12,8 @@ use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::{Amount, BlockHeight, HashedBlob, Resources, SendMessageRequest, Timestamp},
     identifiers::{
-        Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, MessageId, Owner,
-        StreamName,
+        Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, EventId, MessageId,
+        Owner, StreamName,
     },
     ownership::{ChainOwnership, CloseChainError},
 };
@@ -49,6 +49,7 @@ where
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
     expected_post_requests: VecDeque<(String, Vec<u8>, Vec<u8>)>,
     expected_read_blob_requests: VecDeque<(BlobId, HashedBlob)>,
+    expected_read_event_requests: VecDeque<(EventId, Vec<u8>)>,
     key_value_store: KeyValueStore,
 }
 
@@ -91,6 +92,7 @@ where
             expected_service_queries: VecDeque::new(),
             expected_post_requests: VecDeque::new(),
             expected_read_blob_requests: VecDeque::new(),
+            expected_read_event_requests: VecDeque::new(),
             key_value_store: KeyValueStore::mock().to_mut(),
         }
     }
@@ -614,9 +616,15 @@ where
     }
 
     /// Adds an expected `read_blob` call, and the response it should return in the test.
-    pub fn add_expected_read_blob_requests(&mut self, blob_id: BlobId, response: HashedBlob) {
+    pub fn add_expected_read_blob_request(&mut self, blob_id: BlobId, response: HashedBlob) {
         self.expected_read_blob_requests
             .push_back((blob_id, response));
+    }
+
+    /// Adds an expected `read_event` call, and the response it should return in the test.
+    pub fn add_expected_read_event_request(&mut self, event_id: EventId, event_value: Vec<u8>) {
+        self.expected_read_event_requests
+            .push_back((event_id, event_value));
     }
 
     /// Queries our application service as an oracle and returns the response.
@@ -671,6 +679,14 @@ where
         let (expected_blob_id, response) = maybe_request.expect("Unexpected read_blob request");
         assert_eq!(*blob_id, expected_blob_id);
         response
+    }
+
+    /// Reads an event with the given ID from storage.
+    pub fn read_event(&mut self, event_id: EventId) -> Vec<u8> {
+        let maybe_event = self.expected_read_event_requests.pop_front();
+        let (expected_event_id, event_value) = maybe_event.expect("Unexpected read_event request");
+        assert_eq!(event_id, expected_event_id);
+        event_value
     }
 }
 

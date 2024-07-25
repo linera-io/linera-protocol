@@ -4,13 +4,14 @@
 //! Core identifiers used by the Linera protocol.
 
 use std::{
-    fmt::{Debug, Display},
+    fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     str::FromStr,
 };
 
 use anyhow::{anyhow, Context};
 use async_graphql::SimpleObject;
+use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 
@@ -245,6 +246,15 @@ impl GenericApplicationId {
     }
 }
 
+impl Display for GenericApplicationId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GenericApplicationId::System => write!(f, "System"),
+            GenericApplicationId::User(app_id) => Display::fmt(app_id, f),
+        }
+    }
+}
+
 impl From<ApplicationId> for GenericApplicationId {
     fn from(user_application_id: ApplicationId) -> Self {
         GenericApplicationId::User(user_application_id)
@@ -318,6 +328,17 @@ pub struct StreamId {
     pub stream_name: StreamName,
 }
 
+impl Display for StreamId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}:{}",
+            self.application_id,
+            STANDARD_NO_PAD.encode(&self.stream_name.0)
+        )
+    }
+}
+
 /// An event identifier.
 #[derive(
     Debug,
@@ -339,6 +360,18 @@ pub struct EventId {
     pub stream_id: StreamId,
     /// The event key.
     pub key: Vec<u8>,
+}
+
+impl Display for EventId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}:{}:{}",
+            self.chain_id,
+            self.stream_id,
+            STANDARD_NO_PAD.encode(&self.key)
+        )
+    }
 }
 
 /// The destination of a message, relative to a particular application.

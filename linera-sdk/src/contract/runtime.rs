@@ -10,8 +10,8 @@ use linera_base::{
         Timestamp,
     },
     identifiers::{
-        Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, MessageId, Owner,
-        StreamName,
+        Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, EventId, MessageId,
+        Owner, StreamName,
     },
     ownership::{ChainOwnership, CloseChainError},
 };
@@ -274,6 +274,11 @@ where
     /// Reads a blob with the given `BlobId` from storage.
     pub fn read_blob(&mut self, blob_id: BlobId) -> HashedBlob {
         wit::read_blob(blob_id.into()).into()
+    }
+
+    /// Reads an event with the given ID from storage.
+    pub fn read_event(event_id: EventId) -> Vec<u8> {
+        wit::read_event(&event_id.into())
     }
 }
 

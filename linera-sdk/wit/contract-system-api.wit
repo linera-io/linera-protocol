@@ -26,6 +26,7 @@ interface contract-system-api {
     http-post: func(query: string, content-type: string, payload: list<u8>) -> list<u8>;
     assert-before: func(timestamp: timestamp);
     read-blob: func(blob-id: blob-id) -> hashed-blob;
+    read-event: func(event-id: event-id) -> list<u8>;
     log: func(message: string, level: log-level);
     consume-fuel: func(fuel: u64);
 
@@ -96,6 +97,17 @@ interface contract-system-api {
         subscribers(channel-name),
     }
 
+    record event-id {
+        chain-id: chain-id,
+        stream-id: stream-id,
+        key: list<u8>,
+    }
+
+    variant generic-application-id {
+        system,
+        user(application-id),
+    }
+
     record hashed-blob {
         id: blob-id,
         blob: blob,
@@ -143,6 +155,11 @@ interface contract-system-api {
         is-tracked: bool,
         grant: resources,
         message: list<u8>,
+    }
+
+    record stream-id {
+        application-id: generic-application-id,
+        stream-name: stream-name,
     }
 
     record stream-name {
