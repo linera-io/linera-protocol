@@ -109,7 +109,10 @@ where
         .await
         .unwrap()
         .unwrap();
-    publisher.receive_certificate(cert).await.unwrap();
+    publisher
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     publisher.process_inbox().await.unwrap();
 
     let (contract_path, service_path) =
@@ -117,12 +120,11 @@ where
 
     let contract_blob = HashedBlob::load_from_file(contract_path.clone()).await?;
     let expected_contract_blob_id = contract_blob.id();
-    let (blob_id, certificate) = publisher
+    let certificate = publisher
         .publish_blob(contract_blob.clone())
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(expected_contract_blob_id, blob_id);
     assert!(certificate
         .value()
         .executed_block()
@@ -130,12 +132,11 @@ where
         .outcome
         .oracle_responses
         .iter()
-        .any(|responses| responses.contains(&OracleResponse::Blob(blob_id))));
+        .any(|responses| responses.contains(&OracleResponse::Blob(expected_contract_blob_id))));
 
     let service_blob = HashedBlob::load_from_file(service_path.clone()).await?;
     let expected_service_blob_id = service_blob.id();
-    let (blob_id, certificate) = publisher.publish_blob(service_blob).await.unwrap().unwrap();
-    assert_eq!(expected_service_blob_id, blob_id);
+    let certificate = publisher.publish_blob(service_blob).await.unwrap().unwrap();
     assert!(certificate
         .value()
         .executed_block()
@@ -143,15 +144,14 @@ where
         .outcome
         .oracle_responses
         .iter()
-        .any(|responses| responses.contains(&OracleResponse::Blob(blob_id))));
+        .any(|responses| responses.contains(&OracleResponse::Blob(expected_service_blob_id))));
 
     // If I try to upload the contract blob again, I should get the same blob ID
-    let (blob_id, certificate) = publisher
+    let certificate = publisher
         .publish_blob(contract_blob)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(expected_contract_blob_id, blob_id);
     assert!(certificate
         .value()
         .executed_block()
@@ -159,7 +159,7 @@ where
         .outcome
         .oracle_responses
         .iter()
-        .any(|responses| responses.contains(&OracleResponse::Blob(blob_id))));
+        .any(|responses| responses.contains(&OracleResponse::Blob(expected_contract_blob_id))));
 
     let (bytecode_id, cert) = publisher
         .publish_bytecode(
@@ -171,7 +171,10 @@ where
         .unwrap();
     let bytecode_id = bytecode_id.with_abi::<counter::CounterAbi, (), u64>();
     // Receive our own cert to broadcast the bytecode location.
-    publisher.receive_certificate(cert).await.unwrap();
+    publisher
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     publisher.process_inbox().await.unwrap();
 
     creator.synchronize_from_validators().await.unwrap();
@@ -326,7 +329,10 @@ where
         .await
         .unwrap()
         .unwrap();
-    publisher.receive_certificate(cert).await.unwrap();
+    publisher
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     publisher.process_inbox().await.unwrap();
 
     let (bytecode_id1, cert1) = {
@@ -357,8 +363,14 @@ where
     let bytecode_id2 =
         bytecode_id2.with_abi::<meta_counter::MetaCounterAbi, ApplicationId<CounterAbi>, ()>();
     // Receive our own certs to broadcast the bytecode locations.
-    publisher.receive_certificate(cert1).await.unwrap();
-    publisher.receive_certificate(cert2).await.unwrap();
+    publisher
+        .receive_certificate_and_update_validators(cert1)
+        .await
+        .unwrap();
+    publisher
+        .receive_certificate_and_update_validators(cert2)
+        .await
+        .unwrap();
     publisher.process_inbox().await.unwrap();
 
     // Creator receives the bytecodes then creates the app.
@@ -403,7 +415,10 @@ where
         .unwrap()
         .unwrap();
 
-    receiver.receive_certificate(cert).await.unwrap();
+    receiver
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     let (cert, _) = receiver.process_inbox().await.unwrap();
     let executed_block = cert[0].value().executed_block().unwrap();
     let responses = &executed_block.outcome.oracle_responses;
@@ -435,7 +450,10 @@ where
         .unwrap()
         .unwrap();
 
-    receiver.receive_certificate(cert).await.unwrap();
+    receiver
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
@@ -456,7 +474,10 @@ where
         .unwrap()
         .unwrap();
 
-    receiver.receive_certificate(cert).await.unwrap();
+    receiver
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
@@ -468,7 +489,10 @@ where
     assert_eq!(messages.len(), 1);
 
     // The bounced message is marked as "bouncing" in the Wasm context and succeeds.
-    creator.receive_certificate(cert).await.unwrap();
+    creator
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     let mut certs = creator.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
@@ -564,7 +588,10 @@ where
         .with_abi::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>();
 
     // Receive our own cert to broadcast the bytecode location.
-    sender.receive_certificate(pub_cert.clone()).await.unwrap();
+    sender
+        .receive_certificate_and_update_validators(pub_cert.clone())
+        .await
+        .unwrap();
     sender.process_inbox().await.unwrap();
 
     let sender_owner = AccountOwner::User(Owner::from(sender.key_pair().await?.public()));
@@ -612,7 +639,10 @@ where
         assert_eq!(*destination, Destination::Recipient(receiver.chain_id()));
     }
     receiver.synchronize_from_validators().await.unwrap();
-    receiver.receive_certificate(cert).await.unwrap();
+    receiver
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let messages = match certs[0].value() {
@@ -645,7 +675,10 @@ where
         .unwrap()
         .unwrap();
 
-    receiver.receive_certificate(cert).await.unwrap();
+    receiver
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let messages = match certs[0].value() {
@@ -773,7 +806,7 @@ where
 
     // Receive our own cert to broadcast the bytecode location.
     receiver
-        .receive_certificate(pub_cert.clone())
+        .receive_certificate_and_update_validators(pub_cert.clone())
         .await
         .unwrap();
     receiver.process_inbox().await.unwrap();
@@ -796,7 +829,10 @@ where
 
     // Subscribe the receiver. This also registers the application.
     sender.synchronize_from_validators().await.unwrap();
-    sender.receive_certificate(cert).await.unwrap();
+    sender
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     let _certs = sender.process_inbox().await.unwrap();
 
     // Make a post.
@@ -808,7 +844,10 @@ where
         .unwrap()
         .unwrap();
 
-    receiver.receive_certificate(cert.clone()).await.unwrap();
+    receiver
+        .receive_certificate_and_update_validators(cert.clone())
+        .await
+        .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
 
@@ -851,7 +890,10 @@ where
 
     // Unsubscribe the receiver.
     sender.synchronize_from_validators().await.unwrap();
-    sender.receive_certificate(cert).await.unwrap();
+    sender
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     let _certs = sender.process_inbox().await.unwrap();
 
     // Make a post.
@@ -865,7 +907,10 @@ where
         .unwrap();
 
     // The post will not be received by the unsubscribed chain.
-    receiver.receive_certificate(cert).await.unwrap();
+    receiver
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert!(certs.is_empty());
 

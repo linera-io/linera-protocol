@@ -232,9 +232,11 @@ where
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: Certificate,
+        hashed_certificate_values: &[HashedCertificateValue],
+        hashed_blobs: &[HashedBlob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::from(self)
-            .process_validated_block(certificate)
+            .process_validated_block(certificate, hashed_certificate_values, hashed_blobs)
             .await
     }
 
@@ -935,6 +937,8 @@ where
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: Certificate,
+        hashed_certificate_values: &[HashedCertificateValue],
+        hashed_blobs: &[HashedBlob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let executed_block = match certificate.value() {
             CertificateValue::ValidatedBlock { executed_block } => executed_block,
@@ -985,7 +989,12 @@ where
         // Verify that all required bytecode hashed certificate values and blobs are available, and no
         // unrelated ones provided.
         self.state
-            .check_no_missing_blobs(block, executed_block.required_blob_ids(), &[], &[])
+            .check_no_missing_blobs(
+                block,
+                executed_block.required_blob_ids(),
+                hashed_certificate_values,
+                hashed_blobs,
+            )
             .await?;
         let old_round = self.state.chain.manager.get().current_round;
         self.state.chain.manager.get_mut().create_final_vote(

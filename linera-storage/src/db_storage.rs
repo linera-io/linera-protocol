@@ -532,6 +532,31 @@ where
         Ok(blob.with_hash_unchecked(blob_id))
     }
 
+    async fn read_hashed_blobs(
+        &self,
+        blob_ids: &[BlobId],
+    ) -> Result<Vec<Option<HashedBlob>>, ViewError> {
+        let blob_keys = blob_ids
+            .iter()
+            .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
+            .collect::<Result<Vec<_>, _>>()?;
+        let maybe_blobs = self
+            .client
+            .client
+            .read_multi_values::<Blob>(blob_keys)
+            .await?;
+        #[cfg(with_metrics)]
+        READ_BLOB_COUNTER
+            .with_label_values(&[])
+            .inc_by(blob_ids.len() as u64);
+
+        Ok(blob_ids
+            .iter()
+            .zip(maybe_blobs)
+            .map(|(blob_id, maybe_blob)| maybe_blob.map(|blob| blob.with_hash_unchecked(*blob_id)))
+            .collect())
+    }
+
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError> {
         let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
         let maybe_blob_state = self

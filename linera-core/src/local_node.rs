@@ -2,7 +2,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, sync::Arc};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use futures::future;
 use linera_base::{
@@ -11,7 +15,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, LiteCertificate,
+        Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
+        LiteCertificate,
     },
     ChainStateView,
 };
@@ -24,6 +29,7 @@ use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;
 use thiserror::Error;
 use tokio::sync::OwnedRwLockReadGuard;
+use tracing::warn;
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
@@ -188,8 +194,7 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
-    async fn find_missing_application_bytecodes(
-        &self,
+    pub async fn try_download_hashed_certificate_values_from(
         locations: &[BytecodeLocation],
         node: &impl LocalValidatorNode,
         name: &ValidatorName,
@@ -203,17 +208,15 @@ where
         .collect::<Vec<_>>()
     }
 
-    #[tracing::instrument(level = "trace", skip_all)]
-    async fn find_missing_blobs(
-        &self,
-        blob_ids: &[BlobId],
-        node: &impl LocalValidatorNode,
-        name: &ValidatorName,
-    ) -> Vec<HashedBlob> {
+    #[tracing::instrument(level = "trace", skip(locations, nodes))]
+    pub async fn download_hashed_certificate_values(
+        locations: &[BytecodeLocation],
+        nodes: &[(ValidatorName, impl LocalValidatorNode)],
+    ) -> Vec<HashedCertificateValue> {
         future::join_all(
-            blob_ids.iter().map(|blob_id| async move {
-                Self::try_download_blob_from(name, node, *blob_id).await
-            }),
+            locations
+                .iter()
+                .map(|location| Self::download_hashed_certificate_value(nodes, *location)),
         )
         .await
         .into_iter()
@@ -221,8 +224,124 @@ where
         .collect::<Vec<_>>()
     }
 
+    pub async fn find_missing_application_bytecodes(
+        &self,
+        certificate: &Certificate,
+        locations: &Vec<BytecodeLocation>,
+    ) -> Result<Vec<HashedCertificateValue>, NodeError> {
+        if locations.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Find the missing bytecodes locally and retry.
+        let required = match certificate.value() {
+            CertificateValue::ConfirmedBlock { executed_block, .. }
+            | CertificateValue::ValidatedBlock { executed_block, .. } => {
+                executed_block.block.bytecode_locations()
+            }
+            CertificateValue::Timeout { .. } => HashSet::new(),
+        };
+        for location in locations {
+            if !required.contains(location) {
+                let hash = location.certificate_hash;
+                warn!("validator requested {:?} but it is not required", hash);
+                return Err(NodeError::InvalidChainInfoResponse);
+            }
+        }
+        let unique_locations = locations.iter().cloned().collect::<HashSet<_>>();
+        if locations.len() > unique_locations.len() {
+            warn!("locations requested by validator contain duplicates");
+            return Err(NodeError::InvalidChainInfoResponse);
+        }
+        let storage = self.storage_client();
+        Ok(future::join_all(
+            unique_locations
+                .into_iter()
+                .map(|location| storage.read_hashed_certificate_value(location.certificate_hash)),
+        )
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>())
+    }
+
+    // Given a list of missing `BlobId`s and a `Certificate` for a block:
+    // - Makes sure they're required by the block provided
+    // - Makes sure there's no duplicate blobs being requested
+    // - Searches for the blob in different places of the local node: blob cache,
+    //   chain manager's pending blobs, and blob storage.
+    pub async fn find_missing_blobs(
+        &self,
+        certificate: &Certificate,
+        missing_blob_ids: &Vec<BlobId>,
+        chain_id: ChainId,
+    ) -> Result<Vec<HashedBlob>, NodeError> {
+        if missing_blob_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Find the missing blobs locally and retry.
+        let required = match certificate.value() {
+            CertificateValue::ConfirmedBlock { executed_block, .. }
+            | CertificateValue::ValidatedBlock { executed_block, .. } => {
+                executed_block.required_blob_ids()
+            }
+            CertificateValue::Timeout { .. } => HashSet::new(),
+        };
+        for blob_id in missing_blob_ids {
+            if !required.contains(blob_id) {
+                warn!(
+                    "validator requested blob {:?} but it is not required",
+                    blob_id
+                );
+                return Err(NodeError::InvalidChainInfoResponse);
+            }
+        }
+        let mut unique_missing_blob_ids = missing_blob_ids.iter().cloned().collect::<HashSet<_>>();
+        if missing_blob_ids.len() > unique_missing_blob_ids.len() {
+            warn!("blobs requested by validator contain duplicates");
+            return Err(NodeError::InvalidChainInfoResponse);
+        }
+
+        let (found_blobs, not_found_blobs): (HashMap<BlobId, HashedBlob>, Vec<BlobId>) = self
+            .recent_hashed_blobs()
+            .await
+            .try_get_many(missing_blob_ids.clone())
+            .await;
+        let found_blob_ids = found_blobs.clone().into_keys().collect::<HashSet<_>>();
+        let mut found_blobs = found_blobs.clone().into_values().collect::<Vec<_>>();
+
+        unique_missing_blob_ids = unique_missing_blob_ids
+            .difference(&found_blob_ids)
+            .copied()
+            .collect::<HashSet<BlobId>>();
+        let chain_manager_pending_blobs = self
+            .chain_state_view(chain_id)
+            .await?
+            .manager
+            .get()
+            .pending_blobs
+            .clone();
+        for blob_id in not_found_blobs {
+            if let Some(blob) = chain_manager_pending_blobs.get(&blob_id).cloned() {
+                found_blobs.push(blob);
+                unique_missing_blob_ids.remove(&blob_id);
+            }
+        }
+
+        let storage = self.storage_client();
+        found_blobs.extend(
+            storage
+                .read_hashed_blobs(&unique_missing_blob_ids.into_iter().collect::<Vec<_>>())
+                .await?
+                .into_iter()
+                .flatten(),
+        );
+        Ok(found_blobs)
+    }
+
     #[tracing::instrument(level = "trace", skip_all)]
-    async fn try_process_certificates(
+    pub async fn try_process_certificates(
         &self,
         name: &ValidatorName,
         node: &impl LocalValidatorNode,
@@ -246,10 +365,10 @@ where
                 Err(LocalNodeError::WorkerError(
                     WorkerError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids),
                 )) => {
-                    let values = self
-                        .find_missing_application_bytecodes(locations, node, name)
-                        .await;
-                    let blobs = self.find_missing_blobs(blob_ids, node, name).await;
+                    let values =
+                        Self::try_download_hashed_certificate_values_from(locations, node, name)
+                            .await;
+                    let blobs = Self::try_download_blobs_from(blob_ids, name, node).await;
                     if values.len() != locations.len() || blobs.len() != blob_ids.len() {
                         result
                     } else {
@@ -325,7 +444,7 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn recent_hashed_blobs(&self) -> Arc<ValueCache<BlobId, HashedBlob>> {
+    async fn recent_hashed_blobs(&self) -> Arc<ValueCache<BlobId, HashedBlob>> {
         self.node.state.recent_hashed_blobs()
     }
 
@@ -418,7 +537,7 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
-    pub async fn read_or_download_hashed_certificate_value(
+    async fn read_or_download_hashed_certificate_value(
         storage: S,
         validators: &[(ValidatorName, impl LocalValidatorNode)],
         location: BytecodeLocation,
@@ -534,107 +653,8 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip_all)]
-    pub async fn synchronize_chain_state(
-        &self,
-        validators: &[(ValidatorName, impl LocalValidatorNode)],
-        chain_id: ChainId,
-        notifications: &mut impl Extend<Notification>,
-    ) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let mut futures = vec![];
-
-        for (name, node) in validators {
-            let client = self.clone();
-            let mut notifications = vec![];
-            futures.push(async move {
-                (
-                    client
-                        .try_synchronize_chain_state_from(name, node, chain_id, &mut notifications)
-                        .await,
-                    notifications,
-                )
-            });
-        }
-
-        for (result, notifications_) in future::join_all(futures).await {
-            if let Err(e) = result {
-                tracing::error!(?e, "Error synchronizing chain state");
-            }
-
-            notifications.extend(notifications_);
-        }
-
-        self.local_chain_info(chain_id).await
-    }
-
-    #[tracing::instrument(level = "trace", skip(self, name, node, chain_id, notifications))]
-    pub async fn try_synchronize_chain_state_from(
-        &self,
-        name: &ValidatorName,
-        node: &impl LocalValidatorNode,
-        chain_id: ChainId,
-        notifications: &mut impl Extend<Notification>,
-    ) -> Result<(), LocalNodeError> {
-        let local_info = self.local_chain_info(chain_id).await?;
-        let range = BlockHeightRange {
-            start: local_info.next_block_height,
-            limit: None,
-        };
-        let query = ChainInfoQuery::new(chain_id)
-            .with_sent_certificate_hashes_in_range(range)
-            .with_manager_values();
-        let info = match node.handle_chain_info_query(query).await {
-            Ok(response) if response.check(name).is_ok() => response.info,
-            Ok(_) => {
-                tracing::warn!("Ignoring invalid response from validator");
-                // Give up on this validator.
-                return Ok(());
-            }
-            Err(err) => {
-                tracing::warn!("Ignoring error from validator: {}", err);
-                return Ok(());
-            }
-        };
-
-        let certificates = future::try_join_all(
-            info.requested_sent_certificate_hashes
-                .into_iter()
-                .map(move |hash| async move { node.download_certificate(hash).await }),
-        )
-        .await?;
-
-        if !certificates.is_empty()
-            && self
-                .try_process_certificates(name, node, chain_id, certificates, notifications)
-                .await
-                .is_none()
-        {
-            return Ok(());
-        };
-        if let Some(proposal) = info.manager.requested_proposed {
-            if proposal.content.block.chain_id == chain_id {
-                let owner = proposal.owner;
-                if let Err(error) = self.handle_block_proposal(*proposal).await {
-                    tracing::warn!("Skipping proposal from {}: {}", owner, error);
-                }
-            }
-        }
-        if let Some(cert) = info.manager.requested_locked {
-            if cert.value().is_validated() && cert.value().chain_id() == chain_id {
-                let hash = cert.hash();
-                if let Err(error) = self
-                    .handle_certificate(*cert, vec![], vec![], notifications)
-                    .await
-                {
-                    tracing::warn!("Skipping certificate {}: {}", hash, error);
-                }
-            }
-        }
-        Ok(())
-    }
-
     #[tracing::instrument(level = "trace", skip(validators, location))]
-    pub async fn download_hashed_certificate_value(
+    async fn download_hashed_certificate_value(
         validators: &[(ValidatorName, impl LocalValidatorNode)],
         location: BytecodeLocation,
     ) -> Option<HashedCertificateValue> {
@@ -652,7 +672,7 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(validators))]
-    pub async fn download_blob(
+    async fn download_blob(
         validators: &[(ValidatorName, impl LocalValidatorNode)],
         blob_id: BlobId,
     ) -> Option<HashedBlob> {
@@ -665,6 +685,39 @@ where
             }
         }
         None
+    }
+
+    #[tracing::instrument(level = "trace", skip(nodes))]
+    pub async fn download_blobs(
+        blob_ids: &[BlobId],
+        nodes: &[(ValidatorName, impl LocalValidatorNode)],
+    ) -> Vec<HashedBlob> {
+        future::join_all(
+            blob_ids
+                .iter()
+                .map(|blob_id| Self::download_blob(nodes, *blob_id)),
+        )
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+    }
+
+    #[tracing::instrument(level = "trace", skip(node))]
+    pub async fn try_download_blobs_from(
+        blob_ids: &[BlobId],
+        name: &ValidatorName,
+        node: &impl LocalValidatorNode,
+    ) -> Vec<HashedBlob> {
+        future::join_all(
+            blob_ids
+                .iter()
+                .map(|blob_id| Self::try_download_blob_from(name, node, *blob_id)),
+        )
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
     }
 
     #[tracing::instrument(level = "trace", skip(name, node))]

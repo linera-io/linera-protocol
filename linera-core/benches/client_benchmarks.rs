@@ -71,7 +71,10 @@ where
         .unwrap()
         .unwrap();
 
-    chain2.receive_certificate(cert).await.unwrap();
+    chain2
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     chain2.process_inbox().await.unwrap();
     assert_eq!(
         chain1.local_balance().await.unwrap(),
@@ -85,10 +88,16 @@ where
         .unwrap()
         .unwrap();
 
-    chain2.receive_certificate(cert).await.unwrap();
+    chain2
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     let cert = chain2.process_inbox().await.unwrap().0.pop().unwrap();
 
-    chain1.receive_certificate(cert).await.unwrap();
+    chain1
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     chain1.process_inbox().await.unwrap();
     assert_eq!(
         chain1.local_balance().await.unwrap(),
