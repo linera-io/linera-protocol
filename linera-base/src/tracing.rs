@@ -32,7 +32,7 @@ pub fn init() {
         .map(|s| fmt_span_from_str(&s))
         .unwrap_or(FmtSpan::NONE);
 
-    let subscriber = tracing_subscriber::fmt()
+    let mut subscriber = tracing_subscriber::fmt()
         .with_span_events(span_events)
         .with_writer(std::io::stderr)
         .with_env_filter(
@@ -41,20 +41,23 @@ pub fn init() {
                 .from_env_lossy(),
         );
 
-    if let Ok(format) = std::env::var("RUST_LOG_FORMAT") {
-        match format.as_str() {
-            "json" => subscriber.json().init(),
-            "pretty" => subscriber.pretty().init(),
-            "plain" => subscriber.init(),
-            _ => {
-                panic!("Invalid RUST_LOG_FORMAT: `{format}`.  Valid values are `json` or `pretty`.")
-            }
+    if std::env::var("NO_COLOR")
+        .ok()
+        .filter(|x| !x.is_empty())
+        .is_some()
+        || cfg!(feature = "web")
+        || !std::io::stderr().is_terminal()
+    {
+        subscriber = subscriber.with_ansi(false);
+    }
+
+    let format = std::env::var("RUST_LOG_FORMAT").unwrap_or("plain".to_string());
+    match format.as_str() {
+        "json" => subscriber.json().init(),
+        "pretty" => subscriber.pretty().init(),
+        "plain" => subscriber.init(),
+        format => {
+            panic!("Invalid RUST_LOG_FORMAT: `{format}`.  Valid values are `json` or `pretty`.")
         }
-    } else if cfg!(feature = "web") {
-        subscriber.with_ansi(false).init();
-    } else if std::io::stderr().is_terminal() {
-        subscriber.init();
-    } else {
-        subscriber.json().init();
     }
 }
