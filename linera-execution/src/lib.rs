@@ -691,7 +691,7 @@ pub enum MessageKind {
     /// The message cannot be skipped but can be rejected. A receipt must be sent
     /// when the message is rejected in a block of the receiver.
     Tracked,
-    /// This event is a receipt automatically created when the original event was rejected.
+    /// This message is a receipt automatically created when the original message was rejected.
     Bouncing,
 }
 
