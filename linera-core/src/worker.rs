@@ -6,7 +6,7 @@ use std::{
     borrow::Cow,
     collections::{hash_map, BTreeMap, HashMap, VecDeque},
     num::NonZeroUsize,
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -34,7 +34,7 @@ use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::{
-    sync::{mpsc, oneshot, Mutex, OwnedRwLockReadGuard},
+    sync::{mpsc, oneshot, OwnedRwLockReadGuard},
     task::JoinSet,
 };
 use tracing::{error, instrument, trace, warn};
@@ -334,7 +334,7 @@ where
     #[cfg(test)]
     pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<KeyPair>>) -> Self {
         self.chain_worker_config.key_pair = key_pair;
-        self.chain_workers.lock().await.clear();
+        self.chain_workers.lock().unwrap().clear();
         self
     }
 
@@ -455,7 +455,7 @@ where
             {
                 self.delivery_notifiers
                     .lock()
-                    .await
+                    .unwrap()
                     .entry(chain_id)
                     .or_default()
                     .entry(height)
@@ -731,7 +731,7 @@ where
             oneshot::Sender<Result<Response, WorkerError>>,
         ) -> ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<Response, WorkerError> {
-        let chain_actor = self.get_chain_worker_endpoint(chain_id).await?;
+        let chain_actor = self.get_chain_worker_endpoint(chain_id).await;
         let (callback, response) = oneshot::channel();
 
         chain_actor
@@ -749,30 +749,20 @@ where
     async fn get_chain_worker_endpoint(
         &self,
         chain_id: ChainId,
-    ) -> Result<ChainActorEndpoint<StorageClient>, WorkerError> {
-        let mut chain_workers = self.chain_workers.lock().await;
-
-        if !chain_workers.contains(&chain_id) {
-            chain_workers.push(
+    ) -> ChainActorEndpoint<StorageClient> {
+        self.chain_workers.lock().unwrap().get_or_insert(chain_id, || {
+            let (sender, receiver) = mpsc::unbounded_channel();
+            ChainWorkerActor::spawn(
+                self.chain_worker_config.clone(),
+                self.storage.clone(),
+                self.recent_hashed_certificate_values.clone(),
+                self.recent_hashed_blobs.clone(),
                 chain_id,
-                ChainWorkerActor::spawn(
-                    self.chain_worker_config.clone(),
-                    self.storage.clone(),
-                    self.recent_hashed_certificate_values.clone(),
-                    self.recent_hashed_blobs.clone(),
-                    chain_id,
-                    &mut *self.chain_worker_tasks.lock().await,
-                )
-                .await?,
+                receiver,
+                &mut *self.chain_worker_tasks.lock().unwrap(),
             );
-        }
-
-        Ok(chain_workers
-            .get(&chain_id)
-            .expect(
-                "Chain worker should have been inserted in the cache if it wasn't there already",
-            )
-            .clone())
+            sender
+        }).clone()
     }
 
     #[instrument(skip_all, fields(
@@ -979,7 +969,7 @@ where
                     .await?;
                 // Handle delivery notifiers for this chain, if any.
                 if let hash_map::Entry::Occupied(mut map) =
-                    self.delivery_notifiers.lock().await.entry(sender)
+                    self.delivery_notifiers.lock().unwrap().entry(sender)
                 {
                     while let Some(entry) = map.get_mut().first_entry() {
                         if entry.key() > &height_with_fully_delivered_messages {

@@ -209,7 +209,8 @@ where
     }
 
     while let Some(event) = events.next().await {
-        let chain_client = context.lock().await.make_chain_client(event.chain_id());
+        let chain_client = client.chain(event.chain_id())
+            .expect("Notifications should come from a known client");
 
         let notification = match event {
             Event::Notification(notification) => notification,

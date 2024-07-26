@@ -28,7 +28,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use tokio::{
     sync::{mpsc, oneshot, OwnedRwLockReadGuard},
-    task::{JoinHandle, JoinSet},
+    task::JoinHandle,
 };
 use tracing::{instrument, trace, warn};
 #[cfg(with_testing)]
@@ -42,7 +42,7 @@ use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     value_cache::ValueCache,
     worker::{NetworkActions, WorkerError},
-    JoinSetExt as _,
+    JoinSetExt,
 };
 
 /// A request for the [`ChainWorkerActor`].
@@ -151,7 +151,7 @@ where
     StorageClient: Storage + Clone + Send + Sync + 'static,
     ViewError: From<StorageClient::StoreError>,
 {
-    worker: ChainWorkerState<StorageClient>,
+    state: ChainWorkerState<StorageClient>,
     incoming_requests: mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>,
     service_runtime_thread: JoinHandle<()>,
 }
@@ -163,39 +163,37 @@ where
 {
     /// Spawns a new task to run the [`ChainWorkerActor`], returning an endpoint for sending
     /// requests to the worker.
-    pub async fn spawn(
+    pub fn spawn(
         config: ChainWorkerConfig,
         storage: StorageClient,
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
         blob_cache: Arc<ValueCache<BlobId, HashedBlob>>,
         chain_id: ChainId,
-        join_set: &mut JoinSet<()>,
-    ) -> Result<mpsc::UnboundedSender<ChainWorkerRequest<StorageClient::Context>>, WorkerError>
-    {
+        receiver: mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>,
+        join_set: &mut impl JoinSetExt,
+    ) {
         let (service_runtime_thread, execution_state_receiver, runtime_request_sender) =
             Self::spawn_service_runtime_actor(chain_id);
 
-        let worker = ChainWorkerState::load(
-            config,
-            storage,
-            certificate_value_cache,
-            blob_cache,
-            chain_id,
-            execution_state_receiver,
-            runtime_request_sender,
-        )
-        .await?;
+        join_set.spawn_task(async move {
+            let state = ChainWorkerState::load(
+                config,
+                storage,
+                certificate_value_cache,
+                blob_cache,
+                chain_id,
+                execution_state_receiver,
+                runtime_request_sender,
+            ).await.expect("chain worker actor shouldn't be spawned for non-existent chain");
 
-        let (sender, receiver) = mpsc::unbounded_channel();
-        let actor = ChainWorkerActor {
-            worker,
-            incoming_requests: receiver,
-            service_runtime_thread,
-        };
+            let actor = ChainWorkerActor {
+                state,
+                incoming_requests: receiver,
+                service_runtime_thread,
+            };
 
-        join_set.spawn_task(actor.run(tracing::Span::current()));
-
-        Ok(sender)
+            actor.run(tracing::Span::current()).await;
+        });
     }
 
     /// Spawns a blocking task to execute the service runtime actor.
@@ -234,7 +232,7 @@ where
         name = "ChainWorkerActor",
         follows_from = [spawner_span],
         skip_all,
-        fields(chain_id = format!("{:.8}", self.worker.chain_id())),
+        fields(chain_id = format!("{:.8}", self.state.chain_id())),
     )]
     async fn run(mut self, spawner_span: tracing::Span) {
         trace!("Starting `ChainWorkerActor`");
@@ -246,7 +244,7 @@ where
             let responded = match request {
                 #[cfg(with_testing)]
                 ChainWorkerRequest::ReadCertificate { height, callback } => callback
-                    .send(self.worker.read_certificate(height).await)
+                    .send(self.state.read_certificate(height).await)
                     .is_ok(),
                 #[cfg(with_testing)]
                 ChainWorkerRequest::FindEventInInbox {
@@ -257,47 +255,47 @@ where
                     callback,
                 } => callback
                     .send(
-                        self.worker
+                        self.state
                             .find_event_in_inbox(inbox_id, certificate_hash, height, index)
                             .await,
                     )
                     .is_ok(),
                 ChainWorkerRequest::GetChainStateView { callback } => {
-                    callback.send(self.worker.chain_state_view().await).is_ok()
+                    callback.send(self.state.chain_state_view().await).is_ok()
                 }
                 ChainWorkerRequest::QueryApplication { query, callback } => callback
-                    .send(self.worker.query_application(query).await)
+                    .send(self.state.query_application(query).await)
                     .is_ok(),
                 #[cfg(with_testing)]
                 ChainWorkerRequest::ReadBytecodeLocation {
                     bytecode_id,
                     callback,
                 } => callback
-                    .send(self.worker.read_bytecode_location(bytecode_id).await)
+                    .send(self.state.read_bytecode_location(bytecode_id).await)
                     .is_ok(),
                 ChainWorkerRequest::DescribeApplication {
                     application_id,
                     callback,
                 } => callback
-                    .send(self.worker.describe_application(application_id).await)
+                    .send(self.state.describe_application(application_id).await)
                     .is_ok(),
                 ChainWorkerRequest::StageBlockExecution { block, callback } => callback
-                    .send(self.worker.stage_block_execution(block).await)
+                    .send(self.state.stage_block_execution(block).await)
                     .is_ok(),
                 ChainWorkerRequest::ProcessTimeout {
                     certificate,
                     callback,
                 } => callback
-                    .send(self.worker.process_timeout(certificate).await)
+                    .send(self.state.process_timeout(certificate).await)
                     .is_ok(),
                 ChainWorkerRequest::HandleBlockProposal { proposal, callback } => callback
-                    .send(self.worker.handle_block_proposal(proposal).await)
+                    .send(self.state.handle_block_proposal(proposal).await)
                     .is_ok(),
                 ChainWorkerRequest::ProcessValidatedBlock {
                     certificate,
                     callback,
                 } => callback
-                    .send(self.worker.process_validated_block(certificate).await)
+                    .send(self.state.process_validated_block(certificate).await)
                     .is_ok(),
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
@@ -306,7 +304,7 @@ where
                     callback,
                 } => callback
                     .send(
-                        self.worker
+                        self.state
                             .process_confirmed_block(
                                 certificate,
                                 &hashed_certificate_values,
@@ -321,7 +319,7 @@ where
                     callback,
                 } => callback
                     .send(
-                        self.worker
+                        self.state
                             .process_cross_chain_update(origin, bundles)
                             .await,
                     )
@@ -330,10 +328,10 @@ where
                     latest_heights,
                     callback,
                 } => callback
-                    .send(self.worker.confirm_updated_recipient(latest_heights).await)
+                    .send(self.state.confirm_updated_recipient(latest_heights).await)
                     .is_ok(),
                 ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
-                    .send(self.worker.handle_chain_info_query(query).await)
+                    .send(self.state.handle_chain_info_query(query).await)
                     .is_ok(),
             };
 
@@ -342,7 +340,7 @@ where
             }
         }
 
-        drop(self.worker);
+        drop(self.state);
         self.service_runtime_thread
             .await
             .expect("Service runtime thread should not panic");
