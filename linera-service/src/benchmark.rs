@@ -120,7 +120,7 @@ async fn benchmark_with_fungible(
         let free_port = random_free_tcp_port().context("no free TCP port")?;
         let chain_id = client.default_chain().context("missing default chain")?;
         let node_service = client
-            .run_node_service(free_port, ProcessInbox::Skip)
+            .run_node_service(free_port, ProcessInbox::Automatic)
             .await?;
         let channel = SystemChannel::PublishedBytecodes;
         node_service

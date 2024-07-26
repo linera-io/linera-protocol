@@ -96,7 +96,7 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
 
     let (mut net, client) = config.instantiate().await.unwrap();
     let mut node_service = client
-        .run_node_service(None, ProcessInbox::Skip)
+        .run_node_service(None, ProcessInbox::Automatic)
         .await
         .unwrap();
     let mut indexer = run_indexer(&client.path_provider).await;

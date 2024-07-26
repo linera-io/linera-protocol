@@ -78,7 +78,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
         .unwrap();
 
     let mut node_service = client
-        .run_node_service(None, ProcessInbox::Skip)
+        .run_node_service(None, ProcessInbox::Automatic)
         .await
         .unwrap();
     let req_client = &reqwest_client();
