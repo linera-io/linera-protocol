@@ -37,6 +37,11 @@ use crate::{
     util::ChildExt,
 };
 
+pub enum ProcessInbox {
+    Skip,
+    Automatic,
+}
+
 #[cfg(all(feature = "rocksdb", with_testing))]
 trait LocalServerInternal: Sized {
     type Config;

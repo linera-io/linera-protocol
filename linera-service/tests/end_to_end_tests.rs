@@ -37,7 +37,7 @@ use linera_service::cli_wrappers::{
 };
 use linera_service::{
     cli_wrappers::{
-        local_net::{get_node_port, PathProvider},
+        local_net::{get_node_port, PathProvider, ProcessInbox},
         ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     test_name,
@@ -458,7 +458,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
         )
         .await?;
     let port = get_node_port().await;
-    let node_service = client.run_node_service(port).await?;
+    let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
     let app = EthereumTrackerApp(
         node_service
@@ -523,7 +523,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
         )
         .await?;
     let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port).await?;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -573,7 +573,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
         .create_application(&bytecode_id, &(), &original_counter_value, &[], None)
         .await?;
     let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port).await?;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -626,8 +626,12 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1).await?;
-    let mut node_service2 = client2.run_node_service(port2).await?;
+    let mut node_service1 = client1
+        .run_node_service(port1, ProcessInbox::Automatic)
+        .await?;
+    let mut node_service2 = client2
+        .run_node_service(port2, ProcessInbox::Automatic)
+        .await?;
 
     // Request the application so chain 2 has it, too.
     node_service2
@@ -747,8 +751,8 @@ async fn test_wasm_end_to_end_fungible(
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1).await?;
-    let mut node_service2 = client2.run_node_service(port2).await?;
+    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
 
     let app1 = FungibleApp(
         node_service1
@@ -918,7 +922,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         .await?;
 
     let port = get_node_port().await;
-    let mut node_service = client1.run_node_service(port).await?;
+    let mut node_service = client1.run_node_service(port, ProcessInbox::Skip).await?;
 
     let app1 = FungibleApp(
         node_service
@@ -1016,8 +1020,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1).await?;
-    let mut node_service2 = client2.run_node_service(port2).await?;
+    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
 
     let app1 = NonFungibleApp(
         node_service1
@@ -1317,8 +1321,8 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1).await?;
-    let mut node_service2 = client2.run_node_service(port2).await?;
+    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
 
     let app_fungible1 = FungibleApp(
         node_service1
@@ -1459,9 +1463,11 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
     let port3 = get_node_port().await;
-    let mut node_service_admin = client_admin.run_node_service(port1).await?;
-    let mut node_service_a = client_a.run_node_service(port2).await?;
-    let mut node_service_b = client_b.run_node_service(port3).await?;
+    let mut node_service_admin = client_admin
+        .run_node_service(port1, ProcessInbox::Skip)
+        .await?;
+    let mut node_service_a = client_a.run_node_service(port2, ProcessInbox::Skip).await?;
+    let mut node_service_b = client_b.run_node_service(port3, ProcessInbox::Skip).await?;
 
     node_service_a
         .request_application(&chain_a, &token1)
@@ -1700,9 +1706,11 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
     let port3 = get_node_port().await;
-    let mut node_service_amm = client_amm.run_node_service(port1).await?;
-    let mut node_service0 = client0.run_node_service(port2).await?;
-    let mut node_service1 = client1.run_node_service(port3).await?;
+    let mut node_service_amm = client_amm
+        .run_node_service(port1, ProcessInbox::Skip)
+        .await?;
+    let mut node_service0 = client0.run_node_service(port2, ProcessInbox::Skip).await?;
+    let mut node_service1 = client1.run_node_service(port3, ProcessInbox::Skip).await?;
 
     // Amounts of token0 that will be owned by each user
     let state_fungible0 = fungible::InitialState {
@@ -2434,7 +2442,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .await?;
     let port = get_node_port().await;
     let node_service_2 = match network {
-        Network::Grpc => Some(client_2.run_node_service(port).await?),
+        Network::Grpc => Some(client_2.run_node_service(port, ProcessInbox::Skip).await?),
         Network::Tcp | Network::Udp => None,
     };
 
@@ -2514,6 +2522,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .await?;
 
     if let Some(node_service_2) = node_service_2 {
+        node_service_2.process_inbox(&chain_2).await?;
         let query = format!(
             "query {{ chain(chainId:\"{chain_2}\") {{
                 executionState {{ system {{ balances {{
@@ -2521,15 +2530,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
                 }} }} }}
             }} }}"
         );
-        for i in 0.. {
-            tokio::time::sleep(Duration::from_secs(i)).await;
-            let response = node_service_2.query_node(query.clone()).await?;
-            let balances = &response["chain"]["executionState"]["system"]["balances"];
-            if balances["entry"]["value"].as_str() == Some("5.") {
-                break;
-            }
-            assert!(i < 3, "Failed to receive new block");
-        }
+        let response = node_service_2.query_node(query.clone()).await?;
+        let balances = &response["chain"]["executionState"]["system"]["balances"];
+        assert_eq!(balances["entry"]["value"].as_str(), Some("5."));
     } else {
         client_2.sync(chain_2).await?;
         client_2.process_inbox(chain_2).await?;
@@ -2589,7 +2592,9 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
         ?;
 
     let port = get_node_port().await;
-    let node_service = client.run_node_service(port).await?;
+    let node_service = client
+        .run_node_service(port, ProcessInbox::Automatic)
+        .await?;
 
     // Open a new chain with the same public key.
     // The node service should automatically create a client for it internally.
@@ -2688,7 +2693,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let port = get_node_port().await;
-    let mut node_service2 = client2.run_node_service(port).await?;
+    let mut node_service2 = client2.run_node_service(port, ProcessInbox::Skip).await?;
     let response = node_service2
         .query_node(format!(
             "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
@@ -2781,7 +2786,8 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Resul
 async fn test_project_new() -> Result<()> {
     let _rustflags_override = override_disable_warnings_as_errors();
     let path_provider = PathProvider::create_temporary_directory()?;
-    let client = ClientWrapper::new(path_provider, Network::Grpc, None, 0);
+    let id = 0;
+    let client = ClientWrapper::new(path_provider, Network::Grpc, None, id);
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
         .parent()
@@ -2798,7 +2804,8 @@ async fn test_project_new() -> Result<()> {
 #[test_log::test(tokio::test)]
 async fn test_project_test() -> Result<()> {
     let path_provider = PathProvider::create_temporary_directory()?;
-    let client = ClientWrapper::new(path_provider, Network::Grpc, None, 0);
+    let id = 0;
+    let client = ClientWrapper::new(path_provider, Network::Grpc, None, id);
     client
         .project_test(&ClientWrapper::example_path("counter")?)
         .await?;
@@ -2841,7 +2848,7 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     let port = get_node_port().await;
-    let node_service = client.run_node_service(port).await?;
+    let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
     assert_eq!(
         node_service.try_get_applications_uri(&chain).await?.len(),
@@ -2929,7 +2936,7 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     let port = get_node_port().await;
-    let node_service = client.run_node_service(port).await?;
+    let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
     assert_eq!(
         node_service.try_get_applications_uri(&chain).await?.len(),

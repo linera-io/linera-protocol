@@ -35,7 +35,10 @@ use tokio::process::{Child, Command};
 use tracing::{info, warn};
 
 use crate::{
-    cli_wrappers::{local_net::PathProvider, Network},
+    cli_wrappers::{
+        local_net::{PathProvider, ProcessInbox},
+        Network,
+    },
     faucet::ClaimOutcome,
     util::{self, ChildExt},
 };
@@ -370,10 +373,17 @@ impl ClientWrapper {
     }
 
     /// Runs `linera service`.
-    pub async fn run_node_service(&self, port: impl Into<Option<u16>>) -> Result<NodeService> {
+    pub async fn run_node_service(
+        &self,
+        port: impl Into<Option<u16>>,
+        process_inbox: ProcessInbox,
+    ) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
         command.arg("service");
+        if let ProcessInbox::Skip = process_inbox {
+            command.arg("--listener-skip-process-inbox");
+        }
         if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
             command.args(var.split_whitespace());
         }

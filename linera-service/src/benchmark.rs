@@ -14,7 +14,8 @@ use linera_base::{
 use linera_execution::system::SystemChannel;
 use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
 use linera_service::cli_wrappers::{
-    local_net::PathProvider, ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, Network,
+    local_net::{PathProvider, ProcessInbox},
+    ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, Network,
 };
 use port_selector::random_free_tcp_port;
 use rand::{Rng as _, SeedableRng};
@@ -112,7 +113,9 @@ async fn benchmark_with_fungible(
     for client in &clients {
         let free_port = random_free_tcp_port().context("no free TCP port")?;
         let chain_id = client.default_chain().context("missing default chain")?;
-        let node_service = client.run_node_service(free_port).await?;
+        let node_service = client
+            .run_node_service(free_port, ProcessInbox::Automatic)
+            .await?;
         let channel = SystemChannel::PublishedBytecodes;
         node_service
             .subscribe(chain_id, publisher_chain_id, channel)
