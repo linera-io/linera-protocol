@@ -65,7 +65,7 @@ pub trait View<C>: Sized {
 /// Main error type for the crate.
 #[derive(Error, Debug)]
 pub enum ViewError {
-    /// An error occurred while doing BCS serialization.
+    /// An error occurred during BCS serialization.
     #[error("failed to serialize value to calculate its hash")]
     Serialization(#[from] bcs::Error),
 

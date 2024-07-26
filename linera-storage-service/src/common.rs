@@ -65,8 +65,8 @@ pub enum ServiceStoreError {
     #[error(transparent)]
     TransportError(#[from] tonic::transport::Error),
 
-    /// An error occurred while doing BCS
-    #[error("An error occurred while doing BCS")]
+    /// An error occurred during BCS serialization
+    #[error("An error occurred during BCS serialization")]
     Serialization(#[from] bcs::Error),
 
     /// The database is not consistent
