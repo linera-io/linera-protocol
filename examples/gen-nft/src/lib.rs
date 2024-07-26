@@ -93,7 +93,7 @@ linera service --port $PORT &
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     mutation {
         mint(
-            minter: "User:289c661d6da9b5d1a54c50642b9129f0115f762e60c6568f9db5c3ac71996d32",
+            minter: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
             prompt: "Hello!"
         )
     }
@@ -101,7 +101,7 @@ linera service --port $PORT &
 - To check that it's there, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
-        nft(tokenId: "kSIB3o59Ut8wioJdISqZwWedPGUlHK2HapnkOLqLSRA") {
+        nft(tokenId: "9NMD4q5nf2rNy2JQQ9MpUR0c55M8cqeE+Yjngi7t8i0") {
             tokenId,
             owner,
             prompt,
@@ -112,7 +112,7 @@ linera service --port $PORT &
 - To check that it's assigned to the owner, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
-        ownedNfts(owner: "User:289c661d6da9b5d1a54c50642b9129f0115f762e60c6568f9db5c3ac71996d32")
+        ownedNfts(owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f")
     }
 ```
 - To check everything that it's there, run the query:
@@ -125,8 +125,8 @@ linera service --port $PORT &
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     mutation {
         transfer(
-            sourceOwner: "User:289c661d6da9b5d1a54c50642b9129f0115f762e60c6568f9db5c3ac71996d32",
-            tokenId: "kSIB3o59Ut8wioJdISqZwWedPGUlHK2HapnkOLqLSRA",
+            sourceOwner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            tokenId: "9NMD4q5nf2rNy2JQQ9MpUR0c55M8cqeE+Yjngi7t8i0",
             targetAccount: {
                 chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
                 owner: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
