@@ -41,7 +41,7 @@ const NOTIFICATION_SUBSCRIPTION = gql`
 export default function App({ chainId }: { chainId: string }) {
   const [posts, setPosts] = React.useState<ReceivedPosts[]>([])
   const [receivedPosts, { called }] = useLazyQuery<Social>(RECEIVED_POSTS, {
-    onCompleted: (data) => {
+    onCompleted: (data: Social) => {
       setPosts(data.receivedPosts.entries as ReceivedPosts[])
     },
     fetchPolicy: 'network-only',

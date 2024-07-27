@@ -43,7 +43,7 @@ function GraphQLApp() {
   }
 
   return (
-    <GraphQLProvider chainId={id ?? ''} applicationId={app} port={port}>
+    <GraphQLProvider chainId={id} applicationId={app} port={port}>
       <App chainId={id ?? ''} />
       {/* chainId is a required prop, you can pass owner prop here */}
     </GraphQLProvider>
