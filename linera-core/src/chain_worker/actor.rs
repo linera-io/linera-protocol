@@ -114,6 +114,8 @@ where
     /// Process a validated block issued for this multi-owner chain.
     ProcessValidatedBlock {
         certificate: Certificate,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions, bool), WorkerError>>,
     },
 
@@ -295,9 +297,19 @@ where
                     .is_ok(),
                 ChainWorkerRequest::ProcessValidatedBlock {
                     certificate,
+                    hashed_certificate_values,
+                    hashed_blobs,
                     callback,
                 } => callback
-                    .send(self.worker.process_validated_block(certificate).await)
+                    .send(
+                        self.worker
+                            .process_validated_block(
+                                certificate,
+                                &hashed_certificate_values,
+                                &hashed_blobs,
+                            )
+                            .await,
+                    )
                     .is_ok(),
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
@@ -430,10 +442,14 @@ where
                 .finish_non_exhaustive(),
             ChainWorkerRequest::ProcessValidatedBlock {
                 certificate,
+                hashed_certificate_values,
+                hashed_blobs,
                 callback: _callback,
             } => formatter
                 .debug_struct("ChainWorkerRequest::ProcessValidatedBlock")
                 .field("certificate", &certificate)
+                .field("hashed_certificate_values", &hashed_certificate_values)
+                .field("hashed_blobs", &hashed_blobs)
                 .finish_non_exhaustive(),
             ChainWorkerRequest::ProcessConfirmedBlock {
                 certificate,

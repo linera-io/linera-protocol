@@ -170,6 +170,7 @@ pub enum ExecutionError {
 
     #[error("Blob not found on storage read: {0}")]
     BlobNotFoundOnRead(BlobId),
+
     #[error("Event keys can be at most {MAX_EVENT_KEY_LEN} bytes.")]
     EventKeyTooLong,
     #[error("Stream names can be at most {MAX_STREAM_NAME_LEN} bytes.")]
@@ -691,7 +692,7 @@ pub enum MessageKind {
     /// The message cannot be skipped but can be rejected. A receipt must be sent
     /// when the message is rejected in a block of the receiver.
     Tracked,
-    /// This event is a receipt automatically created when the original event was rejected.
+    /// This message is a receipt automatically created when the original message was rejected.
     Bouncing,
 }
 
@@ -916,7 +917,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         Ok(self
             .blobs
             .get(&blob_id)
-            .ok_or_else(|| ExecutionError::BlobNotFoundOnRead(blob_id))?
+            .ok_or_else(|| SystemExecutionError::BlobNotFoundOnRead(blob_id))?
             .clone())
     }
 }

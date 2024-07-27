@@ -232,9 +232,11 @@ where
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: Certificate,
+        hashed_certificate_values: &[HashedCertificateValue],
+        hashed_blobs: &[HashedBlob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::from(self)
-            .process_validated_block(certificate)
+            .process_validated_block(certificate, hashed_certificate_values, hashed_blobs)
             .await
     }
 
@@ -425,16 +427,13 @@ where
     /// Loads pending cross-chain requests.
     async fn create_network_actions(&self) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
-        let targets = self.chain.outboxes.indices().await?;
-        let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
-        for (target, outbox) in targets.into_iter().zip(outboxes) {
-            if let Some(outbox) = outbox {
-                let heights = outbox.queue.elements().await?;
-                heights_by_recipient
-                    .entry(target.recipient)
-                    .or_default()
-                    .insert(target.medium, heights);
-            }
+        let pairs = self.chain.outboxes.try_load_all_entries().await?;
+        for (target, outbox) in pairs {
+            let heights = outbox.queue.elements().await?;
+            heights_by_recipient
+                .entry(target.recipient)
+                .or_default()
+                .insert(target.medium, heights);
         }
         let mut actions = NetworkActions::default();
         for (recipient, height_map) in heights_by_recipient {
@@ -765,22 +764,19 @@ where
         }
         if query.request_pending_messages {
             let mut messages = Vec::new();
-            let origins = chain.inboxes.indices().await?;
-            let inboxes = chain.inboxes.try_load_entries(&origins).await?;
+            let pairs = chain.inboxes.try_load_all_entries().await?;
             let action = if *chain.execution_state.system.closed.get() {
                 MessageAction::Reject
             } else {
                 MessageAction::Accept
             };
-            for (origin, inbox) in origins.into_iter().zip(inboxes) {
-                if let Some(inbox) = inbox {
-                    for event in inbox.added_events.elements().await? {
-                        messages.push(IncomingMessage {
-                            origin: origin.clone(),
-                            event: event.clone(),
-                            action,
-                        });
-                    }
+            for (origin, inbox) in pairs {
+                for event in inbox.added_events.elements().await? {
+                    messages.push(IncomingMessage {
+                        origin: origin.clone(),
+                        event: event.clone(),
+                        action,
+                    });
                 }
             }
 
@@ -941,6 +937,8 @@ where
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: Certificate,
+        hashed_certificate_values: &[HashedCertificateValue],
+        hashed_blobs: &[HashedBlob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let executed_block = match certificate.value() {
             CertificateValue::ValidatedBlock { executed_block } => executed_block,
@@ -991,7 +989,12 @@ where
         // Verify that all required bytecode hashed certificate values and blobs are available, and no
         // unrelated ones provided.
         self.state
-            .check_no_missing_blobs(block, executed_block.required_blob_ids(), &[], &[])
+            .check_no_missing_blobs(
+                block,
+                executed_block.required_blob_ids(),
+                hashed_certificate_values,
+                hashed_blobs,
+            )
             .await?;
         let old_round = self.state.chain.manager.get().current_round;
         self.state.chain.manager.get_mut().create_final_vote(

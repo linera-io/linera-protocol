@@ -39,7 +39,7 @@ static MAP_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
 
 use std::{
     borrow::Borrow,
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap},
     fmt::Debug,
     marker::PhantomData,
     mem,
@@ -51,8 +51,8 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     batch::Batch,
     common::{
-        contains_key, get_interval, insert_key_prefix, Context, CustomSerialize, HasherOutput,
-        KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update,
+        get_interval, Context, CustomSerialize, DeletionSet, HasherOutput, KeyIterable,
+        KeyValueIterable, SuffixClosedSetIterator, Update,
     },
     hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
@@ -62,9 +62,8 @@ use crate::{
 #[derive(Debug)]
 pub struct ByteMapView<C, V> {
     context: C,
-    delete_storage_first: bool,
+    deletion_set: DeletionSet,
     updates: BTreeMap<Vec<u8>, Update<V>>,
-    deleted_prefixes: BTreeSet<Vec<u8>>,
 }
 
 #[async_trait]
@@ -87,9 +86,8 @@ where
     fn post_load(context: C, _values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         Ok(Self {
             context,
-            delete_storage_first: false,
             updates: BTreeMap::new(),
-            deleted_prefixes: BTreeSet::new(),
+            deletion_set: DeletionSet::new(),
         })
     }
 
@@ -98,24 +96,17 @@ where
     }
 
     fn rollback(&mut self) {
-        self.delete_storage_first = false;
         self.updates.clear();
-        self.deleted_prefixes.clear();
+        self.deletion_set.rollback();
     }
 
     async fn has_pending_changes(&self) -> bool {
-        if self.delete_storage_first {
-            return true;
-        }
-        if !self.deleted_prefixes.is_empty() {
-            return true;
-        }
-        !self.updates.is_empty()
+        self.deletion_set.has_pending_changes() || !self.updates.is_empty()
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
-        if self.delete_storage_first {
+        if self.deletion_set.delete_storage_first {
             delete_view = true;
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
@@ -126,7 +117,7 @@ where
                 }
             }
         } else {
-            for index in mem::take(&mut self.deleted_prefixes) {
+            for index in mem::take(&mut self.deletion_set.deleted_prefixes) {
                 let key = self.context.base_index(&index);
                 batch.delete_key_prefix(key);
             }
@@ -138,14 +129,13 @@ where
                 }
             }
         }
-        self.delete_storage_first = false;
+        self.deletion_set.delete_storage_first = false;
         Ok(delete_view)
     }
 
     fn clear(&mut self) {
-        self.delete_storage_first = true;
         self.updates.clear();
-        self.deleted_prefixes.clear();
+        self.deletion_set.clear();
     }
 }
 
@@ -158,9 +148,8 @@ where
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(ByteMapView {
             context: self.context.clone(),
-            delete_storage_first: self.delete_storage_first,
             updates: self.updates.clone(),
-            deleted_prefixes: self.deleted_prefixes.clone(),
+            deletion_set: self.deletion_set.clone(),
         })
     }
 }
@@ -199,8 +188,8 @@ where
     /// # })
     /// ```
     pub fn remove(&mut self, short_key: Vec<u8>) {
-        if self.delete_storage_first {
-            // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
+        if self.deletion_set.contains_prefix_of(&short_key) {
+            // Optimization: No need to mark `short_key` for deletion as we are going to remove a range of keys containing it.
             self.updates.remove(&short_key);
         } else {
             self.updates.insert(short_key, Update::Removed);
@@ -230,9 +219,7 @@ where
         for key in key_list {
             self.updates.remove(&key);
         }
-        if !self.delete_storage_first {
-            insert_key_prefix(&mut self.deleted_prefixes, key_prefix);
-        }
+        self.deletion_set.insert_key_prefix(key_prefix);
     }
 
     /// Obtains the extra data.
@@ -261,10 +248,7 @@ where
             };
             return Ok(test);
         }
-        if self.delete_storage_first {
-            return Ok(false);
-        }
-        if contains_key(&self.deleted_prefixes, short_key) {
+        if self.deletion_set.contains_prefix_of(short_key) {
             return Ok(false);
         }
         let key = self.context.base_index(short_key);
@@ -298,10 +282,7 @@ where
             };
             return Ok(value);
         }
-        if self.delete_storage_first {
-            return Ok(None);
-        }
-        if contains_key(&self.deleted_prefixes, short_key) {
+        if self.deletion_set.contains_prefix_of(short_key) {
             return Ok(None);
         }
         let key = self.context.base_index(short_key);
@@ -326,7 +307,7 @@ where
     pub async fn get_mut(&mut self, short_key: &[u8]) -> Result<Option<&mut V>, ViewError> {
         let update = match self.updates.entry(short_key.to_vec()) {
             Entry::Vacant(e) => {
-                if self.delete_storage_first || contains_key(&self.deleted_prefixes, short_key) {
+                if self.deletion_set.contains_prefix_of(short_key) {
                     None
                 } else {
                     let key = self.context.base_index(short_key);
@@ -376,11 +357,14 @@ where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
         let prefix_len = prefix.len();
-        let iter = self.deleted_prefixes.range(get_interval(prefix.clone()));
-        let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
-        if !self.delete_storage_first && !contains_key(&self.deleted_prefixes, &prefix) {
+        if !self.deletion_set.contains_prefix_of(&prefix) {
+            let iter = self
+                .deletion_set
+                .deleted_prefixes
+                .range(get_interval(prefix.clone()));
+            let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = self.context.base_index(&prefix);
             for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
                 let index = index?;
@@ -571,11 +555,14 @@ where
         F: FnMut(&[u8], &[u8]) -> Result<bool, ViewError> + Send,
     {
         let prefix_len = prefix.len();
-        let iter = self.deleted_prefixes.range(get_interval(prefix.clone()));
-        let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
-        if !self.delete_storage_first && !contains_key(&self.deleted_prefixes, &prefix) {
+        if !self.deletion_set.contains_prefix_of(&prefix) {
+            let iter = self
+                .deletion_set
+                .deleted_prefixes
+                .range(get_interval(prefix.clone()));
+            let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = self.context.base_index(&prefix);
             for entry in self
                 .context
@@ -737,9 +724,7 @@ where
     /// ```
     pub async fn get_mut_or_default(&mut self, short_key: &[u8]) -> Result<&mut V, ViewError> {
         let update = match self.updates.entry(short_key.to_vec()) {
-            Entry::Vacant(e)
-                if self.delete_storage_first || contains_key(&self.deleted_prefixes, short_key) =>
-            {
+            Entry::Vacant(e) if self.deletion_set.contains_prefix_of(short_key) => {
                 e.insert(Update::Set(V::default()))
             }
             Entry::Vacant(e) => {

@@ -14,7 +14,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
-    BytecodeLocation,
+    BytecodeLocation, ExecutionError, SystemExecutionError,
 };
 use linera_version::VersionInfo;
 use linera_views::views::ViewError;
@@ -213,6 +213,9 @@ pub enum NodeError {
 
     #[error("Failed to make a chain info query on the local node: {error}")]
     LocalNodeQuery { error: String },
+
+    #[error("Blob not found on storage read: {0}")]
+    BlobNotFoundOnRead(BlobId),
 }
 
 impl From<tonic::Status> for NodeError {
@@ -278,6 +281,10 @@ impl From<ChainError> for NodeError {
                 height,
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
+            ChainError::ExecutionError(
+                ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(blob_id)),
+                _,
+            ) => Self::BlobNotFoundOnRead(blob_id),
             error => Self::ChainError {
                 error: error.to_string(),
             },

@@ -4708,6 +4708,7 @@ dependencies = [
  "bcs",
  "cfg_aliases",
  "convert_case 0.6.0",
+ "criterion",
  "futures",
  "generic-array",
  "hex",

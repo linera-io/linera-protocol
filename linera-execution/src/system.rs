@@ -12,7 +12,9 @@ use async_graphql::Enum;
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, ApplicationPermissions, ArithmeticError, OracleResponse, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, ArithmeticError, HashedBlob, OracleResponse, Timestamp,
+    },
     ensure, hex_debug,
     identifiers::{Account, BlobId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -37,8 +39,9 @@ use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
-    Destination, MessageContext, MessageKind, OperationContext, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
+    Destination, ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext,
+    QueryContext, RawExecutionOutcome, RawOutgoingMessage, UserApplicationDescription,
+    UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -158,8 +161,11 @@ pub enum SystemOperation {
         contract: Bytecode,
         service: Bytecode,
     },
-    /// Publishes a new blob
+    /// Publishes a new blob.
     PublishBlob { blob_id: BlobId },
+    /// Reads a blob. This is test-only, so we can test without a Wasm application.
+    #[cfg(with_testing)]
+    ReadBlob { blob_id: BlobId },
     /// Creates a new application.
     CreateApplication {
         bytecode_id: BytecodeId,
@@ -411,12 +417,16 @@ pub enum SystemExecutionError {
     UnknownApplicationId(Box<UserApplicationId>),
     #[error("Chain is not active yet.")]
     InactiveChain,
+
+    #[error("Blob not found on storage read: {0}")]
+    BlobNotFoundOnRead(BlobId),
 }
 
 impl<C> SystemExecutionStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
+    C::Extra: ExecutionRuntimeContext,
 {
     /// Invariant for the states of active chains.
     pub fn is_active(&self) -> bool {
@@ -675,6 +685,11 @@ where
                 outcome.messages.push(message);
             }
             PublishBlob { blob_id } => {
+                oracle_responses.push(OracleResponse::Blob(blob_id));
+            }
+            #[cfg(with_testing)]
+            ReadBlob { blob_id } => {
+                self.read_blob(blob_id).await?;
                 oracle_responses.push(OracleResponse::Blob(blob_id));
             }
         }
@@ -1034,6 +1049,14 @@ where
         self.subscriptions.clear();
         self.closed.set(true);
         Ok(messages)
+    }
+
+    pub async fn read_blob(&mut self, blob_id: BlobId) -> Result<HashedBlob, SystemExecutionError> {
+        self.context()
+            .extra()
+            .get_blob(blob_id)
+            .await
+            .map_err(|_| SystemExecutionError::BlobNotFoundOnRead(blob_id))
     }
 }
 

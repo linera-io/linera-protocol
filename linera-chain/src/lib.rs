@@ -112,7 +112,7 @@ pub enum ChainError {
     PreviousBlockMustBeConfirmedFirst,
     #[error("Round number should be at least {0:?}")]
     InsufficientRound(Round),
-    #[error("Round number should greater than {0:?}")]
+    #[error("Round number should be greater than {0:?}")]
     InsufficientRoundStrict(Round),
     #[error("Round number should be {0:?}")]
     WrongRound(Round),

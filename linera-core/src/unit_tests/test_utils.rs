@@ -7,7 +7,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::{lock::Mutex, Future};
+use futures::{
+    lock::{Mutex, MutexGuard},
+    Future,
+};
 use linera_base::{
     crypto::*,
     data_types::*,
@@ -58,7 +61,7 @@ use crate::{
         ValidatorNode,
     },
     notifier::Notifier,
-    worker::{Notification, WorkerState},
+    worker::{NetworkActions, Notification, WorkerState},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -67,7 +70,9 @@ pub enum FaultType {
     Offline,
     OfflineWithInfo,
     Malicious,
-    NoConfirm,
+    DontSendConfirmVote,
+    DontProcessValidated,
+    DontSendValidateVote,
 }
 
 /// A validator used for testing. "Faulty" validators ignore block proposals (but not
@@ -213,12 +218,26 @@ where
         }
     }
 
+    pub fn name(&self) -> ValidatorName {
+        self.name
+    }
+
     async fn set_fault_type(&self, fault_type: FaultType) {
         self.client.lock().await.fault_type = fault_type;
     }
 
     async fn fault_type(&self) -> FaultType {
         self.client.lock().await.fault_type
+    }
+
+    /// Obtains the basic `ChainInfo` data for the local validator chain, with chain manager values.
+    pub async fn chain_info_with_manager_values(
+        &mut self,
+        chain_id: ChainId,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        let query = ChainInfoQuery::new(chain_id).with_manager_values();
+        let response = self.handle_chain_info_query(query).await?;
+        Ok(response.info)
     }
 
     /// Executes the future produced by `f` in a new thread in a new Tokio runtime.
@@ -244,20 +263,80 @@ where
         proposal: BlockProposal,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let validator = self.client.lock().await;
-        let result = match validator.fault_type {
-            FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
-                error: "offline".to_string(),
-            }),
-            FaultType::Malicious => Err(ArithmeticError::Overflow.into()),
-            FaultType::Honest | FaultType::NoConfirm => validator
-                .state
-                .handle_block_proposal(proposal)
-                .await
-                .map_err(Into::into),
+        let mut validator = self.client.lock().await;
+        let handle_block_proposal_result =
+            Self::handle_block_proposal(proposal, &mut validator).await;
+        let result = match handle_block_proposal_result {
+            Some(Err(
+                NodeError::ApplicationBytecodesOrBlobsNotFound(_, _)
+                | NodeError::BlobNotFoundOnRead(_),
+            )) => {
+                handle_block_proposal_result.expect("handle_block_proposal_result should be Some")
+            }
+            _ => match validator.fault_type {
+                FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
+                    error: "offline".to_string(),
+                }),
+                FaultType::Malicious => Err(ArithmeticError::Overflow.into()),
+                FaultType::DontSendValidateVote => Err(NodeError::ClientIoError {
+                    error: "refusing to validate".to_string(),
+                }),
+                FaultType::Honest
+                | FaultType::DontSendConfirmVote
+                | FaultType::DontProcessValidated => handle_block_proposal_result
+                    .expect("handle_block_proposal_result should be Some"),
+            },
         };
         // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
         sender.send(result.map(|(info, _actions)| info))
+    }
+
+    async fn handle_block_proposal(
+        proposal: BlockProposal,
+        validator: &mut MutexGuard<'_, LocalValidator<S>>,
+    ) -> Option<Result<(ChainInfoResponse, NetworkActions), NodeError>> {
+        match validator.fault_type {
+            FaultType::Offline | FaultType::OfflineWithInfo | FaultType::Malicious => None,
+            FaultType::Honest
+            | FaultType::DontSendConfirmVote
+            | FaultType::DontProcessValidated
+            | FaultType::DontSendValidateVote => Some(
+                validator
+                    .state
+                    .handle_block_proposal(proposal)
+                    .await
+                    .map_err(Into::into),
+            ),
+        }
+    }
+
+    async fn handle_certificate(
+        certificate: Certificate,
+        validator: &mut MutexGuard<'_, LocalValidator<S>>,
+        notifications: &mut Vec<Notification>,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
+    ) -> Option<Result<ChainInfoResponse, NodeError>> {
+        match validator.fault_type {
+            FaultType::DontProcessValidated if certificate.value().is_validated() => None,
+            FaultType::Honest
+            | FaultType::DontSendConfirmVote
+            | FaultType::Malicious
+            | FaultType::DontProcessValidated
+            | FaultType::DontSendValidateVote => Some(
+                validator
+                    .state
+                    .fully_handle_certificate_with_notifications(
+                        certificate,
+                        hashed_certificate_values,
+                        hashed_blobs,
+                        Some(notifications),
+                    )
+                    .await
+                    .map_err(Into::into),
+            ),
+            FaultType::Offline | FaultType::OfflineWithInfo => None,
+        }
     }
 
     async fn do_handle_lite_certificate(
@@ -265,35 +344,61 @@ where
         certificate: LiteCertificate<'_>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let validator = self.client.lock().await;
+        let client = self.client.clone();
+        let mut validator = client.lock().await;
         let result = async move {
-            let mut notifications = Vec::new();
-            let cert = validator.state.full_certificate(certificate).await?;
-            let result = match validator.fault_type {
-                FaultType::NoConfirm if cert.value().is_validated() => {
+            let certificate = validator.state.full_certificate(certificate).await?;
+            self.do_handle_certificate_internal(certificate, &mut validator, vec![], vec![])
+                .await
+        }
+        .await;
+        sender.send(result)
+    }
+
+    async fn do_handle_certificate_internal(
+        &self,
+        certificate: Certificate,
+        validator: &mut MutexGuard<'_, LocalValidator<S>>,
+        hashed_certificate_values: Vec<HashedCertificateValue>,
+        hashed_blobs: Vec<HashedBlob>,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        let mut notifications = Vec::new();
+        let is_validated = certificate.value().is_validated();
+        let handle_certificate_result = Self::handle_certificate(
+            certificate,
+            validator,
+            &mut notifications,
+            hashed_certificate_values,
+            hashed_blobs,
+        )
+        .await;
+        let result = match handle_certificate_result {
+            Some(Err(
+                NodeError::ApplicationBytecodesOrBlobsNotFound(_, _)
+                | NodeError::BlobNotFoundOnRead(_),
+            )) => handle_certificate_result.expect("handle_certificate_result should be Some"),
+            _ => match validator.fault_type {
+                FaultType::DontSendConfirmVote | FaultType::DontProcessValidated
+                    if is_validated =>
+                {
                     Err(NodeError::ClientIoError {
                         error: "refusing to confirm".to_string(),
                     })
                 }
-                FaultType::Honest | FaultType::NoConfirm | FaultType::Malicious => validator
-                    .state
-                    .fully_handle_certificate_with_notifications(
-                        cert,
-                        vec![],
-                        vec![],
-                        Some(&mut notifications),
-                    )
-                    .await
-                    .map_err(Into::into),
+                FaultType::Honest
+                | FaultType::DontSendConfirmVote
+                | FaultType::DontProcessValidated
+                | FaultType::Malicious
+                | FaultType::DontSendValidateVote => {
+                    handle_certificate_result.expect("handle_certificate_result should be Some")
+                }
                 FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
                     error: "offline".to_string(),
                 }),
-            };
-            validator.notifier.handle_notifications(&notifications);
-            result
-        }
-        .await;
-        sender.send(result)
+            },
+        };
+        validator.notifier.handle_notifications(&notifications);
+        result
     }
 
     async fn do_handle_certificate(
@@ -303,29 +408,15 @@ where
         hashed_blobs: Vec<HashedBlob>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let validator = self.client.lock().await;
-        let mut notifications = Vec::new();
-        let result = match validator.fault_type {
-            FaultType::NoConfirm if certificate.value().is_validated() => {
-                Err(NodeError::ClientIoError {
-                    error: "refusing to confirm".to_string(),
-                })
-            }
-            FaultType::Honest | FaultType::NoConfirm | FaultType::Malicious => validator
-                .state
-                .fully_handle_certificate_with_notifications(
-                    certificate,
-                    hashed_certificate_values,
-                    hashed_blobs,
-                    Some(&mut notifications),
-                )
-                .await
-                .map_err(Into::into),
-            FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
-                error: "offline".to_string(),
-            }),
-        };
-        validator.notifier.handle_notifications(&notifications);
+        let mut validator = self.client.lock().await;
+        let result = self
+            .do_handle_certificate_internal(
+                certificate,
+                &mut validator,
+                hashed_certificate_values,
+                hashed_blobs,
+            )
+            .await;
         sender.send(result)
     }
 

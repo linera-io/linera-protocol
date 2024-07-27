@@ -71,7 +71,7 @@ impl Block {
         locations
     }
 
-    /// Returns all the blob IDs referred to in this block's operations.
+    /// Returns all the published blob IDs in this block's operations.
     pub fn published_blob_ids(&self) -> HashSet<BlobId> {
         let mut blob_ids = HashSet::new();
         for operation in &self.operations {
@@ -761,16 +761,11 @@ impl ExecutedBlock {
     }
 
     pub fn required_blob_ids(&self) -> HashSet<BlobId> {
-        let mut required_blob_ids = HashSet::new();
-        for responses in &self.outcome.oracle_responses {
-            for response in responses {
-                if let OracleResponse::Blob(blob_id) = response {
-                    required_blob_ids.insert(*blob_id);
-                }
-            }
-        }
+        self.outcome.required_blob_ids()
+    }
 
-        required_blob_ids
+    pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
+        self.required_blob_ids().contains(blob_id)
     }
 }
 
@@ -780,6 +775,19 @@ impl BlockExecutionOutcome {
             block,
             outcome: self,
         }
+    }
+
+    pub fn required_blob_ids(&self) -> HashSet<BlobId> {
+        let mut required_blob_ids = HashSet::new();
+        for responses in &self.oracle_responses {
+            for response in responses {
+                if let OracleResponse::Blob(blob_id) = response {
+                    required_blob_ids.insert(*blob_id);
+                }
+            }
+        }
+
+        required_blob_ids
     }
 }
 

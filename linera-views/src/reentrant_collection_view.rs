@@ -633,6 +633,116 @@ where
         }
         Ok(results)
     }
+
+    async fn load_entries(
+        updates: &mut BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
+        short_keys: &[Vec<u8>],
+        context: &C,
+    ) -> Result<(), ViewError> {
+        let mut keys = Vec::new();
+        let mut short_keys_to_load = Vec::new();
+        for short_key in short_keys {
+            if updates.get(short_key).is_none() {
+                let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
+                let context = context.clone_with_base_key(key);
+                keys.extend(W::pre_load(&context)?);
+                short_keys_to_load.push(short_key.to_vec());
+            }
+        }
+        let values = context.read_multi_values_bytes(keys).await?;
+        let num_init_keys = W::NUM_INIT_KEYS;
+        for (i_key, short_key) in short_keys_to_load.into_iter().enumerate() {
+            let key = context.base_tag_index(KeyTag::Subview as u8, &short_key);
+            let context = context.clone_with_base_key(key);
+            let view = W::post_load(
+                context,
+                &values[i_key * num_init_keys..(i_key + 1) * num_init_keys],
+            )?;
+            let wrapped_view = Arc::new(RwLock::new(view));
+            updates.insert(short_key.to_vec(), Update::Set(wrapped_view));
+        }
+        Ok(())
+    }
+
+    /// Loads all the entries for reading at once.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
+    ///   {
+    ///     let _subview = view.try_load_entry_mut(&[0,1]).await.unwrap();
+    ///   }
+    ///   let subviews = view.try_load_all_entries().await.unwrap();
+    ///   assert_eq!(subviews.len(), 1);
+    /// # })
+    /// ```
+    pub async fn try_load_all_entries(
+        &self,
+    ) -> Result<Vec<(Vec<u8>, ReadGuardedView<W>)>, ViewError> {
+        let short_keys = self.keys().await?;
+        let mut updates = self.updates.lock().await;
+        if !self.delete_storage_first {
+            Self::load_entries(&mut updates, &short_keys, &self.context).await?;
+        }
+        short_keys
+            .into_iter()
+            .map(|short_key| {
+                let Some(Update::Set(view)) = updates.get(&short_key) else {
+                    unreachable!()
+                };
+                let guard = ReadGuardedView(
+                    view.clone()
+                        .try_read_arc()
+                        .ok_or_else(|| ViewError::TryLockError(short_key.clone()))?,
+                );
+                Ok((short_key, guard))
+            })
+            .collect()
+    }
+
+    /// Loads all the entries for writing at once.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
+    ///   {
+    ///     let _subview = view.try_load_entry_mut(&[0,1]).await.unwrap();
+    ///   }
+    ///   let subviews = view.try_load_all_entries_mut().await.unwrap();
+    ///   assert_eq!(subviews.len(), 1);
+    /// # })
+    /// ```
+    pub async fn try_load_all_entries_mut(
+        &self,
+    ) -> Result<Vec<(Vec<u8>, WriteGuardedView<W>)>, ViewError> {
+        let short_keys = self.keys().await?;
+        let mut updates = self.updates.lock().await;
+        if !self.delete_storage_first {
+            Self::load_entries(&mut updates, &short_keys, &self.context).await?;
+        }
+        short_keys
+            .into_iter()
+            .map(|short_key| {
+                let Some(Update::Set(view)) = updates.get(&short_key) else {
+                    unreachable!()
+                };
+                let guard = WriteGuardedView(
+                    view.clone()
+                        .try_write_arc()
+                        .ok_or_else(|| ViewError::TryLockError(short_key.clone()))?,
+                );
+                Ok((short_key, guard))
+            })
+            .collect()
+    }
 }
 
 impl<C, W> ReentrantByteCollectionView<C, W>
@@ -1130,6 +1240,74 @@ where
             .collect::<Result<_, _>>()?;
         self.collection.try_load_entries(short_keys).await
     }
+
+    /// Loads all entries for writing at once.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
+    ///   {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    ///   }
+    ///   let subviews = view.try_load_all_entries_mut().await.unwrap();
+    ///   assert_eq!(subviews.len(), 1);
+    /// # })
+    /// ```
+    pub async fn try_load_all_entries_mut<'a, Q>(
+        &'a mut self,
+    ) -> Result<Vec<(I, WriteGuardedView<W>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + 'a,
+    {
+        let results = self.collection.try_load_all_entries_mut().await?;
+        results
+            .into_iter()
+            .map(|(short_key, view)| {
+                let index = C::deserialize_value(&short_key)?;
+                Ok((index, view))
+            })
+            .collect()
+    }
+
+    /// Load multiple entries for reading at once.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
+    ///   {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    ///   }
+    ///   let subviews = view.try_load_all_entries().await.unwrap();
+    ///   assert_eq!(subviews.len(), 1);
+    /// # })
+    /// ```
+    pub async fn try_load_all_entries<'a, Q>(
+        &'a self,
+    ) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + 'a,
+    {
+        let results = self.collection.try_load_all_entries().await?;
+        results
+            .into_iter()
+            .map(|(short_key, view)| {
+                let index = C::deserialize_value(&short_key)?;
+                Ok((index, view))
+            })
+            .collect()
+    }
 }
 
 impl<C, I, W> ReentrantCollectionView<C, I, W>
@@ -1477,7 +1655,7 @@ impl<C, I, W> ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send + Clone + 'static,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
+    I: Sync + Clone + Send + Debug + CustomSerialize,
     W: View<C> + Send + Sync + 'static,
 {
     /// Load multiple entries for writing at once.
@@ -1546,6 +1724,72 @@ where
             .map(|index| index.to_custom_bytes())
             .collect::<Result<_, _>>()?;
         self.collection.try_load_entries(short_keys).await
+    }
+
+    /// Loads all entries for writing at once.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
+    ///   {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    ///   }
+    ///   let subviews = view.try_load_all_entries_mut().await.unwrap();
+    ///   assert_eq!(subviews.len(), 1);
+    /// # })
+    /// ```
+    pub async fn try_load_all_entries_mut<Q>(
+        &mut self,
+    ) -> Result<Vec<(I, WriteGuardedView<W>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let results = self.collection.try_load_all_entries_mut().await?;
+        results
+            .into_iter()
+            .map(|(short_key, view)| {
+                let index = I::from_custom_bytes(&short_key)?;
+                Ok((index, view))
+            })
+            .collect()
+    }
+
+    /// Load multiple entries for reading at once.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
+    ///   {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    ///   }
+    ///   let subviews = view.try_load_all_entries().await.unwrap();
+    ///   assert_eq!(subviews.len(), 1);
+    /// # })
+    /// ```
+    pub async fn try_load_all_entries<Q>(&self) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let results = self.collection.try_load_all_entries().await?;
+        results
+            .into_iter()
+            .map(|(short_key, view)| {
+                let index = I::from_custom_bytes(&short_key)?;
+                Ok((index, view))
+            })
+            .collect()
     }
 }
 

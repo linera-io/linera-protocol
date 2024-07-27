@@ -3,25 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     fmt,
     hash::Hash,
     ops::Range,
 };
 
-use futures::{future, Future, StreamExt};
+use futures::{Future, StreamExt};
 use linera_base::{
-    data_types::{BlockHeight, HashedBlob, Round},
-    identifiers::{BlobId, ChainId},
+    data_types::{BlockHeight, Round},
+    ensure,
+    identifiers::ChainId,
     time::{Duration, Instant},
 };
-use linera_chain::data_types::{
-    BlockProposal, Certificate, CertificateValue, HashedCertificateValue, LiteVote,
-};
-use linera_execution::{
-    committee::{Committee, ValidatorName},
-    BytecodeLocation,
-};
+use linera_chain::data_types::{BlockProposal, Certificate, LiteVote};
+use linera_execution::committee::{Committee, ValidatorName};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use thiserror::Error;
@@ -73,7 +69,6 @@ where
     pub name: ValidatorName,
     pub node: A,
     pub local_node: LocalNodeClient<S>,
-    pub local_node_chain_managers_pending_blobs: BTreeMap<BlobId, HashedBlob>,
 }
 
 /// An error result for [`communicate_with_quorum`].
@@ -228,115 +223,6 @@ where
             .await
     }
 
-    async fn find_missing_application_bytecodes(
-        &self,
-        certificate: &Certificate,
-        locations: &Vec<BytecodeLocation>,
-    ) -> Result<Vec<HashedCertificateValue>, NodeError> {
-        if locations.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // Find the missing bytecodes locally and retry.
-        let required = match certificate.value() {
-            CertificateValue::ConfirmedBlock { executed_block, .. }
-            | CertificateValue::ValidatedBlock { executed_block, .. } => {
-                executed_block.block.bytecode_locations()
-            }
-            CertificateValue::Timeout { .. } => HashSet::new(),
-        };
-        for location in locations {
-            if !required.contains(location) {
-                let hash = location.certificate_hash;
-                warn!("validator requested {:?} but it is not required", hash);
-                return Err(NodeError::InvalidChainInfoResponse);
-            }
-        }
-        let unique_locations = locations.iter().cloned().collect::<HashSet<_>>();
-        if locations.len() > unique_locations.len() {
-            warn!("locations requested by validator contain duplicates");
-            return Err(NodeError::InvalidChainInfoResponse);
-        }
-        let storage = self.local_node.storage_client();
-        Ok(future::join_all(
-            unique_locations
-                .into_iter()
-                .map(|location| storage.read_hashed_certificate_value(location.certificate_hash)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()?)
-    }
-
-    async fn find_missing_blobs(
-        &self,
-        certificate: &Certificate,
-        blob_ids: &Vec<BlobId>,
-    ) -> Result<Vec<HashedBlob>, NodeError> {
-        if blob_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // Find the missing blobs locally and retry.
-        let required = match certificate.value() {
-            CertificateValue::ConfirmedBlock { executed_block, .. }
-            | CertificateValue::ValidatedBlock { executed_block, .. } => {
-                executed_block.block.published_blob_ids()
-            }
-            CertificateValue::Timeout { .. } => HashSet::new(),
-        };
-        for blob_id in blob_ids {
-            if !required.contains(blob_id) {
-                warn!(
-                    "validator requested blob {:?} but it is not required",
-                    blob_id
-                );
-                return Err(NodeError::InvalidChainInfoResponse);
-            }
-        }
-        let mut unique_blob_ids_to_find = blob_ids.iter().cloned().collect::<HashSet<_>>();
-        if blob_ids.len() > unique_blob_ids_to_find.len() {
-            warn!("blobs requested by validator contain duplicates");
-            return Err(NodeError::InvalidChainInfoResponse);
-        }
-
-        let (found_blobs, not_found_blobs): (HashMap<BlobId, HashedBlob>, Vec<BlobId>) = self
-            .local_node
-            .recent_hashed_blobs()
-            .await
-            .try_get_many(blob_ids.clone())
-            .await;
-        let mut missing_blobs = found_blobs.clone().into_values().collect::<Vec<_>>();
-
-        unique_blob_ids_to_find = unique_blob_ids_to_find
-            .difference(&found_blobs.into_keys().collect::<HashSet<_>>())
-            .copied()
-            .collect::<HashSet<BlobId>>();
-        for blob_id in not_found_blobs {
-            if let Some(blob) = self
-                .local_node_chain_managers_pending_blobs
-                .get(&blob_id)
-                .cloned()
-            {
-                missing_blobs.push(blob);
-                unique_blob_ids_to_find.remove(&blob_id);
-            }
-        }
-
-        let storage = self.local_node.storage_client();
-        missing_blobs.extend(
-            future::join_all(
-                unique_blob_ids_to_find
-                    .into_iter()
-                    .map(|blob_id| storage.read_hashed_blob(blob_id)),
-            )
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?,
-        );
-        Ok(missing_blobs)
-    }
-
     async fn send_certificate(
         &mut self,
         certificate: Certificate,
@@ -347,11 +233,21 @@ where
             .await;
 
         let response = match &result {
-            Err(NodeError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids)) => {
+            Err(
+                original_err @ NodeError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids),
+            ) => {
                 let values = self
+                    .local_node
                     .find_missing_application_bytecodes(&certificate, locations)
                     .await?;
-                let blobs = self.find_missing_blobs(&certificate, blob_ids).await?;
+                let blobs = self
+                    .local_node
+                    .find_missing_blobs(&certificate, blob_ids, certificate.value().chain_id())
+                    .await?;
+                ensure!(
+                    values.len() == locations.len() && blobs.len() == blob_ids.len(),
+                    original_err.clone()
+                );
                 self.node
                     .handle_certificate(certificate, values, blobs, delivery)
                     .await
@@ -391,6 +287,25 @@ where
                     // synchronize them now and retry.
                     self.send_chain_information_for_senders(chain_id).await?;
                 }
+
+                self.node.handle_block_proposal(proposal.clone()).await?
+            }
+            Err(NodeError::BlobNotFoundOnRead(blob_id)) => {
+                // For `BlobNotFoundOnRead`, we assume that the local node should already be
+                // updated with the needed blobs, so sending the chain information about the
+                // certificate that last used the blob to the validator node should be enough.
+                let local_storage = self.local_node.storage_client();
+                let last_used_by_hash = local_storage.read_blob_state(blob_id).await?.last_used_by;
+                let certificate = local_storage.read_certificate(last_used_by_hash).await?;
+
+                let block_chain_id = certificate.value().chain_id();
+                let block_height = certificate.value().height();
+                self.send_chain_information(
+                    block_chain_id,
+                    block_height.try_add_one()?,
+                    CrossChainMessageDelivery::Blocking,
+                )
+                .await?;
 
                 self.node.handle_block_proposal(proposal.clone()).await?
             }
@@ -458,15 +373,12 @@ where
         let mut sender_heights = BTreeMap::new();
         {
             let chain = self.local_node.chain_state_view(chain_id).await?;
-            let origins = chain.inboxes.indices().await?;
-            let inboxes = chain.inboxes.try_load_entries(&origins).await?;
-            for (origin, inbox) in origins.into_iter().zip(inboxes) {
-                if let Some(inbox) = inbox {
-                    let next_height = sender_heights.entry(origin.sender).or_default();
-                    let inbox_next_height = inbox.next_block_height_to_receive()?;
-                    if inbox_next_height > *next_height {
-                        *next_height = inbox_next_height;
-                    }
+            let pairs = chain.inboxes.try_load_all_entries().await?;
+            for (origin, inbox) in pairs {
+                let next_height = sender_heights.entry(origin.sender).or_default();
+                let inbox_next_height = inbox.next_block_height_to_receive()?;
+                if inbox_next_height > *next_height {
+                    *next_height = inbox_next_height;
                 }
             }
         }

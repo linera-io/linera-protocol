@@ -66,8 +66,8 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Install cargo tools
       run: |
-        cargo install cargo-index
-        cargo install cargo-local-registry
+        cargo install --locked cargo-index
+        cargo install --locked cargo-local-registry
     - name: Setup git committer information
       run: |
         git config --global user.email "ci@linera.io"

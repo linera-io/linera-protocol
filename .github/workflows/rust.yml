@@ -29,7 +29,8 @@ env:
   RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links -D warnings
   RUSTFLAGS: -D warnings
   RUSTUP_MAX_RETRIES: 10
-  RUST_LOG: warn
+  RUST_LOG: linera=debug
+  RUST_LOG_FORMAT: plain
 
 permissions:
   contents: read
@@ -67,8 +68,8 @@ jobs:
     - name: Run end-to-end tests
       run: |
         cargo build --release -p linera-storage-service
-        RUST_LOG=info target/release/linera-storage-server memory --endpoint $LINERA_STORAGE_SERVICE &
-        RUST_LOG=info cargo test --features storage-service -- storage_service --nocapture
+        target/release/linera-storage-server memory --endpoint $LINERA_STORAGE_SERVICE &
+        cargo test --features storage-service -- storage_service --nocapture
     - name: Run Ethereum tests
       run: |
         cargo test -p linera-ethereum --features ethereum
@@ -187,8 +188,13 @@ jobs:
     - name: Check for outdated README.md
       run: |
         (set -e; for I in linera-*; do if [ -d "$I" ]; then echo $I; cargo rdme --check --no-fail-on-warnings -w $I; fi; done)
-        cd examples
-        (set -e; for I in fungible native-fungible non-fungible social crowd-funding amm hex-game counter meta-counter matching-engine; do echo $I; cargo rdme --check --no-fail-on-warnings -w $I; done)
+        (set -e; cd examples; for dir in */; do
+            if [ -f "${dir}README.md" ] && grep -q "<!-- cargo-rdme start -->" "${dir}README.md"; then
+                dir_name="${dir%/}"
+                echo "${dir_name}"
+                cargo rdme --check --no-fail-on-warnings -w "${dir_name}"
+            fi
+        done)
     - name: Run Wasm application lints
       run: |
         cd examples

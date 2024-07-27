@@ -14,7 +14,8 @@ use linera_base::{
 use linera_execution::system::SystemChannel;
 use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
 use linera_service::cli_wrappers::{
-    local_net::PathProvider, ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, Network,
+    local_net::{PathProvider, ProcessInbox},
+    ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, Network,
 };
 use port_selector::random_free_tcp_port;
 use rand::{Rng as _, SeedableRng};
@@ -54,13 +55,7 @@ enum Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let env_filter = tracing_subscriber::EnvFilter::builder()
-        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
-        .from_env_lossy();
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_env_filter(env_filter)
-        .init();
+    linera_base::tracing::init();
 
     let args = Args::parse();
     match args {
@@ -118,7 +113,9 @@ async fn benchmark_with_fungible(
     for client in &clients {
         let free_port = random_free_tcp_port().context("no free TCP port")?;
         let chain_id = client.default_chain().context("missing default chain")?;
-        let node_service = client.run_node_service(free_port).await?;
+        let node_service = client
+            .run_node_service(free_port, ProcessInbox::Automatic)
+            .await?;
         let channel = SystemChannel::PublishedBytecodes;
         node_service
             .subscribe(chain_id, publisher_chain_id, channel)

@@ -597,14 +597,16 @@ where
 
     /// Publishes a new blob.
     async fn publish_blob(&self, chain_id: ChainId, blob: Blob) -> Result<BlobId, Error> {
+        let hashed_blob = blob.into_hashed();
         self.apply_client_command(&chain_id, move |client| {
-            let blob = blob.clone();
+            let hashed_blob = hashed_blob.clone();
             async move {
+                let blob_id = hashed_blob.id;
                 let result = client
-                    .publish_blob(blob.into_hashed())
+                    .publish_blob(hashed_blob)
                     .await
                     .map_err(Error::from)
-                    .map(|outcome| outcome.map(|(blob_id, _)| blob_id));
+                    .map(|outcome| outcome.map(|_| blob_id));
                 (result, client)
             }
         })
