@@ -125,19 +125,19 @@ Now make a post [in the 8080 tab](http://localhost:8080/chains/e476187f6ddfeb9d5
 mutation {
     post(
         text: "Linera Social is the new Mastodon!"
-        imageUrl: "https://linera.org/img/logo.svg"  # Optional
+        image: "https://linera.org/img/logo.svg" # optional
     )
 }
 ```
 
-Since 8081 is a subscriber. Let's see if it received any posts: # You can see the post on the [web-frontend](./web-frontend/), or follow the steps below.
+Since 8081 is a subscriber. Let's see if it received any posts: # You can see the post on running the [web-frontend](./web-frontend/), or follow the steps below.
 
 ```gql,uri=http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
 query { receivedPosts { keys { timestamp author index } } }
 ```
 
 This should now list one entry, with timestamp, author and an index. If we view that
-entry, we can see the posted text as well as other null/empty values:
+entry, we can see the posted text as well as other values:
 
 ```gql
 query {
