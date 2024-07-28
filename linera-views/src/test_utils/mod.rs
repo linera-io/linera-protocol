@@ -702,6 +702,16 @@ where
             .expect("creation of a namespace");
         assert!(S::exists(config, namespace).await.expect("test"));
     }
+    // Connecting to all of them at once
+    {
+        let mut connections = Vec::new();
+        for namespace in &working_namespaces {
+            let connection = S::connect(config, namespace)
+                .await
+                .expect("a connection to the namespace");
+            connections.push(connection);
+        }
+    }
     // Listing all of them
     let namespaces = namespaces_with_prefix::<S>(config, &prefix).await;
     assert_eq!(namespaces, working_namespaces);

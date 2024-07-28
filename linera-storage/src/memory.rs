@@ -4,9 +4,12 @@
 use linera_views::memory::MemoryStore;
 #[cfg(with_testing)]
 use {
-    crate::db_storage::DbStorageInner,
+    crate::db_storage::{DbStorageInner, TestClock},
     linera_execution::WasmRuntime,
-    linera_views::memory::{MemoryStoreConfig, MemoryStoreError},
+    linera_views::{
+        memory::{create_memory_store_test_config, MemoryStoreConfig, MemoryStoreError},
+        test_utils::generate_test_namespace,
+    },
 };
 
 use crate::db_storage::DbStorage;
@@ -14,27 +17,24 @@ use crate::db_storage::DbStorage;
 pub type MemoryStorage<C> = DbStorage<MemoryStore, C>;
 
 #[cfg(with_testing)]
-use crate::db_storage::TestClock;
-
-#[cfg(with_testing)]
-impl MemoryStorage<crate::TestClock> {
+impl MemoryStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
-        let clock = crate::TestClock::new();
-        let max_stream_queries = linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
-        MemoryStorage::new_for_testing(wasm_runtime, max_stream_queries, clock)
+        let store_config = create_memory_store_test_config();
+        let namespace = generate_test_namespace();
+        MemoryStorage::new_for_testing(store_config, &namespace, wasm_runtime, TestClock::new())
             .await
             .expect("storage")
     }
 
     pub async fn new_for_testing(
+        store_config: MemoryStoreConfig,
+        namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-        max_stream_queries: usize,
         clock: TestClock,
     ) -> Result<Self, MemoryStoreError> {
-        let store_config = MemoryStoreConfig::new(max_stream_queries);
-        let namespace = "unused_namespace";
         let storage =
-            DbStorageInner::<MemoryStore>::make(store_config, namespace, wasm_runtime).await?;
+            DbStorageInner::<MemoryStore>::new_for_testing(store_config, namespace, wasm_runtime)
+                .await?;
         Ok(Self::create(storage, clock))
     }
 }

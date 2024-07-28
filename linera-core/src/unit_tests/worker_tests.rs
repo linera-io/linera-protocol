@@ -43,7 +43,8 @@ use linera_execution::{
 };
 use linera_storage::{MemoryStorage, Storage, TestClock};
 use linera_views::{
-    memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
+    memory::{create_memory_store_test_config, MemoryContext},
+    test_utils::generate_test_namespace,
     views::{CryptoHashView, RootView, ViewError},
 };
 use test_case::test_case;
@@ -3028,9 +3029,10 @@ where
 #[test(tokio::test)]
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
     // Make a committee and worker (only used for signing certificates)
+    let store_config = create_memory_store_test_config();
+    let namespace = generate_test_namespace();
     let store =
-        MemoryStorage::new_for_testing(None, TEST_MEMORY_MAX_STREAM_QUERIES, TestClock::new())
-            .await?;
+        MemoryStorage::new_for_testing(store_config, &namespace, None, TestClock::new()).await?;
     let (committee, worker) = init_worker(store, true);
     let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
 

@@ -3,17 +3,20 @@
 
 use std::fmt::Debug;
 
-use futures::FutureExt as _;
 use linera_base::ensure;
 use thiserror::Error;
 
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        AdminKeyValueStore, CommonStoreConfig, KeyIterable, KeyValueIterable, KeyValueStore,
-        ReadableKeyValueStore, WritableKeyValueStore,
+        AdminKeyValueStore, KeyIterable, KeyValueIterable, KeyValueStore, ReadableKeyValueStore,
+        WritableKeyValueStore,
     },
-    memory::{MemoryStore, MemoryStoreConfig, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
+};
+#[cfg(with_testing)]
+use crate::{
+    memory::{MemoryStore, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
+    test_utils::generate_test_namespace,
 };
 
 /// Data type indicating that the database is not consistent
@@ -339,18 +342,21 @@ where
     }
 }
 
-/// A virtual DB store where data are persisted in memory.
+/// A memory store for which the values are limited to 100 bytes and can be used for tests.
 #[derive(Clone)]
+#[cfg(with_testing)]
 pub struct LimitedTestMemoryStore {
     store: MemoryStore,
 }
 
+#[cfg(with_testing)]
 impl Default for LimitedTestMemoryStore {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(with_testing)]
 impl ReadableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
@@ -391,6 +397,7 @@ impl ReadableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
     }
 }
 
+#[cfg(with_testing)]
 impl WritableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
     // We set up the MAX_VALUE_SIZE to the artificially low value of 100
     // purely for testing purposes.
@@ -409,24 +416,17 @@ impl WritableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
     }
 }
 
+#[cfg(with_testing)]
 impl KeyValueStore for LimitedTestMemoryStore {
     type Error = MemoryStoreError;
 }
 
+#[cfg(with_testing)]
 impl LimitedTestMemoryStore {
     /// Creates a `LimitedTestMemoryStore`
     pub fn new() -> Self {
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries: None,
-            max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
-            cache_size: 1000,
-        };
-        let config = MemoryStoreConfig { common_config };
-        let namespace = "linera";
-        let store = MemoryStore::connect(&config, namespace)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let namespace = generate_test_namespace();
+        let store = MemoryStore::new(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace).unwrap();
         LimitedTestMemoryStore { store }
     }
 }

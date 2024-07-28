@@ -45,7 +45,7 @@ use {
     crate::common::{
         ContextFromStore, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
-    crate::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
+    crate::memory::{create_test_memory_context, MemoryContext},
     async_lock::RwLock,
     std::sync::Arc,
 };
@@ -1184,7 +1184,7 @@ pub type KeyValueStoreMemoryContext<E> = ContextFromStore<E, ViewContainer<Memor
 impl<E> KeyValueStoreMemoryContext<E> {
     /// Creates a [`KeyValueStoreMemoryContext`].
     pub async fn new(base_key: Vec<u8>, extra: E) -> Result<Self, ViewError> {
-        let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, ());
+        let context = create_test_memory_context();
         let store = ViewContainer::new(context).await?;
         Ok(Self {
             store,

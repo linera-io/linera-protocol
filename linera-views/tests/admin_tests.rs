@@ -1,15 +1,22 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(feature = "rocksdb", feature = "dynamodb", feature = "scylladb"))]
-
 #[cfg(feature = "dynamodb")]
 use linera_views::dynamo_db::{create_dynamo_db_test_config, DynamoDbStore};
 #[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStore};
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::{create_scylla_db_test_config, ScyllaDbStore};
-use linera_views::test_utils::admin_test;
+use linera_views::{
+    memory::{create_memory_store_test_config, MemoryStore},
+    test_utils::admin_test,
+};
+
+#[tokio::test]
+async fn admin_test_memory() {
+    let config = create_memory_store_test_config();
+    admin_test::<MemoryStore>(&config).await;
+}
 
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
