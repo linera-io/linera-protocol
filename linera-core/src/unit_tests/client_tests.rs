@@ -1443,7 +1443,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
     let description1 = ChainDescription::Root(1);
     let chain_id1 = ChainId::from(description1);
-    let mut client1_a = builder
+    let client1_a = builder
         .add_initial_chain(description1, Amount::ZERO)
         .await?;
     let pub_key1_a = client1_a.public_key().await.unwrap();
@@ -1457,7 +1457,7 @@ where
     }
     .into();
     client1_a.execute_operation(owner_change_op1).await.unwrap();
-    let mut client1_b = builder
+    let client1_b = builder
         .make_client(
             chain_id1,
             key_pair1_b,

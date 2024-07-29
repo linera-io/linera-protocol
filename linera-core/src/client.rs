@@ -742,6 +742,7 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(notifications))]
+    /// Notifies subscribers and clears the `notifications`.
     fn handle_notifications(&self, notifications: &mut Vec<Notification>) {
         self.client.notifier.handle_notifications(notifications);
         notifications.clear();
@@ -842,6 +843,7 @@ where
     }
 
     #[tracing::instrument(level = "trace")]
+    /// Returns the pending blobs from the local node's chain manager.
     async fn chain_managers_pending_blobs(
         &self,
     ) -> Result<BTreeMap<BlobId, HashedBlob>, LocalNodeError> {
@@ -943,6 +945,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(certificate, mode))]
+    /// Processes the confirmed block certificate and its ancestors in the local node, then
+    /// updates the validators up to that certificate.
     async fn receive_certificate_and_update_validators_internal(
         &self,
         certificate: Certificate,
@@ -967,6 +971,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(certificate, mode))]
+    /// Processes the confirmed block certificate in the local node. Also downloads and processes
+    /// all ancestors that are still missing.
     async fn receive_certificate_internal(
         &self,
         certificate: Certificate,
@@ -1041,6 +1047,8 @@ where
         level = "trace",
         skip(tracker, committees, max_epoch, node, node_client)
     )]
+    /// Downloads and processes all confirmed block certificates that sent any message to this
+    /// chain, including their ancestors.
     async fn synchronize_received_certificates_from_validator(
         chain_id: ChainId,
         name: ValidatorName,
@@ -1268,6 +1276,7 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(certificate))]
+    /// Handles the certificate in the local node and the resulting notifications.
     async fn process_certificate(
         &self,
         certificate: Certificate,
@@ -1347,6 +1356,7 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
+    /// Downloads and processes any certificates we are missing for the given chain.
     pub async fn synchronize_chain_state(
         &self,
         validators: &[(ValidatorName, impl LocalValidatorNode)],
@@ -1384,6 +1394,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(self, name, node, chain_id, notifications))]
+    /// Downloads any certificates from the specified validator that we are missing for the given
+    /// chain, and processes them.
     pub async fn try_synchronize_chain_state_from(
         &self,
         name: &ValidatorName,
@@ -1497,6 +1509,8 @@ where
         Ok(())
     }
 
+    /// Downloads the blobs from the specified validator and returns them, including blobs that
+    /// are still pending the the validator's chain manager.
     pub async fn find_missing_blobs_in_validator(
         &self,
         blob_ids: Vec<BlobId>,
@@ -1537,6 +1551,8 @@ where
         Ok(found_blobs)
     }
 
+    /// Downloads and processes from the specified validator a confirmed block certificate that
+    /// uses the given blob. If this succeeds, the blob will be in our storage.
     async fn update_local_node_with_blob_from(
         &self,
         blob_id: BlobId,
@@ -1553,6 +1569,8 @@ where
         Ok(())
     }
 
+    /// Downloads and processes a confirmed block certificate that uses the given blob.
+    /// If this succeeds, the blob will be in our storage.
     async fn receive_certificate_for_blob(&self, blob_id: BlobId) -> Result<(), ChainClientError> {
         let validators = self.validator_nodes().await?;
         let mut tasks = FuturesUnordered::new();
@@ -1575,6 +1593,9 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(block))]
+    /// Attempts to execute the block locally. If any incoming message execution fails, that
+    /// message is rejected and execution is retried, until the block accepts only messages
+    /// that succeed.
     async fn stage_block_execution_and_discard_failing_messages(
         &self,
         mut block: Block,
@@ -1614,6 +1635,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(block))]
+    /// Attempts to execute the block locally. If any attempt to read a blob fails, the blob is
+    /// downloaded and execution is retried.
     async fn stage_block_execution(
         &self,
         block: Block,
@@ -1882,6 +1905,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(incoming_messages, operations))]
+    /// Sets the pending block, so that next time `process_pending_block_without_prepare` is
+    /// called, it will be proposed to the validators.
     async fn set_pending_block(
         &self,
         incoming_messages: Vec<IncomingMessage>,
