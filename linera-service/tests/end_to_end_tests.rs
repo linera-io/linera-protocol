@@ -1607,6 +1607,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             })
             .await;
     }
+    // The orders are sent on chain_a / chain_b. First they are
+    // rerouted to the admin chain for processing. This leads
+    // to order being sent to chain_a / chain_b.
     node_service_admin.process_inbox(&chain_admin).await?;
     node_service_a.process_inbox(&chain_a).await?;
     node_service_b.process_inbox(&chain_b).await?;
@@ -1627,9 +1630,6 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             })
             .await;
     }
-
-    node_service_admin.process_inbox(&chain_a).await?;
-
     for order_id in order_ids_b {
         app_matching_b
             .order(matching_engine::Order::Cancel {
@@ -1639,6 +1639,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             .await;
     }
 
+    // Same logic as for the insertion of orders.
     node_service_admin.process_inbox(&chain_admin).await?;
     node_service_a.process_inbox(&chain_a).await?;
     node_service_b.process_inbox(&chain_b).await?;
@@ -2783,6 +2784,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Resul
     assert_eq!(client2.local_balance(account2).await?, Amount::ZERO);
     client1.transfer(Amount::ONE, chain1, chain2).await?;
     client2.sync(chain2).await?;
+    // chain2 must process the result
     client2.process_inbox(chain2).await?;
     assert!(client2.local_balance(account2).await? > Amount::ZERO);
 
