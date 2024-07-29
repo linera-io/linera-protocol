@@ -1134,6 +1134,14 @@ impl Certificate {
         }
         bundles
     }
+
+    pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
+        self.value()
+            .executed_block()
+            .map_or(false, |executed_block| {
+                executed_block.requires_blob(blob_id)
+            })
+    }
 }
 
 /// Verifies certificate signatures.

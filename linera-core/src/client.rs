@@ -51,7 +51,7 @@ use serde::Serialize;
 use thiserror::Error;
 use tokio::sync::{Mutex, OwnedRwLockReadGuard};
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{debug, error, info, Instrument as _};
+use tracing::{debug, error, info, warn, Instrument as _};
 
 use crate::{
     data_types::{
@@ -353,6 +353,9 @@ pub enum ChainClientError {
 
     #[error("Blob not found: {0}")]
     BlobNotFound(BlobId),
+
+    #[error("Got invalid last used by certificate for blob {0} from validator {1}")]
+    InvalidLastUsedByCertificate(BlobId, ValidatorName),
 }
 
 impl From<Infallible> for ChainClientError {
@@ -581,7 +584,7 @@ where
         }
         for mut message in requested_pending_messages {
             if pending_messages.len() >= self.options.max_pending_messages {
-                tracing::warn!(
+                warn!(
                     "Limiting block to {} incoming messages",
                     self.options.max_pending_messages
                 );
@@ -1034,7 +1037,7 @@ where
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
-                    tracing::warn!("Failed to process network hashed certificate value");
+                    warn!("Failed to process network hashed certificate value");
                     return Err(err.into());
                 }
             }
@@ -1098,7 +1101,7 @@ where
             // Check that certificates are valid w.r.t one of our trusted committees.
             if block.epoch > max_epoch {
                 // We don't accept a certificate from a committee in the future.
-                tracing::warn!(
+                warn!(
                     "Postponing received certificate from future epoch {:?}",
                     block.epoch
                 );
@@ -1120,7 +1123,7 @@ where
                     // If a higher block with a recognized epoch comes up later from the
                     // same chain, the call to `receive_certificate` below will download
                     // the skipped certificate again.
-                    tracing::warn!(
+                    warn!(
                         "Skipping received certificate from past epoch {:?}",
                         block.epoch
                     );
@@ -1145,7 +1148,7 @@ where
                 .receive_certificate_internal(certificate, ReceiveCertificateMode::AlreadyChecked)
                 .await
             {
-                tracing::warn!("Received invalid certificate {hash} from {name}: {e}");
+                warn!("Received invalid certificate {hash} from {name}: {e}");
                 // Do not update the validator's tracker in case of error.
                 // Move on to the next validator.
                 return;
@@ -1380,7 +1383,7 @@ where
 
         for (result, new_notifications) in future::join_all(futures).await {
             if let Err(e) = result {
-                tracing::error!(?e, "Error synchronizing chain state");
+                error!(?e, "Error synchronizing chain state");
             }
 
             notifications.extend(new_notifications);
@@ -1414,12 +1417,12 @@ where
         let info = match node.handle_chain_info_query(query).await {
             Ok(response) if response.check(name).is_ok() => response.info,
             Ok(_) => {
-                tracing::warn!("Ignoring invalid response from validator");
+                warn!("Ignoring invalid response from validator {}", name);
                 // Give up on this validator.
                 return Ok(());
             }
             Err(err) => {
-                tracing::warn!("Ignoring error from validator: {}", err);
+                warn!("Ignoring error from validator {}: {}", name, err);
                 return Ok(());
             }
         };
@@ -1443,7 +1446,10 @@ where
         };
         if let Some(proposal) = info.manager.requested_proposed {
             if proposal.content.block.chain_id != chain_id {
-                tracing::warn!("Response from validator contains an invalid proposal");
+                warn!(
+                    "Response from validator {} contains an invalid proposal",
+                    name
+                );
                 return Ok(()); // Give up on this validator.
             }
             let owner = proposal.owner;
@@ -1463,18 +1469,24 @@ where
                         _,
                     ) = &**chain_error
                     {
-                        self.update_local_node_with_blob_from(*blob_id, node)
+                        self.update_local_node_with_blob_from(*blob_id, name, node)
                             .await?;
                         continue; // We found the missing blob: retry.
                     }
                 }
-                tracing::warn!("Skipping proposal from {}: {}", owner, original_err);
+                warn!(
+                    "Skipping proposal from {} and validator {}: {}",
+                    owner, name, original_err
+                );
                 break;
             }
         }
         if let Some(cert) = info.manager.requested_locked {
             if !cert.value().is_validated() || cert.value().chain_id() != chain_id {
-                tracing::warn!("Response from validator contains an invalid locked block");
+                warn!(
+                    "Response from validator {} contains an invalid locked block",
+                    name
+                );
                 return Ok(()); // Give up on this validator.
             }
             let hash = cert.hash();
@@ -1502,7 +1514,10 @@ where
                         continue; // We found the missing blobs: retry.
                     }
                 }
-                tracing::warn!("Skipping certificate {}: {}", hash, original_err);
+                warn!(
+                    "Skipping certificate {} from validator {}: {}",
+                    hash, name, original_err
+                );
                 break;
             }
         }
@@ -1522,11 +1537,11 @@ where
         let info = match node.handle_chain_info_query(query).await {
             Ok(response) if response.check(name).is_ok() => Some(response.info),
             Ok(_) => {
-                tracing::warn!("Got invalid response from validator");
+                warn!("Got invalid response from validator {}", name);
                 return Ok(Vec::new());
             }
             Err(err) => {
-                tracing::warn!("Got error from validator: {}", err);
+                warn!("Got error from validator {}: {}", name, err);
                 return Ok(Vec::new());
             }
         };
@@ -1556,6 +1571,7 @@ where
     async fn update_local_node_with_blob_from(
         &self,
         blob_id: BlobId,
+        name: &ValidatorName,
         node: &impl LocalValidatorNode,
     ) -> Result<(), ChainClientError> {
         let Ok(last_used_by_hash) = node.blob_last_used_by(blob_id).await else {
@@ -1563,6 +1579,10 @@ where
         };
 
         let certificate = node.download_certificate(last_used_by_hash).await?;
+        ensure!(
+            certificate.requires_blob(&blob_id),
+            ChainClientError::InvalidLastUsedByCertificate(blob_id, *name)
+        );
 
         // This will download all ancestors of the certificate and process all of them locally.
         self.receive_certificate(certificate).await?;
@@ -1574,12 +1594,20 @@ where
     async fn receive_certificate_for_blob(&self, blob_id: BlobId) -> Result<(), ChainClientError> {
         let validators = self.validator_nodes().await?;
         let mut tasks = FuturesUnordered::new();
-        for (_, node) in validators.into_iter() {
+        for (name, node) in validators {
             let node = node.clone();
             tasks.push(async move {
                 let last_used_hash = node.blob_last_used_by(blob_id).await.ok()?;
                 let cert = node.download_certificate(last_used_hash).await.ok()?;
-                self.receive_certificate(cert).await.ok()
+                if cert.requires_blob(&blob_id) {
+                    self.receive_certificate(cert).await.ok()
+                } else {
+                    warn!(
+                        "Got invalid last used by certificate for blob {} from validator {}",
+                        blob_id, name
+                    );
+                    None
+                }
             });
         }
 
