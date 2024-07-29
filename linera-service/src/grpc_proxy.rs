@@ -5,6 +5,8 @@
 #![allow(unknown_lints)]
 #![allow(clippy::blocks_in_conditions)]
 
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
 use std::{
     fmt::Debug,
     net::SocketAddr,
@@ -49,7 +51,7 @@ use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument};
 #[cfg(with_metrics)]
 use {
-    linera_base::{prometheus_util, sync::Lazy},
+    linera_base::prometheus_util,
     prometheus::{HistogramVec, IntCounterVec},
 };
 
@@ -57,7 +59,7 @@ use {
 use crate::prometheus_server;
 
 #[cfg(with_metrics)]
-static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
         "proxy_request_latency",
         "Proxy request latency",
@@ -71,13 +73,13 @@ static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
 });
 
 #[cfg(with_metrics)]
-static PROXY_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec("proxy_request_count", "Proxy request count", &[])
         .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
-static PROXY_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
+static PROXY_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "proxy_request_success",
         "Proxy request success",
@@ -87,7 +89,7 @@ static PROXY_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 #[cfg(with_metrics)]
-static PROXY_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
+static PROXY_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "proxy_request_error",
         "Proxy request error",

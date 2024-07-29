@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(rustdoc::invalid_codeblock_attributes)] // Using '=' in the documentation.
+
 /*!
 # Native Fungible Token Example Application
 

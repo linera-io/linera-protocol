@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
 use std::{
     net::{IpAddr, SocketAddr},
     str::FromStr,
@@ -29,7 +31,7 @@ use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, error, info, instrument, warn};
 #[cfg(with_metrics)]
 use {
-    linera_base::{prometheus_util, sync::Lazy},
+    linera_base::prometheus_util,
     prometheus::{HistogramVec, IntCounterVec},
 };
 
@@ -53,7 +55,7 @@ type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest
 type NotificationSender = mpsc::Sender<Notification>;
 
 #[cfg(with_metrics)]
-static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
         "server_request_latency",
         "Server request latency",
@@ -64,13 +66,13 @@ static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
 });
 
 #[cfg(with_metrics)]
-static SERVER_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+static SERVER_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec("server_request_count", "Server request count", &[])
         .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
-static SERVER_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
+static SERVER_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "server_request_success",
         "Server request success",
@@ -80,7 +82,7 @@ static SERVER_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 #[cfg(with_metrics)]
-static SERVER_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
+static SERVER_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "server_request_error",
         "Server request error",
@@ -90,7 +92,7 @@ static SERVER_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 #[cfg(with_metrics)]
-static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: Lazy<HistogramVec> = Lazy::new(|| {
+static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
         "server_request_latency_per_request_type",
         "Server request latency per request type",

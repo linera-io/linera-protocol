@@ -10,6 +10,8 @@
 //! for a given chain, and new instances for the same chain can only be created when the previous
 //! instance is dropped.
 
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
 use std::{
     fmt::{self, Debug, Formatter},
     sync::{Arc, Weak},
@@ -20,10 +22,7 @@ use linera_base::identifiers::ChainId;
 use tokio::sync::{Mutex, OwnedMutexGuard};
 #[cfg(with_metrics)]
 use {
-    linera_base::{
-        prometheus_util::{register_histogram_vec, MeasureLatency},
-        sync::Lazy,
-    },
+    linera_base::prometheus_util::{register_histogram_vec, MeasureLatency},
     prometheus::HistogramVec,
 };
 
@@ -166,7 +165,7 @@ impl Debug for ChainGuard {
 
 /// The time spent waiting to acquire a [`ChainGuard`].
 #[cfg(with_metrics)]
-static CHAIN_GUARD_LOCK_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+static CHAIN_GUARD_LOCK_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec(
         "chain_guard_lock_atency",
         "The time spent waiting to acquire a chain guard",

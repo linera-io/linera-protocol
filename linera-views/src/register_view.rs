@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Debug;
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
 
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{self, MeasureLatency},
-    linera_base::sync::Lazy,
     prometheus::HistogramVec,
 };
 
@@ -21,7 +22,7 @@ use crate::{
 
 #[cfg(with_metrics)]
 /// The runtime of hash computation
-static REGISTER_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
+static REGISTER_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
         "register_view_hash_runtime",
         "RegisterView hash runtime",

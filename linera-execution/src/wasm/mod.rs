@@ -21,12 +21,11 @@ mod wasmer;
 mod wasmtime;
 
 use std::sync::Arc;
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
 
 #[cfg(with_metrics)]
-use linera_base::{
-    prometheus_util::{self, MeasureLatency},
-    sync::Lazy,
-};
+use linera_base::prometheus_util::{self, MeasureLatency};
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
 use thiserror::Error;
@@ -46,7 +45,7 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-static CONTRACT_INSTANTIATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
         "contract_instantiation_latency",
         "Contract instantiation latency",
@@ -59,7 +58,7 @@ static CONTRACT_INSTANTIATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
 });
 
 #[cfg(with_metrics)]
-static SERVICE_INSTANTIATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
         "service_instantiation_latency",
         "Service instantiation latency",
@@ -255,7 +254,7 @@ impl From<::wasmer::InstantiationError> for WasmExecutionError {
 /// This assumes that the current directory is one of the crates.
 #[cfg(with_testing)]
 pub mod test {
-    use once_cell::sync::OnceCell;
+    use std::sync::LazyLock;
 
     #[cfg(with_fs)]
     use super::{WasmContractModule, WasmRuntime, WasmServiceModule};
@@ -280,8 +279,8 @@ pub mod test {
 
     pub fn get_example_bytecode_paths(name: &str) -> Result<(String, String), std::io::Error> {
         let name = name.replace('-', "_");
-        static INSTANCE: OnceCell<()> = OnceCell::new();
-        INSTANCE.get_or_try_init(build_applications)?;
+        static INSTANCE: LazyLock<()> = LazyLock::new(|| build_applications().unwrap());
+        LazyLock::force(&INSTANCE);
         Ok((
             format!("../examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm"),
             format!("../examples/target/wasm32-unknown-unknown/release/{name}_service.wasm"),

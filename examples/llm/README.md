@@ -4,7 +4,8 @@
 
 This example application runs a large language model in an application's service.
 
-The model used by Linera Stories is a 40M parameter TinyLlama by A. Karpathy. Find out more here: https://github.com/karpathy/llama2.c.
+The model used by Linera Stories is a 40M parameter TinyLlama by A. Karpathy. Find out more here:
+<https://github.com/karpathy/llama2.c>.
 
 CAVEAT:
 

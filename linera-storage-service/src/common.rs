@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::PathBuf;
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
 
 use linera_base::command::resolve_binary;
-#[cfg(with_metrics)]
-use linera_base::sync::Lazy;
 #[cfg(with_metrics)]
 use linera_views::metering::KeyValueStoreMetrics;
 use linera_views::{
@@ -93,8 +93,8 @@ pub fn create_shared_store_common_config() -> CommonStoreConfig {
 }
 
 #[cfg(with_metrics)]
-pub(crate) static STORAGE_SERVICE_METRICS: Lazy<KeyValueStoreMetrics> =
-    Lazy::new(|| KeyValueStoreMetrics::new("storage service".to_string()));
+pub(crate) static STORAGE_SERVICE_METRICS: LazyLock<KeyValueStoreMetrics> =
+    LazyLock::new(|| KeyValueStoreMetrics::new("storage service".to_string()));
 
 #[derive(Debug, Clone)]
 pub struct ServiceStoreConfig {

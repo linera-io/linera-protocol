@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
 use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included};
 
 use async_lock::Mutex;
@@ -10,7 +12,6 @@ use serde::{Deserialize, Serialize};
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{self, MeasureLatency},
-    linera_base::sync::Lazy,
     prometheus::HistogramVec,
 };
 
@@ -27,7 +28,7 @@ use crate::{
 
 #[cfg(with_metrics)]
 /// The runtime of hash computation
-static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
+static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
         "key_value_store_view_hash_runtime",
         "KeyValueStoreView hash runtime",

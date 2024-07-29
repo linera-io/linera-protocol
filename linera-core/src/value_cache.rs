@@ -7,6 +7,8 @@
 #[path = "unit_tests/value_cache_tests.rs"]
 mod unit_tests;
 
+#[cfg(with_metrics)]
+use std::{any::type_name, sync::LazyLock};
 use std::{borrow::Cow, hash::Hash, num::NonZeroUsize};
 
 use linera_base::{crypto::CryptoHash, data_types::HashedBlob, identifiers::BlobId};
@@ -14,11 +16,7 @@ use linera_chain::data_types::{Certificate, HashedCertificateValue, LiteCertific
 use lru::LruCache;
 use tokio::sync::Mutex;
 #[cfg(with_metrics)]
-use {
-    linera_base::{prometheus_util, sync::Lazy},
-    prometheus::IntCounterVec,
-    std::any::type_name,
-};
+use {linera_base::prometheus_util, prometheus::IntCounterVec};
 
 use crate::worker::WorkerError;
 
@@ -27,7 +25,7 @@ pub const DEFAULT_VALUE_CACHE_SIZE: usize = 1000;
 
 /// A counter metric for the number of cache hits in the [`ValueCache`].
 #[cfg(with_metrics)]
-static CACHE_HIT_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+static CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "value_cache_hit",
         "Cache hits in `ValueCache`",
@@ -38,7 +36,7 @@ static CACHE_HIT_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
 
 /// A counter metric for the number of cache misses in the [`ValueCache`].
 #[cfg(with_metrics)]
-static CACHE_MISS_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+static CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "value_cache_miss",
         "Cache misses in `ValueCache`",
