@@ -2849,12 +2849,14 @@ where
                     > Some(height)
                 {
                     debug!("Accepting redundant notification for new message");
+                    return;
                 }
-                if let Err(e) = self
+                if let Err(error) = self
                     .find_received_certificates_from_validator(name, node, local_node.clone())
                     .await
                 {
-                    error!("Fail to process notification: {e}");
+                    error!("Fail to process notification: {error}");
+                    return;
                 }
                 if self
                     .local_next_block_height(origin.sender, &mut local_node)
@@ -2873,12 +2875,15 @@ where
                     > Some(height)
                 {
                     debug!("Accepting redundant notification for new block");
+                    return;
                 }
-                self.try_synchronize_chain_state_from(&name, &node, chain_id, &mut notifications)
+                if let Err(error) = self
+                    .try_synchronize_chain_state_from(&name, &node, chain_id, &mut notifications)
                     .await
-                    .unwrap_or_else(|e| {
-                        error!("Fail to process notification: {e}");
-                    });
+                {
+                    error!("Fail to process notification: {error}");
+                    return;
+                }
                 self.handle_notifications(&mut notifications);
                 let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
@@ -2893,6 +2898,7 @@ where
                 if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
                         debug!("Accepting redundant notification for new round");
+                        return;
                     }
                 }
                 if let Err(error) = self
@@ -2900,6 +2906,7 @@ where
                     .await
                 {
                     error!("Fail to process notification: {error}");
+                    return;
                 }
                 self.handle_notifications(&mut notifications);
                 let Some(info) = self.local_chain_info(chain_id, &mut local_node).await else {
