@@ -1435,30 +1435,28 @@ where
                 return Ok(()); // Give up on this validator.
             }
             let owner = proposal.owner;
-            loop {
-                let result = self
-                    .client
-                    .local_node
-                    .handle_block_proposal(*proposal.clone())
-                    .await;
-                if let Err(original_err) = &result {
-                    if let LocalNodeError::WorkerError(WorkerError::ChainError(chain_error)) =
-                        original_err
+            while let Err(original_err) = self
+                .client
+                .local_node
+                .handle_block_proposal(*proposal.clone())
+                .await
+            {
+                if let LocalNodeError::WorkerError(WorkerError::ChainError(chain_error)) =
+                    &original_err
+                {
+                    if let ChainError::ExecutionError(
+                        ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(
+                            blob_id,
+                        )),
+                        _,
+                    ) = &**chain_error
                     {
-                        if let ChainError::ExecutionError(
-                            ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(
-                                blob_id,
-                            )),
-                            _,
-                        ) = &**chain_error
-                        {
-                            self.update_local_node_with_blob_from(*blob_id, node)
-                                .await?;
-                            continue;
-                        }
+                        self.update_local_node_with_blob_from(*blob_id, node)
+                            .await?;
+                        continue; // We found the missing blob: retry.
                     }
-                    tracing::warn!("Skipping proposal from {}: {}", owner, original_err);
                 }
+                tracing::warn!("Skipping proposal from {}: {}", owner, original_err);
                 break;
             }
         }
@@ -1470,31 +1468,29 @@ where
             let hash = cert.hash();
             let mut values = vec![];
             let mut blobs = vec![];
-            loop {
-                let result = self
-                    .client
-                    .local_node
-                    .handle_certificate(*cert.clone(), values, blobs, notifications)
+            while let Err(original_err) = self
+                .client
+                .local_node
+                .handle_certificate(*cert.clone(), values, blobs, notifications)
+                .await
+            {
+                if let LocalNodeError::WorkerError(
+                    WorkerError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids),
+                ) = &original_err
+                {
+                    values = LocalNodeClient::<S>::try_download_hashed_certificate_values_from(
+                        locations, node, name,
+                    )
                     .await;
-                if let Err(original_err) = &result {
-                    if let LocalNodeError::WorkerError(
-                        WorkerError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids),
-                    ) = original_err
-                    {
-                        values = LocalNodeClient::<S>::try_download_hashed_certificate_values_from(
-                            locations, node, name,
-                        )
-                        .await;
-                        blobs = self
-                            .find_missing_blobs_in_validator(blob_ids.clone(), chain_id, name, node)
-                            .await?;
+                    blobs = self
+                        .find_missing_blobs_in_validator(blob_ids.clone(), chain_id, name, node)
+                        .await?;
 
-                        if blobs.len() == blob_ids.len() && values.len() == locations.len() {
-                            continue;
-                        }
+                    if blobs.len() == blob_ids.len() && values.len() == locations.len() {
+                        continue; // We found the missing blobs: retry.
                     }
-                    tracing::warn!("Skipping certificate {}: {}", hash, original_err);
                 }
+                tracing::warn!("Skipping certificate {}: {}", hash, original_err);
                 break;
             }
         }
@@ -1636,7 +1632,7 @@ where
                 ) = &**chain_error
                 {
                     self.receive_certificate_for_blob(*blob_id).await?;
-                    continue;
+                    continue; // We found the missing blob: retry.
                 }
             }
             return Ok(result?);
