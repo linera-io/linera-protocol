@@ -3,10 +3,9 @@
 
 //! Code specific to the usage of the [Wasmtime](https://wasmtime.dev/) runtime.
 
-use std::error::Error;
+use std::{error::Error, sync::LazyLock};
 
 use linera_witty::{wasmtime::EntrypointInstance, ExportTo, Instance};
-use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use wasmtime::{AsContextMut, Config, Engine, Linker, Module, Store};
 
@@ -22,7 +21,7 @@ use crate::{
 };
 
 /// An [`Engine`] instance configured to run application contracts.
-static CONTRACT_ENGINE: Lazy<Engine> = Lazy::new(|| {
+static CONTRACT_ENGINE: LazyLock<Engine> = LazyLock::new(|| {
     let mut config = Config::default();
     config
         .consume_fuel(true)
@@ -32,13 +31,13 @@ static CONTRACT_ENGINE: Lazy<Engine> = Lazy::new(|| {
 });
 
 /// An [`Engine`] instance configured to run application services.
-static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(Engine::default);
+static SERVICE_ENGINE: LazyLock<Engine> = LazyLock::new(Engine::default);
 
 /// A cache of compiled contract modules.
-static CONTRACT_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::default);
+static CONTRACT_CACHE: LazyLock<Mutex<ModuleCache<Module>>> = LazyLock::new(Mutex::default);
 
 /// A cache of compiled service modules.
-static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::default);
+static SERVICE_CACHE: LazyLock<Mutex<ModuleCache<Module>>> = LazyLock::new(Mutex::default);
 
 /// Type representing a running [Wasmtime](https://wasmtime.dev/) contract.
 ///

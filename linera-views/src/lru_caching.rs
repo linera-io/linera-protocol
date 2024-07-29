@@ -4,6 +4,8 @@
 /// The standard cache size used for tests.
 pub const TEST_CACHE_SIZE: usize = 1000;
 
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
 use std::{
     collections::{btree_map, hash_map::RandomState, BTreeMap},
     sync::Arc,
@@ -11,16 +13,13 @@ use std::{
 
 use async_lock::Mutex;
 use linked_hash_map::LinkedHashMap;
+#[cfg(with_metrics)]
+use prometheus::{register_int_counter_vec, IntCounterVec};
 #[cfg(with_testing)]
 use {
     crate::common::{AdminKeyValueStore, CommonStoreConfig, ContextFromStore},
     crate::memory::{MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
     crate::views::ViewError,
-};
-#[cfg(with_metrics)]
-use {
-    linera_base::sync::Lazy,
-    prometheus::{register_int_counter_vec, IntCounterVec},
 };
 
 use crate::{
@@ -30,14 +29,14 @@ use crate::{
 
 #[cfg(with_metrics)]
 /// The total number of cache faults
-static NUM_CACHE_FAULT: Lazy<IntCounterVec> = Lazy::new(|| {
+static NUM_CACHE_FAULT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec!("num_cache_fault", "Number of cache faults", &[])
         .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
 /// The total number of cache successes
-static NUM_CACHE_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
+static NUM_CACHE_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec!("num_cache_success", "Number of cache success", &[])
         .expect("Counter creation should not fail")
 });

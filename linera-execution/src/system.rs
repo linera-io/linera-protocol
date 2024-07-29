@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
 use std::{
     collections::BTreeMap,
     fmt::{self, Display, Formatter},
@@ -29,10 +31,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 #[cfg(with_metrics)]
-use {
-    linera_base::{prometheus_util, sync::Lazy},
-    prometheus::IntCounterVec,
-};
+use {linera_base::prometheus_util, prometheus::IntCounterVec};
 
 #[cfg(test)]
 use crate::test_utils::SystemExecutionState;
@@ -55,7 +54,7 @@ pub static PUBLISH_BYTECODE_MESSAGE_INDEX: u32 = 0;
 
 /// The number of times the [`SystemOperation::OpenChain`] was executed.
 #[cfg(with_metrics)]
-static OPEN_CHAIN_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+static OPEN_CHAIN_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "open_chain_count",
         "The number of times the `OpenChain` operation was executed",

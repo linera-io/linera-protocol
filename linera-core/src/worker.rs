@@ -6,7 +6,7 @@ use std::{
     borrow::Cow,
     collections::{hash_map, BTreeMap, HashMap, VecDeque},
     num::NonZeroUsize,
-    sync::Arc,
+    sync::{Arc, LazyLock},
     time::Duration,
 };
 
@@ -15,7 +15,6 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, HashedBlob, Round},
     doc_scalar, ensure,
     identifiers::{BlobId, ChainId, Owner},
-    sync::Lazy,
 };
 use linera_chain::{
     data_types::{
@@ -63,11 +62,11 @@ use crate::{
 mod worker_tests;
 
 /// The maximum number of [`ChainWorkerActor`]s to keep running.
-static CHAIN_WORKER_LIMIT: Lazy<NonZeroUsize> =
-    Lazy::new(|| NonZeroUsize::new(1_000).expect("`CHAIN_WORKER_LIMIT` should not be zero"));
+static CHAIN_WORKER_LIMIT: LazyLock<NonZeroUsize> =
+    LazyLock::new(|| NonZeroUsize::new(1_000).expect("`CHAIN_WORKER_LIMIT` should not be zero"));
 
 #[cfg(with_metrics)]
-static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
+static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
         "num_rounds_in_certificate",
         "Number of rounds in certificate",
@@ -80,7 +79,7 @@ static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
 });
 
 #[cfg(with_metrics)]
-static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
+static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
         "num_rounds_in_block_proposal",
         "Number of rounds in block proposal",
@@ -93,13 +92,13 @@ static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
 });
 
 #[cfg(with_metrics)]
-static TRANSACTION_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+static TRANSACTION_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec("transaction_count", "Transaction count", &[])
         .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
-static NUM_BLOCKS: Lazy<IntCounterVec> = Lazy::new(|| {
+static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
         .expect("Counter creation should not fail")
 });

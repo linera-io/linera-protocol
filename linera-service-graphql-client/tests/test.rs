@@ -7,10 +7,10 @@
     feature = "scylladb"
 ))]
 
-use std::{collections::BTreeMap, io::Read, str::FromStr, time::Duration};
+use std::{collections::BTreeMap, io::Read, str::FromStr, sync::LazyLock, time::Duration};
 
 use fungible::{FungibleTokenAbi, InitialState};
-use linera_base::{command::resolve_binary, data_types::Amount, identifiers::ChainId, sync::Lazy};
+use linera_base::{command::resolve_binary, data_types::Amount, identifiers::ChainId};
 use linera_service::cli_wrappers::{
     local_net::{Database, LocalNetConfig, ProcessInbox},
     LineraNet, LineraNetConfig, Network,
@@ -24,7 +24,7 @@ use test_case::test_case;
 use tokio::{process::Command, sync::Mutex};
 
 /// A static lock to prevent integration tests from running in parallel.
-pub static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+pub static INTEGRATION_TEST_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 fn reqwest_client() -> reqwest::Client {
     reqwest::ClientBuilder::new()

@@ -69,8 +69,8 @@ impl VersionInfo {
     /// a newline. The newline is meant for `clap` as in `#[command(version =
     /// linera_version::VersionInfo::default_clap_str())]`
     pub fn default_clap_str() -> &'static str {
-        use once_cell::sync::Lazy;
-        static STRING: Lazy<String> = Lazy::new(|| format!("\n{}", VersionInfo::default()));
+        use std::sync::LazyLock;
+        static STRING: LazyLock<String> = LazyLock::new(|| format!("\n{}", VersionInfo::default()));
         STRING.as_str()
     }
 

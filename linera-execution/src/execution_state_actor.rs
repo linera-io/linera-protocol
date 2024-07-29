@@ -4,17 +4,16 @@
 //! Handle requests from the synchronous execution thread of user applications.
 
 use std::fmt::{self, Debug, Formatter};
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
 
 use futures::channel::mpsc;
+#[cfg(with_metrics)]
+use linera_base::prometheus_util::{self, MeasureLatency as _};
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, HashedBlob, Timestamp},
     identifiers::{Account, BlobId, MessageId, Owner},
     ownership::ChainOwnership,
-};
-#[cfg(with_metrics)]
-use linera_base::{
-    prometheus_util::{self, MeasureLatency as _},
-    sync::Lazy,
 };
 use linera_views::{
     batch::Batch,
@@ -36,7 +35,7 @@ use crate::{
 
 #[cfg(with_metrics)]
 /// Histogram of the latency to load a contract bytecode.
-static LOAD_CONTRACT_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+static LOAD_CONTRACT_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
         "load_contract_latency",
         "Load contract latency",
@@ -51,7 +50,7 @@ static LOAD_CONTRACT_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
 
 #[cfg(with_metrics)]
 /// Histogram of the latency to load a service bytecode.
-static LOAD_SERVICE_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+static LOAD_SERVICE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
         "load_service_latency",
         "Load service latency",

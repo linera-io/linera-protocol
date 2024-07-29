@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
 use std::{fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
@@ -32,10 +34,7 @@ use {
 };
 #[cfg(with_metrics)]
 use {
-    linera_base::{
-        prometheus_util::{self, MeasureLatency},
-        sync::Lazy,
-    },
+    linera_base::prometheus_util::{self, MeasureLatency},
     prometheus::{HistogramVec, IntCounterVec},
 };
 
@@ -43,7 +42,7 @@ use crate::{chain_guards::ChainGuards, ChainRuntimeContext, Storage};
 
 /// The metric counting how often a hashed certificate value is tested for existence from storage.
 #[cfg(with_metrics)]
-static CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+static CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "contains_hashed_certificate_value",
         "The metric counting how often a hashed certificate value is tested for existence from storage",
@@ -54,7 +53,7 @@ static CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::ne
 
 /// The metric counting how often hashed certificate values are tested for existence from storage.
 #[cfg(with_metrics)]
-static CONTAINS_HASHED_CERTIFICATE_VALUES_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+static CONTAINS_HASHED_CERTIFICATE_VALUES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "contains_hashed_certificate_values",
         "The metric counting how often hashed certificate values are tested for existence from storage",
@@ -65,7 +64,7 @@ static CONTAINS_HASHED_CERTIFICATE_VALUES_COUNTER: Lazy<IntCounterVec> = Lazy::n
 
 /// The metric counting how often a blob is tested for existence from storage
 #[cfg(with_metrics)]
-static CONTAINS_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+static CONTAINS_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "contains_blob",
         "The metric counting how often a blob is tested for existence from storage",
@@ -76,7 +75,7 @@ static CONTAINS_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 
 /// The metric counting how often multiple blobs are tested for existence from storage
 #[cfg(with_metrics)]
-static CONTAINS_BLOBS_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+static CONTAINS_BLOBS_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "contains_blobs",
         "The metric counting how often multiple blobs are tested for existence from storage",
@@ -87,7 +86,7 @@ static CONTAINS_BLOBS_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 
 /// The metric counting how often a blob state is tested for existence from storage
 #[cfg(with_metrics)]
-static CONTAINS_BLOB_STATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+static CONTAINS_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "contains_blob_state",
         "The metric counting how often a blob state is tested for existence from storage",
@@ -98,7 +97,7 @@ static CONTAINS_BLOB_STATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 
 /// The metric counting how often a certificate is tested for existence from storage.
 #[cfg(with_metrics)]
-static CONTAINS_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+static CONTAINS_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "contains_certificate",
         "The metric counting how often a certificate is tested for existence from storage",
@@ -110,7 +109,7 @@ static CONTAINS_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 /// The metric counting how often a hashed certificate value is read from storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static READ_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+pub static READ_HASHED_CERTIFICATE_VALUE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "read_hashed_certificate_value",
         "The metric counting how often a hashed certificate value is read from storage",
@@ -122,7 +121,7 @@ pub static READ_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::ne
 /// The metric counting how often a blob is read from storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static READ_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+pub static READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "read_blob",
         "The metric counting how often a blob is read from storage",
@@ -134,7 +133,7 @@ pub static READ_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 /// The metric counting how often a blob state is read from storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static READ_BLOB_STATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+pub static READ_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "read_blob_state",
         "The metric counting how often a blob state is read from storage",
@@ -146,7 +145,7 @@ pub static READ_BLOB_STATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 /// The metric counting how often a hashed certificate value is written to storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static WRITE_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+pub static WRITE_HASHED_CERTIFICATE_VALUE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "write_hashed_certificate_value",
         "The metric counting how often a hashed certificate value is written to storage",
@@ -158,7 +157,7 @@ pub static WRITE_HASHED_CERTIFICATE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::n
 /// The metric counting how often a blob is written to storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static WRITE_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+pub static WRITE_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "write_blob",
         "The metric counting how often a blob is written to storage",
@@ -170,7 +169,7 @@ pub static WRITE_BLOB_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 /// The metric counting how often a certificate is read from storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static READ_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+pub static READ_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "read_certificate",
         "The metric counting how often a certificate is read from storage",
@@ -182,7 +181,7 @@ pub static READ_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 /// The metric counting how often a certificate is written to storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+pub static WRITE_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec(
         "write_certificate",
         "The metric counting how often a certificate is written to storage",
@@ -194,7 +193,7 @@ pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 /// The latency to load a chain state.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static LOAD_CHAIN_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
         "load_chain_latency",
         "The latency to load a chain state",

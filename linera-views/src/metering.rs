@@ -1,11 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::LazyLock;
+
 use convert_case::{Case, Casing};
-use linera_base::{
-    prometheus_util::{register_histogram_vec, MeasureLatency},
-    sync::Lazy,
-};
+use linera_base::prometheus_util::{register_histogram_vec, MeasureLatency};
 use prometheus::HistogramVec;
 
 use crate::{
@@ -28,28 +27,28 @@ pub struct KeyValueStoreMetrics {
 
 /// The metrics for the "rocks db"
 #[cfg(with_rocksdb)]
-pub(crate) static ROCKS_DB_METRICS: Lazy<KeyValueStoreMetrics> =
-    Lazy::new(|| KeyValueStoreMetrics::new("rocks db internal".to_string()));
+pub(crate) static ROCKS_DB_METRICS: LazyLock<KeyValueStoreMetrics> =
+    LazyLock::new(|| KeyValueStoreMetrics::new("rocks db internal".to_string()));
 
 /// The metrics for the "dynamo db"
 #[cfg(with_dynamodb)]
-pub(crate) static DYNAMO_DB_METRICS: Lazy<KeyValueStoreMetrics> =
-    Lazy::new(|| KeyValueStoreMetrics::new("dynamo db internal".to_string()));
+pub(crate) static DYNAMO_DB_METRICS: LazyLock<KeyValueStoreMetrics> =
+    LazyLock::new(|| KeyValueStoreMetrics::new("dynamo db internal".to_string()));
 
 /// The metrics for the "scylla db"
 #[cfg(with_scylladb)]
-pub(crate) static SCYLLA_DB_METRICS: Lazy<KeyValueStoreMetrics> =
-    Lazy::new(|| KeyValueStoreMetrics::new("scylla db internal".to_string()));
+pub(crate) static SCYLLA_DB_METRICS: LazyLock<KeyValueStoreMetrics> =
+    LazyLock::new(|| KeyValueStoreMetrics::new("scylla db internal".to_string()));
 
 /// The metrics for the "scylla db"
 #[cfg(any(with_rocksdb, with_dynamodb))]
-pub(crate) static VALUE_SPLITTING_METRICS: Lazy<KeyValueStoreMetrics> =
-    Lazy::new(|| KeyValueStoreMetrics::new("value splitting".to_string()));
+pub(crate) static VALUE_SPLITTING_METRICS: LazyLock<KeyValueStoreMetrics> =
+    LazyLock::new(|| KeyValueStoreMetrics::new("value splitting".to_string()));
 
 /// The metrics for the "lru caching"
 #[cfg(any(with_rocksdb, with_dynamodb, with_scylladb))]
-pub(crate) static LRU_CACHING_METRICS: Lazy<KeyValueStoreMetrics> =
-    Lazy::new(|| KeyValueStoreMetrics::new("lru caching".to_string()));
+pub(crate) static LRU_CACHING_METRICS: LazyLock<KeyValueStoreMetrics> =
+    LazyLock::new(|| KeyValueStoreMetrics::new("lru caching".to_string()));
 
 impl KeyValueStoreMetrics {
     /// Creation of a named Metered counter.
@@ -117,7 +116,7 @@ impl KeyValueStoreMetrics {
 #[derive(Clone)]
 pub struct MeteredStore<K> {
     /// the metrics being stored
-    counter: &'static Lazy<KeyValueStoreMetrics>,
+    counter: &'static LazyLock<KeyValueStoreMetrics>,
     /// The underlying store of the metered store
     pub store: K,
 }
@@ -191,7 +190,7 @@ where
 
 impl<K> MeteredStore<K> {
     /// Creates a new Metered store
-    pub fn new(counter: &'static Lazy<KeyValueStoreMetrics>, store: K) -> Self {
+    pub fn new(counter: &'static LazyLock<KeyValueStoreMetrics>, store: K) -> Self {
         Self { counter, store }
     }
 }

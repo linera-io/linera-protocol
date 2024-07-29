@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(with_testing)]
+use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, HashSet},
     env,
@@ -10,6 +12,8 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
+#[cfg(with_testing)]
+use async_lock::RwLock;
 use async_trait::async_trait;
 use linera_base::{
     command::{resolve_binary, CommandExt},
@@ -27,8 +31,6 @@ use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
 use tracing::{info, warn};
-#[cfg(with_testing)]
-use {async_lock::RwLock, linera_base::sync::Lazy};
 #[cfg(all(feature = "rocksdb", with_testing))]
 use {linera_views::rocks_db::create_rocks_db_test_path, std::ops::Deref};
 
@@ -114,11 +116,11 @@ where
 }
 
 #[cfg(all(feature = "rocksdb", with_testing))]
-static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> =
-    Lazy::new(LocalServer::new);
+static LOCAL_SERVER_ROCKS_DB: LazyLock<LocalServer<LocalServerRocksDbInternal>> =
+    LazyLock::new(LocalServer::new);
 
 #[cfg(with_testing)]
-static PORT_PROVIDER: Lazy<RwLock<u16>> = Lazy::new(|| RwLock::new(7080));
+static PORT_PROVIDER: LazyLock<RwLock<u16>> = LazyLock::new(|| RwLock::new(7080));
 
 /// Provides a port for the node_service. Increment the port numbers.
 #[cfg(with_testing)]

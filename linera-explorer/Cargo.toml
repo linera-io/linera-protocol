@@ -22,7 +22,7 @@ js-sys = "0.3"
 linera-base.workspace = true
 linera-indexer-graphql-client.workspace = true
 linera-service-graphql-client.workspace = true
-once_cell.workspace = true
+once_cell = "1.19.0"
 reqwest.workspace = true
 serde = { workspace = true, features = [ "derive" ] }
 serde-wasm-bindgen = "0.6"
