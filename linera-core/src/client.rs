@@ -1430,74 +1430,72 @@ where
             return Ok(());
         };
         if let Some(proposal) = info.manager.requested_proposed {
-            if proposal.content.block.chain_id == chain_id {
-                let owner = proposal.owner;
-                loop {
-                    let result = self
-                        .client
-                        .local_node
-                        .handle_block_proposal(*proposal.clone())
-                        .await;
-                    if let Err(original_err) = &result {
-                        if let LocalNodeError::WorkerError(WorkerError::ChainError(chain_error)) =
-                            original_err
+            if proposal.content.block.chain_id != chain_id {
+                tracing::warn!("Response from validator contains an invalid proposal");
+                return Ok(()); // Give up on this validator.
+            }
+            let owner = proposal.owner;
+            loop {
+                let result = self
+                    .client
+                    .local_node
+                    .handle_block_proposal(*proposal.clone())
+                    .await;
+                if let Err(original_err) = &result {
+                    if let LocalNodeError::WorkerError(WorkerError::ChainError(chain_error)) =
+                        original_err
+                    {
+                        if let ChainError::ExecutionError(
+                            ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(
+                                blob_id,
+                            )),
+                            _,
+                        ) = &**chain_error
                         {
-                            if let ChainError::ExecutionError(
-                                ExecutionError::SystemError(
-                                    SystemExecutionError::BlobNotFoundOnRead(blob_id),
-                                ),
-                                _,
-                            ) = &**chain_error
-                            {
-                                self.update_local_node_with_blob_from(*blob_id, node)
-                                    .await?;
-                                continue;
-                            }
+                            self.update_local_node_with_blob_from(*blob_id, node)
+                                .await?;
+                            continue;
                         }
-                        tracing::warn!("Skipping proposal from {}: {}", owner, original_err);
                     }
-                    break;
+                    tracing::warn!("Skipping proposal from {}: {}", owner, original_err);
                 }
+                break;
             }
         }
         if let Some(cert) = info.manager.requested_locked {
-            if cert.value().is_validated() && cert.value().chain_id() == chain_id {
-                let hash = cert.hash();
-                let mut values = vec![];
-                let mut blobs = vec![];
-                loop {
-                    let result = self
-                        .client
-                        .local_node
-                        .handle_certificate(*cert.clone(), values, blobs, notifications)
+            if !cert.value().is_validated() || cert.value().chain_id() != chain_id {
+                tracing::warn!("Response from validator contains an invalid locked block");
+                return Ok(()); // Give up on this validator.
+            }
+            let hash = cert.hash();
+            let mut values = vec![];
+            let mut blobs = vec![];
+            loop {
+                let result = self
+                    .client
+                    .local_node
+                    .handle_certificate(*cert.clone(), values, blobs, notifications)
+                    .await;
+                if let Err(original_err) = &result {
+                    if let LocalNodeError::WorkerError(
+                        WorkerError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids),
+                    ) = original_err
+                    {
+                        values = LocalNodeClient::<S>::try_download_hashed_certificate_values_from(
+                            locations, node, name,
+                        )
                         .await;
-                    if let Err(original_err) = &result {
-                        if let LocalNodeError::WorkerError(
-                            WorkerError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids),
-                        ) = original_err
-                        {
-                            values =
-                                LocalNodeClient::<S>::try_download_hashed_certificate_values_from(
-                                    locations, node, name,
-                                )
-                                .await;
-                            blobs = self
-                                .find_missing_blobs_in_validator(
-                                    blob_ids.clone(),
-                                    chain_id,
-                                    name,
-                                    node,
-                                )
-                                .await?;
+                        blobs = self
+                            .find_missing_blobs_in_validator(blob_ids.clone(), chain_id, name, node)
+                            .await?;
 
-                            if blobs.len() == blob_ids.len() && values.len() == locations.len() {
-                                continue;
-                            }
+                        if blobs.len() == blob_ids.len() && values.len() == locations.len() {
+                            continue;
                         }
-                        tracing::warn!("Skipping certificate {}: {}", hash, original_err);
                     }
-                    break;
+                    tracing::warn!("Skipping certificate {}: {}", hash, original_err);
                 }
+                break;
             }
         }
         Ok(())
