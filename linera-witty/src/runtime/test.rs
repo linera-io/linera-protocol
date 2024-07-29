@@ -328,8 +328,8 @@ where
     }
 }
 
-/// A helper trait to serve as an equivalent to [`crate::wasmer::WasmerResults`] and
-/// [`crate::wasmtime::WasmtimeResults`] for the [`MockInstance`].
+/// A helper trait to serve as an equivalent to `crate::wasmer::WasmerResults` and
+/// `crate::wasmtime::WasmtimeResults` for the [`MockInstance`].
 ///
 /// This is in order to help with writing tests generic over the Wasm guest instance type.
 pub trait MockResults {
