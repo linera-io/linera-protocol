@@ -2515,16 +2515,6 @@ where
         .await
     }
 
-    /// Reads some blob. This is test-only, so we can test without a Wasm application.
-    #[cfg(with_testing)]
-    pub async fn read_blob(
-        &mut self,
-        blob_id: BlobId,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        self.execute_operation(Operation::System(SystemOperation::ReadBlob { blob_id }))
-            .await
-    }
-
     /// Adds pending blobs
     pub async fn add_pending_blobs(&mut self, pending_blobs: &[HashedBlob]) {
         for hashed_blob in pending_blobs {

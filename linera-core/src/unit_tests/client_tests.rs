@@ -1495,7 +1495,9 @@ where
     let blob0_id = blob0.id();
 
     // Try to read a blob without publishing it first, should fail
-    let result = client1_a.read_blob(blob0_id).await;
+    let result = client1_a
+        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id }.into())
+        .await;
     assert_matches!(
         result,
         Err(ChainClientError::BlobNotFound(not_found_blob_id)) if not_found_blob_id == blob0_id
@@ -1520,7 +1522,10 @@ where
     // Try to read the blob. This is a different client but on the same chain, so when we synchronize this with the validators
     // before executing the block, we'll actually download and cache locally the blobs that were published by `client_a`.
     // So this will succeed.
-    let certificate = client1_b.read_blob(blob0_id).await.unwrap().unwrap();
+    let certificate = client1_b
+        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id }.into())
+        .await?
+        .unwrap();
     assert_eq!(certificate.round, Round::MultiLeader(0));
     assert!(certificate
         .value()
