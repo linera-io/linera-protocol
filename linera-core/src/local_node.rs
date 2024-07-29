@@ -457,6 +457,7 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(self, validators, notifications))]
+    /// Downloads and processes all certificates up to (excluding) the specified height.
     pub async fn download_certificates(
         &self,
         validators: &[(ValidatorName, impl LocalValidatorNode)],
@@ -584,6 +585,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
+    /// Downloads and processes all certificates up to (excluding) the specified height from the
+    /// given validator.
     async fn try_download_certificates_from(
         &self,
         name: &ValidatorName,
