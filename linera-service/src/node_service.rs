@@ -601,7 +601,7 @@ where
         self.apply_client_command(&chain_id, move |client| {
             let hashed_blob = hashed_blob.clone();
             async move {
-                let blob_id = hashed_blob.id;
+                let blob_id = hashed_blob.id();
                 let result = client
                     .publish_blob(hashed_blob)
                     .await

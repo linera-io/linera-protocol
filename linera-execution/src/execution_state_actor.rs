@@ -11,7 +11,7 @@ use futures::channel::mpsc;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::{self, MeasureLatency as _};
 use linera_base::{
-    data_types::{Amount, ApplicationPermissions, HashedBlob, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Blob, Timestamp},
     identifiers::{Account, BlobId, MessageId, Owner},
     ownership::ChainOwnership,
 };
@@ -443,7 +443,7 @@ pub enum ExecutionRequest {
 
     ReadBlob {
         blob_id: BlobId,
-        callback: Sender<HashedBlob>,
+        callback: Sender<Blob>,
     },
 }
 

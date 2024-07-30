@@ -803,9 +803,9 @@ impl From<HashedBlob> for Blob {
 #[derive(Eq, PartialEq, Debug, Hash, Clone, WitType, WitStore)]
 pub struct HashedBlob {
     /// ID of the blob.
-    pub id: BlobId,
+    id: BlobId,
     /// A blob of binary data.
-    pub blob: Blob,
+    blob: Blob,
 }
 
 impl HashedBlob {

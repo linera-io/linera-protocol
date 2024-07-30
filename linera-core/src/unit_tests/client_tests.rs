@@ -1698,7 +1698,7 @@ where
 
     client2_a.synchronize_from_validators().await.unwrap();
     let blob1 = HashedBlob::test_blob("blob1");
-    let blob1_id = blob1.id;
+    let blob1_id = blob1.id();
 
     client2_a.add_pending_blobs(&[blob1]).await;
     let blob_0_1_operations = vec![
