@@ -378,7 +378,7 @@ async fn test_clearing_of_cached_stored_hash() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Check if a [`ReentrantCollectionView`] doesn't have pending changes after loading its
+/// Checks if a [`ReentrantCollectionView`] doesn't have pending changes after loading its
 /// entries.
 #[tokio::test]
 async fn test_reentrant_collection_view_has_no_pending_changes_after_try_load_entries(
