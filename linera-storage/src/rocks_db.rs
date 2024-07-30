@@ -13,10 +13,6 @@ use {
 
 use crate::db_storage::DbStorage;
 
-#[cfg(test)]
-#[path = "unit_tests/rocks_db.rs"]
-mod tests;
-
 pub type RocksDbStorage<C> = DbStorage<RocksDbStore, C>;
 
 #[cfg(with_testing)]

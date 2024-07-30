@@ -14,10 +14,6 @@ use {
 
 use crate::db_storage::DbStorage;
 
-#[cfg(test)]
-#[path = "unit_tests/scylla_db.rs"]
-mod tests;
-
 pub type ScyllaDbStorage<C> = DbStorage<ScyllaDbStore, C>;
 
 #[cfg(with_testing)]
