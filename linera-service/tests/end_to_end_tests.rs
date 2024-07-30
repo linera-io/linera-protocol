@@ -1484,7 +1484,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         .request_application(&chain_admin, &token1)
         .await?;
 
-    // In an operation node_service_a.request_aplication(&chain_a, appli_b)
+    // In an operation node_service_a.request_application(&chain_a, app_b)
     // chain_b needs to process the request first and then chain_a
     // the answer.
     node_service_a.process_inbox(&chain_a).await?;
