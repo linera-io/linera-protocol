@@ -236,7 +236,7 @@ impl From<ApplicationPermissions> for wit_system_api::ApplicationPermissions {
         } = permissions;
         Self {
             execute_operations: execute_operations
-                .map(|ea| ea.into_iter().map(Into::into).collect()),
+                .map(|app_ids| app_ids.into_iter().map(Into::into).collect()),
             mandatory_applications: mandatory_applications.into_iter().map(Into::into).collect(),
             close_chain: close_chain.into_iter().map(Into::into).collect(),
         }
@@ -254,7 +254,7 @@ impl From<ChainOwnership> for wit_system_api::ChainOwnership {
         Self {
             super_owners: super_owners
                 .into_iter()
-                .map(|(owner, publi_key)| (owner.into(), publi_key.into()))
+                .map(|(owner, public_key)| (owner.into(), public_key.into()))
                 .collect(),
             owners: owners
                 .into_iter()
