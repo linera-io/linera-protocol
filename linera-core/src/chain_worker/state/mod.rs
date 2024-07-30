@@ -355,7 +355,7 @@ where
     ) -> Result<Vec<BlobId>, WorkerError> {
         // Find all certificates containing blobs used when executing this block.
         for hashed_blob in hashed_blobs {
-            let blob_id = hashed_blob.id();
+            let blob_id = hashed_blob.id;
             ensure!(
                 required_blob_ids.remove(&blob_id),
                 WorkerError::UnneededBlob { blob_id }

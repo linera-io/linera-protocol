@@ -464,7 +464,7 @@ where
             .read_hashed_blob(blob_id)
             .await
             .map_err(Into::into);
-        sender.send(hashed_blob.map(|hashed_blob| hashed_blob.blob().clone()))
+        sender.send(hashed_blob.map(|hashed_blob| hashed_blob.blob.clone()))
     }
 
     async fn do_download_certificate_value(

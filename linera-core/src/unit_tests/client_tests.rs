@@ -1492,7 +1492,7 @@ where
         .await?;
 
     let blob0 = HashedBlob::test_blob("blob0");
-    let blob0_id = blob0.id();
+    let blob0_id = blob0.id;
 
     // Try to read a blob without publishing it first, should fail
     let result = client1_a
@@ -1539,7 +1539,7 @@ where
 
     client2_a.synchronize_from_validators().await.unwrap();
     let blob1 = HashedBlob::test_blob("blob1");
-    let blob1_id = blob1.id();
+    let blob1_id = blob1.id;
 
     client2_a.add_pending_blobs(&[blob1]).await;
     let blob_0_1_operations = vec![
@@ -1660,7 +1660,7 @@ where
     builder.set_fault_type([3], FaultType::Offline).await;
 
     let blob0 = HashedBlob::test_blob("blob0");
-    let blob0_id = blob0.id();
+    let blob0_id = blob0.id;
 
     // Publish blob on chain 1
     let publish_certificate = client1.publish_blob(blob0).await.unwrap().unwrap();
@@ -1807,7 +1807,7 @@ where
     builder.set_fault_type([3], FaultType::Offline).await;
 
     let blob0 = HashedBlob::test_blob("blob0");
-    let blob0_id = blob0.id();
+    let blob0_id = blob0.id;
 
     client1.synchronize_from_validators().await.unwrap();
     // Publish blob0 on chain 1
@@ -1819,7 +1819,7 @@ where
         .requires_blob(&blob0_id));
 
     let blob2 = HashedBlob::test_blob("blob2");
-    let blob2_id = blob2.id();
+    let blob2_id = blob2.id;
 
     client2.synchronize_from_validators().await.unwrap();
     // Publish blob2 on chain 2
@@ -1839,7 +1839,7 @@ where
 
     client3_a.synchronize_from_validators().await.unwrap();
     let blob1 = HashedBlob::test_blob("blob1");
-    let blob1_id = blob1.id();
+    let blob1_id = blob1.id;
 
     client3_a.add_pending_blobs(&[blob1]).await;
     let blob_0_1_operations = vec![
@@ -1913,7 +1913,7 @@ where
 
     client3_b.synchronize_from_validators().await.unwrap();
     let blob3 = HashedBlob::test_blob("blob3");
-    let blob3_id = blob3.id();
+    let blob3_id = blob3.id;
 
     client3_b.add_pending_blobs(&[blob3]).await;
     let blob_2_3_operations = vec![

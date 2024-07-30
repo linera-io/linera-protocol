@@ -119,7 +119,7 @@ where
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
 
     let contract_blob = HashedBlob::load_from_file(contract_path.clone()).await?;
-    let expected_contract_blob_id = contract_blob.id();
+    let expected_contract_blob_id = contract_blob.id;
     let certificate = publisher
         .publish_blob(contract_blob.clone())
         .await
@@ -135,7 +135,7 @@ where
         .any(|responses| responses.contains(&OracleResponse::Blob(expected_contract_blob_id))));
 
     let service_blob = HashedBlob::load_from_file(service_path.clone()).await?;
-    let expected_service_blob_id = service_blob.id();
+    let expected_service_blob_id = service_blob.id;
     let certificate = publisher.publish_blob(service_blob).await.unwrap().unwrap();
     assert!(certificate
         .value()

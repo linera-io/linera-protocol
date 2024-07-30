@@ -399,7 +399,7 @@ impl ChainManager {
         }
 
         for hashed_blob in proposal.hashed_blobs {
-            self.pending_blobs.insert(hashed_blob.id(), hashed_blob);
+            self.pending_blobs.insert(hashed_blob.id, hashed_blob);
         }
 
         if let Some(key_pair) = key_pair {

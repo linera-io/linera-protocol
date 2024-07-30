@@ -817,11 +817,6 @@ impl HashedBlob {
         Ok(blob.into_hashed())
     }
 
-    /// A content-addressed blob ID i.e. the hash of the `Blob`.
-    pub fn id(&self) -> BlobId {
-        self.id
-    }
-
     /// Creates a [`HashedBlob`] from a string for testing purposes.
     #[cfg(with_testing)]
     pub fn test_blob(content: &str) -> Self {
@@ -829,11 +824,6 @@ impl HashedBlob {
             bytes: content.as_bytes().to_vec(),
         };
         blob.into_hashed()
-    }
-
-    /// Returns a reference to the inner `Blob`, without the hash.
-    pub fn blob(&self) -> &Blob {
-        &self.blob
     }
 
     /// Moves ownership of the blob of binary data

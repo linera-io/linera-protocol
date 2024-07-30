@@ -331,7 +331,7 @@ where
         let blob = HashedBlob::load_from_file(&blob_path)
             .await
             .context(format!("failed to load blob from {:?}", &blob_path))?;
-        let blob_id = blob.id();
+        let blob_id = blob.id;
 
         info!("Publishing blob");
         self.apply_client_command(chain_client, |chain_client| {

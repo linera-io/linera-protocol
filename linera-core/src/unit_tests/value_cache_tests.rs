@@ -43,7 +43,7 @@ async fn test_insert_single_certificate_value() {
 async fn test_insert_single_hashed_blob() {
     let cache = ValueCache::<BlobId, HashedBlob>::default();
     let value = create_dummy_hashed_blob(0);
-    let blob_id = value.id();
+    let blob_id = value.id;
 
     assert!(cache.insert(Cow::Borrowed(&value)).await);
     assert!(cache.contains(&blob_id).await);
@@ -84,13 +84,13 @@ async fn test_insert_many_hashed_blobs_individually() {
     }
 
     for blob in &blobs {
-        assert!(cache.contains(&blob.id()).await);
-        assert_eq!(cache.get(&blob.id()).await.as_ref(), Some(blob));
+        assert!(cache.contains(&blob.id).await);
+        assert_eq!(cache.get(&blob.id).await.as_ref(), Some(blob));
     }
 
     assert_eq!(
         cache.keys::<BTreeSet<_>>().await,
-        BTreeSet::from_iter(blobs.iter().map(HashedBlob::id))
+        BTreeSet::from_iter(blobs.iter().map(|blob| blob.id))
     );
 }
 

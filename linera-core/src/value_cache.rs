@@ -244,7 +244,7 @@ impl ValueCache<BlobId, HashedBlob> {
     ///
     /// Returns [`true`] if the value was not already present in the cache.
     pub async fn insert<'a>(&self, value: Cow<'a, HashedBlob>) -> bool {
-        let blob_id = (*value).id();
+        let blob_id = value.id;
         let mut cache = self.cache.lock().await;
         if cache.contains(&blob_id) {
             // Promote the re-inserted value in the cache, as if it was accessed again.

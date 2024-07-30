@@ -602,7 +602,7 @@ where
 
     async fn write_hashed_blob(&self, blob: &HashedBlob) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+        Self::add_blob_to_batch(&blob.id, blob, &mut batch)?;
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -654,7 +654,7 @@ where
     async fn write_hashed_blobs(&self, blobs: &[HashedBlob]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for blob in blobs {
-            Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+            Self::add_blob_to_batch(&blob.id, blob, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -670,7 +670,7 @@ where
             Self::add_hashed_cert_value_to_batch(value, &mut batch)?;
         }
         for blob in blobs {
-            Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+            Self::add_blob_to_batch(&blob.id, blob, &mut batch)?;
         }
         Self::add_certificate_to_batch(certificate, &mut batch)?;
         self.write_batch(batch).await

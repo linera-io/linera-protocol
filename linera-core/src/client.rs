@@ -2561,9 +2561,9 @@ where
         self.client.local_node.cache_recent_blob(&hashed_blob).await;
         self.state_mut()
             .pending_blobs
-            .insert(hashed_blob.id(), hashed_blob.clone());
+            .insert(hashed_blob.id, hashed_blob.clone());
         self.execute_operation(Operation::System(SystemOperation::PublishBlob {
-            blob_id: hashed_blob.id(),
+            blob_id: hashed_blob.id,
         }))
         .await
     }
@@ -2574,7 +2574,7 @@ where
             self.client.local_node.cache_recent_blob(hashed_blob).await;
             self.state_mut()
                 .pending_blobs
-                .insert(hashed_blob.id(), hashed_blob.clone());
+                .insert(hashed_blob.id, hashed_blob.clone());
         }
     }
 

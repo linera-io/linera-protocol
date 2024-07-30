@@ -730,7 +730,7 @@ where
         blob_id: BlobId,
     ) -> Option<HashedBlob> {
         match node.download_blob(blob_id).await.map(Blob::into_hashed) {
-            Ok(hashed_blob) if hashed_blob.id() == blob_id => Some(hashed_blob),
+            Ok(hashed_blob) if hashed_blob.id == blob_id => Some(hashed_blob),
             Ok(_) => {
                 tracing::info!("Validator {name} sent an invalid blob {blob_id}.");
                 None
