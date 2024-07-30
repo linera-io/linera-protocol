@@ -638,6 +638,8 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .request_application(&chain2, &application_id)
         .await?;
 
+    // First chain1 receives the request for application and then
+    // chain2 receives the requested application
     node_service1.process_inbox(&chain1).await?;
     node_service2.process_inbox(&chain2).await?;
 
@@ -1133,8 +1135,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     )
     .await;
 
-    // Make sure that the cross-chain communication happens fast enough.
-    node_service1.process_inbox(&chain1).await?;
+    // The transfer is received by chain2 and needs to be processed.
     node_service2.process_inbox(&chain2).await?;
 
     // Checking the NFT is removed from chain1
@@ -1194,9 +1195,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     )
     .await;
 
-    // Make sure that the cross-chain communication happens fast enough.
+    // The transfer from chain2 has to be received from chain1.
     node_service1.process_inbox(&chain1).await?;
-    node_service2.process_inbox(&chain2).await?;
 
     // Checking the NFT is removed from chain2
     assert!(app2.get_nft(&nft2_id).await.is_err());
@@ -1351,6 +1351,8 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
         .request_application(&chain2, &application_id_crowd)
         .await?;
 
+    // Chain2 requests the application from chain1, so chain1 has
+    // to receive the request and then chain2 receive the answer.
     node_service1.process_inbox(&chain1).await?;
     node_service2.process_inbox(&chain2).await?;
 
@@ -1482,6 +1484,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         .request_application(&chain_admin, &token1)
         .await?;
 
+    // In an operation node_service_a.request_application(&chain_a, app_b)
+    // chain_b needs to process the request first and then chain_a
+    // the answer.
     node_service_a.process_inbox(&chain_a).await?;
     node_service_b.process_inbox(&chain_b).await?;
     node_service_a.process_inbox(&chain_a).await?;
@@ -1562,6 +1567,8 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         .request_application(&chain_b, &application_id_matching)
         .await?;
 
+    // First chain_admin needs to process the two requests and
+    // then chain_a / chain_b the answers.
     node_service_admin.process_inbox(&chain_admin).await?;
     node_service_a.process_inbox(&chain_a).await?;
     node_service_b.process_inbox(&chain_b).await?;
@@ -1600,6 +1607,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             })
             .await;
     }
+    // The orders are sent on chain_a / chain_b. First they are
+    // rerouted to the admin chain for processing. This leads
+    // to order being sent to chain_a / chain_b.
     node_service_admin.process_inbox(&chain_admin).await?;
     node_service_a.process_inbox(&chain_a).await?;
     node_service_b.process_inbox(&chain_b).await?;
@@ -1620,9 +1630,6 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             })
             .await;
     }
-
-    node_service_admin.process_inbox(&chain_a).await?;
-
     for order_id in order_ids_b {
         app_matching_b
             .order(matching_engine::Order::Cancel {
@@ -1632,6 +1639,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             .await;
     }
 
+    // Same logic as for the insertion of orders.
     node_service_admin.process_inbox(&chain_admin).await?;
     node_service_a.process_inbox(&chain_a).await?;
     node_service_b.process_inbox(&chain_b).await?;
@@ -1895,6 +1903,8 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .request_application(&chain1, &application_id_amm)
         .await?;
 
+    // The chain_amm must first requests those two requests
+    // and then chain0 / chain1 must handle the answers.
     node_service_amm.process_inbox(&chain_amm).await?;
     node_service0.process_inbox(&chain0).await?;
     node_service1.process_inbox(&chain1).await?;
@@ -2639,6 +2649,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     )
     .await;
 
+    // The chain2 must process the received transfer
     node_service.process_inbox(&chain2).await?;
 
     // Send 4 tokens back.
@@ -2773,6 +2784,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Resul
     assert_eq!(client2.local_balance(account2).await?, Amount::ZERO);
     client1.transfer(Amount::ONE, chain1, chain2).await?;
     client2.sync(chain2).await?;
+    // chain2 must process the result
     client2.process_inbox(chain2).await?;
     assert!(client2.local_balance(account2).await? > Amount::ZERO);
 
