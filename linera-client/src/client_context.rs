@@ -178,7 +178,7 @@ where
             .map(|kp| kp.copy())
             .into_iter()
             .collect();
-        let mut chain_client = self.client.create_chain(
+        let mut chain_client = self.client.create_chain_client(
             chain_id,
             known_key_pairs,
             self.wallet.genesis_admin_chain(),

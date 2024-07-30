@@ -141,7 +141,7 @@ where
     #[tracing::instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
     /// Creates a new `ChainClient`.
     #[allow(clippy::too_many_arguments)]
-    pub fn create_chain(
+    pub fn create_chain_client(
         self: &Arc<Self>,
         chain_id: ChainId,
         known_key_pairs: Vec<KeyPair>,
