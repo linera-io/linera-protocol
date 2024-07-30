@@ -648,6 +648,8 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .mutate(format!("subscribe(chainId: \"{chain1}\")"))
         .await?;
 
+    node_service1.process_inbox(&chain1).await?;
+
     // The returned hash should now be the latest one.
     let query = format!("query {{ chain(chainId: \"{chain2}\") {{ tipState {{ blockHash }} }} }}");
     let response = node_service2.query_node(&query).await?;
