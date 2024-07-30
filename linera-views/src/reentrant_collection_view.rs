@@ -76,9 +76,13 @@ impl<T> std::ops::DerefMut for WriteGuardedView<T> {
 #[derive(Debug)]
 #[allow(clippy::type_complexity)]
 pub struct ReentrantByteCollectionView<C, W> {
+    /// The view [`Context`].
     context: C,
+    /// If the current persisted data will be completely erased and replaced on the next flush.
     delete_storage_first: bool,
+    /// Entries that may have staged changes.
     updates: BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
+    /// Entries cached in memory that have the exact same state as in the persistent storage.
     cached_entries: Mutex<BTreeMap<Vec<u8>, Arc<RwLock<W>>>>,
 }
 
