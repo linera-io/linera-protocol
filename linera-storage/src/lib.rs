@@ -5,7 +5,6 @@
 
 #![deny(clippy::large_futures)]
 
-mod chain_guards;
 mod db_storage;
 #[cfg(with_dynamodb)]
 mod dynamo_db;
