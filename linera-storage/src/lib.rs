@@ -85,6 +85,16 @@ pub trait Storage: Sized {
     fn clock(&self) -> &dyn Clock;
 
     /// Loads the view of a chain state.
+    ///
+    /// # Notes
+    ///
+    /// Each time this method is called, a new [`ChainStateView`] is created. If there is more than
+    /// one instance of the same chain active at any given moment, they will race to access
+    /// persistent storage. This can lead to invalid states and data corruption.
+    ///
+    /// Other methods that also create [`ChainStateView`] instances that can cause conflicts are:
+    /// [`load_active_chain`][`Self::load_active_chain`] and
+    /// [`create_chain`][`Self::create_chain`].
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>
     where
         ViewError: From<Self::StoreError>;
@@ -185,6 +195,15 @@ pub trait Storage: Sized {
     async fn write_certificates(&self, certificate: &[Certificate]) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
+    ///
+    /// # Notes
+    ///
+    /// Each time this method is called, a new [`ChainStateView`] is created. If there is more than
+    /// one instance of the same chain active at any given moment, they will race to access
+    /// persistent storage. This can lead to invalid states and data corruption.
+    ///
+    /// Other methods that also create [`ChainStateView`] instances that can cause conflicts are:
+    /// [`load_chain`][`Self::load_chain`] and [`create_chain`][`Self::create_chain`].
     async fn load_active_chain(
         &self,
         id: ChainId,
@@ -223,6 +242,15 @@ pub trait Storage: Sized {
     }
 
     /// Initializes a chain in a simple way (used for testing and to create a genesis state).
+    ///
+    /// # Notes
+    ///
+    /// This method creates a new [`ChainStateView`] instance. If there is more than one instance
+    /// of the same chain active at any given moment, they will race to access persistent storage.
+    /// This can lead to invalid states and data corruption.
+    ///
+    /// Other methods that also create [`ChainStateView`] instances that can cause conflicts are:
+    /// [`load_chain`][`Self::load_chain`] and [`load_active_chain`][`Self::load_active_chain`].
     async fn create_chain(
         &self,
         committee: Committee,
