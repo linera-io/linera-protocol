@@ -20,7 +20,6 @@ mod service;
 use std::{fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
-use chain_guards::ChainGuard;
 use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
@@ -396,7 +395,6 @@ pub struct ChainRuntimeContext<S> {
     execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
-    _chain_guard: Arc<ChainGuard>,
 }
 
 #[async_trait]
