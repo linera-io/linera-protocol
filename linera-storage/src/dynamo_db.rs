@@ -14,10 +14,6 @@ use {
 
 use crate::db_storage::DbStorage;
 
-#[cfg(test)]
-#[path = "unit_tests/dynamo_db.rs"]
-mod tests;
-
 pub type DynamoDbStorage<C> = DbStorage<DynamoDbStore, C>;
 
 #[cfg(with_testing)]

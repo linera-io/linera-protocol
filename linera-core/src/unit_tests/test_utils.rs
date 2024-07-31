@@ -820,7 +820,7 @@ where
             10,
             CrossChainMessageDelivery::NonBlocking,
         ));
-        Ok(builder.create_chain(
+        Ok(builder.create_chain_client(
             chain_id,
             vec![key_pair],
             self.admin_id,

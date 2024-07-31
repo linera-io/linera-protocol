@@ -38,7 +38,7 @@ use {
     prometheus::{HistogramVec, IntCounterVec},
 };
 
-use crate::{chain_guards::ChainGuards, ChainRuntimeContext, Storage};
+use crate::{ChainRuntimeContext, Storage};
 
 /// The metric counting how often a hashed certificate value is tested for existence from storage.
 #[cfg(with_metrics)]
@@ -208,7 +208,6 @@ pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
 /// A storage implemented from a [`KeyValueStore`]
 pub struct DbStorageInner<Client> {
     client: Client,
-    pub(crate) guards: ChainGuards,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
     wasm_runtime: Option<WasmRuntime>,
@@ -229,7 +228,6 @@ where
     pub(crate) fn new(client: Client, wasm_runtime: Option<WasmRuntime>) -> Self {
         Self {
             client,
-            guards: ChainGuards::default(),
             user_contracts: Arc::new(DashMap::new()),
             user_services: Arc::new(DashMap::new()),
             wasm_runtime,
@@ -427,15 +425,12 @@ where
     ) -> Result<ChainStateView<Self::Context>, ViewError> {
         #[cfg(with_metrics)]
         let _metric = LOAD_CHAIN_LATENCY.measure_latency();
-        tracing::trace!("Acquiring lock on {:?}", chain_id);
-        let guard = self.client.guards.guard(chain_id).await;
         let runtime_context = ChainRuntimeContext {
             storage: self.clone(),
             chain_id,
             execution_runtime_config: self.execution_runtime_config,
             user_contracts: self.client.user_contracts.clone(),
             user_services: self.client.user_services.clone(),
-            _chain_guard: Arc::new(guard),
         };
         let client = self.client.client.clone();
         let base_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
