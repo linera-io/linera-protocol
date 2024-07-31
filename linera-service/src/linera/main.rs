@@ -800,6 +800,7 @@ impl Runnable for Job {
                 port,
                 amount,
                 limit_rate_until,
+                config,
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Starting faucet service using chain {}", chain_id);
@@ -819,6 +820,8 @@ impl Runnable for Job {
                     amount,
                     end_timestamp,
                     genesis_config,
+                    config,
+                    storage,
                 )
                 .await?;
                 faucet.run().await?;
