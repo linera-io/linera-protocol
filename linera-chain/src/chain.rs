@@ -5,7 +5,7 @@
 use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, HashSet},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use async_graphql::SimpleObject;
@@ -37,8 +37,8 @@ use {linera_base::identifiers::BytecodeId, linera_execution::BytecodeLocation};
 
 use crate::{
     data_types::{
-        Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, EventRecord,
-        IncomingBundle, MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
+        Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, EventRecord, IncomingBundle,
+        MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -221,9 +221,9 @@ pub struct InboxEntry {
 }
 
 impl InboxEntry {
-    fn new(origin: Origin, event: &Event) -> Self {
+    fn new(origin: Origin, bundle: &MessageBundle) -> Self {
         InboxEntry {
-            cursor: Cursor::from(event),
+            cursor: Cursor::from(bundle),
             origin,
         }
     }
@@ -256,9 +256,9 @@ where
 
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, Origin, InboxStateView<C>>,
-    /// A queue of unskippable events, with the timestamp when we added them to the inbox.
+    /// A queue of unskippable bundles, with the timestamp when we added them to the inbox.
     pub unskippable: QueueView<C, TimestampedInboxEntry>,
-    /// Non-skippable events that have been removed but are still in the queue.
+    /// Non-skippable bundles that have been removed but are still in the queue.
     pub removed_unskippable: SetView<C, InboxEntry>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, Target, OutboxStateView<C>>,
@@ -501,11 +501,11 @@ where
         let max_stream_queries = self.context().max_stream_queries();
         let stream = stream::iter(pairs)
             .map(|(origin, inbox)| async move {
-                if let Some(event) = inbox.removed_events.front().await? {
+                if let Some(bundle) = inbox.removed_bundles.front().await? {
                     return Err(ChainError::MissingCrossChainUpdate {
                         chain_id,
                         origin: origin.into(),
-                        height: event.height,
+                        height: bundle.height,
                     });
                 }
                 Ok::<(), ChainError>(())
@@ -532,8 +532,8 @@ where
     ) -> Result<Option<BlockHeight>, ChainError> {
         let inbox = self.inboxes.try_load_entry(origin).await?;
         match inbox {
-            Some(inbox) => match inbox.removed_events.back().await? {
-                Some(event) => Ok(Some(event.height)),
+            Some(inbox) => match inbox.removed_bundles.back().await? {
+                Some(bundle) => Ok(Some(bundle.height)),
                 None => Ok(None),
             },
             None => Ok(None),
@@ -557,80 +557,39 @@ where
             origin,
             bundle.height,
         );
-        // Process immediate messages and create inbox events.
-        let mut events = Vec::new();
-        for (index, outgoing_message) in bundle.messages {
-            ensure!(
-                outgoing_message.has_destination(&origin.medium, chain_id),
-                ChainError::InternalError(format!(
-                    "Cross-chain message to {:?} contains message to {:?}",
-                    chain_id, outgoing_message.destination
-                ))
-            );
-            let OutgoingMessage {
-                destination: _,
-                authenticated_signer,
-                grant,
-                refund_grant_to,
-                kind,
-                message,
-            } = outgoing_message;
-            // See if the chain needs initialization.
-            if self.execution_state.system.description.get().is_none() {
-                // Handle any special initialization message to be executed immediately.
-                let message_id = MessageId {
-                    chain_id: origin.sender,
-                    height: bundle.height,
-                    index,
-                };
-                self.execute_init_message(message_id, &message, bundle.timestamp, local_time)
+        let chain_and_height = ChainAndHeight {
+            chain_id: origin.sender,
+            height: bundle.height,
+        };
+        if self.execution_state.system.description.get().is_none() {
+            // The chain isn't initialized yet. Process the OpenChain message.
+            if let Some(posted_message) = bundle.messages.first() {
+                let message_id = chain_and_height.to_message_id(posted_message.index);
+                let message = &posted_message.message;
+                self.execute_init_message(message_id, message, bundle.timestamp, local_time)
                     .await?;
             }
-            // Record the inbox event to process it below.
-            events.push(Event {
-                certificate_hash: bundle.hash,
-                height: bundle.height,
-                index,
-                authenticated_signer,
-                grant,
-                refund_grant_to,
-                kind,
-                timestamp: bundle.timestamp,
-                message,
-            });
         }
-        // There should be inbox events. Otherwise, this means the cross-chain request was
-        // not routed correctly.
-        ensure!(
-            !events.is_empty(),
-            ChainError::InternalError(format!(
-                "The block received by {:?} from {:?} at height {:?} was entirely ignored. \
-                This should not happen",
-                chain_id, origin, bundle.height
-            ))
-        );
-        // Process the inbox events and update the inbox state.
+        // Process the inbox bundle and update the inbox state.
         let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
-        for event in events {
-            let entry = InboxEntry::new(origin.clone(), &event);
-            let skippable = event.is_skippable();
-            let newly_added = inbox.add_event(event).await.map_err(|error| match error {
+        let entry = InboxEntry::new(origin.clone(), &bundle);
+        let skippable = bundle.is_skippable();
+        let newly_added = inbox
+            .add_bundle(bundle)
+            .await
+            .map_err(|error| match error {
                 InboxError::ViewError(error) => ChainError::ViewError(error),
                 error => ChainError::InternalError(format!(
                     "while processing messages in certified block: {error}"
                 )),
             })?;
-            if newly_added && !skippable {
-                let seen = local_time;
-                self.unskippable
-                    .push_back(TimestampedInboxEntry { entry, seen });
-            }
+        if newly_added && !skippable {
+            let seen = local_time;
+            self.unskippable
+                .push_back(TimestampedInboxEntry { entry, seen });
         }
         // Remember the certificate for future validator/client synchronizations.
-        self.received_log.push(ChainAndHeight {
-            chain_id: origin.sender,
-            height: bundle.height,
-        });
+        self.received_log.push(chain_and_height);
         Ok(())
     }
 
@@ -663,39 +622,39 @@ where
     }
 
     /// Removes the incoming messages in the block from the inboxes.
-    pub async fn remove_events_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
+    pub async fn remove_bundles_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
-        let mut events_by_origin: BTreeMap<_, Vec<&Event>> = Default::default();
-        for IncomingBundle { event, origin, .. } in &block.incoming_bundles {
+        let mut bundles_by_origin: BTreeMap<_, Vec<&MessageBundle>> = Default::default();
+        for IncomingBundle { bundle, origin, .. } in &block.incoming_bundles {
             ensure!(
-                event.timestamp <= block.timestamp,
-                ChainError::IncorrectEventTimestamp {
+                bundle.timestamp <= block.timestamp,
+                ChainError::IncorrectBundleTimestamp {
                     chain_id,
-                    message_timestamp: event.timestamp,
+                    bundle_timestamp: bundle.timestamp,
                     block_timestamp: block.timestamp,
                 }
             );
-            let events = events_by_origin.entry(origin).or_default();
-            events.push(event);
+            let bundles = bundles_by_origin.entry(origin).or_default();
+            bundles.push(bundle);
         }
-        let origins = events_by_origin.keys().copied();
+        let origins = bundles_by_origin.keys().copied();
         let inboxes = self.inboxes.try_load_entries_mut(origins).await?;
         let mut removed_unskippable = HashSet::new();
-        for ((origin, events), mut inbox) in events_by_origin.into_iter().zip(inboxes) {
+        for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
             tracing::trace!("Updating inbox {:?} in chain {:?}", origin, chain_id);
-            for event in events {
+            for bundle in bundles {
                 // Mark the message as processed in the inbox.
                 let was_present = inbox
-                    .remove_event(event)
+                    .remove_bundle(bundle)
                     .await
                     .map_err(|error| ChainError::from((chain_id, origin.clone(), error)))?;
-                if was_present && !event.is_skippable() {
-                    removed_unskippable.insert(InboxEntry::new(origin.clone(), event));
+                if was_present && !bundle.is_skippable() {
+                    removed_unskippable.insert(InboxEntry::new(origin.clone(), bundle));
                 }
             }
         }
         if !removed_unskippable.is_empty() {
-            // Delete all removed events from the front of the unskippable queue.
+            // Delete all removed bundles from the front of the unskippable queue.
             let maybe_front = self.unskippable.front().await?;
             if maybe_front.is_some_and(|ts_entry| removed_unskippable.remove(&ts_entry.entry)) {
                 self.unskippable.delete_front();
@@ -725,13 +684,13 @@ where
         &mut self,
         block: &Block,
         local_time: Timestamp,
-        oracle_responses: Option<Vec<Vec<OracleResponse>>>,
+        replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
 
-        assert_eq!(block.chain_id, self.chain_id());
         let chain_id = self.chain_id();
+        assert_eq!(block.chain_id, chain_id);
         ensure!(
             *self.execution_state.system.timestamp.get() <= block.timestamp,
             ChainError::InvalidBlockTimestamp
@@ -745,7 +704,6 @@ where
             tracker: ResourceTracker::default(),
             account: block.authenticated_signer,
         };
-        let mut messages = Vec::new();
 
         if self.is_closed() {
             ensure!(
@@ -765,17 +723,7 @@ where
                 .map_or(true, |description| description.is_child())
         {
             ensure!(
-                matches!(
-                    block.incoming_bundles.first(),
-                    Some(IncomingBundle {
-                        event: Event {
-                            message: Message::System(SystemMessage::OpenChain(_)),
-                            ..
-                        },
-                        action: MessageAction::Accept,
-                        ..
-                    })
-                ),
+                block.starts_with_open_chain(),
                 ChainError::InactiveChain(self.chain_id())
             );
         }
@@ -794,11 +742,11 @@ where
                 mandatory.remove(application_id);
             }
         }
-        for message in &block.incoming_bundles {
+        for pending in block.incoming_messages() {
             if mandatory.is_empty() {
                 break;
             }
-            if let Message::User { application_id, .. } = &message.event.message {
+            if let Message::User { application_id, .. } = &pending.message {
                 mandatory.remove(application_id);
             }
         }
@@ -806,138 +754,152 @@ where
             mandatory.is_empty(),
             ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
         );
-        let mut oracle_responses = oracle_responses.map(Vec::into_iter);
-        let mut new_oracle_responses = Vec::new();
+
+        // Execute each incoming bundle as a transaction, then each operation.
+        // Collect messages, events and oracle responses, each as one list per transaction.
+        let mut replaying_oracle_responses = replaying_oracle_responses.map(Vec::into_iter);
+        let mut oracle_responses = Vec::new();
         let mut events = Vec::new();
+        let mut messages = Vec::new();
         let mut next_message_index = 0;
-        for (index, message) in block.incoming_bundles.iter().enumerate() {
-            #[cfg(with_metrics)]
-            let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
-            let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
-            let chain_execution_context = ChainExecutionContext::IncomingBundle(index);
-            // Execute the received message.
-            let context = MessageContext {
-                chain_id,
-                is_bouncing: message.event.is_bouncing(),
-                height: block.height,
-                certificate_hash: message.event.certificate_hash,
-                message_id: MessageId {
-                    chain_id: message.origin.sender,
-                    height: message.event.height,
-                    index: message.event.index,
-                },
-                authenticated_signer: message.event.authenticated_signer,
-                refund_grant_to: message.event.refund_grant_to,
-                next_message_index,
+        for (bundle_index, incoming_bundle) in (0..).zip(&block.incoming_bundles) {
+            let mut txn_oracle_responses = Vec::new();
+            let mut txn_messages = Vec::new();
+            let mut txn_events = Vec::new();
+            let txn_replaying_oracle_responses = match &mut replaying_oracle_responses {
+                Some(responses) => Some(Arc::new(Mutex::new(
+                    responses
+                        .next()
+                        .ok_or_else(|| ChainError::MissingOracleResponseList)?
+                        .into_iter(),
+                ))),
+                None => None,
             };
-            let (outcomes, oracle_responses) = match message.action {
-                MessageAction::Accept => {
-                    let mut grant = message.event.grant;
-                    let (mut outcomes, oracle_responses) = self
-                        .execution_state
-                        .execute_message(
-                            context,
-                            local_time,
-                            message.event.message.clone(),
-                            (grant > Amount::ZERO).then_some(&mut grant),
-                            match &mut oracle_responses {
-                                Some(responses) => Some(
-                                    responses
-                                        .next()
-                                        .ok_or_else(|| ChainError::MissingOracleResponseList)?,
-                                ),
-                                None => None,
-                            },
-                            &mut resource_controller,
-                        )
-                        .await
-                        .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-                    if grant > Amount::ZERO {
-                        if let Some(refund_grant_to) = message.event.refund_grant_to {
-                            let outcome = self
-                                .execution_state
-                                .send_refund(context, grant, refund_grant_to)
-                                .await
-                                .map_err(|err| {
-                                    ChainError::ExecutionError(err, chain_execution_context)
-                                })?;
-                            outcomes.push(outcome);
-                        }
-                    }
-                    (outcomes, oracle_responses)
-                }
-                MessageAction::Reject => {
-                    // If rejecting a message fails, the entire block proposal should be
-                    // scrapped.
-                    let chain_execution_context = ChainExecutionContext::Block;
-                    ensure!(
-                        !message.event.is_protected() || self.is_closed(),
-                        ChainError::CannotRejectMessage {
-                            chain_id,
-                            origin: Box::new(message.origin.clone()),
-                            event: message.event.clone(),
-                        }
-                    );
-                    let outcomes = if message.event.is_tracked() {
-                        // Bounce the message.
-                        self.execution_state
-                            .bounce_message(
+            for (message_id, posted_message) in incoming_bundle.messages_with_id() {
+                #[cfg(with_metrics)]
+                let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
+                let chain_execution_context = ChainExecutionContext::IncomingBundle(bundle_index);
+                let context = MessageContext {
+                    chain_id,
+                    is_bouncing: posted_message.is_bouncing(),
+                    height: block.height,
+                    certificate_hash: incoming_bundle.bundle.certificate_hash,
+                    message_id,
+                    authenticated_signer: posted_message.authenticated_signer,
+                    refund_grant_to: posted_message.refund_grant_to,
+                    next_message_index,
+                };
+                let (outcomes, new_oracle_responses) = match incoming_bundle.action {
+                    MessageAction::Accept => {
+                        // Once a chain is closed, accepting incoming messages is not allowed.
+                        ensure!(!self.is_closed(), ChainError::ClosedChain);
+
+                        let mut grant = posted_message.grant;
+                        let (mut outcomes, oracle_responses) = self
+                            .execution_state
+                            .execute_message(
                                 context,
-                                message.event.grant,
-                                message.event.refund_grant_to,
-                                message.event.message.clone(),
+                                local_time,
+                                posted_message.message.clone(),
+                                (grant > Amount::ZERO).then_some(&mut grant),
+                                txn_replaying_oracle_responses.clone(),
+                                &mut resource_controller,
                             )
                             .await
                             .map_err(|err| {
                                 ChainError::ExecutionError(err, chain_execution_context)
-                            })?
-                    } else if message.event.grant > Amount::ZERO {
-                        // Nothing to do except maybe refund the grant.
-                        let Some(refund_grant_to) = message.event.refund_grant_to else {
-                            // See OperationContext::refund_grant_to()
-                            return Err(ChainError::InternalError(
+                            })?;
+                        if grant > Amount::ZERO {
+                            if let Some(refund_grant_to) = posted_message.refund_grant_to {
+                                let outcome = self
+                                    .execution_state
+                                    .send_refund(context, grant, refund_grant_to)
+                                    .await
+                                    .map_err(|err| {
+                                        ChainError::ExecutionError(err, chain_execution_context)
+                                    })?;
+                                outcomes.push(outcome);
+                            }
+                        }
+                        (outcomes, oracle_responses)
+                    }
+                    MessageAction::Reject => {
+                        // If rejecting a message fails, the entire block proposal should be
+                        // scrapped.
+                        let chain_execution_context = ChainExecutionContext::Block;
+                        ensure!(
+                            !posted_message.is_protected() || self.is_closed(),
+                            ChainError::CannotRejectMessage {
+                                chain_id,
+                                origin: Box::new(incoming_bundle.origin.clone()),
+                                posted_message: posted_message.clone(),
+                            }
+                        );
+                        let outcomes = if posted_message.is_tracked() {
+                            // Bounce the message.
+                            self.execution_state
+                                .bounce_message(
+                                    context,
+                                    posted_message.grant,
+                                    posted_message.refund_grant_to,
+                                    posted_message.message.clone(),
+                                )
+                                .await
+                                .map_err(|err| {
+                                    ChainError::ExecutionError(err, chain_execution_context)
+                                })?
+                        } else if posted_message.grant > Amount::ZERO {
+                            // Nothing to do except maybe refund the grant.
+                            let Some(refund_grant_to) = posted_message.refund_grant_to else {
+                                // See OperationContext::refund_grant_to()
+                                return Err(ChainError::InternalError(
                                 "Messages with grants should have a non-empty `refund_grant_to`"
                                     .into(),
                             ));
+                            };
+                            // Refund grant.
+                            let outcome = self
+                                .execution_state
+                                .send_refund(context, posted_message.grant, refund_grant_to)
+                                .await
+                                .map_err(|err| {
+                                    ChainError::ExecutionError(err, chain_execution_context)
+                                })?;
+                            vec![outcome]
+                        } else {
+                            Vec::new()
                         };
-                        // Refund grant.
-                        let outcome = self
-                            .execution_state
-                            .send_refund(context, message.event.grant, refund_grant_to)
-                            .await
+                        (outcomes, Vec::new())
+                    }
+                };
+                txn_oracle_responses.extend(new_oracle_responses);
+                let (new_messages, new_events) = self
+                    .process_execution_outcomes(context.height, outcomes)
+                    .await?;
+                if let MessageAction::Accept = incoming_bundle.action {
+                    for message_out in &new_messages {
+                        resource_controller
+                            .with_state(&mut self.execution_state)
+                            .await?
+                            .track_message(&message_out.message)
                             .map_err(|err| {
                                 ChainError::ExecutionError(err, chain_execution_context)
                             })?;
-                        vec![outcome]
-                    } else {
-                        Vec::new()
-                    };
-                    (outcomes, Vec::new())
+                    }
                 }
-            };
-            new_oracle_responses.push(oracle_responses);
-            let (messages_out, new_events) = self
-                .process_execution_outcomes(context.height, outcomes)
-                .await?;
-            if let MessageAction::Accept = message.action {
-                for message_out in &messages_out {
-                    resource_controller
-                        .with_state(&mut self.execution_state)
-                        .await?
-                        .track_message(&message_out.message)
-                        .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-                }
+                next_message_index +=
+                    u32::try_from(new_messages.len()).map_err(|_| ArithmeticError::Overflow)?;
+                txn_messages.extend(new_messages);
+                txn_events.extend(new_events);
             }
-            next_message_index +=
-                u32::try_from(messages_out.len()).map_err(|_| ArithmeticError::Overflow)?;
-            messages.push(messages_out);
-            events.push(new_events);
+            oracle_responses.push(txn_oracle_responses);
+            messages.push(txn_messages);
+            events.push(txn_events);
         }
         // Second, execute the operations in the block and remember the recipients to notify.
-        for (index, operation) in block.operations.iter().enumerate() {
+        for (index, operation) in (0..).zip(&block.operations) {
             #[cfg(with_metrics)]
             let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
-            let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::Operation(index);
             let context = OperationContext {
                 chain_id,
@@ -947,13 +909,13 @@ where
                 authenticated_caller_id: None,
                 next_message_index,
             };
-            let (outcomes, oracle_responses) = self
+            let (outcomes, txn_oracle_responses) = self
                 .execution_state
                 .execute_operation(
                     context,
                     local_time,
                     operation.clone(),
-                    match &mut oracle_responses {
+                    match &mut replaying_oracle_responses {
                         Some(responses) => Some(
                             responses
                                 .next()
@@ -965,7 +927,7 @@ where
                 )
                 .await
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-            new_oracle_responses.push(oracle_responses);
+            oracle_responses.push(txn_oracle_responses);
             let (messages_out, new_events) = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
@@ -1038,7 +1000,7 @@ where
         Ok(BlockExecutionOutcome {
             messages,
             state_hash,
-            oracle_responses: new_oracle_responses,
+            oracle_responses,
             events,
         })
     }

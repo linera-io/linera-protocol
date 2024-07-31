@@ -95,7 +95,7 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// Recorded responses to oracle queries.
     recorded_oracle_responses: Vec<OracleResponse>,
     /// Oracle responses that are being replayed.
-    replaying_oracle_responses: Option<vec::IntoIter<OracleResponse>>,
+    replaying_oracle_responses: Option<Arc<Mutex<vec::IntoIter<OracleResponse>>>>,
 
     /// Track application states based on views.
     view_user_states: BTreeMap<UserApplicationId, ViewUserState>,
@@ -309,7 +309,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         execution_state_sender: ExecutionStateSender,
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
-        replaying_oracle_responses: Option<vec::IntoIter<OracleResponse>>,
+        replaying_oracle_responses: Option<Arc<Mutex<vec::IntoIter<OracleResponse>>>>,
     ) -> Self {
         Self {
             chain_id,
@@ -946,7 +946,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let response = if let Some(responses) = &mut self.replaying_oracle_responses {
-            match responses.next() {
+            match responses.lock().expect("Mutex is poisoned").next() {
                 Some(OracleResponse::Service(bytes)) => bytes,
                 Some(_) => return Err(ExecutionError::OracleResponseMismatch),
                 None => return Err(ExecutionError::MissingOracleResponse),
@@ -972,7 +972,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let bytes = if let Some(responses) = &mut self.replaying_oracle_responses {
-            match responses.next() {
+            match responses.lock().expect("Mutex is poisoned").next() {
                 Some(OracleResponse::Post(bytes)) => bytes,
                 Some(_) => return Err(ExecutionError::OracleResponseMismatch),
                 None => return Err(ExecutionError::MissingOracleResponse),
@@ -995,7 +995,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
 
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
         if let Some(responses) = &mut self.replaying_oracle_responses {
-            match responses.next() {
+            match responses.lock().expect("Mutex is poisoned").next() {
                 Some(OracleResponse::Assert) => {}
                 Some(_) => return Err(ExecutionError::OracleResponseMismatch),
                 None => return Err(ExecutionError::MissingOracleResponse),
@@ -1015,7 +1015,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
 
     fn read_blob_content(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError> {
         if let Some(responses) = &mut self.replaying_oracle_responses {
-            match responses.next() {
+            match responses.lock().expect("Mutex is poisoned").next() {
                 Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == *blob_id => {}
                 Some(_) => return Err(ExecutionError::OracleResponseMismatch),
                 None => return Err(ExecutionError::MissingOracleResponse),
@@ -1051,7 +1051,7 @@ impl ContractSyncRuntime {
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: UserAction,
-        oracle_responses: Option<Vec<OracleResponse>>,
+        replaying_oracle_responses: Option<Arc<Mutex<vec::IntoIter<OracleResponse>>>>,
     ) -> Result<
         (
             Vec<ExecutionOutcome>,
@@ -1067,7 +1067,6 @@ impl ContractSyncRuntime {
         let signer = action.signer();
         let height = action.height();
         let next_message_index = action.next_message_index();
-        let replaying_oracle_responses = oracle_responses.map(Vec::into_iter);
         let mut runtime = SyncRuntime(Some(ContractSyncRuntimeHandle::from(
             SyncRuntimeInternal::new(
                 chain_id,

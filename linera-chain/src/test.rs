@@ -15,8 +15,8 @@ use linera_execution::{
 };
 
 use crate::data_types::{
-    Block, BlockProposal, Certificate, Event, HashedCertificateValue, IncomingBundle,
-    MessageAction, Origin, SignatureAggregator, Vote,
+    Block, BlockProposal, Certificate, HashedCertificateValue, IncomingBundle, MessageAction,
+    MessageBundle, Origin, PostedMessage, SignatureAggregator, Vote,
 };
 
 /// Creates a new child of the given block, with the same timestamp.
@@ -146,18 +146,22 @@ pub trait MessageTestExt: Sized {
 
 impl<T: Into<Message>> MessageTestExt for T {
     fn to_simple_incoming(self, sender: ChainId, height: BlockHeight) -> IncomingBundle {
+        let posted_message = PostedMessage {
+            authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
+            kind: MessageKind::Protected,
+            index: 0,
+            message: self.into(),
+        };
         IncomingBundle {
             origin: Origin::chain(sender),
-            event: Event {
+            bundle: MessageBundle {
                 certificate_hash: CryptoHash::test_hash("certificate"),
                 height,
-                index: 0,
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
+                transaction_index: 0,
                 timestamp: Timestamp::from(0),
-                message: self.into(),
+                messages: vec![posted_message],
             },
             action: MessageAction::Accept,
         }

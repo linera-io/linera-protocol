@@ -22,8 +22,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, ChannelFullName, Event, HashedCertificateValue, IncomingBundle,
-        MessageAction, Origin, OutgoingMessage,
+        BlockExecutionOutcome, ChannelFullName, HashedCertificateValue, IncomingBundle,
+        MessageAction, MessageBundle, Origin, OutgoingMessage, PostedMessage,
     },
     test::{make_child_block, make_first_block, BlockTestExt},
 };
@@ -170,16 +170,19 @@ where
     // Produce one more block to broadcast the bytecode ID.
     let broadcast_message = IncomingBundle {
         origin: Origin::chain(publisher_chain.into()),
-        event: Event {
+        bundle: MessageBundle {
             certificate_hash: publish_certificate.hash(),
             height: publish_block_height,
-            index: 0,
-            authenticated_signer: None,
-            grant: Amount::ZERO,
-            refund_grant_to: None,
-            kind: MessageKind::Protected,
             timestamp: Timestamp::from(1),
-            message: Message::System(publish_message),
+            transaction_index: 0,
+            messages: vec![PostedMessage {
+                authenticated_signer: None,
+                grant: Amount::ZERO,
+                refund_grant_to: None,
+                kind: MessageKind::Protected,
+                index: 0,
+                message: Message::System(publish_message),
+            }],
         },
         action: MessageAction::Accept,
     };
@@ -320,16 +323,19 @@ where
     // Accept subscription
     let accept_message = IncomingBundle {
         origin: Origin::chain(creator_chain.into()),
-        event: Event {
+        bundle: MessageBundle {
             certificate_hash: subscribe_certificate.hash(),
             height: subscribe_block_height,
-            index: 0,
-            authenticated_signer: None,
-            grant: Amount::ZERO,
-            refund_grant_to: None,
-            kind: MessageKind::Protected,
             timestamp: Timestamp::from(2),
-            message: subscribe_message.into(),
+            transaction_index: 0,
+            messages: vec![PostedMessage {
+                authenticated_signer: None,
+                grant: Amount::ZERO,
+                refund_grant_to: None,
+                kind: MessageKind::Protected,
+                index: 0,
+                message: subscribe_message.into(),
+            }],
         },
         action: MessageAction::Accept,
     };
@@ -404,16 +410,19 @@ where
         .with_operation(create_operation)
         .with_incoming_bundle(IncomingBundle {
             origin: Origin::channel(publisher_chain.into(), publish_admin_channel),
-            event: Event {
+            bundle: MessageBundle {
                 certificate_hash: broadcast_certificate.hash(),
                 height: broadcast_block_height,
-                index: 0,
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Simple,
                 timestamp: Timestamp::from(1),
-                message: Message::System(broadcast_message),
+                transaction_index: 0,
+                messages: vec![PostedMessage {
+                    authenticated_signer: None,
+                    grant: Amount::ZERO,
+                    refund_grant_to: None,
+                    kind: MessageKind::Simple,
+                    index: 0,
+                    message: Message::System(broadcast_message),
+                }],
             },
             action: MessageAction::Accept,
         });

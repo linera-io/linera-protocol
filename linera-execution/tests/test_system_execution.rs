@@ -3,6 +3,8 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
+use std::sync::{Arc, Mutex};
+
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, Timestamp},
@@ -92,7 +94,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
             Timestamp::from(0),
             Message::System(message),
             None,
-            Some(Vec::new()),
+            Some(Arc::new(Mutex::new(Vec::new().into_iter()))),
             &mut controller,
         )
         .await

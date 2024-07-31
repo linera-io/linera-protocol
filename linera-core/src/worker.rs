@@ -10,6 +10,8 @@ use std::{
     time::Duration,
 };
 
+#[cfg(with_testing)]
+use linera_base::{crypto::PublicKey, identifiers::BytecodeId};
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
     data_types::{ArithmeticError, Blob, BlockHeight, Round},
@@ -41,14 +43,6 @@ use tracing::{error, instrument, trace, warn, Instrument as _};
 use {
     linera_base::prometheus_util,
     prometheus::{HistogramVec, IntCounterVec},
-};
-#[cfg(with_testing)]
-use {
-    linera_base::{
-        crypto::PublicKey,
-        identifiers::{BytecodeId, Destination, MessageId},
-    },
-    linera_chain::data_types::{ChannelFullName, IncomingBundle, Medium, MessageAction},
 };
 
 use crate::{
@@ -606,7 +600,7 @@ where
         &self,
         origin: Origin,
         recipient: ChainId,
-        bundles: Vec<MessageBundle>,
+        bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         self.query_chain_worker(recipient, move |callback| {
             ChainWorkerRequest::ProcessCrossChainUpdate {
@@ -645,63 +639,6 @@ where
             ChainWorkerRequest::ReadCertificate { height, callback }
         })
         .await
-    }
-
-    /// Returns an [`IncomingBundle`] that's awaiting to be received by the chain specified by
-    /// `chain_id`.
-    #[tracing::instrument(level = "trace", skip(self, chain_id, message_id))]
-    #[cfg(with_testing)]
-    pub async fn find_incoming_bundle(
-        &self,
-        chain_id: ChainId,
-        message_id: MessageId,
-    ) -> Result<Option<IncomingBundle>, WorkerError> {
-        let sender = message_id.chain_id;
-        let Some(certificate) = self.read_certificate(sender, message_id.height).await? else {
-            return Ok(None);
-        };
-        let Some(executed_block) = certificate.value().executed_block() else {
-            return Ok(None);
-        };
-        let Some(outgoing_message) = executed_block.message_by_id(&message_id).cloned() else {
-            return Ok(None);
-        };
-
-        let medium = match outgoing_message.destination {
-            Destination::Recipient(_) => Medium::Direct,
-            Destination::Subscribers(name) => {
-                let application_id = outgoing_message.message.application_id();
-                Medium::Channel(ChannelFullName {
-                    application_id,
-                    name,
-                })
-            }
-        };
-        let origin = Origin { sender, medium };
-
-        let Some(event) = self
-            .query_chain_worker(chain_id, {
-                let origin = origin.clone();
-                move |callback| ChainWorkerRequest::FindEventInInbox {
-                    inbox_id: origin,
-                    certificate_hash: certificate.hash(),
-                    height: message_id.height,
-                    index: message_id.index,
-                    callback,
-                }
-            })
-            .await?
-        else {
-            return Ok(None);
-        };
-
-        assert_eq!(event.message, outgoing_message.message);
-
-        Ok(Some(IncomingBundle {
-            origin,
-            event,
-            action: MessageAction::Accept,
-        }))
     }
 
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
