@@ -6,7 +6,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use async_lock::Mutex;
+use std::sync::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -81,20 +81,20 @@ where
 
     fn rollback(&mut self) {
         self.inner.rollback();
-        *self.hash.get_mut() = self.stored_hash;
+        *self.hash.get_mut().unwrap() = self.stored_hash;
     }
 
     async fn has_pending_changes(&self) -> bool {
         if self.inner.has_pending_changes().await {
             return true;
         }
-        let hash = self.hash.lock().await;
+        let hash = self.hash.lock().unwrap();
         self.stored_hash != *hash
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let delete_view = self.inner.flush(batch)?;
-        let hash = self.hash.get_mut();
+        let hash = self.hash.get_mut().unwrap();
         if delete_view {
             let mut key_prefix = self.inner.context().base_key();
             key_prefix.pop();
@@ -116,7 +116,7 @@ where
 
     fn clear(&mut self) {
         self.inner.clear();
-        *self.hash.get_mut() = None;
+        *self.hash.get_mut().unwrap() = None;
     }
 }
 
@@ -132,7 +132,7 @@ where
         Ok(WrappedHashableContainerView {
             _phantom: PhantomData,
             stored_hash: self.stored_hash,
-            hash: Mutex::new(*self.hash.get_mut()),
+            hash: Mutex::new(*self.hash.get_mut().unwrap()),
             inner: self.inner.clone_unchecked()?,
         })
     }
@@ -150,12 +150,12 @@ where
     type Hasher = W::Hasher;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let hash = *self.hash.get_mut();
+        let hash = *self.hash.get_mut().unwrap();
         match hash {
             Some(hash) => Ok(hash),
             None => {
                 let new_hash = self.inner.hash_mut().await?;
-                let hash = self.hash.get_mut();
+                let hash = self.hash.get_mut().unwrap();
                 *hash = Some(new_hash);
                 Ok(new_hash)
             }
@@ -163,11 +163,12 @@ where
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.lock().await;
-        match *hash {
+        let hash = *self.hash.lock().unwrap();
+        match hash {
             Some(hash) => Ok(hash),
             None => {
                 let new_hash = self.inner.hash().await?;
+                let mut hash = self.hash.lock().unwrap();
                 *hash = Some(new_hash);
                 Ok(new_hash)
             }
@@ -185,7 +186,7 @@ impl<C, W, O> Deref for WrappedHashableContainerView<C, W, O> {
 
 impl<C, W, O> DerefMut for WrappedHashableContainerView<C, W, O> {
     fn deref_mut(&mut self) -> &mut W {
-        *self.hash.get_mut() = None;
+        *self.hash.get_mut().unwrap() = None;
         &mut self.inner
     }
 }
