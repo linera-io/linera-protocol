@@ -5,7 +5,10 @@
 
 #![allow(clippy::items_after_test_module)]
 
-use std::{sync::Arc, vec};
+use std::{
+    sync::{Arc, Mutex},
+    vec,
+};
 
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
@@ -206,7 +209,7 @@ async fn test_fee_consumption(
             } else {
                 None
             },
-            Some(Vec::new()),
+            Some(Arc::new(Mutex::new(Vec::new().into_iter()))),
             &mut controller,
         )
         .await

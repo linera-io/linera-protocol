@@ -12,8 +12,8 @@ use linera_base::{
     ownership::TimeoutConfig,
 };
 use linera_chain::data_types::{
-    Block, Certificate, ChannelFullName, Event, HashedCertificateValue, IncomingBundle, LiteVote,
-    Medium, MessageAction, Origin, SignatureAggregator,
+    Block, Certificate, ChannelFullName, HashedCertificateValue, IncomingBundle, LiteVote, Medium,
+    MessageAction, Origin, SignatureAggregator,
 };
 use linera_execution::{
     system::{Recipient, SystemChannel, SystemOperation, UserData},
@@ -195,32 +195,13 @@ impl BlockBuilder {
             sender: certificate.value().chain_id(),
             medium: medium.clone(),
         };
-        let executed_block = certificate
-            .value()
-            .executed_block()
-            .expect("Failed to obtain executed block from certificate");
         let bundles = certificate
             .message_bundles_for(medium, self.block.chain_id)
             .into_iter()
-            .flat_map(|bundle| {
-                bundle
-                    .messages
-                    .into_iter()
-                    .map(|(index, message)| IncomingBundle {
-                        origin: origin.clone(),
-                        event: Event {
-                            certificate_hash: certificate.hash(),
-                            height: certificate.value().height(),
-                            index,
-                            authenticated_signer: message.authenticated_signer,
-                            grant: message.grant,
-                            refund_grant_to: message.refund_grant_to,
-                            kind: message.kind,
-                            timestamp: executed_block.block.timestamp,
-                            message: message.message,
-                        },
-                        action,
-                    })
+            .map(|(_epoch, bundle)| IncomingBundle {
+                origin: origin.clone(),
+                bundle,
+                action,
             });
         self.with_incoming_bundles(bundles)
     }

@@ -26,8 +26,8 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockExecutionOutcome, BlockProposal, Certificate, ChainAndHeight, ChannelFullName,
-        Event, HashedCertificateValue, IncomingBundle, LiteVote, Medium, MessageAction, Origin,
-        OutgoingMessage, SignatureAggregator,
+        HashedCertificateValue, IncomingBundle, LiteVote, Medium, MessageAction, MessageBundle,
+        Origin, OutgoingMessage, PostedMessage, SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt, VoteTestExt},
     ChainError, ChainExecutionContext,
@@ -261,21 +261,27 @@ where
 
     let mut messages = incoming_bundles
         .iter()
-        .map(|incoming_bundle| {
-            if matches!(incoming_bundle.action, MessageAction::Reject)
-                && matches!(incoming_bundle.event.kind, MessageKind::Tracked)
-            {
-                vec![OutgoingMessage {
-                    authenticated_signer: incoming_bundle.event.authenticated_signer,
-                    destination: Destination::Recipient(incoming_bundle.origin.sender),
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Bouncing,
-                    message: incoming_bundle.event.message.clone(),
-                }]
-            } else {
-                Vec::new()
-            }
+        .flat_map(|incoming_bundle| {
+            incoming_bundle
+                .bundle
+                .messages
+                .iter()
+                .map(|posted_message| {
+                    if matches!(incoming_bundle.action, MessageAction::Reject)
+                        && matches!(posted_message.kind, MessageKind::Tracked)
+                    {
+                        vec![OutgoingMessage {
+                            authenticated_signer: posted_message.authenticated_signer,
+                            destination: Destination::Recipient(incoming_bundle.origin.sender),
+                            grant: Amount::ZERO,
+                            refund_grant_to: None,
+                            kind: MessageKind::Bouncing,
+                            message: posted_message.message.clone(),
+                        }]
+                    } else {
+                        Vec::new()
+                    }
+                })
         })
         .collect::<Vec<_>>();
 
@@ -841,46 +847,55 @@ where
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(5))
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::ZERO,
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::ONE),
+                    transaction_index: 0,
+                    messages: vec![PostedMessage {
+                        authenticated_signer: None,
+                        grant: Amount::ZERO,
+                        refund_grant_to: None,
+                        kind: MessageKind::Tracked,
+                        index: 0,
+                        message: system_credit_message(Amount::ONE),
+                    }],
                 },
                 action: MessageAction::Accept,
             })
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::ZERO,
-                    index: 1,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(2)),
+                    transaction_index: 1,
+                    messages: vec![PostedMessage {
+                        authenticated_signer: None,
+                        grant: Amount::ZERO,
+                        refund_grant_to: None,
+                        kind: MessageKind::Tracked,
+                        index: 0,
+                        message: system_credit_message(Amount::from_tokens(2)),
+                    }],
                 },
                 action: MessageAction::Accept,
             })
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate1.value.hash(),
                     height: BlockHeight::from(1),
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(2)), // wrong amount
+                    transaction_index: 0,
+                    messages: vec![PostedMessage {
+                        authenticated_signer: None,
+                        grant: Amount::ZERO,
+                        refund_grant_to: None,
+                        kind: MessageKind::Tracked,
+                        index: 0,
+                        message: system_credit_message(Amount::from_tokens(2)), // wrong amount
+                    }],
                 },
                 action: MessageAction::Accept,
             })
@@ -897,16 +912,19 @@ where
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(6))
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::ZERO,
-                    index: 1,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(2)),
+                    transaction_index: 1,
+                    messages: vec![PostedMessage {
+                        authenticated_signer: None,
+                        grant: Amount::ZERO,
+                        refund_grant_to: None,
+                        kind: MessageKind::Tracked,
+                        index: 1,
+                        message: system_credit_message(Amount::from_tokens(2)),
+                    }],
                 },
                 action: MessageAction::Accept,
             })
@@ -923,46 +941,55 @@ where
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(6))
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate1.value.hash(),
                     height: BlockHeight::from(1),
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(3)),
+                    transaction_index: 0,
+                    messages: vec![PostedMessage {
+                        authenticated_signer: None,
+                        grant: Amount::ZERO,
+                        refund_grant_to: None,
+                        kind: MessageKind::Tracked,
+                        index: 0,
+                        message: system_credit_message(Amount::from_tokens(3)),
+                    }],
                 },
                 action: MessageAction::Accept,
             })
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::ZERO,
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::ONE),
+                    transaction_index: 0,
+                    messages: vec![PostedMessage {
+                        authenticated_signer: None,
+                        grant: Amount::ZERO,
+                        refund_grant_to: None,
+                        kind: MessageKind::Tracked,
+                        index: 0,
+                        message: system_credit_message(Amount::ONE),
+                    }],
                 },
                 action: MessageAction::Accept,
             })
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::ZERO,
-                    index: 1,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(2)),
+                    transaction_index: 1,
+                    messages: vec![PostedMessage {
+                        message: system_credit_message(Amount::from_tokens(2)),
+                        authenticated_signer: None,
+                        grant: Amount::ZERO,
+                        refund_grant_to: None,
+                        index: 1,
+                        kind: MessageKind::Tracked,
+                    }],
                 },
                 action: MessageAction::Accept,
             })
@@ -979,16 +1006,19 @@ where
             .with_simple_transfer(ChainId::root(3), Amount::ONE)
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::ZERO,
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::ONE),
+                    transaction_index: 0,
+                    messages: vec![PostedMessage {
+                        message: system_credit_message(Amount::ONE),
+                        authenticated_signer: None,
+                        grant: Amount::ZERO,
+                        refund_grant_to: None,
+                        index: 0,
+                        kind: MessageKind::Tracked,
+                    }],
                 },
                 action: MessageAction::Accept,
             })
@@ -1026,31 +1056,37 @@ where
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(3))
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::from(0),
-                    index: 1,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(2)),
+                    transaction_index: 1,
+                    messages: vec![PostedMessage {
+                        message: system_credit_message(Amount::from_tokens(2)),
+                        authenticated_signer: None,
+                        grant: Amount::ZERO,
+                        refund_grant_to: None,
+                        index: 1,
+                        kind: MessageKind::Tracked,
+                    }],
                 },
                 action: MessageAction::Accept,
             })
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate1.value.hash(),
                     height: BlockHeight::from(1),
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(3)),
+                    transaction_index: 0,
+                    messages: vec![PostedMessage {
+                        message: system_credit_message(Amount::from_tokens(3)),
+                        authenticated_signer: None,
+                        grant: Amount::ZERO,
+                        refund_grant_to: None,
+                        index: 0,
+                        kind: MessageKind::Tracked,
+                    }],
                 },
                 action: MessageAction::Accept,
             })
@@ -1271,23 +1307,26 @@ where
     };
     let open_chain_message = IncomingBundle {
         origin: Origin::chain(ChainId::root(3)),
-        event: Event {
+        bundle: MessageBundle {
             certificate_hash: CryptoHash::test_hash("certificate"),
             height: BlockHeight::ZERO,
-            index: 0,
-            authenticated_signer: None,
-            grant: Amount::ZERO,
-            refund_grant_to: None,
-            kind: MessageKind::Protected,
             timestamp: Timestamp::from(0),
-            message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
-                ownership,
-                admin_id,
-                epoch,
-                committees,
-                balance,
-                application_permissions: Default::default(),
-            })),
+            transaction_index: 0,
+            messages: vec![PostedMessage {
+                authenticated_signer: None,
+                grant: Amount::ZERO,
+                refund_grant_to: None,
+                kind: MessageKind::Protected,
+                index: 0,
+                message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
+                    ownership,
+                    admin_id,
+                    epoch,
+                    committees,
+                    balance,
+                    application_permissions: Default::default(),
+                })),
+            }],
         },
         action: MessageAction::Accept,
     };
@@ -1438,16 +1477,19 @@ where
         Amount::from_tokens(1000),
         vec![IncomingBundle {
             origin: Origin::chain(ChainId::root(3)),
-            event: Event {
+            bundle: MessageBundle {
                 certificate_hash: CryptoHash::test_hash("certificate"),
                 height: BlockHeight::ZERO,
-                index: 0,
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Tracked,
                 timestamp: Timestamp::from(0),
-                message: system_credit_message(Amount::from_tokens(995)),
+                transaction_index: 0,
+                messages: vec![PostedMessage {
+                    authenticated_signer: None,
+                    grant: Amount::ZERO,
+                    refund_grant_to: None,
+                    kind: MessageKind::Tracked,
+                    index: 0,
+                    message: system_credit_message(Amount::from_tokens(995)),
+                }],
             },
             action: MessageAction::Accept,
         }],
@@ -1473,27 +1515,30 @@ where
         .await?
         .expect("Missing inbox for `ChainId::root(3)` in `ChainId::root(1)`");
     assert_eq!(BlockHeight::ZERO, inbox.next_block_height_to_receive()?);
-    assert_eq!(inbox.added_events.count(), 0);
+    assert_eq!(inbox.added_bundles.count(), 0);
     assert_matches!(
         inbox
-            .removed_events
+            .removed_bundles
             .front()
             .await?
             .unwrap(),
-        Event {
+        MessageBundle {
             certificate_hash,
             height,
-            index: 0,
-            authenticated_signer: None,
-            grant: Amount::ZERO,
-            refund_grant_to: None,
-            kind: MessageKind::Tracked,
             timestamp,
-            message: Message::System(SystemMessage::Credit { amount, .. }),
+            transaction_index: 0,
+            messages,
         } if certificate_hash == CryptoHash::test_hash("certificate")
             && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
-            && amount == Amount::from_tokens(995),
+            && matches!(messages[..], [PostedMessage {
+                authenticated_signer: None,
+                grant: Amount::ZERO,
+                refund_grant_to: None,
+                kind: MessageKind::Tracked,
+                index: 0,
+                message: Message::System(SystemMessage::Credit { amount, .. }),
+            }] if amount == Amount::from_tokens(995)),
         "Unexpected event",
     );
     assert_eq!(chain.confirmed_log.count(), 1);
@@ -1615,21 +1660,24 @@ where
         .expect("Missing inbox for `ChainId::root(1)` in `ChainId::root(1)`");
     assert_eq!(BlockHeight::from(1), inbox.next_block_height_to_receive()?);
     assert_matches!(
-        inbox.added_events.front().await?.unwrap(),
-        Event {
+        inbox.added_bundles.front().await?.unwrap(),
+        MessageBundle {
             certificate_hash,
             height,
-            index: 0,
+            timestamp,
+            transaction_index: 0,
+            messages,
+        } if certificate_hash == certificate.hash()
+        && height == BlockHeight::ZERO
+        && timestamp == Timestamp::from(0)
+        && matches!(messages[..], [PostedMessage {
             authenticated_signer: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
             kind: MessageKind::Tracked,
-            timestamp,
+            index: 0,
             message: Message::System(SystemMessage::Credit { amount, .. })
-        } if certificate_hash == certificate.hash()
-            && height == BlockHeight::ZERO
-            && timestamp == Timestamp::from(0)
-            && amount == Amount::ONE,
+        }] if amount == Amount::ONE),
         "Unexpected event",
     );
     assert_eq!(
@@ -1688,24 +1736,27 @@ where
     assert_eq!(BlockHeight::from(1), inbox.next_block_height_to_receive()?);
     assert_matches!(
         inbox
-            .added_events
+            .added_bundles
             .front()
             .await?
             .unwrap(),
-        Event {
+        MessageBundle {
             certificate_hash,
             height,
-            index: 0,
+            timestamp,
+            transaction_index: 0,
+            messages,
+        } if certificate_hash == certificate.hash()
+        && height == BlockHeight::ZERO
+        && timestamp == Timestamp::from(0)
+        && matches!(messages[..], [PostedMessage {
             authenticated_signer: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
             kind: MessageKind::Tracked,
-            timestamp,
+            index: 0,
             message: Message::System(SystemMessage::Credit { amount, .. })
-        } if certificate_hash == certificate.hash()
-            && height == BlockHeight::ZERO
-            && timestamp == Timestamp::from(0)
-            && amount == Amount::from_tokens(10),
+        }] if amount == Amount::from_tokens(10)),
         "Unexpected event",
     );
     assert_eq!(chain.confirmed_log.count(), 0);
@@ -1891,16 +1942,19 @@ where
         Amount::ONE,
         vec![IncomingBundle {
             origin: Origin::chain(ChainId::root(1)),
-            event: Event {
+            bundle: MessageBundle {
                 certificate_hash: certificate.hash(),
                 height: BlockHeight::ZERO,
-                index: 0,
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Tracked,
                 timestamp: Timestamp::from(0),
-                message: system_credit_message(Amount::from_tokens(5)),
+                transaction_index: 0,
+                messages: vec![PostedMessage {
+                    authenticated_signer: None,
+                    grant: Amount::ZERO,
+                    refund_grant_to: None,
+                    kind: MessageKind::Tracked,
+                    index: 0,
+                    message: system_credit_message(Amount::from_tokens(5)),
+                }],
             },
             action: MessageAction::Accept,
         }],
@@ -2078,20 +2132,23 @@ where
         Amount::ONE,
         vec![IncomingBundle {
             origin: Origin::chain(ChainId::root(1)),
-            event: Event {
+            bundle: MessageBundle {
                 certificate_hash: certificate00.hash(),
                 height: BlockHeight::from(0),
-                index: 0,
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Tracked,
                 timestamp: Timestamp::from(0),
-                message: Message::System(SystemMessage::Credit {
-                    source: None,
-                    target: Some(sender),
-                    amount: Amount::from_tokens(5),
-                }),
+                transaction_index: 0,
+                messages: vec![PostedMessage {
+                    authenticated_signer: None,
+                    grant: Amount::ZERO,
+                    refund_grant_to: None,
+                    kind: MessageKind::Tracked,
+                    index: 0,
+                    message: Message::System(SystemMessage::Credit {
+                        source: None,
+                        target: Some(sender),
+                        amount: Amount::from_tokens(5),
+                    }),
+                }],
             },
             action: MessageAction::Accept,
         }],
@@ -2162,39 +2219,45 @@ where
         vec![
             IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate1.hash(),
                     height: BlockHeight::from(2),
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        source: Some(sender),
-                        target: Some(recipient),
-                        amount: Amount::from_tokens(3),
-                    }),
+                    transaction_index: 0,
+                    messages: vec![PostedMessage {
+                        authenticated_signer: None,
+                        grant: Amount::ZERO,
+                        refund_grant_to: None,
+                        kind: MessageKind::Tracked,
+                        index: 0,
+                        message: Message::System(SystemMessage::Credit {
+                            source: Some(sender),
+                            target: Some(recipient),
+                            amount: Amount::from_tokens(3),
+                        }),
+                    }],
                 },
                 action: MessageAction::Reject,
             },
             IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate2.hash(),
                     height: BlockHeight::from(3),
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        source: Some(sender),
-                        target: Some(recipient),
-                        amount: Amount::from_tokens(2),
-                    }),
+                    transaction_index: 0,
+                    messages: vec![PostedMessage {
+                        authenticated_signer: None,
+                        grant: Amount::ZERO,
+                        refund_grant_to: None,
+                        kind: MessageKind::Tracked,
+                        index: 0,
+                        message: Message::System(SystemMessage::Credit {
+                            source: Some(sender),
+                            target: Some(recipient),
+                            amount: Amount::from_tokens(2),
+                        }),
+                    }],
                 },
                 action: MessageAction::Accept,
             },
@@ -2226,20 +2289,23 @@ where
         Amount::from_tokens(3),
         vec![IncomingBundle {
             origin: Origin::chain(ChainId::root(2)),
-            event: Event {
+            bundle: MessageBundle {
                 certificate_hash: certificate.hash(),
                 height: BlockHeight::from(0),
-                index: 0,
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Bouncing,
                 timestamp: Timestamp::from(0),
-                message: Message::System(SystemMessage::Credit {
-                    source: Some(sender),
-                    target: Some(recipient),
-                    amount: Amount::from_tokens(3),
-                }),
+                transaction_index: 0,
+                messages: vec![PostedMessage {
+                    authenticated_signer: None,
+                    grant: Amount::ZERO,
+                    refund_grant_to: None,
+                    kind: MessageKind::Bouncing,
+                    index: 0,
+                    message: Message::System(SystemMessage::Credit {
+                        source: Some(sender),
+                        target: Some(recipient),
+                        amount: Amount::from_tokens(3),
+                    }),
+                }],
             },
             action: MessageAction::Accept,
         }],
@@ -2451,19 +2517,22 @@ where
                     .with_epoch(1)
                     .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(admin_id),
-                        event: Event {
+                        bundle: MessageBundle {
                             certificate_hash: certificate0.value.hash(),
                             height: BlockHeight::ZERO,
-                            index: 1,
-                            authenticated_signer: None,
-                            grant: Amount::ZERO,
-                            refund_grant_to: None,
-                            kind: MessageKind::Protected,
                             timestamp: Timestamp::from(0),
-                            message: Message::System(SystemMessage::Subscribe {
-                                id: user_id,
-                                subscription: admin_channel_subscription.clone(),
-                            }),
+                            transaction_index: 0,
+                            messages: vec![PostedMessage {
+                                authenticated_signer: None,
+                                grant: Amount::ZERO,
+                                refund_grant_to: None,
+                                kind: MessageKind::Protected,
+                                index: 1,
+                                message: Message::System(SystemMessage::Subscribe {
+                                    id: user_id,
+                                    subscription: admin_channel_subscription.clone(),
+                                }),
+                            }],
                         },
                         action: MessageAction::Accept,
                     }),
@@ -2515,42 +2584,34 @@ where
         );
         user_chain.validate_incoming_bundles().await?;
         matches!(
-            user_chain
+            &user_chain
                 .inboxes
                 .try_load_entry(&Origin::chain(admin_id))
                 .await?
                 .expect("Missing inbox for admin chain in user chain")
-                .added_events
+                .added_bundles
                 .read_front(10)
                 .await?[..],
-            [
-                Event {
-                    message: Message::System(SystemMessage::OpenChain(_)),
-                    ..
-                },
-                Event {
-                    message: Message::System(SystemMessage::Credit { .. }),
-                    ..
-                },
-                Event {
-                    message: Message::System(SystemMessage::Notify { .. }),
-                    ..
-                }
-            ]
+            [event1, event2, event3]
+            if matches!(event1.messages[..], [PostedMessage {
+                 message: Message::System(SystemMessage::OpenChain(_)), ..
+            }]) && matches!(event2.messages[..], [PostedMessage {
+                message: Message::System(SystemMessage::Credit { .. }), ..
+            }]) && matches!(event3.messages[..], [PostedMessage {
+                message: Message::System(SystemMessage::Notify { .. }), ..
+            }])
         );
         let channel_inbox = user_chain
             .inboxes
             .try_load_entry(&admin_channel_origin)
             .await?
             .expect("Missing inbox for admin channel in user chain");
-        matches!(
-            channel_inbox.added_events.read_front(10).await?[..],
-            [Event {
-                message: Message::System(SystemMessage::SetCommittees { .. }),
-                ..
-            }]
+        matches!(&channel_inbox.added_bundles.read_front(10).await?[..], [event]
+            if matches!(event.messages[..], [PostedMessage {
+                message: Message::System(SystemMessage::SetCommittees { .. }), ..
+            }])
         );
-        assert_eq!(channel_inbox.removed_events.count(), 0);
+        assert_eq!(channel_inbox.removed_bundles.count(), 0);
         assert_eq!(user_chain.execution_state.system.committees.get().len(), 1);
     }
     // Make the child receive the pending messages.
@@ -2582,71 +2643,85 @@ where
                 make_first_block(user_id)
                     .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(admin_id),
-                        event: Event {
+                        bundle: MessageBundle {
                             certificate_hash: certificate0.value.hash(),
                             height: BlockHeight::from(0),
-                            index: 0,
-                            authenticated_signer: None,
-                            grant: Amount::ZERO,
-                            refund_grant_to: None,
-                            kind: MessageKind::Protected,
                             timestamp: Timestamp::from(0),
-                            message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
-                                ownership: ChainOwnership::single(key_pair.public()),
-                                epoch: Epoch::from(0),
-                                committees: committees.clone(),
-                                admin_id,
-                                balance: Amount::ZERO,
-                                application_permissions: Default::default(),
-                            })),
+                            transaction_index: 0,
+                            messages: vec![PostedMessage {
+                                authenticated_signer: None,
+                                grant: Amount::ZERO,
+                                refund_grant_to: None,
+                                kind: MessageKind::Protected,
+                                index: 0,
+                                message: Message::System(SystemMessage::OpenChain(
+                                    OpenChainConfig {
+                                        ownership: ChainOwnership::single(key_pair.public()),
+                                        epoch: Epoch::from(0),
+                                        committees: committees.clone(),
+                                        admin_id,
+                                        balance: Amount::ZERO,
+                                        application_permissions: Default::default(),
+                                    },
+                                )),
+                            }],
                         },
                         action: MessageAction::Accept,
                     })
                     .with_incoming_bundle(IncomingBundle {
                         origin: admin_channel_origin.clone(),
-                        event: Event {
+                        bundle: MessageBundle {
                             certificate_hash: certificate1.value.hash(),
                             height: BlockHeight::from(1),
-                            index: 0,
-                            authenticated_signer: None,
-                            grant: Amount::ZERO,
-                            refund_grant_to: None,
-                            kind: MessageKind::Protected,
                             timestamp: Timestamp::from(0),
-                            message: Message::System(SystemMessage::SetCommittees {
-                                epoch: Epoch::from(1),
-                                committees: committees2.clone(),
-                            }),
+                            transaction_index: 0,
+                            messages: vec![PostedMessage {
+                                authenticated_signer: None,
+                                grant: Amount::ZERO,
+                                refund_grant_to: None,
+                                kind: MessageKind::Protected,
+                                index: 0,
+                                message: Message::System(SystemMessage::SetCommittees {
+                                    epoch: Epoch::from(1),
+                                    committees: committees2.clone(),
+                                }),
+                            }],
                         },
                         action: MessageAction::Accept,
                     })
                     .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(admin_id),
-                        event: Event {
+                        bundle: MessageBundle {
                             certificate_hash: certificate1.value.hash(),
                             height: BlockHeight::from(1),
-                            index: 1,
-                            authenticated_signer: None,
-                            grant: Amount::ZERO,
-                            refund_grant_to: None,
-                            kind: MessageKind::Tracked,
                             timestamp: Timestamp::from(0),
-                            message: system_credit_message(Amount::from_tokens(2)),
+                            transaction_index: 1,
+                            messages: vec![PostedMessage {
+                                authenticated_signer: None,
+                                grant: Amount::ZERO,
+                                refund_grant_to: None,
+                                kind: MessageKind::Tracked,
+                                index: 1,
+                                message: system_credit_message(Amount::from_tokens(2)),
+                            }],
                         },
                         action: MessageAction::Accept,
                     })
                     .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(admin_id),
-                        event: Event {
+                        bundle: MessageBundle {
                             certificate_hash: certificate2.value.hash(),
                             height: BlockHeight::from(2),
-                            index: 0,
-                            authenticated_signer: None,
-                            grant: Amount::ZERO,
-                            refund_grant_to: None,
-                            kind: MessageKind::Protected,
                             timestamp: Timestamp::from(0),
-                            message: Message::System(SystemMessage::Notify { id: user_id }),
+                            transaction_index: 0,
+                            messages: vec![PostedMessage {
+                                authenticated_signer: None,
+                                grant: Amount::ZERO,
+                                refund_grant_to: None,
+                                kind: MessageKind::Protected,
+                                index: 0,
+                                message: Message::System(SystemMessage::Notify { id: user_id }),
+                            }],
                         },
                         action: MessageAction::Accept,
                     }),
@@ -2686,8 +2761,8 @@ where
                 .await?
                 .expect("Missing inbox for admin chain in user chain");
             assert_eq!(inbox.next_block_height_to_receive()?, BlockHeight(3));
-            assert_eq!(inbox.added_events.count(), 0);
-            assert_eq!(inbox.removed_events.count(), 0);
+            assert_eq!(inbox.added_bundles.count(), 0);
+            assert_eq!(inbox.removed_bundles.count(), 0);
         }
         {
             let inbox = user_chain
@@ -2696,8 +2771,8 @@ where
                 .await?
                 .expect("Missing inbox for admin channel in user chain");
             assert_eq!(inbox.next_block_height_to_receive()?, BlockHeight(2));
-            assert_eq!(inbox.added_events.count(), 0);
-            assert_eq!(inbox.removed_events.count(), 0);
+            assert_eq!(inbox.added_bundles.count(), 0);
+            assert_eq!(inbox.removed_bundles.count(), 0);
         }
         Ok(())
     }
@@ -2817,18 +2892,18 @@ where
     assert!(admin_chain.is_active());
     assert_eq!(admin_chain.inboxes.indices().await?.len(), 1);
     matches!(
-        admin_chain
+        &admin_chain
             .inboxes
             .try_load_entry(&Origin::chain(user_id))
             .await?
             .expect("Missing inbox for user chain in admin chain")
-            .added_events
+            .added_bundles
             .read_front(10)
             .await?[..],
-        [Event {
+        [event] if matches!(event.messages[..], [PostedMessage {
             message: Message::System(SystemMessage::Credit { .. }),
             ..
-        }]
+        }])
     );
     Ok(())
 }
@@ -2981,16 +3056,19 @@ where
                     .with_epoch(1)
                     .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(user_id),
-                        event: Event {
+                        bundle: MessageBundle {
                             certificate_hash: certificate0.value.hash(),
                             height: BlockHeight::ZERO,
-                            index: 0,
-                            authenticated_signer: None,
-                            grant: Amount::ZERO,
-                            refund_grant_to: None,
-                            kind: MessageKind::Tracked,
                             timestamp: Timestamp::from(0),
-                            message: system_credit_message(Amount::ONE),
+                            transaction_index: 0,
+                            messages: vec![PostedMessage {
+                                authenticated_signer: None,
+                                grant: Amount::ZERO,
+                                refund_grant_to: None,
+                                kind: MessageKind::Tracked,
+                                index: 0,
+                                message: system_credit_message(Amount::ONE),
+                            }],
                         },
                         action: MessageAction::Accept,
                     }),
@@ -3109,6 +3187,10 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let bundles012 = Vec::from_iter(bundles01.iter().cloned().chain(bundles2.iter().cloned()));
     let bundles0123 = Vec::from_iter(bundles012.iter().cloned().chain(bundles3.iter().cloned()));
 
+    fn without_epochs(bundles: &[(Epoch, MessageBundle)]) -> Vec<MessageBundle> {
+        bundles.iter().map(|(_, bundle)| bundle.clone()).collect()
+    }
+
     let helper = CrossChainUpdateHelper {
         allow_messages_from_deprecated_epochs: true,
         current_epoch: Some(Epoch::from(1)),
@@ -3123,7 +3205,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             None,
             bundles01.clone()
         )?,
-        bundles01.clone()
+        without_epochs(&bundles01)
     );
     // Received heights is removing prefixes.
     assert_eq!(
@@ -3134,7 +3216,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             None,
             bundles01.clone()
         )?,
-        bundles1.clone()
+        without_epochs(&bundles1)
     );
     assert_eq!(
         helper.select_message_bundles(
@@ -3183,7 +3265,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             None,
             bundles0123.clone()
         )?,
-        bundles012.clone()
+        without_epochs(&bundles012)
     );
     // Received heights is still removing prefixes.
     assert_eq!(
@@ -3194,7 +3276,12 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             None,
             bundles012.clone()
         )?,
-        Vec::from_iter(bundles1.iter().cloned().chain(bundles2.iter().cloned()))
+        bundles1
+            .iter()
+            .cloned()
+            .chain(bundles2.iter().cloned())
+            .map(|(_, bundle)| bundle.clone())
+            .collect::<Vec<_>>()
     );
     // Anticipated messages re-certify blocks up to the given height.
     assert_eq!(
@@ -3205,7 +3292,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             Some(BlockHeight::from(1)),
             bundles01.clone()
         )?,
-        bundles1.clone()
+        without_epochs(&bundles1)
     );
     assert_eq!(
         helper.select_message_bundles(
@@ -3215,7 +3302,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             Some(BlockHeight::from(1)),
             bundles01.clone()
         )?,
-        bundles01.clone()
+        without_epochs(&bundles01)
     );
     Ok(())
 }

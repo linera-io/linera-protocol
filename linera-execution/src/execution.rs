@@ -1,7 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    sync::Mutex,
+    vec,
+};
 
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryStreamExt};
 use linera_base::{
@@ -151,7 +155,7 @@ where
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
-        oracle_responses: Option<Vec<OracleResponse>>,
+        oracle_responses: Option<Arc<Mutex<vec::IntoIter<OracleResponse>>>>,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(Vec<ExecutionOutcome>, Vec<OracleResponse>), ExecutionError> {
         let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
@@ -182,7 +186,7 @@ where
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
-        oracle_responses: Option<Vec<OracleResponse>>,
+        oracle_responses: Option<Arc<Mutex<vec::IntoIter<OracleResponse>>>>,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(Vec<ExecutionOutcome>, Vec<OracleResponse>), ExecutionError> {
         let mut cloned_grant = grant.as_ref().map(|x| **x);
@@ -197,6 +201,7 @@ where
         };
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
+        let oracle_responses = oracle_responses.as_ref().map(Arc::clone);
         let execution_outcomes_future = tokio::task::spawn_blocking(move || {
             ContractSyncRuntime::run_action(
                 execution_state_sender,
@@ -294,6 +299,8 @@ where
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(Vec<ExecutionOutcome>, Vec<OracleResponse>), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
+        let oracle_responses =
+            oracle_responses.map(|responses| Arc::new(Mutex::new(responses.into_iter())));
         match operation {
             Operation::System(op) => {
                 let (mut result, new_application, mut returned_oracle_responses) =
@@ -347,7 +354,7 @@ where
         local_time: Timestamp,
         message: Message,
         grant: Option<&mut Amount>,
-        oracle_responses: Option<Vec<OracleResponse>>,
+        oracle_responses: Option<Arc<Mutex<vec::IntoIter<OracleResponse>>>>,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(Vec<ExecutionOutcome>, Vec<OracleResponse>), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());

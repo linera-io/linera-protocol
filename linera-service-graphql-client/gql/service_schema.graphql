@@ -203,11 +203,11 @@ type ChainStateExtendedView {
 	"""
 	inboxes: ReentrantCollectionView_Origin_InboxStateView_2059505700!
 	"""
-	A queue of unskippable events, with the timestamp when we added them to the inbox.
+	A queue of unskippable bundles, with the timestamp when we added them to the inbox.
 	"""
 	unskippable: QueueView_TimestampedInboxEntry_ce4d8b86!
 	"""
-	Non-skippable events that have been removed but are still in the queue.
+	Non-skippable bundles that have been removed but are still in the queue.
 	"""
 	removedUnskippable: [InboxEntry!]!
 	"""
@@ -378,11 +378,6 @@ A number identifying the configuration of the chain (aka the committee)
 scalar Epoch
 
 """
-A message together with non replayable information to ensure uniqueness in a particular inbox
-"""
-scalar Event
-
-"""
 An event recorded in an executed block.
 """
 type EventRecord {
@@ -439,17 +434,18 @@ type InboxEntry {
 }
 
 """
-The state of a inbox.
-* An inbox is used to track events received and executed locally.
-* An `Event` consists of a logical cursor `(height, index)` and some message content `message`.
-* On the surface, an inbox looks like a FIFO queue: the main APIs are `add_event` and
-`remove_event`.
-* However, events can also be removed before they are added. When this happens,
-the events removed by anticipation are tracked in a separate queue. Any event added
-later will be required to match the first removed event and so on.
-* The cursors of added events (resp. removed events) must be increasing over time.
-* Reconciliation of added and removed events is allowed to skip some added events.
-However, the opposite is not true: every removed event must be eventually added.
+The state of an inbox.
+* An inbox is used to track bundles received and executed locally.
+* A `MessageBundle` consists of a logical cursor `(height, index)` and some message
+content `messages`.
+* On the surface, an inbox looks like a FIFO queue: the main APIs are `add_bundle` and
+`remove_bundle`.
+* However, bundles can also be removed before they are added. When this happens,
+the bundles removed by anticipation are tracked in a separate queue. Any bundle added
+later will be required to match the first removed bundle and so on.
+* The cursors of added bundles (resp. removed bundles) must be increasing over time.
+* Reconciliation of added and removed bundles is allowed to skip some added bundles.
+However, the opposite is not true: every removed bundle must be eventually added.
 """
 type InboxStateView {
 	"""
@@ -461,14 +457,14 @@ type InboxStateView {
 	"""
 	nextCursorToRemove: Cursor!
 	"""
-	These events have been added and are waiting to be removed.
+	These bundles have been added and are waiting to be removed.
 	"""
-	addedEvents: QueueView_Event_fd202526!
+	addedBundles: QueueView_MessageBundle_f33fd73d!
 	"""
-	These events have been removed by anticipation and are waiting to be added.
-	At least one of `added_events` and `removed_events` should be empty.
+	These bundles have been removed by anticipation and are waiting to be added.
+	At least one of `added_bundles` and `removed_bundles` should be empty.
 	"""
-	removedEvents: QueueView_Event_fd202526!
+	removedBundles: QueueView_MessageBundle_f33fd73d!
 }
 
 """
@@ -483,7 +479,7 @@ type IncomingBundle {
 	The content of the message to be delivered to the inbox identified by
 	`origin`.
 	"""
-	event: Event!
+	bundle: MessageBundle!
 	"""
 	What to do with the message.
 	"""
@@ -551,6 +547,11 @@ scalar Message
 Whether an incoming message is accepted or rejected
 """
 scalar MessageAction
+
+"""
+A message together with non replayable information to ensure uniqueness in a particular inbox
+"""
+scalar MessageBundle
 
 """
 The kind of outgoing message being sent
@@ -718,7 +719,7 @@ type OutboxStateView {
 }
 
 """
-A message together with routing information.
+A posted message together with routing information.
 """
 type OutgoingMessage {
 	"""
@@ -738,7 +739,7 @@ type OutgoingMessage {
 	"""
 	refundGrantTo: Account
 	"""
-	The kind of event being sent.
+	The kind of message being sent.
 	"""
 	kind: MessageKind!
 	"""
@@ -773,8 +774,8 @@ type QueueView_BlockHeight_f5d50b5f {
 	entries(count: Int): [BlockHeight!]!
 }
 
-type QueueView_Event_fd202526 {
-	entries(count: Int): [Event!]!
+type QueueView_MessageBundle_f33fd73d {
+	entries(count: Int): [MessageBundle!]!
 }
 
 type QueueView_TimestampedInboxEntry_ce4d8b86 {

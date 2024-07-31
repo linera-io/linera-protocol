@@ -22,14 +22,15 @@ test('Block mounting', () => {
                   medium: "Direct",
                   sender: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
                 },
-                event: {
-                  authenticated_signer: null,
+                bundle: {
                   certificate_hash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
                   height: 5,
-                  index: 0,
-                  message: {
-                    System: { BytecodePublished: { operation_index: 0 } }
-                  },
+                  messages: [
+                    [0, {
+                      authenticated_signer: null,
+                      message: { System: { BytecodePublished: { operation_index: 0 } } }
+                    }]
+                  ],
                   timestamp: 1694097510206912
                 },
                 action: "Accept",

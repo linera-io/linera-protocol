@@ -25,7 +25,7 @@ mod types {
     pub type ChainOwnership = Value;
     pub type ChannelFullName = Value;
     pub type Epoch = Value;
-    pub type Event = Value;
+    pub type MessageBundle = Value;
     pub type MessageKind = Value;
     pub type Message = Value;
     pub type MessageAction = Value;
@@ -62,7 +62,7 @@ mod types {
 mod types {
     pub use linera_base::ownership::ChainOwnership;
     pub use linera_chain::{
-        data_types::{ChannelFullName, Event, MessageAction, Origin, Target},
+        data_types::{ChannelFullName, MessageAction, MessageBundle, Origin, Target},
         manager::ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};
@@ -144,12 +144,12 @@ mod from {
         fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingBundles) -> Self {
             let block::BlockBlockValueExecutedBlockBlockIncomingBundles {
                 origin,
-                event,
+                bundle,
                 action,
             } = val;
             IncomingBundle {
                 origin,
-                event,
+                bundle,
                 action,
             }
         }

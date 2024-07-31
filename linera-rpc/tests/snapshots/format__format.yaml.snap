@@ -359,7 +359,9 @@ CrossChainRequest:
                 TUPLE:
                   - TYPENAME: Medium
                   - SEQ:
-                      TYPENAME: MessageBundle
+                      TUPLE:
+                        - TYPENAME: Epoch
+                        - TYPENAME: MessageBundle
     1:
       ConfirmUpdatedRecipient:
         STRUCT:
@@ -389,27 +391,6 @@ Destination:
           TYPENAME: ChannelName
 Epoch:
   NEWTYPESTRUCT: U32
-Event:
-  STRUCT:
-    - certificate_hash:
-        TYPENAME: CryptoHash
-    - height:
-        TYPENAME: BlockHeight
-    - index: U32
-    - authenticated_signer:
-        OPTION:
-          TYPENAME: Owner
-    - grant:
-        TYPENAME: Amount
-    - refund_grant_to:
-        OPTION:
-          TYPENAME: Account
-    - kind:
-        TYPENAME: MessageKind
-    - timestamp:
-        TYPENAME: Timestamp
-    - message:
-        TYPENAME: Message
 EventRecord:
   STRUCT:
     - stream_id:
@@ -452,8 +433,8 @@ IncomingBundle:
   STRUCT:
     - origin:
         TYPENAME: Origin
-    - event:
-        TYPENAME: Event
+    - bundle:
+        TYPENAME: MessageBundle
     - action:
         TYPENAME: MessageAction
 LiteCertificate:
@@ -513,17 +494,14 @@ MessageBundle:
   STRUCT:
     - height:
         TYPENAME: BlockHeight
-    - epoch:
-        TYPENAME: Epoch
     - timestamp:
         TYPENAME: Timestamp
-    - hash:
+    - certificate_hash:
         TYPENAME: CryptoHash
+    - transaction_index: U32
     - messages:
         SEQ:
-          TUPLE:
-            - U32
-            - TYPENAME: OutgoingMessage
+          TYPENAME: PostedMessage
 MessageId:
   STRUCT:
     - chain_id:
@@ -696,6 +674,21 @@ OutgoingMessage:
 Owner:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
+PostedMessage:
+  STRUCT:
+    - authenticated_signer:
+        OPTION:
+          TYPENAME: Owner
+    - grant:
+        TYPENAME: Amount
+    - refund_grant_to:
+        OPTION:
+          TYPENAME: Account
+    - kind:
+        TYPENAME: MessageKind
+    - index: U32
+    - message:
+        TYPENAME: Message
 ProposalContent:
   STRUCT:
     - block:

@@ -422,7 +422,7 @@ where
     let (cert, _) = receiver.process_inbox().await.unwrap();
     let executed_block = cert[0].value().executed_block().unwrap();
     let responses = &executed_block.outcome.oracle_responses;
-    let [_, responses] = &responses[..] else {
+    let [responses] = &responses[..] else {
         panic!("Unexpected oracle responses: {:?}", responses);
     };
     let [OracleResponse::Service(json)] = &responses[..] else {
@@ -460,7 +460,10 @@ where
     let incoming_bundles = &cert.value().block().unwrap().incoming_bundles;
     assert_eq!(incoming_bundles.len(), 1);
     assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
-    assert_eq!(incoming_bundles[0].event.kind, MessageKind::Simple);
+    assert_eq!(
+        incoming_bundles[0].bundle.messages[0].kind,
+        MessageKind::Simple
+    );
     let messages = cert.value().messages().unwrap();
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].len(), 0);
@@ -484,7 +487,14 @@ where
     let incoming_bundles = &cert.value().block().unwrap().incoming_bundles;
     assert_eq!(incoming_bundles.len(), 1);
     assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
-    assert_eq!(incoming_bundles[0].event.kind, MessageKind::Tracked);
+    assert_eq!(
+        incoming_bundles[0].bundle.messages[0].kind,
+        MessageKind::Simple
+    );
+    assert_eq!(
+        incoming_bundles[0].bundle.messages[1].kind,
+        MessageKind::Tracked
+    );
     let messages = cert.value().messages().unwrap();
     assert_eq!(messages.len(), 1);
 
@@ -500,15 +510,24 @@ where
     assert_eq!(incoming_bundles.len(), 2);
     // First message is the grant refund for the successful message sent before.
     assert_eq!(incoming_bundles[0].action, MessageAction::Accept);
-    assert_eq!(incoming_bundles[0].event.kind, MessageKind::Tracked);
+    assert_eq!(
+        incoming_bundles[0].bundle.messages[0].kind,
+        MessageKind::Tracked
+    );
     assert_matches!(
-        incoming_bundles[0].event.message,
+        incoming_bundles[0].bundle.messages[0].message,
         Message::System(SystemMessage::Credit { .. })
     );
     // Second message is the bounced message.
     assert_eq!(incoming_bundles[1].action, MessageAction::Accept);
-    assert_eq!(incoming_bundles[1].event.kind, MessageKind::Bouncing);
-    assert_matches!(incoming_bundles[1].event.message, Message::User { .. });
+    assert_eq!(
+        incoming_bundles[1].bundle.messages[0].kind,
+        MessageKind::Bouncing
+    );
+    assert_matches!(
+        incoming_bundles[1].bundle.messages[0].message,
+        Message::User { .. }
+    );
 
     Ok(())
 }
@@ -652,13 +671,14 @@ where
         _ => panic!("Unexpected value"),
     };
     assert!(messages.iter().any(|msg| matches!(
-        &msg.event.message,
+        &msg.bundle.messages[0].message,
         Message::System(SystemMessage::RegisterApplications { applications })
         if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.hash())
     )));
     assert!(messages
         .iter()
-        .any(|msg| matches!(&msg.event.message, Message::User { .. })));
+        .flat_map(|msg| &msg.bundle.messages)
+        .any(|msg| matches!(msg.message, Message::User { .. })));
 
     // Make another transfer.
     let transfer = fungible::Operation::Transfer {
@@ -687,16 +707,10 @@ where
         }
         _ => panic!("Unexpected value"),
     };
-    // The new block should _not_ contain another `RegisterApplications` message, because the
-    // application is already registered.
-    assert!(!messages.iter().any(|msg| matches!(
-        &msg.event.message,
-        Message::System(SystemMessage::RegisterApplications { applications })
-        if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.hash())
-    )));
     assert!(messages
         .iter()
-        .any(|msg| matches!(&msg.event.message, Message::User { .. })));
+        .flat_map(|msg| &msg.bundle.messages)
+        .any(|msg| matches!(msg.message, Message::User { .. })));
 
     // Try another transfer in the other direction except that the amount is too large.
     let transfer = fungible::Operation::Transfer {
@@ -863,7 +877,7 @@ where
     };
     assert!(messages
         .iter()
-        .any(|msg| matches!(&msg.event.message, Message::User { .. })));
+        .any(|msg| matches!(&msg.bundle.messages[0].message, Message::User { .. })));
 
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
     let posts = receiver
