@@ -88,9 +88,9 @@ pub trait Storage: Sized {
     ///
     /// # Notes
     ///
-    /// Each time this method is called, a new [`ChainStateView`] is created. If there is more than
-    /// one instance of the same chain active at any given moment, they will race to access
-    /// persistent storage. This can lead to invalid states and data corruption.
+    /// Each time this method is called, a new [`ChainStateView`] is created. If there are multiple
+    /// instances of the same chain active at any given moment, they will race to access persistent
+    /// storage. This can lead to invalid states and data corruption.
     ///
     /// Other methods that also create [`ChainStateView`] instances that can cause conflicts are:
     /// [`load_active_chain`][`Self::load_active_chain`] and
@@ -198,9 +198,9 @@ pub trait Storage: Sized {
     ///
     /// # Notes
     ///
-    /// Each time this method is called, a new [`ChainStateView`] is created. If there is more than
-    /// one instance of the same chain active at any given moment, they will race to access
-    /// persistent storage. This can lead to invalid states and data corruption.
+    /// Each time this method is called, a new [`ChainStateView`] is created. If there are multiple
+    /// instances of the same chain active at any given moment, they will race to access persistent
+    /// storage. This can lead to invalid states and data corruption.
     ///
     /// Other methods that also create [`ChainStateView`] instances that can cause conflicts are:
     /// [`load_chain`][`Self::load_chain`] and [`create_chain`][`Self::create_chain`].
@@ -245,8 +245,8 @@ pub trait Storage: Sized {
     ///
     /// # Notes
     ///
-    /// This method creates a new [`ChainStateView`] instance. If there is more than one instance
-    /// of the same chain active at any given moment, they will race to access persistent storage.
+    /// This method creates a new [`ChainStateView`] instance. If there are multiple instances of
+    /// the same chain active at any given moment, they will race to access persistent storage.
     /// This can lead to invalid states and data corruption.
     ///
     /// Other methods that also create [`ChainStateView`] instances that can cause conflicts are:
