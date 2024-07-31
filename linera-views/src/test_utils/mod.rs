@@ -349,15 +349,19 @@ pub fn get_random_key_values2(num_entries: usize, len_value: usize) -> Vec<(Vec<
 }
 
 /// Add a prefix to a list of key-values
-pub fn prefix_expansion(prefix: &[u8], key_values: Vec<(Vec<u8>,Vec<u8>)>) -> Vec<(Vec<u8>,Vec<u8>)> {
-    key_values.into_iter().map(|(key,value)| {
-        let mut big_key = prefix.to_vec();
-        big_key.extend(key);
-        (big_key,value)
-    }).collect()
+pub fn prefix_expansion(
+    prefix: &[u8],
+    key_values: Vec<(Vec<u8>, Vec<u8>)>,
+) -> Vec<(Vec<u8>, Vec<u8>)> {
+    key_values
+        .into_iter()
+        .map(|(key, value)| {
+            let mut big_key = prefix.to_vec();
+            big_key.extend(key);
+            (big_key, value)
+        })
+        .collect()
 }
-
-
 
 /// We build a number of scenarios for testing the reads.
 pub fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
