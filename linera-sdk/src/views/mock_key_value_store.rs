@@ -15,7 +15,7 @@ use futures::FutureExt as _;
 use linera_views::{
     batch::Batch,
     common::{ReadableKeyValueStore, WritableKeyValueStore},
-    memory::{create_memory_store, MemoryStore},
+    memory::{create_test_memory_store, MemoryStore},
 };
 
 /// A mock [`KeyValueStore`] implementation using a [`MemoryStore`].
@@ -32,7 +32,7 @@ pub(super) struct MockKeyValueStore {
 impl Default for MockKeyValueStore {
     fn default() -> Self {
         MockKeyValueStore {
-            store: create_memory_store(),
+            store: create_test_memory_store(),
             contains_key_promises: PromiseRegistry::default(),
             contains_keys_promises: PromiseRegistry::default(),
             read_multi_promises: PromiseRegistry::default(),

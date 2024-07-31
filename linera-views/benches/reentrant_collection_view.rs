@@ -7,7 +7,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use linera_views::{
     batch::Batch,
     common::Context,
-    memory::{create_memory_context, MemoryContext},
+    memory::{create_test_memory_context, MemoryContext},
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     views::View,
@@ -151,7 +151,7 @@ enum ComplexIndex {
 async fn create_populated_reentrant_collection_view(
 ) -> ReentrantCollectionView<MemoryContext<()>, ComplexIndex, RegisterView<MemoryContext<()>, String>>
 {
-    let context = create_memory_context();
+    let context = create_test_memory_context();
     let mut view: ReentrantCollectionView<_, ComplexIndex, RegisterView<_, String>> =
         ReentrantCollectionView::load(context)
             .await

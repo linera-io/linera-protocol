@@ -218,7 +218,7 @@ impl<E> MemoryContext<E> {
 /// Provides a `MemoryContext<()>` that can be used for tests.
 /// It is not named create_memory_test_context because it is massively
 /// used and so we want to have a short name.
-pub fn create_memory_context() -> MemoryContext<()> {
+pub fn create_test_memory_context() -> MemoryContext<()> {
     MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, ())
 }
 
@@ -238,7 +238,7 @@ pub fn create_memory_store_stream_queries(max_stream_queries: usize) -> MemorySt
 }
 
 /// Creates a test memory store for working.
-pub fn create_memory_store() -> MemoryStore {
+pub fn create_test_memory_store() -> MemoryStore {
     create_memory_store_stream_queries(TEST_MEMORY_MAX_STREAM_QUERIES)
 }
 

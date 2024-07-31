@@ -5,7 +5,7 @@ use linera_views::{
     batch::Batch,
     common::{ReadableKeyValueStore, WritableKeyValueStore},
     key_value_store_view::ViewContainer,
-    memory::{create_memory_context, create_memory_store},
+    memory::{create_test_memory_context, create_test_memory_store},
     test_utils::{
         self, get_random_test_scenarios, run_big_write_read, run_reads, run_writes_from_blank,
         run_writes_from_state,
@@ -29,7 +29,7 @@ async fn test_reads_test_memory() {
 #[tokio::test]
 async fn test_reads_memory() {
     for scenario in get_random_test_scenarios() {
-        let key_value_store = create_memory_store();
+        let key_value_store = create_test_memory_store();
         run_reads(key_value_store, scenario).await;
     }
 }
@@ -73,7 +73,7 @@ async fn test_reads_indexed_db() {
 #[tokio::test]
 async fn test_reads_key_value_store_view_memory() {
     for scenario in get_random_test_scenarios() {
-        let context = create_memory_context();
+        let context = create_test_memory_context();
         let key_value_store = ViewContainer::new(context).await.unwrap();
         run_reads(key_value_store, scenario).await;
     }
@@ -81,7 +81,7 @@ async fn test_reads_key_value_store_view_memory() {
 
 #[tokio::test]
 async fn test_specific_reads_memory() {
-    let key_value_store = create_memory_store();
+    let key_value_store = create_test_memory_store();
     let key_values = vec![
         (vec![0, 1, 255], Vec::new()),
         (vec![0, 1, 255, 37], Vec::new()),
@@ -99,13 +99,13 @@ async fn test_test_memory_writes_from_blank() {
 
 #[tokio::test]
 async fn test_memory_writes_from_blank() {
-    let key_value_store = create_memory_store();
+    let key_value_store = create_test_memory_store();
     run_writes_from_blank(&key_value_store).await;
 }
 
 #[tokio::test]
 async fn test_key_value_store_view_memory_writes_from_blank() {
-    let context = create_memory_context();
+    let context = create_test_memory_context();
     let key_value_store = ViewContainer::new(context).await.unwrap();
     run_writes_from_blank(&key_value_store).await;
 }
@@ -141,7 +141,7 @@ async fn test_indexed_db_writes_from_blank() {
 #[tokio::test]
 async fn test_big_value_read_write() {
     use rand::{distributions::Alphanumeric, Rng};
-    let context = create_memory_context();
+    let context = create_test_memory_context();
     for count in [50, 1024] {
         let rng = test_utils::make_deterministic_rng();
         let test_string = rng
@@ -181,7 +181,7 @@ async fn test_scylla_db_big_write_read() {
 
 #[tokio::test]
 async fn test_memory_big_write_read() {
-    let key_value_store = linera_views::memory::create_memory_store();
+    let key_value_store = linera_views::memory::create_test_memory_store();
     let value_sizes = vec![100, 1000, 200000, 5000000];
     let target_size = 20000000;
     run_big_write_read(key_value_store, target_size, value_sizes).await;
@@ -216,7 +216,7 @@ async fn test_dynamo_db_big_write_read() {
 
 #[tokio::test]
 async fn test_memory_writes_from_state() {
-    let key_value_store = create_memory_store();
+    let key_value_store = create_test_memory_store();
     run_writes_from_state(&key_value_store).await;
 }
 
