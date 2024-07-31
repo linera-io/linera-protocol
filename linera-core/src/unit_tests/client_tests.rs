@@ -23,7 +23,7 @@ use linera_execution::{
     ExecutionError, Message, MessageKind, Operation, ResourceControlPolicy, SystemExecutionError,
     SystemMessage, SystemQuery, SystemResponse,
 };
-use linera_storage::Storage;
+use linera_storage::{MemoryStorage, Storage, TestClock};
 use linera_views::views::ViewError;
 use test_case::test_case;
 
@@ -36,17 +36,39 @@ use crate::test_utils::ScyllaDbStorageBuilder;
 #[cfg(feature = "storage-service")]
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
-    client::{ChainClientError, ClientOutcome, MessageAction, MessagePolicy},
+    client::{ChainClient, ChainClientError, ClientOutcome, MessageAction, MessagePolicy},
     local_node::LocalNodeError,
     node::{
         CrossChainMessageDelivery,
         NodeError::{self, ClientIoError},
         ValidatorNode,
     },
-    test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder},
+    test_utils::{FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder, TestBuilder},
     updater::CommunicationError,
     worker::{Notification, Reason, WorkerError},
 };
+
+type MemoryChainClient =
+    ChainClient<NodeProvider<MemoryStorage<TestClock>>, MemoryStorage<TestClock>>;
+
+/// A test to ensure that our chain client listener remains `Send`.  This is a bit of a
+/// hack, but requires that we not hold a `std::sync::Mutex` over `await` points, a
+/// situation that is likely to lead to deadlock.  To further support this mode of
+/// testing, `dashmap` references in [`crate::client`] have also been wrapped in a newtype
+/// to make them non-`Send`.
+#[test_log::test]
+#[allow(dead_code)]
+fn test_listener_is_send() {
+    fn ensure_send(_: &impl Send) {}
+
+    async fn check_listener(chain_client: MemoryChainClient) -> Result<(), ChainClientError> {
+        let (listener, _abort_notifications, _notifications) = chain_client.listen().await?;
+        ensure_send(&listener);
+        Ok(())
+    }
+
+    // If it compiles, we're okay — no need to do anything at runtime.
+}
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]

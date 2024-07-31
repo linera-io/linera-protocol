@@ -28,7 +28,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use tokio::{
     sync::{mpsc, oneshot, OwnedRwLockReadGuard},
-    task::{JoinHandle, JoinSet},
+    task::JoinHandle,
 };
 use tracing::{instrument, trace, warn};
 #[cfg(with_testing)]
@@ -42,7 +42,6 @@ use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     value_cache::ValueCache,
     worker::{NetworkActions, WorkerError},
-    JoinSetExt as _,
 };
 
 /// A request for the [`ChainWorkerActor`].
@@ -154,7 +153,6 @@ where
     ViewError: From<StorageClient::StoreError>,
 {
     worker: ChainWorkerState<StorageClient>,
-    incoming_requests: mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>,
     service_runtime_thread: JoinHandle<()>,
 }
 
@@ -165,15 +163,13 @@ where
 {
     /// Spawns a new task to run the [`ChainWorkerActor`], returning an endpoint for sending
     /// requests to the worker.
-    pub async fn spawn(
+    pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
         blob_cache: Arc<ValueCache<BlobId, HashedBlob>>,
         chain_id: ChainId,
-        join_set: &mut JoinSet<()>,
-    ) -> Result<mpsc::UnboundedSender<ChainWorkerRequest<StorageClient::Context>>, WorkerError>
-    {
+    ) -> Result<Self, WorkerError> {
         let (service_runtime_thread, execution_state_receiver, runtime_request_sender) =
             Self::spawn_service_runtime_actor(chain_id);
 
@@ -188,16 +184,10 @@ where
         )
         .await?;
 
-        let (sender, receiver) = mpsc::unbounded_channel();
-        let actor = ChainWorkerActor {
+        Ok(ChainWorkerActor {
             worker,
-            incoming_requests: receiver,
             service_runtime_thread,
-        };
-
-        join_set.spawn_task(actor.run(tracing::Span::current()));
-
-        Ok(sender)
+        })
     }
 
     /// Spawns a blocking task to execute the service runtime actor.
@@ -234,14 +224,16 @@ where
     /// Runs the worker until there are no more incoming requests.
     #[instrument(
         name = "ChainWorkerActor",
-        follows_from = [spawner_span],
         skip_all,
         fields(chain_id = format!("{:.8}", self.worker.chain_id())),
     )]
-    async fn run(mut self, spawner_span: tracing::Span) {
+    pub async fn run(
+        mut self,
+        mut incoming_requests: mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>,
+    ) {
         trace!("Starting `ChainWorkerActor`");
 
-        while let Some(request) = self.incoming_requests.recv().await {
+        while let Some(request) = incoming_requests.recv().await {
             // TODO(#2237): Spawn concurrent tasks for read-only operations
             trace!("Handling `ChainWorkerRequest`: {request:?}");
 
