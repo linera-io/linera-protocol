@@ -754,19 +754,19 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<ChainActorEndpoint<StorageClient>, WorkerError> {
-        let mut receiver = None;
+        let mut new_receiver = None;
         let sender = self
             .chain_workers
             .lock()
             .unwrap()
             .get_or_insert(chain_id, || {
-                let (sender, receiver_) = mpsc::unbounded_channel();
-                receiver = Some(receiver_);
+                let (sender, receiver) = mpsc::unbounded_channel();
+                new_receiver = Some(receiver);
                 sender
             })
             .clone();
 
-        if let Some(receiver) = receiver {
+        if let Some(receiver) = new_receiver {
             let actor = ChainWorkerActor::load(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
