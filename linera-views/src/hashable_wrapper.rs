@@ -4,9 +4,9 @@
 use std::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
+    sync::Mutex,
 };
 
-use std::sync::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 

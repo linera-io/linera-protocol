@@ -8,10 +8,9 @@ pub const TEST_CACHE_SIZE: usize = 1000;
 use std::sync::LazyLock;
 use std::{
     collections::{btree_map, hash_map::RandomState, BTreeMap},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
-use std::sync::Mutex;
 use linked_hash_map::LinkedHashMap;
 #[cfg(with_metrics)]
 use prometheus::{register_int_counter_vec, IntCounterVec};
