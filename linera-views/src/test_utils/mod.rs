@@ -331,7 +331,8 @@ fn get_random_key_values1(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>,
     get_random_key_values_prefix(&mut rng, key_prefix, 8, len_value, num_entries)
 }
 
-fn get_random_key_values2(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+/// Generates a list of random key-values with no duplicates
+pub fn get_random_key_values2(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     let mut rng = make_deterministic_rng();
     let key_prefix = vec![0];
     let mut key_values = Vec::new();
@@ -346,6 +347,17 @@ fn get_random_key_values2(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>,
     }
     key_values
 }
+
+/// Add a prefix to a list of key-values
+pub fn prefix_expansion(prefix: &[u8], key_values: Vec<(Vec<u8>,Vec<u8>)>) -> Vec<(Vec<u8>,Vec<u8>)> {
+    key_values.into_iter().map(|(key,value)| {
+        let mut big_key = prefix.to_vec();
+        big_key.extend(key);
+        (big_key,value)
+    }).collect()
+}
+
+
 
 /// We build a number of scenarios for testing the reads.
 pub fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
