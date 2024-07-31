@@ -67,7 +67,7 @@ jobs:
     - name: Install cargo tools
       run: |
         cargo install --locked cargo-index
-        cargo install --locked cargo-local-registry
+        cargo install --locked cargo-local-registry --git https://github.com/dhovart/cargo-local-registry --rev 2b20904a
     - name: Setup git committer information
       run: |
         git config --global user.email "ci@linera.io"
