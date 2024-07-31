@@ -48,7 +48,6 @@ linera-views.workspace = true
 linera-views-derive.workspace = true
 linera-witty = { workspace = true, features = ["log", "macros"] }
 lru.workspace = true
-once_cell.workspace = true
 oneshot.workspace = true
 prometheus = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["blocking", "json"] }

@@ -3,10 +3,9 @@
 
 //! Code specific to the usage of the [Wasmer](https://wasmer.io/) runtime.
 
-use std::marker::Unpin;
+use std::{marker::Unpin, sync::LazyLock};
 
 use bytes::Bytes;
-use linera_base::sync::Lazy;
 use linera_witty::{
     wasmer::{EntrypointInstance, InstanceBuilder},
     ExportTo,
@@ -27,7 +26,7 @@ use crate::{
 };
 
 /// An [`Engine`] instance configured to run application services.
-static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(|| {
+static SERVICE_ENGINE: LazyLock<Engine> = LazyLock::new(|| {
     #[cfg(web)]
     {
         wasmer::Engine::default()
@@ -40,10 +39,11 @@ static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(|| {
 });
 
 /// A cache of compiled contract modules, with their respective [`Engine`] instances.
-static CONTRACT_CACHE: Lazy<Mutex<ModuleCache<CachedContractModule>>> = Lazy::new(Mutex::default);
+static CONTRACT_CACHE: LazyLock<Mutex<ModuleCache<CachedContractModule>>> =
+    LazyLock::new(Mutex::default);
 
 /// A cache of compiled service modules.
-static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::default);
+static SERVICE_CACHE: LazyLock<Mutex<ModuleCache<Module>>> = LazyLock::new(Mutex::default);
 
 /// Type representing a running [Wasmer](https://wasmer.io/) contract.
 pub(crate) struct WasmerContractInstance<Runtime> {

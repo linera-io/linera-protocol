@@ -144,6 +144,9 @@ jobs:
         sudo rm -rf /opt/ghc
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+    - name: Check for unexpected chain load operations
+      run: |
+        ./scripts/check_chain_loads.sh
     - name: Build check_copyright_header script
       run: |
         cd ./scripts/check_copyright_header

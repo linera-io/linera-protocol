@@ -1443,7 +1443,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
     let description1 = ChainDescription::Root(1);
     let chain_id1 = ChainId::from(description1);
-    let mut client1_a = builder
+    let client1_a = builder
         .add_initial_chain(description1, Amount::ZERO)
         .await?;
     let pub_key1_a = client1_a.public_key().await.unwrap();
@@ -1457,7 +1457,7 @@ where
     }
     .into();
     client1_a.execute_operation(owner_change_op1).await.unwrap();
-    let mut client1_b = builder
+    let client1_b = builder
         .make_client(
             chain_id1,
             key_pair1_b,
@@ -1495,7 +1495,9 @@ where
     let blob0_id = blob0.id();
 
     // Try to read a blob without publishing it first, should fail
-    let result = client1_a.read_blob(blob0_id).await;
+    let result = client1_a
+        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id }.into())
+        .await;
     assert_matches!(
         result,
         Err(ChainClientError::BlobNotFound(not_found_blob_id)) if not_found_blob_id == blob0_id
@@ -1520,7 +1522,10 @@ where
     // Try to read the blob. This is a different client but on the same chain, so when we synchronize this with the validators
     // before executing the block, we'll actually download and cache locally the blobs that were published by `client_a`.
     // So this will succeed.
-    let certificate = client1_b.read_blob(blob0_id).await.unwrap().unwrap();
+    let certificate = client1_b
+        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id }.into())
+        .await?
+        .unwrap();
     assert_eq!(certificate.round, Round::MultiLeader(0));
     assert!(certificate
         .value()

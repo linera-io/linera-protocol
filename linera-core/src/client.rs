@@ -51,7 +51,7 @@ use serde::Serialize;
 use thiserror::Error;
 use tokio::sync::{Mutex, OwnedRwLockReadGuard};
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{debug, error, info, Instrument as _};
+use tracing::{debug, error, info, warn, Instrument as _};
 
 use crate::{
     data_types::{
@@ -141,7 +141,7 @@ where
     #[tracing::instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
     /// Creates a new `ChainClient`.
     #[allow(clippy::too_many_arguments)]
-    pub fn create_chain(
+    pub fn create_chain_client(
         self: &Arc<Self>,
         chain_id: ChainId,
         known_key_pairs: Vec<KeyPair>,
@@ -353,6 +353,9 @@ pub enum ChainClientError {
 
     #[error("Blob not found: {0}")]
     BlobNotFound(BlobId),
+
+    #[error("Got invalid last used by certificate for blob {0} from validator {1}")]
+    InvalidLastUsedByCertificate(BlobId, ValidatorName),
 }
 
 impl From<Infallible> for ChainClientError {
@@ -581,7 +584,7 @@ where
         }
         for mut message in requested_pending_messages {
             if pending_messages.len() >= self.options.max_pending_messages {
-                tracing::warn!(
+                warn!(
                     "Limiting block to {} incoming messages",
                     self.options.max_pending_messages
                 );
@@ -742,6 +745,7 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(notifications))]
+    /// Notifies subscribers and clears the `notifications`.
     fn handle_notifications(&self, notifications: &mut Vec<Notification>) {
         self.client.notifier.handle_notifications(notifications);
         notifications.clear();
@@ -842,6 +846,7 @@ where
     }
 
     #[tracing::instrument(level = "trace")]
+    /// Returns the pending blobs from the local node's chain manager.
     async fn chain_managers_pending_blobs(
         &self,
     ) -> Result<BTreeMap<BlobId, HashedBlob>, LocalNodeError> {
@@ -943,6 +948,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(certificate, mode))]
+    /// Processes the confirmed block certificate and its ancestors in the local node, then
+    /// updates the validators up to that certificate.
     async fn receive_certificate_and_update_validators_internal(
         &self,
         certificate: Certificate,
@@ -967,6 +974,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(certificate, mode))]
+    /// Processes the confirmed block certificate in the local node. Also downloads and processes
+    /// all ancestors that are still missing.
     async fn receive_certificate_internal(
         &self,
         certificate: Certificate,
@@ -1028,7 +1037,7 @@ where
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
-                    tracing::warn!("Failed to process network hashed certificate value");
+                    warn!("Failed to process network hashed certificate value");
                     return Err(err.into());
                 }
             }
@@ -1041,6 +1050,8 @@ where
         level = "trace",
         skip(tracker, committees, max_epoch, node, node_client)
     )]
+    /// Downloads and processes all confirmed block certificates that sent any message to this
+    /// chain, including their ancestors.
     async fn synchronize_received_certificates_from_validator(
         chain_id: ChainId,
         name: ValidatorName,
@@ -1090,7 +1101,7 @@ where
             // Check that certificates are valid w.r.t one of our trusted committees.
             if block.epoch > max_epoch {
                 // We don't accept a certificate from a committee in the future.
-                tracing::warn!(
+                warn!(
                     "Postponing received certificate from future epoch {:?}",
                     block.epoch
                 );
@@ -1112,7 +1123,7 @@ where
                     // If a higher block with a recognized epoch comes up later from the
                     // same chain, the call to `receive_certificate` below will download
                     // the skipped certificate again.
-                    tracing::warn!(
+                    warn!(
                         "Skipping received certificate from past epoch {:?}",
                         block.epoch
                     );
@@ -1137,7 +1148,7 @@ where
                 .receive_certificate_internal(certificate, ReceiveCertificateMode::AlreadyChecked)
                 .await
             {
-                tracing::warn!("Received invalid certificate {hash} from {name}: {e}");
+                warn!("Received invalid certificate {hash} from {name}: {e}");
                 // Do not update the validator's tracker in case of error.
                 // Move on to the next validator.
                 return;
@@ -1268,6 +1279,7 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(certificate))]
+    /// Handles the certificate in the local node and the resulting notifications.
     async fn process_certificate(
         &self,
         certificate: Certificate,
@@ -1347,6 +1359,7 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
+    /// Downloads and processes any certificates we are missing for the given chain.
     pub async fn synchronize_chain_state(
         &self,
         validators: &[(ValidatorName, impl LocalValidatorNode)],
@@ -1370,7 +1383,7 @@ where
 
         for (result, new_notifications) in future::join_all(futures).await {
             if let Err(e) = result {
-                tracing::error!(?e, "Error synchronizing chain state");
+                error!(?e, "Error synchronizing chain state");
             }
 
             notifications.extend(new_notifications);
@@ -1384,6 +1397,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(self, name, node, chain_id, notifications))]
+    /// Downloads any certificates from the specified validator that we are missing for the given
+    /// chain, and processes them.
     pub async fn try_synchronize_chain_state_from(
         &self,
         name: &ValidatorName,
@@ -1402,12 +1417,12 @@ where
         let info = match node.handle_chain_info_query(query).await {
             Ok(response) if response.check(name).is_ok() => response.info,
             Ok(_) => {
-                tracing::warn!("Ignoring invalid response from validator");
+                warn!("Ignoring invalid response from validator {}", name);
                 // Give up on this validator.
                 return Ok(());
             }
             Err(err) => {
-                tracing::warn!("Ignoring error from validator: {}", err);
+                warn!("Ignoring error from validator {}: {}", name, err);
                 return Ok(());
             }
         };
@@ -1430,79 +1445,87 @@ where
             return Ok(());
         };
         if let Some(proposal) = info.manager.requested_proposed {
-            if proposal.content.block.chain_id == chain_id {
-                let owner = proposal.owner;
-                loop {
-                    let result = self
-                        .client
-                        .local_node
-                        .handle_block_proposal(*proposal.clone())
-                        .await;
-                    if let Err(original_err) = &result {
-                        if let LocalNodeError::WorkerError(WorkerError::ChainError(chain_error)) =
-                            original_err
-                        {
-                            if let ChainError::ExecutionError(
-                                ExecutionError::SystemError(
-                                    SystemExecutionError::BlobNotFoundOnRead(blob_id),
-                                ),
-                                _,
-                            ) = &**chain_error
-                            {
-                                self.update_local_node_with_blob_from(*blob_id, node)
-                                    .await?;
-                                continue;
-                            }
-                        }
-                        tracing::warn!("Skipping proposal from {}: {}", owner, original_err);
+            if proposal.content.block.chain_id != chain_id {
+                warn!(
+                    "Response from validator {} contains an invalid proposal",
+                    name
+                );
+                return Ok(()); // Give up on this validator.
+            }
+            let owner = proposal.owner;
+            while let Err(original_err) = self
+                .client
+                .local_node
+                .handle_block_proposal(*proposal.clone())
+                .await
+            {
+                if let LocalNodeError::WorkerError(WorkerError::ChainError(chain_error)) =
+                    &original_err
+                {
+                    if let ChainError::ExecutionError(
+                        ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(
+                            blob_id,
+                        )),
+                        _,
+                    ) = &**chain_error
+                    {
+                        self.update_local_node_with_blob_from(*blob_id, name, node)
+                            .await?;
+                        continue; // We found the missing blob: retry.
                     }
-                    break;
                 }
+                warn!(
+                    "Skipping proposal from {} and validator {}: {}",
+                    owner, name, original_err
+                );
+                break;
             }
         }
         if let Some(cert) = info.manager.requested_locked {
-            if cert.value().is_validated() && cert.value().chain_id() == chain_id {
-                let hash = cert.hash();
-                let mut values = vec![];
-                let mut blobs = vec![];
-                loop {
-                    let result = self
-                        .client
-                        .local_node
-                        .handle_certificate(*cert.clone(), values, blobs, notifications)
-                        .await;
-                    if let Err(original_err) = &result {
-                        if let LocalNodeError::WorkerError(
-                            WorkerError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids),
-                        ) = original_err
-                        {
-                            values =
-                                LocalNodeClient::<S>::try_download_hashed_certificate_values_from(
-                                    locations, node, name,
-                                )
-                                .await;
-                            blobs = self
-                                .find_missing_blobs_in_validator(
-                                    blob_ids.clone(),
-                                    chain_id,
-                                    name,
-                                    node,
-                                )
-                                .await?;
+            if !cert.value().is_validated() || cert.value().chain_id() != chain_id {
+                warn!(
+                    "Response from validator {} contains an invalid locked block",
+                    name
+                );
+                return Ok(()); // Give up on this validator.
+            }
+            let hash = cert.hash();
+            let mut values = vec![];
+            let mut blobs = vec![];
+            while let Err(original_err) = self
+                .client
+                .local_node
+                .handle_certificate(*cert.clone(), values, blobs, notifications)
+                .await
+            {
+                if let LocalNodeError::WorkerError(
+                    WorkerError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids),
+                ) = &original_err
+                {
+                    values = LocalNodeClient::<S>::try_download_hashed_certificate_values_from(
+                        locations, node, name,
+                    )
+                    .await;
+                    blobs = self
+                        .find_missing_blobs_in_validator(blob_ids.clone(), chain_id, name, node)
+                        .await?;
 
-                            if blobs.len() == blob_ids.len() && values.len() == locations.len() {
-                                continue;
-                            }
-                        }
-                        tracing::warn!("Skipping certificate {}: {}", hash, original_err);
+                    if blobs.len() == blob_ids.len() && values.len() == locations.len() {
+                        continue; // We found the missing blobs: retry.
                     }
-                    break;
                 }
+                warn!(
+                    "Skipping certificate {} from validator {}: {}",
+                    hash, name, original_err
+                );
+                break;
             }
         }
         Ok(())
     }
 
+    /// Downloads the blobs from the specified validator and returns them, including blobs that
+    /// are still pending the the validator's chain manager.
     pub async fn find_missing_blobs_in_validator(
         &self,
         blob_ids: Vec<BlobId>,
@@ -1514,11 +1537,11 @@ where
         let info = match node.handle_chain_info_query(query).await {
             Ok(response) if response.check(name).is_ok() => Some(response.info),
             Ok(_) => {
-                tracing::warn!("Got invalid response from validator");
+                warn!("Got invalid response from validator {}", name);
                 return Ok(Vec::new());
             }
             Err(err) => {
-                tracing::warn!("Got error from validator: {}", err);
+                warn!("Got error from validator {}: {}", name, err);
                 return Ok(Vec::new());
             }
         };
@@ -1543,9 +1566,12 @@ where
         Ok(found_blobs)
     }
 
+    /// Downloads and processes from the specified validator a confirmed block certificate that
+    /// uses the given blob. If this succeeds, the blob will be in our storage.
     async fn update_local_node_with_blob_from(
         &self,
         blob_id: BlobId,
+        name: &ValidatorName,
         node: &impl LocalValidatorNode,
     ) -> Result<(), ChainClientError> {
         let Ok(last_used_by_hash) = node.blob_last_used_by(blob_id).await else {
@@ -1553,21 +1579,35 @@ where
         };
 
         let certificate = node.download_certificate(last_used_by_hash).await?;
+        ensure!(
+            certificate.requires_blob(&blob_id),
+            ChainClientError::InvalidLastUsedByCertificate(blob_id, *name)
+        );
 
         // This will download all ancestors of the certificate and process all of them locally.
         self.receive_certificate(certificate).await?;
         Ok(())
     }
 
+    /// Downloads and processes a confirmed block certificate that uses the given blob.
+    /// If this succeeds, the blob will be in our storage.
     async fn receive_certificate_for_blob(&self, blob_id: BlobId) -> Result<(), ChainClientError> {
         let validators = self.validator_nodes().await?;
         let mut tasks = FuturesUnordered::new();
-        for (_, node) in validators.into_iter() {
+        for (name, node) in validators {
             let node = node.clone();
             tasks.push(async move {
                 let last_used_hash = node.blob_last_used_by(blob_id).await.ok()?;
                 let cert = node.download_certificate(last_used_hash).await.ok()?;
-                self.receive_certificate(cert).await.ok()
+                if cert.requires_blob(&blob_id) {
+                    self.receive_certificate(cert).await.ok()
+                } else {
+                    warn!(
+                        "Got invalid last used by certificate for blob {} from validator {}",
+                        blob_id, name
+                    );
+                    None
+                }
             });
         }
 
@@ -1581,6 +1621,9 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(block))]
+    /// Attempts to execute the block locally. If any incoming message execution fails, that
+    /// message is rejected and execution is retried, until the block accepts only messages
+    /// that succeed.
     async fn stage_block_execution_and_discard_failing_messages(
         &self,
         mut block: Block,
@@ -1620,6 +1663,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(block))]
+    /// Attempts to execute the block locally. If any attempt to read a blob fails, the blob is
+    /// downloaded and execution is retried.
     async fn stage_block_execution(
         &self,
         block: Block,
@@ -1638,7 +1683,7 @@ where
                 ) = &**chain_error
                 {
                     self.receive_certificate_for_blob(*blob_id).await?;
-                    continue;
+                    continue; // We found the missing blob: retry.
                 }
             }
             return Ok(result?);
@@ -1888,6 +1933,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(incoming_messages, operations))]
+    /// Sets the pending block, so that next time `process_pending_block_without_prepare` is
+    /// called, it will be proposed to the validators.
     async fn set_pending_block(
         &self,
         incoming_messages: Vec<IncomingMessage>,
@@ -2521,16 +2568,6 @@ where
         .await
     }
 
-    /// Reads some blob. This is test-only, so we can test without a Wasm application.
-    #[cfg(with_testing)]
-    pub async fn read_blob(
-        &mut self,
-        blob_id: BlobId,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        self.execute_operation(Operation::System(SystemOperation::ReadBlob { blob_id }))
-            .await
-    }
-
     /// Adds pending blobs
     pub async fn add_pending_blobs(&mut self, pending_blobs: &[HashedBlob]) {
         for hashed_blob in pending_blobs {
@@ -2840,12 +2877,14 @@ where
                     > Some(height)
                 {
                     debug!("Accepting redundant notification for new message");
+                    return;
                 }
-                if let Err(e) = self
+                if let Err(error) = self
                     .find_received_certificates_from_validator(name, node, local_node.clone())
                     .await
                 {
-                    error!("Fail to process notification: {e}");
+                    error!("Fail to process notification: {error}");
+                    return;
                 }
                 if self
                     .local_next_block_height(origin.sender, &mut local_node)
@@ -2864,12 +2903,15 @@ where
                     > Some(height)
                 {
                     debug!("Accepting redundant notification for new block");
+                    return;
                 }
-                self.try_synchronize_chain_state_from(&name, &node, chain_id, &mut notifications)
+                if let Err(error) = self
+                    .try_synchronize_chain_state_from(&name, &node, chain_id, &mut notifications)
                     .await
-                    .unwrap_or_else(|e| {
-                        error!("Fail to process notification: {e}");
-                    });
+                {
+                    error!("Fail to process notification: {error}");
+                    return;
+                }
                 self.handle_notifications(&mut notifications);
                 let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
@@ -2884,6 +2926,7 @@ where
                 if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
                         debug!("Accepting redundant notification for new round");
+                        return;
                     }
                 }
                 if let Err(error) = self
@@ -2891,6 +2934,7 @@ where
                     .await
                 {
                     error!("Fail to process notification: {error}");
+                    return;
                 }
                 self.handle_notifications(&mut notifications);
                 let Some(info) = self.local_chain_info(chain_id, &mut local_node).await else {

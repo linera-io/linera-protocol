@@ -5,7 +5,10 @@
 
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
-    data_types::{Amount, BlockHeight, HashedBlob, Resources, SendMessageRequest, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, BlockHeight, HashedBlob, Resources, SendMessageRequest,
+        Timestamp,
+    },
     identifiers::{
         Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, MessageId, Owner,
         StreamName,
@@ -191,6 +194,22 @@ where
     /// permission to do so.
     pub fn close_chain(&mut self) -> Result<(), CloseChainError> {
         wit::close_chain().map_err(|error| error.into())
+    }
+
+    /// Opens a new chain, configuring it with the provided `chain_ownership`,
+    /// `application_permissions` and initial `balance` (debited from the current chain).
+    pub fn open_chain(
+        &mut self,
+        chain_ownership: ChainOwnership,
+        application_permissions: ApplicationPermissions,
+        balance: Amount,
+    ) -> ChainId {
+        wit::open_chain(
+            &chain_ownership.into(),
+            &application_permissions.into(),
+            balance.into(),
+        )
+        .into()
     }
 
     /// Calls another application.

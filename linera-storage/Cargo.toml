@@ -50,7 +50,6 @@ prometheus.workspace = true
 serde.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros"] }
-tracing.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 linera-storage-service.workspace = true

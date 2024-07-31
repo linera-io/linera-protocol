@@ -63,7 +63,7 @@ impl chain_listener::ClientContext for ClientContext {
             .map(|kp| kp.copy())
             .into_iter()
             .collect();
-        self.client.create_chain(
+        self.client.create_chain_client(
             chain_id,
             known_key_pairs,
             self.wallet.genesis_admin_chain(),

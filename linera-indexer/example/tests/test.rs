@@ -7,9 +7,9 @@
     feature = "scylladb"
 ))]
 
-use std::{str::FromStr, time::Duration};
+use std::{str::FromStr, sync::LazyLock, time::Duration};
 
-use linera_base::{command::resolve_binary, data_types::Amount, identifiers::ChainId, sync::Lazy};
+use linera_base::{command::resolve_binary, data_types::Amount, identifiers::ChainId};
 use linera_indexer_graphql_client::{
     indexer::{plugins, state, Plugins, State},
     operations::{get_operation, GetOperation, OperationKey},
@@ -27,7 +27,7 @@ use tokio::{
 use tracing::{info, warn};
 
 /// A static lock to prevent integration tests from running in parallel.
-static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+static INTEGRATION_TEST_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 fn reqwest_client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(30))

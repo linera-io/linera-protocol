@@ -3,4 +3,6 @@
 
 //! Types reexported from [`linera_base`].
 
-pub use linera_base::{abi::*, crypto::*, data_types::*, identifiers::*, BcsHexParseError};
+pub use linera_base::{
+    abi::*, crypto::*, data_types::*, identifiers::*, ownership::*, BcsHexParseError,
+};

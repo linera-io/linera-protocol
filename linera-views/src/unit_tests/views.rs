@@ -1,9 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::VecDeque, marker::PhantomData};
+use std::{collections::VecDeque, fmt::Debug, marker::PhantomData};
 
 use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Serialize};
 use test_case::test_case;
 #[cfg(with_rocksdb)]
 use {
@@ -23,7 +24,8 @@ use crate::{
     common::Context,
     memory::{create_memory_context, MemoryContext},
     queue_view::QueueView,
-    register_view::HashedRegisterView,
+    reentrant_collection_view::ReentrantCollectionView,
+    register_view::{HashedRegisterView, RegisterView},
     test_utils::test_views::{
         TestCollectionView, TestLogView, TestMapView, TestRegisterView, TestView,
     },
@@ -154,11 +156,8 @@ where
                 expected_state.pop_front();
             }
             Operation::CommitAndReload => {
-                let context = context.clone();
-                let mut batch = Batch::new();
-                queue.flush(&mut batch)?;
-                context.write_batch(batch).await?;
-                queue = QueueView::load(context).await?;
+                save_view(&context, &mut queue).await?;
+                queue = QueueView::load(context.clone()).await?;
             }
         }
 
@@ -356,9 +355,7 @@ async fn test_clearing_of_cached_stored_hash() -> anyhow::Result<()> {
     assert_eq!(view.hash_mut().await?, populated_hash);
     assert_ne!(populated_hash, empty_hash);
 
-    let mut batch = Batch::new();
-    view.flush(&mut batch)?;
-    context.write_batch(batch).await?;
+    save_view(&context, &mut view).await?;
 
     assert_eq!(view.hash().await?, populated_hash);
     assert_eq!(view.hash_mut().await?, populated_hash);
@@ -368,9 +365,7 @@ async fn test_clearing_of_cached_stored_hash() -> anyhow::Result<()> {
     assert_eq!(view.hash().await?, empty_hash);
     assert_eq!(view.hash_mut().await?, empty_hash);
 
-    let mut batch = Batch::new();
-    view.flush(&mut batch)?;
-    context.write_batch(batch).await?;
+    save_view(&context, &mut view).await?;
 
     assert_eq!(view.hash().await?, empty_hash);
     assert_eq!(view.hash_mut().await?, empty_hash);
@@ -379,6 +374,163 @@ async fn test_clearing_of_cached_stored_hash() -> anyhow::Result<()> {
 
     assert_eq!(view.hash().await?, empty_hash);
     assert_eq!(view.hash_mut().await?, empty_hash);
+
+    Ok(())
+}
+
+/// Checks if a [`ReentrantCollectionView`] doesn't have pending changes after loading its
+/// entries.
+#[tokio::test]
+async fn test_reentrant_collection_view_has_no_pending_changes_after_try_load_entries(
+) -> anyhow::Result<()> {
+    let context = create_memory_context();
+    let values = [(1, "first".to_owned()), (2, "second".to_owned())];
+    let mut view =
+        ReentrantCollectionView::<_, u8, RegisterView<_, String>>::load(context.clone()).await?;
+
+    assert!(!view.has_pending_changes().await);
+    populate_reentrant_collection_view(&mut view, values.clone()).await?;
+    assert!(view.has_pending_changes().await);
+    save_view(&context, &mut view).await?;
+    assert!(!view.has_pending_changes().await);
+
+    let entries = view.try_load_entries(vec![&1, &2]).await?;
+    assert_eq!(entries.len(), 2);
+    assert!(entries[0].is_some());
+    assert!(entries[1].is_some());
+    assert_eq!(entries[0].as_ref().unwrap().get(), &values[0].1);
+    assert_eq!(entries[1].as_ref().unwrap().get(), &values[1].1);
+
+    assert!(!view.has_pending_changes().await);
+
+    Ok(())
+}
+
+/// Check if a [`ReentrantCollectionView`] has pending changes after adding an entry.
+#[tokio::test]
+async fn test_reentrant_collection_view_has_pending_changes_after_new_entry() -> anyhow::Result<()>
+{
+    let context = create_memory_context();
+    let values = [(1, "first".to_owned()), (2, "second".to_owned())];
+    let mut view =
+        ReentrantCollectionView::<_, u8, RegisterView<_, String>>::load(context.clone()).await?;
+
+    populate_reentrant_collection_view(&mut view, values.clone()).await?;
+    save_view(&context, &mut view).await?;
+    assert!(!view.has_pending_changes().await);
+
+    {
+        let entry = view.try_load_entry_mut(&3).await?;
+        assert_eq!(entry.get(), "");
+        assert!(!entry.has_pending_changes().await);
+    }
+
+    assert!(view.has_pending_changes().await);
+
+    Ok(())
+}
+
+/// Check if a acquiring a write-lock to a sub-view causes the collection to have pending changes.
+#[tokio::test]
+async fn test_reentrant_collection_view_has_pending_changes_after_try_load_entry_mut(
+) -> anyhow::Result<()> {
+    let context = create_memory_context();
+    let values = [(1, "first".to_owned()), (2, "second".to_owned())];
+    let mut view =
+        ReentrantCollectionView::<_, u8, RegisterView<_, String>>::load(context.clone()).await?;
+
+    populate_reentrant_collection_view(&mut view, values.clone()).await?;
+    save_view(&context, &mut view).await?;
+    assert!(!view.has_pending_changes().await);
+
+    let entry = view
+        .try_load_entry(&1)
+        .await?
+        .expect("Missing first entry in collection");
+    assert_eq!(entry.get(), &values[0].1);
+    assert!(!entry.has_pending_changes().await);
+
+    assert!(!view.has_pending_changes().await);
+
+    drop(entry);
+    let entry = view.try_load_entry_mut(&1).await?;
+    assert_eq!(entry.get(), &values[0].1);
+    assert!(!entry.has_pending_changes().await);
+
+    assert!(view.has_pending_changes().await);
+
+    Ok(())
+}
+
+/// Check if a acquiring multiple write-locks to sub-views causes the collection to have pending
+/// changes.
+#[tokio::test]
+async fn test_reentrant_collection_view_has_pending_changes_after_try_load_entries_mut(
+) -> anyhow::Result<()> {
+    let context = create_memory_context();
+    let values = [
+        (1, "first".to_owned()),
+        (2, "second".to_owned()),
+        (3, "third".to_owned()),
+        (4, "fourth".to_owned()),
+    ];
+    let mut view =
+        ReentrantCollectionView::<_, u8, RegisterView<_, String>>::load(context.clone()).await?;
+
+    populate_reentrant_collection_view(&mut view, values.clone()).await?;
+    save_view(&context, &mut view).await?;
+    assert!(!view.has_pending_changes().await);
+
+    let entries = view.try_load_entries([&2, &3]).await?;
+    assert_eq!(entries.len(), 2);
+    assert!(entries[0].is_some());
+    assert!(entries[1].is_some());
+    assert_eq!(entries[0].as_ref().unwrap().get(), &values[1].1);
+    assert_eq!(entries[1].as_ref().unwrap().get(), &values[2].1);
+    assert!(!entries[0].as_ref().unwrap().has_pending_changes().await);
+    assert!(!entries[1].as_ref().unwrap().has_pending_changes().await);
+
+    assert!(!view.has_pending_changes().await);
+
+    drop(entries);
+    let entries = view.try_load_entries_mut([&2, &3]).await?;
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].get(), &values[1].1);
+    assert_eq!(entries[1].get(), &values[2].1);
+    assert!(!entries[0].has_pending_changes().await);
+    assert!(!entries[1].has_pending_changes().await);
+
+    assert!(view.has_pending_changes().await);
+
+    Ok(())
+}
+
+/// Saves a [`View`] into the [`MemoryContext<()>`] storage simulation.
+async fn save_view<C>(context: &C, view: &mut impl View<C>) -> anyhow::Result<()>
+where
+    C: Context,
+{
+    let mut batch = Batch::new();
+    view.flush(&mut batch)?;
+    context.write_batch(batch).await?;
+    Ok(())
+}
+
+/// Populates a [`ReentrantCollectionView`] with some `entries`.
+async fn populate_reentrant_collection_view<C, Key, Value>(
+    collection: &mut ReentrantCollectionView<C, Key, RegisterView<C, Value>>,
+    entries: impl IntoIterator<Item = (Key, Value)>,
+) -> anyhow::Result<()>
+where
+    C: Context + Send + Sync,
+    Key: Serialize + DeserializeOwned + Clone + Debug + Default + Send + Sync,
+    Value: Serialize + DeserializeOwned + Default + Send + Sync,
+    ViewError: From<C::Error>,
+{
+    for (key, value) in entries {
+        let mut entry = collection.try_load_entry_mut(&key).await?;
+        entry.set(value);
+    }
 
     Ok(())
 }

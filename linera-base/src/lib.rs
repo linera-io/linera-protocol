@@ -21,7 +21,6 @@ pub mod identifiers;
 pub mod ownership;
 #[cfg(with_metrics)]
 pub mod prometheus_util;
-pub mod sync;
 pub mod tracing;
 #[cfg(test)]
 mod unit_tests;
