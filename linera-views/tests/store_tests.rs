@@ -10,7 +10,7 @@ use linera_views::{
         self, get_random_test_scenarios, run_big_write_read, run_reads, run_writes_from_blank,
         run_writes_from_state,
     },
-    value_splitting::create_test_memory_store,
+    value_splitting::create_value_splitting_memory_store,
 };
 #[cfg(web)]
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -21,7 +21,7 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[tokio::test]
 async fn test_reads_test_memory() {
     for scenario in get_random_test_scenarios() {
-        let key_value_store = create_test_memory_store();
+        let key_value_store = create_value_splitting_memory_store();
         run_reads(key_value_store, scenario).await;
     }
 }
@@ -93,7 +93,7 @@ async fn test_specific_reads_memory() {
 
 #[tokio::test]
 async fn test_test_memory_writes_from_blank() {
-    let key_value_store = create_test_memory_store();
+    let key_value_store = create_value_splitting_memory_store();
     run_writes_from_blank(&key_value_store).await;
 }
 
