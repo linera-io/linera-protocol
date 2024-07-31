@@ -370,13 +370,15 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
                 let part_key_values = view.map.key_values_by_prefix(vec![u]).await?;
                 assert_eq!(part_state_vec, part_key_values);
             }
-            let keys_vec = all_keys.clone().into_iter().collect::<Vec<_>>();
+            let keys_vec = all_keys.iter().cloned().collect::<Vec<_>>();
             let values = view.map.multi_get(keys_vec.clone()).await?;
             for i in 0..keys_vec.len() {
                 let key = &keys_vec[i];
                 let test_map = new_state_map.contains_key(key);
-                let test_view = view.map.get(key).await?.is_some();
-                assert_eq!(test_map, test_view);
+                let test_view1 = view.map.get(key).await?.is_some();
+                let test_view2 = view.map.contains_key(key).await?;
+                assert_eq!(test_map, test_view1);
+                assert_eq!(test_map, test_view2);
                 assert_eq!(test_map, values[i].is_some());
             }
         }

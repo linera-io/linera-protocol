@@ -289,7 +289,7 @@ where
         Ok(self.context.read_value(&key).await?)
     }
 
-    /// Reads the value at the given positions, if any.
+    /// Reads the values at the given positions, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
