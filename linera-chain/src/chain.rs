@@ -729,10 +729,6 @@ where
                 self.execution_state.system.closed.set(true);
             }
         }
-        ensure!(
-            !self.is_closed() || !block.incoming_bundles.is_empty(),
-            ChainError::ClosedChain
-        );
         let app_permissions = self.execution_state.system.application_permissions.get();
         let mut mandatory = HashSet::<UserApplicationId>::from_iter(
             app_permissions.mandatory_applications.iter().cloned(),

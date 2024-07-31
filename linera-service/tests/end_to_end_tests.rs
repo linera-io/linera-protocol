@@ -3193,7 +3193,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     // We haven't process incoming messages yet.
     assert_eq!(
         client2.local_balance(Account::chain(chain2)).await?,
-        Amount::from_tokens(0),
+        Amount::ZERO,
     );
     assert_eq!(
         client2.query_balance(Account::chain(chain2)).await?,
