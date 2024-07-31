@@ -14,7 +14,7 @@ interface service-system-api {
     fetch-url: func(url: string) -> list<u8>;
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
     http-post: func(query: string, content-type: string, payload: list<u8>) -> list<u8>;
-    read-blob: func(blob-id: blob-id) -> hashed-blob;
+    read-blob: func(blob-id: blob-id) -> blob;
     assert-before: func(timestamp: timestamp);
     log: func(message: string, level: log-level);
 
@@ -52,11 +52,6 @@ interface service-system-api {
         part2: u64,
         part3: u64,
         part4: u64,
-    }
-
-    record hashed-blob {
-        id: blob-id,
-        blob: blob,
     }
 
     enum log-level {

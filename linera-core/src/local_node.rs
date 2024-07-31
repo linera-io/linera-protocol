@@ -448,7 +448,7 @@ where
         self.node.state.recent_hashed_blobs()
     }
 
-    #[tracing::instrument(level = "trace", skip(self, hashed_blob), fields(blob_id = ?hashed_blob.id))]
+    #[tracing::instrument(level = "trace", skip(self, hashed_blob), fields(blob_id = ?hashed_blob.id()))]
     pub async fn cache_recent_blob(&self, hashed_blob: &HashedBlob) -> bool {
         self.node
             .state

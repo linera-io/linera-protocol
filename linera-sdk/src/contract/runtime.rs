@@ -6,8 +6,8 @@
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, HashedBlob, Resources, SendMessageRequest,
-        Timestamp,
+        Amount, ApplicationPermissions, Blob, BlockHeight, HashedBlob, Resources,
+        SendMessageRequest, Timestamp,
     },
     identifiers::{
         Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, MessageId, Owner,
@@ -273,7 +273,7 @@ where
 
     /// Reads a blob with the given `BlobId` from storage.
     pub fn read_blob(&mut self, blob_id: BlobId) -> HashedBlob {
-        wit::read_blob(blob_id.into()).into()
+        Blob::from(wit::read_blob(blob_id.into())).with_hash_unchecked(blob_id)
     }
 }
 
