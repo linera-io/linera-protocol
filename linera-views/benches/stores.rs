@@ -8,11 +8,19 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use linera_views::{
     batch::Batch,
     test_utils::{prefix_expansion, get_random_key_values2},
-    memory::MemoryStore,
-    memory::create_memory_store,
+    memory::{create_memory_store, MemoryStore},
     common::{LocalKeyValueStore},
 };
 use tokio::runtime::Runtime;
+
+#[cfg(with_rocksdb)]
+use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbStore};
+
+#[cfg(with_dynamodb)]
+use linera_views::dynamo_db::{create_dynamo_db_test_store, DynamoDbStore};
+
+#[cfg(with_scylladb)]
+use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbStore};
 
 pub async fn performance_contains_key<S: LocalKeyValueStore>(store: S, iterations: u64) -> Duration
 where
@@ -77,7 +85,7 @@ fn bench_contain_key(criterion: &mut Criterion) {
             bencher
                 .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
 		.iter_custom(|iterations| async move {
-                    let store = create_dynamo_db_test_config().await;
+                    let store = create_dynamo_db_test_store().await;
                     performance_contains_key::<DynamoDbStore>(store, iterations).await
                 })
         }
