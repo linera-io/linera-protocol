@@ -13,7 +13,7 @@ use linera_base::{
     identifiers::{BlobId, ChainDescription, ChainId},
 };
 use linera_chain::data_types::Block;
-use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
+use linera_core::{client::ChainClient, node::LocalValidatorNodeProvider};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::Rng as _;
@@ -164,7 +164,7 @@ impl Wallet {
 
     pub async fn update_from_state<P, S>(&mut self, chain_client: &ChainClient<P, S>)
     where
-        P: ValidatorNodeProvider + Sync + 'static,
+        P: LocalValidatorNodeProvider + Sync + 'static,
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::StoreError>,
     {
