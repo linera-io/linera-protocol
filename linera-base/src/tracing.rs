@@ -41,10 +41,7 @@ pub fn init() {
                 .from_env_lossy(),
         );
 
-    if std::env::var("NO_COLOR")
-        .ok()
-        .filter(|x| !x.is_empty())
-        .is_some()
+    if std::env::var("NO_COLOR").is_ok_and(|x| !x.is_empty())
         || cfg!(feature = "web")
         || !std::io::stderr().is_terminal()
     {
