@@ -836,8 +836,11 @@ where
     let _certs = sender.process_inbox().await.unwrap();
 
     // Make a post.
-    let text = "Please like and subscribe! No, wait, like isn't supported yet.".to_string();
-    let post = social::Operation::Post { text: text.clone() };
+    let text = "Please like and comment!.".to_string();
+    let post = social::Operation::Post {
+        text: text.clone(),
+        image_url: None,
+    };
     let cert = sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
@@ -899,6 +902,7 @@ where
     // Make a post.
     let post = social::Operation::Post {
         text: "Nobody will read this!".to_string(),
+        image_url: None,
     };
     let cert = sender
         .execute_operation(Operation::user(application_id, &post)?)
