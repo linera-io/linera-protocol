@@ -7,11 +7,9 @@ use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
 use linera_storage::{MemoryStorage, Storage};
-use linera_views::{
-    common::{CommonStoreConfig, LocalAdminKeyValueStore as _},
-    memory::MemoryStoreConfig,
-    views::ViewError,
-};
+#[cfg(with_storage)]
+use linera_views::common::LocalAdminKeyValueStore as _;
+use linera_views::{common::CommonStoreConfig, memory::MemoryStoreConfig, views::ViewError};
 use tracing::error;
 #[cfg(feature = "scylladb")]
 use {

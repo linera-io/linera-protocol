@@ -16,13 +16,18 @@ use linera_execution::{
     WasmRuntime, WithWasmDefault as _,
 };
 use linera_views::common::CommonStoreConfig;
+#[cfg(with_persist)]
+use {
+    crate::config::GenesisConfig,
+    crate::config::WalletState,
+    crate::persistent::{self, Persist},
+    crate::wallet::Wallet,
+};
 
 #[cfg(feature = "fs")]
 use crate::config::GenesisConfig;
 use crate::{
     chain_listener::ChainListenerConfig,
-    config::WalletState,
-    persistent::{self, Persist},
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
     util,
     wallet::Wallet,
@@ -220,12 +225,19 @@ impl ClientOptions {
     }
 }
 
-#[cfg(web)]
+#[cfg(feature = "local_storage")]
 impl ClientOptions {
     pub fn wallet(&self) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
         Ok(WalletState::new(persistent::LocalStorage::read(
             "linera-wallet",
         )?))
+    }
+}
+
+#[cfg(not(with_persist))]
+impl ClientOptions {
+    pub fn wallet(&self) -> anyhow::Result<WalletState<Box<dyn Persist<Target = Wallet>>>> {
+        unimplemented!("No persistence backend selected for wallet; please use one of the `fs` or `local_storage` features")
     }
 }
 
