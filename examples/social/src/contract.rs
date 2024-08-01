@@ -98,14 +98,10 @@ impl SocialContract {
         image_url: Option<String>,
     ) -> (Destination, Message) {
         let timestamp = self.runtime.system_time();
-        let image = match image_url {
-            Some(image) => Some(image),
-            None => None,
-        };
         self.state.own_posts.push(OwnPost {
             timestamp,
             text,
-            image_url: image,
+            image_url,
         });
         let count = self.state.own_posts.count();
         let mut posts = vec![];

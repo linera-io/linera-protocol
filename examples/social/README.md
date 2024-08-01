@@ -125,7 +125,7 @@ Now make a post [in the 8080 tab](http://localhost:8080/chains/e476187f6ddfeb9d5
 mutation {
     post(
         text: "Linera Social is the new Mastodon!"
-        image: "https://linera.org/img/logo.svg" # optional
+        imageUrl: "https://linera.org/img/logo.svg" # optional
     )
 }
 ```
