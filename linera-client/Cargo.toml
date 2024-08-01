@@ -62,7 +62,6 @@ bcs.workspace = true
 cfg-if.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 clap.workspace = true
-colored.workspace = true
 dirs.workspace = true
 futures.workspace = true
 gloo-storage = "0.3.0"

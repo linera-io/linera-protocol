@@ -4256,7 +4256,6 @@ dependencies = [
  "cfg_aliases",
  "chrono",
  "clap",
- "colored",
  "counter",
  "crowd-funding",
  "dirs",

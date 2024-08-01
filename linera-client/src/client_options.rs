@@ -147,21 +147,23 @@ impl ClientOptions {
     }
 
     pub fn storage_config(&self) -> Result<StorageConfigNamespace, anyhow::Error> {
-        match &self.storage_config {
-            Some(config) => config.parse(),
-            #[cfg(feature = "rocksdb")]
-            None => {
-                let storage_config = crate::storage::StorageConfig::RocksDb {
-                    path: self.config_path()?.join("wallet.db"),
-                };
-                let namespace = "default".to_string();
-                Ok(StorageConfigNamespace {
-                    storage_config,
-                    namespace,
-                })
+        if let Some(config) = &self.storage_config {
+            config.parse()
+        } else {
+            cfg_if::cfg_if! {
+                if #[cfg(all(feature = "rocksdb", feature = "fs"))] {
+                    let storage_config = crate::storage::StorageConfig::RocksDb {
+                        path: self.config_path()?.join("wallet.db"),
+                    };
+                    let namespace = "default".to_string();
+                    Ok(StorageConfigNamespace {
+                        storage_config,
+                        namespace,
+                    })
+                } else {
+                    anyhow::bail!("A storage option must be provided")
+                }
             }
-            #[cfg(not(feature = "rocksdb"))]
-            None => anyhow::bail!("A storage option must be provided"),
         }
     }
 
