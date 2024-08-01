@@ -286,7 +286,7 @@ impl ValidatorNode for GrpcClient {
         Ok(self
             .client
             .clone()
-            .download_blob(<BlobId as Into<api::BlobId>>::into(blob_id))
+            .download_blob(api::BlobId::try_from(blob_id)?)
             .await?
             .into_inner()
             .into())
@@ -323,7 +323,7 @@ impl ValidatorNode for GrpcClient {
         Ok(self
             .client
             .clone()
-            .blob_last_used_by(<BlobId as Into<api::BlobId>>::into(blob_id))
+            .blob_last_used_by(api::BlobId::try_from(blob_id)?)
             .await?
             .into_inner()
             .try_into()?)

@@ -898,7 +898,7 @@ impl Runnable for Job {
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing blob on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher);
-                let blob_id = context.publish_blob(&chain_client, blob_path).await?;
+                let blob_id = context.publish_data_blob(&chain_client, blob_path).await?;
                 println!("{}", blob_id);
                 info!("{}", "Blob published successfully!".green().bold());
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());

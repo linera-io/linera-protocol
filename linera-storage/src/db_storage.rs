@@ -523,7 +523,7 @@ where
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob = maybe_blob.ok_or_else(|| ViewError::not_found("value for blob ID", blob_id))?;
-        Ok(blob.with_hash_unchecked(blob_id))
+        Ok(blob.with_blob_id_unchecked(blob_id))
     }
 
     async fn read_hashed_blobs(
@@ -547,7 +547,9 @@ where
         Ok(blob_ids
             .iter()
             .zip(maybe_blobs)
-            .map(|(blob_id, maybe_blob)| maybe_blob.map(|blob| blob.with_hash_unchecked(*blob_id)))
+            .map(|(blob_id, maybe_blob)| {
+                maybe_blob.map(|blob| blob.with_blob_id_unchecked(*blob_id))
+            })
             .collect())
     }
 
@@ -597,7 +599,7 @@ where
 
     async fn write_hashed_blob(&self, blob: &HashedBlob) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+        Self::add_blob_to_batch(&blob.id(), blob.blob(), &mut batch)?;
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -649,7 +651,7 @@ where
     async fn write_hashed_blobs(&self, blobs: &[HashedBlob]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for blob in blobs {
-            Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+            Self::add_blob_to_batch(&blob.id(), blob.blob(), &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -665,7 +667,7 @@ where
             Self::add_hashed_cert_value_to_batch(value, &mut batch)?;
         }
         for blob in blobs {
-            Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+            Self::add_blob_to_batch(&blob.id(), blob.blob(), &mut batch)?;
         }
         Self::add_certificate_to_batch(certificate, &mut batch)?;
         self.write_batch(batch).await
@@ -741,7 +743,7 @@ where
 
     fn add_blob_to_batch(
         blob_id: &BlobId,
-        blob: &HashedBlob,
+        blob: &Blob,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]

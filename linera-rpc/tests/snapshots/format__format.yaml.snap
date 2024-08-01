@@ -47,8 +47,15 @@ Blob:
   STRUCT:
     - bytes: BYTES
 BlobId:
-  NEWTYPESTRUCT:
-    TYPENAME: CryptoHash
+  STRUCT:
+    - hash:
+        TYPENAME: CryptoHash
+    - blob_type:
+        TYPENAME: BlobType
+BlobType:
+  ENUM:
+    0:
+      Data: UNIT
 Block:
   STRUCT:
     - chain_id:
@@ -108,7 +115,7 @@ BlockProposal:
           TYPENAME: CertificateValue
     - hashed_blobs:
         SEQ:
-          TYPENAME: Blob
+          TYPENAME: HashedBlob
     - validated_block_certificate:
         OPTION:
           TYPENAME: LiteCertificate
@@ -283,7 +290,7 @@ ChainManagerInfo:
           KEY:
             TYPENAME: BlobId
           VALUE:
-            TYPENAME: Blob
+            TYPENAME: HashedBlob
 ChainOwnership:
   STRUCT:
     - super_owners:
@@ -429,12 +436,18 @@ HandleCertificateRequest:
           TYPENAME: CertificateValue
     - hashed_blobs:
         SEQ:
-          TYPENAME: Blob
+          TYPENAME: HashedBlob
 HandleLiteCertRequest:
   STRUCT:
     - certificate:
         TYPENAME: LiteCertificate
     - wait_for_outgoing_messages: BOOL
+HashedBlob:
+  STRUCT:
+    - blob_type:
+        TYPENAME: BlobType
+    - blob:
+        TYPENAME: Blob
 IncomingMessage:
   STRUCT:
     - origin:

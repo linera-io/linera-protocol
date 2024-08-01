@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
-    identifiers::{ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner},
 };
 
 use super::wit::service_system_api as wit_system_api;
@@ -47,7 +47,16 @@ impl From<Owner> for wit_system_api::Owner {
 impl From<BlobId> for wit_system_api::BlobId {
     fn from(blob_id: BlobId) -> Self {
         wit_system_api::BlobId {
-            inner0: blob_id.0.into(),
+            hash: blob_id.hash.into(),
+            blob_type: blob_id.blob_type.into(),
+        }
+    }
+}
+
+impl From<BlobType> for wit_system_api::BlobType {
+    fn from(blob_type: BlobType) -> Self {
+        match blob_type {
+            BlobType::Data => wit_system_api::BlobType::Data,
         }
     }
 }

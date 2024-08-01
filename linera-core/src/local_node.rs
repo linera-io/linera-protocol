@@ -10,7 +10,7 @@ use std::{
 
 use futures::future;
 use linera_base::{
-    data_types::{ArithmeticError, Blob, BlockHeight, HashedBlob},
+    data_types::{ArithmeticError, BlockHeight, HashedBlob},
     identifiers::{BlobId, ChainId, MessageId},
 };
 use linera_chain::{
@@ -729,11 +729,15 @@ where
         node: &impl LocalValidatorNode,
         blob_id: BlobId,
     ) -> Option<HashedBlob> {
-        match node.download_blob(blob_id).await.map(Blob::into_hashed) {
-            Ok(hashed_blob) if hashed_blob.id() == blob_id => Some(hashed_blob),
-            Ok(_) => {
-                tracing::info!("Validator {name} sent an invalid blob {blob_id}.");
-                None
+        match node.download_blob(blob_id).await {
+            Ok(blob) => {
+                let hashed_blob = blob.with_blob_id_checked(blob_id);
+
+                if hashed_blob.is_none() {
+                    tracing::info!("Validator {name} sent an invalid blob {blob_id}.");
+                }
+
+                hashed_blob
             }
             Err(error) => {
                 tracing::debug!("Failed to fetch blob {blob_id} from validator {name}: {error}");

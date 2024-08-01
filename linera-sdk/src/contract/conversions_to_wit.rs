@@ -10,8 +10,8 @@ use linera_base::{
         Timestamp,
     },
     identifiers::{
-        Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination, MessageId,
-        Owner, StreamName,
+        Account, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, ChannelName, Destination,
+        MessageId, Owner, StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -48,7 +48,16 @@ impl From<Owner> for wit_system_api::Owner {
 impl From<BlobId> for wit_system_api::BlobId {
     fn from(blob_id: BlobId) -> Self {
         wit_system_api::BlobId {
-            inner0: blob_id.0.into(),
+            hash: blob_id.hash.into(),
+            blob_type: blob_id.blob_type.into(),
+        }
+    }
+}
+
+impl From<BlobType> for wit_system_api::BlobType {
+    fn from(blob_id: BlobType) -> Self {
+        match blob_id {
+            BlobType::Data => wit_system_api::BlobType::Data,
         }
     }
 }
