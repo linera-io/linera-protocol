@@ -546,15 +546,17 @@ impl TryFrom<api::BlobId> for BlobId {
     type Error = GrpcProtoConversionError;
 
     fn try_from(blob_id: api::BlobId) -> Result<Self, Self::Error> {
-        Ok(Self(CryptoHash::try_from(blob_id.bytes.as_slice())?))
+        Ok(bincode::deserialize(blob_id.bytes.as_slice())?)
     }
 }
 
-impl From<BlobId> for api::BlobId {
-    fn from(blob_id: BlobId) -> Self {
-        Self {
-            bytes: blob_id.0.as_bytes().to_vec(),
-        }
+impl TryFrom<BlobId> for api::BlobId {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(blob_id: BlobId) -> Result<Self, Self::Error> {
+        Ok(Self {
+            bytes: bincode::serialize(&blob_id)?,
+        })
     }
 }
 

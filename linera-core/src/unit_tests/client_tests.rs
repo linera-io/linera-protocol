@@ -1513,7 +1513,7 @@ where
         )
         .await?;
 
-    let blob0 = HashedBlob::test_blob("blob0");
+    let blob0 = HashedBlob::test_data_blob("blob0");
     let blob0_id = blob0.id();
 
     // Try to read a blob without publishing it first, should fail
@@ -1560,7 +1560,7 @@ where
         .await;
 
     client2_a.synchronize_from_validators().await.unwrap();
-    let blob1 = HashedBlob::test_blob("blob1");
+    let blob1 = HashedBlob::test_data_blob("blob1");
     let blob1_id = blob1.id();
 
     client2_a.add_pending_blobs(&[blob1]).await;
@@ -1681,7 +1681,7 @@ where
     // Take one validator down
     builder.set_fault_type([3], FaultType::Offline).await;
 
-    let blob0 = HashedBlob::test_blob("blob0");
+    let blob0 = HashedBlob::test_data_blob("blob0");
     let blob0_id = blob0.id();
 
     // Publish blob on chain 1
@@ -1697,7 +1697,7 @@ where
         .await;
 
     client2_a.synchronize_from_validators().await.unwrap();
-    let blob1 = HashedBlob::test_blob("blob1");
+    let blob1 = HashedBlob::test_data_blob("blob1");
     let blob1_id = blob1.id();
 
     client2_a.add_pending_blobs(&[blob1]).await;
@@ -1828,7 +1828,7 @@ where
     // Take one validator down
     builder.set_fault_type([3], FaultType::Offline).await;
 
-    let blob0 = HashedBlob::test_blob("blob0");
+    let blob0 = HashedBlob::test_data_blob("blob0");
     let blob0_id = blob0.id();
 
     client1.synchronize_from_validators().await.unwrap();
@@ -1840,7 +1840,7 @@ where
         .unwrap()
         .requires_blob(&blob0_id));
 
-    let blob2 = HashedBlob::test_blob("blob2");
+    let blob2 = HashedBlob::test_data_blob("blob2");
     let blob2_id = blob2.id();
 
     client2.synchronize_from_validators().await.unwrap();
@@ -1860,7 +1860,7 @@ where
         .await;
 
     client3_a.synchronize_from_validators().await.unwrap();
-    let blob1 = HashedBlob::test_blob("blob1");
+    let blob1 = HashedBlob::test_data_blob("blob1");
     let blob1_id = blob1.id();
 
     client3_a.add_pending_blobs(&[blob1]).await;
@@ -1934,7 +1934,7 @@ where
         .await;
 
     client3_b.synchronize_from_validators().await.unwrap();
-    let blob3 = HashedBlob::test_blob("blob3");
+    let blob3 = HashedBlob::test_data_blob("blob3");
     let blob3_id = blob3.id();
 
     client3_b.add_pending_blobs(&[blob3]).await;
@@ -2231,7 +2231,9 @@ where
         .manager;
     assert!(manager.requested_proposed.is_some());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
-    let result = client1.publish_blob(HashedBlob::test_blob("blob1")).await;
+    let result = client1
+        .publish_blob(HashedBlob::test_data_blob("blob1"))
+        .await;
     assert!(result.is_err());
     assert!(client1.pending_block().is_some());
     assert!(!client1.pending_blobs().is_empty());

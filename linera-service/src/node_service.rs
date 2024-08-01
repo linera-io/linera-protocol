@@ -595,9 +595,9 @@ where
         .await
     }
 
-    /// Publishes a new blob.
-    async fn publish_blob(&self, chain_id: ChainId, blob: Blob) -> Result<BlobId, Error> {
-        let hashed_blob = blob.into_hashed();
+    /// Publishes a new data blob.
+    async fn publish_data_blob(&self, chain_id: ChainId, blob: Blob) -> Result<BlobId, Error> {
+        let hashed_blob = blob.with_data_blob_id();
         self.apply_client_command(&chain_id, move |client| {
             let hashed_blob = hashed_blob.clone();
             async move {

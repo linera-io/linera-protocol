@@ -4,7 +4,7 @@
 //! Core identifiers used by the Linera protocol.
 
 use std::{
-    fmt::{Debug, Display},
+    fmt::{self, Debug, Display},
     hash::{Hash, Hasher},
     str::FromStr,
 };
@@ -80,7 +80,7 @@ impl Account {
 }
 
 impl Display for Account {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.owner {
             Some(owner) => write!(f, "{}:{}", self.chain_id, owner),
             None => write!(f, "{}", self.chain_id),
@@ -143,6 +143,51 @@ impl ChainDescription {
 #[cfg_attr(with_testing, derive(Default))]
 pub struct ChainId(pub CryptoHash);
 
+/// The type of the blob.
+#[derive(
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Clone,
+    Copy,
+    Hash,
+    Debug,
+    Serialize,
+    Deserialize,
+    WitType,
+    WitStore,
+    WitLoad,
+    Default,
+)]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
+pub enum BlobType {
+    /// A generic data blob.
+    #[default]
+    Data,
+}
+
+impl Display for BlobType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BlobType::Data => write!(f, "Data")?,
+        };
+
+        Ok(())
+    }
+}
+
+impl FromStr for BlobType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Data" => Ok(BlobType::Data),
+            _ => Err(anyhow!("Invalid blob type: {}", s)),
+        }
+    }
+}
+
 /// A content-addressed blob ID i.e. the hash of the Blob.
 #[derive(
     Eq,
@@ -160,18 +205,44 @@ pub struct ChainId(pub CryptoHash);
     WitLoad,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Default))]
-pub struct BlobId(pub CryptoHash);
+pub struct BlobId {
+    /// The hash of the blob.
+    pub hash: CryptoHash,
+    /// The type of the blob.
+    pub blob_type: BlobType,
+}
 
 impl BlobId {
     /// Creates a new `BlobId` from a `Blob`
-    pub fn new(blob: &Blob) -> Self {
-        BlobId(CryptoHash::new(blob))
+    pub fn new_data(blob: &Blob) -> Self {
+        BlobId {
+            hash: CryptoHash::new(blob),
+            blob_type: BlobType::Data,
+        }
     }
 }
 
 impl Display for BlobId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.0, f)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.blob_type, self.hash)?;
+        Ok(())
+    }
+}
+
+impl FromStr for BlobId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts = s.split(':').collect::<Vec<_>>();
+        if parts.len() == 2 {
+            let blob_type = BlobType::from_str(parts[0]).context("Invalid BlobType!")?;
+            Ok(BlobId {
+                hash: CryptoHash::from_str(parts[1]).context("Invalid hash!")?,
+                blob_type,
+            })
+        } else {
+            Err(anyhow!("Invalid blob ID: {}", s))
+        }
     }
 }
 
@@ -455,7 +526,7 @@ impl<Abi, Parameters, InstantiationArgument> Hash
 impl<Abi, Parameters, InstantiationArgument> Debug
     for BytecodeId<Abi, Parameters, InstantiationArgument>
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let BytecodeId {
             message_id,
             _phantom,
@@ -616,7 +687,7 @@ impl<A> Hash for ApplicationId<A> {
 }
 
 impl<A> Debug for ApplicationId<A> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let ApplicationId {
             bytecode_id,
             creation,
@@ -704,7 +775,7 @@ impl<A> ApplicationId<A> {
 }
 
 impl Display for Owner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
         Display::fmt(&self.0, f)
     }
 }
@@ -769,7 +840,7 @@ impl<'de> Deserialize<'de> for AccountOwner {
 }
 
 impl Display for AccountOwner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AccountOwner::User(owner) => write!(f, "User:{}", owner)?,
             AccountOwner::Application(app_id) => write!(f, "Application:{}", app_id)?,
@@ -807,7 +878,7 @@ where
 }
 
 impl Display for ChainId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.0, f)
     }
 }
@@ -828,8 +899,8 @@ impl TryFrom<&[u8]> for ChainId {
     }
 }
 
-impl std::fmt::Debug for ChainId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+impl fmt::Debug for ChainId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
         write!(f, "{:?}", self.0)
     }
 }
