@@ -28,16 +28,6 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use tokio::task::JoinSet;
 use tracing::{debug, info};
-#[cfg(feature = "fs")]
-use {
-    colored::Colorize as _,
-    linera_base::{
-        data_types::HashedBlob,
-        identifiers::{BlobId, BytecodeId},
-    },
-    linera_execution::Bytecode,
-    std::path::PathBuf,
-};
 #[cfg(feature = "benchmark")]
 use {
     futures::{stream, StreamExt as _},
@@ -63,6 +53,15 @@ use {
         iter,
     },
     tracing::{error, trace},
+};
+#[cfg(feature = "fs")]
+use {
+    linera_base::{
+        data_types::HashedBlob,
+        identifiers::{BlobId, BytecodeId},
+    },
+    linera_execution::Bytecode,
+    std::path::PathBuf,
 };
 
 use crate::{
@@ -396,7 +395,7 @@ where
             })
             .await?;
 
-        info!("{}", "Bytecode published successfully!".green().bold());
+        info!("{}", "Bytecode published successfully!");
 
         info!("Synchronizing client and processing inbox");
         chain_client.synchronize_from_validators().await?;
@@ -428,7 +427,7 @@ where
         })
         .await?;
 
-        info!("{}", "Blob published successfully!".green().bold());
+        info!("{}", "Blob published successfully!");
         Ok(blob_id)
     }
 }

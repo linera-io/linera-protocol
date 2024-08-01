@@ -18,8 +18,10 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 
+#[cfg(with_persist)]
+use crate::persistent;
 use crate::{
-    persistent::{self, Persist},
+    persistent::Persist,
     wallet::{UserChain, Wallet},
 };
 

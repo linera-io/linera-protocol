@@ -8,7 +8,7 @@ fn main() {
             feature = "scylladb",
             feature = "rocksdb",
             feature = "dynamodb",
-            feature = "storage-service",
+            feature = "storage-service"
         ) },
         with_persist: { any(feature = "fs", with_local_storage) },
         with_local_storage: { all(web, feature = "local_storage") },

@@ -52,6 +52,7 @@ web = [
     "linera-execution/web",
     "linera-rpc/web",
 ]
+local-storage = ["web"]
 
 [dependencies]
 anyhow.workspace = true
