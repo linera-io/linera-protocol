@@ -182,11 +182,6 @@ impl ClientOptions {
 
 #[cfg(feature = "fs")]
 impl ClientOptions {
-    pub fn wallet(&self) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
-        let wallet = persistent::File::read(&self.wallet_path()?)?;
-        Ok(WalletState::new(wallet))
-    }
-
     fn wallet_path(&self) -> anyhow::Result<PathBuf> {
         self.wallet_state_path
             .clone()
@@ -222,21 +217,19 @@ impl ClientOptions {
     }
 }
 
-#[cfg(with_local_storage)]
 impl ClientOptions {
     pub fn wallet(&self) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
-        Ok(WalletState::new(persistent::LocalStorage::read(
-            "linera-wallet",
-        )?))
-    }
-}
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "fs")] {
+                let wallet = persistent::File::read(&self.wallet_path()?)?;
+            } else if #[cfg(with_local_storage)] {
+                let wallet = persistent::LocalStorage::read("linera-wallet")?;
+            } else {
+                let wallet = compile_error!("No persistence backend selected for wallet: please use one of the `fs` or `local_storage` features");
+            }
+        };
 
-#[cfg(not(with_persist))]
-impl ClientOptions {
-    pub fn wallet(&self) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
-        #![allow(unreachable_code)]
-        let _wallet = unimplemented!("No persistence backend selected for wallet; please use one of the `fs` or `local_storage` features");
-        Ok(WalletState::new(persistent::Memory::new(_wallet)))
+        Ok(WalletState::new(wallet))
     }
 }
 
