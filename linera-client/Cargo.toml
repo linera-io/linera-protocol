@@ -9,7 +9,6 @@ edition.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["fs"]
 test = ["linera-views/test", "linera-execution/test"]
 benchmark = ["linera-base/test", "dep:linera-sdk"]
 wasmer = [
