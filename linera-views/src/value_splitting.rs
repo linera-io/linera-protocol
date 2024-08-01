@@ -10,8 +10,8 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        AdminKeyValueStore, CommonStoreConfig, KeyIterable, KeyValueIterable,
-        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
+        AdminKeyValueStore, CommonStoreConfig, KeyIterable, KeyValueIterable, KeyValueStore,
+        ReadableKeyValueStore, WritableKeyValueStore,
     },
     memory::{MemoryStore, MemoryStoreConfig, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
 };
@@ -441,9 +441,7 @@ mod tests {
     use linera_views::{
         batch::Batch,
         common::{ReadableKeyValueStore, WritableKeyValueStore},
-        value_splitting::{
-            LimitedMemoryStore, ValueSplittingStore,
-        },
+        value_splitting::{LimitedMemoryStore, ValueSplittingStore},
     };
     use rand::Rng;
 
