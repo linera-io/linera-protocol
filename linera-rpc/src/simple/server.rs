@@ -255,7 +255,7 @@ where
                     .handle_certificate(
                         request.certificate,
                         request.hashed_certificate_values,
-                        request.hashed_blobs,
+                        request.blobs,
                         sender,
                     )
                     .await

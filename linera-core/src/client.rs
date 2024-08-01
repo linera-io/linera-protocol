@@ -22,7 +22,7 @@ use linera_base::{
     abi::Abi,
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, Round, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Round, Timestamp,
     },
     ensure,
     identifiers::{Account, ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner},
@@ -150,7 +150,7 @@ where
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_block: Option<Block>,
-        pending_blobs: BTreeMap<BlobId, HashedBlob>,
+        pending_blobs: BTreeMap<BlobId, Blob>,
     ) -> ChainClient<P, S>
     where
         ViewError: From<S::StoreError>,
@@ -233,7 +233,7 @@ pub struct ChainState {
     pub received_certificate_trackers: HashMap<ValidatorName, u64>,
     /// This contains blobs belonging to our `pending_block` that may not even have
     /// been processed by (i.e. been proposed to) our own local chain manager yet.
-    pub pending_blobs: BTreeMap<BlobId, HashedBlob>,
+    pub pending_blobs: BTreeMap<BlobId, Blob>,
 
     /// A mutex that is held whilst we are preparing the next block, to ensure that no
     /// other client can begin preparing a block.
@@ -464,7 +464,7 @@ where
 
     #[tracing::instrument(level = "trace", skip(self))]
     /// Gets a guarded reference to the set of pending blobs.
-    pub fn pending_blobs(&self) -> ChainGuardMapped<BTreeMap<BlobId, HashedBlob>> {
+    pub fn pending_blobs(&self) -> ChainGuardMapped<BTreeMap<BlobId, Blob>> {
         Unsend::new(self.state().inner.map(|state| &state.pending_blobs))
     }
 
@@ -847,9 +847,7 @@ where
 
     #[tracing::instrument(level = "trace")]
     /// Returns the pending blobs from the local node's chain manager.
-    async fn chain_managers_pending_blobs(
-        &self,
-    ) -> Result<BTreeMap<BlobId, HashedBlob>, LocalNodeError> {
+    async fn chain_managers_pending_blobs(&self) -> Result<BTreeMap<BlobId, Blob>, LocalNodeError> {
         let chain = self.chain_state_view().await?;
         Ok(chain.manager.get().pending_blobs.clone())
     }
@@ -1284,7 +1282,7 @@ where
         &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
     ) -> Result<(), LocalNodeError> {
         let mut notifications = vec![];
         let info = self
@@ -1293,7 +1291,7 @@ where
             .handle_certificate(
                 certificate,
                 hashed_certificate_values,
-                hashed_blobs,
+                blobs,
                 &mut notifications,
             )
             .await?
@@ -1532,7 +1530,7 @@ where
         chain_id: ChainId,
         name: &ValidatorName,
         node: &impl LocalValidatorNode,
-    ) -> Result<Vec<HashedBlob>, NodeError> {
+    ) -> Result<Vec<Blob>, NodeError> {
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
         let info = match node.handle_chain_info_query(query).await {
             Ok(response) if response.check(name).is_ok() => Some(response.info),
@@ -1696,7 +1694,7 @@ where
     async fn read_local_blobs(
         &self,
         blob_ids: impl IntoIterator<Item = BlobId>,
-    ) -> Result<Vec<HashedBlob>, LocalNodeError> {
+    ) -> Result<Vec<Blob>, LocalNodeError> {
         let mut blobs = Vec::new();
         for blob_id in blob_ids {
             if let Some(blob) = self.client.local_node.recent_blob(&blob_id).await {
@@ -1800,13 +1798,13 @@ where
             .local_node
             .read_or_download_hashed_certificate_values(&nodes, block.bytecode_locations())
             .await?;
-        let hashed_blobs = self.read_local_blobs(block.published_blob_ids()).await?;
+        let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
         // Create the final block proposal.
         let key_pair = self.key_pair().await?;
         let proposal = if let Some(cert) = manager.requested_locked {
-            BlockProposal::new_retry(round, *cert, &key_pair, values, hashed_blobs)
+            BlockProposal::new_retry(round, *cert, &key_pair, values, blobs)
         } else {
-            BlockProposal::new_initial(round, block.clone(), &key_pair, values, hashed_blobs)
+            BlockProposal::new_initial(round, block.clone(), &key_pair, values, blobs)
         };
         // Check the final block proposal. This will be cheaper after #1401.
         self.client
@@ -2552,29 +2550,29 @@ where
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(hashed_blob))]
+    #[tracing::instrument(level = "trace", skip(blob))]
     /// Publishes some blob.
     pub async fn publish_blob(
         &self,
-        hashed_blob: HashedBlob,
+        blob: Blob,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        self.client.local_node.cache_recent_blob(&hashed_blob).await;
+        self.client.local_node.cache_recent_blob(&blob).await;
         self.state_mut()
             .pending_blobs
-            .insert(hashed_blob.id(), hashed_blob.clone());
+            .insert(blob.id(), blob.clone());
         self.execute_operation(Operation::System(SystemOperation::PublishBlob {
-            blob_id: hashed_blob.id(),
+            blob_id: blob.id(),
         }))
         .await
     }
 
     /// Adds pending blobs
-    pub async fn add_pending_blobs(&mut self, pending_blobs: &[HashedBlob]) {
-        for hashed_blob in pending_blobs {
-            self.client.local_node.cache_recent_blob(hashed_blob).await;
+    pub async fn add_pending_blobs(&mut self, pending_blobs: &[Blob]) {
+        for blob in pending_blobs {
+            self.client.local_node.cache_recent_blob(blob).await;
             self.state_mut()
                 .pending_blobs
-                .insert(hashed_blob.id(), hashed_blob.clone());
+                .insert(blob.id(), blob.clone());
         }
     }
 

@@ -6,7 +6,7 @@ use std::{iter, time::Duration};
 use futures::{future, stream, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, HashedBlob},
+    data_types::{Blob, BlobContent},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::{self, Certificate, CertificateValue, HashedCertificateValue};
@@ -168,14 +168,14 @@ impl ValidatorNode for GrpcClient {
         &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<data_types::HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
         let request = HandleCertificateRequest {
             certificate,
             hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             wait_for_outgoing_messages,
         };
         client_delegate!(self, handle_certificate, request)
@@ -282,7 +282,7 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError> {
+    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
         Ok(self
             .client
             .clone()

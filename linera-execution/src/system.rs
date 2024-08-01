@@ -15,7 +15,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, OracleResponse, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlobContent, OracleResponse, Timestamp,
     },
     ensure, hex_debug,
     identifiers::{Account, BlobId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
@@ -1050,7 +1050,10 @@ where
         Ok(messages)
     }
 
-    pub async fn read_blob(&mut self, blob_id: BlobId) -> Result<Blob, SystemExecutionError> {
+    pub async fn read_blob(
+        &mut self,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, SystemExecutionError> {
         self.context()
             .extra()
             .get_blob(blob_id)

@@ -9,7 +9,7 @@ use std::{
 use anyhow::Context as _;
 use linera_base::{
     crypto::{CryptoHash, CryptoRng, KeyPair, PublicKey},
-    data_types::{BlockHeight, HashedBlob, Timestamp},
+    data_types::{Blob, BlockHeight, Timestamp},
     identifiers::{BlobId, ChainDescription, ChainId},
 };
 use linera_chain::data_types::Block;
@@ -211,7 +211,7 @@ pub struct UserChain {
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
     pub pending_block: Option<Block>,
-    pub pending_blobs: BTreeMap<BlobId, HashedBlob>,
+    pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 
 impl UserChain {

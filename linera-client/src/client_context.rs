@@ -14,7 +14,7 @@ use colored::Colorize;
 use futures::Future;
 use linera_base::{
     crypto::KeyPair,
-    data_types::{BlockHeight, HashedBlob, Timestamp},
+    data_types::{Blob, BlockHeight, Timestamp},
     identifiers::{Account, BlobId, BytecodeId, ChainId},
     ownership::ChainOwnership,
 };
@@ -328,7 +328,7 @@ where
         blob_path: PathBuf,
     ) -> anyhow::Result<BlobId> {
         info!("Loading data blob file");
-        let blob = HashedBlob::load_data_blob_from_file(&blob_path)
+        let blob = Blob::load_data_blob_from_file(&blob_path)
             .await
             .context(format!("failed to load data blob from {:?}", &blob_path))?;
         let blob_id = blob.id();

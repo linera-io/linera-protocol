@@ -790,7 +790,7 @@ impl Runnable for Job {
                         HandleCertificateRequest {
                             certificate: certificate.clone(),
                             hashed_certificate_values: vec![],
-                            hashed_blobs: vec![],
+                            blobs: vec![],
                             wait_for_outgoing_messages: true,
                         }
                         .into()

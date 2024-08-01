@@ -10,7 +10,7 @@ use std::{
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, HashedBlob, Timestamp},
+    data_types::{Blob, BlockHeight, Timestamp},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -114,7 +114,7 @@ where
     ProcessValidatedBlock {
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions, bool), WorkerError>>,
     },
 
@@ -122,7 +122,7 @@ where
     ProcessConfirmedBlock {
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
@@ -167,7 +167,7 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
-        blob_cache: Arc<ValueCache<BlobId, HashedBlob>>,
+        blob_cache: Arc<ValueCache<BlobId, Blob>>,
         chain_id: ChainId,
     ) -> Result<Self, WorkerError> {
         let (service_runtime_thread, execution_state_receiver, runtime_request_sender) =
@@ -290,7 +290,7 @@ where
                 ChainWorkerRequest::ProcessValidatedBlock {
                     certificate,
                     hashed_certificate_values,
-                    hashed_blobs,
+                    blobs,
                     callback,
                 } => callback
                     .send(
@@ -298,7 +298,7 @@ where
                             .process_validated_block(
                                 certificate,
                                 &hashed_certificate_values,
-                                &hashed_blobs,
+                                &blobs,
                             )
                             .await,
                     )
@@ -306,7 +306,7 @@ where
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
                     hashed_certificate_values,
-                    hashed_blobs,
+                    blobs,
                     callback,
                 } => callback
                     .send(
@@ -314,7 +314,7 @@ where
                             .process_confirmed_block(
                                 certificate,
                                 &hashed_certificate_values,
-                                &hashed_blobs,
+                                &blobs,
                             )
                             .await,
                     )
@@ -435,24 +435,24 @@ where
             ChainWorkerRequest::ProcessValidatedBlock {
                 certificate,
                 hashed_certificate_values,
-                hashed_blobs,
+                blobs,
                 callback: _callback,
             } => formatter
                 .debug_struct("ChainWorkerRequest::ProcessValidatedBlock")
                 .field("certificate", &certificate)
                 .field("hashed_certificate_values", &hashed_certificate_values)
-                .field("hashed_blobs", &hashed_blobs)
+                .field("blobs", &blobs)
                 .finish_non_exhaustive(),
             ChainWorkerRequest::ProcessConfirmedBlock {
                 certificate,
                 hashed_certificate_values,
-                hashed_blobs,
+                blobs,
                 callback: _callback,
             } => formatter
                 .debug_struct("ChainWorkerRequest::ProcessConfirmedBlock")
                 .field("certificate", &certificate)
                 .field("hashed_certificate_values", &hashed_certificate_values)
-                .field("hashed_blobs", &hashed_blobs)
+                .field("blobs", &blobs)
                 .finish_non_exhaustive(),
             ChainWorkerRequest::ProcessCrossChainUpdate {
                 origin,

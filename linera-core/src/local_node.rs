@@ -10,7 +10,7 @@ use std::{
 
 use futures::future;
 use linera_base::{
-    data_types::{ArithmeticError, BlockHeight, HashedBlob},
+    data_types::{ArithmeticError, Blob, BlockHeight},
     identifiers::{BlobId, ChainId, MessageId},
 };
 use linera_chain::{
@@ -131,13 +131,13 @@ where
         &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         notifications: &mut impl Extend<Notification>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let response = Box::pin(self.node.state.fully_handle_certificate_with_notifications(
             certificate,
             hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             Some(notifications),
         ))
         .await?;
@@ -275,7 +275,7 @@ where
         certificate: &Certificate,
         missing_blob_ids: &Vec<BlobId>,
         chain_id: ChainId,
-    ) -> Result<Vec<HashedBlob>, NodeError> {
+    ) -> Result<Vec<Blob>, NodeError> {
         if missing_blob_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -303,8 +303,8 @@ where
             return Err(NodeError::InvalidChainInfoResponse);
         }
 
-        let (found_blobs, not_found_blobs): (HashMap<BlobId, HashedBlob>, Vec<BlobId>) = self
-            .recent_hashed_blobs()
+        let (found_blobs, not_found_blobs): (HashMap<BlobId, Blob>, Vec<BlobId>) = self
+            .recent_blobs()
             .await
             .try_get_many(missing_blob_ids.clone())
             .await;
@@ -332,7 +332,7 @@ where
         let storage = self.storage_client();
         found_blobs.extend(
             storage
-                .read_hashed_blobs(&unique_missing_blob_ids.into_iter().collect::<Vec<_>>())
+                .read_blobs(&unique_missing_blob_ids.into_iter().collect::<Vec<_>>())
                 .await?
                 .into_iter()
                 .flatten(),
@@ -439,21 +439,18 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn recent_blob(&self, blob_id: &BlobId) -> Option<HashedBlob> {
+    pub async fn recent_blob(&self, blob_id: &BlobId) -> Option<Blob> {
         self.node.state.recent_blob(blob_id).await
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    async fn recent_hashed_blobs(&self) -> Arc<ValueCache<BlobId, HashedBlob>> {
-        self.node.state.recent_hashed_blobs()
+    async fn recent_blobs(&self) -> Arc<ValueCache<BlobId, Blob>> {
+        self.node.state.recent_blobs()
     }
 
-    #[tracing::instrument(level = "trace", skip(self, hashed_blob), fields(blob_id = ?hashed_blob.id()))]
-    pub async fn cache_recent_blob(&self, hashed_blob: &HashedBlob) -> bool {
-        self.node
-            .state
-            .cache_recent_blob(Cow::Borrowed(hashed_blob))
-            .await
+    #[tracing::instrument(level = "trace", skip(self, blob), fields(blob_id = ?blob.id()))]
+    pub async fn cache_recent_blob(&self, blob: &Blob) -> bool {
+        self.node.state.cache_recent_blob(Cow::Borrowed(blob)).await
     }
 
     #[tracing::instrument(level = "trace", skip(self, validators, notifications))]
@@ -678,7 +675,7 @@ where
     async fn download_blob(
         validators: &[(ValidatorName, impl LocalValidatorNode)],
         blob_id: BlobId,
-    ) -> Option<HashedBlob> {
+    ) -> Option<Blob> {
         // Sequentially try each validator in random order.
         let mut validators: Vec<_> = validators.iter().collect();
         validators.shuffle(&mut rand::thread_rng());
@@ -694,7 +691,7 @@ where
     pub async fn download_blobs(
         blob_ids: &[BlobId],
         nodes: &[(ValidatorName, impl LocalValidatorNode)],
-    ) -> Vec<HashedBlob> {
+    ) -> Vec<Blob> {
         future::join_all(
             blob_ids
                 .iter()
@@ -711,7 +708,7 @@ where
         blob_ids: &[BlobId],
         name: &ValidatorName,
         node: &impl LocalValidatorNode,
-    ) -> Vec<HashedBlob> {
+    ) -> Vec<Blob> {
         future::join_all(
             blob_ids
                 .iter()
@@ -728,16 +725,16 @@ where
         name: &ValidatorName,
         node: &impl LocalValidatorNode,
         blob_id: BlobId,
-    ) -> Option<HashedBlob> {
+    ) -> Option<Blob> {
         match node.download_blob(blob_id).await {
             Ok(blob) => {
-                let hashed_blob = blob.with_blob_id_checked(blob_id);
+                let blob = blob.with_blob_id_checked(blob_id);
 
-                if hashed_blob.is_none() {
+                if blob.is_none() {
                     tracing::info!("Validator {name} sent an invalid blob {blob_id}.");
                 }
 
-                hashed_blob
+                blob
             }
             Err(error) => {
                 tracing::debug!("Failed to fetch blob {blob_id} from validator {name}: {error}");

@@ -23,7 +23,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, Blob, BlockHeight, HashedBlob, Timestamp},
+    data_types::{Amount, Blob, BlobContent, BlockHeight, Timestamp},
     identifiers::{BlobId, ChainDescription, ChainId, GenericApplicationId},
     ownership::ChainOwnership,
 };
@@ -123,14 +123,11 @@ pub trait Storage: Sized {
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, ViewError>;
 
-    /// Reads the hashed blob with the given blob ID.
-    async fn read_hashed_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ViewError>;
+    /// Reads the blob with the given blob ID.
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
 
     /// Reads the blobs with the given blob IDs.
-    async fn read_hashed_blobs(
-        &self,
-        blob_ids: &[BlobId],
-    ) -> Result<Vec<Option<HashedBlob>>, ViewError>;
+    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError>;
 
     /// Reads the blob state with the given blob ID.
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError>;
@@ -149,13 +146,13 @@ pub trait Storage: Sized {
     ) -> Result<(), ViewError>;
 
     /// Writes the given blob.
-    async fn write_hashed_blob(&self, blob: &HashedBlob) -> Result<(), ViewError>;
+    async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError>;
 
-    /// Writes hashed certificates, hashed blobs and certificate
-    async fn write_hashed_certificate_values_hashed_blobs_certificate(
+    /// Writes hashed certificates, blobs and certificate
+    async fn write_hashed_certificate_values_blobs_certificate(
         &self,
         values: &[HashedCertificateValue],
-        blobs: &[HashedBlob],
+        blobs: &[Blob],
         certificate: &Certificate,
     ) -> Result<(), ViewError>;
 
@@ -180,7 +177,7 @@ pub trait Storage: Sized {
     ) -> Result<(), ViewError>;
 
     /// Writes several blobs.
-    async fn write_hashed_blobs(&self, blobs: &[HashedBlob]) -> Result<(), ViewError>;
+    async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError>;
 
     /// Tests existence of the certificate with the given hash.
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
@@ -473,7 +470,7 @@ where
         }
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError> {
-        Ok(self.storage.read_hashed_blob(blob_id).await?.into_inner())
+    async fn get_blob(&self, blob_id: BlobId) -> Result<BlobContent, ExecutionError> {
+        Ok(self.storage.read_blob(blob_id).await?.into_inner())
     }
 }

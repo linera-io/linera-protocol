@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use futures::{sink::SinkExt, stream::StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, HashedBlob},
+    data_types::{Blob, BlobContent},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::{
@@ -101,14 +101,14 @@ impl ValidatorNode for SimpleClient {
         &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
         let request = HandleCertificateRequest {
             certificate,
             hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             wait_for_outgoing_messages,
         };
         self.query(request.into()).await
@@ -138,7 +138,7 @@ impl ValidatorNode for SimpleClient {
         self.query(RpcMessage::GenesisConfigHashQuery).await
     }
 
-    async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError> {
+    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
         self.query(RpcMessage::DownloadBlob(Box::new(blob_id)))
             .await
     }

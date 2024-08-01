@@ -5,7 +5,7 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, Blob, BlockHeight, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, BlobContent, BlockHeight, SendMessageRequest, Timestamp,
     },
     identifiers::{
         Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner, StreamName,
@@ -357,7 +357,7 @@ where
     }
 
     /// Reads a blob from storage.
-    fn read_blob(caller: &mut Caller, blob_id: BlobId) -> Result<Blob, RuntimeError> {
+    fn read_blob(caller: &mut Caller, blob_id: BlobId) -> Result<BlobContent, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -531,7 +531,7 @@ where
     }
 
     /// Reads a blob from storage.
-    fn read_blob(caller: &mut Caller, blob_id: BlobId) -> Result<Blob, RuntimeError> {
+    fn read_blob(caller: &mut Caller, blob_id: BlobId) -> Result<BlobContent, RuntimeError> {
         caller
             .user_data_mut()
             .runtime

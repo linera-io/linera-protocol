@@ -4,7 +4,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::Blob,
+    data_types::BlobContent,
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
@@ -38,7 +38,7 @@ pub enum RpcMessage {
     Error(Box<NodeError>),
     VersionInfoResponse(Box<VersionInfo>),
     GenesisConfigHashResponse(Box<CryptoHash>),
-    DownloadBlobResponse(Box<Blob>),
+    DownloadBlobResponse(Box<BlobContent>),
     DownloadCertificateValueResponse(Box<CertificateValue>),
     DownloadCertificateResponse(Box<Certificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
@@ -136,7 +136,7 @@ impl TryFrom<RpcMessage> for VersionInfo {
     }
 }
 
-impl TryFrom<RpcMessage> for Blob {
+impl TryFrom<RpcMessage> for BlobContent {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         use RpcMessage::*;
@@ -239,8 +239,8 @@ impl From<VersionInfo> for RpcMessage {
     }
 }
 
-impl From<Blob> for RpcMessage {
-    fn from(blob: Blob) -> Self {
+impl From<BlobContent> for RpcMessage {
+    fn from(blob: BlobContent) -> Self {
         RpcMessage::DownloadBlobResponse(Box::new(blob))
     }
 }
