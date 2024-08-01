@@ -23,7 +23,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, HashedBlob, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, HashedBlob, Timestamp},
     identifiers::{BlobId, ChainDescription, ChainId, GenericApplicationId},
     ownership::ChainOwnership,
 };
@@ -123,7 +123,7 @@ pub trait Storage: Sized {
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, ViewError>;
 
-    /// Reads the blob with the given blob ID.
+    /// Reads the hashed blob with the given blob ID.
     async fn read_hashed_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ViewError>;
 
     /// Reads the blobs with the given blob IDs.
@@ -473,7 +473,7 @@ where
         }
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ExecutionError> {
-        Ok(self.storage.read_hashed_blob(blob_id).await?)
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError> {
+        Ok(self.storage.read_hashed_blob(blob_id).await?.into_inner())
     }
 }

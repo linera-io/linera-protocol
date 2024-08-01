@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, Blob, BlockHeight, HashedBlob, TimeDelta, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, CloseChainError, TimeoutConfig},
 };
@@ -46,15 +46,6 @@ impl From<wit_system_api::BlobId> for BlobId {
 impl From<wit_system_api::Blob> for Blob {
     fn from(blob: wit_system_api::Blob) -> Self {
         Blob { bytes: blob.bytes }
-    }
-}
-
-impl From<wit_system_api::HashedBlob> for HashedBlob {
-    fn from(hashed_blob: wit_system_api::HashedBlob) -> Self {
-        HashedBlob {
-            id: hashed_blob.id.into(),
-            blob: hashed_blob.blob.into(),
-        }
     }
 }
 

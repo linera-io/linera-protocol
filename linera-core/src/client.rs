@@ -1551,7 +1551,7 @@ where
             let new_found_blobs = missing_blobs
                 .iter()
                 .filter_map(|blob_id| info.manager.pending_blobs.get(blob_id))
-                .map(|blob| (blob.id, blob.clone()))
+                .map(|blob| (blob.id(), blob.clone()))
                 .collect::<HashMap<_, _>>();
             missing_blobs.retain(|blob_id| !new_found_blobs.contains_key(blob_id));
             new_found_blobs.into_values().collect()
