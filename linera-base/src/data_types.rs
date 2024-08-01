@@ -4,19 +4,21 @@
 
 //! Core data-types used in the Linera protocol.
 
-use std::fmt;
+#[cfg(with_testing)]
+use std::ops;
+use std::{fmt, fs, io, iter, num::ParseIntError, path::Path, str::FromStr};
 
 use anyhow::Context as _;
 use async_graphql::InputObject;
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use linera_witty::{WitLoad, WitStore, WitType};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 use crate::{
-    crypto::{BcsHashable, CryptoHash},
+    crypto::BcsHashable,
     doc_scalar,
-    identifiers::{ApplicationId, BlobId, Destination, GenericApplicationId},
+    identifiers::{ApplicationId, BlobId, BlobType, Destination, GenericApplicationId},
     time::{Duration, SystemTime},
 };
 
@@ -421,7 +423,7 @@ macro_rules! impl_wrapped_number {
         }
 
         #[cfg(with_testing)]
-        impl std::ops::Add for $name {
+        impl ops::Add for $name {
             type Output = Self;
 
             fn add(self, other: Self) -> Self {
@@ -430,7 +432,7 @@ macro_rules! impl_wrapped_number {
         }
 
         #[cfg(with_testing)]
-        impl std::ops::Sub for $name {
+        impl ops::Sub for $name {
             type Output = Self;
 
             fn sub(self, other: Self) -> Self {
@@ -439,7 +441,7 @@ macro_rules! impl_wrapped_number {
         }
 
         #[cfg(with_testing)]
-        impl std::ops::Mul<$wrapped> for $name {
+        impl ops::Mul<$wrapped> for $name {
             type Output = Self;
 
             fn mul(self, other: $wrapped) -> Self {
@@ -513,7 +515,7 @@ pub enum ParseAmountError {
     TooManyDigits,
 }
 
-impl std::str::FromStr for Amount {
+impl FromStr for Amount {
     type Err = ParseAmountError;
 
     fn from_str(src: &str) -> Result<Self, Self::Err> {
@@ -553,8 +555,8 @@ impl fmt::Display for BlockHeight {
     }
 }
 
-impl std::str::FromStr for BlockHeight {
-    type Err = std::num::ParseIntError;
+impl FromStr for BlockHeight {
+    type Err = ParseIntError;
 
     fn from_str(src: &str) -> Result<Self, Self::Err> {
         Ok(Self(u64::from_str(src)?))
@@ -602,7 +604,7 @@ impl Round {
     }
 }
 
-impl<'a> std::iter::Sum<&'a Amount> for Amount {
+impl<'a> iter::Sum<&'a Amount> for Amount {
     fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
         iter.fold(Self::ZERO, |a, b| a.saturating_add(*b))
     }
@@ -732,7 +734,7 @@ impl OracleResponse {
 }
 
 impl fmt::Display for OracleResponse {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             OracleResponse::Service(bytes) => {
                 write!(f, "Service:{}", STANDARD_NO_PAD.encode(bytes))?
@@ -746,7 +748,7 @@ impl fmt::Display for OracleResponse {
     }
 }
 
-impl std::str::FromStr for OracleResponse {
+impl FromStr for OracleResponse {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -761,7 +763,9 @@ impl std::str::FromStr for OracleResponse {
             ));
         }
         if let Some(string) = s.strip_prefix("Blob:") {
-            return Ok(OracleResponse::Blob(BlobId(CryptoHash::from_str(string)?)));
+            return Ok(OracleResponse::Blob(
+                BlobId::from_str(string).context("Invalid BlobId")?,
+            ));
         }
         Err(anyhow::anyhow!("Invalid enum! Enum: {}", s))
     }
@@ -777,17 +781,30 @@ pub struct Blob {
 
 impl Blob {
     /// Creates a `HashedBlob` without checking that this is the correct `BlobId`!
-    pub fn with_hash_unchecked(self, blob_id: BlobId) -> HashedBlob {
+    pub fn with_blob_id_unchecked(self, blob_id: BlobId) -> HashedBlob {
         HashedBlob {
             id: blob_id,
             blob: self,
         }
     }
 
-    /// Get the `HashedBlob` from the `Blob`.
-    pub fn into_hashed(self) -> HashedBlob {
-        let id = BlobId::new(&self);
-        HashedBlob { blob: self, id }
+    /// Creates a `HashedBlob` checking that this is the correct `BlobId`.
+    pub fn with_blob_id_checked(self, blob_id: BlobId) -> Option<HashedBlob> {
+        let hashed_blob = match blob_id.blob_type {
+            BlobType::Data => self.with_data_blob_id(),
+        };
+
+        if hashed_blob.id() == blob_id {
+            Some(hashed_blob)
+        } else {
+            None
+        }
+    }
+
+    /// Creates a `HashedBlob` by hashing `self`.
+    pub fn with_data_blob_id(self) -> HashedBlob {
+        let id = BlobId::new_data(&self);
+        HashedBlob { id, blob: self }
     }
 }
 
@@ -810,11 +827,11 @@ pub struct HashedBlob {
 
 impl HashedBlob {
     /// Loads a hashed blob from a file.
-    pub async fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
+    pub async fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
         let blob = Blob {
-            bytes: std::fs::read(path)?,
+            bytes: fs::read(path)?,
         };
-        Ok(blob.into_hashed())
+        Ok(blob.with_data_blob_id())
     }
 
     /// A content-addressed blob ID i.e. the hash of the `Blob`.
@@ -824,11 +841,11 @@ impl HashedBlob {
 
     /// Creates a [`HashedBlob`] from a string for testing purposes.
     #[cfg(with_testing)]
-    pub fn test_blob(content: &str) -> Self {
+    pub fn test_data_blob(content: &str) -> Self {
         let blob = Blob {
             bytes: content.as_bytes().to_vec(),
         };
-        blob.into_hashed()
+        blob.with_data_blob_id()
     }
 
     /// Returns a reference to the inner `Blob`, without the hash.
@@ -842,12 +859,34 @@ impl HashedBlob {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "HashedBlob")]
+struct SerializableBlob {
+    pub blob_type: BlobType,
+    pub blob: Blob,
+}
+
 impl Serialize for HashedBlob {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: Serializer,
     {
-        self.blob.serialize(serializer)
+        if serializer.is_human_readable() {
+            let blob_bytes = bcs::to_bytes(&self.blob).map_err(serde::ser::Error::custom)?;
+            serializer.serialize_str(&format!(
+                "{}:{}",
+                self.id.blob_type,
+                hex::encode(blob_bytes)
+            ))
+        } else {
+            SerializableBlob::serialize(
+                &SerializableBlob {
+                    blob_type: self.id.blob_type,
+                    blob: self.blob.clone(),
+                },
+                serializer,
+            )
+        }
     }
 }
 
@@ -856,7 +895,37 @@ impl<'a> Deserialize<'a> for HashedBlob {
     where
         D: Deserializer<'a>,
     {
-        Ok(Blob::deserialize(deserializer)?.into_hashed())
+        fn get_blob_id(blob_type: &BlobType, blob: &Blob) -> BlobId {
+            match blob_type {
+                BlobType::Data => BlobId::new_data(blob),
+            }
+        }
+
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let parts = s.split(':').collect::<Vec<_>>();
+
+            if parts.len() == 2 {
+                let blob_type = BlobType::from_str(parts[0])
+                    .context("Invalid BlobType!")
+                    .map_err(serde::de::Error::custom)?;
+                let blob_bytes = hex::decode(parts[1]).map_err(serde::de::Error::custom)?;
+                let blob: Blob = bcs::from_bytes(&blob_bytes).map_err(serde::de::Error::custom)?;
+
+                Ok(HashedBlob {
+                    id: get_blob_id(&blob_type, &blob),
+                    blob,
+                })
+            } else {
+                Err(serde::de::Error::custom("Invalid HashedBlob!"))
+            }
+        } else {
+            let hashed_blob = SerializableBlob::deserialize(deserializer)?;
+            Ok(HashedBlob {
+                id: get_blob_id(&hashed_blob.blob_type, &hashed_blob.blob),
+                blob: hashed_blob.blob,
+            })
+        }
     }
 }
 

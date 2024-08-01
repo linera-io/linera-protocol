@@ -403,18 +403,18 @@ where
         Ok(bytecode_id)
     }
 
-    pub async fn publish_blob(
+    pub async fn publish_data_blob(
         &mut self,
         chain_client: &ChainClient<NodeProvider, S>,
         blob_path: PathBuf,
     ) -> anyhow::Result<BlobId> {
-        info!("Loading blob file");
-        let blob = HashedBlob::load_from_file(&blob_path)
+        info!("Loading data blob file");
+        let blob = HashedBlob::load_data_blob_from_file(&blob_path)
             .await
-            .context(format!("failed to load blob from {:?}", &blob_path))?;
+            .context(format!("failed to load data blob from {:?}", &blob_path))?;
         let blob_id = blob.id();
 
-        info!("Publishing blob");
+        info!("Publishing data blob");
         self.apply_client_command(chain_client, |chain_client| {
             let blob = blob.clone();
             let chain_client = chain_client.clone();
@@ -422,12 +422,12 @@ where
                 chain_client
                     .publish_blob(blob)
                     .await
-                    .context("Failed to publish blob")
+                    .context("Failed to publish data blob")
             }
         })
         .await?;
 
-        info!("{}", "Blob published successfully!");
+        info!("{}", "Data blob published successfully!");
         Ok(blob_id)
     }
 }

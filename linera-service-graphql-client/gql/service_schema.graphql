@@ -662,9 +662,9 @@ type MutationRoot {
 	"""
 	publishBytecode(chainId: ChainId!, contract: Bytecode!, service: Bytecode!): BytecodeId!
 	"""
-	Publishes a new blob.
+	Publishes a new data blob.
 	"""
-	publishBlob(chainId: ChainId!, blob: Blob!): BlobId!
+	publishDataBlob(chainId: ChainId!, blob: Blob!): BlobId!
 	"""
 	Creates a new application.
 	"""

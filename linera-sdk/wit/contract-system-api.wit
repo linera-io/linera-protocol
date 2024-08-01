@@ -54,7 +54,12 @@ interface contract-system-api {
     }
 
     record blob-id {
-        inner0: crypto-hash,
+        hash: crypto-hash,
+        blob-type: blob-type,
+    }
+
+    enum blob-type {
+        data,
     }
 
     record block-height {
