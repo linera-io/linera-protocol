@@ -28,7 +28,7 @@ scylladb = [
     "linera-core/scylladb",
     "linera-storage/scylladb",
 ]
-storage_service = ["linera-storage-service"]
+storage-service = ["linera-storage-service"]
 kubernetes = []
 fs = ["fs-err", "fs4", "linera-execution/fs"]
 metrics = [

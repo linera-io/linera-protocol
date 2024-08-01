@@ -73,7 +73,7 @@ jobs:
     - name: Run Ethereum tests
       run: |
         cargo test -p linera-ethereum --features ethereum
-        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage_service
+        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown

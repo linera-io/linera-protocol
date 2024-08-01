@@ -77,7 +77,7 @@ k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
 linera-base.workspace = true
 linera-chain.workspace = true
-linera-client = { workspace = true, features = ["fs", "storage_service"] }
+linera-client = { workspace = true, features = ["fs", "storage-service"] }
 linera-core.workspace = true
 linera-execution = { workspace = true, features = ["fs"] }
 linera-rpc = { workspace = true, features = ["server", "simple-network"] }
