@@ -134,42 +134,68 @@ Now make a post [in the 8080 tab](http://localhost:8080/chains/e476187f6ddfeb9d5
 mutation {
     post(
         text: "Linera Social is the new Mastodon!"
+        imageUrl: "https://linera.org/img/logo.svg" # optional
     )
 }
 ```
 
-Since 8081 is a subscriber. Let's see if it received any posts:
+Since 8081 is a subscriber. Let's see if it received any posts: # You can see the post on running the [web-frontend](./web-frontend/), or follow the steps below.
 
 ```gql,uri=http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
 query { receivedPosts { keys { timestamp author index } } }
 ```
 
 This should now list one entry, with timestamp, author and an index. If we view that
-entry, we can see the posted text:
+entry, we can see the posted text as well as other values:
 
 ```gql
 query {
-    receivedPosts {
-        entry(
-            key: {
-                timestamp: 1705504131018960,
-                author: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
-                index: 0
-            }
-        ) { value }
+  receivedPosts {
+    entry(
+      key: {
+        timestamp: 1705504131018960
+        author: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+        index: 0
+      }
+    ) {
+      value {
+        key {
+          timestamp
+          author
+          index
+        }
+        text
+        imageUrl
+        comments {
+          text
+          chainId
+        }
+        likes
+      }
     }
+  }
 }
 ```
 
 ```json
 {
-    "data": {
-        "receivedPosts": {
-            "entry": {
-                "value": "Linera Social is the new Mastodon!"
-            }
+  "data": {
+    "receivedPosts": {
+      "entry": {
+        "value": {
+          "key": {
+            "timestamp": 1705504131018960,
+            "author": "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+            "index": 0
+          },
+          "text": "Linera Social is the new Mastodon!",
+          "imageUrl": "https://linera.org/img/logo.svg",
+          "comments": [],
+          "likes": 0
         }
+      }
     }
+  }
 }
 ```
 */
@@ -202,7 +228,14 @@ pub enum Operation {
     /// Request to be unsubscribed from another chain.
     Unsubscribe { chain_id: ChainId },
     /// Send a new post to everyone who subscribed to us.
-    Post { text: String },
+    Post {
+        text: String,
+        image_url: Option<String>,
+    },
+    /// Like a post
+    Like { key: Key },
+    /// Comment on a post
+    Comment { key: Key, comment: String },
 }
 
 /// A message of the application on one chain, to be handled on another chain.
@@ -216,6 +249,14 @@ pub enum Message {
     /// This includes the most recent posts in reverse order, and the total count of posts by the
     /// sender. I.e. the indices of the posts in the `Vec` are `count - 1, count - 2, ...`.
     Posts { count: u64, posts: Vec<OwnPost> },
+    /// A Chain liked a post
+    Like { key: Key },
+    /// A Chain commented on a post
+    Comment {
+        key: Key,
+        chain_id: ChainId,
+        comment: String,
+    },
 }
 
 /// A post's text and timestamp, to use in contexts where author and index are known.
@@ -225,15 +266,32 @@ pub struct OwnPost {
     pub timestamp: Timestamp,
     /// The posted text.
     pub text: String,
+    /// The posted Image_url(optional).
+    pub image_url: Option<String>,
 }
 
 /// A post on the social app.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, SimpleObject)]
 pub struct Post {
     /// The key identifying the post, including the timestamp, author and index.
     pub key: Key,
     /// The post's text content.
     pub text: String,
+    /// The post's image_url(optional).
+    pub image_url: Option<String>,
+    /// The total number of likes
+    pub likes: u32,
+    /// Comments with there ChainId
+    pub comments: Vec<Comment>,
+}
+
+/// A comment on a post
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, SimpleObject)]
+pub struct Comment {
+    /// The comment text
+    pub text: String,
+    /// The ChainId of the commenter
+    pub chain_id: ChainId,
 }
 
 /// A key by which a post is indexed.
