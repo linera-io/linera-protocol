@@ -47,29 +47,15 @@ CHAIN=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 See the file `linera-protocol/examples/fungible/README.md` or the [online developer
 manual](https://linera.dev) for instructions.
 
-## Setting Up
+## Using the LLM Application
 
-First, ensure you have the model and tokenizer locally by running:
-
-```bash
-wget -O model.bin -c https://huggingface.co/karpathy/tinyllamas/resolve/main/stories42M.bin
-wget -c https://huggingface.co/spaces/lmz/candle-llama2/resolve/main/tokenizer.json
-```
-
-Then, in a separate terminal window, run the Python server to serve models locally:
-```bash
-python3 -m http.server 10001
-```
-
-Finally, deploy the application:
+First, deploy the application:
 ```bash
 cd ..
 APP_ID=$(linera project publish-and-create llm)
 ```
 
-## Using the LLM Application
-
-First, a node service for the current wallet has to be started:
+Then, a node service for the current wallet has to be started:
 
 ```bash
 PORT=8080
