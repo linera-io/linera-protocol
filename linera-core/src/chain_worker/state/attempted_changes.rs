@@ -7,7 +7,7 @@ use std::{borrow::Cow, collections::BTreeMap};
 
 use futures::future::try_join_all;
 use linera_base::{
-    data_types::{BlockHeight, HashedBlob, Timestamp},
+    data_types::{Blob, BlockHeight, Timestamp},
     ensure,
     identifiers::ChainId,
 };
@@ -158,7 +158,7 @@ where
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: &[HashedCertificateValue],
-        hashed_blobs: &[HashedBlob],
+        blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let executed_block = match certificate.value() {
             CertificateValue::ValidatedBlock { executed_block } => executed_block,
@@ -213,7 +213,7 @@ where
                 block,
                 executed_block.required_blob_ids(),
                 hashed_certificate_values,
-                hashed_blobs,
+                blobs,
             )
             .await?;
         let old_round = self.state.chain.manager.get().current_round;
@@ -239,7 +239,7 @@ where
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: &[HashedCertificateValue],
-        hashed_blobs: &[HashedBlob],
+        blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
             panic!("Expecting a confirmation certificate");
@@ -301,7 +301,7 @@ where
                 block,
                 required_blob_ids.clone(),
                 hashed_certificate_values,
-                hashed_blobs,
+                blobs,
             )
             .await?;
         // Persist certificate and hashed certificate values.
@@ -309,10 +309,8 @@ where
             .recent_hashed_certificate_values
             .insert_all(hashed_certificate_values.iter().map(Cow::Borrowed))
             .await;
-        for hashed_blob in hashed_blobs {
-            self.state
-                .cache_recent_blob(Cow::Borrowed(hashed_blob))
-                .await;
+        for blob in blobs {
+            self.state.cache_recent_blob(Cow::Borrowed(blob)).await;
         }
 
         let blobs_in_block = self.state.get_blobs(required_blob_ids.clone()).await?;
@@ -320,7 +318,7 @@ where
 
         self.state
             .storage
-            .write_hashed_certificate_values_hashed_blobs_certificate(
+            .write_hashed_certificate_values_blobs_certificate(
                 hashed_certificate_values,
                 &blobs_in_block,
                 &certificate,

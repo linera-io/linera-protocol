@@ -7,7 +7,7 @@ use std::{borrow::Cow, collections::HashSet};
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
-    data_types::{Amount, BlockHeight, HashedBlob, OracleResponse, Round, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{
         Account, BlobId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
@@ -219,7 +219,7 @@ pub struct BlockProposal {
     pub owner: Owner,
     pub signature: Signature,
     pub hashed_certificate_values: Vec<HashedCertificateValue>,
-    pub hashed_blobs: Vec<HashedBlob>,
+    pub blobs: Vec<Blob>,
     pub validated_block_certificate: Option<LiteCertificate<'static>>,
 }
 
@@ -867,7 +867,7 @@ impl BlockProposal {
         block: Block,
         secret: &KeyPair,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
     ) -> Self {
         let content = ProposalContent {
             round,
@@ -880,7 +880,7 @@ impl BlockProposal {
             owner: secret.public().into(),
             signature,
             hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             validated_block_certificate: None,
         }
     }
@@ -890,7 +890,7 @@ impl BlockProposal {
         validated_block_certificate: Certificate,
         secret: &KeyPair,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let CertificateValue::ValidatedBlock { executed_block } =
@@ -909,7 +909,7 @@ impl BlockProposal {
             owner: secret.public().into(),
             signature,
             hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             validated_block_certificate: Some(lite_cert),
         }
     }

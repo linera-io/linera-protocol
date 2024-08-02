@@ -523,14 +523,14 @@ where
         let HandleCertificateRequest {
             certificate,
             hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             wait_for_outgoing_messages,
         } = request.into_inner().try_into()?;
         let (sender, receiver) = wait_for_outgoing_messages.then(oneshot::channel).unzip();
         match self
             .state
             .clone()
-            .handle_certificate(certificate, hashed_certificate_values, hashed_blobs, sender)
+            .handle_certificate(certificate, hashed_certificate_values, blobs, sender)
             .await
         {
             Ok((info, actions)) => {

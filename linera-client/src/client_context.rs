@@ -57,7 +57,7 @@ use {
 #[cfg(feature = "fs")]
 use {
     linera_base::{
-        data_types::HashedBlob,
+        data_types::Blob,
         identifiers::{BlobId, BytecodeId},
     },
     linera_execution::Bytecode,
@@ -409,7 +409,7 @@ where
         blob_path: PathBuf,
     ) -> anyhow::Result<BlobId> {
         info!("Loading data blob file");
-        let blob = HashedBlob::load_data_blob_from_file(&blob_path)
+        let blob = Blob::load_data_blob_from_file(&blob_path)
             .await
             .context(format!("failed to load data blob from {:?}", &blob_path))?;
         let blob_id = blob.id();

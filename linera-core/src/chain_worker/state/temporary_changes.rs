@@ -177,7 +177,7 @@ where
                 },
             owner,
             hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             validated_block_certificate,
             signature: _,
         } = proposal;
@@ -232,7 +232,7 @@ where
                 block,
                 block.published_blob_ids(),
                 hashed_certificate_values,
-                hashed_blobs,
+                blobs,
             )
             .await?;
         // Write the values so that the bytecode is available during execution.

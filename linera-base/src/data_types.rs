@@ -773,62 +773,62 @@ impl FromStr for OracleResponse {
 
 /// A blob of binary data.
 #[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize, WitType, WitStore)]
-pub struct Blob {
+pub struct BlobContent {
     /// Bytes of the binary blob.
     #[serde(with = "serde_bytes")]
     pub bytes: Vec<u8>,
 }
 
-impl Blob {
-    /// Creates a `HashedBlob` without checking that this is the correct `BlobId`!
-    pub fn with_blob_id_unchecked(self, blob_id: BlobId) -> HashedBlob {
-        HashedBlob {
+impl BlobContent {
+    /// Creates a `Blob` without checking that this is the correct `BlobId`.
+    pub fn with_blob_id_unchecked(self, blob_id: BlobId) -> Blob {
+        Blob {
             id: blob_id,
-            blob: self,
+            content: self,
         }
     }
 
-    /// Creates a `HashedBlob` checking that this is the correct `BlobId`.
-    pub fn with_blob_id_checked(self, blob_id: BlobId) -> Option<HashedBlob> {
-        let hashed_blob = match blob_id.blob_type {
+    /// Creates a `Blob` checking that this is the correct `BlobId`.
+    pub fn with_blob_id_checked(self, blob_id: BlobId) -> Option<Blob> {
+        let blob = match blob_id.blob_type {
             BlobType::Data => self.with_data_blob_id(),
         };
 
-        if hashed_blob.id() == blob_id {
-            Some(hashed_blob)
+        if blob.id() == blob_id {
+            Some(blob)
         } else {
             None
         }
     }
 
-    /// Creates a `HashedBlob` by hashing `self`.
-    pub fn with_data_blob_id(self) -> HashedBlob {
+    /// Creates a `Blob` by hashing `self`.
+    pub fn with_data_blob_id(self) -> Blob {
         let id = BlobId::new_data(&self);
-        HashedBlob { id, blob: self }
+        Blob { id, content: self }
     }
 }
 
-impl BcsHashable for Blob {}
+impl BcsHashable for BlobContent {}
 
-impl From<HashedBlob> for Blob {
-    fn from(blob: HashedBlob) -> Blob {
-        blob.blob
+impl From<Blob> for BlobContent {
+    fn from(blob: Blob) -> BlobContent {
+        blob.content
     }
 }
 
 /// A blob of binary data, with its content-addressed blob ID.
 #[derive(Eq, PartialEq, Debug, Hash, Clone, WitType, WitStore)]
-pub struct HashedBlob {
+pub struct Blob {
     /// ID of the blob.
     id: BlobId,
     /// A blob of binary data.
-    blob: Blob,
+    content: BlobContent,
 }
 
-impl HashedBlob {
-    /// Loads a hashed blob from a file.
+impl Blob {
+    /// Loads a blob from a file.
     pub async fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
-        let blob = Blob {
+        let blob = BlobContent {
             bytes: fs::read(path)?,
         };
         Ok(blob.with_data_blob_id())
@@ -839,40 +839,40 @@ impl HashedBlob {
         self.id
     }
 
-    /// Creates a [`HashedBlob`] from a string for testing purposes.
+    /// Creates a [`Blob`] from a string for testing purposes.
     #[cfg(with_testing)]
     pub fn test_data_blob(content: &str) -> Self {
-        let blob = Blob {
+        let blob = BlobContent {
             bytes: content.as_bytes().to_vec(),
         };
         blob.with_data_blob_id()
     }
 
-    /// Returns a reference to the inner `Blob`, without the hash.
-    pub fn blob(&self) -> &Blob {
-        &self.blob
+    /// Returns a reference to the inner `BlobContent`, without the hash.
+    pub fn content(&self) -> &BlobContent {
+        &self.content
     }
 
     /// Moves ownership of the blob of binary data
-    pub fn into_inner(self) -> Blob {
-        self.blob
+    pub fn into_inner(self) -> BlobContent {
+        self.content
     }
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename = "HashedBlob")]
+#[serde(rename = "Blob")]
 struct SerializableBlob {
     pub blob_type: BlobType,
-    pub blob: Blob,
+    pub blob: BlobContent,
 }
 
-impl Serialize for HashedBlob {
+impl Serialize for Blob {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         if serializer.is_human_readable() {
-            let blob_bytes = bcs::to_bytes(&self.blob).map_err(serde::ser::Error::custom)?;
+            let blob_bytes = bcs::to_bytes(&self.content).map_err(serde::ser::Error::custom)?;
             serializer.serialize_str(&format!(
                 "{}:{}",
                 self.id.blob_type,
@@ -882,7 +882,7 @@ impl Serialize for HashedBlob {
             SerializableBlob::serialize(
                 &SerializableBlob {
                     blob_type: self.id.blob_type,
-                    blob: self.blob.clone(),
+                    blob: self.content.clone(),
                 },
                 serializer,
             )
@@ -890,12 +890,12 @@ impl Serialize for HashedBlob {
     }
 }
 
-impl<'a> Deserialize<'a> for HashedBlob {
+impl<'a> Deserialize<'a> for Blob {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'a>,
     {
-        fn get_blob_id(blob_type: &BlobType, blob: &Blob) -> BlobId {
+        fn get_blob_id(blob_type: &BlobType, blob: &BlobContent) -> BlobId {
             match blob_type {
                 BlobType::Data => BlobId::new_data(blob),
             }
@@ -910,20 +910,21 @@ impl<'a> Deserialize<'a> for HashedBlob {
                     .context("Invalid BlobType!")
                     .map_err(serde::de::Error::custom)?;
                 let blob_bytes = hex::decode(parts[1]).map_err(serde::de::Error::custom)?;
-                let blob: Blob = bcs::from_bytes(&blob_bytes).map_err(serde::de::Error::custom)?;
+                let blob: BlobContent =
+                    bcs::from_bytes(&blob_bytes).map_err(serde::de::Error::custom)?;
 
-                Ok(HashedBlob {
+                Ok(Blob {
                     id: get_blob_id(&blob_type, &blob),
-                    blob,
+                    content: blob,
                 })
             } else {
-                Err(serde::de::Error::custom("Invalid HashedBlob!"))
+                Err(serde::de::Error::custom("Invalid Blob!"))
             }
         } else {
-            let hashed_blob = SerializableBlob::deserialize(deserializer)?;
-            Ok(HashedBlob {
-                id: get_blob_id(&hashed_blob.blob_type, &hashed_blob.blob),
-                blob: hashed_blob.blob,
+            let blob = SerializableBlob::deserialize(deserializer)?;
+            Ok(Blob {
+                id: get_blob_id(&blob.blob_type, &blob.blob),
+                content: blob.blob,
             })
         }
     }
@@ -941,9 +942,9 @@ doc_scalar!(
     "A number to identify successive attempts to decide a value in a consensus protocol."
 );
 doc_scalar!(OracleResponse, "A record of a single oracle response.");
-doc_scalar!(Blob, "A blob of binary data.");
+doc_scalar!(BlobContent, "A blob of binary data.");
 doc_scalar!(
-    HashedBlob,
+    Blob,
     "A blob of binary data, with its content-addressed blob ID."
 );
 

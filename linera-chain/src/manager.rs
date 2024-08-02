@@ -72,7 +72,7 @@ use std::collections::BTreeMap;
 
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{ArithmeticError, BlockHeight, HashedBlob, Round, Timestamp},
+    data_types::{ArithmeticError, Blob, BlockHeight, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{BlobId, ChainId, Owner},
     ownership::ChainOwnership,
@@ -135,7 +135,7 @@ pub struct ChainManager {
     /// The owners that take over in fallback mode.
     pub fallback_owners: BTreeMap<Owner, (PublicKey, u64)>,
     /// These are blobs belonging to proposed or validated blocks that have not been confirmed yet.
-    pub pending_blobs: BTreeMap<BlobId, HashedBlob>,
+    pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 
 doc_scalar!(
@@ -398,8 +398,8 @@ impl ChainManager {
             }
         }
 
-        for hashed_blob in proposal.hashed_blobs {
-            self.pending_blobs.insert(hashed_blob.id(), hashed_blob);
+        for blob in proposal.blobs {
+            self.pending_blobs.insert(blob.id(), blob);
         }
 
         if let Some(key_pair) = key_pair {
@@ -580,7 +580,7 @@ pub struct ChainManagerInfo {
     /// The timestamp when the current round times out.
     pub round_timeout: Option<Timestamp>,
     /// These are blobs belonging to proposed or validated blocks that have not been confirmed yet.
-    pub pending_blobs: BTreeMap<BlobId, HashedBlob>,
+    pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 
 impl From<&ChainManager> for ChainManagerInfo {

@@ -14,7 +14,7 @@ use std::{
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, HashedBlob},
+    data_types::{Blob, BlockHeight},
     ensure,
     identifiers::{BlobId, ChainId},
 };
@@ -61,7 +61,7 @@ where
     execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
     runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
-    recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
+    recent_blobs: Arc<ValueCache<BlobId, Blob>>,
     knows_chain_is_active: bool,
 }
 
@@ -75,7 +75,7 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
-        blob_cache: Arc<ValueCache<BlobId, HashedBlob>>,
+        blob_cache: Arc<ValueCache<BlobId, Blob>>,
         chain_id: ChainId,
         execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
         runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
@@ -90,7 +90,7 @@ where
             execution_state_receiver,
             runtime_request_sender,
             recent_hashed_certificate_values: certificate_value_cache,
-            recent_hashed_blobs: blob_cache,
+            recent_blobs: blob_cache,
             knows_chain_is_active: false,
         })
     }
@@ -244,11 +244,11 @@ where
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: &[HashedCertificateValue],
-        hashed_blobs: &[HashedBlob],
+        blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .process_validated_block(certificate, hashed_certificate_values, hashed_blobs)
+            .process_validated_block(certificate, hashed_certificate_values, blobs)
             .await
     }
 
@@ -257,11 +257,11 @@ where
         &mut self,
         certificate: Certificate,
         hashed_certificate_values: &[HashedCertificateValue],
-        hashed_blobs: &[HashedBlob],
+        blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .process_confirmed_block(certificate, hashed_certificate_values, hashed_blobs)
+            .process_confirmed_block(certificate, hashed_certificate_values, blobs)
             .await
     }
 
@@ -330,12 +330,12 @@ where
         block: &Block,
         blobs_in_block: HashSet<BlobId>,
         hashed_certificate_values: &[HashedCertificateValue],
-        hashed_blobs: &[HashedBlob],
+        blobs: &[Blob],
     ) -> Result<(), WorkerError> {
         let missing_bytecodes = self
             .get_missing_bytecodes(block, hashed_certificate_values)
             .await?;
-        let missing_blobs = self.get_missing_blobs(blobs_in_block, hashed_blobs).await?;
+        let missing_blobs = self.get_missing_blobs(blobs_in_block, blobs).await?;
 
         if missing_bytecodes.is_empty() && missing_blobs.is_empty() {
             return Ok(());
@@ -351,11 +351,11 @@ where
     async fn get_missing_blobs(
         &self,
         mut required_blob_ids: HashSet<BlobId>,
-        hashed_blobs: &[HashedBlob],
+        blobs: &[Blob],
     ) -> Result<Vec<BlobId>, WorkerError> {
         // Find all certificates containing blobs used when executing this block.
-        for hashed_blob in hashed_blobs {
-            let blob_id = hashed_blob.id();
+        for blob in blobs {
+            let blob_id = blob.id();
             ensure!(
                 required_blob_ids.remove(&blob_id),
                 WorkerError::UnneededBlob { blob_id }
@@ -364,7 +364,7 @@ where
 
         let pending_blobs = &self.chain.manager.get().pending_blobs;
         let blob_ids = self
-            .recent_hashed_blobs
+            .recent_blobs
             .subtract_cached_items_from::<_, Vec<_>>(required_blob_ids, |id| id)
             .await
             .into_iter()
@@ -374,11 +374,11 @@ where
     }
 
     /// Returns the blobs requested by their `blob_ids` that are either in pending in the
-    /// chain or in the `recent_hashed_blobs` cache.
-    async fn get_blobs(&self, blob_ids: HashSet<BlobId>) -> Result<Vec<HashedBlob>, WorkerError> {
+    /// chain or in the `recent_blobs` cache.
+    async fn get_blobs(&self, blob_ids: HashSet<BlobId>) -> Result<Vec<Blob>, WorkerError> {
         let pending_blobs = &self.chain.manager.get().pending_blobs;
-        let (found_blobs, not_found_blobs): (HashMap<BlobId, HashedBlob>, HashSet<BlobId>) =
-            self.recent_hashed_blobs.try_get_many(blob_ids).await;
+        let (found_blobs, not_found_blobs): (HashMap<BlobId, Blob>, HashSet<BlobId>) =
+            self.recent_blobs.try_get_many(blob_ids).await;
 
         let mut blobs = found_blobs.into_values().collect::<Vec<_>>();
         for blob_id in not_found_blobs {
@@ -437,9 +437,9 @@ where
         Ok(missing_locations)
     }
 
-    /// Inserts a [`HashedBlob`] into the worker's cache.
-    async fn cache_recent_blob<'a>(&mut self, hashed_blob: Cow<'a, HashedBlob>) -> bool {
-        self.recent_hashed_blobs.insert(hashed_blob).await
+    /// Inserts a [`Blob`] into the worker's cache.
+    async fn cache_recent_blob<'a>(&mut self, blob: Cow<'a, Blob>) -> bool {
+        self.recent_blobs.insert(blob).await
     }
 
     /// Loads pending cross-chain requests.

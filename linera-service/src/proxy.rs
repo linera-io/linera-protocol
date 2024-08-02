@@ -298,11 +298,7 @@ where
                 self.genesis_config.hash().into(),
             ))),
             DownloadBlob(blob_id) => Ok(Some(
-                self.storage
-                    .read_hashed_blob(*blob_id)
-                    .await?
-                    .into_inner()
-                    .into(),
+                self.storage.read_blob(*blob_id).await?.into_inner().into(),
             )),
             DownloadCertificateValue(hash) => Ok(Some(
                 self.storage

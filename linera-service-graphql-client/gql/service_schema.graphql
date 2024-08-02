@@ -43,10 +43,10 @@ input ApplicationPermissions {
 """
 A blob of binary data.
 """
-scalar Blob
+scalar BlobContent
 
 """
-A content-addressed blob ID i.e. the hash of the Blob
+A content-addressed blob ID i.e. the hash of the `BlobContent`
 """
 scalar BlobId
 
@@ -664,7 +664,7 @@ type MutationRoot {
 	"""
 	Publishes a new data blob.
 	"""
-	publishDataBlob(chainId: ChainId!, blob: Blob!): BlobId!
+	publishDataBlob(chainId: ChainId!, blob: BlobContent!): BlobId!
 	"""
 	Creates a new application.
 	"""

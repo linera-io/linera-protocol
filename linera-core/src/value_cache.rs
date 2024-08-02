@@ -11,7 +11,7 @@ mod unit_tests;
 use std::{any::type_name, sync::LazyLock};
 use std::{borrow::Cow, hash::Hash, num::NonZeroUsize};
 
-use linera_base::{crypto::CryptoHash, data_types::HashedBlob, identifiers::BlobId};
+use linera_base::{crypto::CryptoHash, data_types::Blob, identifiers::BlobId};
 use linera_chain::data_types::{Certificate, HashedCertificateValue, LiteCertificate};
 use lru::LruCache;
 use tokio::sync::Mutex;
@@ -236,14 +236,14 @@ impl ValueCache<CryptoHash, HashedCertificateValue> {
     }
 }
 
-impl ValueCache<BlobId, HashedBlob> {
-    /// Inserts a [`HashedBlob`] into the cache, if it's not already present.
+impl ValueCache<BlobId, Blob> {
+    /// Inserts a [`Blob`] into the cache, if it's not already present.
     ///
     /// The `value` is wrapped in a [`Cow`] so that it is only cloned if it needs to be
     /// inserted in the cache.
     ///
     /// Returns [`true`] if the value was not already present in the cache.
-    pub async fn insert<'a>(&self, value: Cow<'a, HashedBlob>) -> bool {
+    pub async fn insert<'a>(&self, value: Cow<'a, Blob>) -> bool {
         let blob_id = (*value).id();
         let mut cache = self.cache.lock().await;
         if cache.contains(&blob_id) {

@@ -56,7 +56,7 @@ service ValidatorNode {
   rpc GetGenesisConfigHash(google.protobuf.Empty) returns (CryptoHash);
 
   // Downloads a blob.
-  rpc DownloadBlob(BlobId) returns (Blob);
+  rpc DownloadBlob(BlobId) returns (BlobContent);
 
   // Downloads a certificate value.
   rpc DownloadCertificateValue(CryptoHash) returns (CertificateValue);
@@ -260,13 +260,13 @@ message Signature {
   bytes bytes = 1;
 }
 
-// A content-addressed blob ID i.e. the hash of the Blob.
+// A content-addressed blob ID i.e. the hash of the `BlobContent`.
 message BlobId {
   bytes bytes = 1;
 }
 
 // A blob of binary data.
-message Blob {
+message BlobContent {
   bytes bytes = 1;
 }
 
