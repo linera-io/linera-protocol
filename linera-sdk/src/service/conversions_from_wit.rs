@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, Blob, BlockHeight, Timestamp},
+    data_types::{Amount, BlobContent, BlockHeight, Timestamp},
     identifiers::{ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner},
 };
 
@@ -40,9 +40,9 @@ impl From<wit_system_api::BlobType> for BlobType {
     }
 }
 
-impl From<wit_system_api::Blob> for Blob {
-    fn from(blob: wit_system_api::Blob) -> Self {
-        Blob { bytes: blob.bytes }
+impl From<wit_system_api::BlobContent> for BlobContent {
+    fn from(blob: wit_system_api::BlobContent) -> Self {
+        BlobContent { bytes: blob.bytes }
     }
 }
 

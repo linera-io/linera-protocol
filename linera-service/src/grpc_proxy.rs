@@ -30,7 +30,7 @@ use linera_rpc::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
-            Blob, BlobId, BlockProposal, Certificate, CertificateValue, ChainInfoQuery,
+            BlobContent, BlobId, BlockProposal, Certificate, CertificateValue, ChainInfoQuery,
             ChainInfoResult, CryptoHash, HandleCertificateRequest, LiteCertificate, Notification,
             SubscriptionRequest, VersionInfo,
         },
@@ -415,15 +415,18 @@ where
     }
 
     #[instrument(skip_all, err(Display))]
-    async fn download_blob(&self, request: Request<BlobId>) -> Result<Response<Blob>, Status> {
+    async fn download_blob(
+        &self,
+        request: Request<BlobId>,
+    ) -> Result<Response<BlobContent>, Status> {
         let blob_id = request.into_inner().try_into()?;
-        let hashed_blob = self
+        let blob = self
             .0
             .storage
-            .read_hashed_blob(blob_id)
+            .read_blob(blob_id)
             .await
             .map_err(|err| Status::from_error(Box::new(err)))?;
-        Ok(Response::new(hashed_blob.into_inner().into()))
+        Ok(Response::new(blob.into_inner().into()))
     }
 
     #[instrument(skip_all, err(Display))]

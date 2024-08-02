@@ -7,7 +7,7 @@ use std::cell::Cell;
 
 use linera_base::{
     abi::ServiceAbi,
-    data_types::{Amount, Blob, BlockHeight, HashedBlob, Timestamp},
+    data_types::{Amount, Blob, BlobContent, BlockHeight, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, Owner},
 };
 
@@ -146,7 +146,7 @@ where
     }
 
     /// Reads a blob with the given `BlobId` from storage.
-    pub fn read_blob(&mut self, blob_id: BlobId) -> HashedBlob {
-        Blob::from(wit::read_blob(blob_id.into())).with_blob_id_unchecked(blob_id)
+    pub fn read_blob(&mut self, blob_id: BlobId) -> Blob {
+        BlobContent::from(wit::read_blob(blob_id.into())).with_blob_id_unchecked(blob_id)
     }
 }

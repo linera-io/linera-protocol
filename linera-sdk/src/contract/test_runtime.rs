@@ -10,7 +10,7 @@ use std::{
 
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
-    data_types::{Amount, BlockHeight, HashedBlob, Resources, SendMessageRequest, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{
         Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, MessageId, Owner,
         StreamName,
@@ -48,7 +48,7 @@ where
     claim_requests: Vec<ClaimRequest>,
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
     expected_post_requests: VecDeque<(String, Vec<u8>, Vec<u8>)>,
-    expected_read_blob_requests: VecDeque<(BlobId, HashedBlob)>,
+    expected_read_blob_requests: VecDeque<(BlobId, Blob)>,
     key_value_store: KeyValueStore,
 }
 
@@ -614,7 +614,7 @@ where
     }
 
     /// Adds an expected `read_blob` call, and the response it should return in the test.
-    pub fn add_expected_read_blob_requests(&mut self, blob_id: BlobId, response: HashedBlob) {
+    pub fn add_expected_read_blob_requests(&mut self, blob_id: BlobId, response: Blob) {
         self.expected_read_blob_requests
             .push_back((blob_id, response));
     }
@@ -666,7 +666,7 @@ where
     }
 
     /// Reads a blob with the given `BlobId` from storage.
-    pub fn read_blob(&mut self, blob_id: &BlobId) -> HashedBlob {
+    pub fn read_blob(&mut self, blob_id: &BlobId) -> Blob {
         let maybe_request = self.expected_read_blob_requests.pop_front();
         let (expected_blob_id, response) = maybe_request.expect("Unexpected read_blob request");
         assert_eq!(*blob_id, expected_blob_id);

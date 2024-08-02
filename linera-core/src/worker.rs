@@ -12,7 +12,7 @@ use std::{
 
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, HashedBlob, Round},
+    data_types::{ArithmeticError, Blob, BlockHeight, Round},
     doc_scalar, ensure,
     identifiers::{BlobId, ChainId, Owner},
 };
@@ -240,8 +240,8 @@ where
     chain_worker_config: ChainWorkerConfig,
     /// Cached hashed certificate values by hash.
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
-    /// Cached hashed blobs by `BlobId`.
-    recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
+    /// Cached blobs by `BlobId`.
+    recent_blobs: Arc<ValueCache<BlobId, Blob>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
@@ -270,7 +270,7 @@ where
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
             recent_hashed_certificate_values: Arc::new(ValueCache::default()),
-            recent_hashed_blobs: Arc::new(ValueCache::default()),
+            recent_blobs: Arc::new(ValueCache::default()),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
             chain_workers: Arc::new(Mutex::new(LruCache::new(*CHAIN_WORKER_LIMIT))),
@@ -311,8 +311,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn recent_hashed_blobs(&self) -> Arc<ValueCache<BlobId, HashedBlob>> {
-        self.recent_hashed_blobs.clone()
+    pub fn recent_blobs(&self) -> Arc<ValueCache<BlobId, Blob>> {
+        self.recent_blobs.clone()
     }
 
     /// Returns the storage client so that it can be manipulated or queried.
@@ -357,8 +357,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(self, blob_id))]
-    pub(crate) async fn recent_blob(&self, blob_id: &BlobId) -> Option<HashedBlob> {
-        self.recent_hashed_blobs.get(blob_id).await
+    pub(crate) async fn recent_blob(&self, blob_id: &BlobId) -> Option<Blob> {
+        self.recent_blobs.get(blob_id).await
     }
 }
 
@@ -370,19 +370,19 @@ where
     // NOTE: This only works for non-sharded workers!
     #[tracing::instrument(
         level = "trace",
-        skip(self, certificate, hashed_certificate_values, hashed_blobs)
+        skip(self, certificate, hashed_certificate_values, blobs)
     )]
     #[cfg(with_testing)]
     pub async fn fully_handle_certificate(
         &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.fully_handle_certificate_with_notifications(
             certificate,
             hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             None::<&mut Vec<Notification>>,
         )
         .await
@@ -390,24 +390,18 @@ where
 
     #[tracing::instrument(
         level = "trace",
-        skip(
-            self,
-            certificate,
-            hashed_certificate_values,
-            hashed_blobs,
-            notifications
-        )
+        skip(self, certificate, hashed_certificate_values, blobs, notifications)
     )]
     #[inline]
     pub(crate) async fn fully_handle_certificate_with_notifications(
         &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         mut notifications: Option<&mut impl Extend<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (response, actions) = self
-            .handle_certificate(certificate, hashed_certificate_values, hashed_blobs, None)
+            .handle_certificate(certificate, hashed_certificate_values, blobs, None)
             .await?;
         if let Some(ref mut notifications) = notifications {
             notifications.extend(actions.notifications);
@@ -522,7 +516,7 @@ where
             self,
             certificate,
             hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             notify_when_messages_are_delivered
         )
     )]
@@ -530,7 +524,7 @@ where
         &self,
         certificate: Certificate,
         hashed_certificate_values: &[HashedCertificateValue],
-        hashed_blobs: &[HashedBlob],
+        blobs: &[Blob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
@@ -544,7 +538,7 @@ where
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
                     hashed_certificate_values: hashed_certificate_values.to_owned(),
-                    hashed_blobs: hashed_blobs.to_owned(),
+                    blobs: blobs.to_owned(),
                     callback,
                 }
             })
@@ -570,7 +564,7 @@ where
         &self,
         certificate: Certificate,
         hashed_certificate_values: &[HashedCertificateValue],
-        hashed_blobs: &[HashedBlob],
+        blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let CertificateValue::ValidatedBlock {
             executed_block: ExecutedBlock { block, .. },
@@ -582,7 +576,7 @@ where
             ChainWorkerRequest::ProcessValidatedBlock {
                 certificate,
                 hashed_certificate_values: hashed_certificate_values.to_owned(),
-                hashed_blobs: hashed_blobs.to_owned(),
+                blobs: blobs.to_owned(),
                 callback,
             }
         })
@@ -633,10 +627,10 @@ where
         self.recent_hashed_certificate_values.insert(value).await
     }
 
-    /// Inserts a [`HashedBlob`] into the worker's cache.
-    #[tracing::instrument(level = "trace", skip(self, hashed_blob))]
-    pub async fn cache_recent_blob<'a>(&self, hashed_blob: Cow<'a, HashedBlob>) -> bool {
-        self.recent_hashed_blobs.insert(hashed_blob).await
+    /// Inserts a [`Blob`] into the worker's cache.
+    #[tracing::instrument(level = "trace", skip(self, blob))]
+    pub async fn cache_recent_blob<'a>(&self, blob: Cow<'a, Blob>) -> bool {
+        self.recent_blobs.insert(blob).await
     }
 
     /// Returns a stored [`Certificate`] for a chain's block.
@@ -771,7 +765,7 @@ where
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
                 self.recent_hashed_certificate_values.clone(),
-                self.recent_hashed_blobs.clone(),
+                self.recent_blobs.clone(),
                 chain_id,
             )
             .await?;
@@ -836,7 +830,7 @@ where
         &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
@@ -859,7 +853,7 @@ where
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
                 let validation_outcomes = self
-                    .process_validated_block(certificate, &hashed_certificate_values, &hashed_blobs)
+                    .process_validated_block(certificate, &hashed_certificate_values, &blobs)
                     .await?;
                 #[cfg(with_metrics)]
                 {
@@ -881,7 +875,7 @@ where
                 self.process_confirmed_block(
                     certificate,
                     &hashed_certificate_values,
-                    &hashed_blobs,
+                    &blobs,
                     notify_when_messages_are_delivered,
                 )
                 .await?

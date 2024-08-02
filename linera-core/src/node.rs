@@ -5,7 +5,7 @@
 use futures::stream::{BoxStream, LocalBoxStream, Stream};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
-    data_types::{ArithmeticError, Blob, BlockHeight, HashedBlob},
+    data_types::{ArithmeticError, Blob, BlobContent, BlockHeight},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -62,7 +62,7 @@ pub trait LocalValidatorNode {
         &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
@@ -81,7 +81,7 @@ pub trait LocalValidatorNode {
     /// Subscribes to receiving notifications for a collection of chains.
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError>;
 
-    async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError>;
+    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
 
     async fn download_certificate_value(
         &self,

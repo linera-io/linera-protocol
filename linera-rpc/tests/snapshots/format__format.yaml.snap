@@ -45,6 +45,12 @@ ApplicationPermissions:
           TYPENAME: ApplicationId
 Blob:
   STRUCT:
+    - blob_type:
+        TYPENAME: BlobType
+    - blob:
+        TYPENAME: BlobContent
+BlobContent:
+  STRUCT:
     - bytes: BYTES
 BlobId:
   STRUCT:
@@ -113,9 +119,9 @@ BlockProposal:
     - hashed_certificate_values:
         SEQ:
           TYPENAME: CertificateValue
-    - hashed_blobs:
+    - blobs:
         SEQ:
-          TYPENAME: HashedBlob
+          TYPENAME: Blob
     - validated_block_certificate:
         OPTION:
           TYPENAME: LiteCertificate
@@ -290,7 +296,7 @@ ChainManagerInfo:
           KEY:
             TYPENAME: BlobId
           VALUE:
-            TYPENAME: HashedBlob
+            TYPENAME: Blob
 ChainOwnership:
   STRUCT:
     - super_owners:
@@ -434,20 +440,14 @@ HandleCertificateRequest:
     - hashed_certificate_values:
         SEQ:
           TYPENAME: CertificateValue
-    - hashed_blobs:
+    - blobs:
         SEQ:
-          TYPENAME: HashedBlob
+          TYPENAME: Blob
 HandleLiteCertRequest:
   STRUCT:
     - certificate:
         TYPENAME: LiteCertificate
     - wait_for_outgoing_messages: BOOL
-HashedBlob:
-  STRUCT:
-    - blob_type:
-        TYPENAME: BlobType
-    - blob:
-        TYPENAME: Blob
 IncomingMessage:
   STRUCT:
     - origin:
@@ -820,7 +820,7 @@ RpcMessage:
     15:
       DownloadBlobResponse:
         NEWTYPE:
-          TYPENAME: Blob
+          TYPENAME: BlobContent
     16:
       DownloadCertificateValueResponse:
         NEWTYPE:

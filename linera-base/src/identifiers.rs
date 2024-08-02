@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bcs_scalar,
     crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
-    data_types::{Blob, BlockHeight},
+    data_types::{BlobContent, BlockHeight},
     doc_scalar,
 };
 
@@ -188,7 +188,7 @@ impl FromStr for BlobType {
     }
 }
 
-/// A content-addressed blob ID i.e. the hash of the Blob.
+/// A content-addressed blob ID i.e. the hash of the `BlobContent`.
 #[derive(
     Eq,
     PartialEq,
@@ -213,10 +213,10 @@ pub struct BlobId {
 }
 
 impl BlobId {
-    /// Creates a new `BlobId` from a `Blob`
-    pub fn new_data(blob: &Blob) -> Self {
+    /// Creates a new `BlobId` from a `BlobContent`
+    pub fn new_data(blob_payload: &BlobContent) -> Self {
         BlobId {
-            hash: CryptoHash::new(blob),
+            hash: CryptoHash::new(blob_payload),
             blob_type: BlobType::Data,
         }
     }
@@ -956,7 +956,7 @@ doc_scalar!(AccountOwner, "An owner of an account.");
 doc_scalar!(Account, "An account");
 doc_scalar!(
     BlobId,
-    "A content-addressed blob ID i.e. the hash of the Blob"
+    "A content-addressed blob ID i.e. the hash of the `BlobContent`"
 );
 
 #[cfg(test)]

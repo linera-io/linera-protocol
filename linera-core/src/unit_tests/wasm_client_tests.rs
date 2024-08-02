@@ -19,7 +19,7 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, HashedBlob, OracleResponse},
+    data_types::{Amount, Blob, OracleResponse},
     identifiers::{
         AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner, StreamId,
         StreamName,
@@ -118,7 +118,7 @@ where
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
 
-    let contract_blob = HashedBlob::load_data_blob_from_file(contract_path.clone()).await?;
+    let contract_blob = Blob::load_data_blob_from_file(contract_path.clone()).await?;
     let expected_contract_blob_id = contract_blob.id();
     let certificate = publisher
         .publish_blob(contract_blob.clone())
@@ -134,7 +134,7 @@ where
         .iter()
         .any(|responses| responses.contains(&OracleResponse::Blob(expected_contract_blob_id))));
 
-    let service_blob = HashedBlob::load_data_blob_from_file(service_path.clone()).await?;
+    let service_blob = Blob::load_data_blob_from_file(service_path.clone()).await?;
     let expected_service_blob_id = service_blob.id();
     let certificate = publisher.publish_blob(service_blob).await.unwrap().unwrap();
     assert!(certificate

@@ -12,7 +12,7 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, OracleResponse,
+        Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, OracleResponse,
         Resources, SendMessageRequest, Timestamp,
     },
     ensure,
@@ -712,7 +712,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         self.inner().assert_before(timestamp)
     }
 
-    fn read_blob(&mut self, blob_id: &BlobId) -> Result<Blob, ExecutionError> {
+    fn read_blob(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError> {
         self.inner().read_blob(blob_id)
     }
 }
@@ -1013,7 +1013,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(())
     }
 
-    fn read_blob(&mut self, blob_id: &BlobId) -> Result<Blob, ExecutionError> {
+    fn read_blob(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError> {
         if let Some(responses) = &mut self.replaying_oracle_responses {
             match responses.next() {
                 Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == *blob_id => {}

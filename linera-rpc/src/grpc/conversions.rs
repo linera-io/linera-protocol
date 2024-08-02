@@ -3,7 +3,7 @@
 
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
-    data_types::{Blob, BlockHeight},
+    data_types::{BlobContent, BlockHeight},
     ensure,
     identifiers::{BlobId, ChainId, Owner},
 };
@@ -182,7 +182,7 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
             hashed_certificate_values: bincode::serialize(
                 &block_proposal.hashed_certificate_values,
             )?,
-            blobs: bincode::serialize(&block_proposal.hashed_blobs)?,
+            blobs: bincode::serialize(&block_proposal.blobs)?,
             validated_block_certificate: block_proposal
                 .validated_block_certificate
                 .map(|cert| bincode::serialize(&cert))
@@ -207,7 +207,7 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
             hashed_certificate_values: bincode::deserialize(
                 &block_proposal.hashed_certificate_values,
             )?,
-            hashed_blobs: bincode::deserialize(&block_proposal.blobs)?,
+            blobs: bincode::deserialize(&block_proposal.blobs)?,
             validated_block_certificate: block_proposal
                 .validated_block_certificate
                 .map(|bytes| bincode::deserialize(&bytes))
@@ -328,7 +328,7 @@ impl TryFrom<api::HandleCertificateRequest> for HandleCertificateRequest {
             certificate: certificate.try_into()?,
             wait_for_outgoing_messages: cert_request.wait_for_outgoing_messages,
             hashed_certificate_values: values,
-            hashed_blobs: blobs,
+            blobs,
         })
     }
 }
@@ -341,7 +341,7 @@ impl TryFrom<HandleCertificateRequest> for api::HandleCertificateRequest {
             chain_id: Some(request.certificate.value().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
             hashed_certificate_values: bincode::serialize(&request.hashed_certificate_values)?,
-            blobs: bincode::serialize(&request.hashed_blobs)?,
+            blobs: bincode::serialize(&request.blobs)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
         })
     }
@@ -568,14 +568,14 @@ impl TryFrom<api::CryptoHash> for CryptoHash {
     }
 }
 
-impl From<Blob> for api::Blob {
-    fn from(blob: Blob) -> Self {
+impl From<BlobContent> for api::BlobContent {
+    fn from(blob: BlobContent) -> Self {
         Self { bytes: blob.bytes }
     }
 }
 
-impl From<api::Blob> for Blob {
-    fn from(blob: api::Blob) -> Self {
+impl From<api::BlobContent> for BlobContent {
+    fn from(blob: api::BlobContent) -> Self {
         Self { bytes: blob.bytes }
     }
 }
@@ -802,7 +802,7 @@ pub mod tests {
         let request = HandleCertificateRequest {
             certificate,
             hashed_certificate_values: values,
-            hashed_blobs: vec![],
+            blobs: vec![],
             wait_for_outgoing_messages: false,
         };
 
@@ -866,7 +866,7 @@ pub mod tests {
                 }
                 .with(get_block()),
             )],
-            hashed_blobs: vec![],
+            blobs: vec![],
             validated_block_certificate: Some(cert),
         };
 

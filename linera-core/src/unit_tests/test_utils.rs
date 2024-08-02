@@ -134,16 +134,11 @@ where
         &self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(
-                certificate,
-                hashed_certificate_values,
-                hashed_blobs,
-                sender,
-            )
+            validator.do_handle_certificate(certificate, hashed_certificate_values, blobs, sender)
         })
         .await
     }
@@ -171,7 +166,7 @@ where
         Ok(CryptoHash::test_hash("genesis config"))
     }
 
-    async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError> {
+    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
         self.spawn_and_receive(move |validator, sender| validator.do_download_blob(blob_id, sender))
             .await
     }
@@ -315,7 +310,7 @@ where
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         notifications: &mut Vec<Notification>,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
             FaultType::DontProcessValidated if certificate.value().is_validated() => None,
@@ -329,7 +324,7 @@ where
                     .fully_handle_certificate_with_notifications(
                         certificate,
                         hashed_certificate_values,
-                        hashed_blobs,
+                        blobs,
                         Some(notifications),
                     )
                     .await
@@ -360,7 +355,7 @@ where
         certificate: Certificate,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
         let mut notifications = Vec::new();
         let is_validated = certificate.value().is_validated();
@@ -369,7 +364,7 @@ where
             validator,
             &mut notifications,
             hashed_certificate_values,
-            hashed_blobs,
+            blobs,
         )
         .await;
         let result = match handle_certificate_result {
@@ -405,7 +400,7 @@ where
         self,
         certificate: Certificate,
         hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;
@@ -414,7 +409,7 @@ where
                 certificate,
                 &mut validator,
                 hashed_certificate_values,
-                hashed_blobs,
+                blobs,
             )
             .await;
         sender.send(result)
@@ -455,16 +450,16 @@ where
     async fn do_download_blob(
         self,
         blob_id: BlobId,
-        sender: oneshot::Sender<Result<Blob, NodeError>>,
-    ) -> Result<(), Result<Blob, NodeError>> {
+        sender: oneshot::Sender<Result<BlobContent, NodeError>>,
+    ) -> Result<(), Result<BlobContent, NodeError>> {
         let validator = self.client.lock().await;
-        let hashed_blob = validator
+        let blob = validator
             .state
             .storage_client()
-            .read_hashed_blob(blob_id)
+            .read_blob(blob_id)
             .await
             .map_err(Into::into);
-        sender.send(hashed_blob.map(|hashed_blob| hashed_blob.blob().clone()))
+        sender.send(blob.map(|blob| blob.into_inner()))
     }
 
     async fn do_download_certificate_value(
