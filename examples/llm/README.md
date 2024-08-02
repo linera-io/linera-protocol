@@ -51,7 +51,7 @@ manual](https://linera.dev) for instructions.
 
 First, deploy the application:
 ```bash
-cd ..
+cd examples
 APP_ID=$(linera project publish-and-create llm)
 ```
 
