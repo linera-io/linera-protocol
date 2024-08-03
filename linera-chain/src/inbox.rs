@@ -8,7 +8,7 @@ use linera_base::{
     identifiers::ChainId,
 };
 #[cfg(with_testing)]
-use linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES};
+use linera_views::memory::{create_test_memory_context, MemoryContext};
 use linera_views::{
     common::Context,
     queue_view::QueueView,
@@ -269,7 +269,7 @@ where
     ViewError: From<<MemoryContext<()> as linera_views::common::Context>::Error>,
 {
     pub async fn new() -> Self {
-        let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, ());
+        let context = create_test_memory_context();
         Self::load(context)
             .await
             .expect("Loading from memory should work")
