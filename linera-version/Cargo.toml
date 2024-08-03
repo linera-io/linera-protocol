@@ -17,6 +17,7 @@ async-graphql.workspace = true
 async-graphql-derive.workspace = true
 base64.workspace = true
 cargo_metadata.workspace = true
+fs-err.workspace = true
 glob.workspace = true
 semver.workspace = true
 serde.workspace = true
@@ -28,6 +29,7 @@ tracing.workspace = true
 [build-dependencies]
 base64.workspace = true
 cargo_metadata.workspace = true
+fs-err.workspace = true
 glob.workspace = true
 quote.workspace = true
 semver.workspace = true

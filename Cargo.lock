@@ -4683,6 +4683,7 @@ dependencies = [
  "async-graphql-derive",
  "base64 0.22.0",
  "cargo_metadata",
+ "fs-err",
  "glob",
  "quote",
  "semver 1.0.22",

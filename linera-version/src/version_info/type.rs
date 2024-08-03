@@ -106,7 +106,7 @@ fn get_hash(
     let mut n_file = 0;
     for path in glob::glob(&package_glob)? {
         let path = path?;
-        let mut file = std::fs::File::open(&path)?;
+        let mut file = fs_err::File::open(&path)?;
         relevant_paths.push(path);
         n_file += 1;
         while file.read(&mut buffer)? != 0 {
@@ -179,7 +179,10 @@ pub struct ApiHashes {
 
 impl VersionInfo {
     pub fn get() -> Result<Self, Error> {
-        Self::trace_get(&std::env::current_dir()?, &mut vec![])
+        Self::trace_get(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
+            &mut vec![],
+        )
     }
 
     fn trace_get(crate_dir: &std::path::Path, paths: &mut Vec<PathBuf>) -> Result<Self, Error> {
@@ -218,7 +221,7 @@ impl VersionInfo {
         }
         .into();
 
-        let api_hashes: ApiHashes = serde_json::from_reader(std::fs::File::open(api_hashes_path)?)?;
+        let api_hashes: ApiHashes = serde_json::from_reader(fs_err::File::open(api_hashes_path)?)?;
 
         let rpc_hash = get_hash(
             paths,
