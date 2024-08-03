@@ -8,10 +8,9 @@ pub const TEST_CACHE_SIZE: usize = 1000;
 use std::sync::LazyLock;
 use std::{
     collections::{btree_map, hash_map::RandomState, BTreeMap},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
-use async_lock::Mutex;
 use linked_hash_map::LinkedHashMap;
 #[cfg(with_metrics)]
 use prometheus::{register_int_counter_vec, IntCounterVec};
@@ -128,24 +127,25 @@ where
         };
 
         // First inquiring in the read_value_bytes LRU
-        let lru_read_values_container = lru_read_values.lock().await;
-        if let Some(value) = lru_read_values_container.query(key) {
-            #[cfg(with_metrics)]
-            NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
-            return Ok(value.clone());
+        {
+            let lru_read_values_container = lru_read_values.lock().unwrap();
+            if let Some(value) = lru_read_values_container.query(key) {
+                #[cfg(with_metrics)]
+                NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
+                return Ok(value.clone());
+            }
         }
-        drop(lru_read_values_container);
         #[cfg(with_metrics)]
         NUM_CACHE_FAULT.with_label_values(&[]).inc();
         let value = self.store.read_value_bytes(key).await?;
-        let mut lru_read_values = lru_read_values.lock().await;
+        let mut lru_read_values = lru_read_values.lock().unwrap();
         lru_read_values.insert(key.to_vec(), value.clone());
         Ok(value)
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, K::Error> {
         if let Some(values) = &self.lru_read_values {
-            let values = values.lock().await;
+            let values = values.lock().unwrap();
             if let Some(value) = values.query(key) {
                 return Ok(value.is_some());
             }
@@ -157,17 +157,19 @@ where
         let Some(values) = &self.lru_read_values else {
             return self.store.contains_keys(keys).await;
         };
-        let values = values.lock().await;
         let size = keys.len();
         let mut results = vec![false; size];
         let mut indices = Vec::new();
         let mut key_requests = Vec::new();
-        for i in 0..size {
-            if let Some(value) = values.query(&keys[i]) {
-                results[i] = value.is_some();
-            } else {
-                indices.push(i);
-                key_requests.push(keys[i].clone());
+        {
+            let values = values.lock().unwrap();
+            for i in 0..size {
+                if let Some(value) = values.query(&keys[i]) {
+                    results[i] = value.is_some();
+                } else {
+                    indices.push(i);
+                    key_requests.push(keys[i].clone());
+                }
             }
         }
         let key_results = self.store.contains_keys(key_requests).await?;
@@ -188,26 +190,27 @@ where
         let mut result = Vec::with_capacity(keys.len());
         let mut cache_miss_indices = Vec::new();
         let mut miss_keys = Vec::new();
-        let lru_read_values_container = lru_read_values.lock().await;
-        for (i, key) in keys.into_iter().enumerate() {
-            if let Some(value) = lru_read_values_container.query(&key) {
-                #[cfg(with_metrics)]
-                NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
-                result.push(value.clone());
-            } else {
-                #[cfg(with_metrics)]
-                NUM_CACHE_FAULT.with_label_values(&[]).inc();
-                result.push(None);
-                cache_miss_indices.push(i);
-                miss_keys.push(key);
+        {
+            let lru_read_values_container = lru_read_values.lock().unwrap();
+            for (i, key) in keys.into_iter().enumerate() {
+                if let Some(value) = lru_read_values_container.query(&key) {
+                    #[cfg(with_metrics)]
+                    NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
+                    result.push(value.clone());
+                } else {
+                    #[cfg(with_metrics)]
+                    NUM_CACHE_FAULT.with_label_values(&[]).inc();
+                    result.push(None);
+                    cache_miss_indices.push(i);
+                    miss_keys.push(key);
+                }
             }
         }
-        drop(lru_read_values_container);
         let values = self
             .store
             .read_multi_values_bytes(miss_keys.clone())
             .await?;
-        let mut lru_read_values = lru_read_values.lock().await;
+        let mut lru_read_values = lru_read_values.lock().unwrap();
         for (i, (key, value)) in cache_miss_indices
             .into_iter()
             .zip(miss_keys.into_iter().zip(values))
@@ -242,21 +245,22 @@ where
             return self.store.write_batch(batch, base_key).await;
         };
 
-        let mut lru_read_values = lru_read_values.lock().await;
-        for operation in &batch.operations {
-            match operation {
-                WriteOperation::Put { key, value } => {
-                    lru_read_values.insert(key.to_vec(), Some(value.to_vec()));
-                }
-                WriteOperation::Delete { key } => {
-                    lru_read_values.insert(key.to_vec(), None);
-                }
-                WriteOperation::DeletePrefix { key_prefix } => {
-                    lru_read_values.delete_prefix(key_prefix);
+        {
+            let mut lru_read_values = lru_read_values.lock().unwrap();
+            for operation in &batch.operations {
+                match operation {
+                    WriteOperation::Put { key, value } => {
+                        lru_read_values.insert(key.to_vec(), Some(value.to_vec()));
+                    }
+                    WriteOperation::Delete { key } => {
+                        lru_read_values.insert(key.to_vec(), None);
+                    }
+                    WriteOperation::DeletePrefix { key_prefix } => {
+                        lru_read_values.delete_prefix(key_prefix);
+                    }
                 }
             }
         }
-        drop(lru_read_values);
         self.store.write_batch(batch, base_key).await
     }
 
