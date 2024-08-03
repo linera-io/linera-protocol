@@ -13,8 +13,16 @@ use linera_base::{
     identifiers::{ChainId, MessageId},
     ownership::ChainOwnership,
 };
-use linera_client::{chain_listener::ClientContext, config::GenesisConfig};
-use linera_core::{client::ChainClient, data_types::ClientOutcome, node::ValidatorNodeProvider};
+use linera_client::{
+    chain_clients::ChainClients,
+    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
+    config::GenesisConfig,
+};
+use linera_core::{
+    client::ChainClient,
+    data_types::ClientOutcome,
+    node::{ValidatorNode, ValidatorNodeProvider},
+};
 use linera_execution::committee::ValidatorName;
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -200,6 +208,8 @@ where
     client: Arc<Mutex<ChainClient<P, S>>>,
     context: Arc<Mutex<C>>,
     genesis_config: Arc<GenesisConfig>,
+    config: ChainListenerConfig,
+    storage: S,
     port: NonZeroU16,
     amount: Amount,
     end_timestamp: Timestamp,
@@ -217,6 +227,8 @@ where
             client: self.client.clone(),
             context: self.context.clone(),
             genesis_config: self.genesis_config.clone(),
+            config: self.config.clone(),
+            storage: self.storage.clone(),
             port: self.port,
             amount: self.amount,
             end_timestamp: self.end_timestamp,
@@ -229,6 +241,7 @@ where
 impl<P, S, C> FaucetService<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + Clone + 'static,
+    <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     ViewError: From<S::StoreError>,
@@ -241,6 +254,8 @@ where
         amount: Amount,
         end_timestamp: Timestamp,
         genesis_config: Arc<GenesisConfig>,
+        config: ChainListenerConfig,
+        storage: S,
     ) -> anyhow::Result<Self> {
         let start_timestamp = client.storage_client().clock().current_time();
         client.process_inbox().await?;
@@ -249,6 +264,8 @@ where
             client: Arc::new(Mutex::new(client)),
             context: Arc::new(Mutex::new(context)),
             genesis_config,
+            config,
+            storage,
             port,
             amount,
             end_timestamp,
@@ -286,6 +303,10 @@ where
             .layer(CorsLayer::permissive());
 
         info!("GraphiQL IDE: http://localhost:{}", port);
+
+        ChainListener::new(self.config, ChainClients::default())
+            .run(self.context.clone(), self.storage.clone())
+            .await;
 
         axum::serve(
             tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?,

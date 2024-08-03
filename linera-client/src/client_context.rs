@@ -20,7 +20,7 @@ use linera_base::{
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
-    client::{ChainClient, Client},
+    client::{ChainClient, Client, MessagePolicy},
     data_types::ClientOutcome,
     node::CrossChainMessageDelivery,
     JoinSetExt as _,
@@ -188,7 +188,10 @@ where
             chain.pending_block.clone(),
             chain.pending_blobs.clone(),
         );
-        chain_client.options_mut().message_policy = self.options.message_policy;
+        chain_client.options_mut().message_policy = MessagePolicy::new(
+            self.options.blanket_message_policy.clone(),
+            self.options.restrict_chain_ids_to.clone(),
+        );
         chain_client
     }
 
