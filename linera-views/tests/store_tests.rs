@@ -56,8 +56,8 @@ async fn test_reads_dynamo_db() {
 #[tokio::test]
 async fn test_reads_scylla_db() {
     for scenario in get_random_test_scenarios() {
-        let store = linera_views::scylla_db::create_scylla_db_test_store().await;
-        run_reads(store, scenario).await;
+        let key_value_store = linera_views::scylla_db::create_scylla_db_test_store().await;
+        run_reads(key_value_store, scenario).await;
     }
 }
 
