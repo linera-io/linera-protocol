@@ -78,6 +78,8 @@ pub enum Error {
     Glob(#[from] glob::GlobError),
     #[error("pattern error: {0}")]
     Pattern(#[from] glob::PatternError),
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
 }
 
 struct Outcome {
@@ -94,10 +96,8 @@ fn get_hash(
     use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
     use sha3::Digest as _;
 
-    let Some(package_root) = get_package_root(metadata, package) else {
-        return Ok("package not used".to_owned());
-    };
-
+    let package_root = get_package_root(metadata, package)
+        .ok_or_else(|| Error::NoSuchPackage(package.to_owned()))?;
     let mut hasher = sha3::Sha3_256::new();
     let mut buffer = [0u8; 4096];
 
@@ -159,6 +159,24 @@ fn get_package_root<'r>(
     )
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct CargoVcsInfo {
+    path_in_vcs: PathBuf,
+    git: CargoVcsInfoGit,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct CargoVcsInfoGit {
+    sha1: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ApiHashes {
+    pub rpc: String,
+    pub graphql: String,
+    pub wit: String,
+}
+
 impl VersionInfo {
     pub fn get() -> Result<Self, Error> {
         Self::trace_get(&std::env::current_dir()?, &mut vec![])
@@ -177,9 +195,15 @@ impl VersionInfo {
                 .into(),
         );
 
+        let cargo_vcs_info_path = crate_dir.join(".cargo_vcs_info.json");
+        let api_hashes_path = crate_dir.join("api-hashes.json");
         let mut git_dirty = false;
         let git_commit = if let Ok(git_commit) = std::env::var("GIT_COMMIT") {
             git_commit
+        } else if cargo_vcs_info_path.is_file() {
+            let cargo_vcs_info: CargoVcsInfo =
+                serde_json::from_reader(std::fs::File::open(cargo_vcs_info_path)?)?;
+            cargo_vcs_info.git.sha1
         } else {
             let git_outcome = run("git", &["rev-parse", "HEAD"])?;
             if git_outcome.status.success() {
@@ -194,12 +218,15 @@ impl VersionInfo {
         }
         .into();
 
+        let api_hashes: ApiHashes = serde_json::from_reader(std::fs::File::open(api_hashes_path)?)?;
+
         let rpc_hash = get_hash(
             paths,
             &metadata,
             "linera-rpc",
             "tests/snapshots/format__format.yaml.snap",
-        )?
+        )
+        .unwrap_or(api_hashes.rpc)
         .into();
 
         let graphql_hash = get_hash(
@@ -207,10 +234,13 @@ impl VersionInfo {
             &metadata,
             "linera-service-graphql-client",
             "gql/*.graphql",
-        )?
+        )
+        .unwrap_or(api_hashes.graphql)
         .into();
 
-        let wit_hash = get_hash(paths, &metadata, "linera-sdk", "wit/*.wit")?.into();
+        let wit_hash = get_hash(paths, &metadata, "linera-sdk", "wit/*.wit")
+            .unwrap_or(api_hashes.wit)
+            .into();
 
         Ok(Self {
             crate_version,
@@ -220,5 +250,13 @@ impl VersionInfo {
             graphql_hash,
             wit_hash,
         })
+    }
+
+    pub fn api_hashes(&self) -> ApiHashes {
+        ApiHashes {
+            rpc: self.rpc_hash.clone().into_owned(),
+            wit: self.wit_hash.clone().into_owned(),
+            graphql: self.graphql_hash.clone().into_owned(),
+        }
     }
 }

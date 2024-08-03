@@ -4678,6 +4678,7 @@ dependencies = [
 name = "linera-version"
 version = "0.12.0"
 dependencies = [
+ "anyhow",
  "async-graphql",
  "async-graphql-derive",
  "base64 0.22.0",
@@ -4686,6 +4687,7 @@ dependencies = [
  "quote",
  "semver 1.0.22",
  "serde",
+ "serde_json",
  "sha3",
  "thiserror",
  "tracing",
