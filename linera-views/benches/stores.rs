@@ -21,17 +21,28 @@ use linera_views::{
 };
 use tokio::runtime::Runtime;
 
+// We generate about 200 keys of length 4 with a key of length 10000
+// The keys are of the form 0,x,y,z,t with 0<= x,y,z,t < 4.
+
+/// A value to use for the keys
+const PREFIX: &[u8] = &[0];
+
+/// A value to use for the keys
+const PREFIX_SEARCH: &[u8] = &[0];
+
+/// The number of keys length
+const NUM_ENTRIES: usize = 200;
+
+/// The length of the values
+const LEN_VALUE: usize = 10000;
+
 pub async fn performance_contains_key<S: LocalKeyValueStore>(store: S, iterations: u64) -> Duration
 where
     S::Error: Debug,
 {
-    let prefix = vec![0];
-    let num_entries = 100;
-    let len_value = 10000;
-
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(&prefix, get_random_key_values2(num_entries, len_value));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
@@ -45,7 +56,7 @@ where
         total_time += measurement.elapsed();
 
         let mut batch = Batch::new();
-        batch.delete_key_prefix(prefix.clone());
+        batch.delete_key_prefix(PREFIX.to_vec());
         store.write_batch(batch, &[]).await.unwrap();
     }
 
@@ -97,13 +108,9 @@ pub async fn performance_contains_keys<S: LocalKeyValueStore>(store: S, iteratio
 where
     S::Error: Debug,
 {
-    let prefix = vec![0];
-    let num_entries = 100;
-    let len_value = 10000;
-
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(&prefix, get_random_key_values2(num_entries, len_value));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
@@ -119,7 +126,7 @@ where
         total_time += measurement.elapsed();
 
         let mut batch = Batch::new();
-        batch.delete_key_prefix(prefix.clone());
+        batch.delete_key_prefix(PREFIX.to_vec());
         store.write_batch(batch, &[]).await.unwrap();
     }
 
@@ -174,13 +181,9 @@ pub async fn performance_find_keys_by_prefix<S: LocalKeyValueStore>(
 where
     S::Error: Debug,
 {
-    let prefix = vec![0];
-    let num_entries = 100;
-    let len_value = 10000;
-
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(&prefix, get_random_key_values2(num_entries, len_value));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
@@ -188,11 +191,11 @@ where
         store.write_batch(batch, &[]).await.unwrap();
 
         let measurement = Instant::now();
-        black_box(store.find_keys_by_prefix(&prefix).await.unwrap());
+        black_box(store.find_keys_by_prefix(PREFIX_SEARCH).await.unwrap());
         total_time += measurement.elapsed();
 
         let mut batch = Batch::new();
-        batch.delete_key_prefix(prefix.clone());
+        batch.delete_key_prefix(PREFIX.to_vec());
         store.write_batch(batch, &[]).await.unwrap();
     }
 
@@ -247,13 +250,9 @@ pub async fn performance_find_key_values_by_prefix<S: LocalKeyValueStore>(
 where
     S::Error: Debug,
 {
-    let prefix = vec![0];
-    let num_entries = 100;
-    let len_value = 10000;
-
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(&prefix, get_random_key_values2(num_entries, len_value));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
@@ -261,11 +260,11 @@ where
         store.write_batch(batch, &[]).await.unwrap();
 
         let measurement = Instant::now();
-        black_box(store.find_key_values_by_prefix(&prefix).await.unwrap());
+        black_box(store.find_key_values_by_prefix(PREFIX_SEARCH).await.unwrap());
         total_time += measurement.elapsed();
 
         let mut batch = Batch::new();
-        batch.delete_key_prefix(prefix.clone());
+        batch.delete_key_prefix(PREFIX.to_vec());
         store.write_batch(batch, &[]).await.unwrap();
     }
 
@@ -320,13 +319,9 @@ pub async fn performance_read_value_bytes<S: LocalKeyValueStore>(
 where
     S::Error: Debug,
 {
-    let prefix = vec![0];
-    let num_entries = 100;
-    let len_value = 10000;
-
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(&prefix, get_random_key_values2(num_entries, len_value));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
@@ -340,7 +335,7 @@ where
         total_time += measurement.elapsed();
 
         let mut batch = Batch::new();
-        batch.delete_key_prefix(prefix.clone());
+        batch.delete_key_prefix(PREFIX.to_vec());
         store.write_batch(batch, &[]).await.unwrap();
     }
 
@@ -395,13 +390,9 @@ pub async fn performance_read_multi_values_bytes<S: LocalKeyValueStore>(
 where
     S::Error: Debug,
 {
-    let prefix = vec![0];
-    let num_entries = 100;
-    let len_value = 10000;
-
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(&prefix, get_random_key_values2(num_entries, len_value));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
@@ -417,7 +408,7 @@ where
         total_time += measurement.elapsed();
 
         let mut batch = Batch::new();
-        batch.delete_key_prefix(prefix.clone());
+        batch.delete_key_prefix(PREFIX.to_vec());
         store.write_batch(batch, &[]).await.unwrap();
     }
 
@@ -469,13 +460,9 @@ pub async fn performance_write_batch<S: LocalKeyValueStore>(store: S, iterations
 where
     S::Error: Debug,
 {
-    let prefix = vec![0];
-    let num_entries = 100;
-    let len_value = 10000;
-
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(&prefix, get_random_key_values2(num_entries, len_value));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
@@ -486,7 +473,7 @@ where
         total_time += measurement.elapsed();
 
         let mut batch = Batch::new();
-        batch.delete_key_prefix(prefix.clone());
+        batch.delete_key_prefix(PREFIX.to_vec());
         store.write_batch(batch, &[]).await.unwrap();
     }
 
