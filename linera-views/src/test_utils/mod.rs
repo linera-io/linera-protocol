@@ -348,11 +348,8 @@ pub fn get_random_key_values2(num_entries: usize, len_value: usize) -> Vec<(Vec<
     key_values
 }
 
-/// Add a prefix to a list of key-values
-pub fn prefix_expansion(
-    prefix: &[u8],
-    key_values: Vec<(Vec<u8>, Vec<u8>)>,
-) -> Vec<(Vec<u8>, Vec<u8>)> {
+/// Adds a prefix to a list of key-values
+pub fn add_prefix(prefix: &[u8], key_values: Vec<(Vec<u8>, Vec<u8>)>) -> Vec<(Vec<u8>, Vec<u8>)> {
     key_values
         .into_iter()
         .map(|(key, value)| {
