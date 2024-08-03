@@ -664,7 +664,7 @@ type MutationRoot {
 	"""
 	Publishes a new data blob.
 	"""
-	publishDataBlob(chainId: ChainId!, blob: BlobContent!): BlobId!
+	publishDataBlob(chainId: ChainId!, blobContent: BlobContent!): BlobId!
 	"""
 	Creates a new application.
 	"""

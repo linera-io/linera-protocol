@@ -312,8 +312,8 @@ where
             | RpcMessage::VersionInfoResponse(_)
             | RpcMessage::GenesisConfigHashQuery
             | RpcMessage::GenesisConfigHashResponse(_)
-            | RpcMessage::DownloadBlob(_)
-            | RpcMessage::DownloadBlobResponse(_)
+            | RpcMessage::DownloadBlobContent(_)
+            | RpcMessage::DownloadBlobContentResponse(_)
             | RpcMessage::DownloadCertificateValue(_)
             | RpcMessage::DownloadCertificateValueResponse(_)
             | RpcMessage::BlobLastUsedBy(_)

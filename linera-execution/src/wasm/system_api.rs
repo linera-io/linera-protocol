@@ -356,12 +356,15 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Reads a blob from storage.
-    fn read_blob(caller: &mut Caller, blob_id: BlobId) -> Result<BlobContent, RuntimeError> {
+    /// Reads a blob content from storage.
+    fn read_blob_content(
+        caller: &mut Caller,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .read_blob(&blob_id)
+            .read_blob_content(&blob_id)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -530,12 +533,15 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Reads a blob from storage.
-    fn read_blob(caller: &mut Caller, blob_id: BlobId) -> Result<BlobContent, RuntimeError> {
+    /// Reads a blob content from storage.
+    fn read_blob_content(
+        caller: &mut Caller,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .read_blob(&blob_id)
+            .read_blob_content(&blob_id)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

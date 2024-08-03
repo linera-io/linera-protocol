@@ -828,10 +828,10 @@ pub struct Blob {
 impl Blob {
     /// Loads a blob from a file.
     pub async fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
-        let blob = BlobContent {
+        let blob_content = BlobContent {
             bytes: fs::read(path)?,
         };
-        Ok(blob.with_data_blob_id())
+        Ok(blob_content.with_data_blob_id())
     }
 
     /// A content-addressed blob ID i.e. the hash of the `Blob`.
@@ -842,10 +842,10 @@ impl Blob {
     /// Creates a [`Blob`] from a string for testing purposes.
     #[cfg(with_testing)]
     pub fn test_data_blob(content: &str) -> Self {
-        let blob = BlobContent {
+        let blob_content = BlobContent {
             bytes: content.as_bytes().to_vec(),
         };
-        blob.with_data_blob_id()
+        blob_content.with_data_blob_id()
     }
 
     /// Returns a reference to the inner `BlobContent`, without the hash.
@@ -863,7 +863,7 @@ impl Blob {
 #[serde(rename = "Blob")]
 struct SerializableBlob {
     pub blob_type: BlobType,
-    pub blob: BlobContent,
+    pub blob_content: BlobContent,
 }
 
 impl Serialize for Blob {
@@ -882,7 +882,7 @@ impl Serialize for Blob {
             SerializableBlob::serialize(
                 &SerializableBlob {
                     blob_type: self.id.blob_type,
-                    blob: self.content.clone(),
+                    blob_content: self.content.clone(),
                 },
                 serializer,
             )
@@ -923,8 +923,8 @@ impl<'a> Deserialize<'a> for Blob {
         } else {
             let blob = SerializableBlob::deserialize(deserializer)?;
             Ok(Blob {
-                id: get_blob_id(&blob.blob_type, &blob.blob),
-                content: blob.blob,
+                id: get_blob_id(&blob.blob_type, &blob.blob_content),
+                content: blob.blob_content,
             })
         }
     }

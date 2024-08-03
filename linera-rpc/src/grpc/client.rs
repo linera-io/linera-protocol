@@ -282,11 +282,11 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
         Ok(self
             .client
             .clone()
-            .download_blob(api::BlobId::try_from(blob_id)?)
+            .download_blob_content(api::BlobId::try_from(blob_id)?)
             .await?
             .into_inner()
             .into())

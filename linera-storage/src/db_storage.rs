@@ -519,15 +519,16 @@ where
 
     async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let maybe_blob = self
+        let maybe_blob_content = self
             .client
             .client
             .read_value::<BlobContent>(&blob_key)
             .await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob = maybe_blob.ok_or_else(|| ViewError::not_found("value for blob ID", blob_id))?;
-        Ok(blob.with_blob_id_unchecked(blob_id))
+        let blob_content =
+            maybe_blob_content.ok_or_else(|| ViewError::not_found("value for blob ID", blob_id))?;
+        Ok(blob_content.with_blob_id_unchecked(blob_id))
     }
 
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
@@ -535,7 +536,7 @@ where
             .iter()
             .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
             .collect::<Result<Vec<_>, _>>()?;
-        let maybe_blobs = self
+        let maybe_blob_contents = self
             .client
             .client
             .read_multi_values::<BlobContent>(blob_keys)
@@ -547,9 +548,9 @@ where
 
         Ok(blob_ids
             .iter()
-            .zip(maybe_blobs)
-            .map(|(blob_id, maybe_blob)| {
-                maybe_blob.map(|blob| blob.with_blob_id_unchecked(*blob_id))
+            .zip(maybe_blob_contents)
+            .map(|(blob_id, maybe_blob_content)| {
+                maybe_blob_content.map(|blob_content| blob_content.with_blob_id_unchecked(*blob_id))
             })
             .collect())
     }
@@ -600,7 +601,7 @@ where
 
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        Self::add_blob_to_batch(&blob.id(), blob.content(), &mut batch)?;
+        Self::add_blob_to_batch(blob, &mut batch)?;
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -652,7 +653,7 @@ where
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for blob in blobs {
-            Self::add_blob_to_batch(&blob.id(), blob.content(), &mut batch)?;
+            Self::add_blob_to_batch(blob, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -668,7 +669,7 @@ where
             Self::add_hashed_cert_value_to_batch(value, &mut batch)?;
         }
         for blob in blobs {
-            Self::add_blob_to_batch(&blob.id(), blob.content(), &mut batch)?;
+            Self::add_blob_to_batch(blob, &mut batch)?;
         }
         Self::add_certificate_to_batch(certificate, &mut batch)?;
         self.write_batch(batch).await
@@ -742,15 +743,11 @@ where
         Ok(())
     }
 
-    fn add_blob_to_batch(
-        blob_id: &BlobId,
-        blob: &BlobContent,
-        batch: &mut Batch,
-    ) -> Result<(), ViewError> {
+    fn add_blob_to_batch(blob: &Blob, batch: &mut Batch) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_key = bcs::to_bytes(&BaseKey::Blob(*blob_id))?;
-        batch.put_key_value(blob_key.to_vec(), blob)?;
+        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob.id()))?;
+        batch.put_key_value(blob_key.to_vec(), blob.content())?;
         Ok(())
     }
 

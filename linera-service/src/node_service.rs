@@ -599,9 +599,9 @@ where
     async fn publish_data_blob(
         &self,
         chain_id: ChainId,
-        blob: BlobContent,
+        blob_content: BlobContent,
     ) -> Result<BlobId, Error> {
-        let blob = blob.with_data_blob_id();
+        let blob = blob_content.with_data_blob_id();
         self.apply_client_command(&chain_id, move |client| {
             let blob = blob.clone();
             async move {

@@ -142,12 +142,12 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
         Ok(match self {
-            Client::Grpc(grpc_client) => grpc_client.download_blob(blob_id).await?,
+            Client::Grpc(grpc_client) => grpc_client.download_blob_content(blob_id).await?,
 
             #[cfg(with_simple_network)]
-            Client::Simple(simple_client) => simple_client.download_blob(blob_id).await?,
+            Client::Simple(simple_client) => simple_client.download_blob_content(blob_id).await?,
         })
     }
 

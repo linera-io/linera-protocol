@@ -31,7 +31,7 @@ use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, Resources,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Resources,
         SendMessageRequest, Timestamp,
     },
     doc_scalar, hex_debug,
@@ -257,7 +257,7 @@ pub trait ExecutionRuntimeContext {
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<BlobContent, ExecutionError>;
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -490,8 +490,8 @@ pub trait BaseRuntime {
     /// owner, not a super owner.
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError>;
 
-    /// Reads a blob specified by a given `BlobId`.
-    fn read_blob(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError>;
+    /// Reads a blob content specified by a given `BlobId`.
+    fn read_blob_content(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
@@ -850,7 +850,7 @@ pub struct TestExecutionRuntimeContext {
     execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
-    blobs: Arc<DashMap<BlobId, BlobContent>>,
+    blobs: Arc<DashMap<BlobId, Blob>>,
 }
 
 #[cfg(with_testing)]
@@ -913,7 +913,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<BlobContent, ExecutionError> {
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError> {
         Ok(self
             .blobs
             .get(&blob_id)

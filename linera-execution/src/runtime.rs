@@ -712,8 +712,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         self.inner().assert_before(timestamp)
     }
 
-    fn read_blob(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError> {
-        self.inner().read_blob(blob_id)
+    fn read_blob_content(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError> {
+        self.inner().read_blob_content(blob_id)
     }
 }
 
@@ -1013,7 +1013,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(())
     }
 
-    fn read_blob(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError> {
+    fn read_blob_content(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError> {
         if let Some(responses) = &mut self.replaying_oracle_responses {
             match responses.next() {
                 Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == *blob_id => {}
@@ -1021,16 +1021,16 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                 None => return Err(ExecutionError::MissingOracleResponse),
             }
         }
-        let blob = self
+        let blob_content = self
             .execution_state_sender
-            .send_request(|callback| ExecutionRequest::ReadBlob {
+            .send_request(|callback| ExecutionRequest::ReadBlobContent {
                 blob_id: *blob_id,
                 callback,
             })?
             .recv_response()?;
         self.recorded_oracle_responses
             .push(OracleResponse::Blob(*blob_id));
-        Ok(blob)
+        Ok(blob_content)
     }
 }
 

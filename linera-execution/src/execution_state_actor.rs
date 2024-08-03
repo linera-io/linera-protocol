@@ -311,8 +311,8 @@ where
                 callback.respond(bytes);
             }
 
-            ReadBlob { blob_id, callback } => {
-                let blob = self.system.read_blob(blob_id).await?;
+            ReadBlobContent { blob_id, callback } => {
+                let blob = self.system.read_blob_content(blob_id).await?;
                 callback.respond(blob);
             }
         }
@@ -441,7 +441,7 @@ pub enum ExecutionRequest {
         callback: oneshot::Sender<Vec<u8>>,
     },
 
-    ReadBlob {
+    ReadBlobContent {
         blob_id: BlobId,
         callback: Sender<BlobContent>,
     },
@@ -578,7 +578,7 @@ impl Debug for ExecutionRequest {
                 .field("content_type", content_type)
                 .finish_non_exhaustive(),
 
-            ExecutionRequest::ReadBlob { blob_id, .. } => formatter
+            ExecutionRequest::ReadBlobContent { blob_id, .. } => formatter
                 .debug_struct("ExecutionRequest::ReadBlob")
                 .field("blob_id", blob_id)
                 .finish_non_exhaustive(),
