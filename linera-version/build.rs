@@ -51,7 +51,7 @@ fn main() {
 
     let out_path = std::path::Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("static.rs");
 
-    std::fs::write(&out_path, static_code.to_string().as_bytes()).unwrap_or_else(|e| {
+    fs_err::write(&out_path, static_code.to_string().as_bytes()).unwrap_or_else(|e| {
         panic!(
             "failed to write output file `{}`: {}",
             out_path.display(),

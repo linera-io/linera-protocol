@@ -76,7 +76,7 @@ either = "1.10.0"
 ethers = { version = "2.0.14", features = ["solc"] }
 flarch = "0.7.0"
 frunk = "0.4.2"
-fs-err = { version = "2.11.0", features = ["tokio"] }
+fs-err = "2.11.0"
 fs4 = "0.8.2"
 fs_extra = "1.3.0"
 futures = "0.3.30"

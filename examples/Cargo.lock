@@ -1975,6 +1975,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-err"
+version = "2.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88a41f105fe1d5b6b34b2055e3dc59bb79b46b48b2040b9e6c7b4b5de097aa41"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "fungible"
 version = "0.1.0"
 dependencies = [
@@ -3519,14 +3528,17 @@ dependencies = [
 name = "linera-version"
 version = "0.12.0"
 dependencies = [
+ "anyhow",
  "async-graphql",
  "async-graphql-derive",
  "base64 0.22.0",
  "cargo_metadata",
+ "fs-err",
  "glob",
  "quote",
  "semver 1.0.22",
  "serde",
+ "serde_json",
  "sha3",
  "thiserror",
  "tracing",

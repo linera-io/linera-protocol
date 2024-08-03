@@ -68,7 +68,7 @@ clap-markdown.workspace = true
 colored.workspace = true
 comfy-table.workspace = true
 current_platform = "0.2.0"
-fs-err.workspace = true
+fs-err = { workspace = true, features = ["tokio"] }
 fs_extra = { workspace = true, optional = true }
 futures.workspace = true
 hex.workspace = true
