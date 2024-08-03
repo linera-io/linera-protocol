@@ -61,7 +61,23 @@ pub struct MemoryStore {
     map: Arc<RwLock<MemoryStoreMap>>,
     /// The maximum number of queries used for the stream.
     max_stream_queries: usize,
+    /// The namespace of the store
+    namespace: String,
+    /// Whether to kill on drop or not the
+    kill_on_drop: bool,
 }
+
+impl Drop for MemoryStore {
+    fn drop(&mut self) {
+        if self.kill_on_drop {
+            let mut namespace_memory_store = MEMORY_STORES
+                .lock()
+                .expect("MEMORY_STORES lock should not be poisoned");
+            Self::sync_delete(&mut namespace_memory_store, &self.namespace);
+        }
+    }
+}
+
 
 impl ReadableKeyValueStore<MemoryStoreError> for MemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
@@ -188,6 +204,7 @@ impl MemoryStore {
         namespace_memory_store: &NamespaceMemoryStore,
         config: &MemoryStoreConfig,
         namespace: &str,
+        kill_on_drop: bool,
     ) -> Result<Self, MemoryStoreError> {
         let max_stream_queries = config.common_config.max_stream_queries;
         let namespace = namespace.to_string();
@@ -195,57 +212,58 @@ impl MemoryStore {
             .get(&namespace)
             .ok_or(MemoryStoreError::NotExistentNamespace)?;
         let map = store.clone();
+        let namespace = namespace.to_string();
         Ok(MemoryStore {
             map,
             max_stream_queries,
+            namespace,
+            kill_on_drop,
         })
     }
 
     fn sync_list_all(
         namespace_memory_store: &NamespaceMemoryStore,
-    ) -> Result<Vec<String>, MemoryStoreError> {
-        let namespaces = namespace_memory_store.keys().cloned().collect::<Vec<_>>();
-        Ok(namespaces)
+    ) -> Vec<String> {
+        namespace_memory_store.keys().cloned().collect::<Vec<_>>()
     }
 
     fn sync_exists(
         namespace_memory_store: &NamespaceMemoryStore,
         namespace: &str,
-    ) -> Result<bool, MemoryStoreError> {
+    ) -> bool {
         let namespace = namespace.to_string();
-        Ok(namespace_memory_store.contains_key(&namespace))
+        namespace_memory_store.contains_key(&namespace)
     }
 
     fn sync_create(
         namespace_memory_store: &mut NamespaceMemoryStore,
         namespace: &str,
-    ) -> Result<(), MemoryStoreError> {
+    ) {
         let namespace = namespace.to_string();
         let map = MemoryStoreMap::new();
         let map = Arc::new(RwLock::new(map));
         namespace_memory_store.insert(namespace, map);
-        Ok(())
     }
 
     fn sync_delete(
         namespace_memory_store: &mut NamespaceMemoryStore,
         namespace: &str,
-    ) -> Result<(), MemoryStoreError> {
+    ) {
         let namespace = namespace.to_string();
         namespace_memory_store.remove(&namespace);
-        Ok(())
     }
 
     /// Create a memory store if one is missing and otherwise connect with the existing one
     pub fn sync_maybe_create_and_connect(
         config: &MemoryStoreConfig,
         namespace: &str,
+        kill_on_drop: bool,
     ) -> Result<Self, MemoryStoreError> {
         let mut namespace_memory_store = MEMORY_STORES.lock().expect("lock should not be poisoned");
-        if !MemoryStore::sync_exists(&namespace_memory_store, namespace)? {
-            MemoryStore::sync_create(&mut namespace_memory_store, namespace)?;
+        if !MemoryStore::sync_exists(&namespace_memory_store, namespace) {
+            MemoryStore::sync_create(&mut namespace_memory_store, namespace);
         }
-        MemoryStore::sync_connect(&namespace_memory_store, config, namespace)
+        MemoryStore::sync_connect(&namespace_memory_store, config, namespace, kill_on_drop)
     }
 
     /// Creates a `MemoryStore` from a number of queries and a namespace.
@@ -256,7 +274,21 @@ impl MemoryStore {
             cache_size: 1000,
         };
         let config = MemoryStoreConfig { common_config };
-        MemoryStore::sync_maybe_create_and_connect(&config, namespace)
+        let kill_on_drop = false;
+        MemoryStore::sync_maybe_create_and_connect(&config, namespace, kill_on_drop)
+    }
+
+    /// Creates a `MemoryStore` from a number of queries and a namespace for testing.
+    #[cfg(with_testing)]
+    pub fn new_for_testing(max_stream_queries: usize, namespace: &str) -> Result<Self, MemoryStoreError> {
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: None,
+            max_stream_queries,
+            cache_size: 1000,
+        };
+        let config = MemoryStoreConfig { common_config };
+        let kill_on_drop = true;
+        MemoryStore::sync_maybe_create_and_connect(&config, namespace, kill_on_drop)
     }
 }
 
@@ -268,35 +300,38 @@ impl AdminKeyValueStore for MemoryStore {
         let namespace_memory_store = MEMORY_STORES
             .lock()
             .expect("MEMORY_STORES lock should not be poisoned");
-        Self::sync_connect(&namespace_memory_store, config, namespace)
+        let kill_on_drop = false;
+        Self::sync_connect(&namespace_memory_store, config, namespace, kill_on_drop)
     }
 
     async fn list_all(_config: &Self::Config) -> Result<Vec<String>, MemoryStoreError> {
         let namespace_memory_store = MEMORY_STORES
             .lock()
             .expect("MEMORY_STORES lock should not be poisoned");
-        Self::sync_list_all(&namespace_memory_store)
+        Ok(Self::sync_list_all(&namespace_memory_store))
     }
 
     async fn exists(_config: &Self::Config, namespace: &str) -> Result<bool, MemoryStoreError> {
         let namespace_memory_store = MEMORY_STORES
             .lock()
             .expect("MEMORY_STORES lock should not be poisoned");
-        Self::sync_exists(&namespace_memory_store, namespace)
+        Ok(Self::sync_exists(&namespace_memory_store, namespace))
     }
 
     async fn create(_config: &Self::Config, namespace: &str) -> Result<(), MemoryStoreError> {
         let mut namespace_memory_store = MEMORY_STORES
             .lock()
             .expect("MEMORY_STORES lock should not be poisoned");
-        Self::sync_create(&mut namespace_memory_store, namespace)
+        Self::sync_create(&mut namespace_memory_store, namespace);
+        Ok(())
     }
 
     async fn delete(_config: &Self::Config, namespace: &str) -> Result<(), MemoryStoreError> {
         let mut namespace_memory_store = MEMORY_STORES
             .lock()
             .expect("MEMORY_STORES lock should not be poisoned");
-        Self::sync_delete(&mut namespace_memory_store, namespace)
+        Self::sync_delete(&mut namespace_memory_store, namespace);
+        Ok(())
     }
 }
 
@@ -321,13 +356,19 @@ pub fn create_memory_store_test_config() -> MemoryStoreConfig {
 impl<E> MemoryContext<E> {
     /// Creates a [`MemoryContext`].
     pub fn new(max_stream_queries: usize, namespace: &str, extra: E) -> Self {
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries: None,
-            max_stream_queries,
-            cache_size: 1000,
-        };
-        let config = MemoryStoreConfig { common_config };
-        let store = MemoryStore::sync_maybe_create_and_connect(&config, namespace).unwrap();
+        let store = MemoryStore::new(max_stream_queries, namespace).unwrap();
+        let base_key = Vec::new();
+        Self {
+            store,
+            base_key,
+            extra,
+        }
+    }
+
+    /// Creates a [`MemoryContext`] for testing.
+    #[cfg(with_testing)]
+    pub fn new_for_testing(max_stream_queries: usize, namespace: &str, extra: E) -> Self {
+        let store = MemoryStore::new_for_testing(max_stream_queries, namespace).unwrap();
         let base_key = Vec::new();
         Self {
             store,
@@ -343,14 +384,14 @@ impl<E> MemoryContext<E> {
 #[cfg(with_testing)]
 pub fn create_test_memory_context() -> MemoryContext<()> {
     let namespace = generate_test_namespace();
-    MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, ())
+    MemoryContext::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, ())
 }
 
 /// Creates a test memory store for working.
 #[cfg(with_testing)]
 pub fn create_test_memory_store() -> MemoryStore {
     let namespace = generate_test_namespace();
-    MemoryStore::new(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace).unwrap()
+    MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace).unwrap()
 }
 
 /// The error type for [`MemoryContext`].

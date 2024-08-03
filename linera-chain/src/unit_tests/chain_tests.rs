@@ -42,7 +42,7 @@ where
         let exec_runtime_context =
             TestExecutionRuntimeContext::new(chain_id, ExecutionRuntimeConfig::default());
         let namespace = generate_test_namespace();
-        let context = MemoryContext::new(
+        let context = MemoryContext::new_for_testing(
             TEST_MEMORY_MAX_STREAM_QUERIES,
             &namespace,
             exec_runtime_context,
