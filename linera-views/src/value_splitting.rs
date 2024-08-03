@@ -426,7 +426,8 @@ impl LimitedTestMemoryStore {
     /// Creates a `LimitedTestMemoryStore`
     pub fn new() -> Self {
         let namespace = generate_test_namespace();
-        let store = MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace).unwrap();
+        let store =
+            MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace).unwrap();
         LimitedTestMemoryStore { store }
     }
 }

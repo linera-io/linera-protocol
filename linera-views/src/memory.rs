@@ -78,7 +78,6 @@ impl Drop for MemoryStore {
     }
 }
 
-
 impl ReadableKeyValueStore<MemoryStoreError> for MemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
@@ -221,34 +220,23 @@ impl MemoryStore {
         })
     }
 
-    fn sync_list_all(
-        namespace_memory_store: &NamespaceMemoryStore,
-    ) -> Vec<String> {
+    fn sync_list_all(namespace_memory_store: &NamespaceMemoryStore) -> Vec<String> {
         namespace_memory_store.keys().cloned().collect::<Vec<_>>()
     }
 
-    fn sync_exists(
-        namespace_memory_store: &NamespaceMemoryStore,
-        namespace: &str,
-    ) -> bool {
+    fn sync_exists(namespace_memory_store: &NamespaceMemoryStore, namespace: &str) -> bool {
         let namespace = namespace.to_string();
         namespace_memory_store.contains_key(&namespace)
     }
 
-    fn sync_create(
-        namespace_memory_store: &mut NamespaceMemoryStore,
-        namespace: &str,
-    ) {
+    fn sync_create(namespace_memory_store: &mut NamespaceMemoryStore, namespace: &str) {
         let namespace = namespace.to_string();
         let map = MemoryStoreMap::new();
         let map = Arc::new(RwLock::new(map));
         namespace_memory_store.insert(namespace, map);
     }
 
-    fn sync_delete(
-        namespace_memory_store: &mut NamespaceMemoryStore,
-        namespace: &str,
-    ) {
+    fn sync_delete(namespace_memory_store: &mut NamespaceMemoryStore, namespace: &str) {
         let namespace = namespace.to_string();
         namespace_memory_store.remove(&namespace);
     }
@@ -280,7 +268,10 @@ impl MemoryStore {
 
     /// Creates a `MemoryStore` from a number of queries and a namespace for testing.
     #[cfg(with_testing)]
-    pub fn new_for_testing(max_stream_queries: usize, namespace: &str) -> Result<Self, MemoryStoreError> {
+    pub fn new_for_testing(
+        max_stream_queries: usize,
+        namespace: &str,
+    ) -> Result<Self, MemoryStoreError> {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries,
