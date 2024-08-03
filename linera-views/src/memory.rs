@@ -242,7 +242,7 @@ impl MemoryStore {
     }
 
     /// Create a memory store if one is missing and otherwise connect with the existing one
-    pub fn sync_maybe_create_and_connect(
+    fn sync_maybe_create_and_connect(
         config: &MemoryStoreConfig,
         namespace: &str,
         kill_on_drop: bool,
@@ -396,8 +396,8 @@ pub enum MemoryStoreError {
     #[error("The value is too large for the MemoryStore")]
     TooLargeValue,
 
-    /// The namespace is not existent
-    #[error("The namespace is not existent")]
+    /// The namespace does not exist
+    #[error("The namespace does not exist")]
     NotExistentNamespace,
 
     /// The database is not consistent
