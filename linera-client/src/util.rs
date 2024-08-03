@@ -1,11 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{num::ParseIntError, time::Duration};
+use std::{collections::HashSet, num::ParseIntError, str::FromStr, time::Duration};
 
 use anyhow::Result;
 use futures::future;
-use linera_base::data_types::{TimeDelta, Timestamp};
+use linera_base::{
+    crypto::CryptoError,
+    data_types::{TimeDelta, Timestamp},
+    identifiers::ChainId,
+};
 use linera_core::{data_types::RoundTimeout, node::NotificationStream, worker::Reason};
 use tokio_stream::StreamExt as _;
 
@@ -15,6 +19,13 @@ pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
 
 pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
     Ok(TimeDelta::from_millis(s.parse()?))
+}
+
+pub fn parse_chain_set(s: &str) -> Result<HashSet<ChainId>, CryptoError> {
+    match s.trim() {
+        "" => Ok(HashSet::new()),
+        s => s.split(",").map(ChainId::from_str).collect(),
+    }
 }
 
 /// Returns after the specified time or if we receive a notification that a new round has started.
