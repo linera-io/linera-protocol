@@ -25,7 +25,7 @@ use linera_execution::{
 };
 use linera_storage::{MemoryStorage, Storage, TestClock};
 use linera_version::VersionInfo;
-use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
+use linera_views::{memory::create_memory_store_test_config, views::ViewError};
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(feature = "dynamodb")]
@@ -907,9 +907,12 @@ impl StorageBuilder for MemoryStorageBuilder {
     type Storage = MemoryStorage<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
+        let store_config = create_memory_store_test_config();
+        let namespace = generate_test_namespace();
         Ok(MemoryStorage::new_for_testing(
+            store_config,
+            &namespace,
             self.wasm_runtime,
-            TEST_MEMORY_MAX_STREAM_QUERIES,
             self.clock.clone(),
         )
         .await?)

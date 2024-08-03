@@ -17,7 +17,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
 use {
-    linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
+    linera_views::memory::{create_test_memory_context, MemoryContext},
     linera_views::views::View,
     std::collections::BTreeMap,
 };
@@ -263,7 +263,7 @@ where
     ViewError: From<<MemoryContext<()> as linera_views::common::Context>::Error>,
 {
     pub async fn new() -> Self {
-        let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, ());
+        let context = create_test_memory_context();
         Self::load(context)
             .await
             .expect("Loading from memory should work")

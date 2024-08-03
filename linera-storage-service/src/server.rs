@@ -10,7 +10,7 @@ use linera_storage_service::common::{KeyTag, MAX_PAYLOAD_SIZE};
 use linera_views::{
     batch::Batch,
     common::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
-    memory::{create_memory_store_stream_queries, MemoryStore},
+    memory::MemoryStore,
 };
 #[cfg(feature = "rocksdb")]
 use linera_views::{
@@ -574,7 +574,8 @@ async fn main() {
     let common_config = CommonStoreConfig::default();
     let (store, endpoint) = match options {
         ServiceStoreServerOptions::Memory { endpoint } => {
-            let store = create_memory_store_stream_queries(common_config.max_stream_queries);
+            let namespace = "linera_storage_service";
+            let store = MemoryStore::new(common_config.max_stream_queries, namespace).unwrap();
             let store = ServiceStoreServerInternal::Memory(store);
             (store, endpoint)
         }
