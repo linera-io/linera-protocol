@@ -341,17 +341,17 @@ where
 
 /// A virtual DB store where data are persisted in memory.
 #[derive(Clone)]
-pub struct LimitedMemoryStore {
+pub struct LimitedTestMemoryStore {
     store: MemoryStore,
 }
 
-impl Default for LimitedMemoryStore {
+impl Default for LimitedTestMemoryStore {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ReadableKeyValueStore<MemoryStoreError> for LimitedMemoryStore {
+impl ReadableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -391,7 +391,7 @@ impl ReadableKeyValueStore<MemoryStoreError> for LimitedMemoryStore {
     }
 }
 
-impl WritableKeyValueStore<MemoryStoreError> for LimitedMemoryStore {
+impl WritableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
     // We set up the MAX_VALUE_SIZE to the artificially low value of 100
     // purely for testing purposes.
     const MAX_VALUE_SIZE: usize = 100;
@@ -409,12 +409,12 @@ impl WritableKeyValueStore<MemoryStoreError> for LimitedMemoryStore {
     }
 }
 
-impl KeyValueStore for LimitedMemoryStore {
+impl KeyValueStore for LimitedTestMemoryStore {
     type Error = MemoryStoreError;
 }
 
-impl LimitedMemoryStore {
-    /// Creates a `LimitedMemoryStore`
+impl LimitedTestMemoryStore {
+    /// Creates a `LimitedTestMemoryStore`
     pub fn new() -> Self {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
@@ -427,13 +427,13 @@ impl LimitedMemoryStore {
             .now_or_never()
             .unwrap()
             .unwrap();
-        LimitedMemoryStore { store }
+        LimitedTestMemoryStore { store }
     }
 }
 
-/// Provides a `LimitedMemoryStore<()>` that can be used for tests.
-pub fn create_value_splitting_memory_store() -> ValueSplittingStore<LimitedMemoryStore> {
-    ValueSplittingStore::new(LimitedMemoryStore::new())
+/// Provides a `LimitedTestMemoryStore<()>` that can be used for tests.
+pub fn create_value_splitting_memory_store() -> ValueSplittingStore<LimitedTestMemoryStore> {
+    ValueSplittingStore::new(LimitedTestMemoryStore::new())
 }
 
 #[cfg(test)]
@@ -441,7 +441,7 @@ mod tests {
     use linera_views::{
         batch::Batch,
         common::{ReadableKeyValueStore, WritableKeyValueStore},
-        value_splitting::{LimitedMemoryStore, ValueSplittingStore},
+        value_splitting::{LimitedTestMemoryStore, ValueSplittingStore},
     };
     use rand::Rng;
 
@@ -450,8 +450,8 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::assertions_on_constants)]
     async fn test_value_splitting1_testing_leftovers() {
-        let store = LimitedMemoryStore::new();
-        const MAX_LEN: usize = LimitedMemoryStore::MAX_VALUE_SIZE;
+        let store = LimitedTestMemoryStore::new();
+        const MAX_LEN: usize = LimitedTestMemoryStore::MAX_VALUE_SIZE;
         assert!(MAX_LEN > 10);
         let big_store = ValueSplittingStore::new(store.clone());
         let key = vec![0, 0];
@@ -476,8 +476,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_value_splitting2_testing_splitting() {
-        let store = LimitedMemoryStore::new();
-        const MAX_LEN: usize = LimitedMemoryStore::MAX_VALUE_SIZE;
+        let store = LimitedTestMemoryStore::new();
+        const MAX_LEN: usize = LimitedTestMemoryStore::MAX_VALUE_SIZE;
         let big_store = ValueSplittingStore::new(store.clone());
         let key = vec![0, 0];
         // Writing a big value
@@ -513,8 +513,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_value_splitting3_write_and_delete() {
-        let store = LimitedMemoryStore::new();
-        const MAX_LEN: usize = LimitedMemoryStore::MAX_VALUE_SIZE;
+        let store = LimitedTestMemoryStore::new();
+        const MAX_LEN: usize = LimitedTestMemoryStore::MAX_VALUE_SIZE;
         let big_store = ValueSplittingStore::new(store.clone());
         let key = vec![0, 0];
         // writing a big key
