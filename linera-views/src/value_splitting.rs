@@ -432,6 +432,7 @@ impl LimitedTestMemoryStore {
 }
 
 /// Provides a `LimitedTestMemoryStore<()>` that can be used for tests.
+#[cfg(with_testing)]
 pub fn create_value_splitting_memory_store() -> ValueSplittingStore<LimitedTestMemoryStore> {
     ValueSplittingStore::new(LimitedTestMemoryStore::new())
 }
