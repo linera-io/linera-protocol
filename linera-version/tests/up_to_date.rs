@@ -10,6 +10,6 @@ fn up_to_date() {
         VersionInfo::default().api_hashes(),
         "`linera-version` API hash cache out of date.\n\
          Please update `linera-version/api-hashes.json` by running:\n\
-         $ cargo run linera-version > linera-version/api-hashes.json"
+         $ cargo run -p linera-version > linera-version/api-hashes.json"
     );
 }
