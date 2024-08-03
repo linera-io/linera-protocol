@@ -3,9 +3,8 @@
 
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
-use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included};
+use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included, sync::Mutex};
 
-use async_lock::Mutex;
 use async_trait::async_trait;
 use linera_base::{data_types::ArithmeticError, ensure};
 use serde::{Deserialize, Serialize};
@@ -202,7 +201,7 @@ where
         self.updates.clear();
         self.total_size = self.stored_total_size;
         self.sizes.rollback();
-        *self.hash.get_mut() = self.stored_hash;
+        *self.hash.get_mut().unwrap() = self.stored_hash;
     }
 
     async fn has_pending_changes(&self) -> bool {
@@ -218,7 +217,7 @@ where
         if self.sizes.has_pending_changes().await {
             return true;
         }
-        let hash = self.hash.lock().await;
+        let hash = self.hash.lock().unwrap();
         self.stored_hash != *hash
     }
 
@@ -250,7 +249,7 @@ where
             }
         }
         self.sizes.flush(batch)?;
-        let hash = *self.hash.get_mut();
+        let hash = *self.hash.get_mut().unwrap();
         if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {
@@ -273,7 +272,7 @@ where
         self.updates.clear();
         self.total_size = SizeData::default();
         self.sizes.clear();
-        *self.hash.get_mut() = None;
+        *self.hash.get_mut().unwrap() = None;
     }
 }
 
@@ -291,7 +290,7 @@ where
             total_size: self.total_size,
             sizes: self.sizes.clone_unchecked()?,
             stored_hash: self.stored_hash,
-            hash: Mutex::new(*self.hash.get_mut()),
+            hash: Mutex::new(*self.hash.get_mut().unwrap()),
         })
     }
 }
@@ -756,7 +755,7 @@ where
     /// # })
     /// ```
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
-        *self.hash.get_mut() = None;
+        *self.hash.get_mut().unwrap() = None;
         let max_key_size = self.max_key_size();
         for operation in batch.operations {
             match operation {
@@ -1048,12 +1047,12 @@ where
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let hash = *self.hash.get_mut();
+        let hash = *self.hash.get_mut().unwrap();
         match hash {
             Some(hash) => Ok(hash),
             None => {
                 let new_hash = self.compute_hash().await?;
-                let hash = self.hash.get_mut();
+                let hash = self.hash.get_mut().unwrap();
                 *hash = Some(new_hash);
                 Ok(new_hash)
             }
@@ -1061,11 +1060,12 @@ where
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.lock().await;
-        match *hash {
+        let hash = *self.hash.lock().unwrap();
+        match hash {
             Some(hash) => Ok(hash),
             None => {
                 let new_hash = self.compute_hash().await?;
+                let mut hash = self.hash.lock().unwrap();
                 *hash = Some(new_hash);
                 Ok(new_hash)
             }
