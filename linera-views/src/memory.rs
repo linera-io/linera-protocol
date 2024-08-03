@@ -47,7 +47,7 @@ pub const TEST_MEMORY_MAX_STREAM_QUERIES: usize = 10;
 /// The analog of the database is the BTreeMap
 type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
-/// The container for the MemoryStopMap according to the Namespace.
+/// The container for the `MemoryStopMap` according to the Namespace.
 type NamespaceMemoryStore = BTreeMap<String, Arc<RwLock<MemoryStoreMap>>>;
 
 /// The global variables of the Namespace memory stores
