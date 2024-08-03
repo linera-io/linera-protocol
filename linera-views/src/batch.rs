@@ -625,7 +625,7 @@ mod tests {
     use linera_views::{
         batch::{Batch, SimpleUnorderedBatch, UnorderedBatch},
         common::Context,
-        memory::create_memory_context,
+        memory::create_test_memory_context,
     };
 
     #[test]
@@ -682,7 +682,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_simplify_batch5() {
-        let context = create_memory_context();
+        let context = create_test_memory_context();
         let mut batch = Batch::new();
         batch.put_key_value_bytes(vec![1, 2, 3], vec![]);
         batch.put_key_value_bytes(vec![1, 2, 4], vec![]);
@@ -705,7 +705,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_simplify_batch6() {
-        let context = create_memory_context();
+        let context = create_test_memory_context();
         let insertions = vec![(vec![1, 2, 3], vec![])];
         let simple_unordered_batch = SimpleUnorderedBatch {
             insertions: insertions.clone(),

@@ -193,10 +193,10 @@ where
     /// Reads the front value, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::memory::create_test_memory_context;
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_test_memory_context();
     ///   let mut queue = QueueView::load(context).await.unwrap();
     ///   queue.push_back(34);
     ///   queue.push_back(42);
@@ -216,10 +216,10 @@ where
     /// Reads the back value, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::memory::create_test_memory_context;
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_test_memory_context();
     ///   let mut queue = QueueView::load(context).await.unwrap();
     ///   queue.push_back(34);
     ///   queue.push_back(42);
@@ -237,10 +237,10 @@ where
     /// Deletes the front value, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::memory::create_test_memory_context;
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_test_memory_context();
     ///   let mut queue = QueueView::load(context).await.unwrap();
     ///   queue.push_back(34 as u128);
     ///   queue.delete_front();
@@ -258,10 +258,10 @@ where
     /// Pushes a value to the end of the queue.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::memory::create_test_memory_context;
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_test_memory_context();
     ///   let mut queue = QueueView::load(context).await.unwrap();
     ///   queue.push_back(34);
     ///   queue.push_back(37);
@@ -275,10 +275,10 @@ where
     /// Reads the size of the queue.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::memory::create_test_memory_context;
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_test_memory_context();
     ///   let mut queue = QueueView::load(context).await.unwrap();
     ///   queue.push_back(34);
     ///   assert_eq!(queue.count(), 1);
@@ -315,10 +315,10 @@ where
     /// Reads the `count` next values in the queue (including staged ones).
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::memory::create_test_memory_context;
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_test_memory_context();
     ///   let mut queue = QueueView::load(context).await.unwrap();
     ///   queue.push_back(34);
     ///   queue.push_back(42);
@@ -355,10 +355,10 @@ where
     /// Reads the `count` last values in the queue (including staged ones).
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::memory::create_test_memory_context;
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_test_memory_context();
     ///   let mut queue = QueueView::load(context).await.unwrap();
     ///   queue.push_back(34);
     ///   queue.push_back(42);
@@ -391,10 +391,10 @@ where
     /// Reads all the elements
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::memory::create_test_memory_context;
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_test_memory_context();
     ///   let mut queue = QueueView::load(context).await.unwrap();
     ///   queue.push_back(34);
     ///   queue.push_back(37);
@@ -428,10 +428,10 @@ where
     /// Gets a mutable iterator on the entries of the queue
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::memory::create_test_memory_context;
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_test_memory_context();
     ///   let mut queue = QueueView::load(context).await.unwrap();
     ///   queue.push_back(34);
     ///   let mut iter = queue.iter_mut().await.unwrap();

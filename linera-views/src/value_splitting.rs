@@ -10,8 +10,8 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
-        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
+        AdminKeyValueStore, CommonStoreConfig, KeyIterable, KeyValueIterable, KeyValueStore,
+        ReadableKeyValueStore, WritableKeyValueStore,
     },
     memory::{MemoryStore, MemoryStoreConfig, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
 };
@@ -341,17 +341,17 @@ where
 
 /// A virtual DB store where data are persisted in memory.
 #[derive(Clone)]
-pub struct TestMemoryStoreInternal {
+pub struct LimitedTestMemoryStore {
     store: MemoryStore,
 }
 
-impl Default for TestMemoryStoreInternal {
+impl Default for LimitedTestMemoryStore {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ReadableKeyValueStore<MemoryStoreError> for TestMemoryStoreInternal {
+impl ReadableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -391,7 +391,7 @@ impl ReadableKeyValueStore<MemoryStoreError> for TestMemoryStoreInternal {
     }
 }
 
-impl WritableKeyValueStore<MemoryStoreError> for TestMemoryStoreInternal {
+impl WritableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
     // We set up the MAX_VALUE_SIZE to the artificially low value of 100
     // purely for testing purposes.
     const MAX_VALUE_SIZE: usize = 100;
@@ -409,12 +409,12 @@ impl WritableKeyValueStore<MemoryStoreError> for TestMemoryStoreInternal {
     }
 }
 
-impl KeyValueStore for TestMemoryStoreInternal {
+impl KeyValueStore for LimitedTestMemoryStore {
     type Error = MemoryStoreError;
 }
 
-impl TestMemoryStoreInternal {
-    /// Creates a `TestMemoryStoreInternal`
+impl LimitedTestMemoryStore {
+    /// Creates a `LimitedTestMemoryStore`
     pub fn new() -> Self {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
@@ -427,139 +427,13 @@ impl TestMemoryStoreInternal {
             .now_or_never()
             .unwrap()
             .unwrap();
-        TestMemoryStoreInternal { store }
+        LimitedTestMemoryStore { store }
     }
 }
 
-/// Supposed to be removed later
-#[derive(Clone)]
-pub struct TestMemoryStore {
-    store: ValueSplittingStore<TestMemoryStoreInternal>,
-}
-
-impl ReadableKeyValueStore<MemoryStoreError> for TestMemoryStore {
-    const MAX_KEY_SIZE: usize = usize::MAX;
-    type Keys = Vec<Vec<u8>>;
-    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
-
-    fn max_stream_queries(&self) -> usize {
-        self.store.max_stream_queries()
-    }
-
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryStoreError> {
-        self.store.read_value_bytes(key).await
-    }
-
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryStoreError> {
-        self.store.contains_key(key).await
-    }
-
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, MemoryStoreError> {
-        self.store.contains_keys(keys).await
-    }
-
-    async fn read_multi_values_bytes(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, MemoryStoreError> {
-        self.store.read_multi_values_bytes(keys).await
-    }
-
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, MemoryStoreError> {
-        self.store.find_keys_by_prefix(key_prefix).await
-    }
-
-    async fn find_key_values_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, MemoryStoreError> {
-        self.store.find_key_values_by_prefix(key_prefix).await
-    }
-}
-
-impl WritableKeyValueStore<MemoryStoreError> for TestMemoryStore {
-    const MAX_VALUE_SIZE: usize = usize::MAX;
-
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), MemoryStoreError> {
-        self.store.write_batch(batch, base_key).await
-    }
-
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), MemoryStoreError> {
-        self.store.clear_journal(base_key).await
-    }
-}
-
-impl KeyValueStore for TestMemoryStore {
-    type Error = MemoryStoreError;
-}
-
-impl TestMemoryStore {
-    /// Creates a `TestMemoryStore` from the guard
-    pub fn new() -> Self {
-        let store = TestMemoryStoreInternal::new();
-        let store = ValueSplittingStore::new(store);
-        TestMemoryStore { store }
-    }
-}
-
-impl Default for TestMemoryStore {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// An implementation of [`crate::common::Context`] that stores all values in memory.
-pub type TestMemoryContext<E> = ContextFromStore<E, TestMemoryStore>;
-
-impl<E> TestMemoryContext<E> {
-    /// Creates a [`TestMemoryContext`].
-    pub fn new(extra: E) -> Self {
-        let store = TestMemoryStore::new();
-        let base_key = Vec::new();
-        Self {
-            store,
-            base_key,
-            extra,
-        }
-    }
-}
-
-/// Provides a `TestMemoryContext<()>` that can be used for tests.
-/// It is not named create_memory_test_context because it is massively
-/// used and so we want to have a short name.
-pub fn create_test_memory_context() -> TestMemoryContext<()> {
-    TestMemoryContext::new(())
-}
-
-/// Creates a `TestMemoryStore` for working.
-pub fn create_test_memory_store() -> TestMemoryStore {
-    TestMemoryStore::new()
-}
-
-/// An implementation of [`crate::common::Context`] that stores all values in memory.
-pub type TestMemoryContextInternal<E> = ContextFromStore<E, TestMemoryStoreInternal>;
-
-impl<E> TestMemoryContextInternal<E> {
-    /// Creates a [`TestMemoryContextInternal`].
-    pub fn new(extra: E) -> Self {
-        let store = TestMemoryStoreInternal::new();
-        let base_key = Vec::new();
-        Self {
-            store,
-            base_key,
-            extra,
-        }
-    }
-}
-
-/// Provides a `TestMemoryStoreInternal<()>` that can be used for tests.
-pub fn create_test_memory_store_internal() -> TestMemoryStoreInternal {
-    TestMemoryStoreInternal::new()
-}
-
-/// Provides a `TestMemoryContextInternal<()>` that can be used for tests.
-pub fn create_test_memory_context_internal() -> TestMemoryContextInternal<()> {
-    TestMemoryContextInternal::new(())
+/// Provides a `LimitedTestMemoryStore<()>` that can be used for tests.
+pub fn create_value_splitting_memory_store() -> ValueSplittingStore<LimitedTestMemoryStore> {
+    ValueSplittingStore::new(LimitedTestMemoryStore::new())
 }
 
 #[cfg(test)]
@@ -567,9 +441,7 @@ mod tests {
     use linera_views::{
         batch::Batch,
         common::{ReadableKeyValueStore, WritableKeyValueStore},
-        value_splitting::{
-            create_test_memory_store_internal, TestMemoryStoreInternal, ValueSplittingStore,
-        },
+        value_splitting::{LimitedTestMemoryStore, ValueSplittingStore},
     };
     use rand::Rng;
 
@@ -578,8 +450,8 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::assertions_on_constants)]
     async fn test_value_splitting1_testing_leftovers() {
-        let store = create_test_memory_store_internal();
-        const MAX_LEN: usize = TestMemoryStoreInternal::MAX_VALUE_SIZE;
+        let store = LimitedTestMemoryStore::new();
+        const MAX_LEN: usize = LimitedTestMemoryStore::MAX_VALUE_SIZE;
         assert!(MAX_LEN > 10);
         let big_store = ValueSplittingStore::new(store.clone());
         let key = vec![0, 0];
@@ -604,8 +476,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_value_splitting2_testing_splitting() {
-        let store = create_test_memory_store_internal();
-        const MAX_LEN: usize = TestMemoryStoreInternal::MAX_VALUE_SIZE;
+        let store = LimitedTestMemoryStore::new();
+        const MAX_LEN: usize = LimitedTestMemoryStore::MAX_VALUE_SIZE;
         let big_store = ValueSplittingStore::new(store.clone());
         let key = vec![0, 0];
         // Writing a big value
@@ -641,8 +513,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_value_splitting3_write_and_delete() {
-        let store = create_test_memory_store_internal();
-        const MAX_LEN: usize = TestMemoryStoreInternal::MAX_VALUE_SIZE;
+        let store = LimitedTestMemoryStore::new();
+        const MAX_LEN: usize = LimitedTestMemoryStore::MAX_VALUE_SIZE;
         let big_store = ValueSplittingStore::new(store.clone());
         let key = vec![0, 0];
         // writing a big key

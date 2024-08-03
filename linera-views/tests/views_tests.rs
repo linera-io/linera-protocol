@@ -25,7 +25,7 @@ use linera_views::{
     lru_caching::{LruCachingMemoryContext, LruCachingStore},
     map_view::{ByteMapView, HashedMapView},
     memory::{
-        create_memory_context, MemoryContext, MemoryStore, MemoryStoreMap,
+        create_test_memory_context, MemoryContext, MemoryStore, MemoryStoreMap,
         TEST_MEMORY_MAX_STREAM_QUERIES,
     },
     queue_view::HashedQueueView,
@@ -708,7 +708,7 @@ pub struct ByteMapStateView<C> {
 
 #[tokio::test]
 async fn test_byte_map_view() -> Result<()> {
-    let context = create_memory_context();
+    let context = create_test_memory_context();
     {
         let mut view = ByteMapStateView::load(context.clone()).await?;
         view.map.insert(vec![0, 1], 5);
@@ -909,7 +909,7 @@ async fn test_collection_removal() -> Result<()> {
     type EntryType = HashedRegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = HashedCollectionView<MemoryContext<()>, u8, EntryType>;
 
-    let context = create_memory_context();
+    let context = create_test_memory_context();
 
     // Write a dummy entry into the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
@@ -940,7 +940,7 @@ async fn test_removal_api_first_second_condition(
     type EntryType = HashedRegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = HashedCollectionView<MemoryContext<()>, u8, EntryType>;
 
-    let context = create_memory_context();
+    let context = create_test_memory_context();
 
     // First add an entry `1` with value `100` and commit
     let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
