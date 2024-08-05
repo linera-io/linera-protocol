@@ -297,7 +297,7 @@ where
             GenesisConfigHashQuery => Ok(Some(RpcMessage::GenesisConfigHashResponse(
                 self.genesis_config.hash().into(),
             ))),
-            DownloadBlob(blob_id) => Ok(Some(
+            DownloadBlobContent(blob_id) => Ok(Some(
                 self.storage.read_blob(*blob_id).await?.into_inner().into(),
             )),
             DownloadCertificateValue(hash) => Ok(Some(
@@ -323,7 +323,7 @@ where
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
             | GenesisConfigHashResponse(_)
-            | DownloadBlobResponse(_)
+            | DownloadBlobContentResponse(_)
             | BlobLastUsedByResponse(_)
             | DownloadCertificateValueResponse(_)
             | DownloadCertificateResponse(_) => {

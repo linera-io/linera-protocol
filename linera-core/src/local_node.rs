@@ -726,7 +726,7 @@ where
         node: &impl LocalValidatorNode,
         blob_id: BlobId,
     ) -> Option<Blob> {
-        match node.download_blob(blob_id).await {
+        match node.download_blob_content(blob_id).await {
             Ok(blob) => {
                 let blob = blob.with_blob_id_checked(blob_id);
 

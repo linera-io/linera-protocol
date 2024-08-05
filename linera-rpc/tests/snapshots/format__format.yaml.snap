@@ -47,7 +47,7 @@ Blob:
   STRUCT:
     - blob_type:
         TYPENAME: BlobType
-    - blob:
+    - blob_content:
         TYPENAME: BlobContent
 BlobContent:
   STRUCT:
@@ -778,7 +778,7 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: ChainInfoQuery
     4:
-      DownloadBlob:
+      DownloadBlobContent:
         NEWTYPE:
           TYPENAME: BlobId
     5:
@@ -818,7 +818,7 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: CryptoHash
     15:
-      DownloadBlobResponse:
+      DownloadBlobContentResponse:
         NEWTYPE:
           TYPENAME: BlobContent
     16:

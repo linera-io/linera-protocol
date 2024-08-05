@@ -214,9 +214,9 @@ pub struct BlobId {
 
 impl BlobId {
     /// Creates a new `BlobId` from a `BlobContent`
-    pub fn new_data(blob_payload: &BlobContent) -> Self {
+    pub fn new_data(blob_content: &BlobContent) -> Self {
         BlobId {
-            hash: CryptoHash::new(blob_payload),
+            hash: CryptoHash::new(blob_content),
             blob_type: BlobType::Data,
         }
     }

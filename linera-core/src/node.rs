@@ -81,7 +81,7 @@ pub trait LocalValidatorNode {
     /// Subscribes to receiving notifications for a collection of chains.
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError>;
 
-    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
+    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
 
     async fn download_certificate_value(
         &self,
