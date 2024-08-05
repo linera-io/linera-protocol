@@ -2976,8 +2976,10 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     // Make a committee and worker (only used for signing certificates)
     let store_config = create_memory_store_test_config();
     let namespace = generate_test_namespace();
+    let root_key = &[];
     let store =
-        MemoryStorage::new_for_testing(store_config, &namespace, None, TestClock::new()).await?;
+        MemoryStorage::new_for_testing(store_config, &namespace, root_key, None, TestClock::new())
+            .await?;
     let (committee, worker) = init_worker(store, true);
     let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
 

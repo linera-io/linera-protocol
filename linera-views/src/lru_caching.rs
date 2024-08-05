@@ -16,14 +16,17 @@ use linked_hash_map::LinkedHashMap;
 use prometheus::{register_int_counter_vec, IntCounterVec};
 #[cfg(with_testing)]
 use {
-    crate::common::{AdminKeyValueStore, CommonStoreConfig, ContextFromStore},
+    crate::common::{CommonStoreConfig, ContextFromStore},
     crate::memory::{MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
     crate::views::ViewError,
 };
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_interval, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
+    common::{
+        get_interval, AdminKeyValueStore, CacheSize, KeyValueStore, ReadableKeyValueStore,
+        WritableKeyValueStore,
+    },
 };
 
 #[cfg(with_metrics)]
@@ -106,6 +109,7 @@ pub struct LruCachingStore<K> {
     /// The inner store that is called by the LRU cache one
     pub store: K,
     lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
+    cache_size: usize,
 }
 
 impl<K> ReadableKeyValueStore<K::Error> for LruCachingStore<K>
@@ -125,7 +129,6 @@ where
         let Some(lru_read_values) = &self.lru_read_values else {
             return self.store.read_value_bytes(key).await;
         };
-
         // First inquiring in the read_value_bytes LRU
         {
             let lru_read_values_container = lru_read_values.lock().unwrap();
@@ -240,9 +243,9 @@ where
     // The LRU cache does not change the underlying store's size limits.
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), K::Error> {
         let Some(lru_read_values) = &self.lru_read_values else {
-            return self.store.write_batch(batch, base_key).await;
+            return self.store.write_batch(batch).await;
         };
 
         {
@@ -261,11 +264,74 @@ where
                 }
             }
         }
-        self.store.write_batch(batch, base_key).await
+        self.store.write_batch(batch).await
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), K::Error> {
-        self.store.clear_journal(base_key).await
+    async fn clear_journal(&self) -> Result<(), K::Error> {
+        self.store.clear_journal().await
+    }
+}
+
+fn new_lru_prefix_cache(cache_size: usize) -> Option<Arc<Mutex<LruPrefixCache>>> {
+    if cache_size == 0 {
+        None
+    } else {
+        Some(Arc::new(Mutex::new(LruPrefixCache::new(cache_size))))
+    }
+}
+
+impl<K> AdminKeyValueStore for LruCachingStore<K>
+where
+    K: AdminKeyValueStore + Send + Sync,
+{
+    type Error = K::Error;
+    type Config = K::Config;
+
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, Self::Error> {
+        let cache_size = config.cache_size();
+        let lru_read_values = new_lru_prefix_cache(cache_size);
+        let store = K::connect(config, namespace, root_key).await?;
+        Ok(Self {
+            store,
+            lru_read_values,
+            cache_size,
+        })
+    }
+
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let cache_size = self.cache_size;
+        // The cloning starts with an empty cache.
+        let lru_read_values = new_lru_prefix_cache(cache_size);
+        let store = self.store.clone_with_root_key(root_key)?;
+        Ok(Self {
+            store,
+            lru_read_values,
+            cache_size,
+        })
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
+        K::list_all(config).await
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
+        K::delete_all(config).await
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
+        K::exists(config, namespace).await
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
+        K::create(config, namespace).await
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
+        K::delete(config, namespace).await
     }
 }
 
@@ -281,18 +347,12 @@ where
     K: KeyValueStore,
 {
     /// Creates a new key-value store that provides LRU caching at top of the given store.
-    pub fn new(store: K, max_size: usize) -> Self {
-        if max_size == 0 {
-            Self {
-                store,
-                lru_read_values: None,
-            }
-        } else {
-            let lru_read_values = Some(Arc::new(Mutex::new(LruPrefixCache::new(max_size))));
-            Self {
-                store,
-                lru_read_values,
-            }
+    pub fn new(store: K, cache_size: usize) -> Self {
+        let lru_read_values = new_lru_prefix_cache(cache_size);
+        Self {
+            store,
+            lru_read_values,
+            cache_size,
         }
     }
 }
@@ -304,18 +364,20 @@ pub type LruCachingMemoryContext<E> = ContextFromStore<E, LruCachingStore<Memory
 #[cfg(with_testing)]
 impl<E> LruCachingMemoryContext<E> {
     /// Creates a [`crate::key_value_store_view::KeyValueStoreMemoryContext`].
-    pub async fn new(base_key: Vec<u8>, extra: E, n: usize) -> Result<Self, ViewError> {
+    pub async fn new(extra: E, cache_size: usize) -> Result<Self, ViewError> {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
-            cache_size: 1000,
+            cache_size,
         };
         let config = MemoryStoreConfig { common_config };
         let namespace = "linera";
-        let store = MemoryStore::connect(&config, namespace)
-            .await
-            .expect("store");
-        let store = LruCachingStore::new(store, n);
+        let root_key = &[];
+        let store =
+            LruCachingStore::<MemoryStore>::maybe_create_and_connect(&config, namespace, root_key)
+                .await
+                .expect("store");
+        let base_key = Vec::new();
         Ok(Self {
             store,
             base_key,

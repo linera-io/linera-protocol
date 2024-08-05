@@ -164,12 +164,12 @@ impl ServiceStoreServer {
     pub async fn write_batch(&self, batch: Batch) -> Result<(), Status> {
         match &self.store {
             ServiceStoreServerInternal::Memory(store) => store
-                .write_batch(batch, &[])
+                .write_batch(batch)
                 .await
                 .map_err(|e| Status::unknown(format!("Memory error {:?} at write_batch", e))),
             #[cfg(feature = "rocksdb")]
             ServiceStoreServerInternal::RocksDb(store) => store
-                .write_batch(batch, &[])
+                .write_batch(batch)
                 .await
                 .map_err(|e| Status::unknown(format!("RocksDB error {:?} at write_batch", e))),
         }
@@ -572,10 +572,12 @@ async fn main() {
 
     let options = <ServiceStoreServerOptions as clap::Parser>::parse();
     let common_config = CommonStoreConfig::default();
+    let namespace = "linera_storage_service";
+    let root_key = &[];
     let (store, endpoint) = match options {
         ServiceStoreServerOptions::Memory { endpoint } => {
-            let namespace = "linera_storage_service";
-            let store = MemoryStore::new(common_config.max_stream_queries, namespace).unwrap();
+            let store =
+                MemoryStore::new(common_config.max_stream_queries, namespace, root_key).unwrap();
             let store = ServiceStoreServerInternal::Memory(store);
             (store, endpoint)
         }
@@ -586,8 +588,7 @@ async fn main() {
                 path_buf,
                 common_config,
             };
-            let namespace = "linera";
-            let store = RocksDbStore::maybe_create_and_connect(&config, namespace)
+            let store = RocksDbStore::maybe_create_and_connect(&config, namespace, root_key)
                 .await
                 .expect("store");
             let store = ServiceStoreServerInternal::RocksDb(store);

@@ -418,12 +418,18 @@ pub trait LocalWritableKeyValueStore<E> {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
-    /// Writes the `batch` in the database with `base_key` the base key of the entries for the journal.
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), E>;
+    /// Writes the `batch` in the database.
+    async fn write_batch(&self, batch: Batch) -> Result<(), E>;
 
     /// Clears any journal entry that may remain.
-    /// The journal is located at the `base_key`.
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), E>;
+    /// The journal is located at the `root_key`.
+    async fn clear_journal(&self) -> Result<(), E>;
+}
+
+/// Config types need to be able to return their cache size
+pub trait CacheSize {
+    /// Get the cache size of the `Config` entry.
+    fn cache_size(&self) -> usize;
 }
 
 /// Low-level trait for the administration of stores and their namespaces.
@@ -433,10 +439,17 @@ pub trait LocalAdminKeyValueStore: Sized {
     type Error;
 
     /// The configuration needed to interact with a new store.
-    type Config: Send + Sync;
+    type Config: Send + Sync + CacheSize;
 
     /// Connects to an existing namespace using the given configuration.
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error>;
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, Self::Error>;
+
+    /// Takes a connection and creates a new one with a different `root_key`.
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error>;
 
     /// Obtains the list of existing namespaces.
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error>;
@@ -465,12 +478,13 @@ pub trait LocalAdminKeyValueStore: Sized {
     fn maybe_create_and_connect(
         config: &Self::Config,
         namespace: &str,
+        root_key: &[u8],
     ) -> impl Future<Output = Result<Self, Self::Error>> {
         async {
             if !Self::exists(config, namespace).await? {
                 Self::create(config, namespace).await?;
             }
-            Self::connect(config, namespace).await
+            Self::connect(config, namespace, root_key).await
         }
     }
 
@@ -478,13 +492,14 @@ pub trait LocalAdminKeyValueStore: Sized {
     fn recreate_and_connect(
         config: &Self::Config,
         namespace: &str,
+        root_key: &[u8],
     ) -> impl Future<Output = Result<Self, Self::Error>> {
         async {
             if Self::exists(config, namespace).await? {
                 Self::delete(config, namespace).await?;
             }
             Self::create(config, namespace).await?;
-            Self::connect(config, namespace).await
+            Self::connect(config, namespace, root_key).await
         }
     }
 }
@@ -647,7 +662,7 @@ pub trait Context: Clone {
     /// Obtains a similar [`Context`] implementation with a different base key.
     fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self;
 
-    /// Getter for the address of the current entry (aka the base_key).
+    /// Getter for the address of the base key.
     fn base_key(&self) -> Vec<u8>;
 
     /// Concatenates the base_key and tag.
@@ -737,7 +752,7 @@ pub trait Context: Clone {
 pub struct ContextFromStore<E, S> {
     /// The DB client that is shared between views.
     pub store: S,
-    /// The base key for the current view.
+    /// The base key for the context.
     pub base_key: Vec<u8>,
     /// User-defined data attached to the view.
     pub extra: E,
@@ -753,10 +768,10 @@ where
     /// Creates a context from store that also clears the journal before making it available.
     pub async fn create(
         store: S,
-        base_key: Vec<u8>,
         extra: E,
     ) -> Result<Self, <ContextFromStore<E, S> as Context>::Error> {
-        store.clear_journal(&base_key).await?;
+        store.clear_journal().await?;
+        let base_key = Vec::new();
         Ok(ContextFromStore {
             store,
             base_key,
@@ -860,7 +875,7 @@ where
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        log_time_async(self.store.write_batch(batch, &self.base_key), "write_batch").await
+        log_time_async(self.store.write_batch(batch), "write_batch").await
     }
 
     fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self {

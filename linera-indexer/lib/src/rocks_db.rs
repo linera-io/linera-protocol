@@ -48,7 +48,9 @@ impl RocksDbRunner {
             common_config,
         };
         let namespace = config.client.table.clone();
-        let store = RocksDbStore::maybe_create_and_connect(&store_config, &namespace).await?;
+        let root_key = &[];
+        let store =
+            RocksDbStore::maybe_create_and_connect(&store_config, &namespace, root_key).await?;
         Self::new(config, store).await
     }
 }

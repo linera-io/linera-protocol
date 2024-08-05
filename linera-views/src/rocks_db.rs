@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::{btree_map::Entry, BTreeMap},
     ffi::OsString,
     ops::{Bound, Bound::Excluded},
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, LazyLock, Mutex},
 };
 
 use futures::future::join_all;
-use linera_base::ensure;
+use linera_base::{ensure, hex};
 use thiserror::Error;
 #[cfg(with_testing)]
 use {
@@ -24,8 +25,8 @@ use crate::metering::{
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyValueStore,
-        ReadableKeyValueStore, WritableKeyValueStore,
+        get_upper_bound, AdminKeyValueStore, CacheSize, CommonStoreConfig, ContextFromStore,
+        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
@@ -46,21 +47,39 @@ const MAX_KEY_SIZE: usize = 8388208;
 /// The RocksDB client that we use.
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
-/// The internal client
+/// The inner client
 #[derive(Clone)]
-pub struct RocksDbStoreInternal {
+struct RocksDbStoreInternal {
     db: Arc<DB>,
+    path_buf: PathBuf,
+    namespace: String,
     max_stream_queries: usize,
+    cache_size: usize,
 }
 
 /// The initial configuration of the system
 #[derive(Clone, Debug)]
 pub struct RocksDbStoreConfig {
-    /// The AWS configuration
+    /// The path to the storage containing the namespaces.
     pub path_buf: PathBuf,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
 }
+
+impl CacheSize for RocksDbStoreConfig {
+    fn cache_size(&self) -> usize {
+        self.common_config.cache_size
+    }
+}
+
+#[derive(Default)]
+struct RocksDbStores {
+    stores: BTreeMap<(String, Vec<u8>), RocksDbStoreInternal>,
+}
+
+/// The global variables of the RocksDB stores
+static ROCKSDB_STORES: LazyLock<Mutex<RocksDbStores>> =
+    LazyLock::new(|| Mutex::new(RocksDbStores::default()));
 
 impl RocksDbStoreInternal {
     fn check_namespace(namespace: &str) -> Result<(), RocksDbStoreError> {
@@ -71,6 +90,59 @@ impl RocksDbStoreInternal {
             return Err(RocksDbStoreError::InvalidTableName);
         }
         Ok(())
+    }
+
+    fn build(
+        path_buf: PathBuf,
+        namespace: &str,
+        max_stream_queries: usize,
+        cache_size: usize,
+        root_key: &[u8],
+    ) -> Result<RocksDbStoreInternal, RocksDbStoreError> {
+        let mut full_path_buf = path_buf.clone();
+        full_path_buf.push(root_key_as_string(root_key));
+        if !std::path::Path::exists(&full_path_buf) {
+            std::fs::create_dir(full_path_buf.clone())?;
+        }
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        let db = DB::open(&options, full_path_buf)?;
+        let namespace = namespace.to_string();
+        Ok(RocksDbStoreInternal {
+            db: Arc::new(db),
+            path_buf,
+            namespace,
+            max_stream_queries,
+            cache_size,
+        })
+    }
+
+    fn connect_from_path(
+        path_buf: PathBuf,
+        namespace: &str,
+        max_stream_queries: usize,
+        cache_size: usize,
+        root_key: &[u8],
+    ) -> Result<RocksDbStoreInternal, RocksDbStoreError> {
+        let mut rocksdb_stores = ROCKSDB_STORES.lock().unwrap();
+        let pair = (namespace.to_string(), root_key.to_vec());
+        match rocksdb_stores.stores.entry(pair) {
+            Entry::Occupied(entry) => {
+                let entry = entry.into_mut();
+                Ok(entry.clone())
+            }
+            Entry::Vacant(entry) => {
+                let store = Self::build(
+                    path_buf,
+                    namespace,
+                    max_stream_queries,
+                    cache_size,
+                    root_key,
+                )?;
+                entry.insert(store.clone());
+                Ok(store)
+            }
+        }
     }
 }
 
@@ -95,7 +167,7 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
         let client = self.clone();
         let key_may_exist = {
             let key = key.to_vec();
-            tokio::task::spawn_blocking(move || client.db.key_may_exist(&key)).await?
+            tokio::task::spawn_blocking(move || client.db.key_may_exist(key)).await?
         };
         if !key_may_exist {
             return Ok(false);
@@ -110,7 +182,7 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
         for key in keys.clone() {
             ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
             let client = self.clone();
-            let handle = tokio::task::spawn_blocking(move || client.db.key_may_exist(&key));
+            let handle = tokio::task::spawn_blocking(move || client.db.key_may_exist(key));
             handles.push(handle);
         }
         let may_results: Vec<_> = join_all(handles)
@@ -154,7 +226,7 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
         );
         let client = self.clone();
         let prefix = key_prefix.to_vec();
-        let len = prefix.len();
+        let len = key_prefix.len();
         let keys = tokio::task::spawn_blocking(move || {
             let mut iter = client.db.raw_iterator();
             let mut keys = Vec::new();
@@ -184,7 +256,7 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
         );
         let client = self.clone();
         let prefix = key_prefix.to_vec();
-        let len = prefix.len();
+        let len = key_prefix.len();
         let key_values = tokio::task::spawn_blocking(move || {
             let mut iter = client.db.raw_iterator();
             let mut key_values = Vec::new();
@@ -211,11 +283,7 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
 impl WritableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
-    async fn write_batch(
-        &self,
-        mut batch: Batch,
-        _base_key: &[u8],
-    ) -> Result<(), RocksDbStoreError> {
+    async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksDbStoreError> {
         let client = self.clone();
         // NOTE: The delete_range functionality of RocksDB needs to have an upper bound in order to work.
         // Thus in order to have the system working, we need to handle the unlikely case of having to
@@ -255,7 +323,7 @@ impl WritableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
                             RocksDbStoreError::KeyTooLong
                         );
                         if let Excluded(upper_bound) = get_upper_bound(&key_prefix) {
-                            inner_batch.delete_range(key_prefix, upper_bound);
+                            inner_batch.delete_range(&key_prefix, &upper_bound);
                         }
                     }
                 }
@@ -267,26 +335,49 @@ impl WritableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
         Ok(())
     }
 
-    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), RocksDbStoreError> {
+    async fn clear_journal(&self) -> Result<(), RocksDbStoreError> {
         Ok(())
     }
+}
+
+fn root_key_as_string(root_key: &[u8]) -> String {
+    format!("ROOT_KEY_{}", hex::encode(root_key))
 }
 
 impl AdminKeyValueStore for RocksDbStoreInternal {
     type Error = RocksDbStoreError;
     type Config = RocksDbStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, RocksDbStoreError> {
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, RocksDbStoreError> {
         Self::check_namespace(namespace)?;
-        let options = rocksdb::Options::default();
         let mut path_buf = config.path_buf.clone();
         path_buf.push(namespace);
-        let db = DB::open(&options, path_buf)?;
         let max_stream_queries = config.common_config.max_stream_queries;
-        Ok(RocksDbStoreInternal {
-            db: Arc::new(db),
+        let cache_size = config.common_config.cache_size;
+        RocksDbStoreInternal::connect_from_path(
+            path_buf,
+            namespace,
             max_stream_queries,
-        })
+            cache_size,
+            root_key,
+        )
+    }
+
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreError> {
+        let path_buf = self.path_buf.clone();
+        let max_stream_queries = self.max_stream_queries;
+        let cache_size = self.cache_size;
+        RocksDbStoreInternal::connect_from_path(
+            path_buf,
+            &self.namespace,
+            max_stream_queries,
+            cache_size,
+            root_key,
+        )
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbStoreError> {
@@ -320,29 +411,17 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, RocksDbStoreError> {
         Self::check_namespace(namespace)?;
-        let options = rocksdb::Options::default();
         let mut path_buf = config.path_buf.clone();
         path_buf.push(namespace);
-        let result = DB::open(&options, path_buf.clone());
-        match result {
-            Ok(_) => Ok(true),
-            Err(error) => match error.kind() {
-                rocksdb::ErrorKind::InvalidArgument => {
-                    std::fs::remove_dir_all(path_buf)?;
-                    Ok(false)
-                }
-                _ => Err(RocksDbStoreError::RocksDb(error)),
-            },
-        }
+        let test = std::path::Path::exists(&path_buf);
+        Ok(test)
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), RocksDbStoreError> {
         Self::check_namespace(namespace)?;
-        let mut options = rocksdb::Options::default();
-        options.create_if_missing(true);
         let mut path_buf = config.path_buf.clone();
         path_buf.push(namespace);
-        let _db = DB::open(&options, path_buf)?;
+        std::fs::create_dir_all(path_buf)?;
         Ok(())
     }
 
@@ -408,7 +487,8 @@ pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
 pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
     let (store_config, dir) = create_rocks_db_test_config().await;
     let namespace = generate_test_namespace();
-    let store = RocksDbStore::recreate_and_connect(&store_config, &namespace)
+    let root_key = &[];
+    let store = RocksDbStore::recreate_and_connect(&store_config, &namespace, root_key)
         .await
         .expect("client");
     (store, dir)
@@ -416,6 +496,39 @@ pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
 
 /// An implementation of [`crate::common::Context`] based on RocksDB
 pub type RocksDbContext<E> = ContextFromStore<E, RocksDbStore>;
+
+impl RocksDbStore {
+    fn cache_size(&self) -> usize {
+        #[cfg(with_metrics)]
+        {
+            self.store.store.store.store.store.store.cache_size
+        }
+        #[cfg(not(with_metrics))]
+        {
+            self.store.store.store.cache_size
+        }
+    }
+
+    fn inner_clone_with_root_key(
+        &self,
+        root_key: &[u8],
+    ) -> Result<RocksDbStoreInternal, RocksDbStoreError> {
+        #[cfg(with_metrics)]
+        {
+            self.store
+                .store
+                .store
+                .store
+                .store
+                .store
+                .clone_with_root_key(root_key)
+        }
+        #[cfg(not(with_metrics))]
+        {
+            self.store.store.store.clone_with_root_key(root_key)
+        }
+    }
+}
 
 impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStore {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
@@ -463,12 +576,12 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStore {
 impl WritableKeyValueStore<RocksDbStoreError> for RocksDbStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), RocksDbStoreError> {
-        self.store.write_batch(batch, base_key).await
+    async fn write_batch(&self, batch: Batch) -> Result<(), RocksDbStoreError> {
+        self.store.write_batch(batch).await
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), RocksDbStoreError> {
-        self.store.clear_journal(base_key).await
+    async fn clear_journal(&self) -> Result<(), RocksDbStoreError> {
+        self.store.clear_journal().await
     }
 }
 
@@ -476,9 +589,27 @@ impl AdminKeyValueStore for RocksDbStore {
     type Error = RocksDbStoreError;
     type Config = RocksDbStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, RocksDbStoreError> {
-        let store = RocksDbStoreInternal::connect(config, namespace).await?;
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, RocksDbStoreError> {
+        let store = RocksDbStoreInternal::connect(config, namespace, root_key).await?;
         let cache_size = config.common_config.cache_size;
+        #[cfg(with_metrics)]
+        let store = MeteredStore::new(&ROCKS_DB_METRICS, store);
+        let store = ValueSplittingStore::new(store);
+        #[cfg(with_metrics)]
+        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
+        let store = LruCachingStore::new(store, cache_size);
+        #[cfg(with_metrics)]
+        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
+        Ok(Self { store })
+    }
+
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreError> {
+        let store = self.inner_clone_with_root_key(root_key)?;
+        let cache_size = self.cache_size();
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&ROCKS_DB_METRICS, store);
         let store = ValueSplittingStore::new(store);
@@ -517,7 +648,8 @@ impl KeyValueStore for RocksDbStore {
 
 impl<E: Clone + Send + Sync> RocksDbContext<E> {
     /// Creates a [`RocksDbContext`].
-    pub fn new(store: RocksDbStore, base_key: Vec<u8>, extra: E) -> Self {
+    pub fn new(store: RocksDbStore, extra: E) -> Self {
+        let base_key = Vec::new();
         Self {
             store,
             base_key,

@@ -238,9 +238,10 @@ where
     pub async fn new_for_testing(
         store_config: Client::Config,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let client = Client::recreate_and_connect(&store_config, namespace).await?;
+        let client = Client::recreate_and_connect(&store_config, namespace, root_key).await?;
         let storage = Self::new(client, wasm_runtime);
         Ok(storage)
     }
@@ -248,9 +249,10 @@ where
     pub async fn initialize(
         store_config: Client::Config,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let store = Client::maybe_create_and_connect(&store_config, namespace).await?;
+        let store = Client::maybe_create_and_connect(&store_config, namespace, root_key).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }
@@ -258,9 +260,10 @@ where
     pub async fn make(
         store_config: Client::Config,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let client = Client::connect(&store_config, namespace).await?;
+        let client = Client::connect(&store_config, namespace, root_key).await?;
         let storage = Self::new(client, wasm_runtime);
         Ok(storage)
     }
@@ -406,7 +409,12 @@ impl TestClock {
 #[async_trait]
 impl<Client, C> Storage for DbStorage<Client, C>
 where
-    Client: KeyValueStore + Clone + Send + Sync + 'static,
+    Client: AdminKeyValueStore<Error = <Client as KeyValueStore>::Error>
+        + KeyValueStore
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     C: Clock + Clone + Send + Sync + 'static,
     ViewError: From<<Client as KeyValueStore>::Error>,
     <Client as KeyValueStore>::Error:
@@ -432,9 +440,9 @@ where
             user_contracts: self.client.user_contracts.clone(),
             user_services: self.client.user_services.clone(),
         };
-        let client = self.client.client.clone();
-        let base_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
-        let context = ContextFromStore::create(client, base_key, runtime_context).await?;
+        let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
+        let client = self.client.client.clone_with_root_key(&root_key)?;
+        let context = ContextFromStore::create(client, runtime_context).await?;
         ChainStateView::load(context).await
     }
 
@@ -776,7 +784,7 @@ where
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        self.client.client.write_batch(batch, &[]).await?;
+        self.client.client.write_batch(batch).await?;
         Ok(())
     }
 
@@ -804,19 +812,23 @@ where
     pub async fn initialize(
         store_config: Client::Config,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, <Client as KeyValueStore>::Error> {
         let storage =
-            DbStorageInner::<Client>::initialize(store_config, namespace, wasm_runtime).await?;
+            DbStorageInner::<Client>::initialize(store_config, namespace, root_key, wasm_runtime)
+                .await?;
         Ok(Self::create(storage, WallClock))
     }
 
     pub async fn new(
         store_config: Client::Config,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let storage = DbStorageInner::<Client>::make(store_config, namespace, wasm_runtime).await?;
+        let storage =
+            DbStorageInner::<Client>::make(store_config, namespace, root_key, wasm_runtime).await?;
         Ok(Self::create(storage, WallClock))
     }
 }

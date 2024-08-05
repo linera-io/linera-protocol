@@ -54,9 +54,8 @@ enum KeyTag {
     Entry,
 }
 
-fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, bcs::Error> {
-    let mut key = base_key.to_vec();
-    key.extend([JOURNAL_TAG]);
+fn get_journaling_key(tag: u8, pos: u32) -> Result<Vec<u8>, bcs::Error> {
+    let mut key = vec![JOURNAL_TAG];
     key.extend([tag]);
     bcs::serialize_into(&mut key, &pos)?;
     Ok(key)
@@ -170,8 +169,17 @@ where
     type Error = K::Error;
     type Config = K::Config;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
-        let store = K::connect(config, namespace).await?;
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, Self::Error> {
+        let store = K::connect(config, namespace, root_key).await?;
+        Ok(Self { store })
+    }
+
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let store = self.store.clone_with_root_key(root_key)?;
         Ok(Self { store })
     }
 
@@ -204,21 +212,21 @@ where
     /// The size constant do not change
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), K::Error> {
         let batch = K::Batch::from_batch(self, batch).await?;
         if Self::is_fastpath_feasible(&batch) {
             self.store.write_batch(batch).await
         } else {
-            let header = self.write_journal(batch, base_key).await?;
-            self.coherently_resolve_journal(header, base_key).await
+            let header = self.write_journal(batch).await?;
+            self.coherently_resolve_journal(header).await
         }
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), K::Error> {
-        let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
+    async fn clear_journal(&self) -> Result<(), K::Error> {
+        let key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         let value = self.read_value::<JournalHeader>(&key).await?;
         if let Some(header) = value {
-            self.coherently_resolve_journal(header, base_key).await?;
+            self.coherently_resolve_journal(header).await?;
         }
         Ok(())
     }
@@ -257,15 +265,10 @@ where
     ///
     /// (4) `block_key` and `header_key` don't exceed `K::MAX_KEY_SIZE` and `bcs_header`
     /// doesn't exceed `K::MAX_VALUE_SIZE`.
-    async fn coherently_resolve_journal(
-        &self,
-        mut header: JournalHeader,
-        base_key: &[u8],
-    ) -> Result<(), K::Error> {
-        let header_key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
+    async fn coherently_resolve_journal(&self, mut header: JournalHeader) -> Result<(), K::Error> {
+        let header_key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         while header.block_count > 0 {
-            let block_key =
-                get_journaling_key(base_key, KeyTag::Entry as u8, header.block_count - 1)?;
+            let block_key = get_journaling_key(KeyTag::Entry as u8, header.block_count - 1)?;
             // Read the batch of updates (aka. "block") previously saved in the journal.
             let mut batch = self
                 .store
@@ -326,12 +329,8 @@ where
     /// * Similarly, a transaction must contain at least one block so it is desirable that
     ///   the maximum size of a block insertion `1 + sizeof(block_key) + K::MAX_VALUE_SIZE`
     ///   plus M bytes of overhead doesn't exceed the threshold of condition (2).
-    async fn write_journal(
-        &self,
-        batch: K::Batch,
-        base_key: &[u8],
-    ) -> Result<JournalHeader, K::Error> {
-        let header_key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
+    async fn write_journal(&self, batch: K::Batch) -> Result<JournalHeader, K::Error> {
+        let header_key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         let key_len = header_key.len();
         let header_value_len = bcs::serialized_size(&JournalHeader::default())?;
         let journal_len_upper_bound = key_len + header_value_len;
@@ -369,7 +368,7 @@ where
                 let value = bcs::to_bytes(&block_batch)?;
                 block_batch = K::Batch::default();
                 assert_eq!(value.len(), block_size);
-                let key = get_journaling_key(base_key, KeyTag::Entry as u8, block_count)?;
+                let key = get_journaling_key(KeyTag::Entry as u8, block_count)?;
                 transaction_batch.add_insert(key, value);
                 block_count += 1;
                 transaction_size += block_size + key_len;

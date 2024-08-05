@@ -170,14 +170,14 @@ where
 {
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), E> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), E> {
         let _metric = self.counter.write_batch.measure_latency();
-        self.store.write_batch(batch, base_key).await
+        self.store.write_batch(batch).await
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), E> {
+    async fn clear_journal(&self) -> Result<(), E> {
         let _metric = self.counter.clear_journal.measure_latency();
-        self.store.clear_journal(base_key).await
+        self.store.clear_journal().await
     }
 }
 
