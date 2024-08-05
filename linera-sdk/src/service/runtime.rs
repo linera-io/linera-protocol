@@ -147,6 +147,6 @@ where
 
     /// Reads a blob with the given `BlobId` from storage.
     pub fn read_blob(&mut self, blob_id: BlobId) -> Blob {
-        BlobContent::from(wit::read_blob(blob_id.into())).with_blob_id_unchecked(blob_id)
+        BlobContent::from(wit::read_blob_content(blob_id.into())).with_blob_id_unchecked(blob_id)
     }
 }

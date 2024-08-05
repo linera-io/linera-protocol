@@ -688,7 +688,7 @@ where
             }
             #[cfg(with_testing)]
             ReadBlob { blob_id } => {
-                self.read_blob(blob_id).await?;
+                self.read_blob_content(blob_id).await?;
                 oracle_responses.push(OracleResponse::Blob(blob_id));
             }
         }
@@ -1050,7 +1050,7 @@ where
         Ok(messages)
     }
 
-    pub async fn read_blob(
+    pub async fn read_blob_content(
         &mut self,
         blob_id: BlobId,
     ) -> Result<BlobContent, SystemExecutionError> {
@@ -1059,6 +1059,7 @@ where
             .get_blob(blob_id)
             .await
             .map_err(|_| SystemExecutionError::BlobNotFoundOnRead(blob_id))
+            .map(Into::into)
     }
 }
 

@@ -14,7 +14,7 @@ interface service-system-api {
     fetch-url: func(url: string) -> list<u8>;
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
     http-post: func(query: string, content-type: string, payload: list<u8>) -> list<u8>;
-    read-blob: func(blob-id: blob-id) -> blob-content;
+    read-blob-content: func(blob-id: blob-id) -> blob-content;
     assert-before: func(timestamp: timestamp);
     log: func(message: string, level: log-level);
 

@@ -166,9 +166,11 @@ where
         Ok(CryptoHash::test_hash("genesis config"))
     }
 
-    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
-        self.spawn_and_receive(move |validator, sender| validator.do_download_blob(blob_id, sender))
-            .await
+    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_download_blob_content(blob_id, sender)
+        })
+        .await
     }
 
     async fn download_certificate_value(
@@ -447,7 +449,7 @@ where
         sender.send(Ok(stream))
     }
 
-    async fn do_download_blob(
+    async fn do_download_blob_content(
         self,
         blob_id: BlobId,
         sender: oneshot::Sender<Result<BlobContent, NodeError>>,

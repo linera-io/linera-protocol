@@ -55,8 +55,8 @@ service ValidatorNode {
   // Request the genesis configuration hash of the network this node is part of.
   rpc GetGenesisConfigHash(google.protobuf.Empty) returns (CryptoHash);
 
-  // Downloads a blob.
-  rpc DownloadBlob(BlobId) returns (BlobContent);
+  // Downloads a blob content.
+  rpc DownloadBlobContent(BlobId) returns (BlobContent);
 
   // Downloads a certificate value.
   rpc DownloadCertificateValue(CryptoHash) returns (CertificateValue);
