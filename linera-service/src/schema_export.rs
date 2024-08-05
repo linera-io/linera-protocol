@@ -163,7 +163,7 @@ async fn main() -> std::io::Result<()> {
 
     let store_config = MemoryStoreConfig::new(TEST_MEMORY_MAX_STREAM_QUERIES);
     let namespace = "schema_export";
-    let storage = MemoryStorage::new(store_config, namespace, None)
+    let storage = MemoryStorage::initialize(store_config, namespace, None)
         .await
         .expect("storage");
     let config = ChainListenerConfig::default();
