@@ -15,6 +15,7 @@ interface service-system-api {
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
     http-post: func(query: string, content-type: string, payload: list<u8>) -> list<u8>;
     read-blob-content: func(blob-id: blob-id) -> blob-content;
+    assert-blob-exists: func(blob-id: blob-id);
     assert-before: func(timestamp: timestamp);
     log: func(message: string, level: log-level);
 

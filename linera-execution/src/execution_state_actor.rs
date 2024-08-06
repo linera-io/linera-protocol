@@ -315,6 +315,11 @@ where
                 let blob = self.system.read_blob_content(blob_id).await?;
                 callback.respond(blob);
             }
+
+            AssertBlobExists { blob_id, callback } => {
+                self.system.assert_blob_exists(blob_id).await?;
+                callback.respond(())
+            }
         }
 
         Ok(())
@@ -444,6 +449,11 @@ pub enum ExecutionRequest {
     ReadBlobContent {
         blob_id: BlobId,
         callback: Sender<BlobContent>,
+    },
+
+    AssertBlobExists {
+        blob_id: BlobId,
+        callback: Sender<()>,
     },
 }
 
@@ -580,6 +590,11 @@ impl Debug for ExecutionRequest {
 
             ExecutionRequest::ReadBlobContent { blob_id, .. } => formatter
                 .debug_struct("ExecutionRequest::ReadBlob")
+                .field("blob_id", blob_id)
+                .finish_non_exhaustive(),
+
+            ExecutionRequest::AssertBlobExists { blob_id, .. } => formatter
+                .debug_struct("ExecutionRequest::AssertBlobExists")
                 .field("blob_id", blob_id)
                 .finish_non_exhaustive(),
         }

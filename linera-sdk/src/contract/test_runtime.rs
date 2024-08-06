@@ -49,6 +49,7 @@ where
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
     expected_post_requests: VecDeque<(String, Vec<u8>, Vec<u8>)>,
     expected_read_blob_requests: VecDeque<(BlobId, Blob)>,
+    expected_contains_blob_requests: VecDeque<(BlobId, Option<()>)>,
     key_value_store: KeyValueStore,
 }
 
@@ -91,6 +92,7 @@ where
             expected_service_queries: VecDeque::new(),
             expected_post_requests: VecDeque::new(),
             expected_read_blob_requests: VecDeque::new(),
+            expected_contains_blob_requests: VecDeque::new(),
             key_value_store: KeyValueStore::mock().to_mut(),
         }
     }
@@ -619,6 +621,12 @@ where
             .push_back((blob_id, response));
     }
 
+    /// Adds an expected `contains_blob` call, and the response it should return in the test.
+    pub fn add_expected_contains_blob_requests(&mut self, blob_id: BlobId, response: Option<()>) {
+        self.expected_contains_blob_requests
+            .push_back((blob_id, response));
+    }
+
     /// Queries our application service as an oracle and returns the response.
     ///
     /// Should only be used with queries where it is very likely that all validators will compute
@@ -671,6 +679,14 @@ where
         let (expected_blob_id, response) = maybe_request.expect("Unexpected read_blob request");
         assert_eq!(*blob_id, expected_blob_id);
         response
+    }
+
+    /// Asserts that a blob with the given `BlobId` exists in storage.
+    pub fn assert_blob_exists(&mut self, blob_id: BlobId) {
+        let maybe_request = self.expected_contains_blob_requests.pop_front();
+        let (expected_blob_id, response) = maybe_request.expect("Unexpected contains_blob request");
+        assert_eq!(blob_id, expected_blob_id);
+        response.expect("Blob does not exist!");
     }
 }
 
