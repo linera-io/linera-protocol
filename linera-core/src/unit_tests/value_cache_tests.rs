@@ -538,7 +538,7 @@ fn create_dummy_validated_block_value() -> HashedCertificateValue {
             block: Block {
                 chain_id: ChainId(CryptoHash::test_hash("Fake chain ID")),
                 epoch: Epoch::ZERO,
-                incoming_messages: vec![],
+                incoming_bundles: vec![],
                 operations: vec![],
                 height: BlockHeight::ZERO,
                 timestamp: Timestamp::from(0),

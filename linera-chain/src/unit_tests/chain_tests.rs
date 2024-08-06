@@ -126,8 +126,8 @@ async fn test_application_permissions() {
 
     // An operation that doesn't belong to the app isn't allowed.
     let invalid_block = make_first_block(chain_id)
-        .with_incoming_message(open_chain_message.clone())
-        .with_incoming_message(register_app_message.clone())
+        .with_incoming_bundle(open_chain_message.clone())
+        .with_incoming_bundle(register_app_message.clone())
         .with_simple_transfer(chain_id, Amount::ONE);
     let result = chain.execute_block(&invalid_block, time, None).await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
@@ -142,8 +142,8 @@ async fn test_application_permissions() {
         bytes: b"foo".to_vec(),
     };
     let valid_block = make_first_block(chain_id)
-        .with_incoming_message(open_chain_message)
-        .with_incoming_message(register_app_message.clone())
+        .with_incoming_bundle(open_chain_message)
+        .with_incoming_bundle(register_app_message.clone())
         .with_operation(app_operation.clone());
     let outcome = chain.execute_block(&valid_block, time, None).await.unwrap();
     let value = HashedCertificateValue::new_confirmed(outcome.with(valid_block));

@@ -15,7 +15,7 @@ use linera_execution::{
 };
 
 use crate::data_types::{
-    Block, BlockProposal, Certificate, Event, HashedCertificateValue, IncomingMessage,
+    Block, BlockProposal, Certificate, Event, HashedCertificateValue, IncomingBundle,
     MessageAction, Origin, SignatureAggregator, Vote,
 };
 
@@ -26,7 +26,7 @@ pub fn make_child_block(parent: &HashedCertificateValue) -> Block {
     Block {
         epoch: parent_value.epoch(),
         chain_id: parent_value.chain_id(),
-        incoming_messages: vec![],
+        incoming_bundles: vec![],
         operations: vec![],
         previous_block_hash: Some(parent.hash()),
         height: parent_value.height().try_add_one().unwrap(),
@@ -40,7 +40,7 @@ pub fn make_first_block(chain_id: ChainId) -> Block {
     Block {
         epoch: Epoch::ZERO,
         chain_id,
-        incoming_messages: vec![],
+        incoming_bundles: vec![],
         operations: vec![],
         previous_block_hash: None,
         height: BlockHeight::ZERO,
@@ -61,7 +61,7 @@ pub trait BlockTestExt: Sized {
     fn with_simple_transfer(self, chain_id: ChainId, amount: Amount) -> Self;
 
     /// Returns the block with the given message appended at the end.
-    fn with_incoming_message(self, incoming_message: IncomingMessage) -> Self;
+    fn with_incoming_bundle(self, incoming_bundle: IncomingBundle) -> Self;
 
     /// Returns the block with the specified timestamp.
     fn with_timestamp(self, timestamp: impl Into<Timestamp>) -> Self;
@@ -97,8 +97,8 @@ impl BlockTestExt for Block {
         self.with_transfer(None, Recipient::chain(chain_id), amount)
     }
 
-    fn with_incoming_message(mut self, incoming_message: IncomingMessage) -> Self {
-        self.incoming_messages.push(incoming_message);
+    fn with_incoming_bundle(mut self, incoming_bundle: IncomingBundle) -> Self {
+        self.incoming_bundles.push(incoming_bundle);
         self
     }
 
@@ -141,12 +141,12 @@ impl VoteTestExt for Vote {
 
 /// Helper trait to simplify constructing messages for tests.
 pub trait MessageTestExt: Sized {
-    fn to_simple_incoming(self, sender: ChainId, height: BlockHeight) -> IncomingMessage;
+    fn to_simple_incoming(self, sender: ChainId, height: BlockHeight) -> IncomingBundle;
 }
 
 impl<T: Into<Message>> MessageTestExt for T {
-    fn to_simple_incoming(self, sender: ChainId, height: BlockHeight) -> IncomingMessage {
-        IncomingMessage {
+    fn to_simple_incoming(self, sender: ChainId, height: BlockHeight) -> IncomingBundle {
+        IncomingBundle {
             origin: Origin::chain(sender),
             event: Event {
                 certificate_hash: CryptoHash::test_hash("certificate"),

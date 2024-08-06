@@ -72,7 +72,7 @@ type Block {
 	A selection of incoming messages to be executed first. Successive messages of same
 	sender and height are grouped together for conciseness.
 	"""
-	incomingMessages: [IncomingMessage!]!
+	incomingBundles: [IncomingBundle!]!
 	"""
 	The operations to execute.
 	"""
@@ -240,7 +240,7 @@ type ChainTipState {
 	"""
 	Number of incoming messages.
 	"""
-	numIncomingMessages: Int!
+	numIncomingBundles: Int!
 	"""
 	Number of operations.
 	"""
@@ -474,7 +474,7 @@ type InboxStateView {
 """
 A message received from a block of another chain.
 """
-type IncomingMessage {
+type IncomingBundle {
 	"""
 	The origin of the message (chain and channel if any).
 	"""

@@ -210,7 +210,7 @@ where
             info!("Received new notification: {:?}", notification);
             Self::maybe_sleep(config.delay_before_ms).await;
             match &notification.reason {
-                Reason::NewIncomingMessage { .. } => timeout = storage.clock().current_time(),
+                Reason::NewIncomingBundle { .. } => timeout = storage.clock().current_time(),
                 Reason::NewBlock { .. } | Reason::NewRound { .. } => {
                     if let Err(error) = client.update_validators().await {
                         warn!(

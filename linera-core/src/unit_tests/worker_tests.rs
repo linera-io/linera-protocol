@@ -26,7 +26,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockExecutionOutcome, BlockProposal, Certificate, ChainAndHeight, ChannelFullName,
-        Event, HashedCertificateValue, IncomingMessage, LiteVote, Medium, MessageAction, Origin,
+        Event, HashedCertificateValue, IncomingBundle, LiteVote, Medium, MessageAction, Origin,
         OutgoingMessage, SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt, VoteTestExt},
@@ -62,7 +62,7 @@ use crate::{
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
         Notification,
-        Reason::{self, NewBlock, NewIncomingMessage},
+        Reason::{self, NewBlock, NewIncomingBundle},
         WorkerError, WorkerState,
     },
 };
@@ -165,7 +165,7 @@ async fn make_simple_transfer_certificate<S>(
     key_pair: &KeyPair,
     target_id: ChainId,
     amount: Amount,
-    incoming_messages: Vec<IncomingMessage>,
+    incoming_bundles: Vec<IncomingBundle>,
     committee: &Committee,
     balance: Amount,
     worker: &WorkerState<S>,
@@ -181,7 +181,7 @@ where
         None,
         Recipient::chain(target_id),
         amount,
-        incoming_messages,
+        incoming_bundles,
         Epoch::ZERO,
         committee,
         balance,
@@ -199,7 +199,7 @@ async fn make_transfer_certificate<S>(
     source: Option<Owner>,
     recipient: Recipient,
     amount: Amount,
-    incoming_messages: Vec<IncomingMessage>,
+    incoming_bundles: Vec<IncomingBundle>,
     committee: &Committee,
     balance: Amount,
     balances: BTreeMap<Owner, Amount>,
@@ -216,7 +216,7 @@ where
         source,
         recipient,
         amount,
-        incoming_messages,
+        incoming_bundles,
         Epoch::ZERO,
         committee,
         balance,
@@ -234,7 +234,7 @@ async fn make_transfer_certificate_for_epoch<S>(
     source: Option<Owner>,
     recipient: Recipient,
     amount: Amount,
-    incoming_messages: Vec<IncomingMessage>,
+    incoming_bundles: Vec<IncomingBundle>,
     epoch: Epoch,
     committee: &Committee,
     balance: Amount,
@@ -259,19 +259,19 @@ where
         Some(cert) => make_child_block(&cert.value),
     };
 
-    let mut messages = incoming_messages
+    let mut messages = incoming_bundles
         .iter()
-        .map(|incoming_message| {
-            if matches!(incoming_message.action, MessageAction::Reject)
-                && matches!(incoming_message.event.kind, MessageKind::Tracked)
+        .map(|incoming_bundle| {
+            if matches!(incoming_bundle.action, MessageAction::Reject)
+                && matches!(incoming_bundle.event.kind, MessageKind::Tracked)
             {
                 vec![OutgoingMessage {
-                    authenticated_signer: incoming_message.event.authenticated_signer,
-                    destination: Destination::Recipient(incoming_message.origin.sender),
+                    authenticated_signer: incoming_bundle.event.authenticated_signer,
+                    destination: Destination::Recipient(incoming_bundle.origin.sender),
                     grant: Amount::ZERO,
                     refund_grant_to: None,
                     kind: MessageKind::Bouncing,
-                    message: incoming_message.event.message.clone(),
+                    message: incoming_bundle.event.message.clone(),
                 }]
             } else {
                 Vec::new()
@@ -281,7 +281,7 @@ where
 
     let block = Block {
         epoch,
-        incoming_messages,
+        incoming_bundles,
         authenticated_signer: source,
         ..block_template
     }
@@ -300,7 +300,7 @@ where
         }
         Recipient::Burn => messages.push(Vec::new()),
     }
-    let tx_count = block.operations.len() + block.incoming_messages.len();
+    let tx_count = block.operations.len() + block.incoming_bundles.len();
     let oracle_responses = iter::repeat_with(Vec::new).take(tx_count).collect();
     let events = iter::repeat_with(Vec::new).take(tx_count).collect();
     let state_hash = system_state.into_hash().await;
@@ -673,7 +673,7 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_handle_block_proposal_with_incoming_messages<B>(
+async fn test_handle_block_proposal_with_incoming_bundles<B>(
     mut storage_builder: B,
 ) -> anyhow::Result<()>
 where
@@ -795,7 +795,7 @@ where
             },
             Notification {
                 chain_id: ChainId::root(2),
-                reason: NewIncomingMessage {
+                reason: NewIncomingBundle {
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight(0)
                 }
@@ -809,7 +809,7 @@ where
             },
             Notification {
                 chain_id: ChainId::root(2),
-                reason: NewIncomingMessage {
+                reason: NewIncomingBundle {
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight(1)
                 }
@@ -839,7 +839,7 @@ where
     {
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(5))
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate0.value.hash(),
@@ -854,7 +854,7 @@ where
                 },
                 action: MessageAction::Accept,
             })
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate0.value.hash(),
@@ -869,7 +869,7 @@ where
                 },
                 action: MessageAction::Accept,
             })
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate1.value.hash(),
@@ -895,7 +895,7 @@ where
     {
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(6))
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate0.value.hash(),
@@ -921,7 +921,7 @@ where
     {
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(6))
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate1.value.hash(),
@@ -936,7 +936,7 @@ where
                 },
                 action: MessageAction::Accept,
             })
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate0.value.hash(),
@@ -951,7 +951,7 @@ where
                 },
                 action: MessageAction::Accept,
             })
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate0.value.hash(),
@@ -977,7 +977,7 @@ where
     {
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(ChainId::root(3), Amount::ONE)
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate0.value.hash(),
@@ -1024,7 +1024,7 @@ where
         // Then receive the next two messages.
         let block_proposal = make_child_block(&certificate.value)
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(3))
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate0.value.hash(),
@@ -1039,7 +1039,7 @@ where
                 },
                 action: MessageAction::Accept,
             })
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate1.value.hash(),
@@ -1269,7 +1269,7 @@ where
         subscriptions,
         ..SystemExecutionState::new(epoch, description, admin_id)
     };
-    let open_chain_message = IncomingMessage {
+    let open_chain_message = IncomingBundle {
         origin: Origin::chain(ChainId::root(3)),
         event: Event {
             certificate_hash: CryptoHash::test_hash("certificate"),
@@ -1298,7 +1298,7 @@ where
             state_hash: state.into_hash().await,
             oracle_responses: vec![Vec::new()],
         }
-        .with(make_first_block(chain_id).with_incoming_message(open_chain_message)),
+        .with(make_first_block(chain_id).with_incoming_bundle(open_chain_message)),
     );
     let certificate = make_certificate(&committee, &worker, value);
     let info = worker
@@ -1406,7 +1406,7 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_handle_certificate_with_anticipated_incoming_message<B>(
+async fn test_handle_certificate_with_anticipated_incoming_bundle<B>(
     mut storage_builder: B,
 ) -> anyhow::Result<()>
 where
@@ -1436,7 +1436,7 @@ where
         &key_pair,
         ChainId::root(2),
         Amount::from_tokens(1000),
-        vec![IncomingMessage {
+        vec![IncomingBundle {
             origin: Origin::chain(ChainId::root(3)),
             event: Event {
                 certificate_hash: CryptoHash::test_hash("certificate"),
@@ -1791,7 +1791,7 @@ where
         actions.notifications,
         vec![Notification {
             chain_id: ChainId::root(2),
-            reason: Reason::NewIncomingMessage {
+            reason: Reason::NewIncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 height: BlockHeight::ZERO,
             }
@@ -1889,7 +1889,7 @@ where
         &recipient_key_pair,
         ChainId::root(3),
         Amount::ONE,
-        vec![IncomingMessage {
+        vec![IncomingBundle {
             origin: Origin::chain(ChainId::root(1)),
             event: Event {
                 certificate_hash: certificate.hash(),
@@ -2076,7 +2076,7 @@ where
         None,
         Recipient::Burn,
         Amount::ONE,
-        vec![IncomingMessage {
+        vec![IncomingBundle {
             origin: Origin::chain(ChainId::root(1)),
             event: Event {
                 certificate_hash: certificate00.hash(),
@@ -2110,7 +2110,7 @@ where
     {
         let chain = worker.chain_state_view(ChainId::root(1)).await?;
         assert!(chain.is_active());
-        chain.validate_incoming_messages().await?;
+        chain.validate_incoming_bundles().await?;
     }
 
     // Then, make two transfers to the recipient.
@@ -2160,7 +2160,7 @@ where
         Recipient::Burn,
         Amount::ONE,
         vec![
-            IncomingMessage {
+            IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate1.hash(),
@@ -2179,7 +2179,7 @@ where
                 },
                 action: MessageAction::Reject,
             },
-            IncomingMessage {
+            IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate2.hash(),
@@ -2214,7 +2214,7 @@ where
     {
         let chain = worker.chain_state_view(ChainId::root(2)).await?;
         assert!(chain.is_active());
-        chain.validate_incoming_messages().await?;
+        chain.validate_incoming_bundles().await?;
     }
 
     // Process the bounced message and try to use the refund.
@@ -2224,7 +2224,7 @@ where
         Some(sender),
         Recipient::Burn,
         Amount::from_tokens(3),
-        vec![IncomingMessage {
+        vec![IncomingBundle {
             origin: Origin::chain(ChainId::root(2)),
             event: Event {
                 certificate_hash: certificate.hash(),
@@ -2258,7 +2258,7 @@ where
     {
         let chain = worker.chain_state_view(ChainId::root(1)).await?;
         assert!(chain.is_active());
-        chain.validate_incoming_messages().await?;
+        chain.validate_incoming_bundles().await?;
     }
     Ok(())
 }
@@ -2364,7 +2364,7 @@ where
     {
         let admin_chain = worker.chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
-        admin_chain.validate_incoming_messages().await?;
+        admin_chain.validate_incoming_bundles().await?;
         assert_eq!(
             BlockHeight::from(1),
             admin_chain.tip_state.get().next_block_height
@@ -2449,7 +2449,7 @@ where
             .with(
                 make_child_block(&certificate1.value)
                     .with_epoch(1)
-                    .with_incoming_message(IncomingMessage {
+                    .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(admin_id),
                         event: Event {
                             certificate_hash: certificate0.value.hash(),
@@ -2477,7 +2477,7 @@ where
         // The root chain has 1 subscribers.
         let admin_chain = worker.chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
-        admin_chain.validate_incoming_messages().await?;
+        admin_chain.validate_incoming_bundles().await?;
         assert_eq!(
             admin_chain
                 .channels
@@ -2513,7 +2513,7 @@ where
                 .len(),
             1
         );
-        user_chain.validate_incoming_messages().await?;
+        user_chain.validate_incoming_bundles().await?;
         matches!(
             user_chain
                 .inboxes
@@ -2580,7 +2580,7 @@ where
             }
             .with(
                 make_first_block(user_id)
-                    .with_incoming_message(IncomingMessage {
+                    .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(admin_id),
                         event: Event {
                             certificate_hash: certificate0.value.hash(),
@@ -2602,7 +2602,7 @@ where
                         },
                         action: MessageAction::Accept,
                     })
-                    .with_incoming_message(IncomingMessage {
+                    .with_incoming_bundle(IncomingBundle {
                         origin: admin_channel_origin.clone(),
                         event: Event {
                             certificate_hash: certificate1.value.hash(),
@@ -2620,7 +2620,7 @@ where
                         },
                         action: MessageAction::Accept,
                     })
-                    .with_incoming_message(IncomingMessage {
+                    .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(admin_id),
                         event: Event {
                             certificate_hash: certificate1.value.hash(),
@@ -2635,7 +2635,7 @@ where
                         },
                         action: MessageAction::Accept,
                     })
-                    .with_incoming_message(IncomingMessage {
+                    .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(admin_id),
                         event: Event {
                             certificate_hash: certificate2.value.hash(),
@@ -2678,7 +2678,7 @@ where
             1
         );
         assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
-        user_chain.validate_incoming_messages().await?;
+        user_chain.validate_incoming_bundles().await?;
         {
             let inbox = user_chain
                 .inboxes
@@ -2979,7 +2979,7 @@ where
             .with(
                 make_child_block(&certificate1.value)
                     .with_epoch(1)
-                    .with_incoming_message(IncomingMessage {
+                    .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(user_id),
                         event: Event {
                             certificate_hash: certificate0.value.hash(),
@@ -3006,7 +3006,7 @@ where
         let admin_chain = worker.chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
         assert_matches!(
-            admin_chain.validate_incoming_messages().await,
+            admin_chain.validate_incoming_bundles().await,
             Err(ChainError::MissingCrossChainUpdate { .. })
         );
     }
@@ -3021,7 +3021,7 @@ where
         // The admin chain has no more anticipated messages.
         let admin_chain = worker.chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
-        admin_chain.validate_incoming_messages().await?;
+        admin_chain.validate_incoming_bundles().await?;
     }
     Ok(())
 }

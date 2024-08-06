@@ -10,7 +10,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Owner},
 };
 use linera_chain::{
-    data_types::{ChainAndHeight, IncomingMessage, Medium, MessageBundle},
+    data_types::{ChainAndHeight, IncomingBundle, Medium, MessageBundle},
     manager::ChainManagerInfo,
     ChainStateView,
 };
@@ -156,7 +156,7 @@ pub struct ChainInfo {
     /// The current committees.
     pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
     /// The received messages that are waiting be picked in the next block (if requested).
-    pub requested_pending_messages: Vec<IncomingMessage>,
+    pub requested_pending_messages: Vec<IncomingBundle>,
     /// The response to `request_sent_certificate_hashes_in_range`
     pub requested_sent_certificate_hashes: Vec<CryptoHash>,
     /// The current number of received certificates (useful for `request_received_log_excluding_first_nth`)
