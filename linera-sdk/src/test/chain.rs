@@ -180,7 +180,10 @@ impl ActiveChain {
             })
             .await;
 
-        let executed_block = certificate.value().executed_block().unwrap();
+        let executed_block = certificate
+            .value()
+            .executed_block()
+            .expect("Failed to obtain executed block from certificate");
         assert_eq!(executed_block.messages().len(), 1);
         let message_id = MessageId {
             chain_id: executed_block.block.chain_id,
@@ -373,7 +376,10 @@ impl ActiveChain {
             })
             .await;
 
-        let executed_block = creation_certificate.value().executed_block().unwrap();
+        let executed_block = creation_certificate
+            .value()
+            .executed_block()
+            .expect("Failed to obtain executed block from certificate");
         assert_eq!(executed_block.messages().len(), 1);
         let creation = MessageId {
             chain_id: executed_block.block.chain_id,

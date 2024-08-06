@@ -160,13 +160,13 @@ impl BlockBuilder {
     /// present in the inboxes of the microchain that owns this block.
     pub(crate) fn with_incoming_bundles(
         &mut self,
-        messages: impl IntoIterator<Item = IncomingBundle>,
+        bundles: impl IntoIterator<Item = IncomingBundle>,
     ) -> &mut Self {
-        self.block.incoming_bundles.extend(messages);
+        self.block.incoming_bundles.extend(bundles);
         self
     }
 
-    /// Receives all admin messages  that were sent to this chain by the given certificate.
+    /// Receives all admin messages that were sent to this chain by the given certificate.
     pub fn with_system_messages_from(
         &mut self,
         certificate: &Certificate,
