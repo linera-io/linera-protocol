@@ -4,7 +4,7 @@
 
 use linera_base::{
     data_types::{OracleResponse, Round},
-    identifiers::{ChainDescription, Destination, GenericApplicationId},
+    identifiers::{BlobType, ChainDescription, Destination, GenericApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -50,6 +50,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<CrossChainRequest>(&samples)?;
     tracer.trace_type::<NodeError>(&samples)?;
     tracer.trace_type::<RpcMessage>(&samples)?;
+    tracer.trace_type::<BlobType>(&samples)?;
     tracer.registry()
 }
 

@@ -13,7 +13,7 @@ use std::{sync::Arc, thread, vec};
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::BlockHeight,
-    identifiers::{BytecodeId, ChainId, MessageId},
+    identifiers::{BlobId, BlobType, BytecodeId, ChainId, MessageId},
 };
 use linera_views::{
     common::Context,
@@ -26,24 +26,17 @@ pub use self::{
     system_execution_state::SystemExecutionState,
 };
 use crate::{
-    ApplicationRegistryView, BytecodeLocation, ExecutionRequest, ExecutionRuntimeContext,
-    ExecutionStateView, QueryContext, ServiceRuntimeRequest, ServiceSyncRuntime,
-    TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
+    ApplicationRegistryView, ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView,
+    QueryContext, ServiceRuntimeRequest, ServiceSyncRuntime, TestExecutionRuntimeContext,
+    UserApplicationDescription, UserApplicationId,
 };
 
 pub fn create_dummy_user_application_description(index: u64) -> UserApplicationDescription {
     let chain_id = ChainId::root(1);
-    let certificate_hash = CryptoHash::new(&FakeCertificate);
+    let contract_blob_hash = CryptoHash::new(&FakeBlob(String::from("contract")));
+    let service_blob_hash = CryptoHash::new(&FakeBlob(String::from("service")));
     UserApplicationDescription {
-        bytecode_id: BytecodeId::new(MessageId {
-            chain_id,
-            height: BlockHeight(index),
-            index: 0,
-        }),
-        bytecode_location: BytecodeLocation {
-            certificate_hash,
-            transaction_index: 0,
-        },
+        bytecode_id: BytecodeId::new(contract_blob_hash, service_blob_hash),
         creation: MessageId {
             chain_id,
             height: BlockHeight(index),
@@ -55,9 +48,9 @@ pub fn create_dummy_user_application_description(index: u64) -> UserApplicationD
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct FakeCertificate;
+pub struct FakeBlob(String);
 
-impl BcsSignable for FakeCertificate {}
+impl BcsSignable for FakeBlob {}
 
 /// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
 ///

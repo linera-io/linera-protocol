@@ -15,14 +15,12 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
-        LiteCertificate,
+        Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, LiteCertificate,
     },
     ChainStateView,
 };
 use linera_execution::{
-    committee::ValidatorName, BytecodeLocation, Query, Response, UserApplicationDescription,
-    UserApplicationId,
+    committee::ValidatorName, Query, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -116,12 +114,7 @@ where
         let response = self
             .node
             .state
-            .fully_handle_certificate_with_notifications(
-                full_cert,
-                vec![],
-                vec![],
-                Some(notifications),
-            )
+            .fully_handle_certificate_with_notifications(full_cert, vec![], Some(notifications))
             .await?;
         Ok(response)
     }
@@ -130,13 +123,11 @@ where
     pub async fn handle_certificate(
         &self,
         certificate: Certificate,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
         blobs: Vec<Blob>,
         notifications: &mut impl Extend<Notification>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let response = Box::pin(self.node.state.fully_handle_certificate_with_notifications(
             certificate,
-            hashed_certificate_values,
             blobs,
             Some(notifications),
         ))
@@ -191,78 +182,6 @@ where
     ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
         let (executed_block, info) = self.node.state.stage_block_execution(block).await?;
         Ok((executed_block, info))
-    }
-
-    #[tracing::instrument(level = "trace", skip_all)]
-    pub async fn try_download_hashed_certificate_values_from(
-        locations: &[BytecodeLocation],
-        node: &impl LocalValidatorNode,
-        name: &ValidatorName,
-    ) -> Vec<HashedCertificateValue> {
-        future::join_all(locations.iter().map(|location| async move {
-            Self::try_download_hashed_certificate_value_from(node, name, *location).await
-        }))
-        .await
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-    }
-
-    #[tracing::instrument(level = "trace", skip(locations, nodes))]
-    pub async fn download_hashed_certificate_values(
-        locations: &[BytecodeLocation],
-        nodes: &[(ValidatorName, impl LocalValidatorNode)],
-    ) -> Vec<HashedCertificateValue> {
-        future::join_all(
-            locations
-                .iter()
-                .map(|location| Self::download_hashed_certificate_value(nodes, *location)),
-        )
-        .await
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-    }
-
-    pub async fn find_missing_application_bytecodes(
-        &self,
-        certificate: &Certificate,
-        locations: &Vec<BytecodeLocation>,
-    ) -> Result<Vec<HashedCertificateValue>, NodeError> {
-        if locations.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // Find the missing bytecodes locally and retry.
-        let required = match certificate.value() {
-            CertificateValue::ConfirmedBlock { executed_block, .. }
-            | CertificateValue::ValidatedBlock { executed_block, .. } => {
-                executed_block.block.bytecode_locations()
-            }
-            CertificateValue::Timeout { .. } => HashSet::new(),
-        };
-        for location in locations {
-            if !required.contains(location) {
-                let hash = location.certificate_hash;
-                warn!("validator requested {:?} but it is not required", hash);
-                return Err(NodeError::InvalidChainInfoResponse);
-            }
-        }
-        let unique_locations = locations.iter().cloned().collect::<HashSet<_>>();
-        if locations.len() > unique_locations.len() {
-            warn!("locations requested by validator contain duplicates");
-            return Err(NodeError::InvalidChainInfoResponse);
-        }
-        let storage = self.storage_client();
-        Ok(future::join_all(
-            unique_locations
-                .into_iter()
-                .map(|location| storage.read_hashed_certificate_value(location.certificate_hash)),
-        )
-        .await
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>())
     }
 
     // Given a list of missing `BlobId`s and a `Certificate` for a block:
@@ -358,21 +277,16 @@ where
                 return info;
             }
             let mut result = self
-                .handle_certificate(certificate.clone(), vec![], vec![], notifications)
+                .handle_certificate(certificate.clone(), vec![], notifications)
                 .await;
 
             result = match &result {
-                Err(LocalNodeError::WorkerError(
-                    WorkerError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids),
-                )) => {
-                    let values =
-                        Self::try_download_hashed_certificate_values_from(locations, node, name)
-                            .await;
+                Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids))) => {
                     let blobs = Self::try_download_blobs_from(blob_ids, name, node).await;
-                    if values.len() != locations.len() || blobs.len() != blob_ids.len() {
+                    if blobs.len() != blob_ids.len() {
                         result
                     } else {
-                        self.handle_certificate(certificate, values, blobs, notifications)
+                        self.handle_certificate(certificate, blobs, notifications)
                             .await
                     }
                 }
@@ -491,74 +405,6 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip_all)]
-    /// Downloads and stores the specified hashed certificate values, unless they are already in the cache or storage.
-    ///
-    /// Does not fail if a hashed certificate value can't be downloaded; it just gets omitted from the result.
-    pub async fn read_or_download_hashed_certificate_values(
-        &self,
-        validators: &[(ValidatorName, impl LocalValidatorNode)],
-        hashed_certificate_value_locations: impl IntoIterator<Item = BytecodeLocation>,
-    ) -> Result<Vec<HashedCertificateValue>, LocalNodeError> {
-        let mut values = vec![];
-        let mut tasks = vec![];
-        for location in hashed_certificate_value_locations {
-            if let Some(value) = self
-                .node
-                .state
-                .recent_hashed_certificate_value(&location.certificate_hash)
-                .await
-            {
-                values.push(value);
-            } else {
-                tasks.push(Self::read_or_download_hashed_certificate_value(
-                    self.storage_client(),
-                    validators,
-                    location,
-                ));
-            }
-        }
-        if tasks.is_empty() {
-            return Ok(values);
-        }
-        let results = future::join_all(tasks).await;
-        for result in results {
-            if let Some(value) = result? {
-                self.node
-                    .state
-                    .cache_recent_hashed_certificate_value(Cow::Borrowed(&value))
-                    .await;
-                values.push(value);
-            }
-        }
-        Ok(values)
-    }
-
-    #[tracing::instrument(level = "trace", skip_all)]
-    async fn read_or_download_hashed_certificate_value(
-        storage: S,
-        validators: &[(ValidatorName, impl LocalValidatorNode)],
-        location: BytecodeLocation,
-    ) -> Result<Option<HashedCertificateValue>, LocalNodeError> {
-        match storage
-            .read_hashed_certificate_value(location.certificate_hash)
-            .await
-        {
-            Ok(hashed_certificate_value) => return Ok(Some(hashed_certificate_value)),
-            Err(ViewError::NotFound(..)) => {}
-            Err(err) => Err(err)?,
-        }
-        match Self::download_hashed_certificate_value(validators, location).await {
-            Some(hashed_certificate_value) => {
-                storage
-                    .write_hashed_certificate_value(&hashed_certificate_value)
-                    .await?;
-                Ok(Some(hashed_certificate_value))
-            }
-            None => Ok(None),
-        }
-    }
-
     #[tracing::instrument(level = "trace", skip(self))]
     /// Obtains the certificate containing the specified message.
     pub async fn certificate_for(
@@ -653,24 +499,6 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(validators, location))]
-    async fn download_hashed_certificate_value(
-        validators: &[(ValidatorName, impl LocalValidatorNode)],
-        location: BytecodeLocation,
-    ) -> Option<HashedCertificateValue> {
-        // Sequentially try each validator in random order, to improve efficiency.
-        let mut validators: Vec<_> = validators.iter().collect();
-        validators.shuffle(&mut rand::thread_rng());
-        for (name, node) in validators {
-            if let Some(value) =
-                Self::try_download_hashed_certificate_value_from(node, name, location).await
-            {
-                return Some(value);
-            }
-        }
-        None
-    }
-
     #[tracing::instrument(level = "trace", skip(validators))]
     async fn download_blob(
         validators: &[(ValidatorName, impl LocalValidatorNode)],
@@ -738,26 +566,6 @@ where
             }
             Err(error) => {
                 tracing::debug!("Failed to fetch blob {blob_id} from validator {name}: {error}");
-                None
-            }
-        }
-    }
-
-    #[tracing::instrument(level = "trace", skip_all)]
-    async fn try_download_hashed_certificate_value_from(
-        node: &impl LocalValidatorNode,
-        name: &ValidatorName,
-        location: BytecodeLocation,
-    ) -> Option<HashedCertificateValue> {
-        match node
-            .download_certificate_value(location.certificate_hash)
-            .await
-        {
-            Ok(hashed_certificate_value) => Some(hashed_certificate_value),
-            Err(error) => {
-                tracing::debug!(
-                    "Failed to fetch certificate value {location:?} from validator {name}: {error}"
-                );
                 None
             }
         }

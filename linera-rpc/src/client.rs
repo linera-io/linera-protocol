@@ -83,21 +83,20 @@ impl ValidatorNode for Client {
     async fn handle_certificate(
         &self,
         certificate: Certificate,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
             Client::Grpc(grpc_client) => {
                 grpc_client
-                    .handle_certificate(certificate, hashed_certificate_values, blobs, delivery)
+                    .handle_certificate(certificate, blobs, delivery)
                     .await
             }
 
             #[cfg(with_simple_network)]
             Client::Simple(simple_client) => {
                 simple_client
-                    .handle_certificate(certificate, hashed_certificate_values, blobs, delivery)
+                    .handle_certificate(certificate, blobs, delivery)
                     .await
             }
         }

@@ -38,14 +38,11 @@ use linera_execution::{
     ExecutionRuntimeContext, UserApplicationDescription, UserApplicationId, UserContractCode,
     UserServiceCode, WasmRuntime,
 };
+#[cfg(with_wasm_runtime)]
+use linera_execution::{WasmContractModule, WasmServiceModule};
 use linera_views::{
     common::Context,
     views::{CryptoHashView, RootView, ViewError},
-};
-#[cfg(with_wasm_runtime)]
-use {
-    linera_chain::data_types::CertificateValue,
-    linera_execution::{Operation, SystemOperation, WasmContractModule, WasmServiceModule},
 };
 
 #[cfg(with_testing)]
@@ -148,10 +145,9 @@ pub trait Storage: Sized {
     /// Writes the given blob.
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError>;
 
-    /// Writes hashed certificates, blobs and certificate
-    async fn write_hashed_certificate_values_blobs_certificate(
+    /// Writes blobs and certificate
+    async fn write_blobs_and_certificate(
         &self,
-        values: &[HashedCertificateValue],
         blobs: &[Blob],
         certificate: &Certificate,
     ) -> Result<(), ViewError>;
@@ -321,13 +317,19 @@ pub trait Storage: Sized {
         let Some(wasm_runtime) = self.wasm_runtime() else {
             panic!("A Wasm runtime is required to load user applications.");
         };
-        let SystemOperation::PublishBytecode { contract, .. } =
-            read_publish_bytecode_operation(self, application_description).await?
-        else {
-            unreachable!("unexpected bytecode operation");
-        };
+        let contract_bytecode_blob_id = BlobId::new_contract_bytecode_from_hash(
+            application_description.bytecode_id.contract_blob_hash,
+        );
+        let contract_blob = self.read_blob(contract_bytecode_blob_id).await?;
         Ok(Arc::new(
-            WasmContractModule::new(contract.try_into()?, wasm_runtime).await?,
+            WasmContractModule::new(
+                contract_blob
+                    .into_inner_contract_bytecode()
+                    .expect("Contract Bytecode Blob is of the wrong Blob type!")
+                    .try_into()?,
+                wasm_runtime,
+            )
+            .await?,
         ))
     }
 
@@ -354,13 +356,19 @@ pub trait Storage: Sized {
         let Some(wasm_runtime) = self.wasm_runtime() else {
             panic!("A Wasm runtime is required to load user applications.");
         };
-        let SystemOperation::PublishBytecode { service, .. } =
-            read_publish_bytecode_operation(self, application_description).await?
-        else {
-            unreachable!("unexpected bytecode operation");
-        };
+        let service_bytecode_blob_id = BlobId::new_service_bytecode_from_hash(
+            application_description.bytecode_id.service_blob_hash,
+        );
+        let service_blob = self.read_blob(service_bytecode_blob_id).await?;
         Ok(Arc::new(
-            WasmServiceModule::new(service.try_into()?, wasm_runtime).await?,
+            WasmServiceModule::new(
+                service_blob
+                    .into_inner_service_bytecode()
+                    .expect("Service Bytecode Blob is of the wrong Blob type!")
+                    .try_into()?,
+                wasm_runtime,
+            )
+            .await?,
         ))
     }
 
@@ -375,44 +383,6 @@ pub trait Storage: Sized {
             Please enable the `wasmer` or the `wasmtime` feature flags \
             when compiling `linera-storage`."
         );
-    }
-}
-
-#[cfg(with_wasm_runtime)]
-async fn read_publish_bytecode_operation(
-    storage: &impl Storage,
-    application_description: &UserApplicationDescription,
-) -> Result<SystemOperation, ExecutionError> {
-    use linera_base::data_types::ArithmeticError;
-
-    let UserApplicationDescription {
-        bytecode_id,
-        bytecode_location,
-        ..
-    } = application_description;
-    let value = storage
-        .read_hashed_certificate_value(bytecode_location.certificate_hash)
-        .await
-        .map_err(|error| match error {
-            ViewError::NotFound(_) => ExecutionError::ApplicationBytecodeNotFound(Box::new(
-                application_description.clone(),
-            )),
-            _ => error.into(),
-        })?
-        .into_inner();
-    let block = match value {
-        CertificateValue::ConfirmedBlock { executed_block, .. } => executed_block.block,
-        _ => return Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
-    };
-    let index = usize::try_from(bytecode_location.transaction_index)
-        .map_err(|_| ArithmeticError::Overflow)?
-        .checked_sub(block.incoming_bundles.len())
-        .ok_or(ArithmeticError::Overflow)?;
-    match block.operations.into_iter().nth(index) {
-        Some(Operation::System(operation @ SystemOperation::PublishBytecode { .. })) => {
-            Ok(operation)
-        }
-        _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
     }
 }
 

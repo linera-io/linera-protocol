@@ -7,7 +7,6 @@ use std::sync::LazyLock;
 use std::{
     collections::BTreeMap,
     fmt::{self, Display, Formatter},
-    iter,
 };
 
 use async_graphql::Enum;
@@ -37,10 +36,10 @@ use {linera_base::prometheus_util, prometheus::IntCounterVec};
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationRegistryView, BytecodeLocation, ChannelName, ChannelSubscription,
-    CompressedBytecode, Destination, ExecutionRuntimeContext, MessageContext, MessageKind,
-    OperationContext, QueryContext, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker,
-    UserApplicationDescription, UserApplicationId,
+    ApplicationRegistryView, ChannelName, ChannelSubscription, Destination,
+    ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage, TransactionTracker, UserApplicationDescription,
+    UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -156,12 +155,9 @@ pub enum SystemOperation {
         channel: SystemChannel,
     },
     /// Publishes a new application bytecode.
-    PublishBytecode {
-        contract: CompressedBytecode,
-        service: CompressedBytecode,
-    },
-    /// Publishes a new blob.
-    PublishBlob { blob_id: BlobId },
+    PublishBytecode { bytecode_id: BytecodeId },
+    /// Publishes a new data blob.
+    PublishDataBlob { blob_hash: CryptoHash },
     /// Reads a blob. This is test-only, so we can test without a Wasm application.
     #[cfg(with_testing)]
     ReadBlob { blob_id: BlobId },
@@ -234,14 +230,8 @@ pub enum SystemMessage {
         id: ChainId,
         subscription: ChannelSubscription,
     },
-    /// Notifies that a new application bytecode was published.
-    BytecodePublished { transaction_index: u32 },
     /// Notifies that a new application was created.
     ApplicationCreated,
-    /// Shares the locations of published bytecodes.
-    BytecodeLocations {
-        locations: Vec<(BytecodeId, BytecodeLocation)>,
-    },
     /// Shares information about some applications to help the recipient use them.
     /// Applications must be registered after their dependencies.
     RegisterApplications {
@@ -250,38 +240,6 @@ pub enum SystemMessage {
     /// Requests a `RegisterApplication` message from the target chain to register the specified
     /// application on the sender chain.
     RequestApplication(UserApplicationId),
-}
-
-impl SystemMessage {
-    /// Returns an iterator over all bytecode locations this message introduces to the receiving
-    /// chain, given the hash of the certificate that it originates from.
-    pub fn bytecode_locations(
-        &self,
-        certificate_hash: CryptoHash,
-    ) -> Box<dyn Iterator<Item = BytecodeLocation> + '_> {
-        match self {
-            SystemMessage::BytecodePublished { transaction_index } => {
-                Box::new(iter::once(BytecodeLocation {
-                    certificate_hash,
-                    transaction_index: *transaction_index,
-                }))
-            }
-            SystemMessage::BytecodeLocations {
-                locations: new_locations,
-            } => Box::new(new_locations.iter().map(|(_id, location)| *location)),
-            SystemMessage::RegisterApplications { applications } => {
-                Box::new(applications.iter().map(|app| app.bytecode_location))
-            }
-            SystemMessage::Credit { .. }
-            | SystemMessage::Withdraw { .. }
-            | SystemMessage::OpenChain(_)
-            | SystemMessage::SetCommittees { .. }
-            | SystemMessage::Subscribe { .. }
-            | SystemMessage::Unsubscribe { .. }
-            | SystemMessage::ApplicationCreated
-            | SystemMessage::RequestApplication(_) => Box::new(iter::empty()),
-        }
-    }
 }
 
 /// A query to the system state.
@@ -302,8 +260,6 @@ pub struct SystemResponse {
 pub enum SystemChannel {
     /// Channel used to broadcast reconfigurations.
     Admin,
-    /// Channel used to broadcast new published bytecodes.
-    PublishedBytecodes,
 }
 
 impl SystemChannel {
@@ -319,7 +275,6 @@ impl Display for SystemChannel {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         let display_name = match self {
             SystemChannel::Admin => "Admin",
-            SystemChannel::PublishedBytecodes => "PublishedBytecodes",
         };
 
         write!(formatter, "{display_name}")
@@ -652,21 +607,13 @@ where
                 };
                 outcome.messages.push(message);
             }
-            PublishBytecode { .. } => {
-                // Send a `BytecodePublished` message to ourself so that we can broadcast
-                // the bytecode-id next.
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(context.chain_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
-                    message: SystemMessage::BytecodePublished {
-                        transaction_index: context
-                            .index
-                            .expect("System application can not be called by other applications"),
-                    },
-                };
-                outcome.messages.push(message);
+            PublishBytecode { bytecode_id } => {
+                txn_tracker.replay_oracle_response(OracleResponse::Blob(
+                    BlobId::new_contract_bytecode_from_hash(bytecode_id.contract_blob_hash),
+                ))?;
+                txn_tracker.replay_oracle_response(OracleResponse::Blob(
+                    BlobId::new_service_bytecode_from_hash(bytecode_id.service_blob_hash),
+                ))?;
             }
             CreateApplication {
                 bytecode_id,
@@ -709,8 +656,10 @@ where
                 };
                 outcome.messages.push(message);
             }
-            PublishBlob { blob_id } => {
-                txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
+            PublishDataBlob { blob_hash } => {
+                txn_tracker.replay_oracle_response(OracleResponse::Blob(
+                    BlobId::new_data_from_hash(blob_hash),
+                ))?;
             }
             #[cfg(with_testing)]
             ReadBlob { blob_id } => {
@@ -879,29 +828,6 @@ where
                     SystemExecutionError::IncorrectChainId(subscription.chain_id)
                 );
                 outcome.unsubscribe.push((subscription.name.clone(), id));
-            }
-            BytecodePublished { transaction_index } => {
-                let bytecode_id = BytecodeId::new(context.message_id);
-                let bytecode_location = BytecodeLocation {
-                    certificate_hash: context.certificate_hash,
-                    transaction_index,
-                };
-                self.registry
-                    .register_published_bytecode(bytecode_id, bytecode_location)?;
-                let locations = self.registry.bytecode_locations().await?;
-                let message = RawOutgoingMessage {
-                    destination: Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Simple,
-                    message: SystemMessage::BytecodeLocations { locations },
-                };
-                outcome.messages.push(message);
-            }
-            BytecodeLocations { locations } => {
-                for (id, location) in locations {
-                    self.registry.register_published_bytecode(id, location)?;
-                }
             }
             RegisterApplications { applications } => {
                 for application in applications {
@@ -1085,11 +1011,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use linera_base::{data_types::BlockHeight, identifiers::ApplicationId};
+    use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ApplicationId};
     use linera_views::memory::MemoryContext;
 
     use super::*;
-    use crate::{Bytecode, ExecutionOutcome, ExecutionStateView, TestExecutionRuntimeContext};
+    use crate::{ExecutionOutcome, ExecutionStateView, TestExecutionRuntimeContext};
 
     /// Returns an execution state view and a matching operation context, for epoch 1, with root
     /// chain 0 as the admin ID and one empty committee.
@@ -1117,47 +1043,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn bytecode_message_index() {
-        let (mut view, context) = new_view_and_context().await;
-        let operation = SystemOperation::PublishBytecode {
-            contract: Bytecode::new(vec![]).into(),
-            service: Bytecode::new(vec![]).into(),
-        };
-        let mut txn_tracker = TransactionTracker::default();
-        let new_application = view
-            .system
-            .execute_operation(context, operation, &mut txn_tracker)
-            .await
-            .unwrap();
-        assert_eq!(new_application, None);
-        let transaction_index = context
-            .index
-            .expect("Missing operation index in dummy context");
-        let [ExecutionOutcome::System(result)] = &txn_tracker.destructure().unwrap().0[..] else {
-            panic!("Unexpected outcome");
-        };
-        assert_eq!(
-            result.messages[PUBLISH_BYTECODE_MESSAGE_INDEX as usize].message,
-            SystemMessage::BytecodePublished { transaction_index }
-        );
-    }
-
-    #[tokio::test]
     async fn application_message_index() {
         let (mut view, context) = new_view_and_context().await;
-        let bytecode_id = BytecodeId::new(MessageId {
-            chain_id: context.chain_id,
-            height: BlockHeight::from(5),
-            index: 0,
-        });
-        let location = BytecodeLocation {
-            certificate_hash: CryptoHash::test_hash("certificate"),
-            transaction_index: 1,
-        };
-        view.system
-            .registry
-            .register_published_bytecode(bytecode_id, location)
-            .unwrap();
+        let bytecode_id = BytecodeId::new(
+            CryptoHash::test_hash("contract"),
+            CryptoHash::test_hash("service"),
+        );
 
         let operation = SystemOperation::CreateApplication {
             bytecode_id,

@@ -7,8 +7,6 @@ This document contains the help content for the `linera` command-line program.
 * [`linera`↴](#linera)
 * [`linera transfer`↴](#linera-transfer)
 * [`linera open-chain`↴](#linera-open-chain)
-* [`linera subscribe`↴](#linera-subscribe)
-* [`linera unsubscribe`↴](#linera-unsubscribe)
 * [`linera open-multi-owner-chain`↴](#linera-open-multi-owner-chain)
 * [`linera change-ownership`↴](#linera-change-ownership)
 * [`linera change-application-permissions`↴](#linera-change-application-permissions)
@@ -59,8 +57,6 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
 * `transfer` — Transfer funds
 * `open-chain` — Open (i.e. activate) a new chain deriving the UID from an existing one
-* `subscribe` — Subscribe to a system channel
-* `unsubscribe` — Unsubscribe from a system channel
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
 * `change-ownership` — Change who owns the chain, and how the owners work together proposing blocks
 * `change-application-permissions` — Changes the application permissions configuration
@@ -168,48 +164,6 @@ Open (i.e. activate) a new chain deriving the UID from an existing one
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
-
-
-
-## `linera subscribe`
-
-Subscribe to a system channel
-
-**Usage:** `linera subscribe [OPTIONS] --channel <CHANNEL>`
-
-###### **Options:**
-
-* `--subscriber <SUBSCRIBER>` — Chain ID (must be one of our chains)
-* `--publisher <PUBLISHER>` — Chain ID
-* `--channel <CHANNEL>` — System channel available in the system application
-
-  Possible values:
-  - `admin`:
-    Channel used to broadcast reconfigurations
-  - `published-bytecodes`:
-    Channel used to broadcast new published bytecodes
-
-
-
-
-## `linera unsubscribe`
-
-Unsubscribe from a system channel
-
-**Usage:** `linera unsubscribe [OPTIONS] --channel <CHANNEL>`
-
-###### **Options:**
-
-* `--subscriber <SUBSCRIBER>` — Chain ID (must be one of our chains)
-* `--publisher <PUBLISHER>` — Chain ID
-* `--channel <CHANNEL>` — System channel available in the system application
-
-  Possible values:
-  - `admin`:
-    Channel used to broadcast reconfigurations
-  - `published-bytecodes`:
-    Channel used to broadcast new published bytecodes
-
 
 
 

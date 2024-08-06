@@ -16,7 +16,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    BytecodeLocation, Message, MessageKind, Operation, SystemOperation,
+    Message, MessageKind, Operation, SystemOperation,
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
 
@@ -60,26 +60,18 @@ pub struct Block {
 }
 
 impl Block {
-    /// Returns all bytecode locations referred to in this block's incoming messages.
-    pub fn bytecode_locations(&self) -> HashSet<BytecodeLocation> {
-        let mut locations = HashSet::new();
-        for incoming_bundle in &self.incoming_bundles {
-            let bundle = &incoming_bundle.bundle;
-            for posted_message in &bundle.messages {
-                if let Message::System(sys_message) = &posted_message.message {
-                    locations.extend(sys_message.bytecode_locations(bundle.certificate_hash));
-                }
-            }
-        }
-        locations
-    }
-
     /// Returns all the published blob IDs in this block's operations.
     pub fn published_blob_ids(&self) -> HashSet<BlobId> {
         let mut blob_ids = HashSet::new();
         for operation in &self.operations {
-            if let Operation::System(SystemOperation::PublishBlob { blob_id }) = operation {
-                blob_ids.insert(blob_id.to_owned());
+            if let Operation::System(SystemOperation::PublishDataBlob { blob_hash }) = operation {
+                blob_ids.insert(BlobId::new_data_from_hash(*blob_hash));
+            }
+            if let Operation::System(SystemOperation::PublishBytecode { bytecode_id }) = operation {
+                blob_ids.extend([
+                    BlobId::new_contract_bytecode_from_hash(bytecode_id.contract_blob_hash),
+                    BlobId::new_service_bytecode_from_hash(bytecode_id.service_blob_hash),
+                ]);
             }
         }
 
@@ -244,7 +236,6 @@ pub struct BlockProposal {
     pub content: ProposalContent,
     pub owner: Owner,
     pub signature: Signature,
-    pub hashed_certificate_values: Vec<HashedCertificateValue>,
     pub blobs: Vec<Blob>,
     pub validated_block_certificate: Option<LiteCertificate<'static>>,
 }
@@ -947,13 +938,7 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(
-        round: Round,
-        block: Block,
-        secret: &KeyPair,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
-        blobs: Vec<Blob>,
-    ) -> Self {
+    pub fn new_initial(round: Round, block: Block, secret: &KeyPair, blobs: Vec<Blob>) -> Self {
         let content = ProposalContent {
             round,
             block,
@@ -964,7 +949,6 @@ impl BlockProposal {
             content,
             owner: secret.public().into(),
             signature,
-            hashed_certificate_values,
             blobs,
             validated_block_certificate: None,
         }
@@ -974,7 +958,6 @@ impl BlockProposal {
         round: Round,
         validated_block_certificate: Certificate,
         secret: &KeyPair,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
         blobs: Vec<Blob>,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
@@ -993,7 +976,6 @@ impl BlockProposal {
             content,
             owner: secret.public().into(),
             signature,
-            hashed_certificate_values,
             blobs,
             validated_block_certificate: Some(lite_cert),
         }

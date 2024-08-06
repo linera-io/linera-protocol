@@ -522,7 +522,6 @@ where
         let start = Instant::now();
         let HandleCertificateRequest {
             certificate,
-            hashed_certificate_values,
             blobs,
             wait_for_outgoing_messages,
         } = request.into_inner().try_into()?;
@@ -530,7 +529,7 @@ where
         match self
             .state
             .clone()
-            .handle_certificate(certificate, hashed_certificate_values, blobs, sender)
+            .handle_certificate(certificate, blobs, sender)
             .await
         {
             Ok((info, actions)) => {

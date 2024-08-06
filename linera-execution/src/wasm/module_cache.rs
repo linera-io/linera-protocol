@@ -9,9 +9,8 @@
 
 use std::sync::Arc;
 
+use linera_base::data_types::Bytecode;
 use lru::LruCache;
-
-use crate::Bytecode;
 
 /// The default maximum size of the bytecodes stored in cache.
 const DEFAULT_MAX_CACHE_SIZE: u64 = 512 /* MiB */ * 1024 /* KiB */ * 1024 /* bytes */;

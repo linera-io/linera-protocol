@@ -5,6 +5,7 @@
 
 use std::{error::Error, sync::LazyLock};
 
+use linera_base::data_types::Bytecode;
 use linera_witty::{wasmtime::EntrypointInstance, ExportTo, Instance};
 use tokio::sync::Mutex;
 use wasmtime::{AsContextMut, Config, Engine, Linker, Module, Store};
@@ -16,7 +17,7 @@ use super::{
 };
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
-    Bytecode, ContractRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
+    ContractRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
     QueryContext, ServiceRuntime,
 };
 

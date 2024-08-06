@@ -113,7 +113,7 @@ impl BlockTestExt for Block {
     }
 
     fn into_proposal_with_round(self, key_pair: &KeyPair, round: Round) -> BlockProposal {
-        BlockProposal::new_initial(round, self, key_pair, vec![], vec![])
+        BlockProposal::new_initial(round, self, key_pair, vec![])
     }
 }
 

@@ -175,9 +175,6 @@ message BlockProposal {
   // Signature value
   Signature signature = 4;
 
-  // Required bytecode
-  bytes hashed_certificate_values = 5;
-
   // A lite certificate for a validated block that justifies the proposal in this round.
   optional bytes validated_block_certificate = 6;
 
@@ -209,9 +206,6 @@ message LiteCertificate {
 message HandleCertificateRequest {
   // The ID of the chain (used for routing).
   ChainId chain_id = 1;
-
-  // Other certificates containing bytecode required by the first one
-  bytes hashed_certificate_values = 5;
 
   // Wait until all outgoing cross-chain messages from this certificate have
   // been received by the target chains.

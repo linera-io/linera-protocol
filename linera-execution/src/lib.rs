@@ -21,7 +21,7 @@ mod transaction_tracker;
 mod util;
 mod wasm;
 
-use std::{fmt, io, str::FromStr, sync::Arc};
+use std::{fmt, str::FromStr, sync::Arc};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
@@ -33,8 +33,8 @@ use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Resources,
-        SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, CompressionError,
+        Resources, SendMessageRequest, Timestamp,
     },
     doc_scalar, hex_debug,
     identifiers::{
@@ -58,9 +58,7 @@ pub use crate::wasm::{
     ViewSystemApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
-    applications::{
-        ApplicationRegistryView, BytecodeLocation, UserApplicationDescription, UserApplicationId,
-    },
+    applications::{ApplicationRegistryView, UserApplicationDescription, UserApplicationId},
     execution::ExecutionStateView,
     execution_state_actor::ExecutionRequest,
     policy::ResourceControlPolicy,
@@ -125,6 +123,8 @@ pub enum ExecutionError {
     WasmError(#[from] WasmExecutionError),
     #[error(transparent)]
     JoinError(#[from] linera_base::task::Error),
+    #[error(transparent)]
+    CompressionError(#[from] CompressionError),
     #[error("The given promise is invalid or was polled once already")]
     InvalidPromise,
 
@@ -151,8 +151,6 @@ pub enum ExecutionError {
     MissingRuntimeResponse,
     #[error("Bytecode ID {0:?} is invalid")]
     InvalidBytecodeId(BytecodeId),
-    #[error("Bytecode could not be decompressed")]
-    InvalidCompressedBytecode(#[source] io::Error),
     #[error("Owner is None")]
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
@@ -1043,87 +1041,6 @@ impl From<SystemResponse> for Response {
 impl From<Vec<u8>> for Response {
     fn from(response: Vec<u8>) -> Self {
         Response::User(response)
-    }
-}
-
-/// A WebAssembly module's bytecode.
-#[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct Bytecode {
-    #[serde(with = "serde_bytes")]
-    bytes: Vec<u8>,
-}
-
-impl Bytecode {
-    /// Creates a new [`Bytecode`] instance using the provided `bytes`.
-    #[allow(dead_code)]
-    pub(crate) fn new(bytes: Vec<u8>) -> Self {
-        Bytecode { bytes }
-    }
-
-    #[cfg(with_fs)]
-    /// Load bytecode from a Wasm module file.
-    pub async fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
-        let bytes = tokio::fs::read(path).await?;
-        Ok(Bytecode { bytes })
-    }
-}
-
-impl AsRef<[u8]> for Bytecode {
-    fn as_ref(&self) -> &[u8] {
-        self.bytes.as_ref()
-    }
-}
-
-impl fmt::Debug for Bytecode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Bytecode").finish_non_exhaustive()
-    }
-}
-
-/// A compressed WebAssembly module's bytecode.
-#[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct CompressedBytecode {
-    #[serde(with = "serde_bytes")]
-    compressed_bytes: Vec<u8>,
-}
-
-impl From<&Bytecode> for CompressedBytecode {
-    fn from(bytecode: &Bytecode) -> Self {
-        let compressed_bytes = zstd::stream::encode_all(&*bytecode.bytes, 19)
-            .expect("Compressing bytes in memory should not fail");
-
-        CompressedBytecode { compressed_bytes }
-    }
-}
-
-impl From<Bytecode> for CompressedBytecode {
-    fn from(bytecode: Bytecode) -> Self {
-        CompressedBytecode::from(&bytecode)
-    }
-}
-
-impl TryFrom<&CompressedBytecode> for Bytecode {
-    type Error = ExecutionError;
-
-    fn try_from(compressed_bytecode: &CompressedBytecode) -> Result<Self, Self::Error> {
-        let bytes = zstd::stream::decode_all(&*compressed_bytecode.compressed_bytes)
-            .map_err(ExecutionError::InvalidCompressedBytecode)?;
-
-        Ok(Bytecode { bytes })
-    }
-}
-
-impl TryFrom<CompressedBytecode> for Bytecode {
-    type Error = ExecutionError;
-
-    fn try_from(compressed_bytecode: CompressedBytecode) -> Result<Self, Self::Error> {
-        Bytecode::try_from(&compressed_bytecode)
-    }
-}
-
-impl fmt::Debug for CompressedBytecode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CompressedBytecode").finish_non_exhaustive()
     }
 }
 

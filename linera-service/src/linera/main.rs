@@ -29,7 +29,6 @@ use linera_client::{
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
-    client::ChainClientError,
     data_types::{ChainInfoQuery, ClientOutcome},
     local_node::LocalNodeClient,
     node::LocalValidatorNodeProvider,
@@ -38,7 +37,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
-    system::{SystemChannel, UserData},
+    system::UserData,
     Message, ResourceControlPolicy, SystemMessage,
 };
 use linera_service::{
@@ -285,78 +284,6 @@ impl Runnable for Job {
                     .context("Failed to close chain")?;
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
-                debug!("{:?}", certificate);
-            }
-
-            Subscribe {
-                subscriber,
-                publisher,
-                channel,
-            } => {
-                let subscriber = subscriber.unwrap_or_else(|| context.default_chain());
-                let chain_client = context.make_chain_client(subscriber);
-                let time_start = Instant::now();
-                info!("Subscribing");
-                let certificate = context
-                    .apply_client_command(&chain_client, |chain_client| {
-                        let chain_client = chain_client.clone();
-                        async move {
-                            match channel {
-                                SystemChannel::Admin => {
-                                    chain_client.subscribe_to_new_committees().await
-                                }
-                                SystemChannel::PublishedBytecodes => {
-                                    let publisher = publisher.ok_or_else(|| {
-                                        ChainClientError::InternalError("Incorrect chain ID")
-                                    })?;
-                                    chain_client
-                                        .subscribe_to_published_bytecodes(publisher)
-                                        .await
-                                }
-                            }
-                        }
-                    })
-                    .await
-                    .context("Failed to subscribe")?;
-                let time_total = time_start.elapsed();
-                info!("Subscription confirmed after {} ms", time_total.as_millis());
-                debug!("{:?}", certificate);
-            }
-
-            Unsubscribe {
-                subscriber,
-                publisher,
-                channel,
-            } => {
-                let subscriber = subscriber.unwrap_or_else(|| context.default_chain());
-                let chain_client = context.make_chain_client(subscriber);
-                let time_start = Instant::now();
-                let certificate = context
-                    .apply_client_command(&chain_client, |chain_client| {
-                        let chain_client = chain_client.clone();
-                        async move {
-                            let chain_client = chain_client.clone();
-                            match channel {
-                                SystemChannel::Admin => {
-                                    info!("Unsubscribing from admin channel");
-                                    chain_client.unsubscribe_from_new_committees().await
-                                }
-                                SystemChannel::PublishedBytecodes => {
-                                    let publisher = publisher.ok_or_else(|| {
-                                        ChainClientError::InternalError("Incorrect chain ID")
-                                    })?;
-                                    info!("Unsubscribing from publisher {}", publisher);
-                                    chain_client
-                                        .unsubscribe_from_published_bytecodes(publisher)
-                                        .await
-                                }
-                            }
-                        }
-                    })
-                    .await
-                    .context("Failed to unsubscribe")?;
-                let time_total = time_start.elapsed();
-                info!("Unsubscribed in {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
             }
 
@@ -797,7 +724,6 @@ impl Runnable for Job {
                     .map(|certificate| {
                         HandleCertificateRequest {
                             certificate: certificate.clone(),
-                            hashed_certificate_values: vec![],
                             blobs: vec![],
                             wait_for_outgoing_messages: true,
                         }

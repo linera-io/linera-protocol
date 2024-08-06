@@ -75,7 +75,10 @@ impl From<wit_system_api::ApplicationId> for ApplicationId {
 
 impl From<wit_system_api::BytecodeId> for BytecodeId {
     fn from(bytecode_id: wit_system_api::BytecodeId) -> Self {
-        BytecodeId::new(bytecode_id.message_id.into())
+        BytecodeId::new(
+            bytecode_id.contract_blob_hash.into(),
+            bytecode_id.service_blob_hash.into(),
+        )
     }
 }
 

@@ -62,6 +62,10 @@ BlobType:
   ENUM:
     0:
       Data: UNIT
+    1:
+      ContractBytecode: UNIT
+    2:
+      ServiceBytecode: UNIT
 Block:
   STRUCT:
     - chain_id:
@@ -116,9 +120,6 @@ BlockProposal:
         TYPENAME: Owner
     - signature:
         TYPENAME: Signature
-    - hashed_certificate_values:
-        SEQ:
-          TYPENAME: CertificateValue
     - blobs:
         SEQ:
           TYPENAME: Blob
@@ -127,13 +128,10 @@ BlockProposal:
           TYPENAME: LiteCertificate
 BytecodeId:
   STRUCT:
-    - message_id:
-        TYPENAME: MessageId
-BytecodeLocation:
-  STRUCT:
-    - certificate_hash:
+    - contract_blob_hash:
         TYPENAME: CryptoHash
-    - transaction_index: U32
+    - service_blob_hash:
+        TYPENAME: CryptoHash
 Certificate:
   STRUCT:
     - value:
@@ -337,9 +335,6 @@ Committee:
             TYPENAME: ValidatorState
     - policy:
         TYPENAME: ResourceControlPolicy
-CompressedBytecode:
-  STRUCT:
-    - compressed_bytes: BYTES
 CrateVersion:
   STRUCT:
     - major: U32
@@ -418,9 +413,6 @@ HandleCertificateRequest:
     - certificate:
         TYPENAME: Certificate
     - wait_for_outgoing_messages: BOOL
-    - hashed_certificate_values:
-        SEQ:
-          TYPENAME: CertificateValue
     - blobs:
         SEQ:
           TYPENAME: Blob
@@ -555,12 +547,10 @@ NodeError:
           - height:
               TYPENAME: BlockHeight
     7:
-      ApplicationBytecodesOrBlobsNotFound:
-        TUPLE:
-          - SEQ:
-              TYPENAME: BytecodeLocation
-          - SEQ:
-              TYPENAME: BlobId
+      BlobsNotFound:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BlobId
     8:
       MissingCertificateValue: UNIT
     9:
@@ -847,8 +837,6 @@ SystemChannel:
   ENUM:
     0:
       Admin: UNIT
-    1:
-      PublishedBytecodes: UNIT
 SystemMessage:
   ENUM:
     0:
@@ -903,26 +891,14 @@ SystemMessage:
           - subscription:
               TYPENAME: ChannelSubscription
     6:
-      BytecodePublished:
-        STRUCT:
-          - transaction_index: U32
-    7:
       ApplicationCreated: UNIT
-    8:
-      BytecodeLocations:
-        STRUCT:
-          - locations:
-              SEQ:
-                TUPLE:
-                  - TYPENAME: BytecodeId
-                  - TYPENAME: BytecodeLocation
-    9:
+    7:
       RegisterApplications:
         STRUCT:
           - applications:
               SEQ:
                 TYPENAME: UserApplicationDescription
-    10:
+    8:
       RequestApplication:
         NEWTYPE:
           TYPENAME: ApplicationId
@@ -994,15 +970,13 @@ SystemOperation:
     8:
       PublishBytecode:
         STRUCT:
-          - contract:
-              TYPENAME: CompressedBytecode
-          - service:
-              TYPENAME: CompressedBytecode
+          - bytecode_id:
+              TYPENAME: BytecodeId
     9:
-      PublishBlob:
+      PublishDataBlob:
         STRUCT:
-          - blob_id:
-              TYPENAME: BlobId
+          - blob_hash:
+              TYPENAME: CryptoHash
     10:
       ReadBlob:
         STRUCT:
@@ -1048,8 +1022,6 @@ UserApplicationDescription:
   STRUCT:
     - bytecode_id:
         TYPENAME: BytecodeId
-    - bytecode_location:
-        TYPENAME: BytecodeLocation
     - creation:
         TYPENAME: MessageId
     - parameters: BYTES

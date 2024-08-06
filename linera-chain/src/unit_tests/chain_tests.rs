@@ -16,8 +16,8 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::OpenChainConfig,
     test_utils::{ExpectedCall, MockApplication},
-    BytecodeLocation, ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageKind, Operation,
-    SystemMessage, TestExecutionRuntimeContext, UserApplicationDescription,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageKind, Operation, SystemMessage,
+    TestExecutionRuntimeContext, UserApplicationDescription,
 };
 use linera_views::{
     memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
@@ -57,11 +57,10 @@ where
 
 fn make_app_description() -> UserApplicationDescription {
     UserApplicationDescription {
-        bytecode_id: BytecodeId::new(make_admin_message_id(BlockHeight(1))),
-        bytecode_location: BytecodeLocation {
-            certificate_hash: CryptoHash::test_hash("bytecode certificate"),
-            transaction_index: 0,
-        },
+        bytecode_id: BytecodeId::new(
+            CryptoHash::test_hash("contract"),
+            CryptoHash::test_hash("service"),
+        ),
         creation: make_admin_message_id(BlockHeight(2)),
         required_application_ids: vec![],
         parameters: vec![],

@@ -19,7 +19,7 @@ use futures::{
 };
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
-    data_types::{Amount, ApplicationPermissions, BlobContent, TimeDelta, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlobContent, Bytecode, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, BytecodeId, ChainId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
@@ -38,8 +38,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{AdminOperation, Recipient, SystemChannel, UserData},
-    Bytecode, Operation, Query, Response, SystemOperation, UserApplicationDescription,
-    UserApplicationId,
+    Operation, Query, Response, SystemOperation, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -601,13 +600,12 @@ where
         chain_id: ChainId,
         blob_content: BlobContent,
     ) -> Result<BlobId, Error> {
-        let blob = blob_content.with_data_blob_id();
+        let blob_id = BlobId::new_data(&blob_content);
         self.apply_client_command(&chain_id, move |client| {
-            let blob = blob.clone();
+            let blob_content = blob_content.clone();
             async move {
-                let blob_id = blob.id();
                 let result = client
-                    .publish_blob(blob)
+                    .publish_data_blob(blob_content)
                     .await
                     .map_err(Error::from)
                     .map(|outcome| outcome.map(|_| blob_id));
