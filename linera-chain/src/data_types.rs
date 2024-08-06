@@ -1138,9 +1138,15 @@ impl Certificate {
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
         self.value()
             .executed_block()
-            .map_or(false, |executed_block| {
-                executed_block.requires_blob(blob_id)
-            })
+            .is_some_and(|executed_block| executed_block.requires_blob(blob_id))
+    }
+
+    #[cfg(with_testing)]
+    pub fn outgoing_message_count(&self) -> usize {
+        let Some(executed_block) = self.value().executed_block() else {
+            return 0;
+        };
+        executed_block.messages().iter().map(Vec::len).sum()
     }
 }
 

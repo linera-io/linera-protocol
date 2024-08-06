@@ -95,7 +95,9 @@ async fn test_bouncing_tokens() {
     let receiver_chain = validator.new_chain().await;
     let receiver_account = AccountOwner::from(receiver_chain.public_key());
 
-    let messages = sender_chain
+    receiver_chain.register_application(application_id).await;
+
+    let certificate = sender_chain
         .add_block(|block| {
             block.with_operation(
                 application_id,
@@ -116,13 +118,11 @@ async fn test_bouncing_tokens() {
         Some(initial_amount.saturating_sub(transfer_amount)),
     );
 
-    assert_eq!(messages.len(), 2);
+    assert_eq!(certificate.outgoing_message_count(), 2);
 
     receiver_chain
         .add_block(move |block| {
-            block
-                .with_incoming_bundle(messages[0])
-                .with_message_rejection(messages[1]);
+            block.with_messages_from(&certificate).with_rejection();
         })
         .await;
 
