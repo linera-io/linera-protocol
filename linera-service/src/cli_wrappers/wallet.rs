@@ -19,8 +19,8 @@ use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, PublicKey},
-    data_types::Amount,
-    identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    data_types::{Amount, BlobContent},
+    identifiers::{Account, ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_client::{config::GenesisConfig, wallet::Wallet};
 use linera_core::worker::Notification;
@@ -908,6 +908,21 @@ impl NodeService {
                 Ok((id, link))
             })
             .collect()
+    }
+
+    pub async fn publish_data_blob(
+        &self,
+        chain_id: &ChainId,
+        blob_content: &BlobContent,
+    ) -> Result<BlobId> {
+        let query = format!(
+            "mutation {{ publishDataBlob(chainId: {}, blobContent: {}) }}",
+            chain_id.to_value(),
+            blob_content.to_value(),
+        );
+        let data = self.query_node(query).await?;
+        serde_json::from_value(data["publishDataBlob"].clone())
+            .context("missing publishDataBlob field in response")
     }
 
     pub async fn publish_bytecode<Abi, Parameters, InstantiationArgument>(
