@@ -780,6 +780,14 @@ pub struct BlobContent {
 }
 
 impl BlobContent {
+    /// Creates a [`BlobContent`] from a string for testing purposes.
+    #[cfg(with_testing)]
+    pub fn test_blob_content(content: &str) -> Self {
+        BlobContent {
+            bytes: content.as_bytes().to_vec(),
+        }
+    }
+
     /// Creates a `Blob` without checking that this is the correct `BlobId`.
     pub fn with_blob_id_unchecked(self, blob_id: BlobId) -> Blob {
         Blob {
@@ -842,10 +850,7 @@ impl Blob {
     /// Creates a [`Blob`] from a string for testing purposes.
     #[cfg(with_testing)]
     pub fn test_data_blob(content: &str) -> Self {
-        let blob_content = BlobContent {
-            bytes: content.as_bytes().to_vec(),
-        };
-        blob_content.with_data_blob_id()
+        BlobContent::test_blob_content(content).with_data_blob_id()
     }
 
     /// Returns a reference to the inner `BlobContent`, without the hash.

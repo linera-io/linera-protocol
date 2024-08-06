@@ -10,8 +10,8 @@ use std::{
 
 use linera_base::{
     abi::ServiceAbi,
-    data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ApplicationId, ChainId, Owner},
+    data_types::{Amount, Blob, BlockHeight, Timestamp},
+    identifiers::{ApplicationId, BlobId, ChainId, Owner},
 };
 
 use crate::{KeyValueStore, Service};
@@ -30,6 +30,7 @@ where
     owner_balances: RefCell<Option<HashMap<Owner, Amount>>>,
     query_application_handler: RefCell<Option<QueryApplicationHandler>>,
     url_blobs: RefCell<Option<HashMap<String, Vec<u8>>>>,
+    blobs: RefCell<Option<HashMap<BlobId, Blob>>>,
     key_value_store: KeyValueStore,
 }
 
@@ -58,6 +59,7 @@ where
             owner_balances: RefCell::new(None),
             query_application_handler: RefCell::new(None),
             url_blobs: RefCell::new(None),
+            blobs: RefCell::new(None),
             key_value_store: KeyValueStore::mock(),
         }
     }
@@ -353,6 +355,47 @@ where
                 panic!(
                     "Blob for URL {url:?} has not been mocked, \
                     please call `MockServiceRuntime::set_url_blob` first"
+                )
+            })
+    }
+
+    /// Configures the blobs returned when fetching from `BlobId`s during the test.
+    pub fn with_blobs(self, blobs: impl IntoIterator<Item = (BlobId, Blob)>) -> Self {
+        *self.blobs.borrow_mut() = Some(blobs.into_iter().collect());
+        self
+    }
+
+    /// Configures the blobs returned when fetching from `BlobId`s during the test.
+    pub fn set_blobs(&self, blobs: impl IntoIterator<Item = (BlobId, Blob)>) -> &Self {
+        *self.blobs.borrow_mut() = Some(blobs.into_iter().collect());
+        self
+    }
+
+    /// Configures the `Blob` returned when fetching from the `BlobId` during the test.
+    pub fn with_blob(self, blob_id: impl Into<BlobId>, blob: Blob) -> Self {
+        self.set_blob(blob_id, blob);
+        self
+    }
+
+    /// Configures the `Blob` returned when fetching from the `BlobId` during the test.
+    pub fn set_blob(&self, blob_id: impl Into<BlobId>, blob: Blob) -> &Self {
+        self.blobs
+            .borrow_mut()
+            .get_or_insert_with(HashMap::new)
+            .insert(blob_id.into(), blob);
+        self
+    }
+
+    /// Fetches a `Blob` from a given `BlobId`.
+    pub fn read_blob(&mut self, blob_id: BlobId) -> Blob {
+        self.blobs
+            .borrow_mut()
+            .as_mut()
+            .and_then(|blobs| blobs.get(&blob_id).cloned())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Blob for BlobId {blob_id:?} has not been mocked, \
+                    please call `MockServiceRuntime::set_blob` first"
                 )
             })
     }
