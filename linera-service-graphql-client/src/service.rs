@@ -47,7 +47,7 @@ mod types {
             height: BlockHeight,
             hash: CryptoHash,
         },
-        NewIncomingMessage {
+        NewIncomingBundle {
             origin: Origin,
             height: BlockHeight,
         },
@@ -134,20 +134,20 @@ pub struct Transfer;
 mod from {
     use linera_base::identifiers::StreamId;
     use linera_chain::data_types::{
-        BlockExecutionOutcome, EventRecord, ExecutedBlock, HashedCertificateValue, IncomingMessage,
+        BlockExecutionOutcome, EventRecord, ExecutedBlock, HashedCertificateValue, IncomingBundle,
         OutgoingMessage,
     };
 
     use super::*;
 
-    impl From<block::BlockBlockValueExecutedBlockBlockIncomingMessages> for IncomingMessage {
-        fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingMessages) -> Self {
-            let block::BlockBlockValueExecutedBlockBlockIncomingMessages {
+    impl From<block::BlockBlockValueExecutedBlockBlockIncomingBundles> for IncomingBundle {
+        fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingBundles) -> Self {
+            let block::BlockBlockValueExecutedBlockBlockIncomingBundles {
                 origin,
                 event,
                 action,
             } = val;
-            IncomingMessage {
+            IncomingBundle {
                 origin,
                 event,
                 action,
@@ -160,21 +160,21 @@ mod from {
             let block::BlockBlockValueExecutedBlockBlock {
                 chain_id,
                 epoch,
-                incoming_messages,
+                incoming_bundles,
                 operations,
                 height,
                 timestamp,
                 authenticated_signer,
                 previous_block_hash,
             } = val;
-            let incoming_messages = incoming_messages
+            let incoming_bundles = incoming_bundles
                 .into_iter()
-                .map(IncomingMessage::from)
+                .map(IncomingBundle::from)
                 .collect();
             linera_chain::data_types::Block {
                 chain_id,
                 epoch,
-                incoming_messages,
+                incoming_bundles,
                 operations,
                 height,
                 timestamp,

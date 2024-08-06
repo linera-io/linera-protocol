@@ -153,7 +153,7 @@ pub enum ChainError {
 pub enum ChainExecutionContext {
     Query,
     DescribeApplication,
-    IncomingMessage(u32),
+    IncomingBundle(u32),
     Operation(u32),
     Block,
     #[cfg(with_testing)]

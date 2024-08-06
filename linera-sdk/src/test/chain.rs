@@ -180,7 +180,7 @@ impl ActiveChain {
         assert_eq!(publish_messages.len(), 1);
 
         self.add_block(|block| {
-            block.with_incoming_message(publish_messages[0]);
+            block.with_incoming_bundle(publish_messages[0]);
         })
         .await;
 
@@ -303,14 +303,14 @@ impl ActiveChain {
 
         let accept_messages = publisher
             .add_block(|block| {
-                block.with_incoming_message(request_messages[0]);
+                block.with_incoming_bundle(request_messages[0]);
             })
             .await;
 
         assert_eq!(accept_messages.len(), 1);
 
         self.add_block(|block| {
-            block.with_incoming_message(accept_messages[0]);
+            block.with_incoming_bundle(accept_messages[0]);
         })
         .await;
     }
@@ -355,7 +355,7 @@ impl ActiveChain {
         let creation_messages = self
             .add_block(|block| {
                 if let Some(message_id) = bytecode_location_message {
-                    block.with_incoming_message(message_id);
+                    block.with_incoming_bundle(message_id);
                 }
 
                 block.with_system_operation(SystemOperation::CreateApplication {
@@ -444,7 +444,7 @@ impl ActiveChain {
 
             let register_messages = source_chain
                 .add_block(|block| {
-                    block.with_incoming_message(request_messages[0]);
+                    block.with_incoming_bundle(request_messages[0]);
                 })
                 .await;
 
@@ -452,7 +452,7 @@ impl ActiveChain {
 
             let final_messages = self
                 .add_block(|block| {
-                    block.with_incoming_message(register_messages[0]);
+                    block.with_incoming_bundle(register_messages[0]);
                 })
                 .await;
 

@@ -322,7 +322,7 @@ pub async fn create_with_accounts(
 
         let transfer_messages = token_chain
             .add_block(|block| {
-                block.with_incoming_message(claim_messages[1]);
+                block.with_incoming_bundle(claim_messages[1]);
             })
             .await;
 
@@ -330,7 +330,7 @@ pub async fn create_with_accounts(
 
         chain
             .add_block(|block| {
-                block.with_incoming_message(transfer_messages[1]);
+                block.with_incoming_bundle(transfer_messages[1]);
             })
             .await;
     }

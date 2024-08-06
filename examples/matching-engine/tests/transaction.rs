@@ -164,7 +164,7 @@ async fn single_transaction() {
 
     matching_chain
         .add_block(|block| {
-            block.with_incoming_messages(orders_bids);
+            block.with_incoming_bundles(orders_bids);
         })
         .await;
 
@@ -214,7 +214,7 @@ async fn single_transaction() {
 
     matching_chain
         .add_block(|block| {
-            block.with_incoming_messages(orders_asks);
+            block.with_incoming_bundles(orders_asks);
         })
         .await;
 
@@ -261,7 +261,7 @@ async fn single_transaction() {
     assert_eq!(order_messages.len(), 2);
     matching_chain
         .add_block(|block| {
-            block.with_incoming_messages(order_messages);
+            block.with_incoming_bundles(order_messages);
         })
         .await;
     user_chain_a.handle_received_messages().await;

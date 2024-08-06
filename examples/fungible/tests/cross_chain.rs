@@ -121,7 +121,7 @@ async fn test_bouncing_tokens() {
     receiver_chain
         .add_block(move |block| {
             block
-                .with_incoming_message(messages[0])
+                .with_incoming_bundle(messages[0])
                 .with_message_rejection(messages[1]);
         })
         .await;

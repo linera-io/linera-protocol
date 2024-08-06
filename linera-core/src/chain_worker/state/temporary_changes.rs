@@ -10,7 +10,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, HashedCertificateValue,
-        IncomingMessage, MessageAction, ProposalContent,
+        IncomingBundle, MessageAction, ProposalContent,
     },
     manager,
 };
@@ -278,7 +278,7 @@ where
             .get()
             .verify_counters(block, &outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
-        self.0.chain.validate_incoming_messages().await?;
+        self.0.chain.validate_incoming_bundles().await?;
         Ok(Some((outcome, local_time)))
     }
 
@@ -315,7 +315,7 @@ where
             };
             for (origin, inbox) in pairs {
                 for event in inbox.added_events.elements().await? {
-                    messages.push(IncomingMessage {
+                    messages.push(IncomingBundle {
                         origin: origin.clone(),
                         event: event.clone(),
                         action,

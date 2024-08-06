@@ -84,7 +84,7 @@ async fn collect_pledges() {
 
     campaign_chain
         .add_block(|block| {
-            block.with_incoming_messages(pledges_and_transfers);
+            block.with_incoming_bundles(pledges_and_transfers);
         })
         .await;
 
@@ -186,7 +186,7 @@ async fn cancel_successful_campaign() {
 
     campaign_chain
         .add_block(|block| {
-            block.with_incoming_messages(pledges_and_transfers);
+            block.with_incoming_bundles(pledges_and_transfers);
         })
         .await;
 

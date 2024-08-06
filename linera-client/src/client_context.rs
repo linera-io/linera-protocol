@@ -624,7 +624,7 @@ where
             let block = Block {
                 epoch: Epoch::ZERO,
                 chain_id,
-                incoming_messages: Vec::new(),
+                incoming_bundles: Vec::new(),
                 operations,
                 previous_block_hash: chain.block_hash,
                 height: chain.next_block_height,

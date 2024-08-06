@@ -22,7 +22,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, ChannelFullName, Event, HashedCertificateValue, IncomingMessage,
+        BlockExecutionOutcome, ChannelFullName, Event, HashedCertificateValue, IncomingBundle,
         MessageAction, Origin, OutgoingMessage,
     },
     test::{make_child_block, make_first_block, BlockTestExt},
@@ -168,7 +168,7 @@ where
     assert!(info.manager.pending.is_none());
 
     // Produce one more block to broadcast the bytecode ID.
-    let broadcast_message = IncomingMessage {
+    let broadcast_message = IncomingBundle {
         origin: Origin::chain(publisher_chain.into()),
         event: Event {
             certificate_hash: publish_certificate.hash(),
@@ -185,7 +185,7 @@ where
     };
     let broadcast_block = make_child_block(&publish_certificate.value)
         .with_timestamp(1)
-        .with_incoming_message(broadcast_message);
+        .with_incoming_bundle(broadcast_message);
     let bytecode_id = BytecodeId::new(MessageId {
         chain_id: publisher_chain.into(),
         height: publish_block_height,
@@ -318,7 +318,7 @@ where
     assert!(info.manager.pending.is_none());
 
     // Accept subscription
-    let accept_message = IncomingMessage {
+    let accept_message = IncomingBundle {
         origin: Origin::chain(creator_chain.into()),
         event: Event {
             certificate_hash: subscribe_certificate.hash(),
@@ -335,7 +335,7 @@ where
     };
     let accept_block = make_child_block(&broadcast_certificate.value)
         .with_timestamp(3)
-        .with_incoming_message(accept_message);
+        .with_incoming_bundle(accept_message);
     publisher_system_state.timestamp = Timestamp::from(3);
     let publisher_state_hash = publisher_system_state.into_hash().await;
     let accept_block_proposal = HashedCertificateValue::new_confirmed(
@@ -402,7 +402,7 @@ where
     let create_block = make_child_block(&subscribe_certificate.value)
         .with_timestamp(4)
         .with_operation(create_operation)
-        .with_incoming_message(IncomingMessage {
+        .with_incoming_bundle(IncomingBundle {
             origin: Origin::channel(publisher_chain.into(), publish_admin_channel),
             event: Event {
                 certificate_hash: broadcast_certificate.hash(),

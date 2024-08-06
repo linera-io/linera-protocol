@@ -14,7 +14,7 @@ use linera_base::{
     ownership::TimeoutConfig,
 };
 use linera_chain::data_types::{
-    Block, Certificate, HashedCertificateValue, IncomingMessage, LiteVote, MessageAction,
+    Block, Certificate, HashedCertificateValue, IncomingBundle, LiteVote, MessageAction,
     SignatureAggregator,
 };
 use linera_execution::{
@@ -29,7 +29,7 @@ use crate::ToBcsBytes;
 /// [`Certificate`]s using a [`TestValidator`].
 pub struct BlockBuilder {
     block: Block,
-    incoming_messages: Vec<(MessageId, MessageAction)>,
+    incoming_bundles: Vec<(MessageId, MessageAction)>,
     validator: TestValidator,
 }
 
@@ -66,14 +66,14 @@ impl BlockBuilder {
             block: Block {
                 epoch: 0.into(),
                 chain_id,
-                incoming_messages: vec![],
+                incoming_bundles: vec![],
                 operations: vec![],
                 previous_block_hash,
                 height,
                 authenticated_signer: Some(owner),
                 timestamp: Timestamp::from(0),
             },
-            incoming_messages: Vec::new(),
+            incoming_bundles: Vec::new(),
             validator,
         }
     }
@@ -162,8 +162,8 @@ impl BlockBuilder {
     ///
     /// The block that produces the message must have already been executed by the test validator,
     /// so that the message is already in the inbox of the microchain this block belongs to.
-    pub fn with_incoming_message(&mut self, message_id: MessageId) -> &mut Self {
-        self.incoming_messages
+    pub fn with_incoming_bundle(&mut self, message_id: MessageId) -> &mut Self {
+        self.incoming_bundles
             .push((message_id, MessageAction::Accept));
         self
     }
@@ -173,7 +173,7 @@ impl BlockBuilder {
     /// The block that produces the message must have already been executed by the test validator,
     /// so that the message is already in the inbox of the microchain this block belongs to.
     pub fn with_message_rejection(&mut self, message_id: MessageId) -> &mut Self {
-        self.incoming_messages
+        self.incoming_bundles
             .push((message_id, MessageAction::Reject));
         self
     }
@@ -182,11 +182,11 @@ impl BlockBuilder {
     ///
     /// The blocks that produce the messages must have already been executed by the test validator,
     /// so that the messages are already in the inbox of the microchain this block belongs to.
-    pub fn with_incoming_messages(
+    pub fn with_incoming_bundles(
         &mut self,
         message_ids: impl IntoIterator<Item = MessageId>,
     ) -> &mut Self {
-        self.incoming_messages.extend(
+        self.incoming_bundles.extend(
             message_ids
                 .into_iter()
                 .map(|message_id| (message_id, MessageAction::Accept)),
@@ -200,16 +200,16 @@ impl BlockBuilder {
     /// present in the inboxes of the microchain that owns this block.
     pub(crate) fn with_raw_messages(
         &mut self,
-        messages: impl IntoIterator<Item = IncomingMessage>,
+        messages: impl IntoIterator<Item = IncomingBundle>,
     ) -> &mut Self {
-        self.block.incoming_messages.extend(messages);
+        self.block.incoming_bundles.extend(messages);
         self
     }
 
     /// Tries to sign the prepared [`Block`] with the [`TestValidator`]'s keys and return the
     /// resulting [`Certificate`]. Returns an error if block execution fails.
     pub(crate) async fn try_sign(mut self) -> anyhow::Result<(Certificate, Vec<MessageId>)> {
-        self.collect_incoming_messages().await;
+        self.collect_incoming_bundles().await;
 
         let (executed_block, _) = self
             .validator
@@ -240,21 +240,21 @@ impl BlockBuilder {
     ///
     /// The requested messages must already all be in the inboxes of the microchain that owns this
     /// block.
-    async fn collect_incoming_messages(&mut self) {
+    async fn collect_incoming_bundles(&mut self) {
         let chain_id = self.block.chain_id;
 
-        for (message_id, action) in mem::take(&mut self.incoming_messages) {
+        for (message_id, action) in mem::take(&mut self.incoming_bundles) {
             let mut message = self
                 .validator
                 .worker()
-                .find_incoming_message(chain_id, message_id)
+                .find_incoming_bundle(chain_id, message_id)
                 .await
                 .expect("Failed to find message to receive in block")
                 .expect("Message that block should consume has not been emitted");
 
             message.action = action;
 
-            self.block.incoming_messages.push(message);
+            self.block.incoming_bundles.push(message);
         }
     }
 }
