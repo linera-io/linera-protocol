@@ -143,7 +143,7 @@ async fn single_transaction() {
     user_chain_b.register_application(matching_id).await;
 
     // Creating the bid orders
-    let mut order_certificates = Vec::new();
+    let mut bid_certificates = Vec::new();
     for price in [1, 2] {
         let price = Price { price };
         let order = Order::Insert {
@@ -153,19 +153,19 @@ async fn single_transaction() {
             price,
         };
         let operation = Operation::ExecuteOrder { order };
-        let order_certificate = user_chain_a
+        let bid_certificate = user_chain_a
             .add_block(|block| {
                 block.with_operation(matching_id, operation);
             })
             .await;
 
-        assert_eq!(order_certificate.outgoing_message_count(), 3);
-        order_certificates.push(order_certificate);
+        assert_eq!(bid_certificate.outgoing_message_count(), 3);
+        bid_certificates.push(bid_certificate);
     }
 
     matching_chain
         .add_block(|block| {
-            for certificate in &order_certificates {
+            for certificate in &bid_certificates {
                 block.with_messages_from(certificate);
             }
         })

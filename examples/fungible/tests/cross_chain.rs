@@ -10,7 +10,7 @@ use fungible::{
 };
 use linera_sdk::{
     base::{AccountOwner, Amount},
-    test::TestValidator,
+    test::{Medium, MessageAction, TestValidator},
 };
 
 /// Test transferring tokens across microchains.
@@ -122,7 +122,11 @@ async fn test_bouncing_tokens() {
 
     receiver_chain
         .add_block(move |block| {
-            block.with_messages_from(&certificate).with_rejection();
+            block.with_messages_from_by_medium(
+                &certificate,
+                &Medium::Direct,
+                MessageAction::Reject,
+            );
         })
         .await;
 

@@ -172,18 +172,16 @@ impl BlockBuilder {
         certificate: &Certificate,
         channel: SystemChannel,
     ) -> &mut Self {
-        self.with_messages_from_by_medium(
-            certificate,
-            &Medium::Channel(ChannelFullName {
-                application_id: GenericApplicationId::System,
-                name: channel.name(),
-            }),
-        )
+        let medium = Medium::Channel(ChannelFullName {
+            application_id: GenericApplicationId::System,
+            name: channel.name(),
+        });
+        self.with_messages_from_by_medium(certificate, &medium, MessageAction::Accept)
     }
 
     /// Receives all direct messages  that were sent to this chain by the given certificate.
     pub fn with_messages_from(&mut self, certificate: &Certificate) -> &mut Self {
-        self.with_messages_from_by_medium(certificate, &Medium::Direct)
+        self.with_messages_from_by_medium(certificate, &Medium::Direct, MessageAction::Accept)
     }
 
     /// Receives all messages that were sent to this chain by the given certificate.
@@ -191,11 +189,16 @@ impl BlockBuilder {
         &mut self,
         certificate: &Certificate,
         medium: &Medium,
+        action: MessageAction,
     ) -> &mut Self {
         let origin = Origin {
             sender: certificate.value().chain_id(),
             medium: medium.clone(),
         };
+        let executed_block = certificate
+            .value()
+            .executed_block()
+            .expect("Failed to obtain executed block from certificate");
         let bundles = certificate
             .message_bundles_for(medium, self.block.chain_id)
             .into_iter()
@@ -213,24 +216,13 @@ impl BlockBuilder {
                             grant: message.grant,
                             refund_grant_to: message.refund_grant_to,
                             kind: message.kind,
-                            timestamp: certificate
-                                .value()
-                                .executed_block()
-                                .unwrap()
-                                .block
-                                .timestamp,
+                            timestamp: executed_block.block.timestamp,
                             message: message.message,
                         },
-                        action: MessageAction::Accept,
+                        action,
                     })
             });
         self.with_incoming_bundles(bundles)
-    }
-
-    /// Rejects the most recently added message bundle.
-    pub fn with_rejection(&mut self) -> &mut Self {
-        self.block.incoming_bundles.last_mut().unwrap().action = MessageAction::Reject;
-        self
     }
 
     /// Tries to sign the prepared [`Block`] with the [`TestValidator`]'s keys and return the

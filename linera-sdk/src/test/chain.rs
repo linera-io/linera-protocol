@@ -195,6 +195,7 @@ impl ActiveChain {
             block.with_messages_from(&certificate);
         })
         .await;
+
         BytecodeId::new(message_id).with_abi()
     }
 
