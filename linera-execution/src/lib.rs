@@ -1,7 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module manages the execution of the system application and the user applications in a Linera chain.
+//! This module manages the execution of the system application and the user applications in a
+//! Linera chain.
 
 #![deny(clippy::large_futures)]
 
@@ -16,6 +17,7 @@ mod runtime;
 pub mod system;
 #[cfg(with_testing)]
 pub mod test_utils;
+mod transaction_tracker;
 mod util;
 mod wasm;
 
@@ -71,6 +73,7 @@ pub use crate::{
         SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation,
         SystemQuery, SystemResponse,
     },
+    transaction_tracker::TransactionTracker,
 };
 
 /// The maximum length of an event key in bytes.
@@ -156,8 +159,8 @@ pub enum ExecutionError {
     ReqwestError(#[from] reqwest::Error),
     #[error("Encountered IO error")]
     IoError(#[from] std::io::Error),
-    #[error("No recorded response for oracle query")]
-    MissingOracleResponse,
+    #[error("More recorded oracle responses than expected")]
+    UnexpectedOracleResponse,
     #[error("Invalid JSON: {}", .0)]
     Json(#[from] serde_json::Error),
     #[error("Recorded response for oracle query has the wrong type")]
@@ -748,6 +751,13 @@ impl ExecutionOutcome {
             ExecutionOutcome::User(app_id, _) => GenericApplicationId::User(*app_id),
         }
     }
+
+    pub fn message_count(&self) -> usize {
+        match self {
+            ExecutionOutcome::System(outcome) => outcome.messages.len(),
+            ExecutionOutcome::User(_, outcome) => outcome.messages.len(),
+        }
+    }
 }
 
 impl<Message, Grant> RawExecutionOutcome<Message, Grant> {
@@ -839,11 +849,11 @@ impl OperationContext {
         })
     }
 
-    fn next_message_id(&self) -> MessageId {
+    fn next_message_id(&self, message_count: u32) -> MessageId {
         MessageId {
             chain_id: self.chain_id,
             height: self.height,
-            index: self.next_message_index,
+            index: self.next_message_index + message_count,
         }
     }
 }

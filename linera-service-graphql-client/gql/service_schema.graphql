@@ -549,7 +549,7 @@ Whether an incoming message is accepted or rejected
 scalar MessageAction
 
 """
-A message together with non replayable information to ensure uniqueness in a particular inbox
+A set of messages from a single block, for a single destination.
 """
 scalar MessageBundle
 

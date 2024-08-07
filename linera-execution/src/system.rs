@@ -38,9 +38,9 @@ use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
-    Destination, ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext,
-    QueryContext, RawExecutionOutcome, RawOutgoingMessage, UserApplicationDescription,
-    UserApplicationId,
+    Destination, ExecutionOutcome, ExecutionRuntimeContext, MessageContext, MessageKind,
+    OperationContext, QueryContext, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker,
+    UserApplicationDescription, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -447,6 +447,10 @@ pub enum SystemExecutionError {
 
     #[error("Blob not found on storage read: {0}")]
     BlobNotFoundOnRead(BlobId),
+    #[error("Oracle response mismatch")]
+    OracleResponseMismatch,
+    #[error("No recorded response for oracle query")]
+    MissingOracleResponse,
 }
 
 impl<C> SystemExecutionStateView<C>
@@ -476,21 +480,18 @@ where
         &mut self,
         context: OperationContext,
         operation: SystemOperation,
-    ) -> Result<
-        (
-            RawExecutionOutcome<SystemMessage, Amount>,
-            Option<(UserApplicationId, Vec<u8>)>,
-            Vec<OracleResponse>,
-        ),
-        SystemExecutionError,
-    > {
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<Option<(UserApplicationId, Vec<u8>)>, SystemExecutionError> {
         use SystemOperation::*;
-        let mut outcome = RawExecutionOutcome::default();
+        let mut outcome = RawExecutionOutcome {
+            authenticated_signer: context.authenticated_signer,
+            refund_grant_to: context.refund_grant_to(),
+            ..RawExecutionOutcome::default()
+        };
         let mut new_application = None;
-        let mut oracle_responses = Vec::new();
         match operation {
             OpenChain(config) => {
-                let next_message_id = context.next_message_id();
+                let next_message_id = context.next_message_id(txn_tracker.message_count()?);
                 let messages = self.open_chain(config, next_message_id)?;
                 outcome.messages.extend(messages);
                 #[cfg(with_metrics)]
@@ -678,7 +679,7 @@ where
             } => {
                 let id = UserApplicationId {
                     bytecode_id,
-                    creation: context.next_message_id(),
+                    creation: context.next_message_id(txn_tracker.message_count()?),
                 };
                 self.registry
                     .register_new_application(
@@ -712,16 +713,31 @@ where
                 outcome.messages.push(message);
             }
             PublishBlob { blob_id } => {
-                oracle_responses.push(OracleResponse::Blob(blob_id));
+                let response = OracleResponse::Blob(blob_id);
+                if let Some(recorded_response) = txn_tracker.next_replayed_oracle_response()? {
+                    ensure!(
+                        recorded_response == response,
+                        SystemExecutionError::OracleResponseMismatch
+                    );
+                }
+                txn_tracker.add_oracle_response(response);
             }
             #[cfg(with_testing)]
             ReadBlob { blob_id } => {
+                let response = OracleResponse::Blob(blob_id);
+                if let Some(recorded_response) = txn_tracker.next_replayed_oracle_response()? {
+                    ensure!(
+                        recorded_response == response,
+                        SystemExecutionError::OracleResponseMismatch
+                    );
+                }
                 self.read_blob_content(blob_id).await?;
-                oracle_responses.push(OracleResponse::Blob(blob_id));
+                txn_tracker.add_oracle_response(response);
             }
         }
 
-        Ok((outcome, new_application, oracle_responses))
+        txn_tracker.add_outcome(ExecutionOutcome::System(outcome));
+        Ok(new_application)
     }
 
     pub async fn transfer(
@@ -1143,15 +1159,19 @@ mod tests {
             contract: Bytecode::new(vec![]),
             service: Bytecode::new(vec![]),
         };
-        let (result, new_application, _) = view
+        let mut txn_tracker = TransactionTracker::default();
+        let new_application = view
             .system
-            .execute_operation(context, operation)
+            .execute_operation(context, operation, &mut txn_tracker)
             .await
             .unwrap();
         assert_eq!(new_application, None);
         let operation_index = context
             .index
             .expect("Missing operation index in dummy context");
+        let [ExecutionOutcome::System(result)] = &txn_tracker.destructure().unwrap().0[..] else {
+            panic!("Unexpected outcome");
+        };
         assert_eq!(
             result.messages[PUBLISH_BYTECODE_MESSAGE_INDEX as usize].message,
             SystemMessage::BytecodePublished { operation_index }
@@ -1181,11 +1201,15 @@ mod tests {
             instantiation_argument: vec![],
             required_application_ids: vec![],
         };
-        let (result, new_application, _) = view
+        let mut txn_tracker = TransactionTracker::default();
+        let new_application = view
             .system
-            .execute_operation(context, operation)
+            .execute_operation(context, operation, &mut txn_tracker)
             .await
             .unwrap();
+        let [ExecutionOutcome::System(result)] = &txn_tracker.destructure().unwrap().0[..] else {
+            panic!("Unexpected outcome");
+        };
         assert_eq!(
             result.messages[CREATE_APPLICATION_MESSAGE_INDEX as usize].message,
             SystemMessage::ApplicationCreated
@@ -1217,13 +1241,17 @@ mod tests {
             balance: Amount::ZERO,
             application_permissions: Default::default(),
         };
+        let mut txn_tracker = TransactionTracker::default();
         let operation = SystemOperation::OpenChain(config.clone());
-        let (result, new_application, _) = view
+        let new_application = view
             .system
-            .execute_operation(context, operation)
+            .execute_operation(context, operation, &mut txn_tracker)
             .await
             .unwrap();
         assert_eq!(new_application, None);
+        let [ExecutionOutcome::System(result)] = &txn_tracker.destructure().unwrap().0[..] else {
+            panic!("Unexpected outcome");
+        };
         assert_eq!(
             result.messages[OPEN_CHAIN_MESSAGE_INDEX as usize].message,
             SystemMessage::OpenChain(config)

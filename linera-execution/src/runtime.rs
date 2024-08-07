@@ -6,7 +6,6 @@ use std::{
     mem,
     ops::{Deref, DerefMut},
     sync::{Arc, Mutex},
-    vec,
 };
 
 use custom_debug_derive::Debug;
@@ -32,8 +31,8 @@ use crate::{
     util::{ReceiverExt, UnboundedSenderExt},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, FinalizeContext,
     MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime,
-    UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
-    MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
+    TransactionTracker, UserApplicationDescription, UserApplicationId, UserContractInstance,
+    UserServiceInstance, MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -89,14 +88,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     call_stack: Vec<ApplicationStatus>,
     /// The set of the IDs of the applications that are in the `call_stack`.
     active_applications: HashSet<UserApplicationId>,
-    /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
-    execution_outcomes: Vec<ExecutionOutcome>,
-    /// Accumulated events emitted by applications.
-    events: Vec<()>,
-    /// Recorded responses to oracle queries.
-    recorded_oracle_responses: Vec<OracleResponse>,
-    /// Oracle responses that are being replayed.
-    replaying_oracle_responses: Option<Arc<Mutex<vec::IntoIter<OracleResponse>>>>,
+    /// The tracking information for this transaction.
+    transaction_tracker: TransactionTracker,
 
     /// Track application states based on views.
     view_user_states: BTreeMap<UserApplicationId, ViewUserState>,
@@ -110,16 +103,10 @@ pub struct SyncRuntimeInternal<UserInstance> {
 impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     /// Returns the index of the next outcome's first message.
     fn next_message_index(&self) -> Result<u32, ArithmeticError> {
-        let mut index = self.next_message_index;
-        for outcome in &self.execution_outcomes {
-            let len = match outcome {
-                ExecutionOutcome::System(outcome) => outcome.messages.len(),
-                ExecutionOutcome::User(_, outcome) => outcome.messages.len(),
-            };
-            let len = u32::try_from(len).map_err(|_| ArithmeticError::Overflow)?;
-            index = index.checked_add(len).ok_or(ArithmeticError::Overflow)?;
-        }
-        Ok(index)
+        let len = self.transaction_tracker.message_count()?;
+        self.next_message_index
+            .checked_add(len)
+            .ok_or(ArithmeticError::Overflow)
     }
 }
 
@@ -310,7 +297,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         execution_state_sender: ExecutionStateSender,
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
-        replaying_oracle_responses: Option<Arc<Mutex<vec::IntoIter<OracleResponse>>>>,
+        transaction_tracker: TransactionTracker,
     ) -> Self {
         Self {
             chain_id,
@@ -325,13 +312,10 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
-            execution_outcomes: Vec::new(),
-            events: Vec::new(),
             view_user_states: BTreeMap::new(),
             refund_grant_to,
             resource_controller,
-            replaying_oracle_responses,
-            recorded_oracle_responses: Vec::new(),
+            transaction_tracker,
         }
     }
 
@@ -507,8 +491,8 @@ impl SyncRuntimeInternal<UserContractInstance> {
             self.resource_controller.track_grant(message.grant)?;
         }
 
-        self.execution_outcomes
-            .push(ExecutionOutcome::User(application_id, outcome));
+        self.transaction_tracker
+            .add_outcome(ExecutionOutcome::User(application_id, outcome));
         Ok(())
     }
 }
@@ -950,23 +934,23 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         application_id: ApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let response = if let Some(responses) = &mut self.replaying_oracle_responses {
-            match responses.lock().expect("Mutex is poisoned").next() {
-                Some(OracleResponse::Service(bytes)) => bytes,
-                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                None => return Err(ExecutionError::MissingOracleResponse),
-            }
-        } else {
-            let context = QueryContext {
-                chain_id: self.chain_id,
-                next_block_height: self.height,
-                local_time: self.local_time,
+        let response =
+            if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
+                match response {
+                    OracleResponse::Service(bytes) => bytes,
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                }
+            } else {
+                let context = QueryContext {
+                    chain_id: self.chain_id,
+                    next_block_height: self.height,
+                    local_time: self.local_time,
+                };
+                let sender = self.execution_state_sender.clone();
+                ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?
             };
-            let sender = self.execution_state_sender.clone();
-            ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?
-        };
-        self.recorded_oracle_responses
-            .push(OracleResponse::Service(response.clone()));
+        self.transaction_tracker
+            .add_oracle_response(OracleResponse::Service(response.clone()));
         Ok(response)
     }
 
@@ -976,34 +960,33 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         content_type: String,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let bytes = if let Some(responses) = &mut self.replaying_oracle_responses {
-            match responses.lock().expect("Mutex is poisoned").next() {
-                Some(OracleResponse::Post(bytes)) => bytes,
-                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                None => return Err(ExecutionError::MissingOracleResponse),
-            }
-        } else {
-            let url = url.to_string();
-            self.execution_state_sender
-                .send_request(|callback| ExecutionRequest::HttpPost {
-                    url,
-                    content_type,
-                    payload,
-                    callback,
-                })?
-                .recv_response()?
-        };
-        self.recorded_oracle_responses
-            .push(OracleResponse::Post(bytes.clone()));
+        let bytes =
+            if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
+                match response {
+                    OracleResponse::Post(bytes) => bytes,
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                }
+            } else {
+                let url = url.to_string();
+                self.execution_state_sender
+                    .send_request(|callback| ExecutionRequest::HttpPost {
+                        url,
+                        content_type,
+                        payload,
+                        callback,
+                    })?
+                    .recv_response()?
+            };
+        self.transaction_tracker
+            .add_oracle_response(OracleResponse::Post(bytes.clone()));
         Ok(bytes)
     }
 
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
-        if let Some(responses) = &mut self.replaying_oracle_responses {
-            match responses.lock().expect("Mutex is poisoned").next() {
-                Some(OracleResponse::Assert) => {}
-                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                None => return Err(ExecutionError::MissingOracleResponse),
+        if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
+            match response {
+                OracleResponse::Assert => {}
+                _ => return Err(ExecutionError::OracleResponseMismatch),
             }
         } else {
             ensure!(
@@ -1014,42 +997,41 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                 }
             );
         }
-        self.recorded_oracle_responses.push(OracleResponse::Assert);
+        self.transaction_tracker
+            .add_oracle_response(OracleResponse::Assert);
         Ok(())
     }
 
     fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError> {
         let blob_id = BlobId::new_data_from_hash(*hash);
-        if let Some(responses) = &mut self.replaying_oracle_responses {
-            match responses.lock().expect("Mutex is poisoned").next() {
-                Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == blob_id => {}
-                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                None => return Err(ExecutionError::MissingOracleResponse),
+        if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
+            match response {
+                OracleResponse::Blob(oracle_blob_id) if oracle_blob_id == blob_id => {}
+                _ => return Err(ExecutionError::OracleResponseMismatch),
             }
         }
         let blob_content = self
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ReadBlobContent { blob_id, callback })?
             .recv_response()?;
-        self.recorded_oracle_responses
-            .push(OracleResponse::Blob(blob_id));
+        self.transaction_tracker
+            .add_oracle_response(OracleResponse::Blob(blob_id));
         Ok(blob_content.bytes)
     }
 
     fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError> {
         let blob_id = BlobId::new_data_from_hash(*hash);
-        if let Some(responses) = &mut self.replaying_oracle_responses {
-            match responses.lock().expect("Mutex is poisoned").next() {
-                Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == blob_id => {}
-                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                None => return Err(ExecutionError::MissingOracleResponse),
+        if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
+            match response {
+                OracleResponse::Blob(oracle_blob_id) if oracle_blob_id == blob_id => {}
+                _ => return Err(ExecutionError::OracleResponseMismatch),
             }
         }
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
             .recv_response()?;
-        self.recorded_oracle_responses
-            .push(OracleResponse::Blob(blob_id));
+        self.transaction_tracker
+            .add_oracle_response(OracleResponse::Blob(blob_id));
         Ok(())
     }
 }
@@ -1071,15 +1053,8 @@ impl ContractSyncRuntime {
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: UserAction,
-        replaying_oracle_responses: Option<Arc<Mutex<vec::IntoIter<OracleResponse>>>>,
-    ) -> Result<
-        (
-            Vec<ExecutionOutcome>,
-            Vec<OracleResponse>,
-            ResourceController,
-        ),
-        ExecutionError,
-    > {
+        txn_tracker: TransactionTracker,
+    ) -> Result<(ResourceController, TransactionTracker), ExecutionError> {
         let executing_message = match &action {
             UserAction::Message(context, _) => Some(context.into()),
             _ => None,
@@ -1098,7 +1073,7 @@ impl ContractSyncRuntime {
                 execution_state_sender,
                 refund_grant_to,
                 resource_controller,
-                replaying_oracle_responses,
+                txn_tracker,
             ),
         )));
         let finalize_context = FinalizeContext {
@@ -1118,11 +1093,7 @@ impl ContractSyncRuntime {
         let runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        Ok((
-            runtime.execution_outcomes,
-            runtime.recorded_oracle_responses,
-            runtime.resource_controller,
-        ))
+        Ok((runtime.resource_controller, runtime.transaction_tracker))
     }
 
     /// Notifies all loaded applications that execution is finalizing.
@@ -1270,8 +1241,8 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             })?
             .recv_response()?;
         self.inner()
-            .execution_outcomes
-            .push(ExecutionOutcome::System(execution_outcome));
+            .transaction_tracker
+            .add_outcome(ExecutionOutcome::System(execution_outcome));
         Ok(())
     }
 
@@ -1295,8 +1266,8 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?
             .with_authenticated_signer(signer);
         self.inner()
-            .execution_outcomes
-            .push(ExecutionOutcome::System(execution_outcome));
+            .transaction_tracker
+            .add_outcome(ExecutionOutcome::System(execution_outcome));
         Ok(())
     }
 
@@ -1367,8 +1338,8 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let outcome = RawExecutionOutcome::default()
             .with_message(open_chain_message)
             .with_message(subscribe_message);
-        this.execution_outcomes
-            .push(ExecutionOutcome::System(outcome));
+        this.transaction_tracker
+            .add_outcome(ExecutionOutcome::System(outcome));
         Ok(chain_id)
     }
 
@@ -1421,7 +1392,7 @@ impl ServiceSyncRuntime {
                 execution_state_sender,
                 None,
                 ResourceController::default(),
-                None,
+                TransactionTracker::default(),
             )
             .into(),
         ));
