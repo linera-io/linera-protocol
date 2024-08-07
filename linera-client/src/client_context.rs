@@ -363,7 +363,7 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::StoreError>,
     W: Persist<Target = Wallet>,
-                {
+{
     pub async fn publish_bytecode(
         &mut self,
         chain_client: &ChainClient<NodeProvider, S>,
