@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::iter::IntoIterator;
+use std::{iter::IntoIterator, ops::Deref};
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, CryptoRng, KeyPair, PublicKey},
@@ -74,7 +74,7 @@ pub struct WalletState<W> {
     prng: Box<dyn CryptoRng>,
 }
 
-impl<W: std::ops::Deref> std::ops::Deref for WalletState<W> {
+impl<W: Deref> Deref for WalletState<W> {
     type Target = W::Target;
 
     fn deref(&self) -> &Self::Target {
@@ -133,7 +133,7 @@ impl WalletState<persistent::LocalStorage<Wallet>> {
     }
 }
 
-impl<W: std::ops::Deref<Target = Wallet>> WalletState<W> {
+impl<W: Deref<Target = Wallet>> WalletState<W> {
     pub fn new(wallet: W) -> Self {
         Self {
             prng: wallet.make_prng(),
