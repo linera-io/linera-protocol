@@ -9,6 +9,7 @@ edition.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+default = ["fs", "storage-service"]
 test = ["linera-views/test", "linera-execution/test"]
 benchmark = ["linera-base/test", "dep:linera-sdk"]
 wasmer = [
@@ -53,6 +54,7 @@ web = [
     "linera-rpc/web",
 ]
 local-storage = ["web"]
+web-default = ["web", "wasmer", "local-storage"]
 
 [dependencies]
 anyhow.workspace = true

@@ -122,7 +122,7 @@ jobs:
           --locked \
           --target wasm32-unknown-unknown \
           --no-default-features \
-          --features web,wasmer,local-storage
+          --features web-default
     - name: Install chromedriver
       uses: nanasess/setup-chromedriver@v2
     - name: Install wasm-pack
