@@ -521,11 +521,11 @@ where
     // Second message is the bounced message.
     assert_eq!(incoming_bundles[1].action, MessageAction::Accept);
     assert_eq!(
-        incoming_bundles[1].bundle.messages[0].kind,
+        incoming_bundles[1].bundle.messages[1].kind,
         MessageKind::Bouncing
     );
     assert_matches!(
-        incoming_bundles[1].bundle.messages[0].message,
+        incoming_bundles[1].bundle.messages[1].message,
         Message::User { .. }
     );
 

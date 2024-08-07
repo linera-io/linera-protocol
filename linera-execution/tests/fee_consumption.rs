@@ -5,10 +5,7 @@
 
 #![allow(clippy::items_after_test_module)]
 
-use std::{
-    sync::{Arc, Mutex},
-    vec,
-};
+use std::{sync::Arc, vec};
 
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
@@ -18,7 +15,7 @@ use linera_base::{
 use linera_execution::{
     test_utils::{register_mock_applications, ExpectedCall, SystemExecutionState},
     ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
-    RawExecutionOutcome, ResourceControlPolicy, ResourceController,
+    RawExecutionOutcome, ResourceControlPolicy, ResourceController, TransactionTracker,
 };
 use test_case::test_case;
 
@@ -196,25 +193,26 @@ async fn test_fee_consumption(
         next_message_index: 0,
     };
     let mut grant = initial_grant.unwrap_or_default();
-    let (outcomes, _) = view
-        .execute_message(
-            context,
-            Timestamp::from(0),
-            Message::User {
-                application_id,
-                bytes: vec![],
-            },
-            if initial_grant.is_some() {
-                Some(&mut grant)
-            } else {
-                None
-            },
-            Some(Arc::new(Mutex::new(Vec::new().into_iter()))),
-            &mut controller,
-        )
-        .await
-        .unwrap();
+    let mut txn_tracker = TransactionTracker::with_oracle_responses(Vec::new());
+    view.execute_message(
+        context,
+        Timestamp::from(0),
+        Message::User {
+            application_id,
+            bytes: vec![],
+        },
+        if initial_grant.is_some() {
+            Some(&mut grant)
+        } else {
+            None
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await
+    .unwrap();
 
+    let (outcomes, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
         outcomes,
         vec![

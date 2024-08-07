@@ -5,7 +5,7 @@
 use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, HashSet},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use async_graphql::SimpleObject;
@@ -20,7 +20,7 @@ use linera_execution::{
     system::SystemMessage, ExecutionOutcome, ExecutionRequest, ExecutionRuntimeContext,
     ExecutionStateView, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
     RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker, Response,
-    ServiceRuntimeRequest, UserApplicationDescription, UserApplicationId,
+    ServiceRuntimeRequest, TransactionTracker, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -758,27 +758,28 @@ where
         // Execute each incoming bundle as a transaction, then each operation.
         // Collect messages, events and oracle responses, each as one list per transaction.
         let mut replaying_oracle_responses = replaying_oracle_responses.map(Vec::into_iter);
+        let mut next_tracker = move || match replaying_oracle_responses.as_mut().map(Iterator::next)
+        {
+            Some(Some(responses)) => Ok(TransactionTracker::with_oracle_responses(responses)),
+            Some(None) => Err(ChainError::MissingOracleResponseList),
+            None => Ok(TransactionTracker::default()),
+        };
+        let add_message_index = |next_message_index: u32, msg_count: usize| {
+            let len = u32::try_from(msg_count).map_err(|_| ArithmeticError::Overflow)?;
+            next_message_index
+                .checked_add(len)
+                .ok_or(ArithmeticError::Overflow)
+        };
+        let mut next_message_index = 0;
         let mut oracle_responses = Vec::new();
         let mut events = Vec::new();
         let mut messages = Vec::new();
-        let mut next_message_index = 0;
         for (bundle_index, incoming_bundle) in (0..).zip(&block.incoming_bundles) {
-            let mut txn_oracle_responses = Vec::new();
-            let mut txn_messages = Vec::new();
-            let mut txn_events = Vec::new();
-            let txn_replaying_oracle_responses = match &mut replaying_oracle_responses {
-                Some(responses) => Some(Arc::new(Mutex::new(
-                    responses
-                        .next()
-                        .ok_or_else(|| ChainError::MissingOracleResponseList)?
-                        .into_iter(),
-                ))),
-                None => None,
-            };
+            let mut txn_tracker = next_tracker()?;
+            let chain_execution_context = ChainExecutionContext::IncomingBundle(bundle_index);
             for (message_id, posted_message) in incoming_bundle.messages_with_id() {
                 #[cfg(with_metrics)]
                 let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
-                let chain_execution_context = ChainExecutionContext::IncomingBundle(bundle_index);
                 let context = MessageContext {
                     chain_id,
                     is_bouncing: posted_message.is_bouncing(),
@@ -789,20 +790,19 @@ where
                     refund_grant_to: posted_message.refund_grant_to,
                     next_message_index,
                 };
-                let (outcomes, new_oracle_responses) = match incoming_bundle.action {
+                match incoming_bundle.action {
                     MessageAction::Accept => {
                         // Once a chain is closed, accepting incoming messages is not allowed.
                         ensure!(!self.is_closed(), ChainError::ClosedChain);
 
                         let mut grant = posted_message.grant;
-                        let (mut outcomes, oracle_responses) = self
-                            .execution_state
+                        self.execution_state
                             .execute_message(
                                 context,
                                 local_time,
                                 posted_message.message.clone(),
                                 (grant > Amount::ZERO).then_some(&mut grant),
-                                txn_replaying_oracle_responses.clone(),
+                                &mut txn_tracker,
                                 &mut resource_controller,
                             )
                             .await
@@ -818,15 +818,14 @@ where
                                     .map_err(|err| {
                                         ChainError::ExecutionError(err, chain_execution_context)
                                     })?;
-                                outcomes.push(outcome);
+                                txn_tracker.add_outcome(outcome);
                             }
                         }
-                        (outcomes, oracle_responses)
                     }
                     MessageAction::Reject => {
+                        let chain_execution_context = ChainExecutionContext::Block;
                         // If rejecting a message fails, the entire block proposal should be
                         // scrapped.
-                        let chain_execution_context = ChainExecutionContext::Block;
                         ensure!(
                             !posted_message.is_protected() || self.is_closed(),
                             ChainError::CannotRejectMessage {
@@ -835,9 +834,10 @@ where
                                 posted_message: posted_message.clone(),
                             }
                         );
-                        let outcomes = if posted_message.is_tracked() {
+                        if posted_message.is_tracked() {
                             // Bounce the message.
-                            self.execution_state
+                            let outcomes = self
+                                .execution_state
                                 .bounce_message(
                                     context,
                                     posted_message.grant,
@@ -847,7 +847,8 @@ where
                                 .await
                                 .map_err(|err| {
                                     ChainError::ExecutionError(err, chain_execution_context)
-                                })?
+                                })?;
+                            txn_tracker.add_outcomes(outcomes);
                         } else if posted_message.grant > Amount::ZERO {
                             // Nothing to do except maybe refund the grant.
                             let Some(refund_grant_to) = posted_message.refund_grant_to else {
@@ -865,33 +866,32 @@ where
                                 .map_err(|err| {
                                     ChainError::ExecutionError(err, chain_execution_context)
                                 })?;
-                            vec![outcome]
-                        } else {
-                            Vec::new()
-                        };
-                        (outcomes, Vec::new())
+                            txn_tracker.add_outcome(outcome)
+                        }
                     }
                 };
-                txn_oracle_responses.extend(new_oracle_responses);
-                let (new_messages, new_events) = self
-                    .process_execution_outcomes(context.height, outcomes)
-                    .await?;
-                if let MessageAction::Accept = incoming_bundle.action {
-                    for message_out in &new_messages {
-                        resource_controller
-                            .with_state(&mut self.execution_state)
-                            .await?
-                            .track_message(&message_out.message)
-                            .map_err(|err| {
-                                ChainError::ExecutionError(err, chain_execution_context)
-                            })?;
-                    }
-                }
-                next_message_index +=
-                    u32::try_from(new_messages.len()).map_err(|_| ArithmeticError::Overflow)?;
-                txn_messages.extend(new_messages);
-                txn_events.extend(new_events);
             }
+            self.execution_state
+                .update_execution_outcomes_with_app_registrations(&mut txn_tracker)
+                .await
+                .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+            let (txn_outcomes, txn_oracle_responses) = txn_tracker
+                .destructure()
+                .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+            let (txn_messages, txn_events) = self
+                .process_execution_outcomes(block.height, txn_outcomes)
+                .await?;
+            if let MessageAction::Accept = incoming_bundle.action {
+                for message_out in &txn_messages {
+                    resource_controller
+                        .with_state(&mut self.execution_state)
+                        .await?
+                        .track_message(&message_out.message)
+                        .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+                }
+            }
+
+            next_message_index = add_message_index(next_message_index, txn_messages.len())?;
             oracle_responses.push(txn_oracle_responses);
             messages.push(txn_messages);
             events.push(txn_events);
@@ -900,6 +900,7 @@ where
         for (index, operation) in (0..).zip(&block.operations) {
             #[cfg(with_metrics)]
             let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
+            let mut txn_tracker = next_tracker()?;
             let chain_execution_context = ChainExecutionContext::Operation(index);
             let context = OperationContext {
                 chain_id,
@@ -909,44 +910,42 @@ where
                 authenticated_caller_id: None,
                 next_message_index,
             };
-            let (outcomes, txn_oracle_responses) = self
-                .execution_state
+            self.execution_state
                 .execute_operation(
                     context,
                     local_time,
                     operation.clone(),
-                    match &mut replaying_oracle_responses {
-                        Some(responses) => Some(
-                            responses
-                                .next()
-                                .ok_or_else(|| ChainError::MissingOracleResponseList)?,
-                        ),
-                        None => None,
-                    },
+                    &mut txn_tracker,
                     &mut resource_controller,
                 )
                 .await
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-            oracle_responses.push(txn_oracle_responses);
-            let (messages_out, new_events) = self
-                .process_execution_outcomes(context.height, outcomes)
+            self.execution_state
+                .update_execution_outcomes_with_app_registrations(&mut txn_tracker)
+                .await
+                .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+            let (txn_outcomes, txn_oracle_responses) = txn_tracker
+                .destructure()
+                .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+            let (txn_messages, txn_events) = self
+                .process_execution_outcomes(context.height, txn_outcomes)
                 .await?;
             resource_controller
                 .with_state(&mut self.execution_state)
                 .await?
                 .track_operation(operation)
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
-            for message_out in &messages_out {
+            for message_out in &txn_messages {
                 resource_controller
                     .with_state(&mut self.execution_state)
                     .await?
                     .track_message(&message_out.message)
                     .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             }
-            next_message_index +=
-                u32::try_from(messages_out.len()).map_err(|_| ArithmeticError::Overflow)?;
-            messages.push(messages_out);
-            events.push(new_events);
+            next_message_index = add_message_index(next_message_index, txn_messages.len())?;
+            oracle_responses.push(txn_oracle_responses);
+            messages.push(txn_messages);
+            events.push(txn_events);
         }
 
         // Finally, charge for the block fee, except if the chain is closed. Closed chains should

@@ -1283,7 +1283,7 @@ doc_scalar!(
 );
 doc_scalar!(
     MessageBundle,
-    "A message together with non replayable information to ensure uniqueness in a particular inbox"
+    "A set of messages from a single block, for a single destination."
 );
 doc_scalar!(
     Medium,
