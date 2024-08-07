@@ -14,7 +14,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
-    data_types::{CertificateValue, Event, ExecutedBlock, IncomingMessage, Medium, Origin},
+    data_types::{CertificateValue, Event, ExecutedBlock, IncomingBundle, Medium, Origin},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -239,7 +239,7 @@ where
         .await?;
     let cert = receiver.process_inbox().await?.0.pop().unwrap();
     {
-        let messages = &cert.value().block().unwrap().incoming_messages;
+        let messages = &cert.value().block().unwrap().incoming_bundles;
         // Both `Claim` messages were included in the block.
         assert_eq!(messages.len(), 2);
         // The first one was rejected.
@@ -920,10 +920,10 @@ where
     let (certificates, _) = client1.process_inbox().await.unwrap();
     let block = certificates[0].value().block().unwrap();
     assert!(block.operations.is_empty());
-    assert_eq!(block.incoming_messages.len(), 2);
+    assert_eq!(block.incoming_bundles.len(), 2);
     assert_matches!(
-        block.incoming_messages[0],
-        IncomingMessage {
+        block.incoming_bundles[0],
+        IncomingBundle {
             origin: Origin { sender, medium: Medium::Direct },
             action: MessageAction::Reject,
             event: Event {
@@ -934,8 +934,8 @@ where
         } if sender == ChainId::root(2)
     );
     assert_matches!(
-        block.incoming_messages[1],
-        IncomingMessage {
+        block.incoming_bundles[1],
+        IncomingBundle {
             origin: Origin { sender, medium: Medium::Direct },
             action: MessageAction::Reject,
             event: Event {

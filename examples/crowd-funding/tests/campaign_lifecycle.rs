@@ -66,7 +66,7 @@ async fn collect_pledges() {
     for (backer_chain, backer_account, _balance) in &backers {
         backer_chain.register_application(campaign_id).await;
 
-        let pledge_messages = backer_chain
+        let pledge_certificate = backer_chain
             .add_block(|block| {
                 block.with_operation(
                     campaign_id,
@@ -78,13 +78,15 @@ async fn collect_pledges() {
             })
             .await;
 
-        assert_eq!(pledge_messages.len(), 3);
-        pledges_and_transfers.extend(pledge_messages);
+        assert_eq!(pledge_certificate.outgoing_message_count(), 3);
+        pledges_and_transfers.push(pledge_certificate);
     }
 
     campaign_chain
         .add_block(|block| {
-            block.with_incoming_messages(pledges_and_transfers);
+            for certificate in &pledges_and_transfers {
+                block.with_messages_from(certificate);
+            }
         })
         .await;
 
@@ -168,7 +170,7 @@ async fn cancel_successful_campaign() {
     for (backer_chain, backer_account, _balance) in &backers {
         backer_chain.register_application(campaign_id).await;
 
-        let pledge_messages = backer_chain
+        let pledge_certificate = backer_chain
             .add_block(|block| {
                 block.with_operation(
                     campaign_id,
@@ -180,13 +182,15 @@ async fn cancel_successful_campaign() {
             })
             .await;
 
-        assert_eq!(pledge_messages.len(), 3);
-        pledges_and_transfers.extend(pledge_messages);
+        assert_eq!(pledge_certificate.outgoing_message_count(), 3);
+        pledges_and_transfers.push(pledge_certificate);
     }
 
     campaign_chain
         .add_block(|block| {
-            block.with_incoming_messages(pledges_and_transfers);
+            for certificate in &pledges_and_transfers {
+                block.with_messages_from(certificate);
+            }
         })
         .await;
 

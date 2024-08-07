@@ -31,7 +31,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
-        IncomingMessage, LiteCertificate, LiteVote, MessageAction,
+        IncomingBundle, LiteCertificate, LiteVote, MessageAction,
     },
     manager::ChainManagerInfo,
     ChainError, ChainExecutionContext, ChainStateView,
@@ -541,7 +541,7 @@ where
     ///
     /// Messages known to be redundant are filtered out: A `RegisterApplications` message whose
     /// entries are already known never needs to be included in a block.
-    async fn pending_messages(&self) -> Result<Vec<IncomingMessage>, ChainClientError> {
+    async fn pending_messages(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
         if self.state().next_block_height != BlockHeight::ZERO
             && self.options.message_policy.is_ignore()
         {
@@ -1634,11 +1634,11 @@ where
             {
                 if let ChainError::ExecutionError(
                     error,
-                    ChainExecutionContext::IncomingMessage(index),
+                    ChainExecutionContext::IncomingBundle(index),
                 ) = &**chain_error
                 {
                     let message = block
-                        .incoming_messages
+                        .incoming_bundles
                         .get_mut(*index as usize)
                         .expect("Message at given index should exist");
                     if message.event.is_protected() {
@@ -1907,10 +1907,8 @@ where
                 return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
             }
         }
-        let incoming_messages = self.pending_messages().await?;
-        let confirmed_value = self
-            .set_pending_block(incoming_messages, operations)
-            .await?;
+        let incoming_bundles = self.pending_messages().await?;
+        let confirmed_value = self.set_pending_block(incoming_bundles, operations).await?;
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
                 if certificate.value().block() == confirmed_value.inner().block() =>
@@ -1930,15 +1928,15 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(incoming_messages, operations))]
+    #[tracing::instrument(level = "trace", skip(incoming_bundles, operations))]
     /// Sets the pending block, so that next time `process_pending_block_without_prepare` is
     /// called, it will be proposed to the validators.
     async fn set_pending_block(
         &self,
-        incoming_messages: Vec<IncomingMessage>,
+        incoming_bundles: Vec<IncomingBundle>,
         operations: Vec<Operation>,
     ) -> Result<HashedCertificateValue, ChainClientError> {
-        let timestamp = self.next_timestamp(&incoming_messages).await;
+        let timestamp = self.next_timestamp(&incoming_bundles).await;
         let identity = self.identity().await?;
         let previous_block_hash;
         let height;
@@ -1950,7 +1948,7 @@ where
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
-            incoming_messages,
+            incoming_bundles,
             operations,
             previous_block_hash,
             height,
@@ -1966,14 +1964,14 @@ where
         Ok(HashedCertificateValue::new_confirmed(executed_block))
     }
 
-    #[tracing::instrument(level = "trace", skip(incoming_messages))]
+    #[tracing::instrument(level = "trace", skip(incoming_bundles))]
     /// Returns a suitable timestamp for the next block.
     ///
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
-    async fn next_timestamp(&self, incoming_messages: &[IncomingMessage]) -> Timestamp {
+    async fn next_timestamp(&self, incoming_bundles: &[IncomingBundle]) -> Timestamp {
         let local_time = self.storage_client().clock().current_time();
-        incoming_messages
+        incoming_bundles
             .iter()
             .map(|msg| msg.event.timestamp)
             .max()
@@ -2070,12 +2068,12 @@ where
         &self,
         owner: Option<Owner>,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
-        let incoming_messages = self.pending_messages().await?;
-        let timestamp = self.next_timestamp(&incoming_messages).await;
+        let incoming_bundles = self.pending_messages().await?;
+        let timestamp = self.next_timestamp(&incoming_bundles).await;
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
-            incoming_messages,
+            incoming_bundles,
             operations: Vec::new(),
             previous_block_hash: self.state().block_hash,
             height: self.state().next_block_height,
@@ -2687,8 +2685,8 @@ where
         self.prepare_chain().await?;
         let mut certificates = Vec::new();
         loop {
-            let incoming_messages = self.pending_messages().await?;
-            if incoming_messages.is_empty() {
+            let incoming_bundles = self.pending_messages().await?;
+            if incoming_bundles.is_empty() {
                 return Ok((certificates, None));
             }
             match self.execute_block(vec![]).await {
@@ -2868,7 +2866,7 @@ where
         notification: Notification,
     ) {
         match notification.reason {
-            Reason::NewIncomingMessage { origin, height } => {
+            Reason::NewIncomingBundle { origin, height } => {
                 if self
                     .local_next_block_height(origin.sender, &mut local_node)
                     .await

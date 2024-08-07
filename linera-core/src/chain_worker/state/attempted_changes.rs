@@ -260,7 +260,7 @@ where
         }
         if tip.is_first_block() && !self.state.chain.is_active() {
             let local_time = self.state.storage.clock().current_time();
-            for message in &block.incoming_messages {
+            for message in &block.incoming_bundles {
                 if self
                     .state
                     .chain
@@ -358,7 +358,7 @@ where
         let tip = self.state.chain.tip_state.get_mut();
         tip.block_hash = Some(certificate.hash());
         tip.next_block_height.try_add_assign_one()?;
-        tip.num_incoming_messages += block.incoming_messages.len() as u32;
+        tip.num_incoming_bundles += block.incoming_bundles.len() as u32;
         tip.num_operations += block.operations.len() as u32;
         tip.num_outgoing_messages += executed_block.outcome.messages.len() as u32;
         self.state.chain.confirmed_log.push(certificate.hash());

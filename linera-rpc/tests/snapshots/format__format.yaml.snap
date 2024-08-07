@@ -68,9 +68,9 @@ Block:
         TYPENAME: ChainId
     - epoch:
         TYPENAME: Epoch
-    - incoming_messages:
+    - incoming_bundles:
         SEQ:
-          TYPENAME: IncomingMessage
+          TYPENAME: IncomingBundle
     - operations:
         SEQ:
           TYPENAME: Operation
@@ -223,7 +223,7 @@ ChainInfo:
               TYPENAME: Committee
     - requested_pending_messages:
         SEQ:
-          TYPENAME: IncomingMessage
+          TYPENAME: IncomingBundle
     - requested_sent_certificate_hashes:
         SEQ:
           TYPENAME: CryptoHash
@@ -448,7 +448,7 @@ HandleLiteCertRequest:
     - certificate:
         TYPENAME: LiteCertificate
     - wait_for_outgoing_messages: BOOL
-IncomingMessage:
+IncomingBundle:
   STRUCT:
     - origin:
         TYPENAME: Origin

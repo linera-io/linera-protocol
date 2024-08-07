@@ -17,7 +17,7 @@ test('Block mounting', () => {
               timestamp: 1694097511817833,
               authenticatedSigner: "a36c72207a7c3cef20eb254978c0947d7cf28c9c7d7c62de42a0ed9db901cf3f",
               previousBlockHash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
-              incomingMessages: [{
+              incomingBundles: [{
                 origin: {
                   medium: "Direct",
                   sender: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"

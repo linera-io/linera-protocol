@@ -30,7 +30,7 @@ defineProps<{blocks: HashedCertificateValue[]}>()
           <td>{{ (new Date(b.value.executedBlock?.block.timestamp/1000)).toLocaleString() }}</td>
           <td :title="b.value.executedBlock?.block.authenticatedSigner">{{ short_hash(b.value.executedBlock?.block.authenticatedSigner) }}</td>
           <td>{{ b.value.status }}</td>
-          <td>{{ b.value.executedBlock?.block.incomingMessages.length }}</td>
+          <td>{{ b.value.executedBlock?.block.incomingBundles.length }}</td>
           <td>{{ b.value.executedBlock?.outcome.messages.length }}</td>
           <td>{{ b.value.executedBlock?.block.operations.length }}</td>
           <td>

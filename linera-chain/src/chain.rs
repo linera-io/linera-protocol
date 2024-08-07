@@ -38,7 +38,7 @@ use {linera_base::identifiers::BytecodeId, linera_execution::BytecodeLocation};
 use crate::{
     data_types::{
         Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, EventRecord,
-        IncomingMessage, MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
+        IncomingBundle, MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -277,7 +277,7 @@ pub struct ChainTipState {
     /// Sequence number tracking blocks.
     pub next_block_height: BlockHeight,
     /// Number of incoming messages.
-    pub num_incoming_messages: u32,
+    pub num_incoming_bundles: u32,
     /// Number of operations.
     pub num_operations: u32,
     /// Number of outgoing messages.
@@ -325,10 +325,10 @@ impl ChainTipState {
         new_block: &Block,
         outcome: &BlockExecutionOutcome,
     ) -> Result<(), ChainError> {
-        let num_incoming_messages = u32::try_from(new_block.incoming_messages.len())
+        let num_incoming_bundles = u32::try_from(new_block.incoming_bundles.len())
             .map_err(|_| ArithmeticError::Overflow)?;
-        self.num_incoming_messages
-            .checked_add(num_incoming_messages)
+        self.num_incoming_bundles
+            .checked_add(num_incoming_bundles)
             .ok_or(ArithmeticError::Overflow)?;
 
         let num_operations =
@@ -495,7 +495,7 @@ where
 
     /// Verifies that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
-    pub async fn validate_incoming_messages(&self) -> Result<(), ChainError> {
+    pub async fn validate_incoming_bundles(&self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let pairs = self.inboxes.try_load_all_entries().await?;
         let max_stream_queries = self.context().max_stream_queries();
@@ -666,7 +666,7 @@ where
     pub async fn remove_events_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let mut events_by_origin: BTreeMap<_, Vec<&Event>> = Default::default();
-        for IncomingMessage { event, origin, .. } in &block.incoming_messages {
+        for IncomingBundle { event, origin, .. } in &block.incoming_bundles {
             ensure!(
                 event.timestamp <= block.timestamp,
                 ChainError::IncorrectEventTimestamp {
@@ -749,7 +749,7 @@ where
 
         if self.is_closed() {
             ensure!(
-                !block.incoming_messages.is_empty() && block.has_only_rejected_messages(),
+                !block.incoming_bundles.is_empty() && block.has_only_rejected_messages(),
                 ChainError::ClosedChain
             );
         }
@@ -766,8 +766,8 @@ where
         {
             ensure!(
                 matches!(
-                    block.incoming_messages.first(),
-                    Some(IncomingMessage {
+                    block.incoming_bundles.first(),
+                    Some(IncomingBundle {
                         event: Event {
                             message: Message::System(SystemMessage::OpenChain(_)),
                             ..
@@ -794,7 +794,7 @@ where
                 mandatory.remove(application_id);
             }
         }
-        for message in &block.incoming_messages {
+        for message in &block.incoming_bundles {
             if mandatory.is_empty() {
                 break;
             }
@@ -810,11 +810,11 @@ where
         let mut new_oracle_responses = Vec::new();
         let mut events = Vec::new();
         let mut next_message_index = 0;
-        for (index, message) in block.incoming_messages.iter().enumerate() {
+        for (index, message) in block.incoming_bundles.iter().enumerate() {
             #[cfg(with_metrics)]
             let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
-            let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
+            let chain_execution_context = ChainExecutionContext::IncomingBundle(index);
             // Execute the received message.
             let context = MessageContext {
                 chain_id,
@@ -1033,7 +1033,7 @@ where
 
         assert_eq!(
             messages.len(),
-            block.incoming_messages.len() + block.operations.len()
+            block.incoming_bundles.len() + block.operations.len()
         );
         Ok(BlockExecutionOutcome {
             messages,

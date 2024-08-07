@@ -20,8 +20,8 @@ use common::INTEGRATION_TEST_GUARD;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 use linera_base::{
     command::resolve_binary,
-    data_types::Amount,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
+    data_types::{Amount, Blob},
+    identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId},
 };
 #[cfg(any(
     feature = "dynamodb",
@@ -212,7 +212,7 @@ impl NonFungibleApp {
         application_id: &ApplicationId,
         name: &String,
         minter: &AccountOwner,
-        payload: &Vec<u8>,
+        blob_id: &BlobId,
         num_minted_nfts: u64,
     ) -> String {
         use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
@@ -221,7 +221,7 @@ impl NonFungibleApp {
             application_id,
             name,
             minter,
-            payload,
+            blob_id,
             num_minted_nfts,
         )
         .expect("Creating token ID should not fail");
@@ -245,12 +245,12 @@ impl NonFungibleApp {
         )?)
     }
 
-    async fn mint(&self, minter: &AccountOwner, name: &String, payload: &Vec<u8>) -> Value {
+    async fn mint(&self, minter: &AccountOwner, name: &String, blob_id: &BlobId) -> Value {
         let mutation = format!(
-            "mint(minter: {}, name: {}, payload: {})",
+            "mint(minter: {}, name: {}, blobId: {})",
             minter.to_value(),
             name.to_value(),
-            payload.to_value(),
+            blob_id.to_value(),
         );
         self.0.mutate(mutation).await.unwrap()
     }
@@ -996,7 +996,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     feature = "kubernetes",
     feature = "remote-net"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
@@ -1038,25 +1038,31 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
 
     let nft1_name = "nft1".to_string();
     let nft1_minter = account_owner1;
-    let nft1_payload = "nft1_data".as_bytes().to_vec();
+
+    let nft1_blob = Blob::test_data_blob("nft1_data");
+    let nft1_blob_id = nft1_blob.id();
+    let blob_id = node_service1
+        .publish_data_blob(&chain1, nft1_blob.content())
+        .await?;
+    assert_eq!(nft1_blob_id, blob_id);
 
     let nft1_id = NonFungibleApp::create_token_id(
         &chain1,
         &application_id.forget_abi(),
         &nft1_name,
         &nft1_minter,
-        &nft1_payload,
+        &nft1_blob_id,
         0, // No NFTs are supposed to have been minted yet in this chain
     );
 
-    app1.mint(&account_owner1, &nft1_name, &nft1_payload).await;
+    app1.mint(&account_owner1, &nft1_name, &nft1_blob_id).await;
 
     let mut expected_nft1 = NftOutput {
         token_id: nft1_id.clone(),
         owner: account_owner1,
         name: nft1_name,
         minter: nft1_minter,
-        payload: nft1_payload,
+        payload: nft1_blob.content().bytes.clone(),
     };
 
     assert_eq!(app1.get_nft(&nft1_id).await?, expected_nft1);
@@ -1160,26 +1166,31 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
 
     let nft2_name = "nft2".to_string();
     let nft2_minter = account_owner2;
-    let nft2_payload = "nft2_data".as_bytes().to_vec();
+    let nft2_blob = Blob::test_data_blob("nft2_data");
+    let nft2_blob_id = nft2_blob.id();
+    let blob_id = node_service2
+        .publish_data_blob(&chain2, nft2_blob.content())
+        .await?;
+    assert_eq!(nft2_blob_id, blob_id);
 
     let nft2_id = NonFungibleApp::create_token_id(
         &chain2,
         &application_id.forget_abi(),
         &nft2_name,
         &nft2_minter,
-        &nft2_payload,
+        &nft2_blob_id,
         0, // No NFTs are supposed to have been minted yet in this chain
     );
 
     // Minting NFT from chain2
-    app2.mint(&account_owner2, &nft2_name, &nft2_payload).await;
+    app2.mint(&account_owner2, &nft2_name, &nft2_blob_id).await;
 
     let expected_nft2 = NftOutput {
         token_id: nft2_id.clone(),
         owner: account_owner2,
         name: nft2_name,
         minter: nft2_minter,
-        payload: nft2_payload,
+        payload: nft2_blob.content().bytes.clone(),
     };
 
     // Confirm it's there
@@ -2753,7 +2764,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
@@ -2835,7 +2846,7 @@ async fn test_project_test() -> Result<()> {
     feature = "scylladb",
     feature = "storage-service"
 ))]
-#[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]

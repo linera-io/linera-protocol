@@ -299,7 +299,7 @@ pub async fn create_with_accounts(
     for (chain, account, initial_amount) in &accounts {
         chain.register_application(application_id).await;
 
-        let claim_messages = chain
+        let claim_certificate = chain
             .add_block(|block| {
                 block.with_operation(
                     application_id,
@@ -318,19 +318,19 @@ pub async fn create_with_accounts(
             })
             .await;
 
-        assert_eq!(claim_messages.len(), 2);
+        assert_eq!(claim_certificate.outgoing_message_count(), 2);
 
-        let transfer_messages = token_chain
+        let transfer_certificate = token_chain
             .add_block(|block| {
-                block.with_incoming_message(claim_messages[1]);
+                block.with_messages_from(&claim_certificate);
             })
             .await;
 
-        assert_eq!(transfer_messages.len(), 2);
+        assert_eq!(transfer_certificate.outgoing_message_count(), 2);
 
         chain
             .add_block(|block| {
-                block.with_incoming_message(transfer_messages[1]);
+                block.with_messages_from(&transfer_certificate);
             })
             .await;
     }

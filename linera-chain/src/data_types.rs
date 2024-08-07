@@ -41,7 +41,7 @@ pub struct Block {
     pub epoch: Epoch,
     /// A selection of incoming messages to be executed first. Successive messages of same
     /// sender and height are grouped together for conciseness.
-    pub incoming_messages: Vec<IncomingMessage>,
+    pub incoming_bundles: Vec<IncomingBundle>,
     /// The operations to execute.
     pub operations: Vec<Operation>,
     /// The block height.
@@ -63,7 +63,7 @@ impl Block {
     /// Returns all bytecode locations referred to in this block's incoming messages.
     pub fn bytecode_locations(&self) -> HashSet<BytecodeLocation> {
         let mut locations = HashSet::new();
-        for message in &self.incoming_messages {
+        for message in &self.incoming_bundles {
             if let Message::System(sys_message) = &message.event.message {
                 locations.extend(sys_message.bytecode_locations(message.event.certificate_hash));
             }
@@ -88,7 +88,7 @@ impl Block {
     pub fn has_only_rejected_messages(&self) -> bool {
         self.operations.is_empty()
             && self
-                .incoming_messages
+                .incoming_bundles
                 .iter()
                 .all(|message| message.action == MessageAction::Reject)
     }
@@ -103,7 +103,7 @@ pub struct ChainAndHeight {
 
 /// A message received from a block of another chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct IncomingMessage {
+pub struct IncomingBundle {
     /// The origin of the message (chain and channel if any).
     pub origin: Origin,
     /// The content of the message to be delivered to the inbox identified by
@@ -122,7 +122,7 @@ pub enum MessageAction {
     Reject,
 }
 
-impl IncomingMessage {
+impl IncomingBundle {
     /// Returns the ID identifying this message.
     pub fn id(&self) -> MessageId {
         MessageId {
@@ -713,7 +713,7 @@ impl ExecutedBlock {
         message_index: u32,
     ) -> Option<MessageId> {
         let block = &self.block;
-        let transaction_index = block.incoming_messages.len().checked_add(operation_index)?;
+        let transaction_index = block.incoming_bundles.len().checked_add(operation_index)?;
         if message_index
             >= u32::try_from(self.outcome.messages.get(transaction_index)?.len()).ok()?
         {
@@ -1138,9 +1138,15 @@ impl Certificate {
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
         self.value()
             .executed_block()
-            .map_or(false, |executed_block| {
-                executed_block.requires_blob(blob_id)
-            })
+            .is_some_and(|executed_block| executed_block.requires_blob(blob_id))
+    }
+
+    #[cfg(with_testing)]
+    pub fn outgoing_message_count(&self) -> usize {
+        let Some(executed_block) = self.value().executed_block() else {
+            return 0;
+        };
+        executed_block.messages().iter().map(Vec::len).sum()
     }
 }
 

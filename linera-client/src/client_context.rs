@@ -363,7 +363,7 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::StoreError>,
     W: Persist<Target = Wallet>,
-{
+                {
     pub async fn publish_bytecode(
         &mut self,
         chain_client: &ChainClient<NodeProvider, S>,
@@ -395,7 +395,7 @@ where
             })
             .await?;
 
-        info!("{}", "Bytecode published successfully!");
+        info!("{}", "Bytecode published successfully!".green().bold());
 
         info!("Synchronizing client and processing inbox");
         chain_client.synchronize_from_validators().await?;
@@ -427,7 +427,7 @@ where
         })
         .await?;
 
-        info!("{}", "Data blob published successfully!");
+        info!("{}", "Data blob published successfully!".green().bold());
         Ok(blob_id)
     }
 }
@@ -638,7 +638,7 @@ where
             let block = Block {
                 epoch: Epoch::ZERO,
                 chain_id,
-                incoming_messages: Vec::new(),
+                incoming_bundles: Vec::new(),
                 operations,
                 previous_block_hash: chain.block_hash,
                 height: chain.next_block_height,

@@ -457,10 +457,10 @@ where
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_messages = &cert.value().block().unwrap().incoming_messages;
-    assert_eq!(incoming_messages.len(), 1);
-    assert_eq!(incoming_messages[0].action, MessageAction::Reject);
-    assert_eq!(incoming_messages[0].event.kind, MessageKind::Simple);
+    let incoming_bundles = &cert.value().block().unwrap().incoming_bundles;
+    assert_eq!(incoming_bundles.len(), 1);
+    assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
+    assert_eq!(incoming_bundles[0].event.kind, MessageKind::Simple);
     let messages = cert.value().messages().unwrap();
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].len(), 0);
@@ -481,10 +481,10 @@ where
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_messages = &cert.value().block().unwrap().incoming_messages;
-    assert_eq!(incoming_messages.len(), 1);
-    assert_eq!(incoming_messages[0].action, MessageAction::Reject);
-    assert_eq!(incoming_messages[0].event.kind, MessageKind::Tracked);
+    let incoming_bundles = &cert.value().block().unwrap().incoming_bundles;
+    assert_eq!(incoming_bundles.len(), 1);
+    assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
+    assert_eq!(incoming_bundles[0].event.kind, MessageKind::Tracked);
     let messages = cert.value().messages().unwrap();
     assert_eq!(messages.len(), 1);
 
@@ -496,19 +496,19 @@ where
     let mut certs = creator.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_messages = &cert.value().block().unwrap().incoming_messages;
-    assert_eq!(incoming_messages.len(), 2);
+    let incoming_bundles = &cert.value().block().unwrap().incoming_bundles;
+    assert_eq!(incoming_bundles.len(), 2);
     // First message is the grant refund for the successful message sent before.
-    assert_eq!(incoming_messages[0].action, MessageAction::Accept);
-    assert_eq!(incoming_messages[0].event.kind, MessageKind::Tracked);
+    assert_eq!(incoming_bundles[0].action, MessageAction::Accept);
+    assert_eq!(incoming_bundles[0].event.kind, MessageKind::Tracked);
     assert_matches!(
-        incoming_messages[0].event.message,
+        incoming_bundles[0].event.message,
         Message::System(SystemMessage::Credit { .. })
     );
     // Second message is the bounced message.
-    assert_eq!(incoming_messages[1].action, MessageAction::Accept);
-    assert_eq!(incoming_messages[1].event.kind, MessageKind::Bouncing);
-    assert_matches!(incoming_messages[1].event.message, Message::User { .. });
+    assert_eq!(incoming_bundles[1].action, MessageAction::Accept);
+    assert_eq!(incoming_bundles[1].event.kind, MessageKind::Bouncing);
+    assert_matches!(incoming_bundles[1].event.message, Message::User { .. });
 
     Ok(())
 }
@@ -647,7 +647,7 @@ where
     assert_eq!(certs.len(), 1);
     let messages = match certs[0].value() {
         CertificateValue::ConfirmedBlock { executed_block, .. } => {
-            &executed_block.block.incoming_messages
+            &executed_block.block.incoming_bundles
         }
         _ => panic!("Unexpected value"),
     };
@@ -683,7 +683,7 @@ where
     assert_eq!(certs.len(), 1);
     let messages = match certs[0].value() {
         CertificateValue::ConfirmedBlock { executed_block, .. } => {
-            &executed_block.block.incoming_messages
+            &executed_block.block.incoming_bundles
         }
         _ => panic!("Unexpected value"),
     };
@@ -857,7 +857,7 @@ where
     // There should be a message receiving the new post.
     let messages = match certs[0].value() {
         CertificateValue::ConfirmedBlock { executed_block, .. } => {
-            &executed_block.block.incoming_messages
+            &executed_block.block.incoming_bundles
         }
         _ => panic!("Unexpected value"),
     };

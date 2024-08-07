@@ -164,7 +164,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           timestamp
           authenticatedSigner
           previousBlockHash
-          incomingMessages {
+          incomingBundles {
             origin
             event
             action
@@ -209,7 +209,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
           timestamp
           authenticatedSigner
           previousBlockHash
-          incomingMessages {
+          incomingBundles {
             origin
             event
             action

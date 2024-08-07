@@ -48,7 +48,7 @@ use {
         crypto::PublicKey,
         identifiers::{BytecodeId, Destination, MessageId},
     },
-    linera_chain::data_types::{ChannelFullName, IncomingMessage, Medium, MessageAction},
+    linera_chain::data_types::{ChannelFullName, IncomingBundle, Medium, MessageAction},
 };
 
 use crate::{
@@ -133,7 +133,7 @@ pub enum Reason {
         height: BlockHeight,
         hash: CryptoHash,
     },
-    NewIncomingMessage {
+    NewIncomingBundle {
         origin: Origin,
         height: BlockHeight,
     },
@@ -647,15 +647,15 @@ where
         .await
     }
 
-    /// Returns an [`IncomingMessage`] that's awaiting to be received by the chain specified by
+    /// Returns an [`IncomingBundle`] that's awaiting to be received by the chain specified by
     /// `chain_id`.
     #[tracing::instrument(level = "trace", skip(self, chain_id, message_id))]
     #[cfg(with_testing)]
-    pub async fn find_incoming_message(
+    pub async fn find_incoming_bundle(
         &self,
         chain_id: ChainId,
         message_id: MessageId,
-    ) -> Result<Option<IncomingMessage>, WorkerError> {
+    ) -> Result<Option<IncomingBundle>, WorkerError> {
         let sender = message_id.chain_id;
         let Some(certificate) = self.read_certificate(sender, message_id.height).await? else {
             return Ok(None);
@@ -697,7 +697,7 @@ where
 
         assert_eq!(event.message, outgoing_message.message);
 
-        Ok(Some(IncomingMessage {
+        Ok(Some(IncomingBundle {
             origin,
             event,
             action: MessageAction::Accept,
@@ -867,7 +867,7 @@ where
             } => {
                 #[cfg(with_metrics)]
                 {
-                    confirmed_transactions = (_executed_block.block.incoming_messages.len()
+                    confirmed_transactions = (_executed_block.block.incoming_bundles.len()
                         + _executed_block.block.operations.len())
                         as u64;
                 }
@@ -952,7 +952,7 @@ where
                     latest_heights.push((origin.medium.clone(), height));
                     notifications.push(Notification {
                         chain_id: recipient,
-                        reason: Reason::NewIncomingMessage { origin, height },
+                        reason: Reason::NewIncomingBundle { origin, height },
                     });
                 }
                 let cross_chain_requests = vec![CrossChainRequest::ConfirmUpdatedRecipient {

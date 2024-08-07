@@ -62,17 +62,17 @@ defineProps<{block: HashedCertificateValue, title: string}>()
           <span><strong>Status</strong></span>
           <span>{{ block.value.status }}</span>
         </li>
-        <li v-if="block.value.executedBlock?.block.incomingMessages.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#in-messages-collapse-'+block.hash">
-          <span><strong>Incoming Messages</strong> ({{ block.value.executedBlock?.block.incomingMessages.length }})</span>
+        <li v-if="block.value.executedBlock?.block.incomingBundles.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#in-messages-collapse-'+block.hash">
+          <span><strong>Incoming Messages</strong> ({{ block.value.executedBlock?.block.incomingBundles.length }})</span>
           <i class="bi bi-caret-down-fill"></i>
         </li>
         <li v-else class="list-group-item d-flex justify-content-between">
           <span><strong>Incoming Messages</strong> (0)</span>
           <span></span>
         </li>
-        <div v-if="block.value.executedBlock?.block.incomingMessages.length!==0" class="collapse" :id="'in-messages-collapse-'+block.hash">
+        <div v-if="block.value.executedBlock?.block.incomingBundles.length!==0" class="collapse" :id="'in-messages-collapse-'+block.hash">
           <ul class="list-group">
-            <li v-for="(m, i) in block.value.executedBlock?.block.incomingMessages" class="list-group-item p-0" key="block.hash+'-inmessage-'+i">
+            <li v-for="(m, i) in block.value.executedBlock?.block.incomingBundles" class="list-group-item p-0" key="block.hash+'-inmessage-'+i">
               <div class="card">
                 <div class="card-header">Message {{ i+1 }}</div>
                 <div class="card-body">
