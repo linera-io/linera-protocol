@@ -12,7 +12,7 @@ use fs4::FileExt as _;
 use super::Persist;
 
 /// A guard that keeps an exclusive lock on a file.
-pub struct Lock(fs_err::File);
+struct Lock(fs_err::File);
 
 impl Lock {
     /// Acquires an exclusive lock on a provided `file`, returning a [`Lock`] which will

@@ -17,9 +17,11 @@ use linera_execution::{
 };
 use linera_views::common::CommonStoreConfig;
 
+#[cfg(feature = "fs")]
+use crate::config::GenesisConfig;
 use crate::{
     chain_listener::ChainListenerConfig,
-    config::{GenesisConfig, WalletState},
+    config::WalletState,
     persistent::{self, Persist},
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
     util,
@@ -145,21 +147,23 @@ impl ClientOptions {
     }
 
     pub fn storage_config(&self) -> Result<StorageConfigNamespace, anyhow::Error> {
-        match &self.storage_config {
-            Some(config) => config.parse(),
-            #[cfg(feature = "rocksdb")]
-            None => {
-                let storage_config = crate::storage::StorageConfig::RocksDb {
-                    path: self.config_path()?.join("wallet.db"),
-                };
-                let namespace = "default".to_string();
-                Ok(StorageConfigNamespace {
-                    storage_config,
-                    namespace,
-                })
+        if let Some(config) = &self.storage_config {
+            config.parse()
+        } else {
+            cfg_if::cfg_if! {
+                if #[cfg(all(feature = "rocksdb", feature = "fs"))] {
+                    let storage_config = crate::storage::StorageConfig::RocksDb {
+                        path: self.config_path()?.join("wallet.db"),
+                    };
+                    let namespace = "default".to_string();
+                    Ok(StorageConfigNamespace {
+                        storage_config,
+                        namespace,
+                    })
+                } else {
+                    anyhow::bail!("A storage option must be provided")
+                }
             }
-            #[cfg(not(feature = "rocksdb"))]
-            None => anyhow::bail!("A storage option must be provided"),
         }
     }
 
@@ -174,20 +178,23 @@ impl ClientOptions {
         .await?;
         Ok(())
     }
+}
 
+#[cfg(feature = "fs")]
+impl ClientOptions {
     pub fn wallet(&self) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
         let wallet = persistent::File::read(&self.wallet_path()?)?;
         Ok(WalletState::new(wallet))
     }
 
-    pub fn wallet_path(&self) -> anyhow::Result<PathBuf> {
+    fn wallet_path(&self) -> anyhow::Result<PathBuf> {
         self.wallet_state_path
             .clone()
             .map(Ok)
             .unwrap_or_else(|| Ok(self.config_path()?.join("wallet.json")))
     }
 
-    pub fn config_path(&self) -> anyhow::Result<PathBuf> {
+    fn config_path(&self) -> anyhow::Result<PathBuf> {
         let mut config_dir = dirs::config_dir().ok_or(anyhow::anyhow!(
             "Default configuration directory not supported. Please specify a path."
         ))?;
@@ -211,7 +218,25 @@ impl ClientOptions {
             "Wallet already exists at {}. Aborting",
             wallet_path.display()
         );
-        WalletState::create(&wallet_path, Wallet::new(genesis_config, testing_prng_seed))
+        WalletState::create_from_file(&wallet_path, Wallet::new(genesis_config, testing_prng_seed))
+    }
+}
+
+#[cfg(with_local_storage)]
+impl ClientOptions {
+    pub fn wallet(&self) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
+        Ok(WalletState::new(persistent::LocalStorage::read(
+            "linera-wallet",
+        )?))
+    }
+}
+
+#[cfg(not(with_persist))]
+impl ClientOptions {
+    pub fn wallet(&self) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
+        #![allow(unreachable_code)]
+        let _wallet = unimplemented!("No persistence backend selected for wallet; please use one of the `fs` or `local_storage` features");
+        Ok(WalletState::new(persistent::Memory::new(_wallet)))
     }
 }
 

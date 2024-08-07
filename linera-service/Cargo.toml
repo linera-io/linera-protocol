@@ -48,7 +48,7 @@ kubernetes = [
     "dep:fs_extra",
 ]
 remote-net = ["dep:k8s-openapi", "dep:kube"]
-metrics = ["prometheus", "linera-base/metrics"]
+metrics = ["prometheus", "linera-base/metrics", "linera-client/metrics"]
 storage-service = []
 
 [dependencies]
@@ -75,17 +75,17 @@ hex.workspace = true
 http.workspace = true
 k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
-linera-base = { workspace = true, features = ["metrics"] }
-linera-chain = { workspace = true, features = ["metrics"] }
-linera-client.workspace = true
-linera-core = { workspace = true, features = ["metrics", "rocksdb", "wasmer"] }
-linera-execution = { workspace = true, features = ["fs", "metrics", "wasmer"] }
+linera-base.workspace = true
+linera-chain.workspace = true
+linera-client = { workspace = true, features = ["fs", "storage-service"] }
+linera-core.workspace = true
+linera-execution = { workspace = true, features = ["fs"] }
 linera-rpc = { workspace = true, features = ["server", "simple-network"] }
 linera-sdk = { workspace = true, optional = true }
-linera-storage = { workspace = true, features = ["metrics", "wasmer"] }
+linera-storage.workspace = true
 linera-storage-service.workspace = true
 linera-version.workspace = true
-linera-views = { workspace = true, features = ["metrics"] }
+linera-views.workspace = true
 pathdiff = { workspace = true, optional = true }
 port-selector.workspace = true
 prometheus = { workspace = true, optional = true }

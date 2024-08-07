@@ -73,7 +73,7 @@ jobs:
     - name: Run Ethereum tests
       run: |
         cargo test -p linera-ethereum --features ethereum
-        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage_service
+        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
@@ -111,15 +111,18 @@ jobs:
     timeout-minutes: 15
 
     steps:
+    - uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - uses: actions/checkout@v3
     - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Compile `linera-core` for the browser
+    - name: Compile `linera-client` for the browser
       run: |
-        cargo build -p linera-core \
+        cargo build -p linera-client \
           --locked \
           --target wasm32-unknown-unknown \
           --no-default-features \
-          --features web,wasmer
+          --features web-default
     - name: Install chromedriver
       uses: nanasess/setup-chromedriver@v2
     - name: Install wasm-pack

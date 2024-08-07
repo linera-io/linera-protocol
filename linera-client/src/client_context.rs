@@ -3,19 +3,17 @@
 
 use std::{
     collections::BTreeMap,
-    path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
 };
 
 use anyhow::Context;
 use async_trait::async_trait;
-use colored::Colorize;
 use futures::Future;
 use linera_base::{
     crypto::KeyPair,
-    data_types::{Blob, BlockHeight, Timestamp},
-    identifiers::{Account, BlobId, BytecodeId, ChainId},
+    data_types::{BlockHeight, Timestamp},
+    identifiers::{Account, ChainId},
     ownership::ChainOwnership,
 };
 use linera_chain::data_types::Certificate;
@@ -25,7 +23,6 @@ use linera_core::{
     node::CrossChainMessageDelivery,
     JoinSetExt as _,
 };
-use linera_execution::Bytecode;
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -56,6 +53,15 @@ use {
         iter,
     },
     tracing::{error, trace},
+};
+#[cfg(feature = "fs")]
+use {
+    linera_base::{
+        data_types::Blob,
+        identifiers::{BlobId, BytecodeId},
+    },
+    linera_execution::Bytecode,
+    std::path::PathBuf,
 };
 
 use crate::{
@@ -283,73 +289,6 @@ where
         }
     }
 
-    pub async fn publish_bytecode(
-        &mut self,
-        chain_client: &ChainClient<NodeProvider, S>,
-        contract: PathBuf,
-        service: PathBuf,
-    ) -> anyhow::Result<BytecodeId> {
-        info!("Loading bytecode files");
-        let contract_bytecode = Bytecode::load_from_file(&contract).await.context(format!(
-            "failed to load contract bytecode from {:?}",
-            &contract
-        ))?;
-        let service_bytecode = Bytecode::load_from_file(&service).await.context(format!(
-            "failed to load service bytecode from {:?}",
-            &service
-        ))?;
-
-        info!("Publishing bytecode");
-        let (bytecode_id, _) = self
-            .apply_client_command(chain_client, |chain_client| {
-                let contract_bytecode = contract_bytecode.clone();
-                let service_bytecode = service_bytecode.clone();
-                let chain_client = chain_client.clone();
-                async move {
-                    chain_client
-                        .publish_bytecode(contract_bytecode, service_bytecode)
-                        .await
-                        .context("Failed to publish bytecode")
-                }
-            })
-            .await?;
-
-        info!("{}", "Bytecode published successfully!".green().bold());
-
-        info!("Synchronizing client and processing inbox");
-        chain_client.synchronize_from_validators().await?;
-        self.process_inbox(chain_client).await?;
-        Ok(bytecode_id)
-    }
-
-    pub async fn publish_data_blob(
-        &mut self,
-        chain_client: &ChainClient<NodeProvider, S>,
-        blob_path: PathBuf,
-    ) -> anyhow::Result<BlobId> {
-        info!("Loading data blob file");
-        let blob = Blob::load_data_blob_from_file(&blob_path)
-            .await
-            .context(format!("failed to load data blob from {:?}", &blob_path))?;
-        let blob_id = blob.id();
-
-        info!("Publishing data blob");
-        self.apply_client_command(chain_client, |chain_client| {
-            let blob = blob.clone();
-            let chain_client = chain_client.clone();
-            async move {
-                chain_client
-                    .publish_blob(blob)
-                    .await
-                    .context("Failed to publish data blob")
-            }
-        })
-        .await?;
-
-        info!("{}", "Data blob published successfully!".green().bold());
-        Ok(blob_id)
-    }
-
     /// Applies the given function to the chain client.
     ///
     /// Updates the wallet regardless of the outcome. As long as the function returns a round
@@ -415,6 +354,81 @@ where
         info!("Operation confirmed after {} ms", time_total.as_millis());
         debug!("{:?}", certificate);
         Ok(())
+    }
+}
+
+#[cfg(feature = "fs")]
+impl<S, W> ClientContext<S, W>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<S::StoreError>,
+    W: Persist<Target = Wallet>,
+{
+    pub async fn publish_bytecode(
+        &mut self,
+        chain_client: &ChainClient<NodeProvider, S>,
+        contract: PathBuf,
+        service: PathBuf,
+    ) -> anyhow::Result<BytecodeId> {
+        info!("Loading bytecode files");
+        let contract_bytecode = Bytecode::load_from_file(&contract).await.context(format!(
+            "failed to load contract bytecode from {:?}",
+            &contract
+        ))?;
+        let service_bytecode = Bytecode::load_from_file(&service).await.context(format!(
+            "failed to load service bytecode from {:?}",
+            &service
+        ))?;
+
+        info!("Publishing bytecode");
+        let (bytecode_id, _) = self
+            .apply_client_command(chain_client, |chain_client| {
+                let contract_bytecode = contract_bytecode.clone();
+                let service_bytecode = service_bytecode.clone();
+                let chain_client = chain_client.clone();
+                async move {
+                    chain_client
+                        .publish_bytecode(contract_bytecode, service_bytecode)
+                        .await
+                        .context("Failed to publish bytecode")
+                }
+            })
+            .await?;
+
+        info!("{}", "Bytecode published successfully!");
+
+        info!("Synchronizing client and processing inbox");
+        chain_client.synchronize_from_validators().await?;
+        self.process_inbox(chain_client).await?;
+        Ok(bytecode_id)
+    }
+
+    pub async fn publish_data_blob(
+        &mut self,
+        chain_client: &ChainClient<NodeProvider, S>,
+        blob_path: PathBuf,
+    ) -> anyhow::Result<BlobId> {
+        info!("Loading data blob file");
+        let blob = Blob::load_data_blob_from_file(&blob_path)
+            .await
+            .context(format!("failed to load data blob from {:?}", &blob_path))?;
+        let blob_id = blob.id();
+
+        info!("Publishing data blob");
+        self.apply_client_command(chain_client, |chain_client| {
+            let blob = blob.clone();
+            let chain_client = chain_client.clone();
+            async move {
+                chain_client
+                    .publish_blob(blob)
+                    .await
+                    .context("Failed to publish data blob")
+            }
+        })
+        .await?;
+
+        info!("{}", "Data blob published successfully!");
+        Ok(blob_id)
     }
 }
 

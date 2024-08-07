@@ -6,13 +6,10 @@ use std::str::FromStr;
 use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
-use linera_storage::{MemoryStorage, ServiceStorage, Storage};
-use linera_storage_service::{client::ServiceStoreClient, common::ServiceStoreConfig};
-use linera_views::{
-    common::{AdminKeyValueStore, CommonStoreConfig},
-    memory::MemoryStoreConfig,
-    views::ViewError,
-};
+use linera_storage::{MemoryStorage, Storage};
+#[cfg(with_storage)]
+use linera_views::common::LocalAdminKeyValueStore as _;
+use linera_views::{common::CommonStoreConfig, memory::MemoryStoreConfig, views::ViewError};
 use tracing::error;
 #[cfg(feature = "scylladb")]
 use {
@@ -33,6 +30,11 @@ use {
     linera_views::rocks_db::{RocksDbStore, RocksDbStoreConfig},
     std::path::PathBuf,
 };
+#[cfg(feature = "storage-service")]
+use {
+    linera_storage::ServiceStorage,
+    linera_storage_service::{client::ServiceStoreClient, common::ServiceStoreConfig},
+};
 
 use crate::config::GenesisConfig;
 
@@ -42,6 +44,7 @@ const DEFAULT_NAMESPACE: &str = "table_linera";
 #[allow(clippy::large_enum_variant)]
 pub enum StoreConfig {
     /// The storage service key-value store
+    #[cfg(feature = "storage-service")]
     Service(ServiceStoreConfig, String),
     /// The memory key value store
     Memory(MemoryStoreConfig, String),
@@ -61,6 +64,7 @@ pub enum StoreConfig {
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
 pub enum StorageConfig {
     /// The storage service description
+    #[cfg(feature = "storage-service")]
     Service {
         /// The endpoint used
         endpoint: String,
@@ -106,6 +110,7 @@ pub struct StorageConfigNamespace {
 
 const MEMORY: &str = "memory";
 const MEMORY_EXT: &str = "memory:";
+#[cfg(feature = "storage-service")]
 const STORAGE_SERVICE: &str = "service:";
 #[cfg(feature = "rocksdb")]
 const ROCKS_DB: &str = "rocksdb:";
@@ -134,6 +139,7 @@ impl FromStr for StorageConfigNamespace {
                 namespace,
             });
         }
+        #[cfg(feature = "storage-service")]
         if let Some(s) = input.strip_prefix(STORAGE_SERVICE) {
             if s.is_empty() {
                 return Err(format_err!(
@@ -281,6 +287,7 @@ impl StorageConfigNamespace {
     ) -> Result<StoreConfig, anyhow::Error> {
         let namespace = self.namespace.clone();
         match &self.storage_config {
+            #[cfg(feature = "storage-service")]
             StorageConfig::Service { endpoint } => {
                 let endpoint = endpoint.clone();
                 let config = ServiceStoreConfig {
@@ -327,6 +334,7 @@ impl std::fmt::Display for StorageConfigNamespace {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let namespace = &self.namespace;
         match &self.storage_config {
+            #[cfg(feature = "storage-service")]
             StorageConfig::Service { endpoint } => {
                 write!(f, "service:tcp:{}:{}", endpoint, namespace)
             }
@@ -358,6 +366,7 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "delete_all does not make sense for memory storage".to_string(),
             }),
+            #[cfg(feature = "storage-service")]
             StoreConfig::Service(config, _namespace) => {
                 ServiceStoreClient::delete_all(&config).await?;
                 Ok(())
@@ -387,6 +396,7 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "delete_namespace does not make sense for memory storage".to_string(),
             }),
+            #[cfg(feature = "storage-service")]
             StoreConfig::Service(config, namespace) => {
                 ServiceStoreClient::delete(&config, &namespace).await?;
                 Ok(())
@@ -416,6 +426,7 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "test_existence does not make sense for memory storage".to_string(),
             }),
+            #[cfg(feature = "storage-service")]
             StoreConfig::Service(config, namespace) => {
                 Ok(ServiceStoreClient::exists(&config, &namespace).await?)
             }
@@ -441,6 +452,7 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "initialize does not make sense for memory storage".to_string(),
             }),
+            #[cfg(feature = "storage-service")]
             StoreConfig::Service(config, namespace) => {
                 ServiceStoreClient::maybe_create_and_connect(&config, &namespace).await?;
                 Ok(())
@@ -470,6 +482,7 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "list_all is not supported for the memory storage".to_string(),
             }),
+            #[cfg(feature = "storage-service")]
             StoreConfig::Service(config, _namespace) => {
                 let tables = ServiceStoreClient::list_all(&config).await?;
                 Ok(tables)
@@ -524,6 +537,7 @@ where
             genesis_config.initialize_storage(&mut storage).await?;
             job.run(storage).await
         }
+        #[cfg(feature = "storage-service")]
         StoreConfig::Service(config, namespace) => {
             let storage = ServiceStorage::new(config, &namespace, wasm_runtime).await?;
             job.run(storage).await
@@ -555,6 +569,7 @@ pub async fn full_initialize_storage(
         StoreConfig::Memory(_, _) => {
             bail!("The initialization should not be called for memory");
         }
+        #[cfg(feature = "storage-service")]
         StoreConfig::Service(config, namespace) => {
             let wasm_runtime = None;
             let mut storage = ServiceStorage::initialize(config, &namespace, wasm_runtime).await?;
@@ -606,6 +621,7 @@ fn test_memory_storage_config_from_str() {
     );
 }
 
+#[cfg(feature = "storage-service")]
 #[test]
 fn test_shared_store_config_from_str() {
     assert_eq!(

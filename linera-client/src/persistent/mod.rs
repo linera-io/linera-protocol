@@ -1,11 +1,24 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod file;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "local-storage")] {
+        pub mod local_storage;
+        pub use local_storage::LocalStorage;
+    }
+}
 
+cfg_if::cfg_if! {
+    if #[cfg(feature = "fs")] {
+        pub mod file;
+        pub use file::File;
+    }
+}
+
+pub mod memory;
 use std::ops::{Deref, DerefMut};
 
-pub use file::File;
+pub use memory::Memory;
 
 /// The `Persist` trait provides a wrapper around a value that can be saved in a
 /// persistent way. A minimal implementation provides an `Error` type, a `persist`
