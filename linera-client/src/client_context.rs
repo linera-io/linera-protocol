@@ -395,7 +395,7 @@ where
             })
             .await?;
 
-        info!("{}", "Bytecode published successfully!".green().bold());
+        info!("{}", "Bytecode published successfully!");
 
         info!("Synchronizing client and processing inbox");
         chain_client.synchronize_from_validators().await?;
@@ -427,7 +427,7 @@ where
         })
         .await?;
 
-        info!("{}", "Data blob published successfully!".green().bold());
+        info!("{}", "Data blob published successfully!");
         Ok(blob_id)
     }
 }
