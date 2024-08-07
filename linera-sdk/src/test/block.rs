@@ -5,20 +5,18 @@
 //!
 //! Helps with the construction of blocks, adding operations and
 
-use std::mem;
-
 use linera_base::{
     crypto::PublicKey,
     data_types::{Amount, ApplicationPermissions, Round, Timestamp},
-    identifiers::{ApplicationId, ChainId, MessageId, Owner},
+    identifiers::{ApplicationId, ChainId, GenericApplicationId, Owner},
     ownership::TimeoutConfig,
 };
 use linera_chain::data_types::{
-    Block, Certificate, HashedCertificateValue, IncomingBundle, LiteVote, MessageAction,
-    SignatureAggregator,
+    Block, Certificate, ChannelFullName, Event, HashedCertificateValue, IncomingBundle, LiteVote,
+    Medium, MessageAction, Origin, SignatureAggregator,
 };
 use linera_execution::{
-    system::{Recipient, SystemOperation, UserData},
+    system::{Recipient, SystemChannel, SystemOperation, UserData},
     Operation,
 };
 
@@ -29,7 +27,6 @@ use crate::ToBcsBytes;
 /// [`Certificate`]s using a [`TestValidator`].
 pub struct BlockBuilder {
     block: Block,
-    incoming_bundles: Vec<(MessageId, MessageAction)>,
     validator: TestValidator,
 }
 
@@ -73,7 +70,6 @@ impl BlockBuilder {
                 authenticated_signer: Some(owner),
                 timestamp: Timestamp::from(0),
             },
-            incoming_bundles: Vec::new(),
             validator,
         }
     }
@@ -158,72 +154,85 @@ impl BlockBuilder {
         self
     }
 
-    /// Receives an incoming message referenced by the [`MessageId`].
-    ///
-    /// The block that produces the message must have already been executed by the test validator,
-    /// so that the message is already in the inbox of the microchain this block belongs to.
-    pub fn with_incoming_bundle(&mut self, message_id: MessageId) -> &mut Self {
-        self.incoming_bundles
-            .push((message_id, MessageAction::Accept));
-        self
-    }
-
-    /// Rejects an incoming message referenced by the [`MessageId`].
-    ///
-    /// The block that produces the message must have already been executed by the test validator,
-    /// so that the message is already in the inbox of the microchain this block belongs to.
-    pub fn with_message_rejection(&mut self, message_id: MessageId) -> &mut Self {
-        self.incoming_bundles
-            .push((message_id, MessageAction::Reject));
-        self
-    }
-
-    /// Receives multiple incoming messages referenced by the [`MessageId`]s.
-    ///
-    /// The blocks that produce the messages must have already been executed by the test validator,
-    /// so that the messages are already in the inbox of the microchain this block belongs to.
-    pub fn with_incoming_bundles(
-        &mut self,
-        message_ids: impl IntoIterator<Item = MessageId>,
-    ) -> &mut Self {
-        self.incoming_bundles.extend(
-            message_ids
-                .into_iter()
-                .map(|message_id| (message_id, MessageAction::Accept)),
-        );
-        self
-    }
-
-    /// Receives incoming messages by specifying them directly.
+    /// Receives incoming message bundles by specifying them directly.
     ///
     /// This is an internal method that bypasses the check to see if the messages are already
     /// present in the inboxes of the microchain that owns this block.
-    pub(crate) fn with_raw_messages(
+    pub(crate) fn with_incoming_bundles(
         &mut self,
-        messages: impl IntoIterator<Item = IncomingBundle>,
+        bundles: impl IntoIterator<Item = IncomingBundle>,
     ) -> &mut Self {
-        self.block.incoming_bundles.extend(messages);
+        self.block.incoming_bundles.extend(bundles);
         self
+    }
+
+    /// Receives all admin messages that were sent to this chain by the given certificate.
+    pub fn with_system_messages_from(
+        &mut self,
+        certificate: &Certificate,
+        channel: SystemChannel,
+    ) -> &mut Self {
+        let medium = Medium::Channel(ChannelFullName {
+            application_id: GenericApplicationId::System,
+            name: channel.name(),
+        });
+        self.with_messages_from_by_medium(certificate, &medium, MessageAction::Accept)
+    }
+
+    /// Receives all direct messages  that were sent to this chain by the given certificate.
+    pub fn with_messages_from(&mut self, certificate: &Certificate) -> &mut Self {
+        self.with_messages_from_by_medium(certificate, &Medium::Direct, MessageAction::Accept)
+    }
+
+    /// Receives all messages that were sent to this chain by the given certificate.
+    pub fn with_messages_from_by_medium(
+        &mut self,
+        certificate: &Certificate,
+        medium: &Medium,
+        action: MessageAction,
+    ) -> &mut Self {
+        let origin = Origin {
+            sender: certificate.value().chain_id(),
+            medium: medium.clone(),
+        };
+        let executed_block = certificate
+            .value()
+            .executed_block()
+            .expect("Failed to obtain executed block from certificate");
+        let bundles = certificate
+            .message_bundles_for(medium, self.block.chain_id)
+            .into_iter()
+            .flat_map(|bundle| {
+                bundle
+                    .messages
+                    .into_iter()
+                    .map(|(index, message)| IncomingBundle {
+                        origin: origin.clone(),
+                        event: Event {
+                            certificate_hash: certificate.hash(),
+                            height: certificate.value().height(),
+                            index,
+                            authenticated_signer: message.authenticated_signer,
+                            grant: message.grant,
+                            refund_grant_to: message.refund_grant_to,
+                            kind: message.kind,
+                            timestamp: executed_block.block.timestamp,
+                            message: message.message,
+                        },
+                        action,
+                    })
+            });
+        self.with_incoming_bundles(bundles)
     }
 
     /// Tries to sign the prepared [`Block`] with the [`TestValidator`]'s keys and return the
     /// resulting [`Certificate`]. Returns an error if block execution fails.
-    pub(crate) async fn try_sign(mut self) -> anyhow::Result<(Certificate, Vec<MessageId>)> {
-        self.collect_incoming_bundles().await;
-
+    pub(crate) async fn try_sign(self) -> anyhow::Result<Certificate> {
         let (executed_block, _) = self
             .validator
             .worker()
             .stage_block_execution(self.block)
             .await?;
-
-        let message_ids = (0..executed_block
-            .messages()
-            .iter()
-            .map(Vec::len)
-            .sum::<usize>() as u32)
-            .map(|index| executed_block.message_id(index))
-            .collect();
 
         let value = HashedCertificateValue::new_confirmed(executed_block);
         let vote = LiteVote::new(value.lite(), Round::Fast, self.validator.key_pair());
@@ -233,28 +242,6 @@ impl BlockBuilder {
             .expect("Failed to sign block")
             .expect("Committee has more than one test validator");
 
-        Ok((certificate, message_ids))
-    }
-
-    /// Collects and adds the previously requested messages to this block.
-    ///
-    /// The requested messages must already all be in the inboxes of the microchain that owns this
-    /// block.
-    async fn collect_incoming_bundles(&mut self) {
-        let chain_id = self.block.chain_id;
-
-        for (message_id, action) in mem::take(&mut self.incoming_bundles) {
-            let mut message = self
-                .validator
-                .worker()
-                .find_incoming_bundle(chain_id, message_id)
-                .await
-                .expect("Failed to find message to receive in block")
-                .expect("Message that block should consume has not been emitted");
-
-            message.action = action;
-
-            self.block.incoming_bundles.push(message);
-        }
+        Ok(certificate)
     }
 }

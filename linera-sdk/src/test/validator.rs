@@ -13,7 +13,7 @@ use futures::FutureExt as _;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
-    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId},
+    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
     ownership::ChainOwnership,
 };
 use linera_core::worker::WorkerState;
@@ -190,13 +190,21 @@ impl TestValidator {
             application_permissions: ApplicationPermissions::default(),
         };
 
-        let messages = admin_chain
+        let certificate = admin_chain
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::OpenChain(new_chain_config));
             })
             .await;
+        let executed_block = certificate
+            .value()
+            .executed_block()
+            .expect("Failed to obtain executed block from certificate");
 
-        ChainDescription::Child(messages[OPEN_CHAIN_MESSAGE_INDEX as usize])
+        ChainDescription::Child(MessageId {
+            chain_id: executed_block.block.chain_id,
+            height: executed_block.block.height,
+            index: OPEN_CHAIN_MESSAGE_INDEX,
+        })
     }
 
     /// Returns the [`ActiveChain`] reference to the microchain identified by `chain_id`.

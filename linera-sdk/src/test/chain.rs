@@ -20,7 +20,10 @@ use linera_base::{
 use linera_chain::{data_types::Certificate, ChainError, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
-    system::{SystemChannel, SystemExecutionError, SystemMessage, SystemOperation},
+    system::{
+        SystemChannel, SystemExecutionError, SystemMessage, SystemOperation,
+        CREATE_APPLICATION_MESSAGE_INDEX, PUBLISH_BYTECODE_MESSAGE_INDEX,
+    },
     Bytecode, ExecutionError, Message, Query, Response,
 };
 use serde::Serialize;
@@ -87,7 +90,7 @@ impl ActiveChain {
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
     /// to provide the block's contents.
-    pub async fn add_block(&self, block_builder: impl FnOnce(&mut BlockBuilder)) -> Vec<MessageId> {
+    pub async fn add_block(&self, block_builder: impl FnOnce(&mut BlockBuilder)) -> Certificate {
         self.try_add_block(block_builder)
             .await
             .expect("Failed to execute block.")
@@ -100,7 +103,7 @@ impl ActiveChain {
     pub async fn try_add_block(
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
-    ) -> anyhow::Result<Vec<MessageId>> {
+    ) -> anyhow::Result<Certificate> {
         let mut tip = self.tip.lock().await;
         let mut block = BlockBuilder::new(
             self.description.into(),
@@ -112,7 +115,7 @@ impl ActiveChain {
         block_builder(&mut block);
 
         // TODO(#2066): Remove boxing once call-stack is shallower
-        let (certificate, message_ids) = Box::pin(block.try_sign()).await?;
+        let certificate = Box::pin(block.try_sign()).await?;
 
         self.validator
             .worker()
@@ -120,9 +123,9 @@ impl ActiveChain {
             .await
             .expect("Rejected certificate");
 
-        *tip = Some(certificate);
+        *tip = Some(certificate.clone());
 
-        Ok(message_ids)
+        Ok(certificate)
     }
 
     /// Receives all queued messages in all inboxes of this microchain.
@@ -140,7 +143,7 @@ impl ActiveChain {
         let messages = information.info.requested_pending_messages;
 
         self.add_block(|block| {
-            block.with_raw_messages(messages);
+            block.with_incoming_bundles(messages);
         })
         .await;
     }
@@ -171,20 +174,29 @@ impl ActiveChain {
         Self::build_bytecodes_in(&repository_path).await;
         let (contract, service) = self.find_bytecodes_in(&repository_path).await;
 
-        let publish_messages = self
+        let certificate = self
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::PublishBytecode { contract, service });
             })
             .await;
 
-        assert_eq!(publish_messages.len(), 1);
+        let executed_block = certificate
+            .value()
+            .executed_block()
+            .expect("Failed to obtain executed block from certificate");
+        assert_eq!(executed_block.messages().len(), 1);
+        let message_id = MessageId {
+            chain_id: executed_block.block.chain_id,
+            height: executed_block.block.height,
+            index: PUBLISH_BYTECODE_MESSAGE_INDEX,
+        };
 
         self.add_block(|block| {
-            block.with_incoming_bundle(publish_messages[0]);
+            block.with_messages_from(&certificate);
         })
         .await;
 
-        BytecodeId::new(publish_messages[0]).with_abi()
+        BytecodeId::new(message_id).with_abi()
     }
 
     /// Compiles the crate in the `repository` path.
@@ -290,7 +302,7 @@ impl ActiveChain {
     pub async fn subscribe_to_published_bytecodes_from(&mut self, publisher_id: ChainId) {
         let publisher = self.validator.get_chain(&publisher_id);
 
-        let request_messages = self
+        let subscribe_certificate = self
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::Subscribe {
                     chain_id: publisher.id(),
@@ -299,18 +311,18 @@ impl ActiveChain {
             })
             .await;
 
-        assert_eq!(request_messages.len(), 1);
+        assert_eq!(subscribe_certificate.outgoing_message_count(), 1);
 
-        let accept_messages = publisher
+        let accept_certificate = publisher
             .add_block(|block| {
-                block.with_incoming_bundle(request_messages[0]);
+                block.with_messages_from(&subscribe_certificate);
             })
             .await;
 
-        assert_eq!(accept_messages.len(), 1);
+        assert_eq!(accept_certificate.outgoing_message_count(), 1);
 
         self.add_block(|block| {
-            block.with_incoming_bundle(accept_messages[0]);
+            block.with_system_messages_from(&accept_certificate, SystemChannel::PublishedBytecodes);
         })
         .await;
     }
@@ -337,13 +349,15 @@ impl ActiveChain {
         Parameters: Serialize,
         InstantiationArgument: Serialize,
     {
-        let bytecode_location_message = if self.needs_bytecode_location(bytecode_id).await {
+        if self.needs_bytecode_location(bytecode_id).await {
             self.subscribe_to_published_bytecodes_from(bytecode_id.message_id.chain_id)
                 .await;
-            Some(self.find_bytecode_location(bytecode_id).await)
-        } else {
-            None
-        };
+            let certificate = self.find_bytecode_location(bytecode_id).await;
+            self.add_block(|block| {
+                block.with_system_messages_from(&certificate, SystemChannel::PublishedBytecodes);
+            })
+            .await;
+        }
 
         let parameters = serde_json::to_vec(&parameters).unwrap();
         let instantiation_argument = serde_json::to_vec(&instantiation_argument).unwrap();
@@ -352,12 +366,8 @@ impl ActiveChain {
             self.register_application(dependency).await;
         }
 
-        let creation_messages = self
+        let creation_certificate = self
             .add_block(|block| {
-                if let Some(message_id) = bytecode_location_message {
-                    block.with_incoming_bundle(message_id);
-                }
-
                 block.with_system_operation(SystemOperation::CreateApplication {
                     bytecode_id: bytecode_id.forget_abi(),
                     parameters,
@@ -367,11 +377,20 @@ impl ActiveChain {
             })
             .await;
 
-        assert_eq!(creation_messages.len(), 1);
+        let executed_block = creation_certificate
+            .value()
+            .executed_block()
+            .expect("Failed to obtain executed block from certificate");
+        assert_eq!(executed_block.messages().len(), 1);
+        let creation = MessageId {
+            chain_id: executed_block.block.chain_id,
+            height: executed_block.block.height,
+            index: CREATE_APPLICATION_MESSAGE_INDEX,
+        };
 
         ApplicationId {
             bytecode_id: bytecode_id.just_abi(),
-            creation: creation_messages[0],
+            creation,
         }
     }
 
@@ -388,11 +407,11 @@ impl ActiveChain {
             .is_none()
     }
 
-    /// Finds the message that sends the message with the bytecode location of `bytecode_id`.
+    /// Finds the certificate that sends the message with the bytecode location of `bytecode_id`.
     async fn find_bytecode_location<Abi, Parameters, InstantiationArgument>(
         &self,
         bytecode_id: BytecodeId<Abi, Parameters, InstantiationArgument>,
-    ) -> MessageId {
+    ) -> Certificate {
         for height in bytecode_id.message_id.height.0.. {
             let certificate = self
                 .validator
@@ -406,23 +425,14 @@ impl ActiveChain {
                 .value()
                 .messages()
                 .expect("Unexpected certificate value");
-            let message_index = messages.iter().flatten().position(|message| {
+            if messages.iter().flatten().any(|message| {
                 matches!(
                     &message.message,
                     Message::System(SystemMessage::BytecodeLocations { locations })
                         if locations.iter().any(|(id, _)| id == &bytecode_id.forget_abi())
                 )
-            });
-
-            if let Some(index) = message_index {
-                return MessageId {
-                    chain_id: bytecode_id.message_id.chain_id,
-                    height: BlockHeight(height),
-                    index: index.try_into().expect(
-                        "Incompatible `MessageId` index types in \
-                        `linera-sdk` and `linera-execution`",
-                    ),
-                };
+            }) {
+                return certificate;
             }
         }
 
@@ -434,29 +444,25 @@ impl ActiveChain {
         if self.needs_application_description(application_id).await {
             let source_chain = self.validator.get_chain(&application_id.creation.chain_id);
 
-            let request_messages = self
+            let request_certificate = self
                 .add_block(|block| {
                     block.with_request_for_application(application_id);
                 })
                 .await;
 
-            assert_eq!(request_messages.len(), 1);
-
-            let register_messages = source_chain
+            let register_certificate = source_chain
                 .add_block(|block| {
-                    block.with_incoming_bundle(request_messages[0]);
+                    block.with_messages_from(&request_certificate);
                 })
                 .await;
 
-            assert_eq!(register_messages.len(), 1);
-
-            let final_messages = self
+            let final_certificate = self
                 .add_block(|block| {
-                    block.with_incoming_bundle(register_messages[0]);
+                    block.with_messages_from(&register_certificate);
                 })
                 .await;
 
-            assert_eq!(final_messages.len(), 0);
+            assert_eq!(final_certificate.outgoing_message_count(), 0);
         }
     }
 
