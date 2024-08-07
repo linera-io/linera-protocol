@@ -96,7 +96,7 @@ jobs:
         mkdir -p ignored/cratesfyi-prefix/crates.io-index
         . .env
         SQLX_OFFLINE=1 cargo build
-        docker-compose up -d db s3
+        docker compose up -d db s3
         cargo run -- database migrate
         grep -v ^# "$LINERA_PACKAGES" | while read LINE; do
             CRATE="${LINE%% *}"
