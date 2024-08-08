@@ -276,8 +276,6 @@ pub struct OperationContext {
     pub height: BlockHeight,
     /// The current index of the operation.
     pub index: Option<u32>,
-    /// The index of the next message to be created.
-    pub next_message_index: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -297,8 +295,6 @@ pub struct MessageContext {
     /// The ID of the message (based on the operation height and index in the remote
     /// certificate).
     pub message_id: MessageId,
-    /// The index of the next message to be created.
-    pub next_message_index: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -309,8 +305,6 @@ pub struct FinalizeContext {
     pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,
-    /// The index of the next message to be created.
-    pub next_message_index: u32,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -844,11 +838,11 @@ impl OperationContext {
         })
     }
 
-    fn next_message_id(&self, message_count: u32) -> MessageId {
+    fn next_message_id(&self, next_message_index: u32) -> MessageId {
         MessageId {
             chain_id: self.chain_id,
             height: self.height,
-            index: self.next_message_index + message_count,
+            index: next_message_index,
         }
     }
 }

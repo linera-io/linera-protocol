@@ -70,7 +70,6 @@ async fn test_fuel_for_counter_wasm_application(
         index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
-        next_message_index: 0,
     };
     let increments = [2_u64, 9, 7, 1000];
     let policy = ResourceControlPolicy {
@@ -89,7 +88,7 @@ async fn test_fuel_for_counter_wasm_application(
             chain_id: ChainId::root(0),
             owner: None,
         };
-        let mut txn_tracker = TransactionTracker::with_oracle_responses(Vec::new());
+        let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
         view.execute_operation(
             context,
             Timestamp::from(0),
@@ -98,7 +97,7 @@ async fn test_fuel_for_counter_wasm_application(
             &mut controller,
         )
         .await?;
-        let (outcomes, _) = txn_tracker.destructure().unwrap();
+        let (outcomes, _, _) = txn_tracker.destructure().unwrap();
         assert_eq!(
             outcomes,
             vec![

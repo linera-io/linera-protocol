@@ -68,8 +68,6 @@ pub struct SyncRuntimeInternal<UserInstance> {
     authenticated_signer: Option<Owner>,
     /// The current message being executed, if there is one.
     executing_message: Option<ExecutingMessage>,
-    /// The index of the next message to be created.
-    next_message_index: u32,
 
     /// How to interact with the storage view of the execution state.
     execution_state_sender: ExecutionStateSender,
@@ -97,16 +95,6 @@ pub struct SyncRuntimeInternal<UserInstance> {
     refund_grant_to: Option<Account>,
     /// Controller to track fuel and storage consumption.
     resource_controller: ResourceController,
-}
-
-impl<UserInstance> SyncRuntimeInternal<UserInstance> {
-    /// Returns the index of the next outcome's first message.
-    fn next_message_index(&self) -> Result<u32, ArithmeticError> {
-        let len = self.transaction_tracker.message_count()?;
-        self.next_message_index
-            .checked_add(len)
-            .ok_or(ArithmeticError::Overflow)
-    }
 }
 
 /// The runtime status of an application.
@@ -291,7 +279,6 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         height: BlockHeight,
         local_time: Timestamp,
         authenticated_signer: Option<Owner>,
-        next_message_index: u32,
         executing_message: Option<ExecutingMessage>,
         execution_state_sender: ExecutionStateSender,
         refund_grant_to: Option<Account>,
@@ -303,7 +290,6 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             height,
             local_time,
             authenticated_signer,
-            next_message_index,
             executing_message,
             execution_state_sender,
             is_finalizing: false,
@@ -443,7 +429,6 @@ impl SyncRuntimeInternal<UserContractInstance> {
             authenticated_caller_id,
             height: self.height,
             index: None,
-            next_message_index: self.next_message_index,
         };
         self.push_application(ApplicationStatus {
             caller_id: authenticated_caller_id,
@@ -491,7 +476,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
         }
 
         self.transaction_tracker
-            .add_user_outcome(application_id, outcome);
+            .add_user_outcome(application_id, outcome)?;
         Ok(())
     }
 }
@@ -1042,14 +1027,12 @@ impl ContractSyncRuntime {
         };
         let signer = action.signer();
         let height = action.height();
-        let next_message_index = action.next_message_index();
         let mut runtime = SyncRuntime(Some(ContractSyncRuntimeHandle::from(
             SyncRuntimeInternal::new(
                 chain_id,
                 height,
                 local_time,
                 signer,
-                next_message_index,
                 executing_message,
                 execution_state_sender,
                 refund_grant_to,
@@ -1061,7 +1044,6 @@ impl ContractSyncRuntime {
             authenticated_signer: signer,
             chain_id,
             height,
-            next_message_index,
         };
         runtime.execute(application_id, signer, move |code| match action {
             UserAction::Instantiate(context, argument) => code.instantiate(context, argument),
@@ -1223,7 +1205,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?;
         self.inner()
             .transaction_tracker
-            .add_system_outcome(execution_outcome);
+            .add_system_outcome(execution_outcome)?;
         Ok(())
     }
 
@@ -1248,7 +1230,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .with_authenticated_signer(signer);
         self.inner()
             .transaction_tracker
-            .add_system_outcome(execution_outcome);
+            .add_system_outcome(execution_outcome)?;
         Ok(())
     }
 
@@ -1303,7 +1285,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let next_message_id = MessageId {
             chain_id: this.chain_id,
             height: this.height,
-            index: this.next_message_index()?,
+            index: this.transaction_tracker.next_message_index(),
         };
         let chain_id = ChainId::child(next_message_id);
         let [open_chain_message, subscribe_message] = this
@@ -1319,7 +1301,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let outcome = RawExecutionOutcome::default()
             .with_message(open_chain_message)
             .with_message(subscribe_message);
-        this.transaction_tracker.add_system_outcome(outcome);
+        this.transaction_tracker.add_system_outcome(outcome)?;
         Ok(chain_id)
     }
 
@@ -1367,7 +1349,6 @@ impl ServiceSyncRuntime {
                 context.next_block_height,
                 context.local_time,
                 None,
-                0,
                 None,
                 execution_state_sender,
                 None,

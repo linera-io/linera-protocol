@@ -20,32 +20,57 @@ pub struct TransactionTracker {
     replaying_oracle_responses: Option<vec::IntoIter<OracleResponse>>,
     oracle_responses: Vec<OracleResponse>,
     outcomes: Vec<ExecutionOutcome>,
+    next_message_index: u32,
 }
 
 impl TransactionTracker {
-    /// Creates a tracker with oracle responses to be replayed.
-    pub fn with_oracle_responses(oracle_responses: Vec<OracleResponse>) -> Self {
+    pub fn new(next_message_index: u32, oracle_responses: Option<Vec<OracleResponse>>) -> Self {
         TransactionTracker {
-            replaying_oracle_responses: Some(oracle_responses.into_iter()),
-            ..TransactionTracker::default()
+            replaying_oracle_responses: oracle_responses.map(Vec::into_iter),
+            next_message_index,
+            oracle_responses: Vec::new(),
+            outcomes: Vec::new(),
         }
     }
 
-    pub fn add_system_outcome(&mut self, outcome: RawExecutionOutcome<SystemMessage, Amount>) {
-        self.outcomes.push(ExecutionOutcome::System(outcome));
+    pub fn next_message_index(&self) -> u32 {
+        self.next_message_index
+    }
+
+    pub fn add_system_outcome(
+        &mut self,
+        outcome: RawExecutionOutcome<SystemMessage, Amount>,
+    ) -> Result<(), ArithmeticError> {
+        self.add_outcome(ExecutionOutcome::System(outcome))
     }
 
     pub fn add_user_outcome(
         &mut self,
         application_id: ApplicationId,
         outcome: RawExecutionOutcome<Vec<u8>, Amount>,
-    ) {
-        self.outcomes
-            .push(ExecutionOutcome::User(application_id, outcome))
+    ) -> Result<(), ArithmeticError> {
+        self.add_outcome(ExecutionOutcome::User(application_id, outcome))
     }
 
-    pub fn add_outcomes(&mut self, outcomes: impl IntoIterator<Item = ExecutionOutcome>) {
-        self.outcomes.extend(outcomes);
+    pub fn add_outcomes(
+        &mut self,
+        outcomes: impl IntoIterator<Item = ExecutionOutcome>,
+    ) -> Result<(), ArithmeticError> {
+        for outcome in outcomes {
+            self.add_outcome(outcome)?;
+        }
+        Ok(())
+    }
+
+    fn add_outcome(&mut self, outcome: ExecutionOutcome) -> Result<(), ArithmeticError> {
+        let message_count =
+            u32::try_from(outcome.message_count()).map_err(|_| ArithmeticError::Overflow)?;
+        self.next_message_index = self
+            .next_message_index
+            .checked_add(message_count)
+            .ok_or(ArithmeticError::Overflow)?;
+        self.outcomes.push(outcome);
+        Ok(())
     }
 
     pub fn add_oracle_response(&mut self, oracle_response: OracleResponse) {
@@ -64,23 +89,14 @@ impl TransactionTracker {
         Ok(Some(response))
     }
 
-    pub fn message_count(&self) -> Result<u32, ArithmeticError> {
-        let mut count = 0usize;
-        for outcome in &self.outcomes {
-            count = count
-                .checked_add(outcome.message_count())
-                .ok_or(ArithmeticError::Overflow)?;
-        }
-        u32::try_from(count).map_err(|_| ArithmeticError::Overflow)
-    }
-
     pub fn destructure(
         self,
-    ) -> Result<(Vec<ExecutionOutcome>, Vec<OracleResponse>), ExecutionError> {
+    ) -> Result<(Vec<ExecutionOutcome>, Vec<OracleResponse>, u32), ExecutionError> {
         let TransactionTracker {
             replaying_oracle_responses,
             oracle_responses,
             outcomes,
+            next_message_index,
         } = self;
         if let Some(mut responses) = replaying_oracle_responses {
             ensure!(
@@ -88,7 +104,7 @@ impl TransactionTracker {
                 ExecutionError::UnexpectedOracleResponse
             );
         }
-        Ok((outcomes, oracle_responses))
+        Ok((outcomes, oracle_responses, next_message_index))
     }
 
     pub(crate) fn outcomes_mut(&mut self) -> &mut Vec<ExecutionOutcome> {

@@ -770,11 +770,12 @@ where
             };
             let with_context =
                 |error: ExecutionError| ChainError::ExecutionError(error, chain_execution_context);
-            let mut txn_tracker = match replaying_oracle_responses.as_mut().map(Iterator::next) {
-                Some(Some(responses)) => TransactionTracker::with_oracle_responses(responses),
+            let maybe_responses = match replaying_oracle_responses.as_mut().map(Iterator::next) {
+                Some(Some(responses)) => Some(responses),
                 Some(None) => return Err(ChainError::MissingOracleResponseList),
-                None => TransactionTracker::default(),
+                None => None,
             };
+            let mut txn_tracker = TransactionTracker::new(next_message_index, maybe_responses);
             match transaction {
                 Transaction::Messages(incoming_bundle) => {
                     for (message_id, posted_message) in incoming_bundle.messages_with_id() {
@@ -783,7 +784,6 @@ where
                             posted_message,
                             incoming_bundle,
                             block,
-                            next_message_index,
                             txn_index,
                             local_time,
                             &mut txn_tracker,
@@ -801,7 +801,6 @@ where
                         index: Some(txn_index),
                         authenticated_signer: block.authenticated_signer,
                         authenticated_caller_id: None,
-                        next_message_index,
                     };
                     self.execution_state
                         .execute_operation(
@@ -820,8 +819,9 @@ where
                 .update_execution_outcomes_with_app_registrations(&mut txn_tracker)
                 .await
                 .map_err(with_context)?;
-            let (txn_outcomes, txn_oracle_responses) =
+            let (txn_outcomes, txn_oracle_responses, new_next_message_index) =
                 txn_tracker.destructure().map_err(with_context)?;
+            next_message_index = new_next_message_index;
             let (txn_messages, txn_events) = self
                 .process_execution_outcomes(block.height, txn_outcomes)
                 .await?;
@@ -852,11 +852,6 @@ where
                     .track_message(&message_out.message)
                     .map_err(with_context)?;
             }
-            let messages_len =
-                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
-            next_message_index = next_message_index
-                .checked_add(messages_len)
-                .ok_or(ArithmeticError::Overflow)?;
             oracle_responses.push(txn_oracle_responses);
             messages.push(txn_messages);
             events.push(txn_events);
@@ -926,7 +921,6 @@ where
         posted_message: &PostedMessage,
         incoming_bundle: &IncomingBundle,
         block: &Block,
-        next_message_index: u32,
         txn_index: u32,
         local_time: Timestamp,
         txn_tracker: &mut TransactionTracker,
@@ -942,7 +936,6 @@ where
             message_id,
             authenticated_signer: posted_message.authenticated_signer,
             refund_grant_to: posted_message.refund_grant_to,
-            next_message_index,
         };
         let mut grant = posted_message.grant;
         match incoming_bundle.action {

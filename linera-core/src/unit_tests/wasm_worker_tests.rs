@@ -494,7 +494,6 @@ where
         authenticated_caller_id: None,
         height: run_block.height,
         index: Some(0),
-        next_message_index: 0,
     };
     let mut controller = ResourceController::default();
     creator_state
@@ -505,7 +504,7 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            &mut TransactionTracker::with_oracle_responses(Vec::new()),
+            &mut TransactionTracker::new(0, Some(Vec::new())),
             &mut controller,
         )
         .await?;
