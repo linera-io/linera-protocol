@@ -14,7 +14,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, OracleResponse, Timestamp},
     ensure,
-    identifiers::{ChainId, Destination, GenericApplicationId, MessageId, StreamId},
+    identifiers::{ChainId, Destination, GenericApplicationId, MessageId, Owner, StreamId},
 };
 use linera_execution::{
     system::SystemMessage, ExecutionError, ExecutionOutcome, ExecutionRequest,
@@ -39,7 +39,7 @@ use {linera_base::identifiers::BytecodeId, linera_execution::BytecodeLocation};
 use crate::{
     data_types::{
         Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, EventRecord, IncomingBundle,
-        MessageAction, MessageBundle, Origin, OutgoingMessage, Target, Transaction,
+        MessageAction, MessageBundle, Origin, OutgoingMessage, PostedMessage, Target, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -759,124 +759,39 @@ where
         // Execute each incoming bundle as a transaction, then each operation.
         // Collect messages, events and oracle responses, each as one list per transaction.
         let mut replaying_oracle_responses = replaying_oracle_responses.map(Vec::into_iter);
-        let mut next_tracker = move || match replaying_oracle_responses.as_mut().map(Iterator::next)
-        {
-            Some(Some(responses)) => Ok(TransactionTracker::with_oracle_responses(responses)),
-            Some(None) => Err(ChainError::MissingOracleResponseList),
-            None => Ok(TransactionTracker::default()),
-        };
-        let add_message_index = |next_message_index: u32, msg_count: usize| {
-            let len = u32::try_from(msg_count).map_err(|_| ArithmeticError::Overflow)?;
-            next_message_index
-                .checked_add(len)
-                .ok_or(ArithmeticError::Overflow)
-        };
         let mut next_message_index = 0;
         let mut oracle_responses = Vec::new();
         let mut events = Vec::new();
         let mut messages = Vec::new();
-        for (txn_index, txn) in block.transactions() {
-            let chain_execution_context = match txn {
-                Transaction::Messages(bundle) if bundle.action == MessageAction::Accept => {
-                    ChainExecutionContext::IncomingBundle(txn_index)
-                }
-                Transaction::Messages(_) => ChainExecutionContext::Block,
+        for (txn_index, transaction) in block.transactions() {
+            let chain_execution_context = match transaction {
+                Transaction::Messages(_) => ChainExecutionContext::IncomingBundle(txn_index),
                 Transaction::Operation(_) => ChainExecutionContext::Operation(txn_index),
             };
             let with_context =
                 |error: ExecutionError| ChainError::ExecutionError(error, chain_execution_context);
-            let mut txn_tracker = next_tracker()?;
-            match txn {
+            let mut txn_tracker = match replaying_oracle_responses.as_mut().map(Iterator::next) {
+                Some(Some(responses)) => TransactionTracker::with_oracle_responses(responses),
+                Some(None) => return Err(ChainError::MissingOracleResponseList),
+                None => TransactionTracker::default(),
+            };
+            match transaction {
                 Transaction::Messages(incoming_bundle) => {
                     for (message_id, posted_message) in incoming_bundle.messages_with_id() {
-                        #[cfg(with_metrics)]
-                        let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
-                        let context = MessageContext {
-                            chain_id,
-                            is_bouncing: posted_message.is_bouncing(),
-                            height: block.height,
-                            certificate_hash: incoming_bundle.bundle.certificate_hash,
+                        self.execute_message_in_block(
                             message_id,
-                            authenticated_signer: posted_message.authenticated_signer,
-                            refund_grant_to: posted_message.refund_grant_to,
+                            posted_message,
+                            incoming_bundle,
+                            block,
                             next_message_index,
-                        };
-                        match incoming_bundle.action {
-                            MessageAction::Accept => {
-                                // Once a chain is closed, accepting incoming messages is not allowed.
-                                ensure!(!self.is_closed(), ChainError::ClosedChain);
-
-                                let mut grant = posted_message.grant;
-                                self.execution_state
-                                    .execute_message(
-                                        context,
-                                        local_time,
-                                        posted_message.message.clone(),
-                                        (grant > Amount::ZERO).then_some(&mut grant),
-                                        &mut txn_tracker,
-                                        &mut resource_controller,
-                                    )
-                                    .await
-                                    .map_err(with_context)?;
-                                if grant > Amount::ZERO {
-                                    if let Some(refund_grant_to) = posted_message.refund_grant_to {
-                                        let outcome = self
-                                            .execution_state
-                                            .send_refund(context, grant, refund_grant_to)
-                                            .await
-                                            .map_err(with_context)?;
-                                        txn_tracker.add_outcome(outcome);
-                                    }
-                                }
-                            }
-                            MessageAction::Reject => {
-                                // If rejecting a message fails, the entire block proposal should be
-                                // scrapped.
-                                ensure!(
-                                    !posted_message.is_protected() || self.is_closed(),
-                                    ChainError::CannotRejectMessage {
-                                        chain_id,
-                                        origin: Box::new(incoming_bundle.origin.clone()),
-                                        posted_message: posted_message.clone(),
-                                    }
-                                );
-                                if posted_message.is_tracked() {
-                                    // Bounce the message.
-                                    let outcomes = self
-                                        .execution_state
-                                        .bounce_message(
-                                            context,
-                                            posted_message.grant,
-                                            posted_message.refund_grant_to,
-                                            posted_message.message.clone(),
-                                        )
-                                        .await
-                                        .map_err(with_context)?;
-                                    txn_tracker.add_outcomes(outcomes);
-                                } else if posted_message.grant > Amount::ZERO {
-                                    // Nothing to do except maybe refund the grant.
-                                    let Some(refund_grant_to) = posted_message.refund_grant_to
-                                    else {
-                                        // See OperationContext::refund_grant_to()
-                                        return Err(ChainError::InternalError(
-                                            "Messages with grants should have a non-empty \
-                                            `refund_grant_to`"
-                                                .into(),
-                                        ));
-                                    };
-                                    // Refund grant.
-                                    let outcome = self
-                                        .execution_state
-                                        .send_refund(context, posted_message.grant, refund_grant_to)
-                                        .await
-                                        .map_err(with_context)?;
-                                    txn_tracker.add_outcome(outcome)
-                                }
-                            }
-                        };
+                            txn_index,
+                            local_time,
+                            &mut txn_tracker,
+                            &mut resource_controller,
+                        )
+                        .await?;
                     }
                 }
-
                 Transaction::Operation(operation) => {
                     #[cfg(with_metrics)]
                     let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
@@ -910,7 +825,7 @@ where
             let (txn_messages, txn_events) = self
                 .process_execution_outcomes(block.height, txn_outcomes)
                 .await?;
-            match txn {
+            match transaction {
                 Transaction::Operation(operation) => {
                     resource_controller
                         .with_state(&mut self.execution_state)
@@ -937,7 +852,11 @@ where
                     .track_message(&message_out.message)
                     .map_err(with_context)?;
             }
-            next_message_index = add_message_index(next_message_index, txn_messages.len())?;
+            let messages_len =
+                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
+            next_message_index = next_message_index
+                .checked_add(messages_len)
+                .ok_or(ArithmeticError::Overflow)?;
             oracle_responses.push(txn_oracle_responses);
             messages.push(txn_messages);
             events.push(txn_events);
@@ -997,6 +916,101 @@ where
             oracle_responses,
             events,
         })
+    }
+
+    /// Executes a message as part of an incoming bundle in a block.
+    #[allow(clippy::too_many_arguments)]
+    async fn execute_message_in_block(
+        &mut self,
+        message_id: MessageId,
+        posted_message: &PostedMessage,
+        incoming_bundle: &IncomingBundle,
+        block: &Block,
+        next_message_index: u32,
+        txn_index: u32,
+        local_time: Timestamp,
+        txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<Owner>>,
+    ) -> Result<(), ChainError> {
+        #[cfg(with_metrics)]
+        let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
+        let context = MessageContext {
+            chain_id: block.chain_id,
+            is_bouncing: posted_message.is_bouncing(),
+            height: block.height,
+            certificate_hash: incoming_bundle.bundle.certificate_hash,
+            message_id,
+            authenticated_signer: posted_message.authenticated_signer,
+            refund_grant_to: posted_message.refund_grant_to,
+            next_message_index,
+        };
+        let mut grant = posted_message.grant;
+        match incoming_bundle.action {
+            MessageAction::Accept => {
+                let with_context = |error: ExecutionError| {
+                    let context = ChainExecutionContext::IncomingBundle(txn_index);
+                    ChainError::ExecutionError(error, context)
+                };
+                // Once a chain is closed, accepting incoming messages is not allowed.
+                ensure!(!self.is_closed(), ChainError::ClosedChain);
+
+                self.execution_state
+                    .execute_message(
+                        context,
+                        local_time,
+                        posted_message.message.clone(),
+                        (grant > Amount::ZERO).then_some(&mut grant),
+                        txn_tracker,
+                        resource_controller,
+                    )
+                    .await
+                    .map_err(with_context)?;
+                if grant > Amount::ZERO {
+                    if let Some(refund_grant_to) = posted_message.refund_grant_to {
+                        self.execution_state
+                            .send_refund(context, grant, refund_grant_to, txn_tracker)
+                            .await
+                            .map_err(with_context)?;
+                    }
+                }
+            }
+            MessageAction::Reject => {
+                let with_context = |error: ExecutionError| {
+                    ChainError::ExecutionError(error, ChainExecutionContext::Block)
+                };
+                // If rejecting a message fails, the entire block proposal should be
+                // scrapped.
+                ensure!(
+                    !posted_message.is_protected() || self.is_closed(),
+                    ChainError::CannotRejectMessage {
+                        chain_id: block.chain_id,
+                        origin: Box::new(incoming_bundle.origin.clone()),
+                        posted_message: posted_message.clone(),
+                    }
+                );
+                if posted_message.is_tracked() {
+                    // Bounce the message.
+                    self.execution_state
+                        .bounce_message(context, grant, posted_message.message.clone(), txn_tracker)
+                        .await
+                        .map_err(with_context)?;
+                } else if grant > Amount::ZERO {
+                    // Nothing to do except maybe refund the grant.
+                    let Some(refund_grant_to) = posted_message.refund_grant_to else {
+                        // See OperationContext::refund_grant_to()
+                        return Err(ChainError::InternalError(
+                            "Messages with grants should have a non-empty `refund_grant_to`".into(),
+                        ));
+                    };
+                    // Refund grant.
+                    self.execution_state
+                        .send_refund(context, posted_message.grant, refund_grant_to, txn_tracker)
+                        .await
+                        .map_err(with_context)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     async fn process_execution_outcomes(
