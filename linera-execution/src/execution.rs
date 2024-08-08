@@ -352,7 +352,7 @@ where
         match message {
             Message::System(message) => {
                 let outcome = self.system.execute_message(context, message).await?;
-                txn_tracker.add_outcome(ExecutionOutcome::System(outcome));
+                txn_tracker.add_system_outcome(outcome);
             }
             Message::User {
                 application_id,
@@ -378,15 +378,15 @@ where
         &self,
         context: MessageContext,
         grant: Amount,
-        refund_grant_to: Option<Account>,
         message: Message,
-    ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
             Message::System(message) => {
                 let mut outcome = RawExecutionOutcome {
                     authenticated_signer: context.authenticated_signer,
-                    refund_grant_to,
+                    refund_grant_to: context.refund_grant_to,
                     ..Default::default()
                 };
                 outcome.messages.push(RawOutgoingMessage {
@@ -396,7 +396,7 @@ where
                     kind: MessageKind::Bouncing,
                     message,
                 });
-                Ok(vec![ExecutionOutcome::System(outcome)])
+                txn_tracker.add_system_outcome(outcome);
             }
             Message::User {
                 application_id,
@@ -404,7 +404,7 @@ where
             } => {
                 let mut outcome = RawExecutionOutcome {
                     authenticated_signer: context.authenticated_signer,
-                    refund_grant_to,
+                    refund_grant_to: context.refund_grant_to,
                     ..Default::default()
                 };
                 outcome.messages.push(RawOutgoingMessage {
@@ -414,9 +414,10 @@ where
                     kind: MessageKind::Bouncing,
                     message: bytes,
                 });
-                Ok(vec![ExecutionOutcome::User(application_id, outcome)])
+                txn_tracker.add_user_outcome(application_id, outcome);
             }
         }
+        Ok(())
     }
 
     pub async fn send_refund(
@@ -424,7 +425,8 @@ where
         context: MessageContext,
         amount: Amount,
         account: Account,
-    ) -> Result<ExecutionOutcome, ExecutionError> {
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         let mut outcome = RawExecutionOutcome::default();
         let message = RawOutgoingMessage {
@@ -439,7 +441,8 @@ where
             },
         };
         outcome.messages.push(message);
-        Ok(ExecutionOutcome::System(outcome))
+        txn_tracker.add_system_outcome(outcome);
+        Ok(())
     }
 
     pub async fn query_application(

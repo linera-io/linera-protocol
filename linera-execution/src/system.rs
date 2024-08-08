@@ -38,8 +38,8 @@ use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
-    Destination, ExecutionOutcome, ExecutionRuntimeContext, MessageContext, MessageKind,
-    OperationContext, QueryContext, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker,
+    Destination, ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext,
+    QueryContext, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker,
     UserApplicationDescription, UserApplicationId,
 };
 
@@ -736,7 +736,7 @@ where
             }
         }
 
-        txn_tracker.add_outcome(ExecutionOutcome::System(outcome));
+        txn_tracker.add_system_outcome(outcome);
         Ok(new_application)
     }
 
@@ -1124,7 +1124,7 @@ mod tests {
     use linera_views::memory::MemoryContext;
 
     use super::*;
-    use crate::{ExecutionStateView, TestExecutionRuntimeContext};
+    use crate::{ExecutionOutcome, ExecutionStateView, TestExecutionRuntimeContext};
 
     /// Returns an execution state view and a matching operation context, for epoch 1, with root
     /// chain 0 as the admin ID and one empty committee.

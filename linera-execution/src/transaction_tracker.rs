@@ -4,12 +4,17 @@
 use std::vec;
 
 use linera_base::{
-    data_types::{ArithmeticError, OracleResponse},
+    data_types::{Amount, ArithmeticError, OracleResponse},
     ensure,
+    identifiers::ApplicationId,
 };
 
-use crate::{ExecutionError, ExecutionOutcome, SystemExecutionError};
+use crate::{
+    ExecutionError, ExecutionOutcome, RawExecutionOutcome, SystemExecutionError, SystemMessage,
+};
 
+/// Tracks oracle responses and execution outcomes of an ongoing transaction execution, as well
+/// as replayed oracle responses.
 #[derive(Debug, Default)]
 pub struct TransactionTracker {
     replaying_oracle_responses: Option<vec::IntoIter<OracleResponse>>,
@@ -18,6 +23,7 @@ pub struct TransactionTracker {
 }
 
 impl TransactionTracker {
+    /// Creates a tracker with oracle responses to be replayed.
     pub fn with_oracle_responses(oracle_responses: Vec<OracleResponse>) -> Self {
         TransactionTracker {
             replaying_oracle_responses: Some(oracle_responses.into_iter()),
@@ -25,8 +31,17 @@ impl TransactionTracker {
         }
     }
 
-    pub fn add_outcome(&mut self, outcome: ExecutionOutcome) {
-        self.outcomes.push(outcome);
+    pub fn add_system_outcome(&mut self, outcome: RawExecutionOutcome<SystemMessage, Amount>) {
+        self.outcomes.push(ExecutionOutcome::System(outcome));
+    }
+
+    pub fn add_user_outcome(
+        &mut self,
+        application_id: ApplicationId,
+        outcome: RawExecutionOutcome<Vec<u8>, Amount>,
+    ) {
+        self.outcomes
+            .push(ExecutionOutcome::User(application_id, outcome))
     }
 
     pub fn add_outcomes(&mut self, outcomes: impl IntoIterator<Item = ExecutionOutcome>) {
