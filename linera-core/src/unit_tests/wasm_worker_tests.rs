@@ -23,7 +23,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, ChannelFullName, HashedCertificateValue, IncomingBundle,
-        MessageAction, MessageBundle, Origin, OutgoingMessage, PostedMessage,
+        MessageAction, MessageBundle, Origin, OutgoingMessage,
     },
     test::{make_child_block, make_first_block, BlockTestExt},
 };
@@ -139,16 +139,18 @@ where
         ..SystemExecutionState::new(Epoch::ZERO, publisher_chain, admin_id)
     };
     let publisher_state_hash = publisher_system_state.clone().into_hash().await;
+    let publish_out_msg = OutgoingMessage {
+        destination: Destination::Recipient(publisher_chain.into()),
+        authenticated_signer: None,
+        grant: Amount::ZERO,
+        refund_grant_to: None,
+        kind: MessageKind::Protected,
+        message: Message::System(publish_message.clone()),
+    };
+    let publish_posted_msg = publish_out_msg.clone().into_posted(0);
     let publish_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![vec![OutgoingMessage {
-                destination: Destination::Recipient(publisher_chain.into()),
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                message: Message::System(publish_message.clone()),
-            }]],
+            messages: vec![vec![publish_out_msg]],
             events: vec![Vec::new()],
             state_hash: publisher_state_hash,
             oracle_responses: vec![Vec::new()],
@@ -177,14 +179,7 @@ where
             height: publish_block_height,
             timestamp: Timestamp::from(1),
             transaction_index: 0,
-            messages: vec![PostedMessage {
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                index: 0,
-                message: Message::System(publish_message),
-            }],
+            messages: vec![publish_posted_msg],
         },
         action: MessageAction::Accept,
     };
@@ -244,6 +239,7 @@ where
         kind: MessageKind::Simple,
         message: Message::System(broadcast_message.clone()),
     };
+    let broadcast_posted_message = broadcast_outgoing_message.clone().into_posted(0);
     let broadcast_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![vec![broadcast_outgoing_message]],
@@ -292,16 +288,18 @@ where
     };
     creator_system_state.subscriptions.insert(publisher_channel);
     let creator_state = creator_system_state.clone().into_view().await;
+    let subscribe_out_msg = OutgoingMessage {
+        destination: Destination::Recipient(publisher_chain.into()),
+        authenticated_signer: None,
+        grant: Amount::ZERO,
+        refund_grant_to: None,
+        kind: MessageKind::Protected,
+        message: Message::System(subscribe_message.clone()),
+    };
+    let subscribe_posted_msg = subscribe_out_msg.clone().into_posted(0);
     let subscribe_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![vec![OutgoingMessage {
-                destination: Destination::Recipient(publisher_chain.into()),
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                message: Message::System(subscribe_message.clone()),
-            }]],
+            messages: vec![vec![subscribe_out_msg]],
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![Vec::new()],
@@ -330,14 +328,7 @@ where
             height: subscribe_block_height,
             timestamp: Timestamp::from(2),
             transaction_index: 0,
-            messages: vec![PostedMessage {
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                index: 0,
-                message: subscribe_message.into(),
-            }],
+            messages: vec![subscribe_posted_msg],
         },
         action: MessageAction::Accept,
     };
@@ -417,14 +408,7 @@ where
                 height: broadcast_block_height,
                 timestamp: Timestamp::from(1),
                 transaction_index: 0,
-                messages: vec![PostedMessage {
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Simple,
-                    index: 0,
-                    message: Message::System(broadcast_message),
-                }],
+                messages: vec![broadcast_posted_message],
             },
             action: MessageAction::Accept,
         });

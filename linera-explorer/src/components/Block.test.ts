@@ -25,12 +25,10 @@ test('Block mounting', () => {
                 bundle: {
                   certificate_hash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
                   height: 5,
-                  messages: [
-                    [0, {
-                      authenticated_signer: null,
-                      message: { System: { BytecodePublished: { operation_index: 0 } } }
-                    }]
-                  ],
+                  messages: [{
+                    authenticated_signer: null,
+                    message: { System: { BytecodePublished: { operation_index: 0 } } }
+                  }],
                   timestamp: 1694097510206912
                 },
                 action: "Accept",

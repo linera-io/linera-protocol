@@ -142,6 +142,8 @@ impl VoteTestExt for Vote {
 /// Helper trait to simplify constructing messages for tests.
 pub trait MessageTestExt: Sized {
     fn to_simple_incoming(self, sender: ChainId, height: BlockHeight) -> IncomingBundle;
+
+    fn to_posted(self, index: u32, kind: MessageKind) -> PostedMessage;
 }
 
 impl<T: Into<Message>> MessageTestExt for T {
@@ -154,16 +156,28 @@ impl<T: Into<Message>> MessageTestExt for T {
             index: 0,
             message: self.into(),
         };
+        let bundle = MessageBundle {
+            certificate_hash: CryptoHash::test_hash("certificate"),
+            height,
+            transaction_index: 0,
+            timestamp: Timestamp::from(0),
+            messages: vec![posted_message],
+        };
         IncomingBundle {
             origin: Origin::chain(sender),
-            bundle: MessageBundle {
-                certificate_hash: CryptoHash::test_hash("certificate"),
-                height,
-                transaction_index: 0,
-                timestamp: Timestamp::from(0),
-                messages: vec![posted_message],
-            },
+            bundle,
             action: MessageAction::Accept,
+        }
+    }
+
+    fn to_posted(self, index: u32, kind: MessageKind) -> PostedMessage {
+        PostedMessage {
+            authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
+            kind,
+            index,
+            message: self.into(),
         }
     }
 }
