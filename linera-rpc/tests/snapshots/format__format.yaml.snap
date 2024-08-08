@@ -136,7 +136,7 @@ BytecodeLocation:
   STRUCT:
     - certificate_hash:
         TYPENAME: CryptoHash
-    - operation_index: U32
+    - transaction_index: U32
 Certificate:
   STRUCT:
     - value:
@@ -905,7 +905,7 @@ SystemMessage:
     6:
       BytecodePublished:
         STRUCT:
-          - operation_index: U32
+          - transaction_index: U32
     7:
       ApplicationCreated: UNIT
     8:
