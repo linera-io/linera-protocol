@@ -65,7 +65,7 @@ pub struct BytecodeLocation {
     /// The certificate that published the bytecode.
     pub certificate_hash: CryptoHash,
     /// The index in the certificate of the operation that published the bytecode (not the message!).
-    pub operation_index: u32,
+    pub transaction_index: u32,
 }
 
 #[derive(Debug, ClonableView, HashableView)]

@@ -235,7 +235,7 @@ pub enum SystemMessage {
         subscription: ChannelSubscription,
     },
     /// Notifies that a new application bytecode was published.
-    BytecodePublished { operation_index: u32 },
+    BytecodePublished { transaction_index: u32 },
     /// Notifies that a new application was created.
     ApplicationCreated,
     /// Shares the locations of published bytecodes.
@@ -262,10 +262,10 @@ impl SystemMessage {
         certificate_hash: CryptoHash,
     ) -> Box<dyn Iterator<Item = BytecodeLocation> + '_> {
         match self {
-            SystemMessage::BytecodePublished { operation_index } => {
+            SystemMessage::BytecodePublished { transaction_index } => {
                 Box::new(iter::once(BytecodeLocation {
                     certificate_hash,
-                    operation_index: *operation_index,
+                    transaction_index: *transaction_index,
                 }))
             }
             SystemMessage::BytecodeLocations {
@@ -664,7 +664,7 @@ where
                     grant: Amount::ZERO,
                     kind: MessageKind::Protected,
                     message: SystemMessage::BytecodePublished {
-                        operation_index: context
+                        transaction_index: context
                             .index
                             .expect("System application can not be called by other applications"),
                     },
@@ -915,11 +915,11 @@ where
                 outcome.messages.push(message);
                 outcome.unsubscribe.push((subscription.name.clone(), id));
             }
-            BytecodePublished { operation_index } => {
+            BytecodePublished { transaction_index } => {
                 let bytecode_id = BytecodeId::new(context.message_id);
                 let bytecode_location = BytecodeLocation {
                     certificate_hash: context.certificate_hash,
-                    operation_index,
+                    transaction_index,
                 };
                 self.registry
                     .register_published_bytecode(bytecode_id, bytecode_location)?;
@@ -1166,7 +1166,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(new_application, None);
-        let operation_index = context
+        let transaction_index = context
             .index
             .expect("Missing operation index in dummy context");
         let [ExecutionOutcome::System(result)] = &txn_tracker.destructure().unwrap().0[..] else {
@@ -1174,7 +1174,7 @@ mod tests {
         };
         assert_eq!(
             result.messages[PUBLISH_BYTECODE_MESSAGE_INDEX as usize].message,
-            SystemMessage::BytecodePublished { operation_index }
+            SystemMessage::BytecodePublished { transaction_index }
         );
     }
 
@@ -1188,7 +1188,7 @@ mod tests {
         });
         let location = BytecodeLocation {
             certificate_hash: CryptoHash::test_hash("certificate"),
-            operation_index: 1,
+            transaction_index: 1,
         };
         view.system
             .registry

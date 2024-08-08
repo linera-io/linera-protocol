@@ -66,8 +66,8 @@ where
             authenticated_signer: None,
             authenticated_caller_id: None,
             height: application_description.creation.height,
-            index: Some(application_description.creation.index),
-            next_message_index: 0,
+            index: Some(0),
+            next_message_index: application_description.creation.index + 1,
         };
 
         let action = UserAction::Instantiate(context, instantiation_argument);

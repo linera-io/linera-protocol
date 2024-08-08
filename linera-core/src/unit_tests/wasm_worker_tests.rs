@@ -125,7 +125,9 @@ where
         contract: contract_bytecode,
         service: service_bytecode,
     };
-    let publish_message = SystemMessage::BytecodePublished { operation_index: 0 };
+    let publish_message = SystemMessage::BytecodePublished {
+        transaction_index: 0,
+    };
     let publish_block = make_first_block(publisher_chain.into())
         .with_timestamp(1)
         .with_operation(publish_operation);
@@ -196,7 +198,7 @@ where
     });
     let bytecode_location = BytecodeLocation {
         certificate_hash: publish_certificate.hash(),
-        operation_index: 0,
+        transaction_index: 0,
     };
     let broadcast_message = SystemMessage::BytecodeLocations {
         locations: vec![(bytecode_id, bytecode_location)],

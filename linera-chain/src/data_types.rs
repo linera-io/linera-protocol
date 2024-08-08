@@ -121,6 +121,22 @@ impl Block {
             .map(|im| im.bundle.messages.len())
             .sum()
     }
+
+    /// Returns an iterator over all transactions, by index.
+    pub fn transactions(&self) -> impl Iterator<Item = (u32, Transaction<'_>)> {
+        let bundles = self.incoming_bundles.iter().map(Transaction::Messages);
+        let operations = self.operations.iter().map(Transaction::Operation);
+        (0u32..).zip(bundles.chain(operations))
+    }
+}
+
+/// A transaction in a block: incoming messages or an operation.
+#[derive(Debug, Clone)]
+pub enum Transaction<'a> {
+    /// A bundle of incoming messages.
+    Messages(&'a IncomingBundle),
+    /// An operation.
+    Operation(&'a Operation),
 }
 
 /// A chain ID with a block height.
