@@ -258,6 +258,7 @@ where
             let actions = self.state.create_network_actions().await?;
             return Ok((info, actions));
         }
+        // TODO(#2351): This sets the committee and then checks that committee's signatures.
         if tip.is_first_block() && !self.state.chain.is_active() {
             let local_time = self.state.storage.clock().current_time();
             for message in &block.incoming_bundles {

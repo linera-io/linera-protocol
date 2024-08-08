@@ -279,6 +279,7 @@ where
             ..RawExecutionOutcome::default()
         };
 
+        // TODO(#2362): This inserts messages in front of existing ones, invalidating their IDs.
         results.insert(0, ExecutionOutcome::System(system_outcome));
 
         Ok(results)
