@@ -190,10 +190,9 @@ async fn test_fee_consumption(
         height: BlockHeight(0),
         certificate_hash: CryptoHash::default(),
         message_id: MessageId::default(),
-        next_message_index: 0,
     };
     let mut grant = initial_grant.unwrap_or_default();
-    let mut txn_tracker = TransactionTracker::with_oracle_responses(Vec::new());
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
     view.execute_message(
         context,
         Timestamp::from(0),
@@ -212,7 +211,7 @@ async fn test_fee_consumption(
     .await
     .unwrap();
 
-    let (outcomes, _) = txn_tracker.destructure().unwrap();
+    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
         outcomes,
         vec![

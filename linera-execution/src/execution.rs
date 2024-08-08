@@ -67,10 +67,10 @@ where
             authenticated_caller_id: None,
             height: application_description.creation.height,
             index: Some(0),
-            next_message_index: application_description.creation.index + 1,
         };
 
         let action = UserAction::Instantiate(context, instantiation_argument);
+        let next_message_index = application_description.creation.index + 1;
 
         let application_id = self
             .system
@@ -90,7 +90,7 @@ where
             tracker,
             account: None,
         };
-        let mut txn_tracker = TransactionTracker::default();
+        let mut txn_tracker = TransactionTracker::new(next_message_index, None);
         self.run_user_action(
             application_id,
             chain_id,
@@ -129,14 +129,6 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.height,
             UserAction::Operation(context, _) => context.height,
             UserAction::Message(context, _) => context.height,
-        }
-    }
-
-    pub(crate) fn next_message_index(&self) -> u32 {
-        match self {
-            UserAction::Instantiate(context, _) => context.next_message_index,
-            UserAction::Operation(context, _) => context.next_message_index,
-            UserAction::Message(context, _) => context.next_message_index,
         }
     }
 }
@@ -352,7 +344,7 @@ where
         match message {
             Message::System(message) => {
                 let outcome = self.system.execute_message(context, message).await?;
-                txn_tracker.add_system_outcome(outcome);
+                txn_tracker.add_system_outcome(outcome)?;
             }
             Message::User {
                 application_id,
@@ -396,7 +388,7 @@ where
                     kind: MessageKind::Bouncing,
                     message,
                 });
-                txn_tracker.add_system_outcome(outcome);
+                txn_tracker.add_system_outcome(outcome)?;
             }
             Message::User {
                 application_id,
@@ -414,7 +406,7 @@ where
                     kind: MessageKind::Bouncing,
                     message: bytes,
                 });
-                txn_tracker.add_user_outcome(application_id, outcome);
+                txn_tracker.add_user_outcome(application_id, outcome)?;
             }
         }
         Ok(())
@@ -441,7 +433,7 @@ where
             },
         };
         outcome.messages.push(message);
-        txn_tracker.add_system_outcome(outcome);
+        txn_tracker.add_system_outcome(outcome)?;
         Ok(())
     }
 

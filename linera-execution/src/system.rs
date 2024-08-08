@@ -491,7 +491,7 @@ where
         let mut new_application = None;
         match operation {
             OpenChain(config) => {
-                let next_message_id = context.next_message_id(txn_tracker.message_count()?);
+                let next_message_id = context.next_message_id(txn_tracker.next_message_index());
                 let messages = self.open_chain(config, next_message_id)?;
                 outcome.messages.extend(messages);
                 #[cfg(with_metrics)]
@@ -679,7 +679,7 @@ where
             } => {
                 let id = UserApplicationId {
                     bytecode_id,
-                    creation: context.next_message_id(txn_tracker.message_count()?),
+                    creation: context.next_message_id(txn_tracker.next_message_index()),
                 };
                 self.registry
                     .register_new_application(
@@ -736,7 +736,7 @@ where
             }
         }
 
-        txn_tracker.add_system_outcome(outcome);
+        txn_tracker.add_system_outcome(outcome)?;
         Ok(new_application)
     }
 
@@ -1139,7 +1139,6 @@ mod tests {
             authenticated_caller_id: None,
             height: BlockHeight::from(7),
             index: Some(2),
-            next_message_index: 3,
         };
         let state = SystemExecutionState {
             description: Some(description),
@@ -1217,7 +1216,7 @@ mod tests {
         let creation = MessageId {
             chain_id: context.chain_id,
             height: context.height,
-            index: context.next_message_index + CREATE_APPLICATION_MESSAGE_INDEX,
+            index: CREATE_APPLICATION_MESSAGE_INDEX,
         };
         let id = ApplicationId {
             bytecode_id,
