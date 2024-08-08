@@ -680,7 +680,8 @@ where
             {
                 let cached_entries = self.cached_entries.lock().unwrap();
                 for short_key in &short_keys {
-                    if !self.updates.contains_key(short_key) && !cached_entries.contains_key(short_key)
+                    if !self.updates.contains_key(short_key)
+                        && !cached_entries.contains_key(short_key)
                     {
                         let key = self
                             .context
@@ -983,7 +984,7 @@ where
                 cached_entries_result.push(cached_entries.get(key).cloned());
             }
         }
-        for (key,cached_entry) in keys.into_iter().zip(cached_entries_result) {
+        for (key, cached_entry) in keys.into_iter().zip(cached_entries_result) {
             hasher.update_with_bytes(&key)?;
             let hash = if let Some(entry) = self.updates.get(&key) {
                 let Update::Set(view) = entry else {
