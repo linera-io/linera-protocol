@@ -167,27 +167,6 @@ pub enum BlobType {
     Data,
 }
 
-impl Display for BlobType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            BlobType::Data => write!(f, "Data")?,
-        };
-
-        Ok(())
-    }
-}
-
-impl FromStr for BlobType {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "Data" => Ok(BlobType::Data),
-            _ => Err(anyhow!("Invalid blob type: {}", s)),
-        }
-    }
-}
-
 /// A content-addressed blob ID i.e. the hash of the `BlobContent`.
 #[derive(
     Eq,
@@ -224,7 +203,12 @@ impl BlobId {
 
 impl Display for BlobId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.blob_type, self.hash)?;
+        write!(
+            f,
+            "{}:{}",
+            serde_json::to_string(&self.blob_type).unwrap(),
+            self.hash
+        )?;
         Ok(())
     }
 }
@@ -235,7 +219,7 @@ impl FromStr for BlobId {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts = s.split(':').collect::<Vec<_>>();
         if parts.len() == 2 {
-            let blob_type = BlobType::from_str(parts[0]).context("Invalid BlobType!")?;
+            let blob_type = serde_json::from_str(parts[0]).context("Invalid BlobType!")?;
             Ok(BlobId {
                 hash: CryptoHash::from_str(parts[1]).context("Invalid hash!")?,
                 blob_type,

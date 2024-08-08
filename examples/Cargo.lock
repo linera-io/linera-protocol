@@ -3321,6 +3321,7 @@ dependencies = [
  "serde",
  "serde-name",
  "serde_bytes",
+ "serde_json",
  "sha3",
  "test-strategy",
  "thiserror",

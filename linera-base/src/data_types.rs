@@ -880,7 +880,7 @@ impl Serialize for Blob {
             let blob_bytes = bcs::to_bytes(&self.content).map_err(serde::ser::Error::custom)?;
             serializer.serialize_str(&format!(
                 "{}:{}",
-                self.id.blob_type,
+                serde_json::to_string(&self.id.blob_type).unwrap(),
                 hex::encode(blob_bytes)
             ))
         } else {
@@ -911,7 +911,7 @@ impl<'a> Deserialize<'a> for Blob {
             let parts = s.split(':').collect::<Vec<_>>();
 
             if parts.len() == 2 {
-                let blob_type = BlobType::from_str(parts[0])
+                let blob_type = serde_json::from_str(parts[0])
                     .context("Invalid BlobType!")
                     .map_err(serde::de::Error::custom)?;
                 let blob_bytes = hex::decode(parts[1]).map_err(serde::de::Error::custom)?;
