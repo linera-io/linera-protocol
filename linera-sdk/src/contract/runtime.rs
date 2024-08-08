@@ -6,19 +6,17 @@
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::{
-        Amount, ApplicationPermissions, Blob, BlobContent, BlockHeight, Resources,
-        SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     identifiers::{
-        Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, MessageId, Owner,
-        StreamName,
+        Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner, StreamName,
     },
     ownership::{ChainOwnership, CloseChainError},
 };
 use serde::Serialize;
 
 use super::wit::contract_system_api as wit;
-use crate::{Contract, KeyValueStore};
+use crate::{Contract, DataBlobHash, KeyValueStore};
 
 /// The common runtime to interface with the host executing the contract.
 ///
@@ -271,14 +269,14 @@ where
         wit::assert_before(timestamp.into());
     }
 
-    /// Reads a blob with the given `BlobId` from storage.
-    pub fn read_blob(&mut self, blob_id: BlobId) -> Blob {
-        BlobContent::from(wit::read_blob_content(blob_id.into())).with_blob_id_unchecked(blob_id)
+    /// Reads a data blob with the given hash from storage.
+    pub fn read_data_blob(&mut self, hash: DataBlobHash) -> Vec<u8> {
+        wit::read_data_blob(hash.0.into())
     }
 
-    /// Asserts that a blob with the given `BlobId` exists in storage.
-    pub fn assert_blob_exists(&mut self, blob_id: BlobId) {
-        wit::assert_blob_exists(blob_id.into())
+    /// Asserts that a data blob with the given hash exists in storage.
+    pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
+        wit::assert_data_blob_exists(hash.0.into())
     }
 }
 

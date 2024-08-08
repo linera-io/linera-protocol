@@ -4,12 +4,9 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use linera_base::{
-    data_types::{
-        Amount, ApplicationPermissions, BlobContent, BlockHeight, SendMessageRequest, Timestamp,
-    },
-    identifiers::{
-        Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner, StreamName,
-    },
+    crypto::CryptoHash,
+    data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
+    identifiers::{Account, ApplicationId, ChainId, ChannelName, MessageId, Owner, StreamName},
     ownership::{ChainOwnership, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -356,24 +353,21 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Reads a blob content from storage.
-    fn read_blob_content(
-        caller: &mut Caller,
-        blob_id: BlobId,
-    ) -> Result<BlobContent, RuntimeError> {
+    /// Reads a data blob from storage.
+    fn read_data_blob(caller: &mut Caller, hash: CryptoHash) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .read_blob_content(&blob_id)
+            .read_data_blob(&hash)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Asserts the existence of a blob with the given `BlobId`.
-    fn assert_blob_exists(caller: &mut Caller, blob_id: BlobId) -> Result<(), RuntimeError> {
+    /// Asserts the existence of a data blob with the given hash.
+    fn assert_data_blob_exists(caller: &mut Caller, hash: CryptoHash) -> Result<(), RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .assert_blob_exists(&blob_id)
+            .assert_data_blob_exists(&hash)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -542,24 +536,21 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Reads a blob content from storage.
-    fn read_blob_content(
-        caller: &mut Caller,
-        blob_id: BlobId,
-    ) -> Result<BlobContent, RuntimeError> {
+    /// Reads a data blob from storage.
+    fn read_data_blob(caller: &mut Caller, hash: CryptoHash) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .read_blob_content(&blob_id)
+            .read_data_blob(&hash)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Asserts the existence of a blob with the given `BlobId`.
-    fn assert_blob_exists(caller: &mut Caller, blob_id: BlobId) -> Result<(), RuntimeError> {
+    /// Asserts the existence of a data blob with the given hash.
+    fn assert_data_blob_exists(caller: &mut Caller, hash: CryptoHash) -> Result<(), RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .assert_blob_exists(&blob_id)
+            .assert_data_blob_exists(&hash)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

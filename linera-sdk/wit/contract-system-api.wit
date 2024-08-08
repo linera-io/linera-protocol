@@ -25,8 +25,8 @@ interface contract-system-api {
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
     http-post: func(query: string, content-type: string, payload: list<u8>) -> list<u8>;
     assert-before: func(timestamp: timestamp);
-    read-blob-content: func(blob-id: blob-id) -> blob-content;
-    assert-blob-exists: func(blob-id: blob-id);
+    read-data-blob: func(hash: crypto-hash) -> list<u8>;
+    assert-data-blob-exists: func(hash: crypto-hash);
     log: func(message: string, level: log-level);
     consume-fuel: func(fuel: u64);
 
@@ -48,19 +48,6 @@ interface contract-system-api {
         execute-operations: option<list<application-id>>,
         mandatory-applications: list<application-id>,
         close-chain: list<application-id>,
-    }
-
-    record blob-content {
-        bytes: list<u8>,
-    }
-
-    record blob-id {
-        hash: crypto-hash,
-        blob-type: blob-type,
-    }
-
-    enum blob-type {
-        data,
     }
 
     record block-height {

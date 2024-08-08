@@ -9,9 +9,9 @@ use std::collections::BTreeSet;
 
 use fungible::Account;
 use linera_sdk::{
-    base::{AccountOwner, BlobId, WithContractAbi},
+    base::{AccountOwner, WithContractAbi},
     views::{RootView, View, ViewStorageContext},
-    Contract, ContractRuntime,
+    Contract, ContractRuntime, DataBlobHash,
 };
 use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
 
@@ -51,10 +51,10 @@ impl Contract for NonFungibleTokenContract {
             Operation::Mint {
                 minter,
                 name,
-                blob_id,
+                blob_hash,
             } => {
                 self.check_account_authentication(minter);
-                self.mint(minter, name, blob_id).await;
+                self.mint(minter, name, blob_hash).await;
             }
 
             Operation::Transfer {
@@ -176,14 +176,14 @@ impl NonFungibleTokenContract {
             .expect("NFT {token_id} not found")
     }
 
-    async fn mint(&mut self, owner: AccountOwner, name: String, blob_id: BlobId) {
-        self.runtime.assert_blob_exists(blob_id);
+    async fn mint(&mut self, owner: AccountOwner, name: String, blob_hash: DataBlobHash) {
+        self.runtime.assert_data_blob_exists(blob_hash);
         let token_id = Nft::create_token_id(
             &self.runtime.chain_id(),
             &self.runtime.application_id().forget_abi(),
             &name,
             &owner,
-            &blob_id,
+            &blob_hash,
             *self.state.num_minted_nfts.get(),
         )
         .expect("Failed to serialize NFT metadata");
@@ -193,7 +193,7 @@ impl NonFungibleTokenContract {
             owner,
             name,
             minter: owner,
-            blob_id,
+            blob_hash,
         })
         .await;
 

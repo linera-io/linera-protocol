@@ -31,7 +31,7 @@ use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Resources,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Resources,
         SendMessageRequest, Timestamp,
     },
     doc_scalar, hex_debug,
@@ -492,11 +492,11 @@ pub trait BaseRuntime {
     /// owner, not a super owner.
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError>;
 
-    /// Reads a blob content specified by a given `BlobId`.
-    fn read_blob_content(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError>;
+    /// Reads a data blob content specified by a given hash.
+    fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError>;
 
-    /// Asserts the existence of a blob with the given `BlobId`.
-    fn assert_blob_exists(&mut self, blob_id: &BlobId) -> Result<(), ExecutionError>;
+    /// Asserts the existence of a data blob with the given hash.
+    fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
