@@ -244,7 +244,7 @@ enum ServiceStoreServerOptions {
     #[cfg(feature = "rocksdb")]
     #[command(name = "rocksdb")]
     RocksDb {
-        #[arg(long = "endpoint")]
+        #[arg(long = "path")]
         path: String,
         #[arg(long = "endpoint")]
         endpoint: String,
