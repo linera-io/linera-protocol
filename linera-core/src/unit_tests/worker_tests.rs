@@ -29,7 +29,7 @@ use linera_chain::{
         HashedCertificateValue, IncomingBundle, LiteVote, Medium, MessageAction, MessageBundle,
         Origin, OutgoingMessage, PostedMessage, SignatureAggregator,
     },
-    test::{make_child_block, make_first_block, BlockTestExt, VoteTestExt},
+    test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -852,14 +852,9 @@ where
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
-                    messages: vec![PostedMessage {
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Tracked,
-                        index: 0,
-                        message: system_credit_message(Amount::ONE),
-                    }],
+                    messages: vec![
+                        system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                    ],
                 },
                 action: MessageAction::Accept,
             })
@@ -870,14 +865,8 @@ where
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
-                    messages: vec![PostedMessage {
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Tracked,
-                        index: 0,
-                        message: system_credit_message(Amount::from_tokens(2)),
-                    }],
+                    messages: vec![system_credit_message(Amount::from_tokens(2))
+                        .to_posted(0, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -888,14 +877,10 @@ where
                     height: BlockHeight::from(1),
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
-                    messages: vec![PostedMessage {
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Tracked,
-                        index: 0,
-                        message: system_credit_message(Amount::from_tokens(2)), // wrong amount
-                    }],
+                    messages: vec![
+                        system_credit_message(Amount::from_tokens(2))
+                            .to_posted(0, MessageKind::Tracked), // wrong amount
+                    ],
                 },
                 action: MessageAction::Accept,
             })
@@ -917,14 +902,8 @@ where
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
-                    messages: vec![PostedMessage {
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Tracked,
-                        index: 1,
-                        message: system_credit_message(Amount::from_tokens(2)),
-                    }],
+                    messages: vec![system_credit_message(Amount::from_tokens(2))
+                        .to_posted(1, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -946,14 +925,8 @@ where
                     height: BlockHeight::from(1),
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
-                    messages: vec![PostedMessage {
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Tracked,
-                        index: 0,
-                        message: system_credit_message(Amount::from_tokens(3)),
-                    }],
+                    messages: vec![system_credit_message(Amount::from_tokens(3))
+                        .to_posted(0, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -964,14 +937,9 @@ where
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
-                    messages: vec![PostedMessage {
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Tracked,
-                        index: 0,
-                        message: system_credit_message(Amount::ONE),
-                    }],
+                    messages: vec![
+                        system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                    ],
                 },
                 action: MessageAction::Accept,
             })
@@ -982,14 +950,8 @@ where
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
-                    messages: vec![PostedMessage {
-                        message: system_credit_message(Amount::from_tokens(2)),
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        index: 1,
-                        kind: MessageKind::Tracked,
-                    }],
+                    messages: vec![system_credit_message(Amount::from_tokens(2))
+                        .to_posted(1, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1011,14 +973,9 @@ where
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
-                    messages: vec![PostedMessage {
-                        message: system_credit_message(Amount::ONE),
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        index: 0,
-                        kind: MessageKind::Tracked,
-                    }],
+                    messages: vec![
+                        system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                    ],
                 },
                 action: MessageAction::Accept,
             })
@@ -1061,14 +1018,8 @@ where
                     height: BlockHeight::from(0),
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
-                    messages: vec![PostedMessage {
-                        message: system_credit_message(Amount::from_tokens(2)),
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        index: 1,
-                        kind: MessageKind::Tracked,
-                    }],
+                    messages: vec![system_credit_message(Amount::from_tokens(2))
+                        .to_posted(1, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1079,14 +1030,8 @@ where
                     height: BlockHeight::from(1),
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
-                    messages: vec![PostedMessage {
-                        message: system_credit_message(Amount::from_tokens(3)),
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        index: 0,
-                        kind: MessageKind::Tracked,
-                    }],
+                    messages: vec![system_credit_message(Amount::from_tokens(3))
+                        .to_posted(0, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1312,21 +1257,15 @@ where
             height: BlockHeight::ZERO,
             timestamp: Timestamp::from(0),
             transaction_index: 0,
-            messages: vec![PostedMessage {
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                index: 0,
-                message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
-                    ownership,
-                    admin_id,
-                    epoch,
-                    committees,
-                    balance,
-                    application_permissions: Default::default(),
-                })),
-            }],
+            messages: vec![Message::System(SystemMessage::OpenChain(OpenChainConfig {
+                ownership,
+                admin_id,
+                epoch,
+                committees,
+                balance,
+                application_permissions: Default::default(),
+            }))
+            .to_posted(0, MessageKind::Protected)],
         },
         action: MessageAction::Accept,
     };
@@ -1482,14 +1421,8 @@ where
                 height: BlockHeight::ZERO,
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
-                messages: vec![PostedMessage {
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
-                    index: 0,
-                    message: system_credit_message(Amount::from_tokens(995)),
-                }],
+                messages: vec![system_credit_message(Amount::from_tokens(995))
+                    .to_posted(0, MessageKind::Tracked)],
             },
             action: MessageAction::Accept,
         }],
@@ -1947,14 +1880,8 @@ where
                 height: BlockHeight::ZERO,
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
-                messages: vec![PostedMessage {
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
-                    index: 0,
-                    message: system_credit_message(Amount::from_tokens(5)),
-                }],
+                messages: vec![system_credit_message(Amount::from_tokens(5))
+                    .to_posted(0, MessageKind::Tracked)],
             },
             action: MessageAction::Accept,
         }],
@@ -2137,18 +2064,12 @@ where
                 height: BlockHeight::from(0),
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
-                messages: vec![PostedMessage {
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
-                    index: 0,
-                    message: Message::System(SystemMessage::Credit {
-                        source: None,
-                        target: Some(sender),
-                        amount: Amount::from_tokens(5),
-                    }),
-                }],
+                messages: vec![Message::System(SystemMessage::Credit {
+                    source: None,
+                    target: Some(sender),
+                    amount: Amount::from_tokens(5),
+                })
+                .to_posted(0, MessageKind::Tracked)],
             },
             action: MessageAction::Accept,
         }],
@@ -2224,18 +2145,12 @@ where
                     height: BlockHeight::from(2),
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
-                    messages: vec![PostedMessage {
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Tracked,
-                        index: 0,
-                        message: Message::System(SystemMessage::Credit {
-                            source: Some(sender),
-                            target: Some(recipient),
-                            amount: Amount::from_tokens(3),
-                        }),
-                    }],
+                    messages: vec![Message::System(SystemMessage::Credit {
+                        source: Some(sender),
+                        target: Some(recipient),
+                        amount: Amount::from_tokens(3),
+                    })
+                    .to_posted(0, MessageKind::Tracked)],
                 },
                 action: MessageAction::Reject,
             },
@@ -2246,18 +2161,12 @@ where
                     height: BlockHeight::from(3),
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
-                    messages: vec![PostedMessage {
-                        authenticated_signer: None,
-                        grant: Amount::ZERO,
-                        refund_grant_to: None,
-                        kind: MessageKind::Tracked,
-                        index: 0,
-                        message: Message::System(SystemMessage::Credit {
-                            source: Some(sender),
-                            target: Some(recipient),
-                            amount: Amount::from_tokens(2),
-                        }),
-                    }],
+                    messages: vec![Message::System(SystemMessage::Credit {
+                        source: Some(sender),
+                        target: Some(recipient),
+                        amount: Amount::from_tokens(2),
+                    })
+                    .to_posted(0, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             },
@@ -2294,18 +2203,12 @@ where
                 height: BlockHeight::from(0),
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
-                messages: vec![PostedMessage {
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Bouncing,
-                    index: 0,
-                    message: Message::System(SystemMessage::Credit {
-                        source: Some(sender),
-                        target: Some(recipient),
-                        amount: Amount::from_tokens(3),
-                    }),
-                }],
+                messages: vec![Message::System(SystemMessage::Credit {
+                    source: Some(sender),
+                    target: Some(recipient),
+                    amount: Amount::from_tokens(3),
+                })
+                .to_posted(0, MessageKind::Bouncing)],
             },
             action: MessageAction::Accept,
         }],
@@ -2522,17 +2425,11 @@ where
                             height: BlockHeight::ZERO,
                             timestamp: Timestamp::from(0),
                             transaction_index: 0,
-                            messages: vec![PostedMessage {
-                                authenticated_signer: None,
-                                grant: Amount::ZERO,
-                                refund_grant_to: None,
-                                kind: MessageKind::Protected,
-                                index: 1,
-                                message: Message::System(SystemMessage::Subscribe {
-                                    id: user_id,
-                                    subscription: admin_channel_subscription.clone(),
-                                }),
-                            }],
+                            messages: vec![Message::System(SystemMessage::Subscribe {
+                                id: user_id,
+                                subscription: admin_channel_subscription.clone(),
+                            })
+                            .to_posted(1, MessageKind::Protected)],
                         },
                         action: MessageAction::Accept,
                     }),
@@ -2648,23 +2545,17 @@ where
                             height: BlockHeight::from(0),
                             timestamp: Timestamp::from(0),
                             transaction_index: 0,
-                            messages: vec![PostedMessage {
-                                authenticated_signer: None,
-                                grant: Amount::ZERO,
-                                refund_grant_to: None,
-                                kind: MessageKind::Protected,
-                                index: 0,
-                                message: Message::System(SystemMessage::OpenChain(
-                                    OpenChainConfig {
-                                        ownership: ChainOwnership::single(key_pair.public()),
-                                        epoch: Epoch::from(0),
-                                        committees: committees.clone(),
-                                        admin_id,
-                                        balance: Amount::ZERO,
-                                        application_permissions: Default::default(),
-                                    },
-                                )),
-                            }],
+                            messages: vec![Message::System(SystemMessage::OpenChain(
+                                OpenChainConfig {
+                                    ownership: ChainOwnership::single(key_pair.public()),
+                                    epoch: Epoch::from(0),
+                                    committees: committees.clone(),
+                                    admin_id,
+                                    balance: Amount::ZERO,
+                                    application_permissions: Default::default(),
+                                },
+                            ))
+                            .to_posted(0, MessageKind::Protected)],
                         },
                         action: MessageAction::Accept,
                     })
@@ -2675,17 +2566,11 @@ where
                             height: BlockHeight::from(1),
                             timestamp: Timestamp::from(0),
                             transaction_index: 0,
-                            messages: vec![PostedMessage {
-                                authenticated_signer: None,
-                                grant: Amount::ZERO,
-                                refund_grant_to: None,
-                                kind: MessageKind::Protected,
-                                index: 0,
-                                message: Message::System(SystemMessage::SetCommittees {
-                                    epoch: Epoch::from(1),
-                                    committees: committees2.clone(),
-                                }),
-                            }],
+                            messages: vec![Message::System(SystemMessage::SetCommittees {
+                                epoch: Epoch::from(1),
+                                committees: committees2.clone(),
+                            })
+                            .to_posted(0, MessageKind::Protected)],
                         },
                         action: MessageAction::Accept,
                     })
@@ -2696,14 +2581,8 @@ where
                             height: BlockHeight::from(1),
                             timestamp: Timestamp::from(0),
                             transaction_index: 1,
-                            messages: vec![PostedMessage {
-                                authenticated_signer: None,
-                                grant: Amount::ZERO,
-                                refund_grant_to: None,
-                                kind: MessageKind::Tracked,
-                                index: 1,
-                                message: system_credit_message(Amount::from_tokens(2)),
-                            }],
+                            messages: vec![system_credit_message(Amount::from_tokens(2))
+                                .to_posted(1, MessageKind::Tracked)],
                         },
                         action: MessageAction::Accept,
                     })
@@ -2714,14 +2593,8 @@ where
                             height: BlockHeight::from(2),
                             timestamp: Timestamp::from(0),
                             transaction_index: 0,
-                            messages: vec![PostedMessage {
-                                authenticated_signer: None,
-                                grant: Amount::ZERO,
-                                refund_grant_to: None,
-                                kind: MessageKind::Protected,
-                                index: 0,
-                                message: Message::System(SystemMessage::Notify { id: user_id }),
-                            }],
+                            messages: vec![Message::System(SystemMessage::Notify { id: user_id })
+                                .to_posted(0, MessageKind::Protected)],
                         },
                         action: MessageAction::Accept,
                     }),
@@ -3061,14 +2934,8 @@ where
                             height: BlockHeight::ZERO,
                             timestamp: Timestamp::from(0),
                             transaction_index: 0,
-                            messages: vec![PostedMessage {
-                                authenticated_signer: None,
-                                grant: Amount::ZERO,
-                                refund_grant_to: None,
-                                kind: MessageKind::Tracked,
-                                index: 0,
-                                message: system_credit_message(Amount::ONE),
-                            }],
+                            messages: vec![system_credit_message(Amount::ONE)
+                                .to_posted(0, MessageKind::Tracked)],
                         },
                         action: MessageAction::Accept,
                     }),

@@ -3,14 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use assert_matches::assert_matches;
-use linera_base::{
-    crypto::CryptoHash,
-    data_types::{Amount, Timestamp},
-};
+use linera_base::{crypto::CryptoHash, data_types::Timestamp};
 use linera_execution::{Message, MessageKind, UserApplicationId};
 
 use super::*;
-use crate::data_types::PostedMessage;
+use crate::test::MessageTestExt as _;
 
 fn make_bundle(
     certificate_hash: CryptoHash,
@@ -18,23 +15,16 @@ fn make_bundle(
     index: u32,
     message: impl Into<Vec<u8>>,
 ) -> MessageBundle {
-    let posted_message = PostedMessage {
-        authenticated_signer: None,
-        grant: Amount::ZERO,
-        refund_grant_to: None,
-        kind: MessageKind::Simple,
-        index,
-        message: Message::User {
-            application_id: UserApplicationId::default(),
-            bytes: message.into(),
-        },
+    let message = Message::User {
+        application_id: UserApplicationId::default(),
+        bytes: message.into(),
     };
     MessageBundle {
         certificate_hash,
         height: BlockHeight::from(height),
         timestamp: Timestamp::default(),
         transaction_index: index,
-        messages: vec![posted_message],
+        messages: vec![message.to_posted(index, MessageKind::Simple)],
     }
 }
 
