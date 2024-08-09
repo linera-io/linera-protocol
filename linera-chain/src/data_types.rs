@@ -807,7 +807,7 @@ impl ExecutedBlock {
         message_index: u32,
     ) -> Option<MessageId> {
         let block = &self.block;
-        let transaction_index = block.message_count().checked_add(operation_index)?;
+        let transaction_index = block.incoming_bundles.len().checked_add(operation_index)?;
         if message_index
             >= u32::try_from(self.outcome.messages.get(transaction_index)?.len()).ok()?
         {
