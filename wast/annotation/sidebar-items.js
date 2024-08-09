@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["custom","dylink_0","name","producers"]};

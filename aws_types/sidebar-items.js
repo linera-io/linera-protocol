@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["docs_for"],"mod":["app_name","build_metadata","endpoint_config","os_shim_internal","region","request_id","sdk_config"],"struct":["SigningName"]};

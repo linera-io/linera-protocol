@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A Rust parser for the WebAssembly Text format"><title>wat - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wat" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wat/index.html">wat</a><span class="version">1.0.71</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">wat</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/wat/lib.rs.html#1-333">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A Rust parser for the <a href="http://webassembly.github.io/spec/core/text/index.html">WebAssembly Text format</a></p>
+<p>This crate contains a stable interface to the parser for the <a href="http://webassembly.github.io/spec/core/text/index.html">WAT</a>
+format of WebAssembly text files. The format parsed by this crate follows
+the <a href="http://webassembly.github.io/spec/core/text/index.html">online specification</a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Parse an in-memory string:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>wat = <span class="string">r#"
+    (module
+        (func $foo)
+
+        (func (export "bar")
+            call $foo
+        )
+    )
+"#</span>;
+
+<span class="kw">let </span>binary = wat::parse_str(wat)<span class="question-mark">?</span>;
+<span class="comment">// ...</span></code></pre></div>
+<p>Parse an on-disk file:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>binary = wat::parse_file(<span class="string">"./foo.wat"</span>)<span class="question-mark">?</span>;
+<span class="comment">// ...</span></code></pre></div>
+<h3 id="evolution-of-the-wat-format"><a class="doc-anchor" href="#evolution-of-the-wat-format">§</a>Evolution of the WAT Format</h3>
+<p>WebAssembly, and the WAT format, are an evolving specification. Features are
+added to WAT, WAT changes, and sometimes WAT breaks. The policy of this
+crate is that it will always follow the <a href="http://webassembly.github.io/spec/core/text/index.html">official specification</a> for
+WAT files.</p>
+<p>Future WebAssembly features will be accepted to this parser <strong>and they will
+not require a feature gate to opt-in</strong>. All implemented WebAssembly features
+will be enabled at all times. Using a future WebAssembly feature in the WAT
+format may cause breakage because while specifications are in development
+the WAT syntax (and/or binary encoding) will often change. This crate will
+do its best to keep up with these proposals, but breaking textual changes
+will be published as non-breaking semver changes to this crate.</p>
+<h3 id="stability"><a class="doc-anchor" href="#stability">§</a>Stability</h3>
+<p>This crate is intended to be a very stable shim over the <code>wast</code> crate
+which is expected to be much more unstable. The <code>wast</code> crate contains
+AST data structures for parsing <code>*.wat</code> files and they will evolve was the
+WAT and WebAssembly specifications evolve over time.</p>
+<p>This crate is currently at version 1.x.y, and it is intended that it will
+remain here for quite some time. Breaking changes to the WAT format will be
+landed as a non-semver-breaking version change in this crate. This crate
+will always follow the <a href="http://webassembly.github.io/spec/core/text/index.html">official specification for WAT</a>.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct wat::Error">Error</a></div><div class="desc docblock-short">Errors from this crate related to parsing WAT files</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.parse_bytes.html" title="fn wat::parse_bytes">parse_bytes</a></div><div class="desc docblock-short">Parses in-memory bytes as either the <a href="http://webassembly.github.io/spec/core/text/index.html">WebAssembly Text format</a>, or a
+binary WebAssembly module.</div></li><li><div class="item-name"><a class="fn" href="fn.parse_file.html" title="fn wat::parse_file">parse_file</a></div><div class="desc docblock-short">Parses a file on disk as a <a href="http://webassembly.github.io/spec/core/text/index.html">WebAssembly Text format</a> file, or a binary
+WebAssembly file</div></li><li><div class="item-name"><a class="fn" href="fn.parse_str.html" title="fn wat::parse_str">parse_str</a></div><div class="desc docblock-short">Parses an in-memory string as the <a href="http://webassembly.github.io/spec/core/text/index.html">WebAssembly Text format</a>, returning
+the file as a binary WebAssembly file.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type wat::Result">Result</a></div><div class="desc docblock-short">A convenience type definition for <code>Result</code> where the error is <a href="struct.Error.html" title="struct wat::Error"><code>Error</code></a></div></li></ul></section></div></main></body></html>

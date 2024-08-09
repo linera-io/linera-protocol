@@ -1,0 +1,779 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/rcgen-0.12.1/src/crl.rs`."><title>crl.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="rcgen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+</pre></div><pre class="rust"><code><span class="attr">#[cfg(feature = <span class="string">"pem"</span>)]
+</span><span class="kw">use </span>pem::Pem;
+<span class="kw">use </span>time::OffsetDateTime;
+<span class="kw">use </span>yasna::DERWriter;
+<span class="kw">use </span>yasna::Tag;
+
+<span class="kw">use </span><span class="kw">crate</span>::oid::<span class="kw-2">*</span>;
+<span class="attr">#[cfg(feature = <span class="string">"pem"</span>)]
+</span><span class="kw">use </span><span class="kw">crate</span>::ENCODE_CONFIG;
+<span class="kw">use crate</span>::{
+	write_distinguished_name, write_dt_utc_or_generalized, write_x509_authority_key_identifier,
+	write_x509_extension,
+};
+<span class="kw">use crate</span>::{Certificate, Error, KeyIdMethod, KeyUsagePurpose, SerialNumber, SignatureAlgorithm};
+
+<span class="doccomment">/// A certificate revocation list (CRL)
+///
+/// ## Example
+///
+/// ```
+/// extern crate rcgen;
+/// use rcgen::*;
+///
+/// # fn main () {
+/// // Generate a CRL issuer.
+/// let mut issuer_params = CertificateParams::new(vec!["crl.issuer.example.com".to_string()]);
+/// issuer_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+/// issuer_params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::CrlSign];
+/// let issuer = Certificate::from_params(issuer_params).unwrap();
+/// // Describe a revoked certificate.
+/// let revoked_cert = RevokedCertParams{
+///   serial_number: SerialNumber::from(9999),
+///   revocation_time: date_time_ymd(2024, 06, 17),
+///   reason_code: Some(RevocationReason::KeyCompromise),
+///   invalidity_date: None,
+/// };
+/// // Create a CRL signed by the issuer, revoking revoked_cert.
+/// let crl = CertificateRevocationListParams{
+///   this_update: date_time_ymd(2023, 06, 17),
+///   next_update: date_time_ymd(2024, 06, 17),
+///   crl_number: SerialNumber::from(1234),
+///   issuing_distribution_point: None,
+///   revoked_certs: vec![revoked_cert],
+///   alg: &amp;PKCS_ECDSA_P256_SHA256,
+///   key_identifier_method: KeyIdMethod::Sha256,
+/// };
+/// let crl = CertificateRevocationList::from_params(crl).unwrap();
+///# }
+</span><span class="kw">pub struct </span>CertificateRevocationList {
+	params: CertificateRevocationListParams,
+}
+
+<span class="kw">impl </span>CertificateRevocationList {
+	<span class="doccomment">/// Generates a new certificate revocation list (CRL) from the given parameters.
+	</span><span class="kw">pub fn </span>from_params(params: CertificateRevocationListParams) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, Error&gt; {
+		<span class="kw">if </span>params.next_update.le(<span class="kw-2">&amp;</span>params.this_update) {
+			<span class="kw">return </span><span class="prelude-val">Err</span>(Error::InvalidCrlNextUpdate);
+		}
+		<span class="prelude-val">Ok</span>(<span class="self">Self </span>{ params })
+	}
+	<span class="doccomment">/// Returns the certificate revocation list (CRL) parameters.
+	</span><span class="kw">pub fn </span>get_params(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>CertificateRevocationListParams {
+		<span class="kw-2">&amp;</span><span class="self">self</span>.params
+	}
+	<span class="doccomment">/// Serializes the certificate revocation list (CRL) in binary DER format, signed with
+	/// the issuing certificate authority's key.
+	</span><span class="kw">pub fn </span>serialize_der_with_signer(<span class="kw-2">&amp;</span><span class="self">self</span>, ca: <span class="kw-2">&amp;</span>Certificate) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, Error&gt; {
+		<span class="kw">if </span>!ca.params.key_usages.is_empty()
+			&amp;&amp; !ca.params.key_usages.contains(<span class="kw-2">&amp;</span>KeyUsagePurpose::CrlSign)
+		{
+			<span class="kw">return </span><span class="prelude-val">Err</span>(Error::IssuerNotCrlSigner);
+		}
+		<span class="self">self</span>.params.serialize_der_with_signer(ca)
+	}
+	<span class="doccomment">/// Serializes the certificate revocation list (CRL) in ASCII PEM format, signed with
+	/// the issuing certificate authority's key.
+	</span><span class="attr">#[cfg(feature = <span class="string">"pem"</span>)]
+	</span><span class="kw">pub fn </span>serialize_pem_with_signer(<span class="kw-2">&amp;</span><span class="self">self</span>, ca: <span class="kw-2">&amp;</span>Certificate) -&gt; <span class="prelude-ty">Result</span>&lt;String, Error&gt; {
+		<span class="kw">let </span>contents = <span class="self">self</span>.serialize_der_with_signer(ca)<span class="question-mark">?</span>;
+		<span class="kw">let </span>p = Pem::new(<span class="string">"X509 CRL"</span>, contents);
+		<span class="prelude-val">Ok</span>(pem::encode_config(<span class="kw-2">&amp;</span>p, ENCODE_CONFIG))
+	}
+}
+
+<span class="doccomment">/// A certificate revocation list (CRL) distribution point, to be included in a certificate's
+/// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13) or
+/// a CRL's [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5)
+</span><span class="attr">#[derive(Debug, PartialEq, Eq, Clone)]
+</span><span class="kw">pub struct </span>CrlDistributionPoint {
+	<span class="doccomment">/// One or more URI distribution point names, indicating a place the current CRL can
+	/// be retrieved. When present, SHOULD include at least one LDAP or HTTP URI.
+	</span><span class="kw">pub </span>uris: Vec&lt;String&gt;,
+}
+
+<span class="kw">impl </span>CrlDistributionPoint {
+	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>write_der(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: DERWriter) {
+		<span class="comment">// DistributionPoint SEQUENCE
+		</span>writer.write_sequence(|writer| {
+			write_distribution_point_name_uris(writer.next(), <span class="kw-2">&amp;</span><span class="self">self</span>.uris);
+		});
+	}
+}
+
+<span class="kw">fn </span>write_distribution_point_name_uris&lt;<span class="lifetime">'a</span>&gt;(
+	writer: DERWriter,
+	uris: <span class="kw">impl </span>IntoIterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>String&gt;,
+) {
+	<span class="comment">// distributionPoint DistributionPointName
+	</span>writer.write_tagged_implicit(Tag::context(<span class="number">0</span>), |writer| {
+		writer.write_sequence(|writer| {
+			<span class="comment">// fullName GeneralNames
+			</span>writer
+				.next()
+				.write_tagged_implicit(Tag::context(<span class="number">0</span>), |writer| {
+					<span class="comment">// GeneralNames
+					</span>writer.write_sequence(|writer| {
+						<span class="kw">for </span>uri <span class="kw">in </span>uris.into_iter() {
+							<span class="comment">// uniformResourceIdentifier [6] IA5String,
+							</span>writer
+								.next()
+								.write_tagged_implicit(Tag::context(<span class="number">6</span>), |writer| {
+									writer.write_ia5_string(uri)
+								});
+						}
+					})
+				});
+		});
+	});
+}
+
+<span class="doccomment">/// Identifies the reason a certificate was revoked.
+/// See RFC 5280 §5.3.1[^1]
+///
+/// [^1] &lt;https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1&gt;
+</span><span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[allow(missing_docs)] </span><span class="comment">// Not much to add above the code name.
+</span><span class="kw">pub enum </span>RevocationReason {
+	Unspecified = <span class="number">0</span>,
+	KeyCompromise = <span class="number">1</span>,
+	CaCompromise = <span class="number">2</span>,
+	AffiliationChanged = <span class="number">3</span>,
+	Superseded = <span class="number">4</span>,
+	CessationOfOperation = <span class="number">5</span>,
+	CertificateHold = <span class="number">6</span>,
+	<span class="comment">// 7 is not defined.
+	</span>RemoveFromCrl = <span class="number">8</span>,
+	PrivilegeWithdrawn = <span class="number">9</span>,
+	AaCompromise = <span class="number">10</span>,
+}
+
+<span class="doccomment">/// Parameters used for certificate revocation list (CRL) generation
+</span><span class="kw">pub struct </span>CertificateRevocationListParams {
+	<span class="doccomment">/// Issue date of the CRL.
+	</span><span class="kw">pub </span>this_update: OffsetDateTime,
+	<span class="doccomment">/// The date by which the next CRL will be issued.
+	</span><span class="kw">pub </span>next_update: OffsetDateTime,
+	<span class="doccomment">/// A monotonically increasing sequence number for a given CRL scope and issuer.
+	</span><span class="kw">pub </span>crl_number: SerialNumber,
+	<span class="doccomment">/// An optional CRL extension identifying the CRL distribution point and scope for a
+	/// particular CRL as described in RFC 5280 Section 5.2.5[^1].
+	///
+	/// [^1]: &lt;https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5&gt;
+	</span><span class="kw">pub </span>issuing_distribution_point: <span class="prelude-ty">Option</span>&lt;CrlIssuingDistributionPoint&gt;,
+	<span class="doccomment">/// A list of zero or more parameters describing revoked certificates included in the CRL.
+	</span><span class="kw">pub </span>revoked_certs: Vec&lt;RevokedCertParams&gt;,
+	<span class="doccomment">/// Signature algorithm to use when signing the serialized CRL.
+	</span><span class="kw">pub </span>alg: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>SignatureAlgorithm,
+	<span class="doccomment">/// Method to generate key identifiers from public keys
+	///
+	/// Defaults to SHA-256.
+	</span><span class="kw">pub </span>key_identifier_method: KeyIdMethod,
+}
+
+<span class="kw">impl </span>CertificateRevocationListParams {
+	<span class="kw">fn </span>serialize_der_with_signer(<span class="kw-2">&amp;</span><span class="self">self</span>, ca: <span class="kw-2">&amp;</span>Certificate) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, Error&gt; {
+		yasna::try_construct_der(|writer| {
+			<span class="comment">// https://www.rfc-editor.org/rfc/rfc5280#section-5.1
+			</span>writer.write_sequence(|writer| {
+				<span class="kw">let </span>tbs_cert_list_serialized = yasna::try_construct_der(|writer| {
+					<span class="self">self</span>.write_crl(writer, ca)<span class="question-mark">?</span>;
+					<span class="prelude-val">Ok</span>::&lt;(), Error&gt;(())
+				})<span class="question-mark">?</span>;
+
+				<span class="comment">// Write tbsCertList
+				</span>writer.next().write_der(<span class="kw-2">&amp;</span>tbs_cert_list_serialized);
+
+				<span class="comment">// Write signatureAlgorithm
+				</span>ca.params.alg.write_alg_ident(writer.next());
+
+				<span class="comment">// Write signature
+				</span>ca.key_pair.sign(<span class="kw-2">&amp;</span>tbs_cert_list_serialized, writer.next())<span class="question-mark">?</span>;
+
+				<span class="prelude-val">Ok</span>(())
+			})
+		})
+	}
+	<span class="kw">fn </span>write_crl(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: DERWriter, ca: <span class="kw-2">&amp;</span>Certificate) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+		writer.write_sequence(|writer| {
+			<span class="comment">// Write CRL version.
+			// RFC 5280 §5.1.2.1:
+			//   This optional field describes the version of the encoded CRL.  When
+			//   extensions are used, as required by this profile, this field MUST be
+			//   present and MUST specify version 2 (the integer value is 1).
+			// RFC 5280 §5.2:
+			//   Conforming CRL issuers are REQUIRED to include the authority key
+			//   identifier (Section 5.2.1) and the CRL number (Section 5.2.3)
+			//   extensions in all CRLs issued.
+			</span>writer.next().write_u8(<span class="number">1</span>);
+
+			<span class="comment">// Write algorithm identifier.
+			// RFC 5280 §5.1.2.2:
+			//   This field MUST contain the same algorithm identifier as the
+			//   signatureAlgorithm field in the sequence CertificateList
+			</span>ca.params.alg.write_alg_ident(writer.next());
+
+			<span class="comment">// Write issuer.
+			// RFC 5280 §5.1.2.3:
+			//   The issuer field MUST contain a non-empty X.500 distinguished name (DN).
+			</span>write_distinguished_name(writer.next(), <span class="kw-2">&amp;</span>ca.params.distinguished_name);
+
+			<span class="comment">// Write thisUpdate date.
+			// RFC 5280 §5.1.2.4:
+			//    This field indicates the issue date of this CRL.  thisUpdate may be
+			//    encoded as UTCTime or GeneralizedTime.
+			</span>write_dt_utc_or_generalized(writer.next(), <span class="self">self</span>.this_update);
+
+			<span class="comment">// Write nextUpdate date.
+			// While OPTIONAL in the ASN.1 module, RFC 5280 §5.1.2.5 says:
+			//   Conforming CRL issuers MUST include the nextUpdate field in all CRLs.
+			</span>write_dt_utc_or_generalized(writer.next(), <span class="self">self</span>.next_update);
+
+			<span class="comment">// Write revokedCertificates.
+			// RFC 5280 §5.1.2.6:
+			//   When there are no revoked certificates, the revoked certificates list
+			//   MUST be absent
+			</span><span class="kw">if </span>!<span class="self">self</span>.revoked_certs.is_empty() {
+				writer.next().write_sequence(|writer| {
+					<span class="kw">for </span>revoked_cert <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.revoked_certs {
+						revoked_cert.write_der(writer.next());
+					}
+				});
+			}
+
+			<span class="comment">// Write crlExtensions.
+			// RFC 5280 §5.1.2.7:
+			//   This field may only appear if the version is 2 (Section 5.1.2.1).  If
+			//   present, this field is a sequence of one or more CRL extensions.
+			// RFC 5280 §5.2:
+			//   Conforming CRL issuers are REQUIRED to include the authority key
+			//   identifier (Section 5.2.1) and the CRL number (Section 5.2.3)
+			//   extensions in all CRLs issued.
+			</span>writer.next().write_tagged(Tag::context(<span class="number">0</span>), |writer| {
+				writer.write_sequence(|writer| {
+					<span class="comment">// Write authority key identifier.
+					</span>write_x509_authority_key_identifier(writer.next(), ca);
+
+					<span class="comment">// Write CRL number.
+					</span>write_x509_extension(writer.next(), OID_CRL_NUMBER, <span class="bool-val">false</span>, |writer| {
+						writer.write_bigint_bytes(<span class="self">self</span>.crl_number.as_ref(), <span class="bool-val">true</span>);
+					});
+
+					<span class="comment">// Write issuing distribution point (if present).
+					</span><span class="kw">if let </span><span class="prelude-val">Some</span>(issuing_distribution_point) = <span class="kw-2">&amp;</span><span class="self">self</span>.issuing_distribution_point {
+						write_x509_extension(
+							writer.next(),
+							OID_CRL_ISSUING_DISTRIBUTION_POINT,
+							<span class="bool-val">true</span>,
+							|writer| {
+								issuing_distribution_point.write_der(writer);
+							},
+						);
+					}
+				});
+			});
+
+			<span class="prelude-val">Ok</span>(())
+		})
+	}
+}
+
+<span class="doccomment">/// A certificate revocation list (CRL) issuing distribution point, to be included in a CRL's
+/// [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
+</span><span class="kw">pub struct </span>CrlIssuingDistributionPoint {
+	<span class="doccomment">/// The CRL's distribution point, containing a sequence of URIs the CRL can be retrieved from.
+	</span><span class="kw">pub </span>distribution_point: CrlDistributionPoint,
+	<span class="doccomment">/// An optional description of the CRL's scope. If omitted, the CRL may contain
+	/// both user certs and CA certs.
+	</span><span class="kw">pub </span>scope: <span class="prelude-ty">Option</span>&lt;CrlScope&gt;,
+}
+
+<span class="kw">impl </span>CrlIssuingDistributionPoint {
+	<span class="kw">fn </span>write_der(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: DERWriter) {
+		<span class="comment">// IssuingDistributionPoint SEQUENCE
+		</span>writer.write_sequence(|writer| {
+			<span class="comment">// distributionPoint [0] DistributionPointName OPTIONAL
+			</span>write_distribution_point_name_uris(writer.next(), <span class="kw-2">&amp;</span><span class="self">self</span>.distribution_point.uris);
+
+			<span class="comment">// -- at most one of onlyContainsUserCerts, onlyContainsCACerts,
+			// -- and onlyContainsAttributeCerts may be set to TRUE.
+			</span><span class="kw">if let </span><span class="prelude-val">Some</span>(scope) = <span class="self">self</span>.scope {
+				<span class="kw">let </span>tag = <span class="kw">match </span>scope {
+					<span class="comment">// onlyContainsUserCerts [1] BOOLEAN DEFAULT FALSE,
+					</span>CrlScope::UserCertsOnly =&gt; Tag::context(<span class="number">1</span>),
+					<span class="comment">// onlyContainsCACerts [2] BOOLEAN DEFAULT FALSE,
+					</span>CrlScope::CaCertsOnly =&gt; Tag::context(<span class="number">2</span>),
+				};
+				writer.next().write_tagged_implicit(tag, |writer| {
+					writer.write_bool(<span class="bool-val">true</span>);
+				});
+			}
+		});
+	}
+}
+
+<span class="doccomment">/// Describes the scope of a CRL for an issuing distribution point extension.
+</span><span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+</span><span class="kw">pub enum </span>CrlScope {
+	<span class="doccomment">/// The CRL contains only end-entity user certificates.
+	</span>UserCertsOnly,
+	<span class="doccomment">/// The CRL contains only CA certificates.
+	</span>CaCertsOnly,
+}
+
+<span class="doccomment">/// Parameters used for describing a revoked certificate included in a [`CertificateRevocationList`].
+</span><span class="kw">pub struct </span>RevokedCertParams {
+	<span class="doccomment">/// Serial number identifying the revoked certificate.
+	</span><span class="kw">pub </span>serial_number: SerialNumber,
+	<span class="doccomment">/// The date at which the CA processed the revocation.
+	</span><span class="kw">pub </span>revocation_time: OffsetDateTime,
+	<span class="doccomment">/// An optional reason code identifying why the certificate was revoked.
+	</span><span class="kw">pub </span>reason_code: <span class="prelude-ty">Option</span>&lt;RevocationReason&gt;,
+	<span class="doccomment">/// An optional field describing the date on which it was known or suspected that the
+	/// private key was compromised or the certificate otherwise became invalid. This date
+	/// may be earlier than the [`RevokedCertParams::revocation_time`].
+	</span><span class="kw">pub </span>invalidity_date: <span class="prelude-ty">Option</span>&lt;OffsetDateTime&gt;,
+}
+
+<span class="kw">impl </span>RevokedCertParams {
+	<span class="kw">fn </span>write_der(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: DERWriter) {
+		writer.write_sequence(|writer| {
+			<span class="comment">// Write serial number.
+			// RFC 5280 §4.1.2.2:
+			//    Certificate users MUST be able to handle serialNumber values up to 20 octets.
+			//    Conforming CAs MUST NOT use serialNumber values longer than 20 octets.
+			//
+			//    Note: Non-conforming CAs may issue certificates with serial numbers
+			//    that are negative or zero.  Certificate users SHOULD be prepared to
+			//    gracefully handle such certificates.
+			</span>writer
+				.next()
+				.write_bigint_bytes(<span class="self">self</span>.serial_number.as_ref(), <span class="bool-val">true</span>);
+
+			<span class="comment">// Write revocation date.
+			</span>write_dt_utc_or_generalized(writer.next(), <span class="self">self</span>.revocation_time);
+
+			<span class="comment">// Write extensions if applicable.
+			// RFC 5280 §5.3:
+			//   Support for the CRL entry extensions defined in this specification is
+			//   optional for conforming CRL issuers and applications.  However, CRL
+			//   issuers SHOULD include reason codes (Section 5.3.1) and invalidity
+			//   dates (Section 5.3.2) whenever this information is available.
+			</span><span class="kw">let </span>has_reason_code =
+				<span class="macro">matches!</span>(<span class="self">self</span>.reason_code, <span class="prelude-val">Some</span>(reason) <span class="kw">if </span>reason != RevocationReason::Unspecified);
+			<span class="kw">let </span>has_invalidity_date = <span class="self">self</span>.invalidity_date.is_some();
+			<span class="kw">if </span>has_reason_code || has_invalidity_date {
+				writer.next().write_sequence(|writer| {
+					<span class="comment">// Write reason code if present.
+					</span><span class="self">self</span>.reason_code.map(|reason_code| {
+						write_x509_extension(writer.next(), OID_CRL_REASONS, <span class="bool-val">false</span>, |writer| {
+							writer.write_enum(reason_code <span class="kw">as </span>i64);
+						});
+					});
+
+					<span class="comment">// Write invalidity date if present.
+					</span><span class="self">self</span>.invalidity_date.map(|invalidity_date| {
+						write_x509_extension(
+							writer.next(),
+							OID_CRL_INVALIDITY_DATE,
+							<span class="bool-val">false</span>,
+							|writer| {
+								write_dt_utc_or_generalized(writer, invalidity_date);
+							},
+						)
+					});
+				});
+			}
+		})
+	}
+}
+</code></pre></div></section></main></body></html>

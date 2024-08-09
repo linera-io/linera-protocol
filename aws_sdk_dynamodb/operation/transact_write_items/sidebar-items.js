@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TransactWriteItemsError"],"mod":["builders"],"struct":["TransactWriteItems","TransactWriteItemsInput","TransactWriteItemsOutput"]};

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("colorchoice", 0, "Global override of color control\nSelection for overriding color output\nReturns the argument unchanged.\nGet the current <code>ColorChoice</code> state\nCalls <code>U::from(self)</code>.\nOverride the detected <code>ColorChoice</code>")

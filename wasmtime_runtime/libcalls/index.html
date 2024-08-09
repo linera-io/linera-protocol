@@ -1,0 +1,54 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Runtime library calls."><title>wasmtime_runtime::libcalls - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="wasmtime_runtime" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../wasmtime_runtime/index.html">wasmtime_runtime</a><span class="version">1.0.2</span></h2></div><h2 class="location"><a href="#">Module libcalls</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li></ul></section><h2><a href="../index.html">In crate wasmtime_runtime</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">wasmtime_runtime</a>::<wbr><a class="mod" href="#">libcalls</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/wasmtime_runtime/libcalls.rs.html#1-514">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Runtime library calls.</p>
+<p>Note that Wasm compilers may sometimes perform these inline rather than
+calling them, particularly when CPUs have special instructions which compute
+them directly.</p>
+<p>These functions are called by compiled Wasm code, and therefore must take
+certain care about some things:</p>
+<ul>
+<li>
+<p>They must only contain basic, raw i32/i64/f32/f64/pointer parameters that
+are safe to pass across the system ABI.</p>
+</li>
+<li>
+<p>If any nested function propagates an <code>Err(trap)</code> out to the library
+function frame, we need to raise it. This involves some nasty and quite
+unsafe code under the covers! Notably, after raising the trap, drops
+<strong>will not</strong> be run for local variables! This can lead to things like
+leaking <code>InstanceHandle</code>s which leads to never deallocating JIT code,
+instances, and modules if we are not careful!</p>
+</li>
+<li>
+<p>The libcall must be entered via a Wasm-to-libcall trampoline that saves
+the last Wasm FP and PC for stack walking purposes. (For more details, see
+<code>crates/runtime/src/backtrace.rs</code>.)</p>
+</li>
+</ul>
+<p>To make it easier to correctly handle all these things, <strong>all</strong> libcalls
+must be defined via the <code>libcall!</code> helper macro! See its doc comments below
+for an example, or just look at the rest of the file.</p>
+<h3 id="dealing-with-externrefs"><a class="doc-anchor" href="#dealing-with-externrefs">§</a>Dealing with <code>externref</code>s</h3>
+<p>When receiving a raw <code>*mut u8</code> that is actually a <code>VMExternRef</code> reference,
+convert it into a proper <code>VMExternRef</code> with <code>VMExternRef::clone_from_raw</code> as
+soon as apossible. Any GC before raw pointer is converted into a reference
+can potentially collect the referenced object, which could lead to use after
+free.</p>
+<p>Avoid this by eagerly converting into a proper <code>VMExternRef</code>! (Unfortunately
+there is no macro to help us automatically get this correct, so stay
+vigilant!)</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">pub unsafe extern </span><span class="string">"C" </span>my_libcall_takes_ref(raw_extern_ref: <span class="kw-2">*mut </span>u8) {
+    <span class="comment">// Before `clone_from_raw`, `raw_extern_ref` is potentially unrooted,
+    // and doing GC here could lead to use after free!
+
+    </span><span class="kw">let </span>my_extern_ref = <span class="kw">if </span>raw_extern_ref.is_null() {
+        <span class="prelude-val">None
+    </span>} <span class="kw">else </span>{
+        <span class="prelude-val">Some</span>(VMExternRef::clone_from_raw(raw_extern_ref))
+    };
+
+    <span class="comment">// Now that we did `clone_from_raw`, it is safe to do a GC (or do
+    // anything else that might transitively GC, like call back into
+    // Wasm!)
+</span>}</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="trampolines/index.html" title="mod wasmtime_runtime::libcalls::trampolines">trampolines</a></div><div class="desc docblock-short">Actually public trampolines which are used by the runtime as the entrypoint
+for libcalls.</div></li></ul></section></div></main></body></html>

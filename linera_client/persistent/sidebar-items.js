@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["file","local_storage","memory"],"struct":["RefMut"],"trait":["Persist"]};

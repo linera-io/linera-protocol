@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Value"],"fn":["from_reader","from_slice","to_vec","to_writer"],"mod":["de","error","ser","tags","value"],"struct":["Deserializer","Error","Serializer","StreamDeserializer"],"type":["Result"]};

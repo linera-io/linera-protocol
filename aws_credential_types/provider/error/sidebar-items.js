@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CredentialsError"],"struct":["CredentialsNotLoaded","InvalidConfiguration","ProviderError","ProviderTimedOut","Unhandled"]};

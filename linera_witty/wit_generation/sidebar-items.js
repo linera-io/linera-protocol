@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["WitInterfaceWriter","WitWorldWriter"],"trait":["RegisterWitTypes","WitInterface"]};

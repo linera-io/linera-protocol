@@ -1,0 +1,89 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A macro, like `custom_keyword`, to create a type which can be used to parse/peek annotation directives."><title>annotation in wast - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wast" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wast/index.html">wast</a><span class="version">64.0.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">wast</a>::<wbr><a class="macro" href="#">annotation</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/wast/lib.rs.html#307-344">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> annotation {
+    (<span class="macro-nonterminal">$name</span>:ident) =&gt; { ... };
+    (<span class="macro-nonterminal">$name</span>:ident = <span class="macro-nonterminal">$annotation</span>:expr) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A macro, like <a href="macro.custom_keyword.html" title="macro wast::custom_keyword"><code>custom_keyword</code></a>, to create a type which can be used to
+parse/peek annotation directives.</p>
+<p>Note that when you’re parsing custom annotations it can be somewhat tricky
+due to the nature that most of them are skipped. You’ll want to be sure to
+consult the documentation of <a href="parser/struct.Parser.html#method.register_annotation" title="method wast::parser::Parser::register_annotation"><code>Parser::register_annotation</code></a> when
+using this macro.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>To see an example of how to use this macro, let’s invent our own syntax for
+the <a href="https://github.com/WebAssembly/tool-conventions/blob/master/ProducersSection.md">producers section</a> which looks like:</p>
+<div class="example-wrap"><pre class="language-wat"><code>(@producer &quot;wat&quot; &quot;1.0.2&quot;)
+</code></pre></div>
+<p>Here, for simplicity, we’ll assume everything is a <code>processed-by</code> directive,
+but you could get much more fancy with this as well.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="comment">// First we define the custom annotation keyword we're using, and by
+// convention we define it in an `annotation` module.
+</span><span class="kw">mod </span>annotation {
+    <span class="macro">wast::annotation!</span>(producer);
+}
+
+<span class="kw">struct </span>Producer&lt;<span class="lifetime">'a</span>&gt; {
+    name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+    version: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Parse&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>Producer&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">fn </span>parse(parser: Parser&lt;<span class="lifetime">'a</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="comment">// Remember that parser conventionally parse the *interior* of an
+        // s-expression, so we parse our `@producer` annotation and then we
+        // parse the payload of our annotation.
+        </span>parser.parse::&lt;annotation::producer&gt;()<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(Producer {
+            name: parser.parse()<span class="question-mark">?</span>,
+            version: parser.parse()<span class="question-mark">?</span>,
+        })
+    }
+}</code></pre></div>
+<p>Note though that this is only half of the parser for annotations. The other
+half is calling the <a href="parser/struct.Parser.html#method.register_annotation" title="method wast::parser::Parser::register_annotation"><code>register_annotation</code></a> method at the right
+time to ensure the parser doesn’t automatically skip our <code>@producer</code>
+directive. Note that we <em>can’t</em> call it inside the <code>Parse for Producer</code>
+definition because that’s too late and the annotation would already have
+been skipped.</p>
+<p>Instead we’ll need to call it from a higher level-parser before the
+parenthesis have been parsed, like so:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>Module&lt;<span class="lifetime">'a</span>&gt; {
+    fields: Vec&lt;ModuleField&lt;<span class="lifetime">'a</span>&gt;&gt;,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Parse&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>Module&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">fn </span>parse(parser: Parser&lt;<span class="lifetime">'a</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="comment">// .. parse module header here ...
+
+        // register our custom `@producer` annotation before we start
+        // parsing the parentheses of each field
+        </span><span class="kw">let </span>_r = parser.register_annotation(<span class="string">"producer"</span>);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>fields = Vec::new();
+        <span class="kw">while </span>!parser.is_empty() {
+            fields.push(parser.parens(|p| p.parse())<span class="question-mark">?</span>);
+        }
+        <span class="prelude-val">Ok</span>(Module { fields })
+    }
+}
+
+<span class="kw">enum </span>ModuleField&lt;<span class="lifetime">'a</span>&gt; {
+    Producer(Producer&lt;<span class="lifetime">'a</span>&gt;),
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Parse&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>ModuleField&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">fn </span>parse(parser: Parser&lt;<span class="lifetime">'a</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="comment">// and here `peek` works and our delegated parsing works because the
+        // annotation has been registered.
+        </span><span class="kw">if </span>parser.peek::&lt;annotation::producer&gt;()<span class="question-mark">? </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(ModuleField::Producer(parser.parse()<span class="question-mark">?</span>));
+        }
+
+        <span class="comment">// .. typically we'd parse other module fields here...
+
+        </span><span class="prelude-val">Err</span>(parser.error(<span class="string">"unknown module field"</span>))
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

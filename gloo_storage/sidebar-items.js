@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["errors"],"struct":["LocalStorage","SessionStorage"],"trait":["Storage"],"type":["Result"]};

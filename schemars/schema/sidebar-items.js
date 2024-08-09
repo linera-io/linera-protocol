@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["InstanceType","Schema","SingleOrVec"],"struct":["ArrayValidation","Metadata","NumberValidation","ObjectValidation","RootSchema","SchemaObject","StringValidation","SubschemaValidation"]};

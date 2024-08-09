@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAGIC"],"enum":["DetectError","Metadata","PathSegmentError","VolumeError"],"externcrate":["bytes","indexmap"],"fn":["detect","is_webc"],"mod":["compat","metadata","migration","v2","v3","wasmer_package"],"struct":["Container","PathSegment","PathSegments","Timestamps","Version","Volume"],"trait":["ToPathSegments"],"type":["Magic"]};

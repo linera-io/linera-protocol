@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["hash","hash32","hash64"],"struct":["FxHasher","FxHasher32","FxHasher64"],"type":["FxBuildHasher","FxHashMap","FxHashSet"]};

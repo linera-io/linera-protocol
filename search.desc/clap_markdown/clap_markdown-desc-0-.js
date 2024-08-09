@@ -1,0 +1,1 @@
+searchState.loadedDescShard("clap_markdown", 0, "Autogenerate Markdown documentation for clap command-line …\nFormat the help information for <code>command</code> as Markdown.\nFormat the help information for <code>command</code> as Markdown.\nFormat the help information for <code>command</code> as Markdown and …")

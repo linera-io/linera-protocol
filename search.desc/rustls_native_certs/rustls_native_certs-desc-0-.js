@@ -1,0 +1,1 @@
+searchState.loadedDescShard("rustls_native_certs", 0, "rustls-native-certs allows rustls to use the platform’s …\nLoad root certificates found in the platform’s native …")

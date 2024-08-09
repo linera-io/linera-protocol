@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ChecksumAlgorithm","SignatureAlgorithm","SignatureError","Tag"],"mod":["read","write"],"struct":["Checksum","Index","IndexEntry","Signature","Span"]};

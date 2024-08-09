@@ -1,0 +1,1 @@
+searchState.loadedDescShard("linera", 0, "Returns the argument unchanged.\nCalls <code>U::from(self)</code>.\nPrints a warning message to explain that the wallet has …\nReads <code>length</code> bytes from memory from the provided <code>location</code>.\nWrites the <code>bytes</code> to memory at the provided <code>location</code>.")

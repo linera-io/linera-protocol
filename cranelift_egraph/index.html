@@ -1,0 +1,196 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="ægraph (aegraph, or acyclic e-graph) implementation."><title>cranelift_egraph - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="cranelift_egraph" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../cranelift_egraph/index.html">cranelift_egraph</a><span class="version">0.91.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">cranelift_egraph</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/cranelift_egraph/lib.rs.html#1-666">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="ægraph-aegraph-or-acyclic-e-graph-implementation"><a class="doc-anchor" href="#ægraph-aegraph-or-acyclic-e-graph-implementation">§</a>ægraph (aegraph, or acyclic e-graph) implementation.</h2>
+<p>An aegraph is a form of e-graph. We will first describe the
+e-graph, then the aegraph as a slightly less powerful but highly
+optimized variant of it.</p>
+<p>The main goal of this library is to be explicitly memory-efficient
+and light on allocations. We need to be as fast and as small as
+possible in order to minimize impact on compile time in a
+production compiler.</p>
+<h3 id="the-e-graph"><a class="doc-anchor" href="#the-e-graph">§</a>The e-graph</h3>
+<p>An e-graph, or equivalence graph, is a kind of node-based
+intermediate representation (IR) data structure that consists of
+<em>eclasses</em> and <em>enodes</em>. An eclass contains one or more enodes;
+semantically an eclass is like a value, and an enode is one way to
+compute that value. If several enodes are in one eclass, the data
+structure is asserting that any of these enodes, if evaluated,
+would produce the value.</p>
+<p>An e-graph also contains a deduplicating hash-map of nodes, so if
+the user creates the same e-node more than once, they get the same
+e-class ID.</p>
+<p>In the usual use-case, an e-graph is used to build a sea-of-nodes
+IR for a function body or other expression-based code, and then
+<em>rewrite rules</em> are applied to the e-graph. Each rewrite
+potentially introduces a new e-node that is equivalent to an
+existing e-node, and then unions the two e-nodes’ classes
+together.</p>
+<p>In the trivial case this results in an e-class containing a series
+of e-nodes that are newly added – all known forms of an
+expression – but Note how if a rewrite rule rewrites into an
+existing e-node (discovered via deduplication), rewriting can
+result in unioning of two e-classes that have existed for some
+time.</p>
+<p>An e-graph’s enodes refer to <em>classes</em> for their arguments, rather
+than other nodes directly. This is key to the ability of an
+e-graph to canonicalize: when two e-classes that are already used
+as arguments by other e-nodes are unioned, all e-nodes that refer
+to those e-classes are themselves re-canonicalized. This can
+result in “cascading” unioning of eclasses, in a process that
+discovers the transitive implications of all individual
+equalities. This process is known as “equality saturation”.</p>
+<h3 id="the-acyclic-e-graph-aegraph"><a class="doc-anchor" href="#the-acyclic-e-graph-aegraph">§</a>The acyclic e-graph (aegraph)</h3>
+<p>An e-graph is powerful, but it can also be expensive to build and
+saturate: there are often many different forms an expression can
+take (because many different rewrites are possible), and cascading
+canonicalization requires heavyweight data structure bookkeeping
+that is expensive to maintain.</p>
+<p>This crate introduces the aegraph: an acyclic e-graph. This data
+structure stores an e-class as an <em>immutable persistent data
+structure</em>. An id can refer to some <em>level</em> of an eclass: a
+snapshot of the nodes in the eclass at one point in time. The
+nodes referred to by this id never change, though the eclass may
+grow later.</p>
+<p>A <em>union</em> is also an operation that creates a new eclass id: the
+original eclass IDs refer to the original eclass contents, while
+the id resulting from the <code>union()</code> operation refers to an eclass
+that has all nodes.</p>
+<p>In order to allow for adequate canonicalization, an enode normally
+stores the <em>latest</em> eclass id for each argument, but computes
+hashes and equality using a <em>canonical</em> eclass id. We define such
+a canonical id with a union-find data structure, just as for a
+traditional e-graph. It is normally the lowest id referring to
+part of the eclass.</p>
+<p>The persistent/immutable nature of this data structure yields one
+extremely important property: it is acyclic! This simplifies
+operation greatly:</p>
+<ul>
+<li>
+<p>When “elaborating” out of the e-graph back to linearized code,
+so that we can generate machine code, we do not need to break
+cycles. A given enode cannot indirectly refer back to itself.</p>
+</li>
+<li>
+<p>When applying rewrite rules, the nodes visible from a given id
+for an eclass never change. This means that we only need to
+apply rewrite rules at that node id <em>once</em>.</p>
+</li>
+</ul>
+<h3 id="data-structure-and-example"><a class="doc-anchor" href="#data-structure-and-example">§</a>Data Structure and Example</h3>
+<p>Each eclass id refers to a table entry (“eclass node”, which is
+different than an “enode”) that can be one of:</p>
+<ul>
+<li>A single enode;</li>
+<li>An enode and an earlier eclass id it is appended to (a “child”
+eclass node);</li>
+<li>A “union node” with two earlier eclass ids.</li>
+</ul>
+<p>Building the aegraph consists solely of adding new entries to the
+end of this table of eclass nodes. An enode referenced from any
+given eclass node can only refer to earlier eclass ids.</p>
+<p>For example, consider the following eclass table:</p>
+<div class="example-wrap"><pre class="language-plain"><code>
+   eclass/enode table
+
+    eclass1    iconst(1)
+    eclass2    blockparam(block0, 0)
+    eclass3    iadd(eclass1, eclass2)
+</code></pre></div>
+<p>This represents the expression <code>iadd(blockparam(block0, 0), iconst(1))</code> (as the sole enode for eclass3).</p>
+<p>Now, say that as we further build the function body, we add
+another enode <code>iadd(eclass3, iconst(1))</code>. The <code>iconst(1)</code> will be
+deduplicated to <code>eclass1</code>, and the toplevel <code>iadd</code> will become its
+own new eclass (<code>eclass4</code>).</p>
+<div class="example-wrap"><pre class="language-plain"><code>    eclass4    iadd(eclass3, eclass1)
+</code></pre></div>
+<p>Now we apply our body of rewrite rules, and these results can
+combine <code>x + 1 + 1</code> into <code>x + 2</code>; so we get:</p>
+<div class="example-wrap"><pre class="language-plain"><code>    eclass5    iconst(2)
+    eclass6    union(iadd(eclass2, eclass5), eclass4)
+</code></pre></div>
+<p>Note that we added the nodes for the new expression, and then we
+union’d it with the earlier <code>eclass4</code>. Logically this represents a
+single eclass that contains two nodes – the <code>x + 1 + 1</code> and <code>x + 2</code> representations – and the <em>latest</em> id for the eclass,
+<code>eclass6</code>, can reach all nodes in the eclass (here the node stored
+in <code>eclass6</code> and the earlier one in <code>elcass4</code>).</p>
+<h3 id="aegraph-vs-egraph"><a class="doc-anchor" href="#aegraph-vs-egraph">§</a>aegraph vs. egraph</h3>
+<p>Where does an aegraph fall short of an e-graph – or in other
+words, why maintain the data structures to allow for full
+(re)canonicalization at all, with e.g. parent pointers to
+recursively update parents?</p>
+<p>This question deserves further study, but right now, it appears
+that the difference is limited to a case like the following:</p>
+<ul>
+<li>expression E1 is interned into the aegraph.</li>
+<li>expression E2 is interned into the aegraph. It uses E1 as an
+argument to one or more operators, and so refers to the
+(currently) latest id for E1.</li>
+<li>expression E3 is interned into the aegraph. A rewrite rule fires
+that unions E3 with E1.</li>
+</ul>
+<p>In an e-graph, the last action would trigger a re-canonicalization
+of all “parents” (users) of E1; so E2 would be re-canonicalized
+using an id that represents the union of E1 and E3. At
+code-generation time, E2 could choose to use a value computed by
+either E1’s or E3’s operator. In an aegraph, this is not the case:
+E2’s e-class and e-nodes are immutable once created, so E2 refers
+only to E1’s representation of the value (a “slice” of the whole
+e-class).</p>
+<p>While at first this sounds quite limiting, there actually appears
+to be a nice mutually-beneficial interaction with the immediate
+application of rewrite rules: by applying all rewrites we know
+about right when E1 is interned, E2 can refer to the best version
+when it is created. The above scenario only leads to a missed
+optimization if:</p>
+<ul>
+<li>a rewrite rule exists from E3 to E1, but not E1 to E3; and</li>
+<li>E3 is <em>cheaper</em> than E1.</li>
+</ul>
+<p>Or in other words, this only matters if there is a rewrite rule
+that rewrites into a more expensive direction. This is unlikely
+for the sorts of rewrite rules we plan to write; it may matter
+more if many possible equalities are expressed, such as
+associativity, commutativity, etc.</p>
+<p>Note that the above represents the best of our understanding, but
+there may be cases we have missed; a more complete examination of
+this question would involve building a full equality saturation
+loop on top of the (a)egraph in this crate, and testing with many
+benchmarks to see if it makes any difference.</p>
+<h3 id="rewrite-rules-flax-fast-localized-aegraph-expansion"><a class="doc-anchor" href="#rewrite-rules-flax-fast-localized-aegraph-expansion">§</a>Rewrite Rules (FLAX: Fast Localized Aegraph eXpansion)</h3>
+<p>The most common use of an e-graph or aegraph is to serve as the IR
+for a compiler. In this use-case, we usually wish to transform the
+program using a body of rewrite rules that represent valid
+transformations (equivalent and hopefully simpler ways of
+computing results). An aegraph supports applying rules in a fairly
+straightforward way: whenever a new eclass entry is added to the
+table, we invoke a toplevel “apply all rewrite rules” entry
+point. This entry point creates new nodes as needed, and when
+done, unions the rewritten nodes with the original. We thus
+<em>immediately</em> expand a new value into all of its representations.</p>
+<p>This immediate expansion stands in contrast to a traditional
+“equality saturation” e-egraph system, in which it is usually best
+to apply rules in batches and then fix up the
+canonicalization. This approach was introduced in the <code>egg</code>
+e-graph engine <sup id="fnref1"><a href="#fn1">1</a></sup>. We call our system FLAX (because flax is an
+alternative to egg): Fast Localized Aegraph eXpansion.</p>
+<p>The reason that this is possible in an aegraph but not
+(efficiently, at least) in a traditional e-graph is that the data
+structure nodes are immutable once created: an eclass id will
+always refer to a fixed set of enodes. There is no
+recanonicalizing of eclass arguments as they union; but also this
+is not usually necessary, because args will have already been
+processed and eagerly rewritten as well. In other words, eager
+rewriting and the immutable data structure mutually allow each
+other to be practical; both work together.</p>
+<div class="footnotes"><hr><ol><li id="fn1"><p>M Willsey, C Nandi, Y R Wang, O Flatt, Z Tatlock, P
+Panchekha. “egg: Fast and Flexible Equality Saturation.” In
+POPL 2021. <a href="https://dl.acm.org/doi/10.1145/3434304">https://dl.acm.org/doi/10.1145/3434304</a>&nbsp;<a href="#fnref1">↩</a></p></li></ol></div></div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.trace.html" title="macro cranelift_egraph::trace">trace</a></div><div class="desc docblock-short">Conditionally-compiled trace-log macro. (Borrowed from
+<code>cranelift-codegen</code>; it’s not worth factoring out a common
+subcrate for this.)</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BumpArena.html" title="struct cranelift_egraph::BumpArena">BumpArena</a></div></li><li><div class="item-name"><a class="struct" href="struct.BumpSlice.html" title="struct cranelift_egraph::BumpSlice">BumpSlice</a></div><div class="desc docblock-short">A slice in an arena: like a <code>BumpVec</code>, but has a fixed size that
+cannot grow. The size of this struct is one 32-bit word smaller
+than <code>BumpVec</code>. It is copyable/cloneable because it will never be
+freed.</div></li><li><div class="item-name"><a class="struct" href="struct.BumpVec.html" title="struct cranelift_egraph::BumpVec">BumpVec</a></div><div class="desc docblock-short">A vector of <code>T</code> stored within a <code>BumpArena</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.CtxHashMap.html" title="struct cranelift_egraph::CtxHashMap">CtxHashMap</a></div><div class="desc docblock-short">A HashMap that takes external context for all operations.</div></li><li><div class="item-name"><a class="struct" href="struct.EClass.html" title="struct cranelift_egraph::EClass">EClass</a></div><div class="desc docblock-short">An EClass entry. Contains either a single new enode and a child
+eclass (i.e., adds one new enode), or unions two child eclasses
+together.</div></li><li><div class="item-name"><a class="struct" href="struct.EGraph.html" title="struct cranelift_egraph::EGraph">EGraph</a></div><div class="desc docblock-short">An egraph.</div></li><li><div class="item-name"><a class="struct" href="struct.Id.html" title="struct cranelift_egraph::Id">Id</a></div><div class="desc docblock-short">An eclass ID.</div></li><li><div class="item-name"><a class="struct" href="struct.NodeIter.html" title="struct cranelift_egraph::NodeIter">NodeIter</a></div><div class="desc docblock-short">An iterator over all nodes in an eclass.</div></li><li><div class="item-name"><a class="struct" href="struct.NodeKey.html" title="struct cranelift_egraph::NodeKey">NodeKey</a></div><div class="desc docblock-short">A reference to a node.</div></li><li><div class="item-name"><a class="struct" href="struct.UnionFind.html" title="struct cranelift_egraph::UnionFind">UnionFind</a></div><div class="desc docblock-short">A union-find data structure. The data structure can allocate
+<code>Id</code>s, indicating eclasses, and can merge eclasses together.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Entry.html" title="enum cranelift_egraph::Entry">Entry</a></div><div class="desc docblock-short">An entry in the hashmap.</div></li><li><div class="item-name"><a class="enum" href="enum.NewOrExisting.html" title="enum cranelift_egraph::NewOrExisting">NewOrExisting</a></div><div class="desc docblock-short">A new or existing <code>T</code> when adding to a deduplicated set or data
+structure, like an egraph.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Analysis.html" title="trait cranelift_egraph::Analysis">Analysis</a></div><div class="desc docblock-short">A trait that allows the aegraph to compute a property of each
+node as it is created.</div></li><li><div class="item-name"><a class="trait" href="trait.CtxEq.html" title="trait cranelift_egraph::CtxEq">CtxEq</a></div><div class="desc docblock-short">Trait that allows for equality comparison given some external
+context.</div></li><li><div class="item-name"><a class="trait" href="trait.CtxHash.html" title="trait cranelift_egraph::CtxHash">CtxHash</a></div><div class="desc docblock-short">Trait that allows for hashing given some external context.</div></li><li><div class="item-name"><a class="trait" href="trait.Language.html" title="trait cranelift_egraph::Language">Language</a></div><div class="desc docblock-short">A trait implemented by all “languages” (types that can be enodes).</div></li></ul></section></div></main></body></html>

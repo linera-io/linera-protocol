@@ -1,0 +1,123 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Parsing and inspecting Rust literal tokens."><title>litrs - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="litrs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../litrs/index.html">litrs</a><span class="version">0.4.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">litrs</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/litrs/lib.rs.html#1-370">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Parsing and inspecting Rust literal tokens.</p>
+<p>This library offers functionality to parse Rust literals, i.e. tokens in the
+Rust programming language that represent fixed values. The grammar for
+those is defined <a href="https://doc.rust-lang.org/reference/tokens.html#literals">here</a>.</p>
+<p>This kind of functionality already exists in the crate <code>syn</code>. However, as
+you oftentimes don’t need (nor want) the full power of <code>syn</code>, <code>litrs</code> was
+built. This crate also offers a bit more flexibility compared to <code>syn</code>
+(only regarding literals, of course).</p>
+<h2 id="quick-start"><a class="doc-anchor" href="#quick-start">§</a>Quick start</h2><div><table><thead><tr><th><strong><code>StringLit::try_from(tt)?.value()</code></strong></th></tr></thead><tbody>
+</tbody></table>
+</div>
+<p>… where <code>tt</code> is a <code>proc_macro::TokenTree</code> and where <a href="struct.StringLit.html" title="struct litrs::StringLit"><code>StringLit</code></a> can be
+replaced with <a href="enum.Literal.html" title="enum litrs::Literal"><code>Literal</code></a> or other types of literals (e.g. <a href="struct.FloatLit.html" title="struct litrs::FloatLit"><code>FloatLit</code></a>).
+Calling <code>value()</code> returns the value that is represented by the literal.</p>
+<p><strong>Mini Example</strong></p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proc_macro::TokenStream;
+
+<span class="attr">#[proc_macro]
+</span><span class="kw">pub fn </span>foo(input: TokenStream) -&gt; TokenStream {
+     <span class="kw">let </span>first_token = input.into_iter().next().unwrap(); <span class="comment">// Do proper error handling!
+     </span><span class="kw">let </span>string_value = <span class="kw">match </span>litrs::StringLit::try_from(first_token) {
+         <span class="prelude-val">Ok</span>(string_lit) =&gt; string_lit.value(),
+         <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span>e.to_compile_error(),
+     };
+
+     <span class="comment">// `string_value` is the string value with all escapes resolved.
+     </span><span class="macro">todo!</span>()
+}</code></pre></div>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p>The main types of this library are <a href="enum.Literal.html" title="enum litrs::Literal"><code>Literal</code></a>, representing any kind of
+literal, and <code>*Lit</code>, like <a href="struct.StringLit.html" title="struct litrs::StringLit"><code>StringLit</code></a> or <a href="struct.FloatLit.html" title="struct litrs::FloatLit"><code>FloatLit</code></a>, representing a
+specific kind of literal.</p>
+<p>There are different ways to obtain such a literal type:</p>
+<ul>
+<li>
+<p><strong><code>parse</code></strong>: parses a <code>&amp;str</code> or <code>String</code> and returns <code>Result&lt;_, ParseError&gt;</code>. For example: <a href="enum.Literal.html#method.parse" title="associated function litrs::Literal::parse"><code>Literal::parse</code></a> and
+<a href="struct.IntegerLit.html#method.parse" title="associated function litrs::IntegerLit::parse"><code>IntegerLit::parse</code></a>.</p>
+</li>
+<li>
+<p><strong><code>From&lt;proc_macro::Literal&gt; for Literal</code></strong>: turns a <code>Literal</code> value from
+the <code>proc_macro</code> crate into a <code>Literal</code> from this crate.</p>
+</li>
+<li>
+<p><strong><code>TryFrom&lt;proc_macro::Literal&gt; for *Lit</code></strong>: tries to turn a
+<code>proc_macro::Literal</code> into a specific literal type of this crate. If
+the input is a literal of a different kind, <code>Err(InvalidToken)</code> is
+returned.</p>
+</li>
+<li>
+<p><strong><code>TryFrom&lt;proc_macro::TokenTree&gt;</code></strong>: attempts to turn a token tree into a
+literal type of this crate. An error is returned if the token tree is
+not a literal, or if you are trying to turn it into a specific kind of
+literal and the token tree is a different kind of literal.</p>
+</li>
+</ul>
+<p>All of the <code>From</code> and <code>TryFrom</code> conversions also work for reference to
+<code>proc_macro</code> types. Additionally, if the crate feature <code>proc-macro2</code> is
+enabled (which it is by default), all these <code>From</code> and <code>TryFrom</code> impls also
+exist for the corresponding <code>proc_macro2</code> types.</p>
+<p><strong>Note</strong>: <code>true</code> and <code>false</code> are <code>Ident</code>s when passed to your proc macro.
+The <code>TryFrom&lt;TokenTree&gt;</code> impls check for those two special idents and
+return a <a href="enum.BoolLit.html" title="enum litrs::BoolLit"><code>BoolLit</code></a> appropriately. For that reason, there is also no
+<code>TryFrom&lt;proc_macro::Literal&gt;</code> impl for <a href="enum.BoolLit.html" title="enum litrs::BoolLit"><code>BoolLit</code></a>. The <code>proc_macro::Literal</code>
+simply cannot represent bool literals.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>In a proc-macro:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::convert::TryFrom;
+<span class="kw">use </span>proc_macro::TokenStream;
+<span class="kw">use </span>litrs::FloatLit;
+
+<span class="attr">#[proc_macro]
+</span><span class="kw">pub fn </span>foo(input: TokenStream) -&gt; TokenStream {
+     <span class="kw">let </span><span class="kw-2">mut </span>input = input.into_iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+     <span class="kw">if </span>input.len() != <span class="number">1 </span>{
+         <span class="comment">// Please do proper error handling in your real code!
+         </span><span class="macro">panic!</span>(<span class="string">"expected exactly one token as input"</span>);
+     }
+     <span class="kw">let </span>token = input.remove(<span class="number">0</span>);
+
+     <span class="kw">match </span>FloatLit::try_from(token) {
+         <span class="prelude-val">Ok</span>(float_lit) =&gt; { <span class="comment">/* do something */ </span>}
+         <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span>e.to_compile_error(),
+     }
+
+     <span class="comment">// Dummy output
+     </span>TokenStream::new()
+}</code></pre></div>
+<p>Parsing from string:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>litrs::{FloatLit, Literal};
+
+<span class="comment">// Parse a specific kind of literal (float in this case):
+</span><span class="kw">let </span>float_lit = FloatLit::parse(<span class="string">"3.14f32"</span>);
+<span class="macro">assert!</span>(float_lit.is_ok());
+<span class="macro">assert_eq!</span>(float_lit.unwrap().suffix(), <span class="string">"f32"</span>);
+<span class="macro">assert!</span>(FloatLit::parse(<span class="string">"'c'"</span>).is_err());
+
+<span class="comment">// Parse any kind of literal. After parsing, you can inspect the literal
+// and decide what to do in each case.
+</span><span class="kw">let </span>lit = Literal::parse(<span class="string">"0xff80"</span>).expect(<span class="string">"failed to parse literal"</span>);
+<span class="kw">match </span>lit {
+    Literal::Integer(lit) =&gt; { <span class="comment">/* ... */ </span>}
+    Literal::Float(lit) =&gt; { <span class="comment">/* ... */ </span>}
+    Literal::Bool(lit) =&gt; { <span class="comment">/* ... */ </span>}
+    Literal::Char(lit) =&gt; { <span class="comment">/* ... */ </span>}
+    Literal::String(lit) =&gt; { <span class="comment">/* ... */ </span>}
+    Literal::Byte(lit) =&gt; { <span class="comment">/* ... */ </span>}
+    Literal::ByteString(lit) =&gt; { <span class="comment">/* ... */ </span>}
+}</code></pre></div>
+<h2 id="crate-features"><a class="doc-anchor" href="#crate-features">§</a>Crate features</h2>
+<ul>
+<li><code>proc-macro2</code> (<strong>default</strong>): adds the dependency <code>proc_macro2</code>, a bunch of
+<code>From</code> and <code>TryFrom</code> impls, and [<code>InvalidToken::to_compile_error2</code>].</li>
+<li><code>check_suffix</code>: if enabled, <code>parse</code> functions will exactly verify that the
+literal suffix is valid. Adds the dependency <code>unicode-xid</code>. If disabled,
+only an approximate check (only in ASCII range) is done. If you are
+writing a proc macro, you don’t need to enable this as the suffix is
+already checked by the compiler.</li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ByteLit.html" title="struct litrs::ByteLit">ByteLit</a></div><div class="desc docblock-short">A (single) byte literal, e.g. <code>b'k'</code> or <code>b'!'</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.ByteStringLit.html" title="struct litrs::ByteStringLit">ByteStringLit</a></div><div class="desc docblock-short">A byte string or raw byte string literal, e.g. <code>b&quot;hello&quot;</code> or <code>br#&quot;abc&quot;def&quot;#</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.CharLit.html" title="struct litrs::CharLit">CharLit</a></div><div class="desc docblock-short">A character literal, e.g. <code>'g'</code> or <code>'🦊'</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.FloatLit.html" title="struct litrs::FloatLit">FloatLit</a></div><div class="desc docblock-short">A floating point literal, e.g. <code>3.14</code>, <code>8.</code>, <code>135e12</code>, or <code>1.956e2f64</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.IntegerLit.html" title="struct litrs::IntegerLit">IntegerLit</a></div><div class="desc docblock-short">An integer literal, e.g. <code>27</code>, <code>0x7F</code>, <code>0b101010u8</code> or <code>5_000_000i64</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.InvalidToken.html" title="struct litrs::InvalidToken">InvalidToken</a></div><div class="desc docblock-short">An error signaling that a different kind of token was expected. Returned by
+the various <code>TryFrom</code> impls.</div></li><li><div class="item-name"><a class="struct" href="struct.ParseError.html" title="struct litrs::ParseError">ParseError</a></div><div class="desc docblock-short">Errors during parsing.</div></li><li><div class="item-name"><a class="struct" href="struct.StringLit.html" title="struct litrs::StringLit">StringLit</a></div><div class="desc docblock-short">A string or raw string literal, e.g. <code>&quot;foo&quot;</code>, <code>&quot;Grüße&quot;</code> or <code>r#&quot;a🦊c&quot;d🦀f&quot;#</code>.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.BoolLit.html" title="enum litrs::BoolLit">BoolLit</a></div><div class="desc docblock-short">A bool literal: <code>true</code> or <code>false</code>. Also see <a href="https://doc.rust-lang.org/reference/expressions/literal-expr.html#boolean-literal-expressions">the reference</a>.</div></li><li><div class="item-name"><a class="enum" href="enum.FloatType.html" title="enum litrs::FloatType">FloatType</a></div><div class="desc docblock-short">All possible float type suffixes.</div></li><li><div class="item-name"><a class="enum" href="enum.IntegerBase.html" title="enum litrs::IntegerBase">IntegerBase</a></div><div class="desc docblock-short">The bases in which an integer can be specified.</div></li><li><div class="item-name"><a class="enum" href="enum.IntegerType.html" title="enum litrs::IntegerType">IntegerType</a></div><div class="desc docblock-short">All possible integer type suffixes.</div></li><li><div class="item-name"><a class="enum" href="enum.Literal.html" title="enum litrs::Literal">Literal</a></div><div class="desc docblock-short">A literal. This is the main type of this library.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Buffer.html" title="trait litrs::Buffer">Buffer</a></div><div class="desc docblock-short">A shared or owned string buffer. Implemented for <code>String</code> and <code>&amp;str</code>. <em>Implementation detail</em>.</div></li><li><div class="item-name"><a class="trait" href="trait.FromIntegerLiteral.html" title="trait litrs::FromIntegerLiteral">FromIntegerLiteral</a></div><div class="desc docblock-short">Integer literal types. <em>Implementation detail</em>.</div></li></ul></section></div></main></body></html>

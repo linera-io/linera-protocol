@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["app","cargo_annotations","hash","package"]};

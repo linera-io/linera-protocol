@@ -1,0 +1,256 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="CBOR and serialization."><title>serde_cbor - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde_cbor" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde_cbor/index.html">serde_cbor</a><span class="version">0.11.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">serde_cbor</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/serde_cbor/lib.rs.html#1-369">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>CBOR and serialization.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>Serde CBOR supports Rust 1.40 and up. Add this to your <code>Cargo.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+serde_cbor = &quot;0.10&quot;
+</code></pre></div>
+<p>Storing and loading Rust types is easy and requires only
+minimal modifications to the program code.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde_derive::{Deserialize, Serialize};
+<span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>std::fs::File;
+
+<span class="comment">// Types annotated with `Serialize` can be stored as CBOR.
+// To be able to load them again add `Deserialize`.
+</span><span class="attr">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">struct </span>Mascot {
+    name: String,
+    species: String,
+    year_of_birth: u32,
+}
+
+<span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>Error&gt;&gt; {
+    <span class="kw">let </span>ferris = Mascot {
+        name: <span class="string">"Ferris"</span>.to_owned(),
+        species: <span class="string">"crab"</span>.to_owned(),
+        year_of_birth: <span class="number">2015</span>,
+    };
+
+    <span class="kw">let </span>ferris_file = File::create(<span class="string">"examples/ferris.cbor"</span>)<span class="question-mark">?</span>;
+    <span class="comment">// Write Ferris to the given file.
+    // Instead of a file you can use any type that implements `io::Write`
+    // like a HTTP body, database connection etc.
+    </span>serde_cbor::to_writer(ferris_file, <span class="kw-2">&amp;</span>ferris)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span>tux_file = File::open(<span class="string">"examples/tux.cbor"</span>)<span class="question-mark">?</span>;
+    <span class="comment">// Load Tux from a file.
+    // Serde CBOR performs roundtrip serialization meaning that
+    // the data will not change in any way.
+    </span><span class="kw">let </span>tux: Mascot = serde_cbor::from_reader(tux_file)<span class="question-mark">?</span>;
+
+    <span class="macro">println!</span>(<span class="string">"{:?}"</span>, tux);
+    <span class="comment">// prints: Mascot { name: "Tux", species: "penguin", year_of_birth: 1996 }
+
+    </span><span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>There are a lot of options available to customize the format.
+To operate on untyped CBOR values have a look at the <code>Value</code> type.</p>
+<h2 id="type-based-serialization-and-deserialization"><a class="doc-anchor" href="#type-based-serialization-and-deserialization">§</a>Type-based Serialization and Deserialization</h2>
+<p>Serde provides a mechanism for low boilerplate serialization &amp; deserialization of values to and
+from CBOR via the serialization API. To be able to serialize a piece of data, it must implement
+the <code>serde::Serialize</code> trait. To be able to deserialize a piece of data, it must implement the
+<code>serde::Deserialize</code> trait. Serde provides an annotation to automatically generate the
+code for these traits: <code>#[derive(Serialize, Deserialize)]</code>.</p>
+<p>The CBOR API also provides an enum <code>serde_cbor::Value</code>.</p>
+<h2 id="packed-encoding"><a class="doc-anchor" href="#packed-encoding">§</a>Packed Encoding</h2>
+<p>When serializing structs or enums in CBOR the keys or enum variant names will be serialized
+as string keys to a map. Especially in embedded environments this can increase the file
+size too much. In packed encoding all struct keys, as well as any enum variant that has no data,
+will be serialized as variable sized integers. The first 24 entries in any struct consume only a
+single byte!  Packed encoding uses serde’s preferred <a href="https://serde.rs/enum-representations.html">externally tagged enum
+format</a> and therefore serializes enum variant names
+as string keys when that variant contains data.  So, in the packed encoding example, <code>FirstVariant</code>
+encodes to a single byte, but encoding <code>SecondVariant</code> requires 16 bytes.</p>
+<p>To serialize a document in this format use <code>Serializer::new(writer).packed_format()</code> or
+the shorthand <code>ser::to_vec_packed</code>. The deserialization works without any changes.</p>
+<p>If you would like to omit the enum variant encoding for all variants, including ones that
+contain data, you can add <code>legacy_enums()</code> in addition to <code>packed_format()</code>, as can seen
+in the Serialize using minimal encoding example.</p>
+<h2 id="self-describing-documents"><a class="doc-anchor" href="#self-describing-documents">§</a>Self describing documents</h2>
+<p>In some contexts different formats are used but there is no way to declare the format used
+out of band. For this reason CBOR has a magic number that may be added before any document.
+Self describing documents are created with <code>serializer.self_describe()</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Read a CBOR value that is known to be a map of string keys to string values and print it.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>serde_cbor::from_slice;
+
+<span class="kw">let </span>slice = <span class="string">b"\xa5aaaAabaBacaCadaDaeaE"</span>;
+<span class="kw">let </span>value: BTreeMap&lt;String, String&gt; = from_slice(slice).unwrap();
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, value); <span class="comment">// {"e": "E", "d": "D", "a": "A", "c": "C", "b": "B"}</span></code></pre></div>
+<p>Read a general CBOR value with an unknown content.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde_cbor::from_slice;
+<span class="kw">use </span>serde_cbor::value::Value;
+
+<span class="kw">let </span>slice = <span class="string">b"\x82\x01\xa1aaab"</span>;
+<span class="kw">let </span>value: Value = from_slice(slice).unwrap();
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, value); <span class="comment">// Array([U64(1), Object({String("a"): String("b")})])</span></code></pre></div>
+<p>Serialize an object.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>serde_cbor::to_vec;
+
+<span class="kw">let </span><span class="kw-2">mut </span>programming_languages = BTreeMap::new();
+programming_languages.insert(<span class="string">"rust"</span>, <span class="macro">vec!</span>[<span class="string">"safe"</span>, <span class="string">"concurrent"</span>, <span class="string">"fast"</span>]);
+programming_languages.insert(<span class="string">"python"</span>, <span class="macro">vec!</span>[<span class="string">"powerful"</span>, <span class="string">"friendly"</span>, <span class="string">"open"</span>]);
+programming_languages.insert(<span class="string">"js"</span>, <span class="macro">vec!</span>[<span class="string">"lightweight"</span>, <span class="string">"interpreted"</span>, <span class="string">"object-oriented"</span>]);
+<span class="kw">let </span>encoded = to_vec(<span class="kw-2">&amp;</span>programming_languages);
+<span class="macro">assert_eq!</span>(encoded.unwrap().len(), <span class="number">103</span>);</code></pre></div>
+<p>Deserializing data in the middle of a slice</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde_cbor::Deserializer;
+
+<span class="kw">let </span>data: Vec&lt;u8&gt; = <span class="macro">vec!</span>[
+    <span class="number">0x66</span>, <span class="number">0x66</span>, <span class="number">0x6f</span>, <span class="number">0x6f</span>, <span class="number">0x62</span>, <span class="number">0x61</span>, <span class="number">0x72</span>, <span class="number">0x66</span>, <span class="number">0x66</span>, <span class="number">0x6f</span>, <span class="number">0x6f</span>, <span class="number">0x62</span>,
+    <span class="number">0x61</span>, <span class="number">0x72</span>,
+];
+<span class="kw">let </span><span class="kw-2">mut </span>deserializer = Deserializer::from_slice(<span class="kw-2">&amp;</span>data);
+<span class="kw">let </span>value: <span class="kw-2">&amp;</span>str = serde::de::Deserialize::deserialize(<span class="kw-2">&amp;mut </span>deserializer)
+    .unwrap();
+<span class="kw">let </span>rest = <span class="kw-2">&amp;</span>data[deserializer.byte_offset()..];
+<span class="macro">assert_eq!</span>(value, <span class="string">"foobar"</span>);
+<span class="macro">assert_eq!</span>(rest, <span class="kw-2">&amp;</span>[<span class="number">0x66</span>, <span class="number">0x66</span>, <span class="number">0x6f</span>, <span class="number">0x6f</span>, <span class="number">0x62</span>, <span class="number">0x61</span>, <span class="number">0x72</span>]);</code></pre></div>
+<p>Serialize using packed encoding</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde_derive::{Deserialize, Serialize};
+<span class="kw">use </span>serde_cbor::ser::to_vec_packed;
+<span class="kw">use </span>WithTwoVariants::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">enum </span>WithTwoVariants {
+    FirstVariant,
+    SecondVariant(u8),
+}
+
+<span class="kw">let </span>cbor = to_vec_packed(<span class="kw-2">&amp;</span>FirstVariant).unwrap();
+<span class="macro">assert_eq!</span>(cbor.len(), <span class="number">1</span>);
+
+<span class="kw">let </span>cbor = to_vec_packed(<span class="kw-2">&amp;</span>SecondVariant(<span class="number">0</span>)).unwrap();
+<span class="macro">assert_eq!</span>(cbor.len(), <span class="number">16</span>); <span class="comment">// Includes 13 bytes of "SecondVariant"</span></code></pre></div>
+<p>Serialize using minimal encoding</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde_derive::{Deserialize, Serialize};
+<span class="kw">use </span>serde_cbor::{<span class="prelude-ty">Result</span>, Serializer, ser::{<span class="self">self</span>, IoWrite}};
+<span class="kw">use </span>WithTwoVariants::<span class="kw-2">*</span>;
+
+<span class="kw">fn </span>to_vec_minimal&lt;T&gt;(value: <span class="kw-2">&amp;</span>T) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;&gt;
+<span class="kw">where
+    </span>T: serde::Serialize,
+{
+    <span class="kw">let </span><span class="kw-2">mut </span>vec = Vec::new();
+    value.serialize(<span class="kw-2">&amp;mut </span>Serializer::new(<span class="kw-2">&amp;mut </span>IoWrite::new(<span class="kw-2">&amp;mut </span>vec)).packed_format().legacy_enums())<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(vec)
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">enum </span>WithTwoVariants {
+    FirstVariant,
+    SecondVariant(u8),
+}
+
+<span class="kw">let </span>cbor = to_vec_minimal(<span class="kw-2">&amp;</span>FirstVariant).unwrap();
+<span class="macro">assert_eq!</span>(cbor.len(), <span class="number">1</span>);
+
+<span class="kw">let </span>cbor = to_vec_minimal(<span class="kw-2">&amp;</span>SecondVariant(<span class="number">0</span>)).unwrap();
+<span class="macro">assert_eq!</span>(cbor.len(), <span class="number">3</span>);</code></pre></div>
+<h2 id="no-std-support"><a class="doc-anchor" href="#no-std-support">§</a><code>no-std</code> support</h2>
+<p>Serde CBOR supports building in a <code>no_std</code> context, use the following lines
+in your <code>Cargo.toml</code> dependencies:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+serde = { version = &quot;1.0&quot;, default-features = false }
+serde_cbor = { version = &quot;0.10&quot;, default-features = false }
+</code></pre></div>
+<p>Without the <code>std</code> feature the functions <a href="fn.from_reader.html" title="fn serde_cbor::from_reader">from_reader</a>, <a href="fn.from_slice.html" title="fn serde_cbor::from_slice">from_slice</a>, <a href="fn.to_vec.html" title="fn serde_cbor::to_vec">to_vec</a>, and <a href="fn.to_writer.html" title="fn serde_cbor::to_writer">to_writer</a>
+are not exported. To export <a href="fn.from_slice.html" title="fn serde_cbor::from_slice">from_slice</a> and <a href="fn.to_vec.html" title="fn serde_cbor::to_vec">to_vec</a> enable the <code>alloc</code> feature. The <code>alloc</code>
+feature uses the <a href="https://doc.rust-lang.org/alloc/"><code>alloc</code> library</a> and requires at least version 1.36.0 of Rust.</p>
+<p><em>Note</em>: to use derive macros in serde you will need to declare <code>serde</code>
+dependency like so:</p>
+<div class="example-wrap"><pre class="language-toml"><code>serde = { version = &quot;1.0&quot;, default-features = false, features = [&quot;derive&quot;] }
+</code></pre></div>
+<p>Serialize an object with <code>no_std</code> and without <code>alloc</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>serde_cbor::Serializer;
+<span class="kw">use </span>serde_cbor::ser::SliceWrite;
+
+<span class="attr">#[derive(Serialize)]
+</span><span class="kw">struct </span>User {
+    user_id: u32,
+    password_hash: [u8; <span class="number">4</span>],
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">100</span>];
+<span class="kw">let </span>writer = SliceWrite::new(<span class="kw-2">&amp;mut </span>buf[..]);
+<span class="kw">let </span><span class="kw-2">mut </span>ser = Serializer::new(writer);
+<span class="kw">let </span>user = User {
+    user_id: <span class="number">42</span>,
+    password_hash: [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>],
+};
+user.serialize(<span class="kw-2">&amp;mut </span>ser)<span class="question-mark">?</span>;
+<span class="kw">let </span>writer = ser.into_inner();
+<span class="kw">let </span>size = writer.bytes_written();
+<span class="kw">let </span>expected = [
+    <span class="number">0xa2</span>, <span class="number">0x67</span>, <span class="number">0x75</span>, <span class="number">0x73</span>, <span class="number">0x65</span>, <span class="number">0x72</span>, <span class="number">0x5f</span>, <span class="number">0x69</span>, <span class="number">0x64</span>, <span class="number">0x18</span>, <span class="number">0x2a</span>, <span class="number">0x6d</span>,
+    <span class="number">0x70</span>, <span class="number">0x61</span>, <span class="number">0x73</span>, <span class="number">0x73</span>, <span class="number">0x77</span>, <span class="number">0x6f</span>, <span class="number">0x72</span>, <span class="number">0x64</span>, <span class="number">0x5f</span>, <span class="number">0x68</span>, <span class="number">0x61</span>, <span class="number">0x73</span>,
+    <span class="number">0x68</span>, <span class="number">0x84</span>, <span class="number">0x1</span>, <span class="number">0x2</span>, <span class="number">0x3</span>, <span class="number">0x4
+</span>];
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>buf[..size], expected);</code></pre></div>
+<p>Deserialize an object.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, PartialEq, Deserialize)]
+</span><span class="kw">struct </span>User {
+    user_id: u32,
+    password_hash: [u8; <span class="number">4</span>],
+}
+
+<span class="kw">let </span>value = [
+    <span class="number">0xa2</span>, <span class="number">0x67</span>, <span class="number">0x75</span>, <span class="number">0x73</span>, <span class="number">0x65</span>, <span class="number">0x72</span>, <span class="number">0x5f</span>, <span class="number">0x69</span>, <span class="number">0x64</span>, <span class="number">0x18</span>, <span class="number">0x2a</span>, <span class="number">0x6d</span>,
+    <span class="number">0x70</span>, <span class="number">0x61</span>, <span class="number">0x73</span>, <span class="number">0x73</span>, <span class="number">0x77</span>, <span class="number">0x6f</span>, <span class="number">0x72</span>, <span class="number">0x64</span>, <span class="number">0x5f</span>, <span class="number">0x68</span>, <span class="number">0x61</span>, <span class="number">0x73</span>,
+    <span class="number">0x68</span>, <span class="number">0x84</span>, <span class="number">0x1</span>, <span class="number">0x2</span>, <span class="number">0x3</span>, <span class="number">0x4
+</span>];
+
+<span class="comment">// from_slice_with_scratch will not alter input data, use it whenever you
+// borrow from somewhere else.
+// You will have to size your scratch according to the input data you
+// expect.
+</span><span class="kw">use </span>serde_cbor::de::from_slice_with_scratch;
+<span class="kw">let </span><span class="kw-2">mut </span>scratch = [<span class="number">0u8</span>; <span class="number">32</span>];
+<span class="kw">let </span>user: User = from_slice_with_scratch(<span class="kw-2">&amp;</span>value[..], <span class="kw-2">&amp;mut </span>scratch)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(user, User {
+    user_id: <span class="number">42</span>,
+    password_hash: [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>],
+});
+
+<span class="kw">let </span><span class="kw-2">mut </span>value = [
+    <span class="number">0xa2</span>, <span class="number">0x67</span>, <span class="number">0x75</span>, <span class="number">0x73</span>, <span class="number">0x65</span>, <span class="number">0x72</span>, <span class="number">0x5f</span>, <span class="number">0x69</span>, <span class="number">0x64</span>, <span class="number">0x18</span>, <span class="number">0x2a</span>, <span class="number">0x6d</span>,
+    <span class="number">0x70</span>, <span class="number">0x61</span>, <span class="number">0x73</span>, <span class="number">0x73</span>, <span class="number">0x77</span>, <span class="number">0x6f</span>, <span class="number">0x72</span>, <span class="number">0x64</span>, <span class="number">0x5f</span>, <span class="number">0x68</span>, <span class="number">0x61</span>, <span class="number">0x73</span>,
+    <span class="number">0x68</span>, <span class="number">0x84</span>, <span class="number">0x1</span>, <span class="number">0x2</span>, <span class="number">0x3</span>, <span class="number">0x4
+</span>];
+
+<span class="comment">// from_mut_slice will move data around the input slice, you may only use it
+// on data you may own or can modify.
+</span><span class="kw">use </span>serde_cbor::de::from_mut_slice;
+<span class="kw">let </span>user: User = from_mut_slice(<span class="kw-2">&amp;mut </span>value[..])<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(user, User {
+    user_id: <span class="number">42</span>,
+    password_hash: [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>],
+});</code></pre></div>
+<h2 id="limitations"><a class="doc-anchor" href="#limitations">§</a>Limitations</h2>
+<p>While Serde CBOR strives to support all features of Serde and CBOR
+there are a few limitations.</p>
+<ul>
+<li><a href="https://tools.ietf.org/html/rfc7049#section-2.4.4">Tags</a> are ignored during deserialization and can’t be emitted during
+serialization. This is because Serde has no concept of tagged
+values. See: <a href="https://github.com/pyfisch/cbor/issues/3">#3</a></li>
+<li>Unknown <a href="https://tools.ietf.org/html/rfc7049#section-3.5">simple values</a> cause an <code>UnassignedCode</code> error.
+The simple values <em>False</em> and <em>True</em> are recognized and parsed as bool.
+<em>Null</em> and <em>Undefined</em> are both deserialized as <em>unit</em>.
+The <em>unit</em> type is serialized as <em>Null</em>. See: <a href="https://github.com/pyfisch/cbor/issues/86">#86</a></li>
+<li><a href="https://doc.rust-lang.org/std/primitive.u128.html">128-bit integers</a> can’t be directly encoded in CBOR. If you need them
+store them as a byte string. See: <a href="https://github.com/pyfisch/cbor/issues/77">#77</a></li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="de/index.html" title="mod serde_cbor::de">de</a></div><div class="desc docblock-short">Deserialization.</div></li><li><div class="item-name"><a class="mod" href="error/index.html" title="mod serde_cbor::error">error</a></div><div class="desc docblock-short">When serializing or deserializing CBOR goes wrong.</div></li><li><div class="item-name"><a class="mod" href="ser/index.html" title="mod serde_cbor::ser">ser</a></div><div class="desc docblock-short">Serialize a Rust data structure to CBOR data.</div></li><li><div class="item-name"><a class="mod" href="tags/index.html" title="mod serde_cbor::tags">tags</a></div><div class="desc docblock-short">Support for cbor tags</div></li><li><div class="item-name"><a class="mod" href="value/index.html" title="mod serde_cbor::value">value</a></div><div class="desc docblock-short">CBOR values, keys and serialization routines.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Deserializer.html" title="struct serde_cbor::Deserializer">Deserializer</a></div><div class="desc docblock-short">A Serde <code>Deserialize</code>r of CBOR data.</div></li><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct serde_cbor::Error">Error</a></div><div class="desc docblock-short">This type represents all possible errors that can occur when serializing or deserializing CBOR
+data.</div></li><li><div class="item-name"><a class="struct" href="struct.Serializer.html" title="struct serde_cbor::Serializer">Serializer</a></div><div class="desc docblock-short">A structure for serializing Rust values to CBOR.</div></li><li><div class="item-name"><a class="struct" href="struct.StreamDeserializer.html" title="struct serde_cbor::StreamDeserializer">StreamDeserializer</a></div><div class="desc docblock-short">Iterator that deserializes a stream into multiple CBOR values.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Value.html" title="enum serde_cbor::Value">Value</a></div><div class="desc docblock-short">The <code>Value</code> enum, a loosely typed way of representing any valid CBOR value.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.from_reader.html" title="fn serde_cbor::from_reader">from_reader</a></div><div class="desc docblock-short">Decodes a value from CBOR data in a reader.</div></li><li><div class="item-name"><a class="fn" href="fn.from_slice.html" title="fn serde_cbor::from_slice">from_slice</a></div><div class="desc docblock-short">Decodes a value from CBOR data in a slice.</div></li><li><div class="item-name"><a class="fn" href="fn.to_vec.html" title="fn serde_cbor::to_vec">to_vec</a></div><div class="desc docblock-short">Serializes a value to a vector.</div></li><li><div class="item-name"><a class="fn" href="fn.to_writer.html" title="fn serde_cbor::to_writer">to_writer</a></div><div class="desc docblock-short">Serializes a value to a writer.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type serde_cbor::Result">Result</a></div><div class="desc docblock-short">Alias for a <code>Result</code> with the error type <code>serde_cbor::Error</code>.</div></li></ul></section></div></main></body></html>

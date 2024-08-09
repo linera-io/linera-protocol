@@ -1,0 +1,28 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A macro for defining custom reserved symbols."><title>custom_reserved in wast - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wast" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wast/index.html">wast</a><span class="version">64.0.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">wast</a>::<wbr><a class="macro" href="#">custom_reserved</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/wast/lib.rs.html#158-195">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> custom_reserved {
+    (<span class="macro-nonterminal">$name</span>:ident) =&gt; { ... };
+    (<span class="macro-nonterminal">$name</span>:ident = <span class="macro-nonterminal">$rsv</span>:expr) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A macro for defining custom reserved symbols.</p>
+<p>This is like <code>custom_keyword!</code> but for reserved symbols (<code>Token::Reserved</code>)
+instead of keywords (<code>Token::Keyword</code>).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wast::parser::{Parser, <span class="prelude-ty">Result</span>, Parse};
+
+<span class="comment">// Define a custom reserved symbol, the "spaceship" operator: `&lt;=&gt;`.
+</span><span class="macro">wast::custom_reserved!</span>(spaceship = <span class="string">"&lt;=&gt;"</span>);
+
+<span class="doccomment">/// A "three-way comparison" like `(&lt;=&gt; a b)` that returns -1 if `a` is less
+/// than `b`, 0 if they're equal, and 1 if `a` is greater than `b`.
+</span><span class="kw">struct </span>ThreeWayComparison&lt;<span class="lifetime">'a</span>&gt; {
+    lhs: wast::core::Expression&lt;<span class="lifetime">'a</span>&gt;,
+    rhs: wast::core::Expression&lt;<span class="lifetime">'a</span>&gt;,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Parse&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>ThreeWayComparison&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">fn </span>parse(parser: Parser&lt;<span class="lifetime">'a</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        parser.parse::&lt;spaceship&gt;()<span class="question-mark">?</span>;
+        <span class="kw">let </span>lhs = parser.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>rhs = parser.parse()<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(ThreeWayComparison { lhs, rhs })
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

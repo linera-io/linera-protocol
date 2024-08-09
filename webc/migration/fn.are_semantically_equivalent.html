@@ -1,0 +1,27 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Checks whether two webcs (one v2 and one v3) are semantically equivalent. For v2 and v3 to be equivalent, these criteria must be true:"><title>are_semantically_equivalent in webc::migration - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="webc" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../webc/index.html">webc</a><span class="version">6.0.0-rc1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In webc::migration</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">webc</a>::<wbr><a href="index.html">migration</a>::<wbr><a class="fn" href="#">are_semantically_equivalent</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/webc/migration.rs.html#244-366">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn are_semantically_equivalent(
+    v2: <a class="struct" href="../compat/struct.SharedBytes.html" title="struct webc::compat::SharedBytes">OwnedBuffer</a>,
+    v3: <a class="struct" href="../compat/struct.SharedBytes.html" title="struct webc::compat::SharedBytes">OwnedBuffer</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.80.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.80.0/std/primitive.unit.html">()</a>, <a class="struct" href="../../anyhow/struct.Error.html" title="struct anyhow::Error">Error</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Checks whether two webcs (one v2 and one v3) are semantically equivalent. For v2 and v3 to be equivalent,
+these criteria must be true:</p>
+<ul>
+<li>Contents of the manifest must be the same. In particular, these items:
+<ul>
+<li><code>origin</code></li>
+<li><code>atoms</code></li>
+<li><code>commands</code></li>
+<li><code>entrypoint</code></li>
+</ul>
+</li>
+<li>Atoms in both webcs must be the same:
+<ul>
+<li>same number of atoms</li>
+<li>same atom names</li>
+<li>same atom contents</li>
+</ul>
+</li>
+<li>The filesystem in both webcs must be the same (regardless of structure of volumes):
+Each top level directory in webc v2 is equivalent to a volume in webc v3 so this check, for
+every top level directory in v2, will find the associated volume in v3 and walk them
+at the same time to make they have the same entries and contents.</li>
+</ul>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WalletError"],"struct":["Wallet"],"type":["LocalWallet"]};

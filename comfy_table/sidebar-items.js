@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Attribute","CellAlignment","Color","ColumnConstraint","ContentArrangement","TableComponent","Width"],"mod":["modifiers","presets"],"struct":["Cell","Cells","Column","ColumnCellIter","Row","Table"]};

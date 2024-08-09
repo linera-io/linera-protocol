@@ -1,0 +1,37 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Run the provided non-terminating computation on an entirely new stack."><title>replace_stack in psm - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="psm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../psm/index.html">psm</a><span class="version">0.1.21</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">psm</a>::<wbr><a class="fn" href="#">replace_stack</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/psm/lib.rs.html#253-270">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn replace_stack&lt;F: <a class="trait" href="https://doc.rust-lang.org/1.80.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>()&gt;(
+    base: <a class="primitive" href="https://doc.rust-lang.org/1.80.0/core/primitive.pointer.html">*mut </a><a class="primitive" href="https://doc.rust-lang.org/1.80.0/core/primitive.u8.html">u8</a>,
+    size: <a class="primitive" href="https://doc.rust-lang.org/1.80.0/core/primitive.usize.html">usize</a>,
+    callback: F,
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.80.0/core/primitive.never.html">!</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Run the provided non-terminating computation on an entirely new stack.</p>
+<p><code>base</code> address must be the low address of the stack memory region, regardless of the stack
+growth direction. It is not necessary for the whole region <code>[base; base + size]</code> to be usable
+at the time this function called, however it is required that at least the following hold:</p>
+<ul>
+<li>Both <code>base</code> and <code>base + size</code> are aligned up to the target-specific requirements;</li>
+<li>Depending on <code>StackDirection</code> value for the platform, the end of the stack memory region,
+which would end up containing the first frame(s), must have sufficient number of pages
+allocated to execute code until more pages are commited. The other end should contain a guard
+page (not writable, readable or executable) to ensure Rust’s soundness guarantees.</li>
+</ul>
+<p>Note, that some or all of these considerations are irrelevant to some applications. For
+example, Rust’s soundness story relies on all stacks having a guard-page, however if the user
+is able to guarantee that the memory region used for stack cannot be exceeded, a guard page may
+end up being an expensive unnecessity.</p>
+<p>The previous stack is not deallocated and may not be deallocated unless the data on the old
+stack is not referenced in any way (by e.g. the <code>callback</code> closure).</p>
+<p>On platforms where multiple stack pointers are available, the “current” stack pointer is
+replaced.</p>
+<h2 id="guidelines"><a class="doc-anchor" href="#guidelines">§</a>Guidelines</h2>
+<p>Memory regions that are aligned to a single page (usually 4kB) are an extremely portable choice
+for stacks.</p>
+<p>Allocate at least 4kB of stack. Some architectures (such as SPARC) consume stack memory
+significantly faster compared to the more usual architectures such as x86 or ARM. Allocating
+less than 4kB of memory may make it impossible to commit more pages without overflowing the
+stack later on.</p>
+<h2 id="unsafety"><a class="doc-anchor" href="#unsafety">§</a>Unsafety</h2>
+<p>The stack <code>base</code> address must be aligned as appropriate for the target.</p>
+<p>The stack <code>size</code> must be a multiple of stack alignment required by target.</p>
+<p>The <code>size</code> must not overflow <code>isize</code>.</p>
+<p><code>callback</code> must not return (not enforced by typesystem currently because <code>!</code> is unstable),
+unwind or otherwise return control flow to any of the previous frames.</p>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="@brief Description of a dynamic update of the content within JIT-compiled method @details The JIT engine may generate the methods that are updated at runtime partially by mixed (data + executable code) content. When you use the iJIT_Method_Update structure to describe the update of the content within a JIT-compiled method, use iJVM_EVENT_TYPE_METHOD_UPDATE_V2 as an event type to report it."><title>iJIT_Method_Update in ittapi_sys - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ittapi_sys" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc type"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ittapi_sys/index.html">ittapi_sys</a><span class="version">0.3.5</span></h2></div><h2 class="location"><a href="#">iJIT_Method_Update</a></h2><div class="sidebar-elems"><section><h3><a href="#aliased-type">Aliased type</a></h3><h3><a href="#fields">Fields</a></h3><ul class="block field"><li><a href="#structfield.data_format">data_format</a></li><li><a href="#structfield.load_address">load_address</a></li><li><a href="#structfield.size">size</a></li><li><a href="#structfield.type_">type_</a></li></ul></section><h2><a href="index.html">In crate ittapi_sys</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Type Alias <a href="index.html">ittapi_sys</a>::<wbr><a class="type" href="#">iJIT_Method_Update</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/ittapi_sys/linux/jitprofiling_bindings.rs.html#712">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub type iJIT_Method_Update = <a class="struct" href="struct._iJIT_Method_Update.html" title="struct ittapi_sys::_iJIT_Method_Update">_iJIT_Method_Update</a>;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>@brief Description of a dynamic update of the content within JIT-compiled method
+@details The JIT engine may generate the methods that are updated at runtime
+partially by mixed (data + executable code) content. When you use the iJIT_Method_Update
+structure to describe the update of the content within a JIT-compiled method,
+use iJVM_EVENT_TYPE_METHOD_UPDATE_V2 as an event type to report it.</p>
+<p>On the first Update event, VTune Amplifier copies the original code range reported by
+the iJVM_EVENT_TYPE_METHOD_LOAD event, then modifies it with the supplied bytes and
+adds the modified range to the original method. For next update events, VTune Amplifier
+does the same but it uses the latest modified version of a code region for update.
+Eventually, VTune Amplifier GUI displays multiple code ranges for the method reported by
+the iJVM_EVENT_TYPE_METHOD_LOAD event.
+Notes:</p>
+<ul>
+<li>Multiple update events with different types for the same trace are allowed
+but they must be reported for the same code ranges.
+Example,
+@code
+[– data—]        Allowed
+[– code –]                    Allowed
+[code]                            Ignored
+[– data—]        Allowed
+[– code –]                    Allowed
+[———— trace ———]
+@endcode</li>
+<li>The types of previously reported events can be changed but they must be reported
+for the same code ranges.
+Example,
+@code
+[– data—]                    Allowed
+[– code –]                    Allowed
+[– data—]                    Allowed
+[– code –]                    Allowed
+[———— trace ———]
+@endcode</li>
+</ul>
+</div></details><h2 id="aliased-type" class="section-header">Aliased Type<a href="#aliased-type" class="anchor">§</a></h2><pre class="rust item-decl"><code>struct iJIT_Method_Update {
+    pub load_address: <a class="primitive" href="https://doc.rust-lang.org/1.80.0/std/primitive.pointer.html">*mut </a><a class="enum" href="https://doc.rust-lang.org/1.80.0/core/ffi/enum.c_void.html" title="enum core::ffi::c_void">c_void</a>,
+    pub size: <a class="primitive" href="https://doc.rust-lang.org/1.80.0/std/primitive.u32.html">u32</a>,
+    pub type_: <a class="primitive" href="https://doc.rust-lang.org/1.80.0/std/primitive.u32.html">u32</a>,
+    pub data_format: <a class="primitive" href="https://doc.rust-lang.org/1.80.0/std/primitive.pointer.html">*const </a><a class="primitive" href="https://doc.rust-lang.org/1.80.0/std/primitive.i8.html">i8</a>,
+}</code></pre><h2 id="fields" class="fields section-header">Fields<a href="#fields" class="anchor">§</a></h2><span id="structfield.load_address" class="structfield section-header"><a href="#structfield.load_address" class="anchor field">§</a><code>load_address: <a class="primitive" href="https://doc.rust-lang.org/1.80.0/std/primitive.pointer.html">*mut </a><a class="enum" href="https://doc.rust-lang.org/1.80.0/core/ffi/enum.c_void.html" title="enum core::ffi::c_void">c_void</a></code></span><div class="docblock"><p>&lt;\brief Start address of the update within a method</p>
+</div><span id="structfield.size" class="structfield section-header"><a href="#structfield.size" class="anchor field">§</a><code>size: <a class="primitive" href="https://doc.rust-lang.org/1.80.0/std/primitive.u32.html">u32</a></code></span><div class="docblock"><p>&lt;\brief The update size</p>
+</div><span id="structfield.type_" class="structfield section-header"><a href="#structfield.type_" class="anchor field">§</a><code>type_: <a class="primitive" href="https://doc.rust-lang.org/1.80.0/std/primitive.u32.html">u32</a></code></span><div class="docblock"><p>&lt;\brief Type of the update</p>
+</div><span id="structfield.data_format" class="structfield section-header"><a href="#structfield.data_format" class="anchor field">§</a><code>data_format: <a class="primitive" href="https://doc.rust-lang.org/1.80.0/std/primitive.pointer.html">*const </a><a class="primitive" href="https://doc.rust-lang.org/1.80.0/std/primitive.i8.html">i8</a></code></span><div class="docblock"><p>&lt;\brief C string that contains a format string
+that follows the same specifications as format in printf.
+The format string is used for iJIT_CT_CODE only
+and cannot be NULL.
+Format can be changed on the fly.</p>
+</div><script src="../type.impl/ittapi_sys/struct._iJIT_Method_Update.js" data-self-path="ittapi_sys::iJIT_Method_Update" async></script></section></div></main></body></html>

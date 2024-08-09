@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Traits for parsing the WebAssembly Text format"><title>wast::parser - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="wast" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../wast/index.html">wast</a><span class="version">64.0.0</span></h2></div><h2 class="location"><a href="#">Module parser</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In crate wast</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">wast</a>::<wbr><a class="mod" href="#">parser</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/wast/parser.rs.html#1-1382">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Traits for parsing the WebAssembly Text format</p>
+<p>This module contains the traits, abstractions, and utilities needed to
+define custom parsers for WebAssembly text format items. This module exposes
+a recursive descent parsing strategy and centers around the
+<a href="trait.Parse.html" title="trait wast::parser::Parse"><code>Parse</code></a> trait for defining new fragments of
+WebAssembly text syntax.</p>
+<p>The top-level <a href="fn.parse.html" title="fn wast::parser::parse"><code>parse</code></a> function can be used to fully parse AST fragments:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wast::Wat;
+<span class="kw">use </span>wast::parser::{<span class="self">self</span>, ParseBuffer};
+
+<span class="kw">let </span>wat = <span class="string">"(module (func))"</span>;
+<span class="kw">let </span>buf = ParseBuffer::new(wat)<span class="question-mark">?</span>;
+<span class="kw">let </span>module = parser::parse::&lt;Wat&gt;(<span class="kw-2">&amp;</span>buf)<span class="question-mark">?</span>;</code></pre></div>
+<p>and you can also define your own new syntax with the
+<a href="trait.Parse.html" title="trait wast::parser::Parse"><code>Parse</code></a> trait:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wast::kw;
+<span class="kw">use </span>wast::core::{Import, Func};
+<span class="kw">use </span>wast::parser::{Parser, Parse, <span class="prelude-ty">Result</span>};
+
+<span class="comment">// Fields of a WebAssembly which only allow imports and functions, and all
+// imports must come before all the functions
+</span><span class="kw">struct </span>OnlyImportsAndFunctions&lt;<span class="lifetime">'a</span>&gt; {
+    imports: Vec&lt;Import&lt;<span class="lifetime">'a</span>&gt;&gt;,
+    functions: Vec&lt;Func&lt;<span class="lifetime">'a</span>&gt;&gt;,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Parse&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>OnlyImportsAndFunctions&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">fn </span>parse(parser: Parser&lt;<span class="lifetime">'a</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="comment">// While the second token is `import` (the first is `(`, so we care
+        // about the second) we parse an `ast::ModuleImport` inside of
+        // parentheses. The `parens` function here ensures that what we
+        // parse inside of it is surrounded by `(` and `)`.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>imports = Vec::new();
+        <span class="kw">while </span>parser.peek2::&lt;kw::import&gt;()<span class="question-mark">? </span>{
+            <span class="kw">let </span>import = parser.parens(|p| p.parse())<span class="question-mark">?</span>;
+            imports.push(import);
+        }
+
+        <span class="comment">// Afterwards we assume everything else is a function. Note that
+        // `parse` here is a generic function and type inference figures out
+        // that we're parsing functions here and imports above.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>functions = Vec::new();
+        <span class="kw">while </span>!parser.is_empty() {
+            <span class="kw">let </span>func = parser.parens(|p| p.parse())<span class="question-mark">?</span>;
+            functions.push(func);
+        }
+
+        <span class="prelude-val">Ok</span>(OnlyImportsAndFunctions { imports, functions })
+    }
+}</code></pre></div>
+<p>This module is heavily inspired by <a href="https://docs.rs/syn"><code>syn</code></a> so you can
+likely also draw inspiration from the excellent examples in the <code>syn</code> crate.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Cursor.html" title="struct wast::parser::Cursor">Cursor</a></div><div class="desc docblock-short">An immutable cursor into a list of tokens.</div></li><li><div class="item-name"><a class="struct" href="struct.Lookahead1.html" title="struct wast::parser::Lookahead1">Lookahead1</a></div><div class="desc docblock-short">A helpful structure to perform a lookahead of one token to determine what to
+parse.</div></li><li><div class="item-name"><a class="struct" href="struct.ParseBuffer.html" title="struct wast::parser::ParseBuffer">ParseBuffer</a></div><div class="desc docblock-short">A low-level buffer of tokens which represents a completely lexed file.</div></li><li><div class="item-name"><a class="struct" href="struct.Parser.html" title="struct wast::parser::Parser">Parser</a></div><div class="desc docblock-short">An in-progress parser for the tokens of a WebAssembly text file.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Parse.html" title="trait wast::parser::Parse">Parse</a></div><div class="desc docblock-short">A trait for parsing a fragment of syntax in a recursive descent fashion.</div></li><li><div class="item-name"><a class="trait" href="trait.Peek.html" title="trait wast::parser::Peek">Peek</a></div><div class="desc docblock-short">A trait for types which be used to “peek” to see if they’re the next token
+in an input stream of <a href="struct.Parser.html" title="struct wast::parser::Parser"><code>Parser</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.parse.html" title="fn wast::parser::parse">parse</a></div><div class="desc docblock-short">A top-level convenience parsing function that parses a <code>T</code> from <code>buf</code> and
+requires that all tokens in <code>buf</code> are consume.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type wast::parser::Result">Result</a></div><div class="desc docblock-short">A convenience type definition for <code>Result</code> where the error is hardwired to
+<a href="../struct.Error.html" title="struct wast::Error"><code>Error</code></a>.</div></li></ul></section></div></main></body></html>

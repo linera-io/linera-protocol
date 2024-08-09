@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["HEADER_APP_VERSION_ID"],"enum":["AppScalingModeV1","HealthCheckV1"],"struct":["AppConfigCapabilityMapV1","AppConfigCapabilityMemoryV1","AppConfigV1","AppScalingConfigV1","AppScheduledTask","AppVolume","AppVolumeMount","HealthCheckHttpV1"]};

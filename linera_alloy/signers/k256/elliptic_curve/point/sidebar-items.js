@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["NonIdentity"],"trait":["AffineCoordinates","BatchNormalize","CurveArithmetic","DecompactPoint","DecompressPoint","Double","PointCompaction","PointCompression"],"type":["AffinePoint","ProjectivePoint"]};

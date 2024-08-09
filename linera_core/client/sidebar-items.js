@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ChainClientError","MessagePolicy"],"struct":["AbortOnDrop","ChainClient","ChainClientOptions","ChainState","Client","Unsend"],"type":["ChainGuard","ChainGuardMapped","ChainGuardMut"]};

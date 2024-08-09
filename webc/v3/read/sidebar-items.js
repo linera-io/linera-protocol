@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DirEntry","DirEntryError","LookupError","OwnedReaderError","Section","SectionError","StreamingReaderError","VolumeHeaderError"],"struct":["AtomsSection","Directory","FileEntry","IndexSection","ManifestSection","OwnedReader","StreamingReader","VolumeSection"]};
