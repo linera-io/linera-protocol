@@ -177,7 +177,7 @@ impl FromStr for BlobType {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        serde_json::from_str(s).map_err(|_| anyhow!("Invalid BlobType: {}", s))
+        serde_json::from_str(s).with_context(|| format!("Invalid BlobType: {}", s))
     }
 }
 
