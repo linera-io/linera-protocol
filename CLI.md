@@ -120,9 +120,6 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
   Default value: `10`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
-
-  Possible values: `true`, `false`
-
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
 * `--message-policy <MESSAGE_POLICY>` — The policy for handling incoming messages
 
@@ -408,9 +405,6 @@ Add or modify a validator (admin only)
   Default value: `1`
 * `--skip-online-check` — Skip the version and genesis config checks
 
-  Possible values: `true`, `false`
-
-
 
 
 ## `linera remove-validator`
@@ -524,9 +518,6 @@ Watch the network for notifications
 
 * `--raw` — Show all notifications from all validators
 
-  Possible values: `true`, `false`
-
-
 
 
 ## `linera service`
@@ -538,9 +529,6 @@ Run a GraphQL service to explore and extend the chains of the wallet
 ###### **Options:**
 
 * `--listener-skip-process-inbox` — Do not create blocks automatically to receive incoming messages. Instead, wait for an explicit mutation `processInbox`
-
-  Possible values: `true`, `false`
-
 * `--listener-delay-before-ms <DELAY_BEFORE_MS>` — Wait before processing any notification (useful for testing)
 
   Default value: `0`
@@ -746,9 +734,6 @@ Initialize a wallet from the genesis configuration
 * `--genesis <GENESIS_CONFIG_PATH>` — The path to the genesis configuration for a Linera deployment. Either this or `--faucet` must be specified
 * `--faucet <FAUCET>` — The address of a faucet
 * `--with-new-chain` — Request a new chain from the faucet, credited with tokens. This requires `--faucet`
-
-  Possible values: `true`, `false`
-
 * `--with-other-chains <WITH_OTHER_CHAINS>` — Other chains to follow
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 
