@@ -108,13 +108,13 @@ pub trait Storage: Sized {
         hash: Vec<CryptoHash>,
     ) -> Result<Vec<bool>, ViewError>;
 
-    /// Tests existence of a blob with the given hash.
+    /// Tests the existence of a blob with the given blob ID.
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
-    /// List the missing blobs from the storage.
+    /// Lists the missing blobs from storage.
     async fn missing_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, ViewError>;
 
-    /// Tests existence of a blob state with the given hash.
+    /// Tests existence of a blob state with the given blob ID.
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
     /// Reads the hashed certificate value with the given hash.
@@ -472,5 +472,9 @@ where
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError> {
         Ok(self.storage.read_blob(blob_id).await?)
+    }
+
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
+        self.storage.contains_blob(blob_id).await
     }
 }

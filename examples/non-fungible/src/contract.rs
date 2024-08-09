@@ -177,6 +177,7 @@ impl NonFungibleTokenContract {
     }
 
     async fn mint(&mut self, owner: AccountOwner, name: String, blob_id: BlobId) {
+        self.runtime.assert_blob_exists(blob_id);
         let token_id = Nft::create_token_id(
             &self.runtime.chain_id(),
             &self.runtime.application_id().forget_abi(),

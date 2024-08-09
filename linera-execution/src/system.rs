@@ -1061,6 +1061,17 @@ where
             .map_err(|_| SystemExecutionError::BlobNotFoundOnRead(blob_id))
             .map(Into::into)
     }
+
+    pub async fn assert_blob_exists(
+        &mut self,
+        blob_id: BlobId,
+    ) -> Result<(), SystemExecutionError> {
+        if self.context().extra().contains_blob(blob_id).await? {
+            Ok(())
+        } else {
+            Err(SystemExecutionError::BlobNotFoundOnRead(blob_id))
+        }
+    }
 }
 
 #[cfg(test)]

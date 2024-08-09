@@ -258,6 +258,8 @@ pub trait ExecutionRuntimeContext {
     ) -> Result<UserServiceCode, ExecutionError>;
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError>;
+
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -492,6 +494,9 @@ pub trait BaseRuntime {
 
     /// Reads a blob content specified by a given `BlobId`.
     fn read_blob_content(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError>;
+
+    /// Asserts the existence of a blob with the given `BlobId`.
+    fn assert_blob_exists(&mut self, blob_id: &BlobId) -> Result<(), ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
@@ -919,6 +924,10 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .get(&blob_id)
             .ok_or_else(|| SystemExecutionError::BlobNotFoundOnRead(blob_id))?
             .clone())
+    }
+
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
+        Ok(self.blobs.contains_key(&blob_id))
     }
 }
 

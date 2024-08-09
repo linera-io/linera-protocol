@@ -368,6 +368,15 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Asserts the existence of a blob with the given `BlobId`.
+    fn assert_blob_exists(caller: &mut Caller, blob_id: BlobId) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .assert_blob_exists(&blob_id)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Logs a `message` with the provided information `level`.
     fn log(_caller: &mut Caller, message: String, level: log::Level) -> Result<(), RuntimeError> {
         match level {
@@ -542,6 +551,15 @@ where
             .user_data_mut()
             .runtime
             .read_blob_content(&blob_id)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Asserts the existence of a blob with the given `BlobId`.
+    fn assert_blob_exists(caller: &mut Caller, blob_id: BlobId) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .assert_blob_exists(&blob_id)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
