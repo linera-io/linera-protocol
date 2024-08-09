@@ -79,3 +79,7 @@ cfg_aliases.workspace = true
 [[bench]]
 name = "reentrant_collection_view"
 harness = false
+
+[[bench]]
+name = "stores"
+harness = false
