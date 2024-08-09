@@ -20,9 +20,11 @@ impl RocksDbStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> (Self, TempDir) {
         let (store_config, dir) = create_rocks_db_test_config().await;
         let namespace = generate_test_namespace();
+        let root_key = &[];
         let storage = RocksDbStorage::new_for_testing(
             store_config,
             &namespace,
+            root_key,
             wasm_runtime,
             TestClock::new(),
         )
@@ -34,12 +36,17 @@ impl RocksDbStorage<TestClock> {
     pub async fn new_for_testing(
         store_config: RocksDbStoreConfig,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
     ) -> Result<Self, RocksDbStoreError> {
-        let storage =
-            DbStorageInner::<RocksDbStore>::new_for_testing(store_config, namespace, wasm_runtime)
-                .await?;
+        let storage = DbStorageInner::<RocksDbStore>::new_for_testing(
+            store_config,
+            namespace,
+            root_key,
+            wasm_runtime,
+        )
+        .await?;
         Ok(Self::create(storage, clock))
     }
 }

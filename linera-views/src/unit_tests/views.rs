@@ -223,11 +223,11 @@ impl TestContextFactory for RocksDbContextFactory {
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let (store_config, directory) = create_rocks_db_test_config().await;
         let namespace = generate_test_namespace();
-        let store = RocksDbStore::recreate_and_connect(&store_config, &namespace)
+        let root_key = &[];
+        let store = RocksDbStore::recreate_and_connect(&store_config, &namespace, root_key)
             .await
             .expect("store");
-        let dummy_key_prefix = vec![0];
-        let context = RocksDbContext::new(store, dummy_key_prefix, ());
+        let context = RocksDbContext::new(store, ());
 
         self.temporary_directories.push(directory);
 
@@ -253,14 +253,15 @@ impl TestContextFactory for DynamoDbContextFactory {
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
 
         let namespace = generate_test_namespace();
+        let root_key = &[];
         let common_config = create_dynamo_db_common_config();
         let store_config = DynamoDbStoreConfig {
             config,
             common_config,
         };
-        let store = DynamoDbStore::recreate_and_connect(&store_config, &namespace).await?;
-        let dummy_key_prefix = vec![0];
-        Ok(DynamoDbContext::new(store, dummy_key_prefix, ()))
+        let store =
+            DynamoDbStore::recreate_and_connect(&store_config, &namespace, root_key).await?;
+        Ok(DynamoDbContext::new(store, ()))
     }
 }
 
@@ -276,9 +277,9 @@ impl TestContextFactory for ScyllaDbContextFactory {
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let config = create_scylla_db_test_config().await;
         let namespace = generate_test_namespace();
-        let store = ScyllaDbStore::recreate_and_connect(&config, &namespace).await?;
-        let dummy_key_prefix = vec![0];
-        let context = ScyllaDbContext::new(store, dummy_key_prefix, ());
+        let root_key = &[];
+        let store = ScyllaDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
+        let context = ScyllaDbContext::new(store, ());
         Ok(context)
     }
 }

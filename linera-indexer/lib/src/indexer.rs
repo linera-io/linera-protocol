@@ -11,7 +11,7 @@ use axum::{extract::Extension, routing::get, Router};
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::HashedCertificateValue;
 use linera_views::{
-    common::{Context, ContextFromStore, KeyValueStore},
+    common::{AdminKeyValueStore, Context, ContextFromStore, KeyValueStore},
     map_view::MapView,
     register_view::RegisterView,
     set_view::SetView,
@@ -58,18 +58,27 @@ enum LatestBlock {
 
 impl<S> Indexer<S>
 where
-    S: KeyValueStore + Clone + Send + Sync + 'static,
-    S::Error: From<bcs::Error>
+    S: AdminKeyValueStore<Error = <S as KeyValueStore>::Error>
+        + KeyValueStore
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    <S as KeyValueStore>::Error: From<bcs::Error>
         + From<DatabaseConsistencyError>
         + Send
         + Sync
         + std::error::Error
         + 'static,
-    ViewError: From<S::Error>,
+    ViewError: From<<S as KeyValueStore>::Error>,
 {
     /// Loads the indexer using a database backend with an `indexer` prefix.
     pub async fn load(store: S) -> Result<Self, IndexerError> {
-        let context = ContextFromStore::create(store.clone(), "indexer".as_bytes().to_vec(), ())
+        let root_key = "indexer".as_bytes().to_vec();
+        let store = store
+            .clone_with_root_key(&root_key)
+            .map_err(|_e| IndexerError::CloneWithRootKeyError)?;
+        let context = ContextFromStore::create(store, ())
             .await
             .map_err(|e| IndexerError::ViewError(e.into()))?;
         let state = State(Arc::new(Mutex::new(StateView::load(context).await?)));

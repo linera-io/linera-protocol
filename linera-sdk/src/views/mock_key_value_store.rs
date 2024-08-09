@@ -179,7 +179,7 @@ impl MockKeyValueStore {
     /// Writes a `batch` of operations to storage.
     pub(crate) fn write_batch(&self, batch: Batch) {
         self.store
-            .write_batch(batch, &[])
+            .write_batch(batch)
             .now_or_never()
             .expect("Memory store should never wait for anything")
             .expect("Memory store should never fail");

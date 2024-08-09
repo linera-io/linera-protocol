@@ -251,7 +251,7 @@ pub async fn run_reads<S: LocalKeyValueStore>(store: S, key_values: Vec<(Vec<u8>
         set_keys.insert(&key[..]);
         batch.put_key_value_bytes(key.clone(), value.clone());
     }
-    store.write_batch(batch, &[]).await.unwrap();
+    store.write_batch(batch).await.unwrap();
     for key_prefix in keys
         .iter()
         .flat_map(|key| (0..key.len()).map(|u| &key[..=u]))
@@ -460,7 +460,7 @@ pub async fn run_test_batch_from_blank<C: LocalKeyValueStore>(
     batch: Batch,
 ) {
     let kv_state = realize_batch(&batch);
-    key_value_store.write_batch(batch, &[]).await.unwrap();
+    key_value_store.write_batch(batch).await.unwrap();
     // Checking the consistency
     let key_values = read_key_values_prefix(key_value_store, &key_prefix).await;
     assert_eq!(key_values, kv_state);
@@ -518,10 +518,7 @@ pub async fn tombstone_triggering_test<C: LocalKeyValueStore>(key_value_store: C
     }
     run_test_batch_from_blank(&key_value_store, key_prefix.clone(), batch_insert).await;
     // Deleting them all
-    key_value_store
-        .write_batch(batch_delete, &[])
-        .await
-        .unwrap();
+    key_value_store.write_batch(batch_delete).await.unwrap();
     // Reading everything and seeing that it is now cleaned.
     let key_values = read_key_values_prefix(&key_value_store, &key_prefix).await;
     assert_eq!(key_values, remaining_key_values);
@@ -567,12 +564,9 @@ async fn run_test_batch_from_state<C: LocalKeyValueStore>(
         kv_state.insert(key.clone(), value.clone());
         batch_insert.put_key_value_bytes(key, value);
     }
-    key_value_store
-        .write_batch(batch_insert, &[])
-        .await
-        .unwrap();
+    key_value_store.write_batch(batch_insert).await.unwrap();
     update_state_from_batch(&mut kv_state, &batch);
-    key_value_store.write_batch(batch, &[]).await.unwrap();
+    key_value_store.write_batch(batch).await.unwrap();
     let key_values = read_key_values_prefix(key_value_store, &key_prefix).await;
     assert_eq!(key_values, kv_state);
 }
@@ -705,8 +699,9 @@ where
     // Connecting to all of them at once
     {
         let mut connections = Vec::new();
+        let root_key = &[];
         for namespace in &working_namespaces {
-            let connection = S::connect(config, namespace)
+            let connection = S::connect(config, namespace, root_key)
                 .await
                 .expect("a connection to the namespace");
             connections.push(connection);

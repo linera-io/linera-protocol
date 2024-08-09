@@ -1139,7 +1139,7 @@ where
 {
     const MAX_VALUE_SIZE: usize = C::MAX_VALUE_SIZE;
 
-    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         let mut view = self.view.write().await;
         view.write_batch(batch).await?;
         let mut batch = Batch::new();
@@ -1148,7 +1148,7 @@ where
         Ok(())
     }
 
-    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), ViewError> {
+    async fn clear_journal(&self) -> Result<(), ViewError> {
         Ok(())
     }
 }
@@ -1183,9 +1183,10 @@ pub type KeyValueStoreMemoryContext<E> = ContextFromStore<E, ViewContainer<Memor
 #[cfg(with_testing)]
 impl<E> KeyValueStoreMemoryContext<E> {
     /// Creates a [`KeyValueStoreMemoryContext`].
-    pub async fn new(base_key: Vec<u8>, extra: E) -> Result<Self, ViewError> {
+    pub async fn new(extra: E) -> Result<Self, ViewError> {
         let context = create_test_memory_context();
         let store = ViewContainer::new(context).await?;
+        let base_key = Vec::new();
         Ok(Self {
             store,
             base_key,
