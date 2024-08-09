@@ -149,4 +149,9 @@ where
     pub fn read_blob(&mut self, blob_id: BlobId) -> Blob {
         BlobContent::from(wit::read_blob_content(blob_id.into())).with_blob_id_unchecked(blob_id)
     }
+
+    /// Asserts that a blob with the given `BlobId` exists in storage.
+    pub fn assert_blob_exists(&mut self, blob_id: BlobId) {
+        wit::assert_blob_exists(blob_id.into())
+    }
 }

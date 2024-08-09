@@ -389,8 +389,8 @@ where
     /// Fetches a `Blob` from a given `BlobId`.
     pub fn read_blob(&mut self, blob_id: BlobId) -> Blob {
         self.blobs
-            .borrow_mut()
-            .as_mut()
+            .borrow()
+            .as_ref()
             .and_then(|blobs| blobs.get(&blob_id).cloned())
             .unwrap_or_else(|| {
                 panic!(
@@ -398,6 +398,20 @@ where
                     please call `MockServiceRuntime::set_blob` first"
                 )
             })
+    }
+
+    /// Asserts that a blob with the given `BlobId` exists in storage.
+    pub fn assert_blob_exists(&mut self, blob_id: BlobId) {
+        self.blobs
+            .borrow()
+            .as_ref()
+            .map(|blobs| blobs.contains_key(&blob_id))
+            .unwrap_or_else(|| {
+                panic!(
+                    "Blob for BlobId {blob_id:?} has not been mocked, \
+                    please call `MockServiceRuntime::set_blob` first"
+                )
+            });
     }
 
     /// Loads a mocked value from the `cell` cache or panics with a provided `message`.
