@@ -171,7 +171,7 @@ impl Display for BlobType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match serde_json::to_string(self) {
             Ok(s) => write!(f, "{}", s),
-            Err(_) => return Err(fmt::Error),
+            Err(_) => Err(fmt::Error),
         }
     }
 }
