@@ -1,6 +1,7 @@
 <!-- cargo-rdme start -->
 
-This module manages the execution of the system application and the user applications in a Linera chain.
+This module manages the execution of the system application and the user applications in a
+Linera chain.
 
 <!-- cargo-rdme end -->
 

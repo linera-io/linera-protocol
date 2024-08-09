@@ -22,8 +22,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, ChannelFullName, Event, HashedCertificateValue, IncomingBundle,
-        MessageAction, Origin, OutgoingMessage,
+        BlockExecutionOutcome, ChannelFullName, HashedCertificateValue, IncomingBundle,
+        MessageAction, MessageBundle, Origin, OutgoingMessage,
     },
     test::{make_child_block, make_first_block, BlockTestExt},
 };
@@ -32,8 +32,8 @@ use linera_execution::{
     system::{SystemChannel, SystemMessage, SystemOperation},
     test_utils::SystemExecutionState,
     Bytecode, BytecodeLocation, ChannelSubscription, Message, MessageKind, Operation,
-    OperationContext, ResourceController, UserApplicationDescription, UserApplicationId,
-    WasmContractModule, WasmRuntime,
+    OperationContext, ResourceController, TransactionTracker, UserApplicationDescription,
+    UserApplicationId, WasmContractModule, WasmRuntime,
 };
 #[cfg(feature = "dynamodb")]
 use linera_storage::DynamoDbStorage;
@@ -125,7 +125,9 @@ where
         contract: contract_bytecode,
         service: service_bytecode,
     };
-    let publish_message = SystemMessage::BytecodePublished { operation_index: 0 };
+    let publish_message = SystemMessage::BytecodePublished {
+        transaction_index: 0,
+    };
     let publish_block = make_first_block(publisher_chain.into())
         .with_timestamp(1)
         .with_operation(publish_operation);
@@ -137,16 +139,18 @@ where
         ..SystemExecutionState::new(Epoch::ZERO, publisher_chain, admin_id)
     };
     let publisher_state_hash = publisher_system_state.clone().into_hash().await;
+    let publish_out_msg = OutgoingMessage {
+        destination: Destination::Recipient(publisher_chain.into()),
+        authenticated_signer: None,
+        grant: Amount::ZERO,
+        refund_grant_to: None,
+        kind: MessageKind::Protected,
+        message: Message::System(publish_message.clone()),
+    };
+    let publish_posted_msg = publish_out_msg.clone().into_posted(0);
     let publish_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![vec![OutgoingMessage {
-                destination: Destination::Recipient(publisher_chain.into()),
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                message: Message::System(publish_message.clone()),
-            }]],
+            messages: vec![vec![publish_out_msg]],
             events: vec![Vec::new()],
             state_hash: publisher_state_hash,
             oracle_responses: vec![Vec::new()],
@@ -170,16 +174,12 @@ where
     // Produce one more block to broadcast the bytecode ID.
     let broadcast_message = IncomingBundle {
         origin: Origin::chain(publisher_chain.into()),
-        event: Event {
+        bundle: MessageBundle {
             certificate_hash: publish_certificate.hash(),
             height: publish_block_height,
-            index: 0,
-            authenticated_signer: None,
-            grant: Amount::ZERO,
-            refund_grant_to: None,
-            kind: MessageKind::Protected,
             timestamp: Timestamp::from(1),
-            message: Message::System(publish_message),
+            transaction_index: 0,
+            messages: vec![publish_posted_msg],
         },
         action: MessageAction::Accept,
     };
@@ -193,7 +193,7 @@ where
     });
     let bytecode_location = BytecodeLocation {
         certificate_hash: publish_certificate.hash(),
-        operation_index: 0,
+        transaction_index: 0,
     };
     let broadcast_message = SystemMessage::BytecodeLocations {
         locations: vec![(bytecode_id, bytecode_location)],
@@ -239,6 +239,7 @@ where
         kind: MessageKind::Simple,
         message: Message::System(broadcast_message.clone()),
     };
+    let broadcast_posted_message = broadcast_outgoing_message.clone().into_posted(0);
     let broadcast_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![vec![broadcast_outgoing_message]],
@@ -287,16 +288,18 @@ where
     };
     creator_system_state.subscriptions.insert(publisher_channel);
     let creator_state = creator_system_state.clone().into_view().await;
+    let subscribe_out_msg = OutgoingMessage {
+        destination: Destination::Recipient(publisher_chain.into()),
+        authenticated_signer: None,
+        grant: Amount::ZERO,
+        refund_grant_to: None,
+        kind: MessageKind::Protected,
+        message: Message::System(subscribe_message.clone()),
+    };
+    let subscribe_posted_msg = subscribe_out_msg.clone().into_posted(0);
     let subscribe_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![vec![OutgoingMessage {
-                destination: Destination::Recipient(publisher_chain.into()),
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                message: Message::System(subscribe_message.clone()),
-            }]],
+            messages: vec![vec![subscribe_out_msg]],
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![Vec::new()],
@@ -320,16 +323,12 @@ where
     // Accept subscription
     let accept_message = IncomingBundle {
         origin: Origin::chain(creator_chain.into()),
-        event: Event {
+        bundle: MessageBundle {
             certificate_hash: subscribe_certificate.hash(),
             height: subscribe_block_height,
-            index: 0,
-            authenticated_signer: None,
-            grant: Amount::ZERO,
-            refund_grant_to: None,
-            kind: MessageKind::Protected,
             timestamp: Timestamp::from(2),
-            message: subscribe_message.into(),
+            transaction_index: 0,
+            messages: vec![subscribe_posted_msg],
         },
         action: MessageAction::Accept,
     };
@@ -404,16 +403,12 @@ where
         .with_operation(create_operation)
         .with_incoming_bundle(IncomingBundle {
             origin: Origin::channel(publisher_chain.into(), publish_admin_channel),
-            event: Event {
+            bundle: MessageBundle {
                 certificate_hash: broadcast_certificate.hash(),
                 height: broadcast_block_height,
-                index: 0,
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Simple,
                 timestamp: Timestamp::from(1),
-                message: Message::System(broadcast_message),
+                transaction_index: 0,
+                messages: vec![broadcast_posted_message],
             },
             action: MessageAction::Accept,
         });
@@ -483,7 +478,6 @@ where
         authenticated_caller_id: None,
         height: run_block.height,
         index: Some(0),
-        next_message_index: 0,
     };
     let mut controller = ResourceController::default();
     creator_state
@@ -494,7 +488,7 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            Some(Vec::new()),
+            &mut TransactionTracker::new(0, Some(Vec::new())),
             &mut controller,
         )
         .await?;

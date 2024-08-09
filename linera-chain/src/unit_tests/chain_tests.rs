@@ -58,7 +58,7 @@ fn make_app_description() -> UserApplicationDescription {
         bytecode_id: BytecodeId::new(make_admin_message_id(BlockHeight(1))),
         bytecode_location: BytecodeLocation {
             certificate_hash: CryptoHash::test_hash("bytecode certificate"),
-            operation_index: 0,
+            transaction_index: 0,
         },
         creation: make_admin_message_id(BlockHeight(2)),
         required_application_ids: vec![],
@@ -85,7 +85,6 @@ fn make_open_chain_config() -> OpenChainConfig {
         admin_id: admin_id(),
         epoch: Epoch::ZERO,
         committees: iter::once((Epoch::ZERO, committee)).collect(),
-        balance: Amount::from_tokens(10),
         application_permissions: Default::default(),
     }
 }

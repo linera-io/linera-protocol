@@ -186,13 +186,15 @@ impl TestValidator {
                 .collect(),
             admin_id,
             epoch: Epoch::ZERO,
-            balance: Amount::ZERO,
             application_permissions: ApplicationPermissions::default(),
         };
 
         let certificate = admin_chain
             .add_block(|block| {
-                block.with_system_operation(SystemOperation::OpenChain(new_chain_config));
+                block.with_system_operation(SystemOperation::OpenChain {
+                    config: new_chain_config,
+                    balance: 0.into(),
+                });
             })
             .await;
         let executed_block = certificate

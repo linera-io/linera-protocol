@@ -14,7 +14,10 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
-    data_types::{CertificateValue, Event, ExecutedBlock, IncomingBundle, Medium, Origin},
+    data_types::{
+        CertificateValue, ExecutedBlock, IncomingBundle, Medium, MessageBundle, Origin,
+        PostedMessage,
+    },
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -243,10 +246,10 @@ where
         // Both `Claim` messages were included in the block.
         assert_eq!(messages.len(), 2);
         // The first one was rejected.
-        assert_eq!(messages[0].event.height, BlockHeight::from(2));
+        assert_eq!(messages[0].bundle.height, BlockHeight::from(2));
         assert_eq!(messages[0].action, MessageAction::Reject);
         // The second was accepted.
-        assert_eq!(messages[1].event.height, BlockHeight::from(3));
+        assert_eq!(messages[1].bundle.height, BlockHeight::from(3));
         assert_eq!(messages[1].action, MessageAction::Accept);
     }
 
@@ -629,7 +632,7 @@ where
         certificate.value(),
         CertificateValue::ConfirmedBlock { executed_block, .. } if matches!(
             executed_block.block.operations[open_chain_message_id.index as usize],
-            Operation::System(SystemOperation::OpenChain(_)),
+            Operation::System(SystemOperation::OpenChain {..}),
         ),
         "Unexpected certificate value",
     );
@@ -735,7 +738,7 @@ where
         &certificate.value(),
         CertificateValue::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
             block.operations[open_chain_message_id.index as usize],
-            Operation::System(SystemOperation::OpenChain(_)),
+            Operation::System(SystemOperation::OpenChain { .. }),
         ),
         "Unexpected certificate value",
     );
@@ -759,9 +762,11 @@ where
         result,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(*error, ChainError::CannotSkipMessage {
-            event: Event { message: Message::System(SystemMessage::Credit { .. }), .. }, ..
-        })
+        )) if matches!(&*error, ChainError::CannotSkipMessage {
+            bundle: MessageBundle { messages, .. }, ..
+        } if matches!(messages[..], [PostedMessage {
+            message: Message::System(SystemMessage::Credit { .. }), ..
+        }]))
     );
     Ok(())
 }
@@ -922,37 +927,46 @@ where
     assert!(block.operations.is_empty());
     assert_eq!(block.incoming_bundles.len(), 2);
     assert_matches!(
-        block.incoming_bundles[0],
+        &block.incoming_bundles[0],
         IncomingBundle {
             origin: Origin { sender, medium: Medium::Direct },
             action: MessageAction::Reject,
-            event: Event {
-                kind: MessageKind::Tracked,
-                message: Message::System(SystemMessage::Credit { .. }),
+            bundle: MessageBundle {
+                messages,
                 ..
             },
-        } if sender == ChainId::root(2)
+        } if *sender == ChainId::root(2) && matches!(messages[..],
+            [PostedMessage {
+                message: Message::System(SystemMessage::Credit { .. }),
+                kind: MessageKind::Tracked,
+                ..
+            }]
+        )
     );
     assert_matches!(
-        block.incoming_bundles[1],
+        &block.incoming_bundles[1],
         IncomingBundle {
             origin: Origin { sender, medium: Medium::Direct },
             action: MessageAction::Reject,
-            event: Event {
-                kind: MessageKind::Protected,
-                message: Message::System(SystemMessage::Subscribe { .. }),
+            bundle: MessageBundle {
+                messages,
                 ..
             },
-        } if sender == ChainId::root(2)
+        } if *sender == ChainId::root(2) && matches!(messages[..],
+            [PostedMessage {
+                message: Message::System(SystemMessage::Subscribe { .. }),
+                kind: MessageKind::Protected,
+                ..
+            }]
+        )
     );
 
-    // Since blocks are free of charge on closed chains, empty blocks are not allowed.
-    assert_matches!(
-        client1.execute_operations(vec![]).await,
-        Err(ChainClientError::LocalNodeError(
-            LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(*error, ChainError::ClosedChain)
-    );
+    // Empty blocks are allowed on closed chains but they must pay the block fee.
+    {
+        let balance = client1.local_balance().await.unwrap();
+        client1.execute_operations(vec![]).await.unwrap();
+        assert!(client1.local_balance().await.unwrap() < balance);
+    }
     Ok(())
 }
 

@@ -182,7 +182,7 @@ pub enum CrossChainRequest {
     UpdateRecipient {
         sender: ChainId,
         recipient: ChainId,
-        bundle_vecs: Vec<(Medium, Vec<MessageBundle>)>,
+        bundle_vecs: Vec<(Medium, Vec<(Epoch, MessageBundle)>)>,
     },
     /// Acknowledge the height of the highest confirmed blocks communicated with `UpdateRecipient`.
     ConfirmUpdatedRecipient {
@@ -207,8 +207,8 @@ impl CrossChainRequest {
         match self {
             CrossChainRequest::UpdateRecipient { bundle_vecs, .. } => {
                 bundle_vecs.iter().any(|(_, bundles)| {
-                    debug_assert!(bundles.windows(2).all(|w| w[0].height <= w[1].height));
-                    matches!(bundles.first(), Some(h) if h.height <= height)
+                    debug_assert!(bundles.windows(2).all(|w| w[0].1.height <= w[1].1.height));
+                    matches!(bundles.first(), Some((_, h)) if h.height <= height)
                 })
             }
             _ => false,

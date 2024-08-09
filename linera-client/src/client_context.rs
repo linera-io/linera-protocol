@@ -491,12 +491,14 @@ where
                 committees,
                 admin_id: self.wallet.genesis_admin_chain(),
                 epoch,
-                balance,
                 application_permissions: Default::default(),
             };
-            let operations = iter::repeat(Operation::System(SystemOperation::OpenChain(config)))
-                .take(num_new_chains)
-                .collect();
+            let operations = iter::repeat(Operation::System(SystemOperation::OpenChain {
+                config,
+                balance,
+            }))
+            .take(num_new_chains)
+            .collect();
             let certificate = chain_client
                 .execute_without_prepare(operations)
                 .await?

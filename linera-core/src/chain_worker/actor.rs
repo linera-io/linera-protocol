@@ -21,8 +21,8 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    ExecutionRequest, Query, QueryContext, Response, ServiceRuntimeRequest, ServiceSyncRuntime,
-    UserApplicationDescription, UserApplicationId,
+    committee::Epoch, ExecutionRequest, Query, QueryContext, Response, ServiceRuntimeRequest,
+    ServiceSyncRuntime, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -32,10 +32,7 @@ use tokio::{
 };
 use tracing::{instrument, trace, warn};
 #[cfg(with_testing)]
-use {
-    linera_base::identifiers::BytecodeId, linera_chain::data_types::Event,
-    linera_execution::BytecodeLocation,
-};
+use {linera_base::identifiers::BytecodeId, linera_execution::BytecodeLocation};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState};
 use crate::{
@@ -57,14 +54,14 @@ where
         callback: oneshot::Sender<Result<Option<Certificate>, WorkerError>>,
     },
 
-    /// Search for an event in one of the chain's inboxes.
+    /// Search for a bundle in one of the chain's inboxes.
     #[cfg(with_testing)]
-    FindEventInInbox {
+    FindBundleInInbox {
         inbox_id: Origin,
         certificate_hash: CryptoHash,
         height: BlockHeight,
         index: u32,
-        callback: oneshot::Sender<Result<Option<Event>, WorkerError>>,
+        callback: oneshot::Sender<Result<Option<MessageBundle>, WorkerError>>,
     },
 
     /// Request a read-only view of the [`ChainStateView`].
@@ -129,7 +126,7 @@ where
     /// Process a cross-chain update.
     ProcessCrossChainUpdate {
         origin: Origin,
-        bundles: Vec<MessageBundle>,
+        bundles: Vec<(Epoch, MessageBundle)>,
         callback: oneshot::Sender<Result<Option<BlockHeight>, WorkerError>>,
     },
 
@@ -243,7 +240,7 @@ where
                     .send(self.worker.read_certificate(height).await)
                     .is_ok(),
                 #[cfg(with_testing)]
-                ChainWorkerRequest::FindEventInInbox {
+                ChainWorkerRequest::FindBundleInInbox {
                     inbox_id,
                     certificate_hash,
                     height,
@@ -252,7 +249,7 @@ where
                 } => callback
                     .send(
                         self.worker
-                            .find_event_in_inbox(inbox_id, certificate_hash, height, index)
+                            .find_bundle_in_inbox(inbox_id, certificate_hash, height, index)
                             .await,
                     )
                     .is_ok(),
@@ -371,14 +368,14 @@ where
                 .field("height", &height)
                 .finish_non_exhaustive(),
             #[cfg(with_testing)]
-            ChainWorkerRequest::FindEventInInbox {
+            ChainWorkerRequest::FindBundleInInbox {
                 inbox_id,
                 certificate_hash,
                 height,
                 index,
                 callback: _callback,
             } => formatter
-                .debug_struct("ChainWorkerRequest::FindEventInInbox")
+                .debug_struct("ChainWorkerRequest::FindBundleInInbox")
                 .field("inbox_id", &inbox_id)
                 .field("certificate_hash", &certificate_hash)
                 .field("height", &height)
