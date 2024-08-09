@@ -12,6 +12,8 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(with_testing)]
+use linera_base::identifiers::BytecodeId;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
@@ -32,8 +34,6 @@ use linera_execution::{
 use linera_storage::Storage;
 use linera_views::views::{ClonableView, ViewError};
 use tokio::sync::{OwnedRwLockReadGuard, RwLock};
-#[cfg(with_testing)]
-use {linera_base::identifiers::BytecodeId, linera_chain::data_types::Event};
 
 #[cfg(test)]
 pub(crate) use self::attempted_changes::CrossChainUpdateHelper;
@@ -141,18 +141,18 @@ where
             .await
     }
 
-    /// Searches for an event in one of the chain's inboxes.
+    /// Searches for a bundle in one of the chain's inboxes.
     #[cfg(with_testing)]
-    pub(super) async fn find_event_in_inbox(
+    pub(super) async fn find_bundle_in_inbox(
         &mut self,
         inbox_id: Origin,
         certificate_hash: CryptoHash,
         height: BlockHeight,
         index: u32,
-    ) -> Result<Option<Event>, WorkerError> {
+    ) -> Result<Option<MessageBundle>, WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
-            .find_event_in_inbox(inbox_id, certificate_hash, height, index)
+            .find_bundle_in_inbox(inbox_id, certificate_hash, height, index)
             .await
     }
 
@@ -269,7 +269,7 @@ where
     pub(super) async fn process_cross_chain_update(
         &mut self,
         origin: Origin,
-        bundles: Vec<MessageBundle>,
+        bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await

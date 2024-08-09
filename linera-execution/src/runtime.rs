@@ -6,7 +6,6 @@ use std::{
     mem,
     ops::{Deref, DerefMut},
     sync::{Arc, Mutex},
-    vec,
 };
 
 use custom_debug_derive::Debug;
@@ -29,8 +28,8 @@ use crate::{
     execution_state_actor::{ExecutionRequest, ExecutionStateSender},
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, FinalizeContext,
-    MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime,
+    BaseRuntime, ContractRuntime, ExecutionError, FinalizeContext, MessageContext,
+    OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime, TransactionTracker,
     UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
     MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
 };
@@ -69,8 +68,6 @@ pub struct SyncRuntimeInternal<UserInstance> {
     authenticated_signer: Option<Owner>,
     /// The current message being executed, if there is one.
     executing_message: Option<ExecutingMessage>,
-    /// The index of the next message to be created.
-    next_message_index: u32,
 
     /// How to interact with the storage view of the execution state.
     execution_state_sender: ExecutionStateSender,
@@ -88,14 +85,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     call_stack: Vec<ApplicationStatus>,
     /// The set of the IDs of the applications that are in the `call_stack`.
     active_applications: HashSet<UserApplicationId>,
-    /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
-    execution_outcomes: Vec<ExecutionOutcome>,
-    /// Accumulated events emitted by applications.
-    events: Vec<()>,
-    /// Recorded responses to oracle queries.
-    recorded_oracle_responses: Vec<OracleResponse>,
-    /// Oracle responses that are being replayed.
-    replaying_oracle_responses: Option<vec::IntoIter<OracleResponse>>,
+    /// The tracking information for this transaction.
+    transaction_tracker: TransactionTracker,
 
     /// Track application states based on views.
     view_user_states: BTreeMap<UserApplicationId, ViewUserState>,
@@ -104,22 +95,6 @@ pub struct SyncRuntimeInternal<UserInstance> {
     refund_grant_to: Option<Account>,
     /// Controller to track fuel and storage consumption.
     resource_controller: ResourceController,
-}
-
-impl<UserInstance> SyncRuntimeInternal<UserInstance> {
-    /// Returns the index of the next outcome's first message.
-    fn next_message_index(&self) -> Result<u32, ArithmeticError> {
-        let mut index = self.next_message_index;
-        for outcome in &self.execution_outcomes {
-            let len = match outcome {
-                ExecutionOutcome::System(outcome) => outcome.messages.len(),
-                ExecutionOutcome::User(_, outcome) => outcome.messages.len(),
-            };
-            let len = u32::try_from(len).map_err(|_| ArithmeticError::Overflow)?;
-            index = index.checked_add(len).ok_or(ArithmeticError::Overflow)?;
-        }
-        Ok(index)
-    }
 }
 
 /// The runtime status of an application.
@@ -304,19 +279,17 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         height: BlockHeight,
         local_time: Timestamp,
         authenticated_signer: Option<Owner>,
-        next_message_index: u32,
         executing_message: Option<ExecutingMessage>,
         execution_state_sender: ExecutionStateSender,
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
-        replaying_oracle_responses: Option<vec::IntoIter<OracleResponse>>,
+        transaction_tracker: TransactionTracker,
     ) -> Self {
         Self {
             chain_id,
             height,
             local_time,
             authenticated_signer,
-            next_message_index,
             executing_message,
             execution_state_sender,
             is_finalizing: false,
@@ -324,13 +297,10 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
-            execution_outcomes: Vec::new(),
-            events: Vec::new(),
             view_user_states: BTreeMap::new(),
             refund_grant_to,
             resource_controller,
-            replaying_oracle_responses,
-            recorded_oracle_responses: Vec::new(),
+            transaction_tracker,
         }
     }
 
@@ -459,7 +429,6 @@ impl SyncRuntimeInternal<UserContractInstance> {
             authenticated_caller_id,
             height: self.height,
             index: None,
-            next_message_index: self.next_message_index,
         };
         self.push_application(ApplicationStatus {
             caller_id: authenticated_caller_id,
@@ -506,8 +475,8 @@ impl SyncRuntimeInternal<UserContractInstance> {
             self.resource_controller.track_grant(message.grant)?;
         }
 
-        self.execution_outcomes
-            .push(ExecutionOutcome::User(application_id, outcome));
+        self.transaction_tracker
+            .add_user_outcome(application_id, outcome)?;
         Ok(())
     }
 }
@@ -945,23 +914,23 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         application_id: ApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let response = if let Some(responses) = &mut self.replaying_oracle_responses {
-            match responses.next() {
-                Some(OracleResponse::Service(bytes)) => bytes,
-                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                None => return Err(ExecutionError::MissingOracleResponse),
-            }
-        } else {
-            let context = QueryContext {
-                chain_id: self.chain_id,
-                next_block_height: self.height,
-                local_time: self.local_time,
+        let response =
+            if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
+                match response {
+                    OracleResponse::Service(bytes) => bytes,
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                }
+            } else {
+                let context = QueryContext {
+                    chain_id: self.chain_id,
+                    next_block_height: self.height,
+                    local_time: self.local_time,
+                };
+                let sender = self.execution_state_sender.clone();
+                ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?
             };
-            let sender = self.execution_state_sender.clone();
-            ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?
-        };
-        self.recorded_oracle_responses
-            .push(OracleResponse::Service(response.clone()));
+        self.transaction_tracker
+            .add_oracle_response(OracleResponse::Service(response.clone()));
         Ok(response)
     }
 
@@ -971,34 +940,33 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         content_type: String,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let bytes = if let Some(responses) = &mut self.replaying_oracle_responses {
-            match responses.next() {
-                Some(OracleResponse::Post(bytes)) => bytes,
-                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                None => return Err(ExecutionError::MissingOracleResponse),
-            }
-        } else {
-            let url = url.to_string();
-            self.execution_state_sender
-                .send_request(|callback| ExecutionRequest::HttpPost {
-                    url,
-                    content_type,
-                    payload,
-                    callback,
-                })?
-                .recv_response()?
-        };
-        self.recorded_oracle_responses
-            .push(OracleResponse::Post(bytes.clone()));
+        let bytes =
+            if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
+                match response {
+                    OracleResponse::Post(bytes) => bytes,
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                }
+            } else {
+                let url = url.to_string();
+                self.execution_state_sender
+                    .send_request(|callback| ExecutionRequest::HttpPost {
+                        url,
+                        content_type,
+                        payload,
+                        callback,
+                    })?
+                    .recv_response()?
+            };
+        self.transaction_tracker
+            .add_oracle_response(OracleResponse::Post(bytes.clone()));
         Ok(bytes)
     }
 
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
-        if let Some(responses) = &mut self.replaying_oracle_responses {
-            match responses.next() {
-                Some(OracleResponse::Assert) => {}
-                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                None => return Err(ExecutionError::MissingOracleResponse),
+        if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
+            match response {
+                OracleResponse::Assert => {}
+                _ => return Err(ExecutionError::OracleResponseMismatch),
             }
         } else {
             ensure!(
@@ -1009,16 +977,16 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                 }
             );
         }
-        self.recorded_oracle_responses.push(OracleResponse::Assert);
+        self.transaction_tracker
+            .add_oracle_response(OracleResponse::Assert);
         Ok(())
     }
 
     fn read_blob_content(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError> {
-        if let Some(responses) = &mut self.replaying_oracle_responses {
-            match responses.next() {
-                Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == *blob_id => {}
-                Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                None => return Err(ExecutionError::MissingOracleResponse),
+        if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
+            match response {
+                OracleResponse::Blob(oracle_blob_id) if oracle_blob_id == *blob_id => {}
+                _ => return Err(ExecutionError::OracleResponseMismatch),
             }
         }
         let blob_content = self
@@ -1028,8 +996,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                 callback,
             })?
             .recv_response()?;
-        self.recorded_oracle_responses
-            .push(OracleResponse::Blob(*blob_id));
+        self.transaction_tracker
+            .add_oracle_response(OracleResponse::Blob(*blob_id));
         Ok(blob_content)
     }
 }
@@ -1051,42 +1019,31 @@ impl ContractSyncRuntime {
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: UserAction,
-        oracle_responses: Option<Vec<OracleResponse>>,
-    ) -> Result<
-        (
-            Vec<ExecutionOutcome>,
-            Vec<OracleResponse>,
-            ResourceController,
-        ),
-        ExecutionError,
-    > {
+        txn_tracker: TransactionTracker,
+    ) -> Result<(ResourceController, TransactionTracker), ExecutionError> {
         let executing_message = match &action {
             UserAction::Message(context, _) => Some(context.into()),
             _ => None,
         };
         let signer = action.signer();
         let height = action.height();
-        let next_message_index = action.next_message_index();
-        let replaying_oracle_responses = oracle_responses.map(Vec::into_iter);
         let mut runtime = SyncRuntime(Some(ContractSyncRuntimeHandle::from(
             SyncRuntimeInternal::new(
                 chain_id,
                 height,
                 local_time,
                 signer,
-                next_message_index,
                 executing_message,
                 execution_state_sender,
                 refund_grant_to,
                 resource_controller,
-                replaying_oracle_responses,
+                txn_tracker,
             ),
         )));
         let finalize_context = FinalizeContext {
             authenticated_signer: signer,
             chain_id,
             height,
-            next_message_index,
         };
         runtime.execute(application_id, signer, move |code| match action {
             UserAction::Instantiate(context, argument) => code.instantiate(context, argument),
@@ -1099,11 +1056,7 @@ impl ContractSyncRuntime {
         let runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        Ok((
-            runtime.execution_outcomes,
-            runtime.recorded_oracle_responses,
-            runtime.resource_controller,
-        ))
+        Ok((runtime.resource_controller, runtime.transaction_tracker))
     }
 
     /// Notifies all loaded applications that execution is finalizing.
@@ -1251,8 +1204,8 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             })?
             .recv_response()?;
         self.inner()
-            .execution_outcomes
-            .push(ExecutionOutcome::System(execution_outcome));
+            .transaction_tracker
+            .add_system_outcome(execution_outcome)?;
         Ok(())
     }
 
@@ -1276,8 +1229,8 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?
             .with_authenticated_signer(signer);
         self.inner()
-            .execution_outcomes
-            .push(ExecutionOutcome::System(execution_outcome));
+            .transaction_tracker
+            .add_system_outcome(execution_outcome)?;
         Ok(())
     }
 
@@ -1332,7 +1285,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let next_message_id = MessageId {
             chain_id: this.chain_id,
             height: this.height,
-            index: this.next_message_index()?,
+            index: this.transaction_tracker.next_message_index(),
         };
         let chain_id = ChainId::child(next_message_id);
         let [open_chain_message, subscribe_message] = this
@@ -1348,8 +1301,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let outcome = RawExecutionOutcome::default()
             .with_message(open_chain_message)
             .with_message(subscribe_message);
-        this.execution_outcomes
-            .push(ExecutionOutcome::System(outcome));
+        this.transaction_tracker.add_system_outcome(outcome)?;
         Ok(chain_id)
     }
 
@@ -1397,12 +1349,11 @@ impl ServiceSyncRuntime {
                 context.next_block_height,
                 context.local_time,
                 None,
-                0,
                 None,
                 execution_state_sender,
                 None,
                 ResourceController::default(),
-                None,
+                TransactionTracker::default(),
             )
             .into(),
         ));

@@ -20,7 +20,7 @@ use linera_views::views::{View, ViewError};
 #[cfg(with_testing)]
 use {
     linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::BytecodeId},
-    linera_chain::data_types::{Certificate, Event, Origin},
+    linera_chain::data_types::{Certificate, MessageBundle, Origin},
     linera_execution::BytecodeLocation,
 };
 
@@ -69,25 +69,25 @@ where
         Ok(Some(certificate))
     }
 
-    /// Searches for an event in one of the chain's inboxes.
+    /// Searches for a bundle in one of the chain's inboxes.
     #[cfg(with_testing)]
-    pub(super) async fn find_event_in_inbox(
+    pub(super) async fn find_bundle_in_inbox(
         &mut self,
         inbox_id: Origin,
         certificate_hash: CryptoHash,
         height: BlockHeight,
         index: u32,
-    ) -> Result<Option<Event>, WorkerError> {
+    ) -> Result<Option<MessageBundle>, WorkerError> {
         self.0.ensure_is_active()?;
 
         let mut inbox = self.0.chain.inboxes.try_load_entry_mut(&inbox_id).await?;
-        let mut events = inbox.added_events.iter_mut().await?;
+        let mut bundles = inbox.added_bundles.iter_mut().await?;
 
-        Ok(events
-            .find(|event| {
-                event.certificate_hash == certificate_hash
-                    && event.height == height
-                    && event.index == index
+        Ok(bundles
+            .find(|bundle| {
+                bundle.certificate_hash == certificate_hash
+                    && bundle.height == height
+                    && bundle.messages.iter().any(|msg| msg.index == index)
             })
             .cloned())
     }
@@ -224,7 +224,7 @@ where
         // Update the inboxes so that we can verify the provided hashed certificate values are
         // legitimately required.
         // Actual execution happens below, after other validity checks.
-        self.0.chain.remove_events_from_inboxes(block).await?;
+        self.0.chain.remove_bundles_from_inboxes(block).await?;
         // Verify that all required bytecode hashed certificate values and blobs are available, and no
         // unrelated ones provided.
         self.0
@@ -314,10 +314,10 @@ where
                 MessageAction::Accept
             };
             for (origin, inbox) in pairs {
-                for event in inbox.added_events.elements().await? {
+                for bundle in inbox.added_bundles.elements().await? {
                     messages.push(IncomingBundle {
                         origin: origin.clone(),
-                        event: event.clone(),
+                        bundle: bundle.clone(),
                         action,
                     });
                 }

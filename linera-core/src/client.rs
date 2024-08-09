@@ -31,7 +31,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
-        IncomingBundle, LiteCertificate, LiteVote, MessageAction,
+        IncomingBundle, LiteCertificate, LiteVote, MessageAction, PostedMessage,
     },
     manager::ChainManagerInfo,
     ChainError, ChainExecutionContext, ChainStateView,
@@ -570,8 +570,11 @@ where
         {
             let Some(index) = requested_pending_messages.iter().position(|message| {
                 matches!(
-                    message.event.message,
-                    Message::System(SystemMessage::OpenChain(_))
+                    message.bundle.messages.first(),
+                    Some(PostedMessage {
+                        message: Message::System(SystemMessage::OpenChain(_)),
+                        ..
+                    })
                 )
             }) else {
                 return Err(LocalNodeError::InactiveChain(self.chain_id).into());
@@ -591,28 +594,10 @@ where
                 break;
             }
             if self.options.message_policy.is_reject() {
-                if message.event.is_skippable() {
+                if message.bundle.is_skippable() {
                     continue;
-                } else if message.event.is_tracked() {
+                } else if message.bundle.is_tracked() {
                     message.action = MessageAction::Reject;
-                }
-            }
-            if let Message::System(SystemMessage::RegisterApplications { applications }) =
-                &message.event.message
-            {
-                let chain_id = self.chain_id;
-                if applications
-                    .iter()
-                    .map(|application| {
-                        self.client
-                            .local_node
-                            .describe_application(chain_id, application.into())
-                    })
-                    .collect::<FuturesUnordered<_>>()
-                    .all(|result| async move { result.is_ok() })
-                    .await
-                {
-                    continue; // These applications are already registered; skip register message.
                 }
             }
             pending_messages.push(message);
@@ -1641,7 +1626,7 @@ where
                         .incoming_bundles
                         .get_mut(*index as usize)
                         .expect("Message at given index should exist");
-                    if message.event.is_protected() {
+                    if message.bundle.is_protected() {
                         error!("Protected incoming message failed to execute locally: {message:?}");
                     } else {
                         // Reject the faulty message from the block and continue.
@@ -1973,7 +1958,7 @@ where
         let local_time = self.storage_client().clock().current_time();
         incoming_bundles
             .iter()
-            .map(|msg| msg.event.timestamp)
+            .map(|msg| msg.bundle.timestamp)
             .max()
             .map_or(local_time, |timestamp| timestamp.max(local_time))
             .max(self.state().timestamp)

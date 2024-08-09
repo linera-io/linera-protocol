@@ -18,23 +18,24 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{data_types::Event, ChainError, Origin};
+use crate::{data_types::MessageBundle, ChainError, Origin};
 
 #[cfg(test)]
 #[path = "unit_tests/inbox_tests.rs"]
 mod inbox_tests;
 
-/// The state of a inbox.
-/// * An inbox is used to track events received and executed locally.
-/// * An `Event` consists of a logical cursor `(height, index)` and some message content `message`.
-/// * On the surface, an inbox looks like a FIFO queue: the main APIs are `add_event` and
-///   `remove_event`.
-/// * However, events can also be removed before they are added. When this happens,
-///   the events removed by anticipation are tracked in a separate queue. Any event added
-///   later will be required to match the first removed event and so on.
-/// * The cursors of added events (resp. removed events) must be increasing over time.
-/// * Reconciliation of added and removed events is allowed to skip some added events.
-///   However, the opposite is not true: every removed event must be eventually added.
+/// The state of an inbox.
+/// * An inbox is used to track bundles received and executed locally.
+/// * A `MessageBundle` consists of a logical cursor `(height, index)` and some message
+///   content `messages`.
+/// * On the surface, an inbox looks like a FIFO queue: the main APIs are `add_bundle` and
+///   `remove_bundle`.
+/// * However, bundles can also be removed before they are added. When this happens,
+///   the bundles removed by anticipation are tracked in a separate queue. Any bundle added
+///   later will be required to match the first removed bundle and so on.
+/// * The cursors of added bundles (resp. removed bundles) must be increasing over time.
+/// * Reconciliation of added and removed bundles is allowed to skip some added bundles.
+///   However, the opposite is not true: every removed bundle must be eventually added.
 #[derive(Debug, ClonableView, View, async_graphql::SimpleObject)]
 pub struct InboxStateView<C>
 where
@@ -45,11 +46,11 @@ where
     pub next_cursor_to_add: RegisterView<C, Cursor>,
     /// We have already removed all the messages below this height and index.
     pub next_cursor_to_remove: RegisterView<C, Cursor>,
-    /// These events have been added and are waiting to be removed.
-    pub added_events: QueueView<C, Event>,
-    /// These events have been removed by anticipation and are waiting to be added.
-    /// At least one of `added_events` and `removed_events` should be empty.
-    pub removed_events: QueueView<C, Event>,
+    /// These bundles have been added and are waiting to be removed.
+    pub added_bundles: QueueView<C, MessageBundle>,
+    /// These bundles have been removed by anticipation and are waiting to be added.
+    /// At least one of `added_bundles` and `removed_bundles` should be empty.
+    pub removed_bundles: QueueView<C, MessageBundle>,
 }
 
 #[derive(
@@ -77,20 +78,29 @@ pub(crate) enum InboxError {
     ViewError(#[from] ViewError),
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
-    #[error("Cannot reconcile {event:?} with {previous_event:?}")]
-    UnexpectedEvent { event: Event, previous_event: Event },
-    #[error("{event:?} is out of order. Block and height should be at least: {next_cursor:?}")]
-    IncorrectOrder { event: Event, next_cursor: Cursor },
-    #[error("{event:?} cannot be skipped: it must be received before the next messages from the same origin")]
-    UnskippableEvent { event: Event },
+    #[error("Cannot reconcile {bundle:?} with {previous_bundle:?}")]
+    UnexpectedBundle {
+        bundle: MessageBundle,
+        previous_bundle: MessageBundle,
+    },
+    #[error("{bundle:?} is out of order. Block and height should be at least: {next_cursor:?}")]
+    IncorrectOrder {
+        bundle: MessageBundle,
+        next_cursor: Cursor,
+    },
+    #[error(
+        "{bundle:?} cannot be skipped: it must be received before the next \
+        messages from the same origin"
+    )]
+    UnskippableBundle { bundle: MessageBundle },
 }
 
-impl From<&Event> for Cursor {
+impl From<&MessageBundle> for Cursor {
     #[inline]
-    fn from(event: &Event) -> Self {
+    fn from(bundle: &MessageBundle) -> Self {
         Self {
-            height: event.height,
-            index: event.index,
+            height: bundle.height,
+            index: bundle.transaction_index,
         }
     }
 }
@@ -111,28 +121,29 @@ impl From<(ChainId, Origin, InboxError)> for ChainError {
         match error {
             InboxError::ViewError(e) => ChainError::ViewError(e),
             InboxError::ArithmeticError(e) => ChainError::ArithmeticError(e),
-            InboxError::UnexpectedEvent {
-                event,
-                previous_event,
+            InboxError::UnexpectedBundle {
+                bundle,
+                previous_bundle,
             } => ChainError::UnexpectedMessage {
                 chain_id,
                 origin: origin.into(),
-                event,
-                previous_event,
+                bundle,
+                previous_bundle,
             },
-            InboxError::IncorrectOrder { event, next_cursor } => {
-                ChainError::IncorrectMessageOrder {
-                    chain_id,
-                    origin: origin.into(),
-                    event,
-                    next_height: next_cursor.height,
-                    next_index: next_cursor.index,
-                }
-            }
-            InboxError::UnskippableEvent { event } => ChainError::CannotSkipMessage {
+            InboxError::IncorrectOrder {
+                bundle,
+                next_cursor,
+            } => ChainError::IncorrectMessageOrder {
                 chain_id,
                 origin: origin.into(),
-                event,
+                bundle,
+                next_height: next_cursor.height,
+                next_index: next_cursor.index,
+            },
+            InboxError::UnskippableBundle { bundle } => ChainError::CannotSkipMessage {
+                chain_id,
+                origin: origin.into(),
+                bundle,
             },
         }
     }
@@ -143,8 +154,8 @@ where
     C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
 {
-    /// Converts the internal cursor for added events into an externally-visible block height.
-    /// This makes sense because the rest of the system always adds events one block at a time.
+    /// Converts the internal cursor for added bundles into an externally-visible block height.
+    /// This makes sense because the rest of the system always adds bundles one block at a time.
     pub fn next_block_height_to_receive(&self) -> Result<BlockHeight, ChainError> {
         let cursor = self.next_cursor_to_add.get();
         if cursor.index == 0 {
@@ -154,55 +165,58 @@ where
         }
     }
 
-    /// Consumes an event from the inbox.
+    /// Consumes an bundle from the inbox.
     ///
-    /// Returns `true` if the event was already known, i.e. it was present in `added_events`.
-    pub(crate) async fn remove_event(&mut self, event: &Event) -> Result<bool, InboxError> {
+    /// Returns `true` if the bundle was already known, i.e. it was present in `added_bundles`.
+    pub(crate) async fn remove_bundle(
+        &mut self,
+        bundle: &MessageBundle,
+    ) -> Result<bool, InboxError> {
         // Record the latest cursor.
-        let cursor = Cursor::from(event);
+        let cursor = Cursor::from(bundle);
         ensure!(
             cursor >= *self.next_cursor_to_remove.get(),
             InboxError::IncorrectOrder {
-                event: event.clone(),
+                bundle: bundle.clone(),
                 next_cursor: *self.next_cursor_to_remove.get(),
             }
         );
-        // Discard added events with lower cursors (if any).
-        while let Some(previous_event) = self.added_events.front().await? {
-            if Cursor::from(&previous_event) >= cursor {
+        // Discard added bundles with lower cursors (if any).
+        while let Some(previous_bundle) = self.added_bundles.front().await? {
+            if Cursor::from(&previous_bundle) >= cursor {
                 break;
             }
             ensure!(
-                previous_event.is_skippable(),
-                InboxError::UnskippableEvent {
-                    event: previous_event
+                previous_bundle.is_skippable(),
+                InboxError::UnskippableBundle {
+                    bundle: previous_bundle
                 }
             );
-            self.added_events.delete_front();
-            tracing::trace!("Skipping previously received event {:?}", previous_event);
+            self.added_bundles.delete_front();
+            tracing::trace!("Skipping previously received bundle {:?}", previous_bundle);
         }
-        // Reconcile the event with the next added event, or mark it as removed.
-        let already_known = match self.added_events.front().await? {
-            Some(previous_event) => {
-                // Rationale: If the two cursors are equal, then the events should match.
+        // Reconcile the bundle with the next added bundle, or mark it as removed.
+        let already_known = match self.added_bundles.front().await? {
+            Some(previous_bundle) => {
+                // Rationale: If the two cursors are equal, then the bundles should match.
                 // Otherwise, at this point we know that `self.next_cursor_to_add >
-                // Cursor::from(&previous_event) > cursor`. Notably, `event` will never be
+                // Cursor::from(&previous_bundle) > cursor`. Notably, `bundle` will never be
                 // added in the future. Therefore, we should fail instead of adding
-                // it to `self.removed_events`.
+                // it to `self.removed_bundles`.
                 ensure!(
-                    event == &previous_event,
-                    InboxError::UnexpectedEvent {
-                        previous_event,
-                        event: event.clone(),
+                    bundle == &previous_bundle,
+                    InboxError::UnexpectedBundle {
+                        previous_bundle,
+                        bundle: bundle.clone(),
                     }
                 );
-                self.added_events.delete_front();
-                tracing::trace!("Consuming event {:?}", event);
+                self.added_bundles.delete_front();
+                tracing::trace!("Consuming bundle {:?}", bundle);
                 true
             }
             None => {
-                tracing::trace!("Marking event as expected: {:?}", event);
-                self.removed_events.push_back(event.clone());
+                tracing::trace!("Marking bundle as expected: {:?}", bundle);
+                self.removed_bundles.push_back(bundle.clone());
                 false
             }
         };
@@ -210,42 +224,42 @@ where
         Ok(already_known)
     }
 
-    /// Pushes an event to the inbox. The verifications should not fail in production unless
+    /// Pushes an bundle to the inbox. The verifications should not fail in production unless
     /// many validators are faulty.
     ///
-    /// Returns `true` if the event was new, `false` if it was already in `removed_events`.
-    pub(crate) async fn add_event(&mut self, event: Event) -> Result<bool, InboxError> {
+    /// Returns `true` if the bundle was new, `false` if it was already in `removed_bundles`.
+    pub(crate) async fn add_bundle(&mut self, bundle: MessageBundle) -> Result<bool, InboxError> {
         // Record the latest cursor.
-        let cursor = Cursor::from(&event);
+        let cursor = Cursor::from(&bundle);
         ensure!(
             cursor >= *self.next_cursor_to_add.get(),
             InboxError::IncorrectOrder {
-                event: event.clone(),
+                bundle: bundle.clone(),
                 next_cursor: *self.next_cursor_to_add.get(),
             }
         );
         // Find if the message was removed ahead of time.
-        let newly_added = match self.removed_events.front().await? {
-            Some(previous_event) => {
-                if Cursor::from(&previous_event) == cursor {
+        let newly_added = match self.removed_bundles.front().await? {
+            Some(previous_bundle) => {
+                if Cursor::from(&previous_bundle) == cursor {
                     // We already executed this message by anticipation. Remove it from
                     // the queue.
                     ensure!(
-                        event == previous_event,
-                        InboxError::UnexpectedEvent {
-                            previous_event,
-                            event,
+                        bundle == previous_bundle,
+                        InboxError::UnexpectedBundle {
+                            previous_bundle,
+                            bundle,
                         }
                     );
-                    self.removed_events.delete_front();
+                    self.removed_bundles.delete_front();
                 } else {
-                    // The receiver has already executed a later event from the same
+                    // The receiver has already executed a later bundle from the same
                     // sender ahead of time so we should skip this one.
                     ensure!(
-                        cursor < Cursor::from(&previous_event) && event.is_skippable(),
-                        InboxError::UnexpectedEvent {
-                            previous_event,
-                            event,
+                        cursor < Cursor::from(&previous_bundle) && bundle.is_skippable(),
+                        InboxError::UnexpectedBundle {
+                            previous_bundle,
+                            bundle,
                         }
                     );
                 }
@@ -253,7 +267,7 @@ where
             }
             None => {
                 // Otherwise, schedule the message for execution.
-                self.added_events.push_back(event);
+                self.added_bundles.push_back(bundle);
                 true
             }
         };

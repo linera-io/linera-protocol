@@ -383,6 +383,8 @@ async fn read_publish_bytecode_operation(
     storage: &impl Storage,
     application_description: &UserApplicationDescription,
 ) -> Result<SystemOperation, ExecutionError> {
+    use linera_base::data_types::ArithmeticError;
+
     let UserApplicationDescription {
         bytecode_id,
         bytecode_location,
@@ -398,13 +400,15 @@ async fn read_publish_bytecode_operation(
             _ => error.into(),
         })?
         .into_inner();
-    let operations = match value {
-        CertificateValue::ConfirmedBlock { executed_block, .. } => executed_block.block.operations,
+    let block = match value {
+        CertificateValue::ConfirmedBlock { executed_block, .. } => executed_block.block,
         _ => return Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
     };
-    let index = usize::try_from(bytecode_location.operation_index)
-        .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;
-    match operations.into_iter().nth(index) {
+    let index = usize::try_from(bytecode_location.transaction_index)
+        .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?
+        .checked_sub(block.incoming_bundles.len())
+        .ok_or(ArithmeticError::Overflow)?;
+    match block.operations.into_iter().nth(index) {
         Some(Operation::System(operation @ SystemOperation::PublishBytecode { .. })) => {
             Ok(operation)
         }

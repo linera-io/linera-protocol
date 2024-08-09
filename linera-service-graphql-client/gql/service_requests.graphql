@@ -49,10 +49,10 @@ query ChainInbox($chainId: ChainId!, $origin: Origin!) {
             height
             index
           }
-          addedEvents {
+          addedBundles {
             entries
           }
-          removedEvents {
+          removedBundles {
             entries
           }
         }
@@ -111,8 +111,8 @@ query Chain(
             height
             index
           }
-          addedEvents { entries }
-          removedEvents { entries }
+          addedBundles { entries }
+          removedBundles { entries }
         }
       }
     }
@@ -166,7 +166,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           previousBlockHash
           incomingBundles {
             origin
-            event
+            bundle
             action
           }
           operations
@@ -211,7 +211,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
           previousBlockHash
           incomingBundles {
             origin
-            event
+            bundle
             action
           }
           operations

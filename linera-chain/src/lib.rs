@@ -14,7 +14,7 @@ mod outbox;
 pub mod test;
 
 pub use chain::ChainStateView;
-use data_types::{Event, Origin};
+use data_types::{MessageBundle, Origin, PostedMessage};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
@@ -49,48 +49,51 @@ pub enum ChainError {
     },
     #[error(
         "Message in block proposed to {chain_id:?} does not match the previously received messages from \
-        origin {origin:?}: was {event:?} instead of {previous_event:?}"
+        origin {origin:?}: was {bundle:?} instead of {previous_bundle:?}"
     )]
     UnexpectedMessage {
         chain_id: ChainId,
         origin: Box<Origin>,
-        event: Event,
-        previous_event: Event,
+        bundle: MessageBundle,
+        previous_bundle: MessageBundle,
     },
     #[error(
         "Message in block proposed to {chain_id:?} is out of order compared to previous messages \
-         from origin {origin:?}: {event:?}. Block and height should be at least: \
+         from origin {origin:?}: {bundle:?}. Block and height should be at least: \
          {next_height}, {next_index}"
     )]
     IncorrectMessageOrder {
         chain_id: ChainId,
         origin: Box<Origin>,
-        event: Event,
+        bundle: MessageBundle,
         next_height: BlockHeight,
         next_index: u32,
     },
-    #[error("Block proposed to {chain_id:?} is attempting to reject protected message {event:?}")]
+    #[error(
+        "Block proposed to {chain_id:?} is attempting to reject protected message \
+        {posted_message:?}"
+    )]
     CannotRejectMessage {
         chain_id: ChainId,
         origin: Box<Origin>,
-        event: Event,
+        posted_message: PostedMessage,
     },
     #[error(
-        "Block proposed to {chain_id:?} is attempting to skip a message \
-         that cannot be skipped: {event:?}"
+        "Block proposed to {chain_id:?} is attempting to skip a message bundle \
+         that cannot be skipped: {bundle:?}"
     )]
     CannotSkipMessage {
         chain_id: ChainId,
         origin: Box<Origin>,
-        event: Event,
+        bundle: MessageBundle,
     },
     #[error(
-        "Incoming message in block proposed to {chain_id:?} has timestamp {message_timestamp:}, \
-         which is later than the block timestamp {block_timestamp:}."
+        "Incoming message bundle in block proposed to {chain_id:?} has timestamp \
+        {bundle_timestamp:}, which is later than the block timestamp {block_timestamp:}."
     )]
-    IncorrectEventTimestamp {
+    IncorrectBundleTimestamp {
         chain_id: ChainId,
-        message_timestamp: Timestamp,
+        bundle_timestamp: Timestamp,
         block_timestamp: Timestamp,
     },
     #[error("The signature was not created by a valid entity")]
