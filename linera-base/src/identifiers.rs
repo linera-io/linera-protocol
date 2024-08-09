@@ -169,11 +169,10 @@ pub enum BlobType {
 
 impl Display for BlobType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            BlobType::Data => write!(f, "Data")?,
-        };
-
-        Ok(())
+        match serde_json::to_string(self) {
+            Ok(s) => write!(f, "{}", s),
+            Err(_) => Err(fmt::Error),
+        }
     }
 }
 
@@ -181,10 +180,7 @@ impl FromStr for BlobType {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "Data" => Ok(BlobType::Data),
-            _ => Err(anyhow!("Invalid blob type: {}", s)),
-        }
+        serde_json::from_str(s).with_context(|| format!("Invalid BlobType: {}", s))
     }
 }
 
