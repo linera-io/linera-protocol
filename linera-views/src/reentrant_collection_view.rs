@@ -597,19 +597,20 @@ where
         let mut keys_to_check = Vec::new();
         let mut keys_to_check_metadata = Vec::new();
 
-        let mut cached_entries = self.cached_entries.lock().unwrap();
-
-        for (position, short_key) in short_keys.into_iter().enumerate() {
-            if let Some(update) = self.updates.get(&short_key) {
-                if let Update::Set(view) = update {
+        {
+            let cached_entries = self.cached_entries.lock().unwrap();
+            for (position, short_key) in short_keys.into_iter().enumerate() {
+                if let Some(update) = self.updates.get(&short_key) {
+                    if let Update::Set(view) = update {
+                        results[position] = Some((short_key, view.clone()));
+                    }
+                } else if let Some(view) = cached_entries.get(&short_key) {
                     results[position] = Some((short_key, view.clone()));
+                } else if !self.delete_storage_first {
+                    let key_index = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
+                    keys_to_check.push(key_index);
+                    keys_to_check_metadata.push((position, short_key));
                 }
-            } else if let Some(view) = cached_entries.get(&short_key) {
-                results[position] = Some((short_key, view.clone()));
-            } else if !self.delete_storage_first {
-                let key_index = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
-                keys_to_check.push(key_index);
-                keys_to_check_metadata.push((position, short_key));
             }
         }
 
@@ -632,6 +633,7 @@ where
                 keys_to_load.extend(W::pre_load(context)?);
             }
             let values = self.context.read_multi_values_bytes(keys_to_load).await?;
+            let mut cached_entries = self.cached_entries.lock().unwrap();
             for (loaded_values, (position, short_key, context)) in
                 values.chunks_exact(W::NUM_INIT_KEYS).zip(entries_to_load)
             {
