@@ -115,6 +115,7 @@ impl Runnable for Job {
                 sender,
                 recipient,
                 amount,
+                user_data,
             } => {
                 let chain_client = context.make_chain_client(sender.chain_id);
                 info!(
@@ -125,8 +126,9 @@ impl Runnable for Job {
                 let certificate = context
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
+                        let value = user_data.clone();
                         async move {
-                            let data = UserData::default();
+                            let data = UserData::from_option_string(value);
                             chain_client
                                 .transfer_to_account(sender.owner, amount, recipient, data)
                                 .await

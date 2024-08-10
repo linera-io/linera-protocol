@@ -258,6 +258,10 @@ pub enum ClientCommand {
 
         /// Amount to transfer
         amount: Amount,
+
+        /// User Data
+        #[arg(long = "data")]
+        user_data: Option<String>,
     },
 
     /// Open (i.e. activate) a new chain deriving the UID from an existing one.
