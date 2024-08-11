@@ -362,15 +362,18 @@ impl UserData {
             Some(s) => {
                 // Convert the String to a Vec<u8>
                 let vec = s.into_bytes();
+                if vec.len() <= 32 {
+                    // Create an array from the Vec<u8>
+                    let mut array = [b' '; 32];
 
-                // Initialize the array with spaces
-                let mut array = [b' '; 32];
+                    // Copy bytes from the vector into the array
+                    let len = vec.len().min(32);
+                    array[..len].copy_from_slice(&vec[..len]);
 
-                // Copy bytes from Vec<u8> to the array
-                let len = vec.len().min(32);
-                array[..len].copy_from_slice(&vec[..len]);
-
-                Some(array)
+                    Some(array)
+                } else {
+                    None
+                }
             }
             None => None,
         };
