@@ -120,7 +120,7 @@ impl Runnable for Job {
                 let data = match UserData::from_option_string(user_data) {
                     Ok(data) => data,
                     Err(bytes_len) => bail!(
-                        "Failed to parse user data({} bytes) exceeding max length(32 bytes)",
+                        "Failed to parse user data ({} bytes) exceeding max length (32 bytes)",
                         bytes_len
                     ),
                 };
