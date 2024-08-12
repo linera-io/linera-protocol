@@ -117,6 +117,13 @@ impl Runnable for Job {
                 amount,
                 user_data,
             } => {
+                let data = match UserData::from_option_string(user_data) {
+                    Ok(data) => data,
+                    Err(bytes_len) => bail!(
+                        "Failed to parse user data({} bytes) exceeding max length(32 bytes)",
+                        bytes_len
+                    ),
+                };
                 let chain_client = context.make_chain_client(sender.chain_id);
                 info!(
                     "Starting transfer of {} native tokens from {} to {}",
@@ -126,11 +133,10 @@ impl Runnable for Job {
                 let certificate = context
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
-                        let value = user_data.clone();
+                        let user_data = data.clone();
                         async move {
-                            let data = UserData::from_option_string(value);
                             chain_client
-                                .transfer_to_account(sender.owner, amount, recipient, data)
+                                .transfer_to_account(sender.owner, amount, recipient, user_data)
                                 .await
                         }
                     })

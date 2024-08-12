@@ -356,7 +356,7 @@ impl Recipient {
 pub struct UserData(pub Option<[u8; 32]>);
 
 impl UserData {
-    pub fn from_option_string(opt_str: Option<String>) -> Self {
+    pub fn from_option_string(opt_str: Option<String>) -> Result<Self, usize> {
         // Convert the Option<String> to Option<[u8; 32]>
         let option_array = match opt_str {
             Some(s) => {
@@ -372,14 +372,14 @@ impl UserData {
 
                     Some(array)
                 } else {
-                    None
+                    return Err(vec.len());
                 }
             }
             None => None,
         };
 
         // Return the UserData with the converted Option<[u8; 32]>
-        UserData(option_array)
+        Ok(UserData(option_array))
     }
 }
 
