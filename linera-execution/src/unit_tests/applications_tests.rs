@@ -41,10 +41,10 @@ fn app_description(index: u32, deps: Vec<u32>) -> UserApplicationDescription {
     }
 }
 
-fn location(operation_index: u32) -> BytecodeLocation {
+fn location(transaction_index: u32) -> BytecodeLocation {
     BytecodeLocation {
         certificate_hash: CryptoHash::test_hash("certificate"),
-        transaction_index: operation_index,
+        transaction_index,
     }
 }
 

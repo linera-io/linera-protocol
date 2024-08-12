@@ -468,7 +468,7 @@ type InboxStateView {
 }
 
 """
-A message received from a block of another chain.
+A bundle of cross-chain messages.
 """
 type IncomingBundle {
 	"""

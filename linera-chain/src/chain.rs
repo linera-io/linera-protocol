@@ -765,8 +765,8 @@ where
         let mut messages = Vec::new();
         for (txn_index, transaction) in block.transactions() {
             let chain_execution_context = match transaction {
-                Transaction::Messages(_) => ChainExecutionContext::IncomingBundle(txn_index),
-                Transaction::Operation(_) => ChainExecutionContext::Operation(txn_index),
+                Transaction::ReceiveMessages(_) => ChainExecutionContext::IncomingBundle(txn_index),
+                Transaction::ExecuteOperation(_) => ChainExecutionContext::Operation(txn_index),
             };
             let with_context =
                 |error: ExecutionError| ChainError::ExecutionError(error, chain_execution_context);
@@ -777,7 +777,7 @@ where
             };
             let mut txn_tracker = TransactionTracker::new(next_message_index, maybe_responses);
             match transaction {
-                Transaction::Messages(incoming_bundle) => {
+                Transaction::ReceiveMessages(incoming_bundle) => {
                     for (message_id, posted_message) in incoming_bundle.messages_with_id() {
                         self.execute_message_in_block(
                             message_id,
@@ -792,7 +792,7 @@ where
                         .await?;
                     }
                 }
-                Transaction::Operation(operation) => {
+                Transaction::ExecuteOperation(operation) => {
                     #[cfg(with_metrics)]
                     let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
                     let context = OperationContext {
@@ -826,14 +826,14 @@ where
                 .process_execution_outcomes(block.height, txn_outcomes)
                 .await?;
             match transaction {
-                Transaction::Operation(operation) => {
+                Transaction::ExecuteOperation(operation) => {
                     resource_controller
                         .with_state(&mut self.execution_state)
                         .await?
                         .track_operation(operation)
                         .map_err(with_context)?;
                 }
-                Transaction::Messages(incoming_bundle) => {
+                Transaction::ReceiveMessages(incoming_bundle) => {
                     if let MessageAction::Accept = incoming_bundle.action {
                         for message_out in &txn_messages {
                             resource_controller
