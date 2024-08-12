@@ -259,7 +259,7 @@ pub enum ClientCommand {
         /// Amount to transfer
         amount: Amount,
 
-        /// User Data
+        /// User Data (should be a string whose bytes are at most 32 in length)
         #[arg(long = "data")]
         user_data: Option<String>,
     },
