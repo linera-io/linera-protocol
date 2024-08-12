@@ -1203,37 +1203,35 @@ impl Certificate {
     /// recipient. Messages originating from different transactions of the original block
     /// are kept in separate bundles. If the medium is a channel, does not verify that the
     /// recipient is actually subscribed to that channel.
-    pub fn message_bundles_for(
-        &self,
-        medium: &Medium,
+    pub fn message_bundles_for<'a>(
+        &'a self,
+        medium: &'a Medium,
         recipient: ChainId,
-    ) -> Vec<(Epoch, MessageBundle)> {
-        let Some(executed_block) = self.value().executed_block() else {
-            return Vec::new();
-        };
-        let mut bundles = Vec::new();
+    ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
         let mut index = 0u32;
-        for (transaction_index, txn_messages) in (0u32..).zip(executed_block.messages()) {
-            let messages = (index..)
-                .zip(txn_messages)
-                .filter(|(_, message)| message.has_destination(medium, recipient))
-                .map(|(idx, message)| message.clone().into_posted(idx))
-                .collect::<Vec<_>>();
-            index += txn_messages.len() as u32;
-            if !messages.is_empty() {
-                bundles.push((
-                    executed_block.block.epoch,
-                    MessageBundle {
-                        height: executed_block.block.height,
-                        timestamp: executed_block.block.timestamp,
-                        certificate_hash: self.hash(),
-                        transaction_index,
-                        messages,
-                    },
-                ));
-            }
-        }
-        bundles
+        let maybe_executed_block = self.value().executed_block().into_iter();
+        maybe_executed_block.flat_map(move |executed_block| {
+            (0u32..).zip(executed_block.messages()).filter_map(
+                move |(transaction_index, txn_messages)| {
+                    let messages = (index..)
+                        .zip(txn_messages)
+                        .filter(|(_, message)| message.has_destination(medium, recipient))
+                        .map(|(idx, message)| message.clone().into_posted(idx))
+                        .collect::<Vec<_>>();
+                    index += txn_messages.len() as u32;
+                    (!messages.is_empty()).then(|| {
+                        let bundle = MessageBundle {
+                            height: executed_block.block.height,
+                            timestamp: executed_block.block.timestamp,
+                            certificate_hash: self.hash(),
+                            transaction_index,
+                            messages,
+                        };
+                        (executed_block.block.epoch, bundle)
+                    })
+                },
+            )
+        })
     }
 
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {

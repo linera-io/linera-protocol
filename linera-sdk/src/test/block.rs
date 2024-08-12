@@ -197,7 +197,6 @@ impl BlockBuilder {
         };
         let bundles = certificate
             .message_bundles_for(medium, self.block.chain_id)
-            .into_iter()
             .map(|(_epoch, bundle)| IncomingBundle {
                 origin: origin.clone(),
                 bundle,

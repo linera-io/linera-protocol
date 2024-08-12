@@ -389,7 +389,7 @@ fn update_recipient_direct(recipient: ChainId, certificate: &Certificate) -> Cro
     CrossChainRequest::UpdateRecipient {
         sender,
         recipient,
-        bundle_vecs: vec![(Medium::Direct, bundles)],
+        bundle_vecs: vec![(Medium::Direct, bundles.collect())],
     }
 }
 
@@ -3046,10 +3046,18 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         Some(&certificate2),
     )
     .await;
-    let bundles0 = certificate0.message_bundles_for(&Medium::Direct, id1);
-    let bundles1 = certificate1.message_bundles_for(&Medium::Direct, id1);
-    let bundles2 = certificate2.message_bundles_for(&Medium::Direct, id1);
-    let bundles3 = certificate3.message_bundles_for(&Medium::Direct, id1);
+    let bundles0 = certificate0
+        .message_bundles_for(&Medium::Direct, id1)
+        .collect::<Vec<_>>();
+    let bundles1 = certificate1
+        .message_bundles_for(&Medium::Direct, id1)
+        .collect::<Vec<_>>();
+    let bundles2 = certificate2
+        .message_bundles_for(&Medium::Direct, id1)
+        .collect::<Vec<_>>();
+    let bundles3 = certificate3
+        .message_bundles_for(&Medium::Direct, id1)
+        .collect::<Vec<_>>();
     let bundles01 = Vec::from_iter(bundles0.iter().cloned().chain(bundles1.iter().cloned()));
     let bundles012 = Vec::from_iter(bundles01.iter().cloned().chain(bundles2.iter().cloned()));
     let bundles0123 = Vec::from_iter(bundles012.iter().cloned().chain(bundles3.iter().cloned()));
