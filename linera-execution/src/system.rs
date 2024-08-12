@@ -355,6 +355,34 @@ impl Recipient {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
 
+impl UserData {
+    pub fn from_option_string(opt_str: Option<String>) -> Result<Self, usize> {
+        // Convert the Option<String> to Option<[u8; 32]>
+        let option_array = match opt_str {
+            Some(s) => {
+                // Convert the String to a Vec<u8>
+                let vec = s.into_bytes();
+                if vec.len() <= 32 {
+                    // Create an array from the Vec<u8>
+                    let mut array = [b' '; 32];
+
+                    // Copy bytes from the vector into the array
+                    let len = vec.len().min(32);
+                    array[..len].copy_from_slice(&vec[..len]);
+
+                    Some(array)
+                } else {
+                    return Err(vec.len());
+                }
+            }
+            None => None,
+        };
+
+        // Return the UserData with the converted Option<[u8; 32]>
+        Ok(UserData(option_array))
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum SystemExecutionError {
     #[error(transparent)]

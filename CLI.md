@@ -140,7 +140,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
 Transfer funds
 
-**Usage:** `linera transfer --from <SENDER> --to <RECIPIENT> <AMOUNT>`
+**Usage:** `linera transfer [OPTIONS] --from <SENDER> --to <RECIPIENT> <AMOUNT>`
 
 ###### **Arguments:**
 
@@ -150,6 +150,7 @@ Transfer funds
 
 * `--from <SENDER>` — Sending chain ID (must be one of our chains)
 * `--to <RECIPIENT>` — Recipient account
+* `--data <USER_DATA>` — User Data (should be a string whose bytes are at most 32 in length)
 
 
 
