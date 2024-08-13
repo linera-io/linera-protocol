@@ -479,7 +479,7 @@ async fn run(options: ServerOptions) {
             committee,
             testing_prng_seed,
         } => {
-            let mut config_validators = Vec::new();
+            let mut config_validators = Vec::with_capacity(validators.len());
             let mut rng = Box::<dyn CryptoRng>::from(testing_prng_seed);
             for options_path in validators {
                 let options_string = fs_err::tokio::read_to_string(options_path)

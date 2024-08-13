@@ -109,7 +109,7 @@ async fn benchmark_with_fungible(
 
     info!("Starting the node services and subscribing to the publisher chain.");
     let publisher_chain_id = publisher.default_chain().context("missing default chain")?;
-    let mut services = Vec::new();
+    let mut services = Vec::with_capacity(clients.len());
     for client in &clients {
         let free_port = random_free_tcp_port().context("no free TCP port")?;
         let chain_id = client.default_chain().context("missing default chain")?;

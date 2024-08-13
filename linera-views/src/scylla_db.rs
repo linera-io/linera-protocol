@@ -255,7 +255,11 @@ impl ScyllaDbClient {
     async fn write_batch_internal(&self, batch: UnorderedBatch) -> Result<(), ScyllaDbStoreError> {
         let session = &self.session;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Logged);
-        let mut batch_values = Vec::new();
+        let mut batch_values = Vec::with_capacity(
+            batch.key_prefix_deletions.len()
+                + batch.simple_unordered_batch.deletions.len()
+                + batch.simple_unordered_batch.insertions.len(),
+        );
         let query1 = &self.write_batch_delete_prefix_unbounded;
         let query2 = &self.write_batch_delete_prefix_bounded;
         for key_prefix in batch.key_prefix_deletions {

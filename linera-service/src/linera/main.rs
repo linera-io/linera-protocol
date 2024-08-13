@@ -1399,7 +1399,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
             )?;
             let mut genesis_config_ref = Persist::mutate(&mut genesis_config);
             let mut rng = Box::<dyn CryptoRng>::from(*testing_prng_seed);
-            let mut chains = vec![];
+            let mut chains = Vec::with_capacity(*num_other_initial_chains as usize);
             for i in 0..*num_other_initial_chains {
                 let description = ChainDescription::Root(i);
                 // Create keys.

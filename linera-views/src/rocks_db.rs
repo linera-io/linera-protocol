@@ -106,7 +106,7 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
         let size = keys.len();
         let mut results = vec![false; size];
-        let mut handles = Vec::new();
+        let mut handles = Vec::with_capacity(size);
         for key in keys.clone() {
             ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
             let client = self.clone();
@@ -117,8 +117,9 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
             .await
             .into_iter()
             .collect::<Result<_, _>>()?;
-        let mut indices = Vec::new();
-        let mut keys_red = Vec::new();
+        let count_true = may_results.iter().filter(|&&x| x).count();
+        let mut indices = Vec::with_capacity(count_true);
+        let mut keys_red = Vec::with_capacity(count_true);
         for (i, key) in keys.into_iter().enumerate() {
             if may_results[i] {
                 indices.push(i);
@@ -290,8 +291,8 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbStoreError> {
-        let entries = std::fs::read_dir(config.path_buf.clone())?;
-        let mut namespaces = Vec::new();
+        let mut entries = std::fs::read_dir(config.path_buf.clone())?;
+        let mut namespaces = Vec::with_capacity(entries.by_ref().count());
         for entry in entries {
             let entry = entry?;
             if !entry.file_type()?.is_dir() {

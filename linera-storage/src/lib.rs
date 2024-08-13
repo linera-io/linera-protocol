@@ -231,7 +231,7 @@ pub trait Storage: Sized {
             }));
         }
         let results = future::join_all(tasks).await;
-        let mut certs = Vec::new();
+        let mut certs = Vec::with_capacity(results.len());
         for result in results {
             certs.push(result.expect("storage access should not cancel or crash")?);
         }

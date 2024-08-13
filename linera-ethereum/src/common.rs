@@ -199,7 +199,7 @@ pub fn parse_log(
         .split(',')
         .map(|s| s.to_string())
         .collect::<Vec<_>>();
-    let mut values = Vec::new();
+    let mut values = Vec::with_capacity(ethereum_types.len());
     let mut topic_index = 0;
     let mut data_index = 0;
     let mut vec = [0_u8; 32];

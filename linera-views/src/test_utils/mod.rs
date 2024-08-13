@@ -143,7 +143,7 @@ pub fn get_small_key_space<R: Rng>(rng: &mut R, key_prefix: &[u8], n: usize) -> 
 
 /// Builds a random k element subset of n
 pub fn get_random_kset<R: Rng>(rng: &mut R, n: usize, k: usize) -> Vec<usize> {
-    let mut values = Vec::new();
+    let mut values = Vec::with_capacity(n);
     for u in 0..n {
         values.push(u);
     }
@@ -163,7 +163,7 @@ pub fn get_random_key_values_prefix<R: Rng>(
     num_entries: usize,
 ) -> Vec<(Vec<u8>, Vec<u8>)> {
     loop {
-        let mut v_ret = Vec::new();
+        let mut v_ret = Vec::with_capacity(num_entries);
         let mut vector_set = HashSet::new();
         for _ in 0..num_entries {
             let v1 = get_random_byte_vector(rng, &key_prefix, len_key);

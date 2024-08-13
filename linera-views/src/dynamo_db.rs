@@ -683,7 +683,7 @@ impl KeyIterable<DynamoDbStoreError> for DynamoDbKeys {
 
     fn iterator(&self) -> Self::Iterator<'_> {
         let pos = 0;
-        let mut iters = Vec::new();
+        let mut iters = Vec::with_capacity(self.result_queries.responses.len());
         for response in &self.result_queries.responses {
             let iter = response.items.iter().flatten();
             iters.push(iter);
@@ -771,7 +771,7 @@ impl KeyValueIterable<DynamoDbStoreError> for DynamoDbKeyValues {
 
     fn iterator(&self) -> Self::Iterator<'_> {
         let pos = 0;
-        let mut iters = Vec::new();
+        let mut iters = Vec::with_capacity(self.result_queries.responses.len());
         for response in &self.result_queries.responses {
             let iter = response.items.iter().flatten();
             iters.push(iter);
@@ -785,7 +785,7 @@ impl KeyValueIterable<DynamoDbStoreError> for DynamoDbKeyValues {
 
     fn into_iterator_owned(self) -> Self::IteratorOwned {
         let pos = 0;
-        let mut iters = Vec::new();
+        let mut iters = Vec::with_capacity(self.result_queries.responses.len());
         for response in self.result_queries.responses.into_iter() {
             let iter = response.items.into_iter().flatten();
             iters.push(iter);
@@ -820,7 +820,7 @@ impl ReadableKeyValueStore<DynamoDbStoreError> for DynamoDbStoreInternal {
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, DynamoDbStoreError> {
-        let mut handles = Vec::new();
+        let mut handles = Vec::with_capacity(keys.len());
         for key in keys {
             ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbStoreError::KeyTooLong);
             let key_db = build_key(key);
@@ -837,7 +837,7 @@ impl ReadableKeyValueStore<DynamoDbStoreError> for DynamoDbStoreInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbStoreError> {
-        let mut handles = Vec::new();
+        let mut handles = Vec::with_capacity(keys.len());
         for key in keys {
             ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbStoreError::KeyTooLong);
             let key_db = build_key(key);

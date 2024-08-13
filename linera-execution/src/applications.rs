@@ -243,7 +243,7 @@ where
         extra_registered_apps: &HashMap<UserApplicationId, UserApplicationDescription>,
     ) -> Result<Vec<UserApplicationDescription>, SystemExecutionError> {
         let ids_with_deps = self.find_dependencies(ids, extra_registered_apps).await?;
-        let mut result = Vec::new();
+        let mut result = Vec::with_capacity(ids_with_deps.len());
         for id in ids_with_deps {
             let description = if let Some(description) = extra_registered_apps.get(&id) {
                 description.clone()

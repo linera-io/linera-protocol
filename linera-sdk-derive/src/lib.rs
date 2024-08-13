@@ -30,15 +30,15 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
     let crate_root = Ident::new(crate_root, Span::call_site());
     let enum_name = input.ident;
     let mutation_root_name = concat(&enum_name, "MutationRoot");
-    let mut methods = vec![];
+    let mut methods = Vec::with_capacity(input.variants.len());
 
     for variant in input.variants {
         let variant_name = &variant.ident;
         let function_name = snakify(variant_name);
         match variant.fields {
             Fields::Named(named) => {
-                let mut fields = vec![];
-                let mut field_names = vec![];
+                let mut fields = Vec::with_capacity(named.named.len());
+                let mut field_names = Vec::with_capacity(named.named.len());
                 for field in named.named {
                     let name = field.ident.expect("named fields always have names");
                     let ty = field.ty;
@@ -53,8 +53,8 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
                 });
             }
             Fields::Unnamed(unnamed) => {
-                let mut fields = vec![];
-                let mut field_names = vec![];
+                let mut fields = Vec::with_capacity(unnamed.unnamed.len());
+                let mut field_names = Vec::with_capacity(unnamed.unnamed.len());
                 for (i, field) in unnamed.unnamed.iter().enumerate() {
                     let name = concat(&syn::parse_str::<Ident>("field").unwrap(), &i.to_string());
                     let ty = &field.ty;

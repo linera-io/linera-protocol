@@ -1364,7 +1364,7 @@ where
         chain_id: ChainId,
         notifications: &mut impl Extend<Notification>,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        let mut futures = vec![];
+        let mut futures = Vec::with_capacity(validators.len());
 
         for (name, node) in validators {
             let client = self.clone();

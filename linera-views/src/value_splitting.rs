@@ -72,7 +72,7 @@ where
         if count == 1 {
             return Ok(Some(big_value));
         }
-        let mut big_keys = Vec::new();
+        let mut big_keys = Vec::with_capacity(count as usize - 1);
         for i in 1..count {
             let big_key_segment = Self::get_segment_key(key, i)?;
             big_keys.push(big_key_segment);
@@ -113,16 +113,16 @@ where
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, K::Error> {
-        let mut big_keys = Vec::new();
+        let mut big_keys = Vec::with_capacity(keys.len());
         for key in &keys {
             let mut big_key = key.clone();
             big_key.extend(&[0, 0, 0, 0]);
             big_keys.push(big_key);
         }
         let values = self.store.read_multi_values_bytes(big_keys).await?;
-        let mut big_values = Vec::<Option<Vec<u8>>>::new();
+        let mut big_values = Vec::<Option<Vec<u8>>>::with_capacity(values.len());
         let mut keys_add = Vec::new();
-        let mut n_blocks = Vec::new();
+        let mut n_blocks = Vec::with_capacity(values.len());
         for (key, value) in keys.iter().zip(values) {
             match value {
                 None => {
@@ -335,7 +335,7 @@ where
     fn get_initial_count_first_chunk(count: u32, first_chunk: &[u8]) -> Result<Vec<u8>, K::Error> {
         let mut bytes = bcs::to_bytes(&count)?;
         bytes.reverse();
-        let mut value_ext = Vec::new();
+        let mut value_ext = Vec::with_capacity(bytes.len() + first_chunk.len());
         value_ext.extend(bytes);
         value_ext.extend(first_chunk);
         Ok(value_ext)

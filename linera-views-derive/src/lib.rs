@@ -104,15 +104,15 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         .predicates
         .extend(context_constraints.predicates);
 
-    let mut name_quotes = Vec::new();
-    let mut rollback_quotes = Vec::new();
-    let mut flush_quotes = Vec::new();
-    let mut test_flush_quotes = Vec::new();
-    let mut clear_quotes = Vec::new();
-    let mut has_pending_changes_quotes = Vec::new();
-    let mut num_init_keys_quotes = Vec::new();
-    let mut pre_load_keys_quotes = Vec::new();
-    let mut post_load_keys_quotes = Vec::new();
+    let mut name_quotes = Vec::with_capacity(input.fields.len());
+    let mut rollback_quotes = Vec::with_capacity(input.fields.len());
+    let mut flush_quotes = Vec::with_capacity(input.fields.len());
+    let mut test_flush_quotes = Vec::with_capacity(input.fields.len());
+    let mut clear_quotes = Vec::with_capacity(input.fields.len());
+    let mut has_pending_changes_quotes = Vec::with_capacity(input.fields.len());
+    let mut num_init_keys_quotes = Vec::with_capacity(input.fields.len());
+    let mut pre_load_keys_quotes = Vec::with_capacity(input.fields.len());
+    let mut post_load_keys_quotes = Vec::with_capacity(input.fields.len());
     for (idx, e) in input.fields.into_iter().enumerate() {
         let name = e.clone().ident.unwrap();
         let test_flush_ident = format_ident!("deleted{}", idx);
@@ -233,8 +233,8 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
         .predicates
         .extend(context_constraints.predicates);
 
-    let mut flushes = Vec::new();
-    let mut deletes = Vec::new();
+    let mut flushes = Vec::with_capacity(input.fields.len());
+    let mut deletes = Vec::with_capacity(input.fields.len());
     for e in input.fields {
         let name = e.clone().ident.unwrap();
         flushes.push(quote! { self.#name.flush(&mut batch)?; });
@@ -285,8 +285,8 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
         .predicates
         .extend(context_constraints.predicates);
 
-    let mut field_hashes_mut = Vec::new();
-    let mut field_hashes = Vec::new();
+    let mut field_hashes_mut = Vec::with_capacity(input.fields.len());
+    let mut field_hashes = Vec::with_capacity(input.fields.len());
     for e in input.fields {
         let name = e.clone().ident.unwrap();
         field_hashes_mut.push(quote! { hasher.write_all(self.#name.hash_mut().await?.as_ref())?; });

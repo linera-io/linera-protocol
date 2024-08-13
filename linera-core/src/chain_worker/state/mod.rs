@@ -427,7 +427,8 @@ where
             .storage
             .contains_hashed_certificate_values(hashes)
             .await?;
-        let mut missing_locations = vec![];
+        let count_false = results.iter().filter(|&&result| !result).count();
+        let mut missing_locations = Vec::with_capacity(count_false);
         for (location, result) in locations.into_iter().zip(results) {
             if !result {
                 missing_locations.push(location);

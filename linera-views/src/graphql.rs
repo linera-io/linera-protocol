@@ -273,7 +273,7 @@ where
             self.keys().await?
         };
 
-        let mut entries = vec![];
+        let mut entries = Vec::with_capacity(keys.len());
         for key in keys {
             entries.push(Entry {
                 value: self.get(&key).await?,
@@ -351,7 +351,7 @@ where
             self.indices().await?
         };
 
-        let mut values = vec![];
+        let mut values = Vec::with_capacity(keys.len());
         for key in keys {
             values.push(Entry {
                 value: self.get(&key).await?,
@@ -422,7 +422,7 @@ where
             self.indices().await?
         };
 
-        let mut values = vec![];
+        let mut values = Vec::with_capacity(keys.len());
         for key in keys {
             values.push(Entry {
                 value: self.get(&key).await?,
@@ -534,7 +534,7 @@ where
             self.indices().await?
         };
 
-        let mut values = vec![];
+        let mut values = Vec::with_capacity(keys.len());
         for key in keys {
             let value = self
                 .try_load_entry(&key)
@@ -599,7 +599,7 @@ where
             self.indices().await?
         };
 
-        let mut values = vec![];
+        let mut values = Vec::with_capacity(keys.len());
         for key in keys {
             let value = self
                 .try_load_entry(&key)
@@ -697,7 +697,7 @@ where
             self.indices().await?
         };
 
-        let mut values = vec![];
+        let mut values = Vec::with_capacity(keys.len());
         for key in keys {
             let value = self
                 .try_load_entry(&key)
@@ -766,7 +766,7 @@ where
             self.indices().await?
         };
 
-        let mut values = vec![];
+        let mut values = Vec::with_capacity(keys.len());
         for key in keys {
             let value = self
                 .try_load_entry(&key)

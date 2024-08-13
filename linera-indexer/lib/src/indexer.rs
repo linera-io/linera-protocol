@@ -225,7 +225,7 @@ where
     pub async fn state(&self) -> Result<Vec<HighestBlock>, IndexerError> {
         let state = self.0.lock().await;
         let chains = state.chains.indices().await?;
-        let mut result = Vec::new();
+        let mut result = Vec::with_capacity(chains.len());
         for chain in chains {
             let block = state.chains.get(&chain).await?;
             result.push(HighestBlock {

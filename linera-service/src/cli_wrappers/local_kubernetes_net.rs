@@ -409,7 +409,7 @@ impl LocalKubernetesNet {
         let tmp_dir_path_clone = self.tmp_dir.path().to_path_buf();
         let num_shards = self.num_shards;
 
-        let mut validators_initialization_futures = Vec::new();
+        let mut validators_initialization_futures = Vec::with_capacity(self.kind_clusters.len());
         for (i, kind_cluster) in self.kind_clusters.iter().cloned().enumerate() {
             let docker_image_name = docker_image.name().to_string();
             let base_dir = base_dir.clone();

@@ -122,7 +122,7 @@ impl ReadableKeyValueStore<MemoryStoreError> for MemoryStore {
             .map
             .read()
             .expect("MemoryStore lock should not be poisoned");
-        let mut result = Vec::new();
+        let mut result = Vec::with_capacity(keys.len());
         for key in keys {
             result.push(map.get(&key).cloned());
         }

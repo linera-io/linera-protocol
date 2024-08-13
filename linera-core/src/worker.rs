@@ -946,8 +946,8 @@ where
                 if height_by_origin.is_empty() {
                     return Ok(NetworkActions::default());
                 }
-                let mut notifications = Vec::new();
-                let mut latest_heights = Vec::new();
+                let mut notifications = Vec::with_capacity(height_by_origin.len());
+                let mut latest_heights = Vec::with_capacity(height_by_origin.len());
                 for (origin, height) in height_by_origin {
                     latest_heights.push((origin.medium.clone(), height));
                     notifications.push(Notification {

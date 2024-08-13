@@ -452,7 +452,7 @@ where
         &self,
         hashes: Vec<CryptoHash>,
     ) -> Result<Vec<bool>, ViewError> {
-        let mut keys = Vec::new();
+        let mut keys = Vec::with_capacity(hashes.len());
         for hash in hashes {
             let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
             keys.push(value_key);
@@ -474,13 +474,14 @@ where
     }
 
     async fn missing_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, ViewError> {
-        let mut keys = Vec::new();
+        let mut keys = Vec::with_capacity(blob_ids.len());
         for blob_id in blob_ids.clone() {
             let key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
             keys.push(key);
         }
         let results = self.client.client.contains_keys(keys).await?;
-        let mut missing_blobs = Vec::new();
+        let count_false = results.iter().filter(|&&result| !result).count();
+        let mut missing_blobs = Vec::with_capacity(count_false);
         for (blob_id, result) in blob_ids.into_iter().zip(results) {
             if !result {
                 missing_blobs.push(blob_id);
@@ -575,7 +576,7 @@ where
         limit: u32,
     ) -> Result<Vec<HashedCertificateValue>, ViewError> {
         let mut hash = Some(from);
-        let mut values = Vec::new();
+        let mut values = Vec::with_capacity(limit as usize);
         for _ in 0..limit {
             let Some(next_hash) = hash else {
                 break;

@@ -108,7 +108,7 @@ impl ReadableKeyValueStore<ServiceStoreError> for ServiceStoreClientInternal {
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ServiceStoreError> {
-        let mut full_keys = Vec::new();
+        let mut full_keys = Vec::with_capacity(keys.len());
         for key in keys {
             ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
             let mut full_key = self.namespace.clone();
@@ -129,7 +129,7 @@ impl ReadableKeyValueStore<ServiceStoreError> for ServiceStoreClientInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ServiceStoreError> {
-        let mut full_keys = Vec::new();
+        let mut full_keys = Vec::with_capacity(keys.len());
         for key in keys {
             ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
             let mut full_key = self.namespace.clone();
