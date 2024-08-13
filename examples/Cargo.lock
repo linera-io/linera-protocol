@@ -2454,7 +2454,10 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "linera-sdk",
+ "log",
  "serde",
+ "serde_json",
+ "test-log",
  "tokio",
 ]
 
