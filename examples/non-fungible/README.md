@@ -86,6 +86,7 @@ linera service --port $PORT &
 
 - Navigate to `http://localhost:8080/`.
 - To publish a blob, run the mutation:
+
 ```gql,uri=http://localhost:8080/
     mutation {
         publishDataBlob(
@@ -99,23 +100,22 @@ linera service --port $PORT &
 
 - Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`.
 - To mint an NFT, run the mutation:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     mutation {
         mint(
             minter: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
             name: "nft1",
-            blobId: {
-              hash: "34a20da0fdd7e24ddbff60cb7f952b053b3f0e196e622d47c3a368f690f01326",
-              blob_type: "Data"
-            }
+            blobHash: "34a20da0fdd7e24ddbff60cb7f952b053b3f0e196e622d47c3a368f690f01326",
         )
     }
 ```
 
 - To check that it's there, run the query:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
-        nft(tokenId: "o66hIR1qQ8oUoTZTKHK35Cg1ObRgYSpBJnnS2gyvGBQ") {
+        nft(tokenId: "iQe01ZJeKo8E7HPr+MfwFedBZMdZ2v3UDI0F0kHMY+A") {
             tokenId,
             owner,
             name,
@@ -126,6 +126,7 @@ linera service --port $PORT &
 ```
 
 - To check that it's assigned to the owner, run the query:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
         ownedNfts(owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f")
@@ -133,6 +134,7 @@ linera service --port $PORT &
 ```
 
 - To check everything that it's there, run the query:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
         nfts
@@ -140,11 +142,12 @@ linera service --port $PORT &
 ```
 
 - To transfer the NFT to user `$OWNER_2`, still on chain `$CHAIN_1`, run the mutation:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     mutation {
         transfer(
             sourceOwner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
-            tokenId: "o66hIR1qQ8oUoTZTKHK35Cg1ObRgYSpBJnnS2gyvGBQ",
+            tokenId: "iQe01ZJeKo8E7HPr+MfwFedBZMdZ2v3UDI0F0kHMY+A",
             targetAccount: {
                 chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
                 owner: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"

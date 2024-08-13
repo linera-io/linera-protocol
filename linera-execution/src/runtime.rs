@@ -11,9 +11,10 @@ use std::{
 
 use custom_debug_derive::Debug;
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, OracleResponse,
-        Resources, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleResponse, Resources,
+        SendMessageRequest, Timestamp,
     },
     ensure,
     identifiers::{
@@ -712,12 +713,12 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         self.inner().assert_before(timestamp)
     }
 
-    fn read_blob_content(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError> {
-        self.inner().read_blob_content(blob_id)
+    fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError> {
+        self.inner().read_data_blob(hash)
     }
 
-    fn assert_blob_exists(&mut self, blob_id: &BlobId) -> Result<(), ExecutionError> {
-        self.inner().assert_blob_exists(blob_id)
+    fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError> {
+        self.inner().assert_data_blob_exists(hash)
     }
 }
 
@@ -1017,42 +1018,38 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(())
     }
 
-    fn read_blob_content(&mut self, blob_id: &BlobId) -> Result<BlobContent, ExecutionError> {
+    fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError> {
+        let blob_id = BlobId::new_data_from_hash(*hash);
         if let Some(responses) = &mut self.replaying_oracle_responses {
             match responses.next() {
-                Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == *blob_id => {}
+                Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == blob_id => {}
                 Some(_) => return Err(ExecutionError::OracleResponseMismatch),
                 None => return Err(ExecutionError::MissingOracleResponse),
             }
         }
         let blob_content = self
             .execution_state_sender
-            .send_request(|callback| ExecutionRequest::ReadBlobContent {
-                blob_id: *blob_id,
-                callback,
-            })?
+            .send_request(|callback| ExecutionRequest::ReadBlobContent { blob_id, callback })?
             .recv_response()?;
         self.recorded_oracle_responses
-            .push(OracleResponse::Blob(*blob_id));
-        Ok(blob_content)
+            .push(OracleResponse::Blob(blob_id));
+        Ok(blob_content.bytes)
     }
 
-    fn assert_blob_exists(&mut self, blob_id: &BlobId) -> Result<(), ExecutionError> {
+    fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError> {
+        let blob_id = BlobId::new_data_from_hash(*hash);
         if let Some(responses) = &mut self.replaying_oracle_responses {
             match responses.next() {
-                Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == *blob_id => {}
+                Some(OracleResponse::Blob(oracle_blob_id)) if oracle_blob_id == blob_id => {}
                 Some(_) => return Err(ExecutionError::OracleResponseMismatch),
                 None => return Err(ExecutionError::MissingOracleResponse),
             }
         }
         self.execution_state_sender
-            .send_request(|callback| ExecutionRequest::AssertBlobExists {
-                blob_id: *blob_id,
-                callback,
-            })?
+            .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
             .recv_response()?;
         self.recorded_oracle_responses
-            .push(OracleResponse::Blob(*blob_id));
+            .push(OracleResponse::Blob(blob_id));
         Ok(())
     }
 }

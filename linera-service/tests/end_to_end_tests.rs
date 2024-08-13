@@ -21,8 +21,9 @@ use futures::{channel::mpsc, SinkExt, StreamExt};
 use linera_base::{
     command::resolve_binary,
     data_types::{Amount, Blob},
-    identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
 };
+use linera_sdk::DataBlobHash;
 #[cfg(any(
     feature = "dynamodb",
     feature = "scylladb",
@@ -212,7 +213,7 @@ impl NonFungibleApp {
         application_id: &ApplicationId,
         name: &String,
         minter: &AccountOwner,
-        blob_id: &BlobId,
+        hash: &DataBlobHash,
         num_minted_nfts: u64,
     ) -> String {
         use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
@@ -221,7 +222,7 @@ impl NonFungibleApp {
             application_id,
             name,
             minter,
-            blob_id,
+            hash,
             num_minted_nfts,
         )
         .expect("Creating token ID should not fail");
@@ -245,12 +246,12 @@ impl NonFungibleApp {
         )?)
     }
 
-    async fn mint(&self, minter: &AccountOwner, name: &String, blob_id: &BlobId) -> Value {
+    async fn mint(&self, minter: &AccountOwner, name: &String, blob_hash: &DataBlobHash) -> Value {
         let mutation = format!(
-            "mint(minter: {}, name: {}, blobId: {})",
+            "mint(minter: {}, name: {}, blobHash: {})",
             minter.to_value(),
             name.to_value(),
-            blob_id.to_value(),
+            blob_hash.to_value(),
         );
         self.0.mutate(mutation).await.unwrap()
     }
@@ -1046,16 +1047,19 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .await?;
     assert_eq!(nft1_blob_id, blob_id);
 
+    let nft1_blob_hash = DataBlobHash(nft1_blob_id.hash);
+
     let nft1_id = NonFungibleApp::create_token_id(
         &chain1,
         &application_id.forget_abi(),
         &nft1_name,
         &nft1_minter,
-        &nft1_blob_id,
+        &nft1_blob_hash,
         0, // No NFTs are supposed to have been minted yet in this chain
     );
 
-    app1.mint(&account_owner1, &nft1_name, &nft1_blob_id).await;
+    app1.mint(&account_owner1, &nft1_name, &nft1_blob_hash)
+        .await;
 
     let mut expected_nft1 = NftOutput {
         token_id: nft1_id.clone(),
@@ -1173,17 +1177,20 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .await?;
     assert_eq!(nft2_blob_id, blob_id);
 
+    let nft2_blob_hash = DataBlobHash(nft2_blob_id.hash);
+
     let nft2_id = NonFungibleApp::create_token_id(
         &chain2,
         &application_id.forget_abi(),
         &nft2_name,
         &nft2_minter,
-        &nft2_blob_id,
+        &nft2_blob_hash,
         0, // No NFTs are supposed to have been minted yet in this chain
     );
 
     // Minting NFT from chain2
-    app2.mint(&account_owner2, &nft2_name, &nft2_blob_id).await;
+    app2.mint(&account_owner2, &nft2_name, &nft2_blob_hash)
+        .await;
 
     let expected_nft2 = NftOutput {
         token_id: nft2_id.clone(),

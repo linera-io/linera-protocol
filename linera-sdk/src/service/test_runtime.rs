@@ -10,11 +10,11 @@ use std::{
 
 use linera_base::{
     abi::ServiceAbi,
-    data_types::{Amount, Blob, BlockHeight, Timestamp},
-    identifiers::{ApplicationId, BlobId, ChainId, Owner},
+    data_types::{Amount, BlockHeight, Timestamp},
+    identifiers::{ApplicationId, ChainId, Owner},
 };
 
-use crate::{KeyValueStore, Service};
+use crate::{DataBlobHash, KeyValueStore, Service};
 
 /// The runtime available during execution of a query.
 pub struct MockServiceRuntime<Application>
@@ -30,7 +30,7 @@ where
     owner_balances: RefCell<Option<HashMap<Owner, Amount>>>,
     query_application_handler: RefCell<Option<QueryApplicationHandler>>,
     url_blobs: RefCell<Option<HashMap<String, Vec<u8>>>>,
-    blobs: RefCell<Option<HashMap<BlobId, Blob>>>,
+    blobs: RefCell<Option<HashMap<DataBlobHash, Vec<u8>>>>,
     key_value_store: KeyValueStore,
 }
 
@@ -359,56 +359,56 @@ where
             })
     }
 
-    /// Configures the blobs returned when fetching from `BlobId`s during the test.
-    pub fn with_blobs(self, blobs: impl IntoIterator<Item = (BlobId, Blob)>) -> Self {
+    /// Configures the blobs returned when fetching from hashes during the test.
+    pub fn with_blobs(self, blobs: impl IntoIterator<Item = (DataBlobHash, Vec<u8>)>) -> Self {
         *self.blobs.borrow_mut() = Some(blobs.into_iter().collect());
         self
     }
 
-    /// Configures the blobs returned when fetching from `BlobId`s during the test.
-    pub fn set_blobs(&self, blobs: impl IntoIterator<Item = (BlobId, Blob)>) -> &Self {
+    /// Configures the blobs returned when fetching from hashes during the test.
+    pub fn set_blobs(&self, blobs: impl IntoIterator<Item = (DataBlobHash, Vec<u8>)>) -> &Self {
         *self.blobs.borrow_mut() = Some(blobs.into_iter().collect());
         self
     }
 
     /// Configures the `Blob` returned when fetching from the `BlobId` during the test.
-    pub fn with_blob(self, blob_id: impl Into<BlobId>, blob: Blob) -> Self {
-        self.set_blob(blob_id, blob);
+    pub fn with_blob(self, hash: impl Into<DataBlobHash>, blob: Vec<u8>) -> Self {
+        self.set_blob(hash, blob);
         self
     }
 
-    /// Configures the `Blob` returned when fetching from the `BlobId` during the test.
-    pub fn set_blob(&self, blob_id: impl Into<BlobId>, blob: Blob) -> &Self {
+    /// Configures the blob returned when fetching from the hash during the test.
+    pub fn set_blob(&self, hash: impl Into<DataBlobHash>, blob: Vec<u8>) -> &Self {
         self.blobs
             .borrow_mut()
             .get_or_insert_with(HashMap::new)
-            .insert(blob_id.into(), blob);
+            .insert(hash.into(), blob);
         self
     }
 
-    /// Fetches a `Blob` from a given `BlobId`.
-    pub fn read_blob(&mut self, blob_id: BlobId) -> Blob {
+    /// Fetches a blob from a given hash.
+    pub fn read_data_blob(&mut self, hash: DataBlobHash) -> Vec<u8> {
         self.blobs
             .borrow()
             .as_ref()
-            .and_then(|blobs| blobs.get(&blob_id).cloned())
+            .and_then(|blobs| blobs.get(&hash).cloned())
             .unwrap_or_else(|| {
                 panic!(
-                    "Blob for BlobId {blob_id:?} has not been mocked, \
+                    "Blob for hash {hash:?} has not been mocked, \
                     please call `MockServiceRuntime::set_blob` first"
                 )
             })
     }
 
-    /// Asserts that a blob with the given `BlobId` exists in storage.
-    pub fn assert_blob_exists(&mut self, blob_id: BlobId) {
+    /// Asserts that a blob with the given hash exists in storage.
+    pub fn assert_blob_exists(&mut self, hash: DataBlobHash) {
         self.blobs
             .borrow()
             .as_ref()
-            .map(|blobs| blobs.contains_key(&blob_id))
+            .map(|blobs| blobs.contains_key(&hash))
             .unwrap_or_else(|| {
                 panic!(
-                    "Blob for BlobId {blob_id:?} has not been mocked, \
+                    "Blob for hash {hash:?} has not been mocked, \
                     please call `MockServiceRuntime::set_blob` first"
                 )
             });

@@ -7,12 +7,12 @@ use std::cell::Cell;
 
 use linera_base::{
     abi::ServiceAbi,
-    data_types::{Amount, Blob, BlobContent, BlockHeight, Timestamp},
-    identifiers::{ApplicationId, BlobId, ChainId, Owner},
+    data_types::{Amount, BlockHeight, Timestamp},
+    identifiers::{ApplicationId, ChainId, Owner},
 };
 
 use super::wit::service_system_api as wit;
-use crate::{KeyValueStore, Service};
+use crate::{DataBlobHash, KeyValueStore, Service};
 
 /// The runtime available during execution of a query.
 pub struct ServiceRuntime<Application>
@@ -145,13 +145,13 @@ where
         value
     }
 
-    /// Reads a blob with the given `BlobId` from storage.
-    pub fn read_blob(&mut self, blob_id: BlobId) -> Blob {
-        BlobContent::from(wit::read_blob_content(blob_id.into())).with_blob_id_unchecked(blob_id)
+    /// Reads a data blob with the given hash from storage.
+    pub fn read_data_blob(&mut self, hash: DataBlobHash) -> Vec<u8> {
+        wit::read_data_blob(hash.0.into())
     }
 
-    /// Asserts that a blob with the given `BlobId` exists in storage.
-    pub fn assert_blob_exists(&mut self, blob_id: BlobId) {
-        wit::assert_blob_exists(blob_id.into())
+    /// Asserts that a data blob with the given hash exists in storage.
+    pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
+        wit::assert_data_blob_exists(hash.0.into())
     }
 }

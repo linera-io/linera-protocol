@@ -14,9 +14,9 @@ use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use fungible::Account;
 use linera_sdk::{
-    base::{AccountOwner, BlobId, WithServiceAbi},
+    base::{AccountOwner, WithServiceAbi},
     views::{View, ViewStorageContext},
-    Service, ServiceRuntime,
+    DataBlobHash, Service, ServiceRuntime,
 };
 use non_fungible::{NftOutput, Operation, TokenId};
 
@@ -82,7 +82,7 @@ impl QueryRoot {
                     .runtime
                     .try_lock()
                     .expect("Services only run in a single thread");
-                runtime.read_blob(nft.blob_id).into_inner().bytes
+                runtime.read_data_blob(nft.blob_hash)
             };
             let nft_output = NftOutput::new_with_token_id(token_id, nft, payload);
             Some(nft_output)
@@ -101,7 +101,7 @@ impl QueryRoot {
                         .runtime
                         .try_lock()
                         .expect("Services only run in a single thread");
-                    runtime.read_blob(nft.blob_id).into_inner().bytes
+                    runtime.read_data_blob(nft.blob_hash)
                 };
                 let nft_output = NftOutput::new(nft, payload);
                 nfts.insert(nft_output.token_id.clone(), nft_output);
@@ -166,7 +166,7 @@ impl QueryRoot {
                     .runtime
                     .try_lock()
                     .expect("Services only run in a single thread");
-                runtime.read_blob(nft.blob_id).into_inner().bytes
+                runtime.read_data_blob(nft.blob_hash)
             };
             let nft_output = NftOutput::new(nft, payload);
             result.insert(nft_output.token_id.clone(), nft_output);
@@ -180,11 +180,11 @@ struct MutationRoot;
 
 #[Object]
 impl MutationRoot {
-    async fn mint(&self, minter: AccountOwner, name: String, blob_id: BlobId) -> Vec<u8> {
+    async fn mint(&self, minter: AccountOwner, name: String, blob_hash: DataBlobHash) -> Vec<u8> {
         bcs::to_bytes(&Operation::Mint {
             minter,
             name,
-            blob_id,
+            blob_hash,
         })
         .unwrap()
     }

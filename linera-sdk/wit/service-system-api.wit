@@ -14,8 +14,8 @@ interface service-system-api {
     fetch-url: func(url: string) -> list<u8>;
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
     http-post: func(query: string, content-type: string, payload: list<u8>) -> list<u8>;
-    read-blob-content: func(blob-id: blob-id) -> blob-content;
-    assert-blob-exists: func(blob-id: blob-id);
+    read-data-blob: func(hash: crypto-hash) -> list<u8>;
+    assert-data-blob-exists: func(hash: crypto-hash);
     assert-before: func(timestamp: timestamp);
     log: func(message: string, level: log-level);
 
@@ -26,19 +26,6 @@ interface service-system-api {
     record application-id {
         bytecode-id: bytecode-id,
         creation: message-id,
-    }
-
-    record blob-content {
-        bytes: list<u8>,
-    }
-
-    record blob-id {
-        hash: crypto-hash,
-        blob-type: blob-type,
-    }
-
-    enum blob-type {
-        data,
     }
 
     record block-height {

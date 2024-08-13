@@ -10,16 +10,15 @@ use std::{
 
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
-    data_types::{Amount, Blob, BlockHeight, Resources, SendMessageRequest, Timestamp},
+    data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
     identifiers::{
-        Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, MessageId, Owner,
-        StreamName,
+        Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner, StreamName,
     },
     ownership::{ChainOwnership, CloseChainError},
 };
 use serde::Serialize;
 
-use crate::{Contract, KeyValueStore};
+use crate::{Contract, DataBlobHash, KeyValueStore};
 
 /// A mock of the common runtime to interface with the host executing the contract.
 pub struct MockContractRuntime<Application>
@@ -48,8 +47,8 @@ where
     claim_requests: Vec<ClaimRequest>,
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
     expected_post_requests: VecDeque<(String, Vec<u8>, Vec<u8>)>,
-    expected_read_blob_requests: VecDeque<(BlobId, Blob)>,
-    expected_contains_blob_requests: VecDeque<(BlobId, Option<()>)>,
+    expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
+    expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
     key_value_store: KeyValueStore,
 }
 
@@ -91,8 +90,8 @@ where
             claim_requests: Vec::new(),
             expected_service_queries: VecDeque::new(),
             expected_post_requests: VecDeque::new(),
-            expected_read_blob_requests: VecDeque::new(),
-            expected_contains_blob_requests: VecDeque::new(),
+            expected_read_data_blob_requests: VecDeque::new(),
+            expected_assert_data_blob_exists_requests: VecDeque::new(),
             key_value_store: KeyValueStore::mock().to_mut(),
         }
     }
@@ -615,16 +614,20 @@ where
             .push_back((url, payload, response));
     }
 
-    /// Adds an expected `read_blob` call, and the response it should return in the test.
-    pub fn add_expected_read_blob_requests(&mut self, blob_id: BlobId, response: Blob) {
-        self.expected_read_blob_requests
-            .push_back((blob_id, response));
+    /// Adds an expected `read_data_blob` call, and the response it should return in the test.
+    pub fn add_expected_read_data_blob_requests(&mut self, hash: DataBlobHash, response: Vec<u8>) {
+        self.expected_read_data_blob_requests
+            .push_back((hash, response));
     }
 
-    /// Adds an expected `contains_blob` call, and the response it should return in the test.
-    pub fn add_expected_contains_blob_requests(&mut self, blob_id: BlobId, response: Option<()>) {
-        self.expected_contains_blob_requests
-            .push_back((blob_id, response));
+    /// Adds an expected `assert_data_blob_exists` call, and the response it should return in the test.
+    pub fn add_expected_assert_data_blob_exists_requests(
+        &mut self,
+        hash: DataBlobHash,
+        response: Option<()>,
+    ) {
+        self.expected_assert_data_blob_exists_requests
+            .push_back((hash, response));
     }
 
     /// Queries our application service as an oracle and returns the response.
@@ -673,19 +676,20 @@ where
         assert!(self.timestamp.is_some_and(|t| t < timestamp))
     }
 
-    /// Reads a blob with the given `BlobId` from storage.
-    pub fn read_blob(&mut self, blob_id: &BlobId) -> Blob {
-        let maybe_request = self.expected_read_blob_requests.pop_front();
-        let (expected_blob_id, response) = maybe_request.expect("Unexpected read_blob request");
-        assert_eq!(*blob_id, expected_blob_id);
+    /// Reads a data blob with the given hash from storage.
+    pub fn read_data_blob(&mut self, hash: &DataBlobHash) -> Vec<u8> {
+        let maybe_request = self.expected_read_data_blob_requests.pop_front();
+        let (expected_hash, response) = maybe_request.expect("Unexpected read_data_blob request");
+        assert_eq!(*hash, expected_hash);
         response
     }
 
-    /// Asserts that a blob with the given `BlobId` exists in storage.
-    pub fn assert_blob_exists(&mut self, blob_id: BlobId) {
-        let maybe_request = self.expected_contains_blob_requests.pop_front();
-        let (expected_blob_id, response) = maybe_request.expect("Unexpected contains_blob request");
-        assert_eq!(blob_id, expected_blob_id);
+    /// Asserts that a blob with the given hash exists in storage.
+    pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
+        let maybe_request = self.expected_assert_data_blob_exists_requests.pop_front();
+        let (expected_blob_hash, response) =
+            maybe_request.expect("Unexpected assert_data_blob_exists request");
+        assert_eq!(hash, expected_blob_hash);
         response.expect("Blob does not exist!");
     }
 }

@@ -211,8 +211,13 @@ pub struct BlobId {
 impl BlobId {
     /// Creates a new `BlobId` from a `BlobContent`
     pub fn new_data(blob_content: &BlobContent) -> Self {
+        Self::new_data_from_hash(CryptoHash::new(blob_content))
+    }
+
+    /// Creates a new `BlobId` from a hash
+    pub fn new_data_from_hash(hash: CryptoHash) -> Self {
         BlobId {
-            hash: CryptoHash::new(blob_content),
+            hash,
             blob_type: BlobType::Data,
         }
     }

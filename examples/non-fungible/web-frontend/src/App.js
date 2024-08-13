@@ -33,8 +33,12 @@ const GET_OWNED_NFTS = gql`
 `;
 
 const MINT_NFT = gql`
-  mutation Mint($minter: AccountOwner!, $name: String!, $blobId: BlobId!) {
-    mint(minter: $minter, name: $name, blobId: $blobId)
+  mutation Mint(
+    $minter: AccountOwner!
+    $name: String!
+    $blobHash: CryptoHash!
+  ) {
+    mint(minter: $minter, name: $name, blobHash: $blobHash)
   }
 `;
 
@@ -183,24 +187,28 @@ function App({ chainId, owner }) {
       variables: {
         chainId: chainId,
         blobContent: {
-          bytes: Array.from(byteArrayFile)
+          bytes: Array.from(byteArrayFile),
         },
       },
     }).then((r) => {
       if ('errors' in r) {
-        console.log('Got error while publishing Data Blob: ' + JSON.stringify(r, null, 2));
+        console.log(
+          'Got error while publishing Data Blob: ' + JSON.stringify(r, null, 2)
+        );
       } else {
         console.log('Data Blob published: ' + JSON.stringify(r, null, 2));
-        const blobId = r['data']['publishDataBlob'];
+        const blobHash = r['data']['publishDataBlob']['hash'];
         mintNft({
           variables: {
             minter: `User:${owner}`,
             name: name,
-            blobId: blobId,
+            blobHash: blobHash,
           },
         }).then((r) => {
           if ('errors' in r) {
-            console.log('Got error while minting NFT: ' + JSON.stringify(r, null, 2));
+            console.log(
+              'Got error while minting NFT: ' + JSON.stringify(r, null, 2)
+            );
           } else {
             console.log('NFT minted: ' + JSON.stringify(r, null, 2));
           }
@@ -229,7 +237,9 @@ function App({ chainId, owner }) {
       },
     }).then((r) => {
       if ('errors' in r) {
-        console.log('Error while transferring NFT: ' + JSON.stringify(r, null, 2));
+        console.log(
+          'Error while transferring NFT: ' + JSON.stringify(r, null, 2)
+        );
       } else {
         console.log('NFT transferred: ' + JSON.stringify(r, null, 2));
       }
