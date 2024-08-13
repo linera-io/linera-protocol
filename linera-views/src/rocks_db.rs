@@ -291,8 +291,8 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbStoreError> {
-        let mut entries = std::fs::read_dir(config.path_buf.clone())?;
-        let mut namespaces = Vec::with_capacity(entries.by_ref().count());
+        let entries = std::fs::read_dir(config.path_buf.clone())?;
+        let mut namespaces = Vec::new();
         for entry in entries {
             let entry = entry?;
             if !entry.file_type()?.is_dir() {
