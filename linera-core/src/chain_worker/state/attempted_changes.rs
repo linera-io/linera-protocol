@@ -9,7 +9,7 @@ use futures::future::try_join_all;
 use linera_base::{
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
-    identifiers::ChainId,
+    identifiers::{ChainId, MessageId},
 };
 use linera_chain::{
     data_types::{
@@ -260,20 +260,23 @@ where
         }
         // TODO(#2351): This sets the committee and then checks that committee's signatures.
         if tip.is_first_block() && !self.state.chain.is_active() {
-            let local_time = self.state.storage.clock().current_time();
-            for message in &block.incoming_bundles {
-                if self
-                    .state
-                    .chain
-                    .execute_init_message(
-                        message.id(),
-                        &message.event.message,
-                        message.event.timestamp,
-                        local_time,
-                    )
-                    .await?
-                {
-                    break;
+            if let Some(incoming_bundle) = block.incoming_bundles.first() {
+                if let Some(posted_message) = incoming_bundle.bundle.messages.first() {
+                    let message_id = MessageId {
+                        chain_id: incoming_bundle.origin.sender,
+                        height: incoming_bundle.bundle.height,
+                        index: posted_message.index,
+                    };
+                    let local_time = self.state.storage.clock().current_time();
+                    self.state
+                        .chain
+                        .execute_init_message(
+                            message_id,
+                            &posted_message.message,
+                            incoming_bundle.bundle.timestamp,
+                            local_time,
+                        )
+                        .await?;
                 }
             }
         }
@@ -339,7 +342,7 @@ where
         .await?;
 
         // Execute the block and update inboxes.
-        self.state.chain.remove_events_from_inboxes(block).await?;
+        self.state.chain.remove_bundles_from_inboxes(block).await?;
         let local_time = self.state.storage.clock().current_time();
         let verified_outcome = Box::pin(self.state.chain.execute_block(
             block,
@@ -386,7 +389,7 @@ where
     pub(super) async fn process_cross_chain_update(
         &mut self,
         origin: Origin,
-        bundles: Vec<MessageBundle>,
+        bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         // Only process certificates with relevant heights and epochs.
         let next_height_to_receive = self
@@ -573,12 +576,12 @@ impl<'a> CrossChainUpdateHelper<'a> {
         recipient: ChainId,
         next_height_to_receive: BlockHeight,
         last_anticipated_block_height: Option<BlockHeight>,
-        mut bundles: Vec<MessageBundle>,
+        mut bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Vec<MessageBundle>, WorkerError> {
         let mut latest_height = None;
         let mut skipped_len = 0;
         let mut trusted_len = 0;
-        for (i, bundle) in bundles.iter().enumerate() {
+        for (i, (epoch, bundle)) in bundles.iter().enumerate() {
             // Make sure that heights are not decreasing.
             ensure!(
                 latest_height <= Some(bundle.height),
@@ -592,32 +595,35 @@ impl<'a> CrossChainUpdateHelper<'a> {
             // Check if the height is trusted or the epoch is trusted.
             if self.allow_messages_from_deprecated_epochs
                 || Some(bundle.height) <= last_anticipated_block_height
-                || Some(bundle.epoch) >= self.current_epoch
-                || self.committees.contains_key(&bundle.epoch)
+                || Some(*epoch) >= self.current_epoch
+                || self.committees.contains_key(epoch)
             {
                 trusted_len = i + 1;
             }
         }
         if skipped_len > 0 {
-            let sample_bundle = &bundles[skipped_len - 1];
+            let (_, sample_bundle) = &bundles[skipped_len - 1];
             debug!(
                 "Ignoring repeated messages to {recipient:?} from {origin:?} at height {}",
                 sample_bundle.height,
             );
         }
         if skipped_len < bundles.len() && trusted_len < bundles.len() {
-            let sample_bundle = &bundles[trusted_len];
+            let (sample_epoch, sample_bundle) = &bundles[trusted_len];
             warn!(
                 "Refusing messages to {recipient:?} from {origin:?} at height {} \
                  because the epoch {:?} is not trusted any more",
-                sample_bundle.height, sample_bundle.epoch,
+                sample_bundle.height, sample_epoch,
             );
         }
-        let certificates = if skipped_len < trusted_len {
-            bundles.drain(skipped_len..trusted_len).collect()
+        let bundles = if skipped_len < trusted_len {
+            bundles
+                .drain(skipped_len..trusted_len)
+                .map(|(_, bundle)| bundle)
+                .collect()
         } else {
             vec![]
         };
-        Ok(certificates)
+        Ok(bundles)
     }
 }

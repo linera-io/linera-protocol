@@ -42,7 +42,7 @@ pub fn create_dummy_user_application_description(index: u64) -> UserApplicationD
         }),
         bytecode_location: BytecodeLocation {
             certificate_hash,
-            operation_index: 0,
+            transaction_index: 0,
         },
         creation: MessageId {
             chain_id,

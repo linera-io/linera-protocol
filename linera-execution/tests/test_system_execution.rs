@@ -13,7 +13,7 @@ use linera_execution::{
     test_utils::SystemExecutionState,
     ExecutionOutcome, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
     RawExecutionOutcome, ResourceController, Response, SystemMessage, SystemOperation, SystemQuery,
-    SystemResponse,
+    SystemResponse, TransactionTracker,
 };
 
 #[tokio::test]
@@ -34,24 +34,24 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
-        next_message_index: 0,
     };
     let mut controller = ResourceController::default();
-    let (outcomes, _) = view
-        .execute_operation(
-            context,
-            Timestamp::from(0),
-            Operation::System(operation),
-            Some(Vec::new()),
-            &mut controller,
-        )
-        .await
-        .unwrap();
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    view.execute_operation(
+        context,
+        Timestamp::from(0),
+        Operation::System(operation),
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await
+    .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::ZERO);
     let account = Account {
         chain_id: ChainId::root(0),
         owner: None,
     };
+    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
         outcomes,
         vec![ExecutionOutcome::System(
@@ -83,21 +83,21 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         },
         authenticated_signer: None,
         refund_grant_to: None,
-        next_message_index: 0,
     };
     let mut controller = ResourceController::default();
-    let (outcomes, _) = view
-        .execute_message(
-            context,
-            Timestamp::from(0),
-            Message::System(message),
-            None,
-            Some(Vec::new()),
-            &mut controller,
-        )
-        .await
-        .unwrap();
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    view.execute_message(
+        context,
+        Timestamp::from(0),
+        Message::System(message),
+        None,
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await
+    .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::from_tokens(4));
+    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
         outcomes,
         vec![ExecutionOutcome::System(RawExecutionOutcome::default())]

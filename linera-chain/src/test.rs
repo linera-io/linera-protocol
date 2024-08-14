@@ -4,7 +4,7 @@
 //! Test utilities
 
 use linera_base::{
-    crypto::{CryptoHash, KeyPair},
+    crypto::KeyPair,
     data_types::{Amount, BlockHeight, Round, Timestamp},
     identifiers::{ChainId, Owner},
 };
@@ -15,8 +15,8 @@ use linera_execution::{
 };
 
 use crate::data_types::{
-    Block, BlockProposal, Certificate, Event, HashedCertificateValue, IncomingBundle,
-    MessageAction, Origin, SignatureAggregator, Vote,
+    Block, BlockProposal, Certificate, HashedCertificateValue, IncomingBundle, PostedMessage,
+    SignatureAggregator, Vote,
 };
 
 /// Creates a new child of the given block, with the same timestamp.
@@ -141,25 +141,18 @@ impl VoteTestExt for Vote {
 
 /// Helper trait to simplify constructing messages for tests.
 pub trait MessageTestExt: Sized {
-    fn to_simple_incoming(self, sender: ChainId, height: BlockHeight) -> IncomingBundle;
+    fn to_posted(self, index: u32, kind: MessageKind) -> PostedMessage;
 }
 
 impl<T: Into<Message>> MessageTestExt for T {
-    fn to_simple_incoming(self, sender: ChainId, height: BlockHeight) -> IncomingBundle {
-        IncomingBundle {
-            origin: Origin::chain(sender),
-            event: Event {
-                certificate_hash: CryptoHash::test_hash("certificate"),
-                height,
-                index: 0,
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                timestamp: Timestamp::from(0),
-                message: self.into(),
-            },
-            action: MessageAction::Accept,
+    fn to_posted(self, index: u32, kind: MessageKind) -> PostedMessage {
+        PostedMessage {
+            authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
+            kind,
+            index,
+            message: self.into(),
         }
     }
 }

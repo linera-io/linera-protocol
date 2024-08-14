@@ -299,7 +299,10 @@ impl ActiveChain {
     }
 
     /// Subscribes this microchain to the bytecodes published on the `publisher_id` microchain.
-    pub async fn subscribe_to_published_bytecodes_from(&mut self, publisher_id: ChainId) {
+    pub async fn subscribe_to_published_bytecodes_from(
+        &mut self,
+        publisher_id: ChainId,
+    ) -> Certificate {
         let publisher = self.validator.get_chain(&publisher_id);
 
         let subscribe_certificate = self
@@ -324,7 +327,7 @@ impl ActiveChain {
         self.add_block(|block| {
             block.with_system_messages_from(&accept_certificate, SystemChannel::PublishedBytecodes);
         })
-        .await;
+        .await
     }
 
     /// Creates an application on this microchain, using the bytecode referenced by `bytecode_id`.
