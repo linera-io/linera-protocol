@@ -968,12 +968,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     }
 
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
-        if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
-            match response {
-                OracleResponse::Assert => {}
-                _ => return Err(ExecutionError::OracleResponseMismatch),
-            }
-        } else {
+        if !self
+            .transaction_tracker
+            .replay_oracle_response(OracleResponse::Assert)?
+        {
+            // There are no recorded oracle responses, so we check the local time.
             ensure!(
                 self.local_time < timestamp,
                 ExecutionError::AssertBefore {
@@ -982,41 +981,27 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                 }
             );
         }
-        self.transaction_tracker
-            .add_oracle_response(OracleResponse::Assert);
         Ok(())
     }
 
     fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError> {
         let blob_id = BlobId::new_data_from_hash(*hash);
-        if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
-            match response {
-                OracleResponse::Blob(oracle_blob_id) if oracle_blob_id == blob_id => {}
-                _ => return Err(ExecutionError::OracleResponseMismatch),
-            }
-        }
+        self.transaction_tracker
+            .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         let blob_content = self
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ReadBlobContent { blob_id, callback })?
             .recv_response()?;
-        self.transaction_tracker
-            .add_oracle_response(OracleResponse::Blob(blob_id));
         Ok(blob_content.bytes)
     }
 
     fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError> {
         let blob_id = BlobId::new_data_from_hash(*hash);
-        if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
-            match response {
-                OracleResponse::Blob(oracle_blob_id) if oracle_blob_id == blob_id => {}
-                _ => return Err(ExecutionError::OracleResponseMismatch),
-            }
-        }
+        self.transaction_tracker
+            .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
             .recv_response()?;
-        self.transaction_tracker
-            .add_oracle_response(OracleResponse::Blob(blob_id));
         Ok(())
     }
 }

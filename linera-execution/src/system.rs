@@ -713,26 +713,12 @@ where
                 outcome.messages.push(message);
             }
             PublishBlob { blob_id } => {
-                let response = OracleResponse::Blob(blob_id);
-                if let Some(recorded_response) = txn_tracker.next_replayed_oracle_response()? {
-                    ensure!(
-                        recorded_response == response,
-                        SystemExecutionError::OracleResponseMismatch
-                    );
-                }
-                txn_tracker.add_oracle_response(response);
+                txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
             }
             #[cfg(with_testing)]
             ReadBlob { blob_id } => {
-                let response = OracleResponse::Blob(blob_id);
-                if let Some(recorded_response) = txn_tracker.next_replayed_oracle_response()? {
-                    ensure!(
-                        recorded_response == response,
-                        SystemExecutionError::OracleResponseMismatch
-                    );
-                }
+                txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
                 self.read_blob_content(blob_id).await?;
-                txn_tracker.add_oracle_response(response);
             }
         }
 

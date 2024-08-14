@@ -878,8 +878,8 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![
-                        system_credit_message(Amount::from_tokens(2))
-                            .to_posted(0, MessageKind::Tracked), // wrong amount
+                        system_credit_message(Amount::from_tokens(2)) // wrong amount
+                            .to_posted(0, MessageKind::Tracked),
                     ],
                 },
                 action: MessageAction::Accept,
@@ -1472,7 +1472,7 @@ where
                 index: 0,
                 message: Message::System(SystemMessage::Credit { amount, .. }),
             }] if amount == Amount::from_tokens(995)),
-        "Unexpected event",
+        "Unexpected bundle",
     );
     assert_eq!(chain.confirmed_log.count(), 1);
     assert_eq!(Some(certificate.hash()), chain.tip_state.get().block_hash);
@@ -1611,7 +1611,7 @@ where
             index: 0,
             message: Message::System(SystemMessage::Credit { amount, .. })
         }] if amount == Amount::ONE),
-        "Unexpected event",
+        "Unexpected bundle",
     );
     assert_eq!(
         BlockHeight::from(1),
@@ -1690,7 +1690,7 @@ where
             index: 0,
             message: Message::System(SystemMessage::Credit { amount, .. })
         }] if amount == Amount::from_tokens(10)),
-        "Unexpected event",
+        "Unexpected bundle",
     );
     assert_eq!(chain.confirmed_log.count(), 0);
     assert_eq!(None, chain.tip_state.get().block_hash);
@@ -2489,12 +2489,12 @@ where
                 .added_bundles
                 .read_front(10)
                 .await?[..],
-            [event1, event2, event3]
-            if matches!(event1.messages[..], [PostedMessage {
+            [bundle1, bundle2, bundle3]
+            if matches!(bundle1.messages[..], [PostedMessage {
                  message: Message::System(SystemMessage::OpenChain(_)), ..
-            }]) && matches!(event2.messages[..], [PostedMessage {
+            }]) && matches!(bundle2.messages[..], [PostedMessage {
                 message: Message::System(SystemMessage::Credit { .. }), ..
-            }]) && matches!(event3.messages[..], [PostedMessage {
+            }]) && matches!(bundle3.messages[..], [PostedMessage {
                 message: Message::System(SystemMessage::Notify { .. }), ..
             }])
         );
@@ -2503,8 +2503,8 @@ where
             .try_load_entry(&admin_channel_origin)
             .await?
             .expect("Missing inbox for admin channel in user chain");
-        matches!(&channel_inbox.added_bundles.read_front(10).await?[..], [event]
-            if matches!(event.messages[..], [PostedMessage {
+        matches!(&channel_inbox.added_bundles.read_front(10).await?[..], [bundle]
+            if matches!(bundle.messages[..], [PostedMessage {
                 message: Message::System(SystemMessage::SetCommittees { .. }), ..
             }])
         );
@@ -2773,7 +2773,7 @@ where
             .added_bundles
             .read_front(10)
             .await?[..],
-        [event] if matches!(event.messages[..], [PostedMessage {
+        [bundle] if matches!(bundle.messages[..], [PostedMessage {
             message: Message::System(SystemMessage::Credit { .. }),
             ..
         }])
@@ -3062,8 +3062,13 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let bundles012 = Vec::from_iter(bundles01.iter().cloned().chain(bundles2.iter().cloned()));
     let bundles0123 = Vec::from_iter(bundles012.iter().cloned().chain(bundles3.iter().cloned()));
 
-    fn without_epochs(bundles: &[(Epoch, MessageBundle)]) -> Vec<MessageBundle> {
-        bundles.iter().map(|(_, bundle)| bundle.clone()).collect()
+    fn without_epochs<'a>(
+        bundles: impl IntoIterator<Item = &'a (Epoch, MessageBundle)>,
+    ) -> Vec<MessageBundle> {
+        bundles
+            .into_iter()
+            .map(|(_, bundle)| bundle.clone())
+            .collect()
     }
 
     let helper = CrossChainUpdateHelper {
@@ -3151,12 +3156,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             None,
             bundles012.clone()
         )?,
-        bundles1
-            .iter()
-            .cloned()
-            .chain(bundles2.iter().cloned())
-            .map(|(_, bundle)| bundle.clone())
-            .collect::<Vec<_>>()
+        without_epochs(bundles1.iter().chain(&bundles2))
     );
     // Anticipated messages re-certify blocks up to the given height.
     assert_eq!(

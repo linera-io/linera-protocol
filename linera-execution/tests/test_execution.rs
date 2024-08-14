@@ -1510,7 +1510,7 @@ async fn test_open_chain() {
         application_id,
         bytes: vec![],
     };
-    let mut txn_tracker = TransactionTracker::new(5, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(first_message_index, Some(Vec::new()));
     view.execute_operation(
         context,
         Timestamp::from(0),

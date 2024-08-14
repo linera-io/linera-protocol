@@ -16,8 +16,8 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::OpenChainConfig,
     test_utils::{ExpectedCall, MockApplication},
-    BytecodeLocation, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, SystemMessage,
-    TestExecutionRuntimeContext, UserApplicationDescription,
+    BytecodeLocation, ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageKind, Operation,
+    SystemMessage, TestExecutionRuntimeContext, UserApplicationDescription,
 };
 use linera_views::{
     memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
@@ -26,7 +26,7 @@ use linera_views::{
 };
 
 use crate::{
-    data_types::HashedCertificateValue,
+    data_types::{HashedCertificateValue, IncomingBundle, MessageAction, MessageBundle, Origin},
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
     ChainError, ChainStateView,
 };
@@ -111,23 +111,35 @@ async fn test_application_permissions() {
         application_permissions: ApplicationPermissions::new_single(application_id),
         ..make_open_chain_config()
     };
-    let message = SystemMessage::OpenChain(config).into();
+    let open_chain_message = SystemMessage::OpenChain(config).into();
     chain
-        .execute_init_message(message_id, &message, time, time)
+        .execute_init_message(message_id, &open_chain_message, time, time)
         .await
         .unwrap();
 
-    // The OpenChain message must be included in the first block. Also register the app.
-    let open_chain_message = message.to_simple_incoming(admin_id(), BlockHeight(1));
     let register_app_message = SystemMessage::RegisterApplications {
         applications: vec![app_description],
-    }
-    .to_simple_incoming(admin_id(), BlockHeight(2));
+    };
+
+    // The OpenChain message must be included in the first block. Also register the app.
+    let bundle = IncomingBundle {
+        origin: Origin::chain(admin_id()),
+        bundle: MessageBundle {
+            certificate_hash: CryptoHash::test_hash("certificate"),
+            height: BlockHeight(1),
+            transaction_index: 0,
+            timestamp: Timestamp::from(0),
+            messages: vec![
+                open_chain_message.to_posted(0, MessageKind::Protected),
+                register_app_message.to_posted(1, MessageKind::Simple),
+            ],
+        },
+        action: MessageAction::Accept,
+    };
 
     // An operation that doesn't belong to the app isn't allowed.
     let invalid_block = make_first_block(chain_id)
-        .with_incoming_bundle(open_chain_message.clone())
-        .with_incoming_bundle(register_app_message.clone())
+        .with_incoming_bundle(bundle.clone())
         .with_simple_transfer(chain_id, Amount::ONE);
     let result = chain.execute_block(&invalid_block, time, None).await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
@@ -142,8 +154,7 @@ async fn test_application_permissions() {
         bytes: b"foo".to_vec(),
     };
     let valid_block = make_first_block(chain_id)
-        .with_incoming_bundle(open_chain_message)
-        .with_incoming_bundle(register_app_message.clone())
+        .with_incoming_bundle(bundle)
         .with_operation(app_operation.clone());
     let outcome = chain.execute_block(&valid_block, time, None).await.unwrap();
     let value = HashedCertificateValue::new_confirmed(outcome.with(valid_block));

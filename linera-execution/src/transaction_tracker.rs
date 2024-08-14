@@ -77,6 +77,25 @@ impl TransactionTracker {
         self.oracle_responses.push(oracle_response);
     }
 
+    /// Adds the oracle response to the record.
+    /// If replaying, it also checks that it matches the next replayed one and returns `true`.
+    pub fn replay_oracle_response(
+        &mut self,
+        oracle_response: OracleResponse,
+    ) -> Result<bool, SystemExecutionError> {
+        let replaying = if let Some(recorded_response) = self.next_replayed_oracle_response()? {
+            ensure!(
+                recorded_response == oracle_response,
+                SystemExecutionError::OracleResponseMismatch
+            );
+            true
+        } else {
+            false
+        };
+        self.add_oracle_response(oracle_response);
+        Ok(replaying)
+    }
+
     pub fn next_replayed_oracle_response(
         &mut self,
     ) -> Result<Option<OracleResponse>, SystemExecutionError> {

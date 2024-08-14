@@ -405,7 +405,7 @@ async fn read_publish_bytecode_operation(
         _ => return Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
     };
     let index = usize::try_from(bytecode_location.transaction_index)
-        .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?
+        .map_err(|_| ArithmeticError::Overflow)?
         .checked_sub(block.incoming_bundles.len())
         .ok_or(ArithmeticError::Overflow)?;
     match block.operations.into_iter().nth(index) {

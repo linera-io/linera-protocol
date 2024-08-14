@@ -107,7 +107,7 @@ impl Block {
         )
     }
 
-    /// Returns an iterator over all incoming `Message`s in this block.
+    /// Returns an iterator over all incoming [`PostedMessage`]s in this block.
     pub fn incoming_messages(&self) -> impl Iterator<Item = &PostedMessage> {
         self.incoming_bundles
             .iter()
@@ -163,10 +163,9 @@ impl ChainAndHeight {
 /// A bundle of cross-chain messages.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct IncomingBundle {
-    /// The origin of the message (chain and channel if any).
+    /// The origin of the messages (chain and channel if any).
     pub origin: Origin,
-    /// The content of the message to be delivered to the inbox identified by
-    /// `origin`.
+    /// The messages to be delivered to the inbox identified by `origin`.
     pub bundle: MessageBundle,
     /// What to do with the message.
     pub action: MessageAction,
@@ -174,7 +173,7 @@ pub struct IncomingBundle {
 
 impl IncomingBundle {
     /// Returns an iterator over all posted messages in this bundle, together with their ID.
-    pub fn messages_with_id(&self) -> impl Iterator<Item = (MessageId, &PostedMessage)> {
+    pub fn messages_and_ids(&self) -> impl Iterator<Item = (MessageId, &PostedMessage)> {
         let chain_and_height = ChainAndHeight {
             chain_id: self.origin.sender,
             height: self.bundle.height,
@@ -314,7 +313,7 @@ impl OutgoingMessage {
         }
     }
 
-    /// Returns the posted message, i.e. the outgong message without the destination.
+    /// Returns the posted message, i.e. the outgoing message without the destination.
     pub fn into_posted(self, index: u32) -> PostedMessage {
         let OutgoingMessage {
             destination: _,

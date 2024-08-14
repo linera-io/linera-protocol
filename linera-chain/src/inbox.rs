@@ -165,7 +165,7 @@ where
         }
     }
 
-    /// Consumes an bundle from the inbox.
+    /// Consumes a bundle from the inbox.
     ///
     /// Returns `true` if the bundle was already known, i.e. it was present in `added_bundles`.
     pub(crate) async fn remove_bundle(
@@ -224,7 +224,7 @@ where
         Ok(already_known)
     }
 
-    /// Pushes an bundle to the inbox. The verifications should not fail in production unless
+    /// Pushes a bundle to the inbox. The verifications should not fail in production unless
     /// many validators are faulty.
     ///
     /// Returns `true` if the bundle was new, `false` if it was already in `removed_bundles`.
@@ -238,11 +238,11 @@ where
                 next_cursor: *self.next_cursor_to_add.get(),
             }
         );
-        // Find if the message was removed ahead of time.
+        // Find if the bundle was removed ahead of time.
         let newly_added = match self.removed_bundles.front().await? {
             Some(previous_bundle) => {
                 if Cursor::from(&previous_bundle) == cursor {
-                    // We already executed this message by anticipation. Remove it from
+                    // We already executed this bundle by anticipation. Remove it from
                     // the queue.
                     ensure!(
                         bundle == previous_bundle,
@@ -266,7 +266,7 @@ where
                 false
             }
             None => {
-                // Otherwise, schedule the message for execution.
+                // Otherwise, schedule the messages for execution.
                 self.added_bundles.push_back(bundle);
                 true
             }

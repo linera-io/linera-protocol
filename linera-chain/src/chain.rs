@@ -551,6 +551,7 @@ where
         bundle: MessageBundle,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
+        assert!(!bundle.messages.is_empty());
         let chain_id = self.chain_id();
         tracing::trace!(
             "Processing new messages to {:?} from {:?} at height {}",
@@ -778,7 +779,7 @@ where
             let mut txn_tracker = TransactionTracker::new(next_message_index, maybe_responses);
             match transaction {
                 Transaction::ReceiveMessages(incoming_bundle) => {
-                    for (message_id, posted_message) in incoming_bundle.messages_with_id() {
+                    for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
                         self.execute_message_in_block(
                             message_id,
                             posted_message,
@@ -812,6 +813,11 @@ where
                         )
                         .await
                         .map_err(with_context)?;
+                    resource_controller
+                        .with_state(&mut self.execution_state)
+                        .await?
+                        .track_operation(operation)
+                        .map_err(with_context)?;
                 }
             }
 
@@ -825,32 +831,21 @@ where
             let (txn_messages, txn_events) = self
                 .process_execution_outcomes(block.height, txn_outcomes)
                 .await?;
-            match transaction {
-                Transaction::ExecuteOperation(operation) => {
+            if matches!(
+                transaction,
+                Transaction::ExecuteOperation(_)
+                    | Transaction::ReceiveMessages(IncomingBundle {
+                        action: MessageAction::Accept,
+                        ..
+                    })
+            ) {
+                for message_out in &txn_messages {
                     resource_controller
                         .with_state(&mut self.execution_state)
                         .await?
-                        .track_operation(operation)
+                        .track_message(&message_out.message)
                         .map_err(with_context)?;
                 }
-                Transaction::ReceiveMessages(incoming_bundle) => {
-                    if let MessageAction::Accept = incoming_bundle.action {
-                        for message_out in &txn_messages {
-                            resource_controller
-                                .with_state(&mut self.execution_state)
-                                .await?
-                                .track_message(&message_out.message)
-                                .map_err(with_context)?;
-                        }
-                    }
-                }
-            }
-            for message_out in &txn_messages {
-                resource_controller
-                    .with_state(&mut self.execution_state)
-                    .await?
-                    .track_message(&message_out.message)
-                    .map_err(with_context)?;
             }
             oracle_responses.push(txn_oracle_responses);
             messages.push(txn_messages);
