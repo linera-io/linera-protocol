@@ -22,7 +22,7 @@ use crate::config::GenesisConfig;
 use crate::{
     chain_listener::ChainListenerConfig,
     config::WalletState,
-    persistent::{self, Persist},
+    persistent,
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
     util,
     wallet::Wallet,
@@ -210,7 +210,7 @@ impl ClientOptions {
 
 #[cfg(feature = "fs")]
 impl ClientOptions {
-    pub fn wallet(&self) -> Result<WalletState<impl Persist<Target = Wallet>>, Error> {
+    pub fn wallet(&self) -> Result<WalletState<persistent::File<Wallet>>, Error> {
         let wallet = persistent::File::read(&self.wallet_path()?)?;
         Ok(WalletState::new(wallet))
     }
@@ -237,7 +237,7 @@ impl ClientOptions {
         &self,
         genesis_config: GenesisConfig,
         testing_prng_seed: Option<u64>,
-    ) -> Result<WalletState<impl Persist<Target = Wallet>>, Error> {
+    ) -> Result<WalletState<persistent::File<Wallet>>, Error> {
         let wallet_path = self.wallet_path()?;
         if wallet_path.exists() {
             return Err(Error::WalletAlreadyExists(wallet_path));
@@ -251,7 +251,7 @@ impl ClientOptions {
 
 #[cfg(with_local_storage)]
 impl ClientOptions {
-    pub fn wallet(&self) -> Result<WalletState<impl Persist<Target = Wallet>>, Error> {
+    pub fn wallet(&self) -> Result<WalletState<persistent::LocalStorage<Wallet>>, Error> {
         Ok(WalletState::new(persistent::LocalStorage::read(
             "linera-wallet",
         )?))
@@ -260,7 +260,7 @@ impl ClientOptions {
 
 #[cfg(not(with_persist))]
 impl ClientOptions {
-    pub fn wallet(&self) -> Result<WalletState<impl Persist<Target = Wallet>>, Error> {
+    pub fn wallet(&self) -> Result<WalletState<persistent::Memory<Wallet>>, Error> {
         #![allow(unreachable_code)]
         let _wallet = unimplemented!("No persistence backend selected for wallet; please use one of the `fs` or `local_storage` features");
         Ok(WalletState::new(persistent::Memory::new(_wallet)))
