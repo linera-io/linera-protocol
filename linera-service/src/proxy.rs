@@ -107,7 +107,7 @@ impl ProxyContext {
 
 #[async_trait]
 impl Runnable for ProxyContext {
-    type Output = ();
+    type Output = Result<(), anyhow::Error>;
 
     async fn run<S>(self, storage: S) -> Result<(), anyhow::Error>
     where
@@ -369,6 +369,6 @@ impl ProxyOptions {
             ProxyContext::from_options(self)?,
         )
         .boxed()
-        .await
+        .await?
     }
 }

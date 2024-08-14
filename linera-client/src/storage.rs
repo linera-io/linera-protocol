@@ -528,7 +528,7 @@ impl StoreConfig {
 pub trait Runnable {
     type Output;
 
-    async fn run<S>(self, storage: S) -> Result<Self::Output, Error>
+    async fn run<S>(self, storage: S) -> Self::Output
     where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::StoreError>;
@@ -553,27 +553,27 @@ where
             let store_config = MemoryStoreConfig::new(config.common_config.max_stream_queries);
             let mut storage = MemoryStorage::new(store_config, &namespace, wasm_runtime).await?;
             genesis_config.initialize_storage(&mut storage).await?;
-            job.run(storage).await
+            Ok(job.run(storage).await)
         }
         #[cfg(feature = "storage-service")]
         StoreConfig::Service(config, namespace) => {
             let storage = ServiceStorage::new(config, &namespace, wasm_runtime).await?;
-            job.run(storage).await
+            Ok(job.run(storage).await)
         }
         #[cfg(feature = "rocksdb")]
         StoreConfig::RocksDb(config, namespace) => {
             let storage = RocksDbStorage::new(config, &namespace, wasm_runtime).await?;
-            job.run(storage).await
+            Ok(job.run(storage).await)
         }
         #[cfg(feature = "dynamodb")]
         StoreConfig::DynamoDb(config, namespace) => {
             let storage = DynamoDbStorage::new(config, &namespace, wasm_runtime).await?;
-            job.run(storage).await
+            Ok(job.run(storage).await)
         }
         #[cfg(feature = "scylladb")]
         StoreConfig::ScyllaDb(config, namespace) => {
             let storage = ScyllaDbStorage::new(config, &namespace, wasm_runtime).await?;
-            job.run(storage).await
+            Ok(job.run(storage).await)
         }
     }
 }

@@ -182,9 +182,9 @@ impl ServerContext {
 
 #[async_trait]
 impl Runnable for ServerContext {
-    type Output = ();
+    type Output = anyhow::Result<()>;
 
-    async fn run<S>(self, storage: S) -> Result<(), anyhow::Error>
+    async fn run<S>(self, storage: S) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::StoreError>,
@@ -295,14 +295,14 @@ fn make_server_config<R: CryptoRng>(
     let key = KeyPair::generate_from(rng);
     let name = ValidatorName(key.public());
     let validator = ValidatorConfig { network, name };
-    persistent::File::new(
+    Ok(persistent::File::new(
         path,
         ValidatorServerConfig {
             validator,
             key,
             internal_network,
         },
-    )
+    )?)
 }
 
 #[derive(clap::Parser)]
@@ -471,6 +471,7 @@ async fn run(options: ServerOptions) {
             run_with_storage(full_storage_config, &genesis_config, wasm_runtime, job)
                 .boxed()
                 .await
+                .unwrap()
                 .unwrap();
         }
 
