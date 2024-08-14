@@ -18,12 +18,30 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("chain error: {0}")]
+    Chain(#[from] linera_chain::ChainError),
+    #[error("persistence error: {0}")]
+    Persistence(Box<dyn std::error::Error + Send + Sync>),
+}
+
 #[cfg(with_persist)]
 use crate::persistent;
 use crate::{
     persistent::Persist,
+    util,
     wallet::{UserChain, Wallet},
 };
+
+util::impl_from_dynamic!(Error:Persistence, persistent::memory::Error);
+#[cfg(with_local_storage)]
+util::impl_from_dynamic!(Error:Persistence, persistent::local_storage::Error);
+#[cfg(feature = "fs")]
+util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
+
 
 /// The public configuration of a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -83,9 +101,9 @@ impl<W: Deref> Deref for WalletState<W> {
 }
 
 impl<W: Persist<Target = Wallet>> Persist for WalletState<W> {
-    type Error = anyhow::Error;
+    type Error = W::Error;
 
-    fn persist(this: &mut Self) -> anyhow::Result<()> {
+    fn persist(this: &mut Self) -> Result<(), W::Error> {
         Persist::mutate(&mut this.wallet).refresh_prng_seed(&mut this.prng);
         tracing::debug!("Persisted user chains");
         Ok(())
@@ -108,27 +126,27 @@ impl<W: Persist<Target = Wallet>> Extend<UserChain> for WalletState<W> {
 
 #[cfg(feature = "fs")]
 impl WalletState<persistent::File<Wallet>> {
-    pub fn create_from_file(path: &std::path::Path, wallet: Wallet) -> Result<Self, anyhow::Error> {
+    pub fn create_from_file(path: &std::path::Path, wallet: Wallet) -> Result<Self, Error> {
         Ok(Self::new(persistent::File::read_or_create(path, || {
             Ok(wallet)
         })?))
     }
 
-    pub fn read_from_file(path: &std::path::Path) -> Result<Self, anyhow::Error> {
+    pub fn read_from_file(path: &std::path::Path) -> Result<Self, Error> {
         Ok(Self::new(persistent::File::read(path)?))
     }
 }
 
 #[cfg(web)]
 impl WalletState<persistent::LocalStorage<Wallet>> {
-    pub fn create_from_local_storage(key: &str, wallet: Wallet) -> Result<Self, anyhow::Error> {
+    pub fn create_from_local_storage(key: &str, wallet: Wallet) -> Result<Self, Error> {
         Ok(Self::new(persistent::LocalStorage::read_or_create(
             key,
             || Ok(wallet),
         )?))
     }
 
-    pub fn read_from_local_storage(key: &str) -> Result<Self, anyhow::Error> {
+    pub fn read_from_local_storage(key: &str) -> Result<Self, Error> {
         Ok(Self::new(persistent::LocalStorage::read(key)?))
     }
 }
@@ -176,7 +194,7 @@ impl GenesisConfig {
         }
     }
 
-    pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), anyhow::Error>
+    pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), Error>
     where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::StoreError>,

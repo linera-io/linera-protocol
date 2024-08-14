@@ -28,6 +28,37 @@ use crate::{
     wallet::Wallet,
 };
 
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("a storage option must be provided")]
+    NoStorageOption,
+    #[error("wallet already exists at {0}")]
+    WalletAlreadyExists(PathBuf),
+    #[error("default configuration directory not supported: please specify a path")]
+    NoDefaultConfigurationDirectory,
+    #[error("there are {public_keys} public keys but {weights} weights")]
+    MisalignedWeights {
+        public_keys: usize,
+        weights: usize,
+    },
+    #[error("storage error: {0}")]
+    Storage(#[from] crate::storage::Error),
+    #[error("persistence error: {0}")]
+    Persistence(#[from] Box<dyn std::error::Error + Send + Sync>),
+    #[error("config error: {0}")]
+    Config(#[from] crate::config::Error),
+}
+
+#[cfg(feature = "fs")]
+util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
+
+#[cfg(with_local_storage)]
+util::impl_from_dynamic!(Error:Persistence, persistent::local_storage::Error);
+
+util::impl_from_infallible!(Error);
+
 #[derive(Clone, clap::Parser)]
 #[command(
     name = "linera",
@@ -107,12 +138,9 @@ pub struct ClientOptions {
 }
 
 impl ClientOptions {
-    pub fn init() -> anyhow::Result<Self> {
+    pub fn init() -> Result<Self, Error> {
         let mut options = <ClientOptions as clap::Parser>::parse();
-        let suffix = match options.with_wallet {
-            None => String::new(),
-            Some(n) => format!("_{}", n),
-        };
+        let suffix = options.with_wallet.map(|n| format!("_{}", n)).unwrap_or_default();
         let wallet_env_var = env::var(format!("LINERA_WALLET{suffix}")).ok();
         let storage_env_var = env::var(format!("LINERA_STORAGE{suffix}")).ok();
         if let (None, Some(wallet_path)) = (&options.wallet_state_path, wallet_env_var) {
@@ -132,7 +160,7 @@ impl ClientOptions {
         }
     }
 
-    pub async fn run_with_storage<R: Runnable>(&self, job: R) -> anyhow::Result<R::Output> {
+    pub async fn run_with_storage<R: Runnable>(&self, job: R) -> Result<R::Output, Error> {
         let genesis_config = self.wallet()?.genesis_config().clone();
         let output = Box::pin(run_with_storage(
             self.storage_config()?
@@ -146,9 +174,9 @@ impl ClientOptions {
         Ok(output)
     }
 
-    pub fn storage_config(&self) -> Result<StorageConfigNamespace, anyhow::Error> {
+    pub fn storage_config(&self) -> Result<StorageConfigNamespace, Error> {
         if let Some(config) = &self.storage_config {
-            config.parse()
+            Ok(config.parse()?)
         } else {
             cfg_if::cfg_if! {
                 if #[cfg(all(feature = "rocksdb", feature = "fs"))] {
@@ -161,13 +189,13 @@ impl ClientOptions {
                         namespace,
                     })
                 } else {
-                    anyhow::bail!("A storage option must be provided")
+                    Err(Error::NoStorageOption)
                 }
             }
         }
     }
 
-    pub async fn initialize_storage(&self) -> anyhow::Result<()> {
+    pub async fn initialize_storage(&self) -> Result<(), Error> {
         let wallet = self.wallet()?;
         full_initialize_storage(
             self.storage_config()?
@@ -182,22 +210,20 @@ impl ClientOptions {
 
 #[cfg(feature = "fs")]
 impl ClientOptions {
-    pub fn wallet(&self) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
+    pub fn wallet(&self) -> Result<WalletState<impl Persist<Target = Wallet>>, Error> {
         let wallet = persistent::File::read(&self.wallet_path()?)?;
         Ok(WalletState::new(wallet))
     }
 
-    fn wallet_path(&self) -> anyhow::Result<PathBuf> {
+    fn wallet_path(&self) -> Result<PathBuf, Error> {
         self.wallet_state_path
             .clone()
             .map(Ok)
             .unwrap_or_else(|| Ok(self.config_path()?.join("wallet.json")))
     }
 
-    fn config_path(&self) -> anyhow::Result<PathBuf> {
-        let mut config_dir = dirs::config_dir().ok_or(anyhow::anyhow!(
-            "Default configuration directory not supported. Please specify a path."
-        ))?;
+    fn config_path(&self) -> Result<PathBuf, Error> {
+        let mut config_dir = dirs::config_dir().ok_or(Error::NoDefaultConfigurationDirectory)?;
         config_dir.push("linera");
         if !config_dir.exists() {
             tracing::debug!("{} does not exist, creating", config_dir.display());
@@ -211,20 +237,18 @@ impl ClientOptions {
         &self,
         genesis_config: GenesisConfig,
         testing_prng_seed: Option<u64>,
-    ) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
+    ) -> Result<WalletState<impl Persist<Target = Wallet>>, Error> {
         let wallet_path = self.wallet_path()?;
-        anyhow::ensure!(
-            !wallet_path.exists(),
-            "Wallet already exists at {}. Aborting",
-            wallet_path.display()
-        );
-        WalletState::create_from_file(&wallet_path, Wallet::new(genesis_config, testing_prng_seed))
+        if wallet_path.exists() {
+            return Err(Error::WalletAlreadyExists(wallet_path));
+        }
+        Ok(WalletState::create_from_file(&wallet_path, Wallet::new(genesis_config, testing_prng_seed))?)
     }
 }
 
 #[cfg(with_local_storage)]
 impl ClientOptions {
-    pub fn wallet(&self) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
+    pub fn wallet(&self) -> Result<WalletState<impl Persist<Target = Wallet>>, Error> {
         Ok(WalletState::new(persistent::LocalStorage::read(
             "linera-wallet",
         )?))
@@ -233,7 +257,7 @@ impl ClientOptions {
 
 #[cfg(not(with_persist))]
 impl ClientOptions {
-    pub fn wallet(&self) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
+    pub fn wallet(&self) -> Result<WalletState<impl Persist<Target = Wallet>>, Error> {
         #![allow(unreachable_code)]
         let _wallet = unimplemented!("No persistence backend selected for wallet; please use one of the `fs` or `local_storage` features");
         Ok(WalletState::new(persistent::Memory::new(_wallet)))
@@ -1041,9 +1065,9 @@ pub struct ChainOwnershipConfig {
 }
 
 impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
-    type Error = anyhow::Error;
+    type Error = Error;
 
-    fn try_from(config: ChainOwnershipConfig) -> anyhow::Result<ChainOwnership> {
+    fn try_from(config: ChainOwnershipConfig) -> Result<ChainOwnership, Error> {
         let ChainOwnershipConfig {
             super_owner_public_keys,
             owner_public_keys,
@@ -1054,12 +1078,12 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
             timeout_increment,
             fallback_duration,
         } = config;
-        anyhow::ensure!(
-            owner_weights.is_empty() || owner_weights.len() == owner_public_keys.len(),
-            "There are {} public keys but {} weights.",
-            owner_public_keys.len(),
-            owner_weights.len()
-        );
+        if !owner_weights.is_empty() && owner_weights.len() != owner_public_keys.len() {
+            return Err(Error::MisalignedWeights {
+                public_keys: owner_public_keys.len(),
+                weights: owner_weights.len(),
+            });
+        }
         let super_owners = super_owner_public_keys
             .into_iter()
             .map(|pub_key| (Owner::from(pub_key), pub_key))

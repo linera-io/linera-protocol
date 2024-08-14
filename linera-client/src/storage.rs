@@ -3,7 +3,6 @@
 
 use std::str::FromStr;
 
-use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
 use linera_storage::{MemoryStorage, Storage};
@@ -13,7 +12,6 @@ use linera_views::{common::CommonStoreConfig, memory::MemoryStoreConfig, views::
 use tracing::error;
 #[cfg(feature = "scylladb")]
 use {
-    anyhow::Context,
     linera_storage::ScyllaDbStorage,
     linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
     std::num::NonZeroU16,
@@ -36,9 +34,31 @@ use {
     linera_storage_service::{client::ServiceStoreClient, common::ServiceStoreConfig},
 };
 
-use crate::config::GenesisConfig;
+use crate::{config::GenesisConfig, util};
 
 const DEFAULT_NAMESPACE: &str = "table_linera";
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("invalid storage specification format: {0}")]
+    Format(String),
+    #[error("invalid operation: {0}")]
+    InvalidOperation(String),
+    #[error("backend error: {0}")]
+    Backend(Box<dyn std::error::Error + Send + Sync>),
+    #[error("config error: {0}")]
+    Config(#[from] crate::config::Error),
+}
+
+util::impl_from_dynamic!(Error:Backend, linera_views::memory::MemoryStoreError);
+#[cfg(feature = "storage-service")]
+util::impl_from_dynamic!(Error:Backend, linera_storage_service::common::ServiceStoreError);
+#[cfg(feature = "rocksdb")]
+util::impl_from_dynamic!(Error:Backend, linera_views::rocks_db::RocksDbStoreError);
+#[cfg(feature = "dynamodb")]
+util::impl_from_dynamic!(Error:Backend, linera_views::dynamo_db::DynamoDbStoreError);
+#[cfg(feature = "scylladb")]
+util::impl_from_dynamic!(Error:Backend, linera_views::scylla_db::ScyllaDbStoreError);
 
 /// The configuration of the key value store in use.
 #[allow(clippy::large_enum_variant)]
@@ -120,7 +140,7 @@ const DYNAMO_DB: &str = "dynamodb:";
 const SCYLLA_DB: &str = "scylladb:";
 
 impl FromStr for StorageConfigNamespace {
-    type Err = anyhow::Error;
+    type Err = Error;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         if input == MEMORY {
@@ -142,18 +162,18 @@ impl FromStr for StorageConfigNamespace {
         #[cfg(feature = "storage-service")]
         if let Some(s) = input.strip_prefix(STORAGE_SERVICE) {
             if s.is_empty() {
-                return Err(format_err!(
+                return Err(Error::Format(
                     "For Storage service, the formatting has to be service:endpoint:namespace,\
-example service:tcp:127.0.0.1:7878:table_do_my_test"
+example service:tcp:127.0.0.1:7878:table_do_my_test".into()
                 ));
             }
             let parts = s.split(':').collect::<Vec<_>>();
             if parts.len() != 4 {
-                return Err(format_err!("We should have one endpoint and one namespace"));
+                return Err(Error::Format("We should have one endpoint and one namespace".into()));
             }
             let protocol = parts[0];
             if protocol != "tcp" {
-                return Err(format_err!("Only allowed protocol is tcp"));
+                return Err(Error::Format("Only allowed protocol is tcp".into()));
             }
             let endpoint = parts[1];
             let port = parts[2];
@@ -171,8 +191,8 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
         #[cfg(feature = "rocksdb")]
         if let Some(s) = input.strip_prefix(ROCKS_DB) {
             if s.is_empty() {
-                return Err(format_err!(
-                    "For RocksDB, the formatting has to be rocksdb:directory:namespace"
+                return Err(Error::Format(
+                    "For RocksDB, the formatting has to be rocksdb:directory:namespace".into()
                 ));
             }
             let parts = s.split(':').collect::<Vec<_>>();
@@ -194,23 +214,23 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                     namespace,
                 });
             }
-            return Err(format_err!("We should have one or two parts"));
+            return Err(Error::Format("We should have one or two parts".into()));
         }
         #[cfg(feature = "dynamodb")]
         if let Some(s) = input.strip_prefix(DYNAMO_DB) {
             let mut parts = s.splitn(2, ':');
             let namespace = parts
                 .next()
-                .ok_or_else(|| format_err!("Missing DynamoDB table name, e.g. {DYNAMO_DB}TABLE"))?
+                .ok_or_else(|| Error::Format(format!("Missing DynamoDB table name, e.g. {DYNAMO_DB}TABLE")))?
                 .to_string();
             let use_localstack = match parts.next() {
                 None | Some("env") => false,
                 Some("localstack") => true,
                 Some(unknown) => {
-                    return Err(format_err!(
+                    return Err(Error::Format(format!(
                         "Invalid DynamoDB endpoint {unknown:?}. \
                         Expected {DYNAMO_DB}TABLE:[env|localstack]"
-                    ));
+                    )));
                 }
             };
             let storage_config = StorageConfig::DynamoDb { use_localstack };
@@ -229,32 +249,30 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 while let Some(part) = parts.next() {
                     match part {
                         "tcp" => {
-                            let address = parts.next().with_context(|| {
-                                format!("Failed to find address for {}. {}", s, parse_error)
+                            let address = parts.next().ok_or_else(|| {
+                                Error::Format(format!("Failed to find address for {s}. {parse_error}"))
                             })?;
-                            let port_str = parts.next().with_context(|| {
-                                format!("Failed to find port for {}. {}", s, parse_error)
+                            let port_str = parts.next().ok_or_else(|| {
+                                Error::Format(format!("Failed to find port for {s}. {parse_error}"))
                             })?;
-                            let port = NonZeroU16::from_str(port_str).with_context(|| {
+                            let port = NonZeroU16::from_str(port_str).unwrap_or_else(|_| {
                                 format!(
-                                    "Failed to find parse port {} for {}. {}",
-                                    port_str, s, parse_error
+                                    "Failed to find parse port {port_str} for {s}. {parse_error}",
                                 )
                             })?;
                             if uri.is_some() {
-                                bail!("The uri has already been assigned");
+                                return Err(Error::Format("The uri has already been assigned".into()));
                             }
                             uri = Some(format!("{}:{}", &address, port));
                         }
                         _ if part.starts_with("table") => {
-                            anyhow::ensure!(
-                                namespace.is_none(),
-                                "The namespace has already been assigned"
-                            );
+                            if namespace.is_some() {
+                                return Err(Error::Format("The namespace has already been assigned"));
+                            }
                             namespace = Some(part.to_string());
                         }
                         _ => {
-                            bail!("the entry \"{}\" is not matching", part);
+                            return Err(Error::Format(format!("the entry \"{part}\" is not matching")));
                         }
                     }
                 }
@@ -275,7 +293,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
         error!("Also available is DynamoDB");
         #[cfg(feature = "scylladb")]
         error!("Also available is ScyllaDB");
-        Err(format_err!("The input has not matched: {}", input))
+        Err(Error::Format(format!("The input has not matched: {input}")))
     }
 }
 
@@ -284,7 +302,7 @@ impl StorageConfigNamespace {
     pub async fn add_common_config(
         &self,
         common_config: CommonStoreConfig,
-    ) -> Result<StoreConfig, anyhow::Error> {
+    ) -> Result<StoreConfig, Error> {
         let namespace = self.namespace.clone();
         match &self.storage_config {
             #[cfg(feature = "storage-service")]
@@ -510,7 +528,7 @@ impl StoreConfig {
 pub trait Runnable {
     type Output;
 
-    async fn run<S>(self, storage: S) -> Result<Self::Output, anyhow::Error>
+    async fn run<S>(self, storage: S) -> Result<Self::Output, Error>
     where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::StoreError>;
@@ -526,7 +544,7 @@ pub async fn run_with_storage<Job>(
     genesis_config: &GenesisConfig,
     wasm_runtime: Option<WasmRuntime>,
     job: Job,
-) -> Result<Job::Output, anyhow::Error>
+) -> Result<Job::Output, Error>
 where
     Job: Runnable,
 {
@@ -564,34 +582,34 @@ where
 pub async fn full_initialize_storage(
     config: StoreConfig,
     genesis_config: &GenesisConfig,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), Error> {
     match config {
         StoreConfig::Memory(_, _) => {
-            bail!("The initialization should not be called for memory");
+            return Err(Error::InvalidOperation("The initialization should not be called for memory".into()));
         }
         #[cfg(feature = "storage-service")]
         StoreConfig::Service(config, namespace) => {
             let wasm_runtime = None;
             let mut storage = ServiceStorage::initialize(config, &namespace, wasm_runtime).await?;
-            genesis_config.initialize_storage(&mut storage).await
+            Ok(genesis_config.initialize_storage(&mut storage).await?)
         }
         #[cfg(feature = "rocksdb")]
         StoreConfig::RocksDb(config, namespace) => {
             let wasm_runtime = None;
             let mut storage = RocksDbStorage::initialize(config, &namespace, wasm_runtime).await?;
-            genesis_config.initialize_storage(&mut storage).await
+            Ok(genesis_config.initialize_storage(&mut storage).await?)
         }
         #[cfg(feature = "dynamodb")]
         StoreConfig::DynamoDb(config, namespace) => {
             let wasm_runtime = None;
             let mut storage = DynamoDbStorage::initialize(config, &namespace, wasm_runtime).await?;
-            genesis_config.initialize_storage(&mut storage).await
+            Ok(genesis_config.initialize_storage(&mut storage).await?)
         }
         #[cfg(feature = "scylladb")]
         StoreConfig::ScyllaDb(config, namespace) => {
             let wasm_runtime = None;
             let mut storage = ScyllaDbStorage::initialize(config, &namespace, wasm_runtime).await?;
-            genesis_config.initialize_storage(&mut storage).await
+            Ok(genesis_config.initialize_storage(&mut storage).await?)
         }
     }
 }

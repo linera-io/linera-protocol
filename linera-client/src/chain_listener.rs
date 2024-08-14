@@ -25,7 +25,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use tracing::{debug, error, info, warn, Instrument as _};
 
-use crate::{chain_clients::ChainClients, wallet::Wallet};
+use crate::{Error, chain_clients::ChainClients, wallet::Wallet};
 
 #[cfg(test)]
 #[path = "unit_tests/chain_listener.rs"]
@@ -155,7 +155,7 @@ where
         context: Arc<Mutex<C>>,
         storage: S,
         config: ChainListenerConfig,
-    ) -> anyhow::Result<()>
+    ) -> Result<(), Error>
     where
         C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     {

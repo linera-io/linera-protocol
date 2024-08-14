@@ -6,10 +6,10 @@ use std::{
     iter::IntoIterator,
 };
 
-use anyhow::Context as _;
 use linera_base::{
     crypto::{CryptoHash, CryptoRng, KeyPair, PublicKey},
     data_types::{Blob, BlockHeight, Timestamp},
+    ensure,
     identifiers::{BlobId, ChainDescription, ChainId},
 };
 use linera_chain::data_types::Block;
@@ -19,7 +19,7 @@ use linera_views::views::ViewError;
 use rand::Rng as _;
 use serde::{Deserialize, Serialize};
 
-use crate::config::GenesisConfig;
+use crate::{Error, error, config::GenesisConfig};
 
 #[derive(Serialize, Deserialize)]
 pub struct Wallet {
@@ -67,18 +67,18 @@ impl Wallet {
         self.chains.insert(chain.chain_id, chain);
     }
 
-    pub fn forget_keys(&mut self, chain_id: &ChainId) -> Result<KeyPair, anyhow::Error> {
+    pub fn forget_keys(&mut self, chain_id: &ChainId) -> Result<KeyPair, Error> {
         let chain = self
             .chains
             .get_mut(chain_id)
-            .context(format!("Failed to get chain for chain ID: {}", chain_id))?;
-        chain.key_pair.take().context("Failed to take keypair")
+            .ok_or(error::Inner::NonexistentChain(*chain_id))?;
+        chain.key_pair.take().ok_or(error::Inner::NonexistentKeypair(*chain_id).into())
     }
 
-    pub fn forget_chain(&mut self, chain_id: &ChainId) -> Result<UserChain, anyhow::Error> {
+    pub fn forget_chain(&mut self, chain_id: &ChainId) -> Result<UserChain, Error> {
         self.chains
             .remove(chain_id)
-            .context(format!("Failed to remove chain: {}", chain_id))
+            .ok_or(error::Inner::NonexistentChain(*chain_id).into())
     }
 
     pub fn default_chain(&self) -> Option<ChainId> {
@@ -133,11 +133,11 @@ impl Wallet {
         key: PublicKey,
         chain_id: ChainId,
         timestamp: Timestamp,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         let key_pair = self
             .unassigned_key_pairs
             .remove(&key)
-            .context("could not assign chain to key as unassigned key was not found")?;
+            .ok_or(error::Inner::NonexistentKeypair(chain_id))?;
         let user_chain = UserChain {
             chain_id,
             key_pair: Some(key_pair),
@@ -151,12 +151,10 @@ impl Wallet {
         Ok(())
     }
 
-    pub fn set_default_chain(&mut self, chain_id: ChainId) -> Result<(), anyhow::Error> {
-        anyhow::ensure!(
+    pub fn set_default_chain(&mut self, chain_id: ChainId) -> Result<(), Error> {
+        ensure!(
             self.chains.contains_key(&chain_id),
-            "Chain {} cannot be assigned as the default chain since it does not exist in the \
-             wallet.",
-            &chain_id
+            error::Inner::NonexistentChain(chain_id)
         );
         self.default = Some(chain_id);
         Ok(())

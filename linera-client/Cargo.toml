@@ -57,7 +57,6 @@ local-storage = ["web"]
 web-default = ["web", "wasmer", "local-storage"]
 
 [dependencies]
-anyhow.workspace = true
 async-graphql.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
@@ -80,6 +79,8 @@ linera-views.workspace = true
 rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
+thiserror-context = "0.1.1"
 tokio.workspace = true
 tokio-stream.workspace = true
 tracing.workspace = true
@@ -100,6 +101,7 @@ cfg_aliases.workspace = true
 
 [dev-dependencies]
 amm.workspace = true
+anyhow.workspace = true
 base64.workspace = true
 counter.workspace = true
 crowd-funding.workspace = true
