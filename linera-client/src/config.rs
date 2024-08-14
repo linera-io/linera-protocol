@@ -28,10 +28,8 @@ pub enum Error {
     Persistence(Box<dyn std::error::Error + Send + Sync>),
 }
 
-#[cfg(with_persist)]
-use crate::persistent;
 use crate::{
-    persistent::Persist,
+    persistent::{self, Persist},
     util,
     wallet::{UserChain, Wallet},
 };
@@ -136,7 +134,7 @@ impl WalletState<persistent::File<Wallet>> {
     }
 }
 
-#[cfg(web)]
+#[cfg(with_local_storage)]
 impl WalletState<persistent::LocalStorage<Wallet>> {
     pub fn create_from_local_storage(key: &str, wallet: Wallet) -> Result<Self, Error> {
         Ok(Self::new(persistent::LocalStorage::read_or_create(

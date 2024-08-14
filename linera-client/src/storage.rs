@@ -264,10 +264,10 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                             let port_str = parts.next().ok_or_else(|| {
                                 Error::Format(format!("Failed to find port for {s}. {parse_error}"))
                             })?;
-                            let port = NonZeroU16::from_str(port_str).unwrap_or_else(|_| {
-                                format!(
+                            let port = NonZeroU16::from_str(port_str).map_err(|_| {
+                                Error::Format(format!(
                                     "Failed to find parse port {port_str} for {s}. {parse_error}",
-                                )
+                                ))
                             })?;
                             if uri.is_some() {
                                 return Err(Error::Format(
@@ -279,7 +279,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                         _ if part.starts_with("table") => {
                             if namespace.is_some() {
                                 return Err(Error::Format(
-                                    "The namespace has already been assigned",
+                                    "The namespace has already been assigned".into(),
                                 ));
                             }
                             namespace = Some(part.to_string());
