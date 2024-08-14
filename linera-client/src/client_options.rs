@@ -39,10 +39,7 @@ pub enum Error {
     #[error("default configuration directory not supported: please specify a path")]
     NoDefaultConfigurationDirectory,
     #[error("there are {public_keys} public keys but {weights} weights")]
-    MisalignedWeights {
-        public_keys: usize,
-        weights: usize,
-    },
+    MisalignedWeights { public_keys: usize, weights: usize },
     #[error("storage error: {0}")]
     Storage(#[from] crate::storage::Error),
     #[error("persistence error: {0}")]
@@ -140,7 +137,10 @@ pub struct ClientOptions {
 impl ClientOptions {
     pub fn init() -> Result<Self, Error> {
         let mut options = <ClientOptions as clap::Parser>::parse();
-        let suffix = options.with_wallet.map(|n| format!("_{}", n)).unwrap_or_default();
+        let suffix = options
+            .with_wallet
+            .map(|n| format!("_{}", n))
+            .unwrap_or_default();
         let wallet_env_var = env::var(format!("LINERA_WALLET{suffix}")).ok();
         let storage_env_var = env::var(format!("LINERA_STORAGE{suffix}")).ok();
         if let (None, Some(wallet_path)) = (&options.wallet_state_path, wallet_env_var) {
@@ -242,7 +242,10 @@ impl ClientOptions {
         if wallet_path.exists() {
             return Err(Error::WalletAlreadyExists(wallet_path));
         }
-        Ok(WalletState::create_from_file(&wallet_path, Wallet::new(genesis_config, testing_prng_seed))?)
+        Ok(WalletState::create_from_file(
+            &wallet_path,
+            Wallet::new(genesis_config, testing_prng_seed),
+        )?)
     }
 }
 

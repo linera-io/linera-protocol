@@ -42,7 +42,6 @@ util::impl_from_dynamic!(Error:Persistence, persistent::local_storage::Error);
 #[cfg(feature = "fs")]
 util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
 
-
 /// The public configuration of a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorConfig {

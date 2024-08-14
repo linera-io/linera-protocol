@@ -57,7 +57,6 @@ local-storage = ["web"]
 web-default = ["web", "wasmer", "local-storage"]
 
 [dependencies]
-async-graphql.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 cfg-if.workspace = true

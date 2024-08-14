@@ -48,10 +48,12 @@ where
         E: Into<W>,
         Result<(), E>: Context<W, T, E>,
     {
-        self.or_else(|error| if let Err(cleanup_error) = cleanup() {
-            Err(cleanup_error).context(error)
-        } else {
-            Err(error.into())
+        self.or_else(|error| {
+            if let Err(cleanup_error) = cleanup() {
+                Err(cleanup_error).context(error)
+            } else {
+                Err(error)
+            }
         })
     }
 }
@@ -112,7 +114,8 @@ impl<T: serde::de::DeserializeOwned> File<T> {
                     .write(true)
                     .create(true)
                     .open(path)?,
-            ).with_context(|| format!("locking path {}", path.display()))?,
+            )
+            .with_context(|| format!("locking path {}", path.display()))?,
             path: path.into(),
             value,
         })
@@ -121,7 +124,11 @@ impl<T: serde::de::DeserializeOwned> File<T> {
     /// Reads the value from a file at `path`, returning an error if it does not exist.
     pub fn read(path: &Path) -> Result<Self, Error> {
         Self::read_or_create(path, || {
-            Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("path does not exist: {}", path.display())).into())
+            Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("path does not exist: {}", path.display()),
+            )
+            .into())
         })
     }
 
@@ -170,8 +177,13 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> Persist for File<T> {
 
         let remove_temp_file = || fs_err::remove_file(&temp_file_path);
 
-        serde_json::to_writer_pretty(&mut temp_file_writer, &this.value).map_err(Error::from).or_cleanup(remove_temp_file)?;
-        temp_file_writer.flush().map_err(Error::from).or_cleanup(remove_temp_file)?;
+        serde_json::to_writer_pretty(&mut temp_file_writer, &this.value)
+            .map_err(Error::from)
+            .or_cleanup(remove_temp_file)?;
+        temp_file_writer
+            .flush()
+            .map_err(Error::from)
+            .or_cleanup(remove_temp_file)?;
         fs_err::rename(&temp_file_path, &this.path)?;
         Ok(())
     }

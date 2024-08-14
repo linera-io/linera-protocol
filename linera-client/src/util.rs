@@ -46,13 +46,11 @@ macro_rules! impl_from_infallible {
     ($target:path) => {
         impl From<::std::convert::Infallible> for $target {
             fn from(infallible: ::std::convert::Infallible) -> Self {
-                match infallible { }
+                match infallible {}
             }
         }
-    }
+    };
 }
 
-pub(crate) use {
-    impl_from_dynamic,
-    impl_from_infallible,
-};
+pub(crate) use impl_from_dynamic;
+pub(crate) use impl_from_infallible;

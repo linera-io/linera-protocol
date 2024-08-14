@@ -10,13 +10,6 @@ use linera_storage::{MemoryStorage, Storage};
 use linera_views::common::LocalAdminKeyValueStore as _;
 use linera_views::{common::CommonStoreConfig, memory::MemoryStoreConfig, views::ViewError};
 use tracing::error;
-#[cfg(feature = "scylladb")]
-use {
-    linera_storage::ScyllaDbStorage,
-    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
-    std::num::NonZeroU16,
-    tracing::debug,
-};
 #[cfg(feature = "dynamodb")]
 use {
     linera_storage::DynamoDbStorage,
@@ -27,6 +20,13 @@ use {
     linera_storage::RocksDbStorage,
     linera_views::rocks_db::{RocksDbStore, RocksDbStoreConfig},
     std::path::PathBuf,
+};
+#[cfg(feature = "scylladb")]
+use {
+    linera_storage::ScyllaDbStorage,
+    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
+    std::num::NonZeroU16,
+    tracing::debug,
 };
 #[cfg(feature = "storage-service")]
 use {
@@ -164,12 +164,15 @@ impl FromStr for StorageConfigNamespace {
             if s.is_empty() {
                 return Err(Error::Format(
                     "For Storage service, the formatting has to be service:endpoint:namespace,\
-example service:tcp:127.0.0.1:7878:table_do_my_test".into()
+example service:tcp:127.0.0.1:7878:table_do_my_test"
+                        .into(),
                 ));
             }
             let parts = s.split(':').collect::<Vec<_>>();
             if parts.len() != 4 {
-                return Err(Error::Format("We should have one endpoint and one namespace".into()));
+                return Err(Error::Format(
+                    "We should have one endpoint and one namespace".into(),
+                ));
             }
             let protocol = parts[0];
             if protocol != "tcp" {
@@ -192,7 +195,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test".into()
         if let Some(s) = input.strip_prefix(ROCKS_DB) {
             if s.is_empty() {
                 return Err(Error::Format(
-                    "For RocksDB, the formatting has to be rocksdb:directory:namespace".into()
+                    "For RocksDB, the formatting has to be rocksdb:directory:namespace".into(),
                 ));
             }
             let parts = s.split(':').collect::<Vec<_>>();
@@ -221,7 +224,11 @@ example service:tcp:127.0.0.1:7878:table_do_my_test".into()
             let mut parts = s.splitn(2, ':');
             let namespace = parts
                 .next()
-                .ok_or_else(|| Error::Format(format!("Missing DynamoDB table name, e.g. {DYNAMO_DB}TABLE")))?
+                .ok_or_else(|| {
+                    Error::Format(format!(
+                        "Missing DynamoDB table name, e.g. {DYNAMO_DB}TABLE"
+                    ))
+                })?
                 .to_string();
             let use_localstack = match parts.next() {
                 None | Some("env") => false,
@@ -250,7 +257,9 @@ example service:tcp:127.0.0.1:7878:table_do_my_test".into()
                     match part {
                         "tcp" => {
                             let address = parts.next().ok_or_else(|| {
-                                Error::Format(format!("Failed to find address for {s}. {parse_error}"))
+                                Error::Format(format!(
+                                    "Failed to find address for {s}. {parse_error}"
+                                ))
                             })?;
                             let port_str = parts.next().ok_or_else(|| {
                                 Error::Format(format!("Failed to find port for {s}. {parse_error}"))
@@ -261,18 +270,24 @@ example service:tcp:127.0.0.1:7878:table_do_my_test".into()
                                 )
                             })?;
                             if uri.is_some() {
-                                return Err(Error::Format("The uri has already been assigned".into()));
+                                return Err(Error::Format(
+                                    "The uri has already been assigned".into(),
+                                ));
                             }
                             uri = Some(format!("{}:{}", &address, port));
                         }
                         _ if part.starts_with("table") => {
                             if namespace.is_some() {
-                                return Err(Error::Format("The namespace has already been assigned"));
+                                return Err(Error::Format(
+                                    "The namespace has already been assigned",
+                                ));
                             }
                             namespace = Some(part.to_string());
                         }
                         _ => {
-                            return Err(Error::Format(format!("the entry \"{part}\" is not matching")));
+                            return Err(Error::Format(format!(
+                                "the entry \"{part}\" is not matching"
+                            )));
                         }
                     }
                 }
@@ -584,9 +599,9 @@ pub async fn full_initialize_storage(
     genesis_config: &GenesisConfig,
 ) -> Result<(), Error> {
     match config {
-        StoreConfig::Memory(_, _) => {
-            return Err(Error::InvalidOperation("The initialization should not be called for memory".into()));
-        }
+        StoreConfig::Memory(_, _) => Err(Error::InvalidOperation(
+            "The initialization should not be called for memory".into(),
+        )),
         #[cfg(feature = "storage-service")]
         StoreConfig::Service(config, namespace) => {
             let wasm_runtime = None;

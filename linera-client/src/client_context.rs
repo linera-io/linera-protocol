@@ -65,13 +65,13 @@ use {
 };
 
 use crate::{
-    Error,
     chain_listener,
     client_options::{ChainOwnershipConfig, ClientOptions},
     config::WalletState,
     persistent::Persist,
     util,
     wallet::{UserChain, Wallet},
+    Error,
 };
 
 pub struct ClientContext<Storage, W>
@@ -285,7 +285,9 @@ where
                     self.save_wallet();
                     return Ok(certificates);
                 }
-                Some(timestamp) => util::wait_for_next_round(&mut notification_stream, timestamp).await,
+                Some(timestamp) => {
+                    util::wait_for_next_round(&mut notification_stream, timestamp).await
+                }
             }
         }
     }

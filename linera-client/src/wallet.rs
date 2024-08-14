@@ -19,7 +19,7 @@ use linera_views::views::ViewError;
 use rand::Rng as _;
 use serde::{Deserialize, Serialize};
 
-use crate::{Error, error, config::GenesisConfig};
+use crate::{config::GenesisConfig, error, Error};
 
 #[derive(Serialize, Deserialize)]
 pub struct Wallet {
@@ -72,7 +72,10 @@ impl Wallet {
             .chains
             .get_mut(chain_id)
             .ok_or(error::Inner::NonexistentChain(*chain_id))?;
-        chain.key_pair.take().ok_or(error::Inner::NonexistentKeypair(*chain_id).into())
+        chain
+            .key_pair
+            .take()
+            .ok_or(error::Inner::NonexistentKeypair(*chain_id).into())
     }
 
     pub fn forget_chain(&mut self, chain_id: &ChainId) -> Result<UserChain, Error> {
