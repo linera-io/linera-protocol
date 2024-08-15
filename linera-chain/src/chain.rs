@@ -678,7 +678,7 @@ where
     }
 
     /// Executes a block: first the incoming messages, then the main operation.
-    /// * Modifies the state of inboxes, outboxes, and channels, if needed.
+    /// * Modifies the state of outboxes and channels, if needed.
     /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown
     ///   away.
     /// * Returns the list of messages caused by the block being executed.
@@ -693,6 +693,47 @@ where
 
         let chain_id = self.chain_id();
         assert_eq!(block.chain_id, chain_id);
+        // The first incoming message of any child chain must be `OpenChain`. A root chain must
+        // already be initialized
+        if block.height == BlockHeight::ZERO
+            && self
+                .execution_state
+                .system
+                .description
+                .get()
+                .map_or(true, |description| description.is_child())
+        {
+            let Some(in_bundle) = block
+                .incoming_bundles
+                .first()
+                .filter(|in_bundle| in_bundle.action == MessageAction::Accept)
+            else {
+                return Err(ChainError::InactiveChain(chain_id));
+            };
+            let Some(posted_message) =
+                in_bundle.bundle.messages.first().filter(|pm| {
+                    matches!(pm.message, Message::System(SystemMessage::OpenChain(_)))
+                })
+            else {
+                return Err(ChainError::InactiveChain(chain_id));
+            };
+
+            if !self.is_active() {
+                let message_id = MessageId {
+                    chain_id: in_bundle.origin.sender,
+                    height: in_bundle.bundle.height,
+                    index: posted_message.index,
+                };
+                self.execute_init_message(
+                    message_id,
+                    &posted_message.message,
+                    block.timestamp,
+                    local_time,
+                )
+                .await?;
+            }
+        }
+
         ensure!(
             *self.execution_state.system.timestamp.get() <= block.timestamp,
             ChainError::InvalidBlockTimestamp
@@ -711,22 +752,6 @@ where
             ensure!(
                 !block.incoming_bundles.is_empty() && block.has_only_rejected_messages(),
                 ChainError::ClosedChain
-            );
-        }
-
-        // The first incoming message of any child chain must be `OpenChain`. A root chain must
-        // already be initialized
-        if block.height == BlockHeight::ZERO
-            && self
-                .execution_state
-                .system
-                .description
-                .get()
-                .map_or(true, |description| description.is_child())
-        {
-            ensure!(
-                block.starts_with_open_chain(),
-                ChainError::InactiveChain(self.chain_id())
             );
         }
         let app_permissions = self.execution_state.system.application_permissions.get();

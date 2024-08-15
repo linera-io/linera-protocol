@@ -16,7 +16,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    BytecodeLocation, Message, MessageKind, Operation, SystemMessage, SystemOperation,
+    BytecodeLocation, Message, MessageKind, Operation, SystemOperation,
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
 
@@ -94,17 +94,6 @@ impl Block {
                 .incoming_bundles
                 .iter()
                 .all(|message| message.action == MessageAction::Reject)
-    }
-
-    /// Returns whether `OpenChain` is the first message in this block.
-    pub fn starts_with_open_chain(&self) -> bool {
-        let Some(posted_message) = self.incoming_messages().next() else {
-            return false;
-        };
-        matches!(
-            posted_message.message,
-            Message::System(SystemMessage::OpenChain(_))
-        )
     }
 
     /// Returns an iterator over all incoming [`PostedMessage`]s in this block.
