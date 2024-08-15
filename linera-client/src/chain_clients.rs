@@ -9,11 +9,7 @@ use linera_core::client::ChainClient;
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("unknown chain ID {0}")]
-    MissingChain(ChainId),
-}
+use crate::error::{self, Error};
 
 pub type ClientMapInner<P, S> = BTreeMap<ChainId, ChainClient<P, S>>;
 pub struct ChainClients<P, S>(pub Arc<Mutex<ClientMapInner<P, S>>>)
@@ -57,7 +53,7 @@ where
     pub async fn try_client_lock(&self, chain_id: &ChainId) -> Result<ChainClient<P, S>, Error> {
         self.client_lock(chain_id)
             .await
-            .ok_or(Error::MissingChain(*chain_id))
+            .ok_or(error::Inner::NonexistentChain(*chain_id).into())
     }
 
     pub async fn map_lock(&self) -> MutexGuard<ClientMapInner<P, S>> {

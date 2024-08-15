@@ -6,6 +6,7 @@ use thiserror_context::Context;
 use crate::{persistent, util};
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub(crate) enum Inner {
     #[error("chain client error: {0}")]
     ChainClient(#[from] linera_core::client::ChainClientError),
