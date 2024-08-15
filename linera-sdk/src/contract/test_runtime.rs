@@ -10,7 +10,9 @@ use std::{
 
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
-    data_types::{Amount, BlockHeight, Resources, SendMessageRequest, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
+    },
     identifiers::{
         Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner, StreamName,
     },
@@ -49,6 +51,8 @@ where
     expected_post_requests: VecDeque<(String, Vec<u8>, Vec<u8>)>,
     expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
+    expected_open_chain_calls:
+        VecDeque<(ChainOwnership, ApplicationPermissions, Amount, MessageId)>,
     key_value_store: KeyValueStore,
 }
 
@@ -92,6 +96,7 @@ where
             expected_post_requests: VecDeque::new(),
             expected_read_data_blob_requests: VecDeque::new(),
             expected_assert_data_blob_exists_requests: VecDeque::new(),
+            expected_open_chain_calls: VecDeque::new(),
             key_value_store: KeyValueStore::mock().to_mut(),
         }
     }
@@ -550,6 +555,41 @@ where
         } else {
             Err(CloseChainError::NotPermitted)
         }
+    }
+
+    /// Adds an expected call to `open_chain`, and the message ID that should be returned.
+    pub fn add_expected_open_chain_call(
+        &mut self,
+        ownership: ChainOwnership,
+        application_permissions: ApplicationPermissions,
+        balance: Amount,
+        message_id: MessageId,
+    ) {
+        self.expected_open_chain_calls.push_back((
+            ownership,
+            application_permissions,
+            balance,
+            message_id,
+        ));
+    }
+
+    /// Opens a new chain, configuring it with the provided `chain_ownership`,
+    /// `application_permissions` and initial `balance` (debited from the current chain).
+    pub fn open_chain(
+        &mut self,
+        ownership: ChainOwnership,
+        application_permissions: ApplicationPermissions,
+        balance: Amount,
+    ) -> (MessageId, ChainId) {
+        let (expected_ownership, expected_permissions, expected_balance, message_id) = self
+            .expected_open_chain_calls
+            .pop_front()
+            .expect("Unexpected open_chain call");
+        assert_eq!(ownership, expected_ownership);
+        assert_eq!(application_permissions, expected_permissions);
+        assert_eq!(balance, expected_balance);
+        let chain_id = ChainId::child(message_id);
+        (message_id, chain_id)
     }
 
     /// Configures the handler for cross-application calls made during the test.
