@@ -201,13 +201,13 @@ where
         chain_ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> ChainId {
-        wit::open_chain(
+    ) -> (MessageId, ChainId) {
+        let (message_id, chain_id) = wit::open_chain(
             &chain_ownership.into(),
             &application_permissions.into(),
             balance.into(),
-        )
-        .into()
+        );
+        (message_id.into(), chain_id.into())
     }
 
     /// Calls another application.

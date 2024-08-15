@@ -1496,9 +1496,10 @@ async fn test_open_chain() {
             runtime.transfer(None, destination, Amount::ONE).unwrap();
             let id = runtime.application_id().unwrap();
             let application_permissions = ApplicationPermissions::new_single(id);
-            let chain_id = runtime
+            let (actual_message_id, chain_id) = runtime
                 .open_chain(child_ownership, application_permissions, Amount::ONE)
                 .unwrap();
+            assert_eq!(message_id, actual_message_id);
             assert_eq!(chain_id, ChainId::child(message_id));
             Ok(vec![])
         }
