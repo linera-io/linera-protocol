@@ -30,7 +30,7 @@ use tokio::task::JoinSet;
 use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
 use {
-    futures::{stream, StreamExt as _},
+    futures::{stream, StreamExt as _, TryStreamExt as _},
     linera_base::{
         crypto::PublicKey,
         data_types::Amount,
@@ -587,7 +587,7 @@ where
                             .contains_key(&application_id)
                             .await?
                         {
-                            return Ok(chain_client);
+                            return Ok::<_, Error>(chain_client);
                         }
                     }
                     panic!("Could not instantiate application on chain {chain_id:?}");
@@ -598,10 +598,9 @@ where
         // https://github.com/rust-lang/rust/issues/102211#issuecomment-1673201352
         let clients = stream::iter(futures)
             .buffer_unordered(max_in_flight)
-            .collect::<Vec<Result<_, Error>>>()
-            .await;
+            .try_collect::<Vec<_>>()
+            .await?;
         for client in clients {
-            let client = client?;
             self.update_wallet_from_client(&client).await;
         }
         Ok(())
