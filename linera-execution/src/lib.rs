@@ -577,7 +577,7 @@ pub trait ContractRuntime: BaseRuntime {
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<ChainId, ExecutionError>;
+    ) -> Result<(MessageId, ChainId), ExecutionError>;
 
     /// Closes the current chain.
     fn close_chain(&mut self) -> Result<(), ExecutionError>;

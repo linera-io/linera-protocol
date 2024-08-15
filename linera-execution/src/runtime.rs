@@ -1284,20 +1284,20 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<ChainId, ExecutionError> {
+    ) -> Result<(MessageId, ChainId), ExecutionError> {
         let mut this = self.inner();
-        let next_message_id = MessageId {
+        let message_id = MessageId {
             chain_id: this.chain_id,
             height: this.height,
             index: this.transaction_tracker.next_message_index(),
         };
-        let chain_id = ChainId::child(next_message_id);
+        let chain_id = ChainId::child(message_id);
         let [open_chain_message, subscribe_message] = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::OpenChain {
                 ownership,
                 balance,
-                next_message_id,
+                next_message_id: message_id,
                 application_permissions,
                 callback,
             })?
@@ -1306,7 +1306,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .with_message(open_chain_message)
             .with_message(subscribe_message);
         this.transaction_tracker.add_system_outcome(outcome)?;
-        Ok(chain_id)
+        Ok((message_id, chain_id))
     }
 
     fn close_chain(&mut self) -> Result<(), ExecutionError> {
