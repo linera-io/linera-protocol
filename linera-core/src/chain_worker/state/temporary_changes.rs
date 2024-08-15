@@ -139,8 +139,6 @@ where
         &mut self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
-        self.0.ensure_is_active()?;
-
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
 
