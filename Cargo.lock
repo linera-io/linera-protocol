@@ -4230,7 +4230,6 @@ version = "0.12.0"
 dependencies = [
  "amm",
  "anyhow",
- "async-graphql",
  "async-trait",
  "base64 0.22.1",
  "bcs",
@@ -4273,6 +4272,8 @@ dependencies = [
  "test-case",
  "test-log",
  "test-strategy",
+ "thiserror",
+ "thiserror-context",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -7498,6 +7499,12 @@ checksum = "c0342370b38b6a11b6cc11d6a805569958d54cfa061a29969c3b5ce2ea405724"
 dependencies = [
  "thiserror-impl",
 ]
+
+[[package]]
+name = "thiserror-context"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c47055a4888725c27962ef13f6de5b8ab42662b88fd5488184a6bd353dbeffab"
 
 [[package]]
 name = "thiserror-impl"

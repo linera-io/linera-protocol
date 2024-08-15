@@ -97,7 +97,7 @@ fn read_json(string: Option<String>, path: Option<PathBuf>) -> anyhow::Result<Ve
 
 #[async_trait]
 impl Runnable for Job {
-    type Output = ();
+    type Output = anyhow::Result<()>;
 
     async fn run<S>(self, storage: S) -> anyhow::Result<()>
     where
@@ -1429,7 +1429,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 Ok(project.test().await?)
             }
             ProjectCommand::PublishAndCreate { .. } => {
-                options.run_with_storage(Job(options.clone())).await
+                options.run_with_storage(Job(options.clone())).await?
             }
         },
 
@@ -1576,12 +1576,12 @@ Make sure to use a Linera client compatible with this network.
                         faucet.is_some(),
                         "Using --with-new-chain requires --faucet to be set"
                     );
-                    options.run_with_storage(Job(options.clone())).await?;
+                    options.run_with_storage(Job(options.clone())).await??;
                 }
                 Ok(())
             }
         },
 
-        _ => options.run_with_storage(Job(options.clone())).await,
+        _ => options.run_with_storage(Job(options.clone())).await?,
     }
 }

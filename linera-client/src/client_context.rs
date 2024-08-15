@@ -7,7 +7,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::Context;
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
@@ -26,11 +25,12 @@ use linera_core::{
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
+use thiserror_context::Context;
 use tokio::task::JoinSet;
 use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
 use {
-    futures::{stream, StreamExt as _},
+    futures::{stream, StreamExt as _, TryStreamExt as _},
     linera_base::{
         crypto::PublicKey,
         data_types::Amount,
@@ -69,8 +69,9 @@ use crate::{
     client_options::{ChainOwnershipConfig, ClientOptions},
     config::WalletState,
     persistent::Persist,
-    util::wait_for_next_round,
+    util,
     wallet::{UserChain, Wallet},
+    Error,
 };
 
 pub struct ClientContext<Storage, W>
@@ -247,7 +248,7 @@ where
     pub async fn process_inbox(
         &mut self,
         chain_client: &ChainClient<NodeProvider, S>,
-    ) -> anyhow::Result<Vec<Certificate>> {
+    ) -> Result<Vec<Certificate>, Error> {
         let mut certificates = Vec::new();
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {
@@ -284,7 +285,9 @@ where
                     self.save_wallet();
                     return Ok(certificates);
                 }
-                Some(timestamp) => wait_for_next_round(&mut notification_stream, timestamp).await,
+                Some(timestamp) => {
+                    util::wait_for_next_round(&mut notification_stream, timestamp).await
+                }
             }
         }
     }
@@ -297,11 +300,11 @@ where
         &mut self,
         client: &ChainClient<NodeProvider, S>,
         mut f: F,
-    ) -> anyhow::Result<T>
+    ) -> Result<T, Error>
     where
         F: FnMut(&ChainClient<NodeProvider, S>) -> Fut,
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
-        anyhow::Error: From<E>,
+        Error: From<E>,
     {
         // Try applying f optimistically without validator notifications. Return if committed.
         let result = f(client).await;
@@ -323,7 +326,7 @@ where
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             // Otherwise wait and try again in the next round.
-            wait_for_next_round(&mut notification_stream, timeout).await;
+            util::wait_for_next_round(&mut notification_stream, timeout).await;
         }
     }
 
@@ -331,7 +334,7 @@ where
         &mut self,
         chain_id: Option<ChainId>,
         ownership_config: ChainOwnershipConfig,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
         let chain_client = self.make_chain_client(chain_id);
         info!("Changing ownership for chain {}", chain_id);
@@ -369,7 +372,7 @@ where
         chain_client: &ChainClient<NodeProvider, S>,
         contract: PathBuf,
         service: PathBuf,
-    ) -> anyhow::Result<BytecodeId> {
+    ) -> Result<BytecodeId, Error> {
         info!("Loading bytecode files");
         let contract_bytecode = Bytecode::load_from_file(&contract).await.context(format!(
             "failed to load contract bytecode from {:?}",
@@ -407,7 +410,7 @@ where
         &mut self,
         chain_client: &ChainClient<NodeProvider, S>,
         blob_path: PathBuf,
-    ) -> anyhow::Result<BlobId> {
+    ) -> Result<BlobId, Error> {
         info!("Loading data blob file");
         let blob = Blob::load_data_blob_from_file(&blob_path)
             .await
@@ -453,7 +456,7 @@ where
         &mut self,
         num_chains: usize,
         balance: Amount,
-    ) -> anyhow::Result<HashMap<ChainId, KeyPair>> {
+    ) -> Result<HashMap<ChainId, KeyPair>, Error> {
         let mut key_pairs = HashMap::new();
         for chain_id in self.wallet.own_chain_ids() {
             if key_pairs.len() == num_chains {
@@ -477,13 +480,13 @@ where
         let default_chain_id = self
             .wallet
             .default_chain()
-            .context("should have default chain")?;
+            .expect("should have default chain");
         let chain_client = self.make_chain_client(default_chain_id);
         while key_pairs.len() < num_chains {
             let key_pair = self.wallet.generate_key_pair();
             let public_key = key_pair.public();
             let (epoch, committees) = chain_client.epoch_and_committees(default_chain_id).await?;
-            let epoch = epoch.context("missing epoch on the default chain")?;
+            let epoch = epoch.expect("default chain should be active");
             // Put at most 1000 OpenChain operations in each block.
             let num_new_chains = (num_chains - key_pairs.len()).min(1000);
             let config = OpenChainConfig {
@@ -504,12 +507,12 @@ where
             let executed_block = certificate
                 .value()
                 .executed_block()
-                .context("certificate should be confirmed block")?;
+                .expect("certificate should be confirmed block");
             let timestamp = executed_block.block.timestamp;
             for i in 0..num_new_chains {
                 let message_id = executed_block
                     .message_id_for_operation(i, OPEN_CHAIN_MESSAGE_INDEX)
-                    .context("failed to create new chain")?;
+                    .expect("failed to create new chain");
                 let chain_id = ChainId::child(message_id);
                 key_pairs.insert(chain_id, key_pair.copy());
                 self.update_wallet_for_new_chain(chain_id, Some(key_pair.copy()), timestamp);
@@ -531,11 +534,11 @@ where
         key_pairs: &HashMap<ChainId, KeyPair>,
         application_id: ApplicationId,
         max_in_flight: usize,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         let default_chain_id = self
             .wallet
             .default_chain()
-            .context("should have default chain")?;
+            .expect("should have default chain");
         let default_key = self
             .wallet
             .get(default_chain_id)
@@ -584,21 +587,20 @@ where
                             .contains_key(&application_id)
                             .await?
                         {
-                            return Ok(chain_client);
+                            return Ok::<_, Error>(chain_client);
                         }
                     }
-                    anyhow::bail!("Could not instantiate application on chain {:?}", chain_id);
+                    panic!("Could not instantiate application on chain {chain_id:?}");
                 }
             })
             .collect::<Vec<_>>();
         // We have to collect the futures to avoid a higher-ranked lifetime error:
         // https://github.com/rust-lang/rust/issues/102211#issuecomment-1673201352
-        let results = stream::iter(futures)
+        let clients = stream::iter(futures)
             .buffer_unordered(max_in_flight)
-            .collect::<Vec<_>>()
-            .await;
-        for result in results {
-            let client = result?;
+            .try_collect::<Vec<_>>()
+            .await?;
+        for client in clients {
             self.update_wallet_from_client(&client).await;
         }
         Ok(())
@@ -810,7 +812,7 @@ where
     }
 
     /// Stages the execution of a block proposal.
-    pub async fn stage_block_execution(&self, block: Block) -> anyhow::Result<ExecutedBlock> {
+    pub async fn stage_block_execution(&self, block: Block) -> Result<ExecutedBlock, Error> {
         Ok(self
             .client
             .local_node()

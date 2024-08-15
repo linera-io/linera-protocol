@@ -6,26 +6,63 @@ use std::{
     path::Path,
 };
 
-use anyhow::Context as _;
 use fs4::FileExt as _;
+use thiserror_context::Context;
 
 use super::Persist;
 
 /// A guard that keeps an exclusive lock on a file.
 struct Lock(fs_err::File);
 
+#[derive(Debug, thiserror::Error)]
+enum ErrorInner {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("JSON error: {0}")]
+    Serde(#[from] serde_json::Error),
+}
+
+thiserror_context::impl_context!(Error(ErrorInner));
+
+/// Utility: run a fallible cleanup function if an operation failed, attaching the
+/// original operation as context to its error.
+trait CleanupExt {
+    type Ok;
+    type Error;
+
+    fn or_cleanup<E>(self, f: impl FnOnce() -> Result<(), E>) -> Result<Self::Ok, Self::Error>
+    where
+        E: Into<Self::Error>,
+        Result<(), E>: Context<Self::Error, Self::Ok, E>;
+}
+
+impl<T, W> CleanupExt for Result<T, W>
+where
+    W: std::fmt::Display + Send + Sync + 'static,
+{
+    type Ok = T;
+    type Error = W;
+
+    fn or_cleanup<E>(self, cleanup: impl FnOnce() -> Result<(), E>) -> Self
+    where
+        E: Into<W>,
+        Result<(), E>: Context<W, T, E>,
+    {
+        self.or_else(|error| {
+            if let Err(cleanup_error) = cleanup() {
+                Err(cleanup_error).context(error)
+            } else {
+                Err(error)
+            }
+        })
+    }
+}
+
 impl Lock {
     /// Acquires an exclusive lock on a provided `file`, returning a [`Lock`] which will
     /// release the lock when dropped.
-    pub fn new(file: fs_err::File, path: &Path) -> anyhow::Result<Self> {
-        file.file().try_lock_exclusive().with_context(|| {
-            format!(
-                "Error getting write lock \"{}\". Please make sure the file exists \
-                 and that it is not in use by another process already.",
-                path.display()
-            )
-        })?;
-
+    pub fn new(file: fs_err::File) -> std::io::Result<Self> {
+        file.file().try_lock_exclusive()?;
         Ok(Lock(file))
     }
 }
@@ -69,7 +106,7 @@ fn open_options() -> fs_err::OpenOptions {
 
 impl<T: serde::de::DeserializeOwned> File<T> {
     /// Creates a new persistent file at `path` containing `value`.
-    pub fn new(path: &Path, value: T) -> anyhow::Result<Self> {
+    pub fn new(path: &Path, value: T) -> Result<Self, Error> {
         Ok(Self {
             _lock: Lock::new(
                 fs_err::OpenOptions::new()
@@ -77,17 +114,21 @@ impl<T: serde::de::DeserializeOwned> File<T> {
                     .write(true)
                     .create(true)
                     .open(path)?,
-                path,
-            )?,
+            )
+            .with_context(|| format!("locking path {}", path.display()))?,
             path: path.into(),
             value,
         })
     }
 
     /// Reads the value from a file at `path`, returning an error if it does not exist.
-    pub fn read(path: &Path) -> anyhow::Result<Self> {
+    pub fn read(path: &Path) -> Result<Self, Error> {
         Self::read_or_create(path, || {
-            Err(anyhow::anyhow!("Path does not exist: {}", path.display()))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("path does not exist: {}", path.display()),
+            )
+            .into())
         })
     }
 
@@ -95,9 +136,9 @@ impl<T: serde::de::DeserializeOwned> File<T> {
     /// if it does not exist. If it does exist, `value` will not be called.
     pub fn read_or_create(
         path: &Path,
-        value: impl FnOnce() -> anyhow::Result<T>,
-    ) -> anyhow::Result<Self> {
-        let lock = Lock::new(open_options().read(true).open(path)?, path)?;
+        value: impl FnOnce() -> Result<T, Error>,
+    ) -> Result<Self, Error> {
+        let lock = Lock::new(open_options().read(true).open(path)?)?;
         let mut reader = io::BufReader::new(&lock.0);
 
         Ok(Self {
@@ -113,7 +154,7 @@ impl<T: serde::de::DeserializeOwned> File<T> {
 }
 
 impl<T: serde::Serialize + serde::de::DeserializeOwned> Persist for File<T> {
-    type Error = anyhow::Error;
+    type Error = Error;
 
     fn as_mut(this: &mut Self) -> &mut T {
         &mut this.value
@@ -128,20 +169,21 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> Persist for File<T> {
     /// The temporary file is then renamed to the original filename. If
     /// serialization or writing to disk fails, the temporary file is
     /// deleted.
-    fn persist(this: &mut Self) -> anyhow::Result<()> {
+    fn persist(this: &mut Self) -> Result<(), Error> {
         let mut temp_file_path = this.path.clone();
         temp_file_path.set_extension("json.new");
         let temp_file = open_options().open(&temp_file_path)?;
         let mut temp_file_writer = std::io::BufWriter::new(temp_file);
 
-        if let Err(e) = serde_json::to_writer_pretty(&mut temp_file_writer, &this.value) {
-            fs_err::remove_file(&temp_file_path).context("handling writing error {e}")?;
-            anyhow::bail!("failed to serialize the wallet state: {e}")
-        }
-        if let Err(e) = temp_file_writer.flush() {
-            fs_err::remove_file(&temp_file_path).context("handling flushing error {e}")?;
-            anyhow::bail!("failed to write the wallet state: {e}");
-        }
+        let remove_temp_file = || fs_err::remove_file(&temp_file_path);
+
+        serde_json::to_writer_pretty(&mut temp_file_writer, &this.value)
+            .map_err(Error::from)
+            .or_cleanup(remove_temp_file)?;
+        temp_file_writer
+            .flush()
+            .map_err(Error::from)
+            .or_cleanup(remove_temp_file)?;
         fs_err::rename(&temp_file_path, &this.path)?;
         Ok(())
     }
