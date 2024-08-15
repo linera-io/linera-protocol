@@ -275,8 +275,13 @@ where
             ..RawExecutionOutcome::default()
         };
 
+        // Insert the message before the first user outcome.
+        let index = results
+            .iter()
+            .position(|outcome| matches!(outcome, ExecutionOutcome::User(_, _)))
+            .unwrap_or(results.len());
         // TODO(#2362): This inserts messages in front of existing ones, invalidating their IDs.
-        results.insert(0, ExecutionOutcome::System(system_outcome));
+        results.insert(index, ExecutionOutcome::System(system_outcome));
 
         Ok(())
     }
