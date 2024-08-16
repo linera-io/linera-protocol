@@ -21,7 +21,7 @@ mod transaction_tracker;
 mod util;
 mod wasm;
 
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{fmt, io, str::FromStr, sync::Arc};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
@@ -151,6 +151,8 @@ pub enum ExecutionError {
     MissingRuntimeResponse,
     #[error("Bytecode ID {0:?} is invalid")]
     InvalidBytecodeId(BytecodeId),
+    #[error("Bytecode could not be decompressed")]
+    InvalidCompressedBytecode(#[source] io::Error),
     #[error("Owner is None")]
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
@@ -1071,6 +1073,53 @@ impl AsRef<[u8]> for Bytecode {
 impl fmt::Debug for Bytecode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Bytecode").finish_non_exhaustive()
+    }
+}
+
+/// A compressed WebAssembly module's bytecode.
+#[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct CompressedBytecode {
+    #[serde(with = "serde_bytes")]
+    compressed_bytes: Vec<u8>,
+}
+
+impl From<&Bytecode> for CompressedBytecode {
+    fn from(bytecode: &Bytecode) -> Self {
+        let compressed_bytes = zstd::stream::encode_all(&*bytecode.bytes, 19)
+            .expect("Compressing bytes in memory should not fail");
+
+        CompressedBytecode { compressed_bytes }
+    }
+}
+
+impl From<Bytecode> for CompressedBytecode {
+    fn from(bytecode: Bytecode) -> Self {
+        CompressedBytecode::from(&bytecode)
+    }
+}
+
+impl TryFrom<&CompressedBytecode> for Bytecode {
+    type Error = ExecutionError;
+
+    fn try_from(compressed_bytecode: &CompressedBytecode) -> Result<Self, Self::Error> {
+        let bytes = zstd::stream::decode_all(&*compressed_bytecode.compressed_bytes)
+            .map_err(ExecutionError::InvalidCompressedBytecode)?;
+
+        Ok(Bytecode { bytes })
+    }
+}
+
+impl TryFrom<CompressedBytecode> for Bytecode {
+    type Error = ExecutionError;
+
+    fn try_from(compressed_bytecode: CompressedBytecode) -> Result<Self, Self::Error> {
+        Bytecode::try_from(&compressed_bytecode)
+    }
+}
+
+impl fmt::Debug for CompressedBytecode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CompressedBytecode").finish_non_exhaustive()
     }
 }
 
