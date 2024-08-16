@@ -122,8 +122,8 @@ where
 
     // Publish some bytecode.
     let publish_operation = SystemOperation::PublishBytecode {
-        contract: contract_bytecode,
-        service: service_bytecode,
+        contract: contract_bytecode.into(),
+        service: service_bytecode.into(),
     };
     let publish_message = SystemMessage::BytecodePublished {
         transaction_index: 0,
