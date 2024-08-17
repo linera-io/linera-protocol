@@ -125,9 +125,6 @@ BlockProposal:
     - validated_block_certificate:
         OPTION:
           TYPENAME: LiteCertificate
-Bytecode:
-  STRUCT:
-    - bytes: BYTES
 BytecodeId:
   STRUCT:
     - message_id:
@@ -340,6 +337,9 @@ Committee:
             TYPENAME: ValidatorState
     - policy:
         TYPENAME: ResourceControlPolicy
+CompressedBytecode:
+  STRUCT:
+    - compressed_bytes: BYTES
 CrateVersion:
   STRUCT:
     - major: U32
@@ -1000,9 +1000,9 @@ SystemOperation:
       PublishBytecode:
         STRUCT:
           - contract:
-              TYPENAME: Bytecode
+              TYPENAME: CompressedBytecode
           - service:
-              TYPENAME: Bytecode
+              TYPENAME: CompressedBytecode
     9:
       PublishBlob:
         STRUCT:
