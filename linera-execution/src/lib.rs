@@ -1070,7 +1070,7 @@ impl AsRef<[u8]> for Bytecode {
 
 impl fmt::Debug for Bytecode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Bytecode").finish()
+        f.debug_struct("Bytecode").finish_non_exhaustive()
     }
 }
 
