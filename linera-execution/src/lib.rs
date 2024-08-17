@@ -1068,8 +1068,8 @@ impl AsRef<[u8]> for Bytecode {
     }
 }
 
-impl std::fmt::Debug for Bytecode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl fmt::Debug for Bytecode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Bytecode").finish()
     }
 }
