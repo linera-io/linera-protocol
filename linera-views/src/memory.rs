@@ -241,7 +241,9 @@ impl MemoryStore {
     }
 
     fn sync_create(memory_stores: &mut MemoryStores, namespace: &str) {
-        memory_stores.stores.insert(namespace.to_string(), BTreeMap::new());
+        memory_stores
+            .stores
+            .insert(namespace.to_string(), BTreeMap::new());
     }
 
     fn sync_delete(memory_stores: &mut MemoryStores, namespace: &str) {
