@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fmt::Debug,
     sync::{Arc, LazyLock, Mutex, RwLock},
 };
 
-use linera_base::ensure;
 use thiserror::Error;
 
 #[cfg(with_testing)]
@@ -51,8 +50,7 @@ type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 /// The container for the `MemoryStopMap` according to the Namespace and Namespace/root_key
 #[derive(Default)]
 struct MemoryStores {
-    stores: BTreeMap<(String, Vec<u8>), Arc<RwLock<MemoryStoreMap>>>,
-    namespaces: BTreeSet<String>,
+    stores: BTreeMap<String, BTreeMap<Vec<u8>, Arc<RwLock<MemoryStoreMap>>>>,
 }
 
 /// The global variables of the Namespace memory stores
@@ -68,7 +66,7 @@ pub struct MemoryStore {
     max_stream_queries: usize,
     /// The namespace of the store
     namespace: String,
-    /// The root_key of the store
+    /// The root key of the store
     root_key: Vec<u8>,
     /// Whether to kill on drop or not the
     kill_on_drop: bool,
@@ -80,8 +78,8 @@ impl Drop for MemoryStore {
             let mut memory_stores = MEMORY_STORES
                 .lock()
                 .expect("MEMORY_STORES lock should not be poisoned");
-            let pair = (self.namespace.clone(), self.root_key.clone());
-            memory_stores.stores.remove(&pair);
+            let stores = memory_stores.stores.get_mut(&self.namespace).unwrap();
+            stores.remove(&self.root_key);
         }
     }
 }
@@ -215,12 +213,10 @@ impl MemoryStore {
         kill_on_drop: bool,
     ) -> Result<Self, MemoryStoreError> {
         let max_stream_queries = config.common_config.max_stream_queries;
-        ensure!(
-            memory_stores.namespaces.contains(namespace),
-            MemoryStoreError::NotExistentNamespace
-        );
-        let pair = (namespace.to_string(), root_key.to_vec());
-        let store = memory_stores.stores.entry(pair).or_insert_with(|| {
+        let Some(stores) = memory_stores.stores.get_mut(namespace) else {
+            return Err(MemoryStoreError::NotExistentNamespace);
+        };
+        let store = stores.entry(root_key.to_vec()).or_insert_with(|| {
             let map = MemoryStoreMap::new();
             Arc::new(RwLock::new(map))
         });
@@ -237,32 +233,22 @@ impl MemoryStore {
     }
 
     fn sync_list_all(memory_stores: &MemoryStores) -> Vec<String> {
-        memory_stores.namespaces.iter().cloned().collect::<Vec<_>>()
+        memory_stores.stores.keys().cloned().collect::<Vec<_>>()
     }
 
     fn sync_exists(memory_stores: &MemoryStores, namespace: &str) -> bool {
-        memory_stores.namespaces.contains(namespace)
+        memory_stores.stores.contains_key(namespace)
     }
 
     fn sync_create(memory_stores: &mut MemoryStores, namespace: &str) {
-        memory_stores.namespaces.insert(namespace.to_string());
+        memory_stores.stores.insert(namespace.to_string(), BTreeMap::new());
     }
 
     fn sync_delete(memory_stores: &mut MemoryStores, namespace: &str) {
-        let namespace = namespace.to_string();
-        memory_stores.namespaces.remove(&namespace);
-        let mut pair_removes = Vec::new();
-        for key in memory_stores.stores.keys() {
-            if key.0 == namespace {
-                pair_removes.push(key.clone());
-            }
-        }
-        for pair in pair_removes {
-            memory_stores.stores.remove(&pair);
-        }
+        memory_stores.stores.remove(namespace);
     }
 
-    /// Create a memory store if one is missing and otherwise connect with the existing one
+    /// Connects to a memory store. Creates it if it does not exist yet
     fn sync_maybe_create_and_connect(
         config: &MemoryStoreConfig,
         namespace: &str,

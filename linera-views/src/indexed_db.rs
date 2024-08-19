@@ -58,7 +58,7 @@ pub struct IndexedDbStore {
     pub object_store_name: String,
     /// The maximum number of queries used for the stream.
     pub max_stream_queries: usize,
-    /// The used root_key
+    /// The used root key
     root_key: Vec<u8>,
 }
 
