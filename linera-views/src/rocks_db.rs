@@ -498,35 +498,19 @@ pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
 pub type RocksDbContext<E> = ContextFromStore<E, RocksDbStore>;
 
 impl RocksDbStore {
-    fn cache_size(&self) -> usize {
-        #[cfg(with_metrics)]
-        {
-            self.store.store.store.store.store.store.cache_size
-        }
-        #[cfg(not(with_metrics))]
-        {
-            self.store.store.store.cache_size
-        }
+    #[cfg(with_metrics)]
+    fn inner(&self) -> &RocksDbStoreInternal {
+        &self.store
+            .store
+            .store
+            .store
+            .store
+            .store
     }
 
-    fn inner_clone_with_root_key(
-        &self,
-        root_key: &[u8],
-    ) -> Result<RocksDbStoreInternal, RocksDbStoreError> {
-        #[cfg(with_metrics)]
-        {
-            self.store
-                .store
-                .store
-                .store
-                .store
-                .store
-                .clone_with_root_key(root_key)
-        }
-        #[cfg(not(with_metrics))]
-        {
-            self.store.store.store.clone_with_root_key(root_key)
-        }
+    #[cfg(not(with_metrics))]
+    fn inner(&self) -> &RocksDbStoreInternal {
+        &self.store.store.store
     }
 }
 
@@ -608,8 +592,8 @@ impl AdminKeyValueStore for RocksDbStore {
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreError> {
-        let store = self.inner_clone_with_root_key(root_key)?;
-        let cache_size = self.cache_size();
+        let store = self.inner().clone_with_root_key(root_key)?;
+        let cache_size = self.inner().cache_size;
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&ROCKS_DB_METRICS, store);
         let store = ValueSplittingStore::new(store);
