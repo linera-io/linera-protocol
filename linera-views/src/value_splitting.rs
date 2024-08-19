@@ -216,7 +216,7 @@ where
 {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), K::Error> {
         let mut batch_new = Batch::new();
         for operation in batch.operations {
             match operation {
@@ -246,11 +246,11 @@ where
                 }
             }
         }
-        self.store.write_batch(batch_new, base_key).await
+        self.store.write_batch(batch_new).await
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), K::Error> {
-        self.store.clear_journal(base_key).await
+    async fn clear_journal(&self) -> Result<(), K::Error> {
+        self.store.clear_journal().await
     }
 }
 
@@ -261,8 +261,17 @@ where
     type Error = K::Error;
     type Config = K::Config;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
-        let store = K::connect(config, namespace).await?;
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, Self::Error> {
+        let store = K::connect(config, namespace, root_key).await?;
+        Ok(Self { store })
+    }
+
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let store = self.store.clone_with_root_key(root_key)?;
         Ok(Self { store })
     }
 
@@ -403,16 +412,16 @@ impl WritableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
     // purely for testing purposes.
     const MAX_VALUE_SIZE: usize = 100;
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), MemoryStoreError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), MemoryStoreError> {
         ensure!(
             batch.check_value_size(Self::MAX_VALUE_SIZE),
             MemoryStoreError::TooLargeValue
         );
-        self.store.write_batch(batch, base_key).await
+        self.store.write_batch(batch).await
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), MemoryStoreError> {
-        self.store.clear_journal(base_key).await
+    async fn clear_journal(&self) -> Result<(), MemoryStoreError> {
+        self.store.clear_journal().await
     }
 }
 
@@ -426,8 +435,10 @@ impl LimitedTestMemoryStore {
     /// Creates a `LimitedTestMemoryStore`
     pub fn new() -> Self {
         let namespace = generate_test_namespace();
+        let root_key = &[];
         let store =
-            MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace).unwrap();
+            MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, root_key)
+                .unwrap();
         LimitedTestMemoryStore { store }
     }
 }
@@ -461,14 +472,14 @@ mod tests {
         let mut batch = Batch::new();
         let value = Vec::from([0; MAX_LEN + 1]);
         batch.put_key_value_bytes(key.clone(), value.clone());
-        big_store.write_batch(batch, &[]).await.unwrap();
+        big_store.write_batch(batch).await.unwrap();
         let value_read = big_store.read_value_bytes(&key).await.unwrap();
         assert_eq!(value_read, Some(value));
         // Write a key with a smaller value
         let mut batch = Batch::new();
         let value = Vec::from([0, 1]);
         batch.put_key_value_bytes(key.clone(), value.clone());
-        big_store.write_batch(batch, &[]).await.unwrap();
+        big_store.write_batch(batch).await.unwrap();
         let value_read = big_store.read_value_bytes(&key).await.unwrap();
         assert_eq!(value_read, Some(value));
         // Two segments are present even though only one is used
@@ -490,7 +501,7 @@ mod tests {
             value.push(rng.gen::<u8>());
         }
         batch.put_key_value_bytes(key.clone(), value.clone());
-        big_store.write_batch(batch, &[]).await.unwrap();
+        big_store.write_batch(batch).await.unwrap();
         let value_read = big_store.read_value_bytes(&key).await.unwrap();
         assert_eq!(value_read, Some(value.clone()));
         // Reading the segments and checking
@@ -527,11 +538,11 @@ mod tests {
             value.push(rng.gen::<u8>());
         }
         batch.put_key_value_bytes(key.clone(), value.clone());
-        big_store.write_batch(batch, &[]).await.unwrap();
+        big_store.write_batch(batch).await.unwrap();
         // deleting it
         let mut batch = Batch::new();
         batch.delete_key(key.clone());
-        big_store.write_batch(batch, &[]).await.unwrap();
+        big_store.write_batch(batch).await.unwrap();
         // reading everything (there are leftover keys)
         let key_values = big_store.find_key_values_by_prefix(&[0]).await.unwrap();
         assert_eq!(key_values.len(), 0);

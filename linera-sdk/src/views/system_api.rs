@@ -152,12 +152,12 @@ impl ReadableKeyValueStore<ViewError> for KeyValueStore {
 impl WritableKeyValueStore<ViewError> for KeyValueStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
-    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         self.wit_api.write_batch(batch);
         Ok(())
     }
 
-    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), ViewError> {
+    async fn clear_journal(&self) -> Result<(), ViewError> {
         Ok(())
     }
 }
