@@ -1102,13 +1102,7 @@ impl AdminKeyValueStore for DynamoDbStore {
 impl DynamoDbStore {
     #[cfg(with_metrics)]
     fn inner(&self) -> &DynamoDbStoreInternal {
-        &self.store
-            .store
-            .store
-            .store
-            .store
-            .store
-            .store
+        &self.store.store.store.store.store.store.store
     }
 
     #[cfg(not(with_metrics))]

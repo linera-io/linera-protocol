@@ -500,12 +500,7 @@ pub type RocksDbContext<E> = ContextFromStore<E, RocksDbStore>;
 impl RocksDbStore {
     #[cfg(with_metrics)]
     fn inner(&self) -> &RocksDbStoreInternal {
-        &self.store
-            .store
-            .store
-            .store
-            .store
-            .store
+        &self.store.store.store.store.store.store
     }
 
     #[cfg(not(with_metrics))]

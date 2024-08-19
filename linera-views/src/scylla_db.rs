@@ -932,11 +932,7 @@ impl KeyValueStore for ScyllaDbStore {
 impl ScyllaDbStore {
     #[cfg(with_metrics)]
     fn inner(&self) -> &ScyllaDbStoreInternal {
-        &self.store
-            .store
-            .store
-            .store
-            .store
+        &self.store.store.store.store.store
     }
 
     #[cfg(not(with_metrics))]
