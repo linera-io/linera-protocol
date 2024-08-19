@@ -47,7 +47,7 @@ pub const TEST_MEMORY_MAX_STREAM_QUERIES: usize = 10;
 /// The analog of the database is the BTreeMap
 type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
-/// The container for the `MemoryStopMap` according to the Namespace and Namespace/root_key
+/// The container for the `MemoryStoreMap`s by namespace and then root key
 #[derive(Default)]
 struct MemoryStores {
     stores: BTreeMap<String, BTreeMap<Vec<u8>, Arc<RwLock<MemoryStoreMap>>>>,
@@ -63,7 +63,7 @@ impl MemoryStores {
     ) -> Result<MemoryStore, MemoryStoreError> {
         let max_stream_queries = config.common_config.max_stream_queries;
         let Some(stores) = self.stores.get_mut(namespace) else {
-            return Err(MemoryStoreError::NotExistentNamespace);
+            return Err(MemoryStoreError::NamespaceNotFound);
         };
         let store = stores.entry(root_key.to_vec()).or_insert_with(|| {
             let map = MemoryStoreMap::new();
@@ -446,7 +446,7 @@ pub enum MemoryStoreError {
 
     /// The namespace does not exist
     #[error("The namespace does not exist")]
-    NotExistentNamespace,
+    NamespaceNotFound,
 
     /// The database is not consistent
     #[error(transparent)]
