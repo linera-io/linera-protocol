@@ -773,12 +773,6 @@ impl ScyllaDbStoreInternal {
         }
     }
 
-    /// Retrieves the table_name from the store
-    pub async fn get_namespace(&self) -> String {
-        let store = self.store.deref();
-        store.namespace.clone()
-    }
-
     fn check_namespace(namespace: &str) -> Result<(), ScyllaDbStoreError> {
         if !namespace.is_empty()
             && namespace.len() <= 48
@@ -936,18 +930,6 @@ impl KeyValueStore for ScyllaDbStore {
 }
 
 impl ScyllaDbStore {
-    /// Gets the table name of the ScyllaDB store.
-    pub async fn get_namespace(&self) -> String {
-        #[cfg(with_metrics)]
-        {
-            self.store.store.store.store.store.get_namespace().await
-        }
-        #[cfg(not(with_metrics))]
-        {
-            self.store.store.store.get_namespace().await
-        }
-    }
-
     #[cfg(with_metrics)]
     fn inner(&self) -> &ScyllaDbStoreInternal {
         &self.store
