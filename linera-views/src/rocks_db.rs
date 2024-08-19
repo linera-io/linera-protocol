@@ -507,6 +507,18 @@ impl RocksDbStore {
     fn inner(&self) -> &RocksDbStoreInternal {
         &self.store.store.store
     }
+
+    fn from_inner(store: RocksDbStoreInternal, cache_size: usize) -> RocksDbStore {
+        #[cfg(with_metrics)]
+        let store = MeteredStore::new(&ROCKS_DB_METRICS, store);
+        let store = ValueSplittingStore::new(store);
+        #[cfg(with_metrics)]
+        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
+        let store = LruCachingStore::new(store, cache_size);
+        #[cfg(with_metrics)]
+        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
+        Self { store }
+    }
 }
 
 impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStore {
@@ -575,29 +587,13 @@ impl AdminKeyValueStore for RocksDbStore {
     ) -> Result<Self, RocksDbStoreError> {
         let store = RocksDbStoreInternal::connect(config, namespace, root_key).await?;
         let cache_size = config.common_config.cache_size;
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&ROCKS_DB_METRICS, store);
-        let store = ValueSplittingStore::new(store);
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
-        let store = LruCachingStore::new(store, cache_size);
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
-        Ok(Self { store })
+        Ok(Self::from_inner(store, cache_size))
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreError> {
         let store = self.inner().clone_with_root_key(root_key)?;
         let cache_size = self.inner().cache_size;
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&ROCKS_DB_METRICS, store);
-        let store = ValueSplittingStore::new(store);
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
-        let store = LruCachingStore::new(store, cache_size);
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
-        Ok(Self { store })
+        Ok(Self::from_inner(store, cache_size))
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbStoreError> {

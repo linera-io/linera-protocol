@@ -1051,31 +1051,13 @@ impl AdminKeyValueStore for DynamoDbStore {
     ) -> Result<Self, DynamoDbStoreError> {
         let cache_size = config.common_config.cache_size;
         let simple_store = DynamoDbStoreInternal::connect(config, namespace, root_key).await?;
-        let store = JournalingKeyValueStore::new(simple_store);
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&DYNAMO_DB_METRICS, store);
-        let store = ValueSplittingStore::new(store);
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
-        let store = LruCachingStore::new(store, cache_size);
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
-        Ok(Self { store })
+        Ok(Self::from_inner(simple_store, cache_size))
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, DynamoDbStoreError> {
         let cache_size = self.inner().cache_size;
         let simple_store = self.inner().clone_with_root_key(root_key)?;
-        let store = JournalingKeyValueStore::new(simple_store);
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&DYNAMO_DB_METRICS, store);
-        let store = ValueSplittingStore::new(store);
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
-        let store = LruCachingStore::new(store, cache_size);
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
-        Ok(Self { store })
+        Ok(Self::from_inner(simple_store, cache_size))
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbStoreError> {
@@ -1108,6 +1090,19 @@ impl DynamoDbStore {
     #[cfg(not(with_metrics))]
     fn inner(&self) -> &DynamoDbStoreInternal {
         &self.store.store.store.store
+    }
+
+    fn from_inner(simple_store: DynamoDbStoreInternal, cache_size: usize) -> DynamoDbStore {
+        let store = JournalingKeyValueStore::new(simple_store);
+        #[cfg(with_metrics)]
+        let store = MeteredStore::new(&DYNAMO_DB_METRICS, store);
+        let store = ValueSplittingStore::new(store);
+        #[cfg(with_metrics)]
+        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
+        let store = LruCachingStore::new(store, cache_size);
+        #[cfg(with_metrics)]
+        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
+        Self { store }
     }
 }
 
