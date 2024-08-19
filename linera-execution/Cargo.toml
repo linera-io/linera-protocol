@@ -60,6 +60,7 @@ wasm-encoder = { workspace = true, optional = true }
 wasm-instrument = { workspace = true, optional = true, features = ["sign_ext"] }
 wasmparser = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true }
+zstd.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }

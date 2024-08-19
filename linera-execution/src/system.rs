@@ -37,9 +37,9 @@ use {linera_base::prometheus_util, prometheus::IntCounterVec};
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
-    Destination, ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext,
-    QueryContext, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker,
+    ApplicationRegistryView, BytecodeLocation, ChannelName, ChannelSubscription,
+    CompressedBytecode, Destination, ExecutionRuntimeContext, MessageContext, MessageKind,
+    OperationContext, QueryContext, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker,
     UserApplicationDescription, UserApplicationId,
 };
 
@@ -157,8 +157,8 @@ pub enum SystemOperation {
     },
     /// Publishes a new application bytecode.
     PublishBytecode {
-        contract: Bytecode,
-        service: Bytecode,
+        contract: CompressedBytecode,
+        service: CompressedBytecode,
     },
     /// Publishes a new blob.
     PublishBlob { blob_id: BlobId },
@@ -1110,7 +1110,7 @@ mod tests {
     use linera_views::memory::MemoryContext;
 
     use super::*;
-    use crate::{ExecutionOutcome, ExecutionStateView, TestExecutionRuntimeContext};
+    use crate::{Bytecode, ExecutionOutcome, ExecutionStateView, TestExecutionRuntimeContext};
 
     /// Returns an execution state view and a matching operation context, for epoch 1, with root
     /// chain 0 as the admin ID and one empty committee.
@@ -1141,8 +1141,8 @@ mod tests {
     async fn bytecode_message_index() {
         let (mut view, context) = new_view_and_context().await;
         let operation = SystemOperation::PublishBytecode {
-            contract: Bytecode::new(vec![]),
-            service: Bytecode::new(vec![]),
+            contract: Bytecode::new(vec![]).into(),
+            service: Bytecode::new(vec![]).into(),
         };
         let mut txn_tracker = TransactionTracker::default();
         let new_application = view

@@ -24,7 +24,7 @@ use linera_execution::{
         SystemChannel, SystemExecutionError, SystemMessage, SystemOperation,
         CREATE_APPLICATION_MESSAGE_INDEX, PUBLISH_BYTECODE_MESSAGE_INDEX,
     },
-    Bytecode, ExecutionError, Message, Query, Response,
+    Bytecode, CompressedBytecode, ExecutionError, Message, Query, Response,
 };
 use serde::Serialize;
 use tokio::{fs, sync::Mutex};
@@ -219,8 +219,12 @@ impl ActiveChain {
     /// Searches the Cargo manifest of the crate calling this method for binaries to use as the
     /// contract and service bytecodes.
     ///
-    /// Returns a tuple with the loaded contract and service [`Bytecode`]s.
-    async fn find_bytecodes_in(&self, repository: &Path) -> (Bytecode, Bytecode) {
+    /// Returns a tuple with the loaded contract and service [`CompressedBytecode`]s,
+    /// ready to be published.
+    async fn find_bytecodes_in(
+        &self,
+        repository: &Path,
+    ) -> (CompressedBytecode, CompressedBytecode) {
         let manifest_path = repository.join("Cargo.toml");
         let cargo_manifest =
             Manifest::from_path(manifest_path).expect("Failed to load Cargo.toml manifest");
@@ -252,14 +256,14 @@ impl ActiveChain {
         let contract_path = base_path.join(format!("{}.wasm", contract_binary));
         let service_path = base_path.join(format!("{}.wasm", service_binary));
 
-        (
-            Bytecode::load_from_file(contract_path)
-                .await
-                .expect("Failed to load contract bytecode from file"),
-            Bytecode::load_from_file(service_path)
-                .await
-                .expect("Failed to load service bytecode from file"),
-        )
+        let contract = Bytecode::load_from_file(contract_path)
+            .await
+            .expect("Failed to load contract bytecode from file");
+        let service = Bytecode::load_from_file(service_path)
+            .await
+            .expect("Failed to load service bytecode from file");
+
+        (contract.into(), service.into())
     }
 
     /// Searches for the directory where the built WebAssembly binaries should be.

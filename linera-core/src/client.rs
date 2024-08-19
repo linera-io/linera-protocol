@@ -2516,8 +2516,8 @@ where
         service: Bytecode,
     ) -> Result<ClientOutcome<(BytecodeId, Certificate)>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::PublishBytecode {
-            contract: contract.clone(),
-            service: service.clone(),
+            contract: contract.into(),
+            service: service.into(),
         }))
         .await?
         .try_map(|certificate| {

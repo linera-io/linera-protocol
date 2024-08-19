@@ -164,6 +164,7 @@ webassembly-test = "0.1.0"
 web-sys = "0.3.69"
 web-time = "1.1.0"
 wit-bindgen = "0.24.0"
+zstd = "0.13.2"
 
 linera-base = { version = "0.12.0", path = "./linera-base" }
 linera-chain = { version = "0.12.0", path = "./linera-chain" }

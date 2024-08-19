@@ -327,7 +327,7 @@ pub trait Storage: Sized {
             unreachable!("unexpected bytecode operation");
         };
         Ok(Arc::new(
-            WasmContractModule::new(contract, wasm_runtime).await?,
+            WasmContractModule::new(contract.try_into()?, wasm_runtime).await?,
         ))
     }
 
@@ -360,7 +360,7 @@ pub trait Storage: Sized {
             unreachable!("unexpected bytecode operation");
         };
         Ok(Arc::new(
-            WasmServiceModule::new(service, wasm_runtime).await?,
+            WasmServiceModule::new(service.try_into()?, wasm_runtime).await?,
         ))
     }
 
