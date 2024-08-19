@@ -119,9 +119,10 @@ impl LocalReadableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, IndexedDbStoreError> {
-        future::try_join_all(keys.into_iter().map(|key| async move {
-            self.contains_key(&key).await
-        }))
+        future::try_join_all(
+            keys.into_iter()
+                .map(|key| async move { self.contains_key(&key).await }),
+        )
         .await
     }
 
@@ -129,9 +130,10 @@ impl LocalReadableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, IndexedDbStoreError> {
-        future::try_join_all(keys.into_iter().map(|key| async move {
-            self.read_value_bytes(&key).await
-        }))
+        future::try_join_all(
+            keys.into_iter()
+                .map(|key| async move { self.read_value_bytes(&key).await }),
+        )
         .await
     }
 
