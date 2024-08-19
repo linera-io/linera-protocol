@@ -1064,8 +1064,8 @@ impl AdminKeyValueStore for DynamoDbStore {
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, DynamoDbStoreError> {
-        let cache_size = self.cache_size();
-        let simple_store = self.inner_clone_with_root_key(root_key)?;
+        let cache_size = self.inner().cache_size;
+        let simple_store = self.inner().clone_with_root_key(root_key)?;
         let store = JournalingKeyValueStore::new(simple_store);
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&DYNAMO_DB_METRICS, store);
@@ -1100,36 +1100,20 @@ impl AdminKeyValueStore for DynamoDbStore {
 }
 
 impl DynamoDbStore {
-    fn inner_clone_with_root_key(
-        &self,
-        root_key: &[u8],
-    ) -> Result<DynamoDbStoreInternal, DynamoDbStoreError> {
-        #[cfg(with_metrics)]
-        {
-            self.store
-                .store
-                .store
-                .store
-                .store
-                .store
-                .store
-                .clone_with_root_key(root_key)
-        }
-        #[cfg(not(with_metrics))]
-        {
-            self.store.store.store.store.clone_with_root_key(root_key)
-        }
+    #[cfg(with_metrics)]
+    fn inner(&self) -> &DynamoDbStoreInternal {
+        &self.store
+            .store
+            .store
+            .store
+            .store
+            .store
+            .store
     }
 
-    fn cache_size(&self) -> usize {
-        #[cfg(with_metrics)]
-        {
-            self.store.store.store.store.store.store.store.cache_size
-        }
-        #[cfg(not(with_metrics))]
-        {
-            self.store.store.store.store.cache_size
-        }
+    #[cfg(not(with_metrics))]
+    fn inner(&self) -> &DynamoDbStoreInternal {
+        &self.store.store.store.store
     }
 }
 
