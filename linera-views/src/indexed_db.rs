@@ -72,10 +72,10 @@ impl IndexedDbStore {
         Ok(f(object_store))
     }
 
-    fn extend_key(&self, key: &[u8]) -> Vec<u8> {
-        let mut extended_key = self.root_key.clone();
-        extended_key.extend(key);
-        extended_key
+    fn full_key(&self, key: &[u8]) -> Vec<u8> {
+        let mut full_key = self.root_key.clone();
+        full_key.extend(key);
+        full_key
     }
 }
 
@@ -104,14 +104,14 @@ impl LocalReadableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, IndexedDbStoreError> {
-        let key = self.extend_key(key);
+        let key = self.full_key(key);
         let key = js_sys::Uint8Array::from(key.as_slice());
         let value = self.with_object_store(|o| o.get(&key))??.await?;
         Ok(value.map(|v| js_sys::Uint8Array::new(&v).to_vec()))
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, IndexedDbStoreError> {
-        let key = self.extend_key(key);
+        let key = self.full_key(key);
         let key = js_sys::Uint8Array::from(key.as_slice());
         let count = self.with_object_store(|o| o.count_with_key(&key))??.await?;
         assert!(count < 2);
@@ -120,7 +120,6 @@ impl LocalReadableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, IndexedDbStoreError> {
         future::try_join_all(keys.into_iter().map(|key| async move {
-            let key = self.extend_key(&key);
             self.contains_key(&key).await
         }))
         .await
@@ -131,7 +130,6 @@ impl LocalReadableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, IndexedDbStoreError> {
         future::try_join_all(keys.into_iter().map(|key| async move {
-            let key = self.extend_key(&key);
             self.read_value_bytes(&key).await
         }))
         .await
@@ -141,7 +139,7 @@ impl LocalReadableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, IndexedDbStoreError> {
-        let key_prefix = self.extend_key(key_prefix);
+        let key_prefix = self.full_key(key_prefix);
         let range = prefix_to_range(&key_prefix)?;
         Ok(self
             .with_object_store(|o| o.get_all_keys_with_key(&range))??
@@ -159,7 +157,7 @@ impl LocalReadableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, IndexedDbStoreError> {
         let mut key_values = vec![];
-        let key_prefix = self.extend_key(key_prefix);
+        let key_prefix = self.full_key(key_prefix);
         let range = prefix_to_range(&key_prefix)?;
         let transaction = self.database.transaction_on_one(&self.object_store_name)?;
         let object_store = transaction.object_store(&self.object_store_name)?;
@@ -197,7 +195,7 @@ impl LocalWritableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
         for ent in batch.operations {
             match ent {
                 WriteOperation::Put { key, value } => {
-                    let key = self.extend_key(&key);
+                    let key = self.full_key(&key);
                     object_store
                         .put_key_val_owned(
                             js_sys::Uint8Array::from(&key[..]),
@@ -206,13 +204,13 @@ impl LocalWritableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
                         .await?;
                 }
                 WriteOperation::Delete { key } => {
-                    let key = self.extend_key(&key);
+                    let key = self.full_key(&key);
                     object_store
                         .delete_owned(js_sys::Uint8Array::from(&key[..]))?
                         .await?;
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    let key_prefix = self.extend_key(&key_prefix);
+                    let key_prefix = self.full_key(&key_prefix);
                     object_store
                         .delete_owned(prefix_to_range(&key_prefix[..])?)?
                         .await?;
