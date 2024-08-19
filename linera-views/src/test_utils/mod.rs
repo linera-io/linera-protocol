@@ -332,13 +332,13 @@ fn get_random_key_values1(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>,
 }
 
 /// Generates a list of random key-values with no duplicates
-pub fn get_random_key_values2(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+pub fn get_random_key_values2(num_entries: usize, len_key: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     let mut rng = make_deterministic_rng();
     let key_prefix = vec![0];
     let mut key_values = Vec::new();
     let mut key_set = HashSet::new();
     for _ in 0..num_entries {
-        let key = get_small_key_space(&mut rng, &key_prefix, 4);
+        let key = get_small_key_space(&mut rng, &key_prefix, len_key);
         if !key_set.contains(&key) {
             key_set.insert(key.clone());
             let value = get_random_byte_vector(&mut rng, &[], len_value);
@@ -366,8 +366,8 @@ pub fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
         get_random_key_values1(7, 3),
         get_random_key_values1(150, 3),
         get_random_key_values1(30, 10),
-        get_random_key_values2(30, 10),
-        get_random_key_values2(30, 100),
+        get_random_key_values2(30, 4, 10),
+        get_random_key_values2(30, 4, 100),
     ]
 }
 

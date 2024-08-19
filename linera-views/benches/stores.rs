@@ -21,20 +21,33 @@ use linera_views::{
 };
 use tokio::runtime::Runtime;
 
-// We generate about 200 keys of length 4 with a key of length 10000
-// The keys are of the form 0,x,y,z,t with 0<= x,y,z,t < 4.
+// We generate about 2000 keys of length 11 with a key of length 10000
+// The keys are of the form 0,x_1, ..., x_n with 0 <= x_i < 4 and n=10.
 
 /// A value to use for the keys
 const PREFIX: &[u8] = &[0];
 
 /// A value to use for the keys
-const PREFIX_SEARCH: &[u8] = &[0];
+const PREFIX_SEARCH: &[u8] = &[0,0];
 
 /// The number of keys length
 const NUM_ENTRIES: usize = 200;
 
+/// The number of inserted keys
+const NUM_INSERT: usize = 70;
+
+/// The length of the keys
+const LEN_KEY: usize = 10;
+
 /// The length of the values
 const LEN_VALUE: usize = 10000;
+
+async fn clear_store<S: LocalKeyValueStore>(store: &S) {
+    let mut batch = Batch::new();
+    batch.delete_key_prefix(PREFIX.to_vec());
+    store.write_batch(batch, &[]).await.unwrap();
+}
+
 
 pub async fn performance_contains_key<S: LocalKeyValueStore>(store: S, iterations: u64) -> Duration
 where
@@ -42,9 +55,9 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
         let mut batch = Batch::new();
-        for key_value in &key_values {
+        for key_value in &key_values[..NUM_INSERT] {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
         store.write_batch(batch, &[]).await.unwrap();
@@ -55,9 +68,7 @@ where
         }
         total_time += measurement.elapsed();
 
-        let mut batch = Batch::new();
-        batch.delete_key_prefix(PREFIX.to_vec());
-        store.write_batch(batch, &[]).await.unwrap();
+        clear_store(&store).await;
     }
 
     total_time
@@ -110,9 +121,9 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
         let mut batch = Batch::new();
-        for key_value in &key_values {
+        for key_value in &key_values[..NUM_INSERT] {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
         store.write_batch(batch, &[]).await.unwrap();
@@ -125,9 +136,7 @@ where
         black_box(store.contains_keys(keys).await.unwrap());
         total_time += measurement.elapsed();
 
-        let mut batch = Batch::new();
-        batch.delete_key_prefix(PREFIX.to_vec());
-        store.write_batch(batch, &[]).await.unwrap();
+        clear_store(&store).await;
     }
 
     total_time
@@ -183,7 +192,7 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
@@ -194,9 +203,7 @@ where
         black_box(store.find_keys_by_prefix(PREFIX_SEARCH).await.unwrap());
         total_time += measurement.elapsed();
 
-        let mut batch = Batch::new();
-        batch.delete_key_prefix(PREFIX.to_vec());
-        store.write_batch(batch, &[]).await.unwrap();
+        clear_store(&store).await;
     }
 
     total_time
@@ -252,7 +259,7 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
@@ -263,9 +270,7 @@ where
         black_box(store.find_key_values_by_prefix(PREFIX_SEARCH).await.unwrap());
         total_time += measurement.elapsed();
 
-        let mut batch = Batch::new();
-        batch.delete_key_prefix(PREFIX.to_vec());
-        store.write_batch(batch, &[]).await.unwrap();
+        clear_store(&store).await;
     }
 
     total_time
@@ -321,7 +326,7 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
@@ -334,9 +339,7 @@ where
         }
         total_time += measurement.elapsed();
 
-        let mut batch = Batch::new();
-        batch.delete_key_prefix(PREFIX.to_vec());
-        store.write_batch(batch, &[]).await.unwrap();
+        clear_store(&store).await;
     }
 
     total_time
@@ -392,7 +395,7 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
@@ -407,9 +410,7 @@ where
         black_box(store.read_multi_values_bytes(keys).await.unwrap());
         total_time += measurement.elapsed();
 
-        let mut batch = Batch::new();
-        batch.delete_key_prefix(PREFIX.to_vec());
-        store.write_batch(batch, &[]).await.unwrap();
+        clear_store(&store).await;
     }
 
     total_time
@@ -462,7 +463,7 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_VALUE));
+        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
@@ -472,9 +473,7 @@ where
         store.write_batch(batch, &[]).await.unwrap();
         total_time += measurement.elapsed();
 
-        let mut batch = Batch::new();
-        batch.delete_key_prefix(PREFIX.to_vec());
-        store.write_batch(batch, &[]).await.unwrap();
+        clear_store(&store).await;
     }
 
     total_time
