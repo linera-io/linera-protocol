@@ -30,7 +30,7 @@ const PREFIX: &[u8] = &[0];
 /// A value to use for the keys
 const PREFIX_SEARCH: &[u8] = &[0, 0];
 
-/// The number of keys length
+/// The number of keys
 const NUM_ENTRIES: usize = 200;
 
 /// The number of inserted keys
