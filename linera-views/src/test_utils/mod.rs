@@ -332,7 +332,11 @@ fn get_random_key_values1(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>,
 }
 
 /// Generates a list of random key-values with no duplicates
-pub fn get_random_key_values2(num_entries: usize, len_key: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+pub fn get_random_key_values2(
+    num_entries: usize,
+    len_key: usize,
+    len_value: usize,
+) -> Vec<(Vec<u8>, Vec<u8>)> {
     let mut rng = make_deterministic_rng();
     let key_prefix = vec![0];
     let mut key_values = Vec::new();

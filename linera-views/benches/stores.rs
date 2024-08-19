@@ -16,7 +16,7 @@ use linera_views::scylla_db::create_scylla_db_test_store;
 use linera_views::{
     batch::Batch,
     common::LocalKeyValueStore,
-    memory::create_memory_store,
+    memory::create_test_memory_store,
     test_utils::{add_prefix, get_random_key_values2},
 };
 use tokio::runtime::Runtime;
@@ -28,7 +28,7 @@ use tokio::runtime::Runtime;
 const PREFIX: &[u8] = &[0];
 
 /// A value to use for the keys
-const PREFIX_SEARCH: &[u8] = &[0,0];
+const PREFIX_SEARCH: &[u8] = &[0, 0];
 
 /// The number of keys length
 const NUM_ENTRIES: usize = 200;
@@ -45,9 +45,8 @@ const LEN_VALUE: usize = 10000;
 async fn clear_store<S: LocalKeyValueStore>(store: &S) {
     let mut batch = Batch::new();
     batch.delete_key_prefix(PREFIX.to_vec());
-    store.write_batch(batch, &[]).await.unwrap();
+    store.write_batch(batch).await.unwrap();
 }
-
 
 pub async fn performance_contains_key<S: LocalKeyValueStore>(store: S, iterations: u64) -> Duration
 where
@@ -55,12 +54,15 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
+        let key_values = add_prefix(
+            PREFIX,
+            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+        );
         let mut batch = Batch::new();
         for key_value in &key_values[..NUM_INSERT] {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
-        store.write_batch(batch, &[]).await.unwrap();
+        store.write_batch(batch).await.unwrap();
 
         let measurement = Instant::now();
         for key_value in &key_values {
@@ -79,7 +81,7 @@ fn bench_contains_key(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_memory_store();
+                let store = create_test_memory_store();
                 performance_contains_key(store, iterations).await
             })
     });
@@ -121,12 +123,15 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
+        let key_values = add_prefix(
+            PREFIX,
+            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+        );
         let mut batch = Batch::new();
         for key_value in &key_values[..NUM_INSERT] {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
-        store.write_batch(batch, &[]).await.unwrap();
+        store.write_batch(batch).await.unwrap();
         let keys = key_values
             .into_iter()
             .map(|(key, _)| key)
@@ -147,7 +152,7 @@ fn bench_contains_keys(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_memory_store();
+                let store = create_test_memory_store();
                 performance_contains_keys(store, iterations).await
             })
     });
@@ -192,12 +197,15 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
+        let key_values = add_prefix(
+            PREFIX,
+            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+        );
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
-        store.write_batch(batch, &[]).await.unwrap();
+        store.write_batch(batch).await.unwrap();
 
         let measurement = Instant::now();
         black_box(store.find_keys_by_prefix(PREFIX_SEARCH).await.unwrap());
@@ -214,7 +222,7 @@ fn bench_find_keys_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_memory_store();
+                let store = create_test_memory_store();
                 performance_find_keys_by_prefix(store, iterations).await
             })
     });
@@ -259,15 +267,23 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
+        let key_values = add_prefix(
+            PREFIX,
+            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+        );
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
-        store.write_batch(batch, &[]).await.unwrap();
+        store.write_batch(batch).await.unwrap();
 
         let measurement = Instant::now();
-        black_box(store.find_key_values_by_prefix(PREFIX_SEARCH).await.unwrap());
+        black_box(
+            store
+                .find_key_values_by_prefix(PREFIX_SEARCH)
+                .await
+                .unwrap(),
+        );
         total_time += measurement.elapsed();
 
         clear_store(&store).await;
@@ -281,7 +297,7 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_memory_store();
+                let store = create_test_memory_store();
                 performance_find_key_values_by_prefix(store, iterations).await
             })
     });
@@ -326,12 +342,15 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
+        let key_values = add_prefix(
+            PREFIX,
+            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+        );
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
-        store.write_batch(batch, &[]).await.unwrap();
+        store.write_batch(batch).await.unwrap();
 
         let measurement = Instant::now();
         for (key, _) in &key_values {
@@ -350,7 +369,7 @@ fn bench_read_value_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_memory_store();
+                let store = create_test_memory_store();
                 performance_read_value_bytes(store, iterations).await
             })
     });
@@ -395,12 +414,15 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
+        let key_values = add_prefix(
+            PREFIX,
+            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+        );
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
-        store.write_batch(batch, &[]).await.unwrap();
+        store.write_batch(batch).await.unwrap();
         let keys = key_values
             .into_iter()
             .map(|(key, _)| key)
@@ -421,7 +443,7 @@ fn bench_read_multi_values_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_memory_store();
+                let store = create_test_memory_store();
                 performance_read_multi_values_bytes(store, iterations).await
             })
     });
@@ -463,14 +485,17 @@ where
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
-        let key_values = add_prefix(PREFIX, get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE));
+        let key_values = add_prefix(
+            PREFIX,
+            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+        );
         let mut batch = Batch::new();
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
 
         let measurement = Instant::now();
-        store.write_batch(batch, &[]).await.unwrap();
+        store.write_batch(batch).await.unwrap();
         total_time += measurement.elapsed();
 
         clear_store(&store).await;
@@ -484,7 +509,7 @@ fn bench_write_batch(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_memory_store();
+                let store = create_test_memory_store();
                 performance_write_batch(store, iterations).await
             })
     });
