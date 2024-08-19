@@ -427,6 +427,27 @@ impl Runnable for Job {
                 );
             }
 
+            QueryNewValidator { address } => {
+                use linera_core::node::ValidatorNode as _;
+
+                let node_provider = context.make_node_provider();
+                match node_provider.make_node(&address)?.get_version_info().await {
+                    Ok(version_info)
+                        if version_info.is_compatible_with(&linera_version::VERSION_INFO) =>
+                    {
+                        info!("Version information for new validator: {}", version_info);
+                    }
+                    Ok(version_info) => warn!(
+                        "Validator version {} is not compatible with local version {}.",
+                        version_info,
+                        linera_version::VERSION_INFO
+                    ),
+                    Err(error) => {
+                        warn!("Failed to get version information for new validator:\n{error}")
+                    }
+                }
+            }
+
             QueryValidators { chain_id } => {
                 use linera_core::node::ValidatorNode as _;
 
@@ -466,12 +487,43 @@ impl Runnable for Job {
             command @ (SetValidator { .. }
             | RemoveValidator { .. }
             | ResourceControlPolicy { .. }) => {
+                use linera_core::node::ValidatorNode as _;
+
                 info!("Starting operations to change validator set");
                 let time_start = Instant::now();
 
                 // Make sure genesis chains are subscribed to the admin chain.
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
+                if let SetValidator {
+                    name,
+                    address,
+                    votes: _,
+                    force,
+                } = &command
+                {
+                    let mut node = context.make_node_provider().make_node(address)?;
+                    match node.get_version_info().await {
+                        Ok(version_info)
+                            if version_info.is_compatible_with(&linera_version::VERSION_INFO) => {}
+                        Ok(version_info) if *force => warn!(
+                            "Validator version {} is not compatible with local version {}.",
+                            version_info,
+                            linera_version::VERSION_INFO
+                        ),
+                        Ok(version_info) => bail!(
+                            "Validator version {} is not compatible with local version {}.",
+                            version_info,
+                            linera_version::VERSION_INFO
+                        ),
+                        Err(error) if *force => warn!(
+                            "Failed to get version information for validator {name:?}:\n{error}"
+                        ),
+                        Err(error) => bail!(
+                            "Failed to get version information for validator {name:?}:\n{error}"
+                        ),
+                    }
+                }
                 let chain_client = context.make_chain_client(context.wallet.genesis_admin_chain());
                 let n = context
                     .process_inbox(&chain_client)
@@ -495,6 +547,7 @@ impl Runnable for Job {
                                     name,
                                     address,
                                     votes,
+                                    force: _,
                                 } => {
                                     validators.insert(
                                         name,
