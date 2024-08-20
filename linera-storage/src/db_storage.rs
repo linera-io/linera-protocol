@@ -22,7 +22,7 @@ use linera_execution::{
 };
 use linera_views::{
     batch::Batch,
-    common::{from_bytes_option, AdminKeyValueStore, ContextFromStore, KeyValueStore},
+    common::{from_bytes_option, ContextFromStore, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
@@ -216,7 +216,6 @@ pub struct DbStorageInner<Client> {
 impl<Client> DbStorageInner<Client>
 where
     Client: KeyValueStore
-        + AdminKeyValueStore<Error = <Client as KeyValueStore>::Error>
         + Clone
         + Send
         + Sync
@@ -409,8 +408,7 @@ impl TestClock {
 #[async_trait]
 impl<Client, C> Storage for DbStorage<Client, C>
 where
-    Client: AdminKeyValueStore<Error = <Client as KeyValueStore>::Error>
-        + KeyValueStore
+    Client: KeyValueStore
         + Clone
         + Send
         + Sync
@@ -800,7 +798,6 @@ where
 impl<Client> DbStorage<Client, WallClock>
 where
     Client: KeyValueStore
-        + AdminKeyValueStore<Error = <Client as KeyValueStore>::Error>
         + Clone
         + Send
         + Sync
