@@ -189,7 +189,7 @@ where
             chain.pending_blobs.clone(),
         );
         chain_client.options_mut().message_policy = MessagePolicy::new(
-            self.options.blanket_message_policy.clone(),
+            self.options.blanket_message_policy,
             self.options.restrict_chain_ids_to.clone(),
         );
         chain_client

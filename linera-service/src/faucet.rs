@@ -247,6 +247,7 @@ where
     ViewError: From<S::StoreError>,
 {
     /// Creates a new instance of the faucet service.
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         port: NonZeroU16,
         client: ChainClient<P, S>,
