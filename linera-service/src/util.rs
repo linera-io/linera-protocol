@@ -152,13 +152,14 @@ impl QuotedBashAndGraphQlScript {
                     quote += &line;
                     quote += "\n";
                 }
-                let json = serde_json::to_string(&quote).unwrap();
-                let command = format!(
-                    "curl -w '\\n' -g -X POST -H \"Content-Type: application/json\" -d '{{ \"query\": {json} }}' {uri} \
-                     | tee /dev/stderr \
-                     | jq -e .data \n"
-                );
-                result.push(command);
+
+                result.push(format!("QUERY=\"{}\"", quote.replace('"', "\\\"")));
+                result.push("JSON_QUERY=$(jq -n --arg q \"$QUERY\" '{\"query\": $q}')".to_string());
+                result.push(format!(
+                    "QUERY_RESULT=$(curl -w '\\n' -g -X POST -H \"Content-Type: application/json\" -d \"$JSON_QUERY\" {uri} \
+                        | tee /dev/stderr \
+                        | jq -e .data \n)"
+                ));
 
                 if let Some(pause) = pause_after_gql_mutations {
                     // Hack: let's add a pause after mutations.

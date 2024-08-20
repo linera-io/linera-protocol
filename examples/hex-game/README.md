@@ -20,7 +20,6 @@ This implementation shows how to write a game that is played on a shared tempora
 Users make turns by submitting operations to the chain, not by sending messages, so a player
 does not have to wait for any other chain owner to accept any message.
 
-
 # Usage
 
 ## Setting up
@@ -71,15 +70,17 @@ linera -w0 service --port 8080 &
 sleep 1
 ```
 
+Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
+
 The `start` mutation starts a new game. We specify the two players using their new public keys,
 on [`http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`][main_chain]:
 
-```gql,uri=http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
 mutation {
   start(
     players: [
-        "8a21aedaef74697db8b676c3e03ddf965bf4a808dc2bcabb6d70d6e6e3022ff7",
-        "80265761fee067b68ba47cce7464cbc7f1da5b7044d8f68ffc898db5ccb563a5"
+        "$PUB_KEY_1",
+        "$PUB_KEY_2"
     ],
     boardSize: 11,
     feeBudget: "1"
@@ -89,7 +90,7 @@ mutation {
 
 The app's main chain keeps track of the games in progress, by public key:
 
-```gql,uri=http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
 query {
   gameChains {
     keys(count: 3)
@@ -99,10 +100,10 @@ query {
 
 It contains the temporary chain's ID, and the ID of the message that created it:
 
-```gql,uri=http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
 query {
   gameChains {
-    entry(key: "8a21aedaef74697db8b676c3e03ddf965bf4a808dc2bcabb6d70d6e6e3022ff7") {
+    entry(key: "$PUB_KEY_1") {
       value {
         messageId chainId
       }
@@ -141,8 +142,8 @@ And the second player player at [`http://localhost:8080/chains/$HEX_CHAIN/applic
 mutation { makeMove(x: 4, y: 5) }
 ```
 
-[main_chain]: http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
-[first_player]: http://localhost:8080/chains/a393137daba303e8b561cb3a5bff50efba1fb7f24950db28f1844b7ac2c1cf27/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
-[second_player]: http://localhost:8081/chains/a393137daba303e8b561cb3a5bff50efba1fb7f24950db28f1844b7ac2c1cf27/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+[main_chain]: http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+[first_player]: http://localhost:8080/chains/$HEX_CHAIN/applications/$APP_ID
+[second_player]: http://localhost:8081/chains/$HEX_CHAIN/applications/$APP_ID
 
 <!-- cargo-rdme end -->

@@ -68,62 +68,73 @@ linera service --port $PORT &
 
 ### Using GraphiQL
 
+Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
+
 - Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`.
 - To get the current balance of user $OWNER_1, run the query:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
         accounts {
             entry(
-                key: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f"
+                key: "User:$OWNER_1"
             ) {
                 value
             }
         }
     }
 ```
+
 - To get the current balance of user $OWNER_2, run the query:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
         accounts {
             entry(
-                key: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
+                key: "User:$OWNER_2"
             ) {
                 value
             }
         }
     }
 ```
+
 - To transfer 50 tokens from $OWNER_1 to $OWNER_2
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     mutation {
         transfer(
-            owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            owner: "User:$OWNER_1",
             amount: "50.",
             targetAccount: {
-                chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
-                owner: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
+                chainId: "$CHAIN_1",
+                owner: "User:$OWNER_2"
             }
         )
     }
 ```
+
 - To get the new balance of user $OWNER_1, run the query:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
         accounts {
             entry(
-                key: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f"
+                key: "User:$OWNER_1"
             ) {
                 value
             }
         }
     }
 ```
+
 - To get the new balance of user $OWNER_2, run the query:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
         accounts {
             entry(
-                key: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
+                key: "User:$OWNER_2"
             ) {
                 value
             }

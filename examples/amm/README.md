@@ -97,59 +97,65 @@ linera service --port $PORT &
 
 ### Using GraphiQL
 
+Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
+
 To properly setup the tokens in the proper chains, we need to do some transfer operations:
 
 - Transfer 50 FUN1 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID
     mutation {
         transfer(
-            owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            owner: "User:$OWNER_AMM",
             amount: "50.",
             targetAccount: {
-                chainId: "dad01517c7a3c428ea903253a9e59964e8db06d323a9bd3f4c74d6366832bdbf",
-                owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
+                chainId: "$CHAIN_1",
+                owner: "User:$OWNER_1",
             }
         )
     }
 ```
 
 - Transfer 50 FUN1 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_2` in `$CHAIN_2`, so they're in the proper chain
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID
     mutation {
         transfer(
-            owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            owner: "User:$OWNER_AMM",
             amount: "50.",
             targetAccount: {
-                chainId: "e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3",
-                owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
+                chainId: "$CHAIN_2",
+                owner: "User:$OWNER_2",
             }
         )
     }
 ```
 
 - Transfer 50 FUN2 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID
     mutation {
         transfer(
-            owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            owner: "User:$OWNER_AMM",
             amount: "50.",
             targetAccount: {
-                chainId: "dad01517c7a3c428ea903253a9e59964e8db06d323a9bd3f4c74d6366832bdbf",
-                owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
+                chainId: "$CHAIN_1",
+                owner: "User:$OWNER_1",
             }
         )
     }
 ```
 
 - Transfer 50 FUN2 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_2` in `$CHAIN_2`, so they're in the proper chain
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID
     mutation {
         transfer(
-            owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            owner: "User:$OWNER_AMM",
             amount: "50.",
             targetAccount: {
-                chainId: "e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3",
-                owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
+                chainId: "$CHAIN_2",
+                owner: "User:$OWNER_2",
             }
         )
     }
@@ -162,12 +168,13 @@ operation from the chain.
 ```gql,uri=http://localhost:8080
 mutation {
   requestApplication (
-    chainId:"dad01517c7a3c428ea903253a9e59964e8db06d323a9bd3f4c74d6366832bdbf",
-    applicationId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65080000000000000000000000",
-    targetChainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+    chainId:"$CHAIN_1",
+    applicationId: "$AMM_APPLICATION_ID",
+    targetChainId: "$CHAIN_AMM"
   )
 }
 ```
+
 Note: The above mutation has to be performed from `http://localhost:8080`.
 
 Before performing any operation we need to provide liquidity to it, so we will use the `AddLiquidity` operation,
@@ -178,7 +185,7 @@ To perform `AddLiquidity` operation:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
 mutation {
   addLiquidity(
-    owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
+    owner: "User:$OWNER_1",
     maxToken0Amount: "50",
     maxToken1Amount: "50",
   )
@@ -188,12 +195,13 @@ mutation {
 ```gql,uri=http://localhost:8080
 mutation {
   requestApplication (
-    chainId:"e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3",
-    applicationId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65080000000000000000000000",
-    targetChainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+    chainId:"$CHAIN_2",
+    applicationId: "$AMM_APPLICATION_ID",
+    targetChainId: "$CHAIN_AMM"
   )
 }
 ```
+
 Note: The above mutation has to be performed from `http://localhost:8080`.
 
 To perform `Swap` operation, navigate to `http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID` and
@@ -202,7 +210,7 @@ perform the following mutation:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID
 mutation {
   swap(
-    owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
+    owner: "User:$OWNER_2",
     inputTokenIdx: 1,
     inputAmount: "1",
   )
@@ -215,7 +223,7 @@ perform the following mutation:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
 mutation {
   removeLiquidity(
-    owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
+    owner: "User:$OWNER_1",
     tokenToRemoveIdx: 1,
     tokenToRemoveAmount: "1",
   )
@@ -228,7 +236,7 @@ perform the following mutation:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
 mutation {
   removeAllAddedLiquidity(
-    owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
+    owner: "User:$OWNER_1",
   )
 }
 ```
@@ -268,7 +276,7 @@ First, let's add some liquidity again to the AMM. Navigate to
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
 mutation {
   addLiquidity(
-    owner: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f",
+    owner: "User:$OWNER_1",
     maxToken0Amount: "40",
     maxToken1Amount: "40",
   )
@@ -289,7 +297,7 @@ to `http://localhost:8080/chains/$CHAIN_1/applications/$FUN1_APP_ID`, and perfor
 query {
     accounts {
         entry(
-            key: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f"
+            key: "User:$OWNER_1"
         ) {
             value
         }
@@ -303,7 +311,7 @@ Then navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$FUN2_APP_I
 query {
     accounts {
         entry(
-            key: "User:65adbf65c9c1f48a0f1f2d06e0780994dcf8e428ffd5ee53948b3bb6c572c66f"
+            key: "User:$OWNER_1"
         ) {
             value
         }

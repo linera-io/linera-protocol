@@ -17,8 +17,8 @@ creator (and beneficiary) of the campaign.
 
 The goal of a crowd-funding campaign is to let people pledge any number of tokens from
 their own chain(s). If enough tokens are pledged before the campaign expires, the campaign is
-*successful* and the creator can receive all the funds, including ones exceeding the funding
-target. Otherwise, the campaign is *unsuccessful* and contributors should be refunded.
+_successful_ and the creator can receive all the funds, including ones exceeding the funding
+target. Otherwise, the campaign is _unsuccessful_ and contributors should be refunded.
 
 # Caveat
 
@@ -99,7 +99,6 @@ default chain of each wallet and call them `$OWNER_0` and `$OWNER_1`. Remember t
 chain IDs as `$CHAIN_0` (the chain where we just published the application) and `$CHAIN_1`
 (some user chain in wallet 2).
 
-
 ## Creating tokens
 
 Compile the Wasm binaries for the two applications `fungible` and `crowd-funding`, publish
@@ -122,7 +121,6 @@ sleep 8
 ```
 
 We will remember the application ID for the newly created token as `$APP_ID_0`.
-
 
 ## Creating a crowd-funding campaign
 
@@ -158,11 +156,13 @@ linera --with-wallet 1 service --port 8081 &
 sleep 2
 ```
 
+Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
+
 Point your browser to http://localhost:8080, and enter the query:
 
 ```gql,uri=http://localhost:8080
 query { applications(
-    chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+    chainId: "$CHAIN_0"
 ) { id link } }
 ```
 
@@ -174,8 +174,8 @@ there yet. Request `crowd-funding` from the other chain. As an application ID, u
 
 ```gql,uri=http://localhost:8081
 mutation { requestApplication(
-    chainId: "1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03"
-    applicationId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000"
+    chainId: "$CHAIN_1"
+    applicationId: "$APP_ID_1"
 ) }
 ```
 
@@ -188,16 +188,17 @@ application by its ID. The entry also has a field `link`. If you open that in a 
 see the GraphQL API for that application on that chain.
 
 Let's pledge 30 tokens by the campaign creator themself, i.e.
-[`$OWNER_0` on 8080](http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000):
+[`$OWNER_0` on 8080](http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1):
 
 Let's give it a variable for testing (for instance with `curl -g -X POST -H "Content-Type: application/json" -d '{ "query": "'$QUERY'" }' $URI | jq -e .data`):
+
 ```bash
 CAMPAIGN=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
 ```
 
 ```gql,uri=$CAMPAIGN
 mutation { pledge(
-    owner:"User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+    owner:"User:$OWNER_0",
     amount:"30."
 ) }
 ```
@@ -210,7 +211,7 @@ query { pledges { keys } }
 
 To also have `$OWNER_1` make a pledge, they first need to claim their tokens. Those are still
 on the other chain, where the application was created. Find the [link on 8081
-for the fungible application](http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000),
+for the fungible application](http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0),
 open it and run the following query.
 
 ```bash
@@ -220,13 +221,13 @@ TOKEN1=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
 ```gql,uri=$TOKEN1
 mutation { claim(
   sourceAccount: {
-    owner: "User:b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd",
-    chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+    owner: "User:$OWNER_1",
+    chainId: "$CHAIN_0"
   },
   amount: "200.",
   targetAccount: {
-    owner: "User:b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd",
-    chainId: "1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03"
+    owner: "User:$OWNER_1",
+    chainId: "$CHAIN_1"
   }
 ) }
 ```
@@ -235,12 +236,12 @@ You can check that the 200 tokens have arrived:
 
 ```gql,uri=$TOKEN1
 query {
-    accounts { entry(key: "User:b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd") { value } }
+    accounts { entry(key: "User:$OWNER_1") { value } }
 }
 ```
 
 Now, also on 8081, you can open the [link for the crowd-funding
-application](http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000)
+application](http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1)
 and run:
 
 ```bash
@@ -249,7 +250,7 @@ PLEDGE1=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
 
 ```gql,uri=$PLEDGE1
 mutation { pledge(
-  owner:"User:b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd",
+  owner:"User:$OWNER_1",
   amount:"80."
 ) }
 ```
@@ -262,13 +263,13 @@ mutation { collect }
 ```
 
 [In the fungible application on
-8080](http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000),
+8080](http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0),
 check that we have received 110 tokens, in addition to the
 70 that we had left after pledging 30:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0
 query {
-    accounts { entry(key: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f") { value } }
+    accounts { entry(key: "User:$OWNER_0") { value } }
 }
 ```
 
