@@ -331,13 +331,18 @@ fn get_random_key_values1(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>,
     get_random_key_values_prefix(&mut rng, key_prefix, 8, len_value, num_entries)
 }
 
-fn get_random_key_values2(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+/// Generates a list of random key-values with no duplicates
+pub fn get_random_key_values2(
+    num_entries: usize,
+    len_key: usize,
+    len_value: usize,
+) -> Vec<(Vec<u8>, Vec<u8>)> {
     let mut rng = make_deterministic_rng();
     let key_prefix = vec![0];
     let mut key_values = Vec::new();
     let mut key_set = HashSet::new();
     for _ in 0..num_entries {
-        let key = get_small_key_space(&mut rng, &key_prefix, 4);
+        let key = get_small_key_space(&mut rng, &key_prefix, len_key);
         if !key_set.contains(&key) {
             key_set.insert(key.clone());
             let value = get_random_byte_vector(&mut rng, &[], len_value);
@@ -347,14 +352,26 @@ fn get_random_key_values2(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>,
     key_values
 }
 
+/// Adds a prefix to a list of key-values
+pub fn add_prefix(prefix: &[u8], key_values: Vec<(Vec<u8>, Vec<u8>)>) -> Vec<(Vec<u8>, Vec<u8>)> {
+    key_values
+        .into_iter()
+        .map(|(key, value)| {
+            let mut big_key = prefix.to_vec();
+            big_key.extend(key);
+            (big_key, value)
+        })
+        .collect()
+}
+
 /// We build a number of scenarios for testing the reads.
 pub fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
     vec![
         get_random_key_values1(7, 3),
         get_random_key_values1(150, 3),
         get_random_key_values1(30, 10),
-        get_random_key_values2(30, 10),
-        get_random_key_values2(30, 100),
+        get_random_key_values2(30, 4, 10),
+        get_random_key_values2(30, 4, 100),
     ]
 }
 
