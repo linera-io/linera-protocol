@@ -515,12 +515,6 @@ impl<S: KeyValueStore> RestrictedKeyValueStore for S {
     type Error = <Self as KeyValueStore>::Error;
 }
 
-/*
-impl<S: LocalKeyValueStore> LocalRestrictedKeyValueStore for S {
-    type Error = <Self as LocalKeyValueStore>::Error;
-}
-*/
-
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
 pub trait KeyValueStore:
     ReadableKeyValueStore<Self::Error>
