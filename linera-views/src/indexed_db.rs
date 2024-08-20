@@ -10,8 +10,8 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound_option, CommonStoreConfig, ContextFromStore,
-        LocalAdminKeyValueStore, LocalKeyValueStore, LocalReadableKeyValueStore,
+        get_upper_bound_option, CommonStoreConfig, ContextFromStore, LocalAdminKeyValueStore,
+        LocalKeyValueStore, LocalReadableKeyValueStore, LocalRestrictedKeyValueStore,
         LocalWritableKeyValueStore,
     },
     value_splitting::DatabaseConsistencyError,
@@ -222,8 +222,7 @@ impl LocalWritableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
     }
 }
 
-impl LocalAdminKeyValueStore for IndexedDbStore {
-    type Error = IndexedDbStoreError;
+impl LocalAdminKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
     type Config = IndexedDbStoreConfig;
 
     async fn connect(
@@ -305,6 +304,10 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
 }
 
 impl LocalKeyValueStore for IndexedDbStore {
+    type Error = IndexedDbStoreError;
+}
+
+impl LocalRestrictedKeyValueStore for IndexedDbStore {
     type Error = IndexedDbStoreError;
 }
 
