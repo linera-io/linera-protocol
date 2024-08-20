@@ -371,7 +371,7 @@ where
         self
     }
 
-    /// Configures the `Blob` returned when fetching from the `BlobId` during the test.
+    /// Configures the blob returned when fetching from the given hash during the test.
     pub fn with_blob(self, hash: impl Into<DataBlobHash>, blob: Vec<u8>) -> Self {
         self.set_blob(hash, blob);
         self
