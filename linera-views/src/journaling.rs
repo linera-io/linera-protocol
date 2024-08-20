@@ -117,10 +117,10 @@ where
     }
 }
 
-impl<K> ReadableKeyValueStore<K::Error> for JournalingKeyValueStore<K>
+impl<K, E> ReadableKeyValueStore<E> for JournalingKeyValueStore<K>
 where
-    K: DirectKeyValueStore + Send + Sync,
-    K::Error: From<JournalConsistencyError>,
+    K: ReadableKeyValueStore<E> + Send + Sync,
+    E: From<JournalConsistencyError>,
 {
     /// The size constant do not change
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
@@ -133,33 +133,27 @@ where
         self.store.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, K::Error> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, E> {
         self.store.read_value_bytes(key).await
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, K::Error> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, E> {
         self.store.contains_key(key).await
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, K::Error> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, E> {
         self.store.contains_keys(keys).await
     }
 
-    async fn read_multi_values_bytes(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, K::Error> {
+    async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, E> {
         self.store.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, K::Error> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, E> {
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
-    async fn find_key_values_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, K::Error> {
+    async fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::KeyValues, E> {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
