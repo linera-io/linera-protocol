@@ -7,6 +7,7 @@ edition = "2021"
 [dependencies]
 async-graphql.workspace = true
 linera-sdk.workspace = true
+log.workspace = true
 serde.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
@@ -15,6 +16,8 @@ tokio = { workspace = true, features = ["rt", "sync"] }
 
 [dev-dependencies]
 linera-sdk = { workspace = true, features = ["test"] }
+serde_json.workspace = true
+test-log.workspace = true
 
 [[bin]]
 name = "hex_game_contract"

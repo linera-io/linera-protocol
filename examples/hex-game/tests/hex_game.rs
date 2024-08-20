@@ -5,42 +5,39 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use hex_game::{HexAbi, InstantiationArgument, Operation};
+use hex_game::{HexAbi, Operation, Timeouts};
 use linera_sdk::{
-    base::{KeyPair, Owner, TimeDelta},
-    test::TestValidator,
+    base::{ChainDescription, KeyPair, TimeDelta},
+    test::{ActiveChain, TestValidator},
 };
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn hex_game() {
     let key_pair1 = KeyPair::generate();
     let key_pair2 = KeyPair::generate();
-    let owner1 = Owner::from(key_pair1.public());
-    let owner2 = Owner::from(key_pair2.public());
-    let arg = InstantiationArgument {
-        players: [owner1, owner2],
-        board_size: 2u16,
-        start_time: TimeDelta::from_secs(60),
-        increment: TimeDelta::from_secs(30),
-        block_delay: TimeDelta::from_secs(5),
-    };
-    let (_, app_id, mut chain) =
-        TestValidator::with_current_application::<HexAbi, _, _>((), arg).await;
 
-    chain
+    let (validator, app_id, creation_chain) =
+        TestValidator::with_current_application::<HexAbi, _, _>((), Timeouts::default()).await;
+
+    let certificate = creation_chain
         .add_block(|block| {
-            block.with_owner_change(
-                Vec::new(),
-                vec![(key_pair1.public(), 1), (key_pair2.public(), 1)],
-                100,
-                Default::default(),
-            );
+            let operation = Operation::Start {
+                board_size: 2,
+                players: [key_pair1.public(), key_pair2.public()],
+                timeouts: None,
+            };
+            block.with_operation(app_id, operation);
         })
         .await;
 
-    chain.set_key_pair(key_pair1.copy());
+    let executed_block = certificate.value().executed_block().unwrap();
+    let message_id = executed_block.message_id_for_operation(0, 0).unwrap();
+    let description = ChainDescription::Child(message_id);
+    let mut chain = ActiveChain::new(key_pair1.copy(), description, validator);
+
     chain
         .add_block(|block| {
+            block.with_messages_from(&certificate);
             block.with_operation(app_id, Operation::MakeMove { x: 0, y: 0 });
         })
         .await;
@@ -71,44 +68,50 @@ async fn hex_game() {
 
     let response = chain.graphql_query(app_id, "query { winner }").await;
     assert_eq!(Some("TWO"), response["winner"].as_str());
+    assert!(chain.is_closed().await);
 }
 
 #[tokio::test]
 async fn hex_game_clock() {
     let key_pair1 = KeyPair::generate();
     let key_pair2 = KeyPair::generate();
-    let owner1 = Owner::from(key_pair1.public());
-    let owner2 = Owner::from(key_pair2.public());
-    let arg = InstantiationArgument {
-        players: [owner1, owner2],
-        board_size: 2u16,
+
+    let timeouts = Timeouts {
         start_time: TimeDelta::from_secs(60),
         increment: TimeDelta::from_secs(30),
         block_delay: TimeDelta::from_secs(5),
     };
-    let (validator, app_id, mut chain) =
-        TestValidator::with_current_application::<HexAbi, _, _>((), arg.clone()).await;
 
-    chain
+    let (validator, app_id, creation_chain) =
+        TestValidator::with_current_application::<HexAbi, _, _>((), Timeouts::default()).await;
+
+    let time = validator.clock().current_time();
+    validator.clock().add(
+        timeouts
+            .block_delay
+            .saturating_sub(TimeDelta::from_millis(1)),
+    );
+
+    let certificate = creation_chain
         .add_block(|block| {
-            block.with_owner_change(
-                Vec::new(),
-                vec![(key_pair1.public(), 1), (key_pair2.public(), 1)],
-                100,
-                Default::default(),
-            );
+            let operation = Operation::Start {
+                board_size: 2,
+                players: [key_pair1.public(), key_pair2.public()],
+                timeouts: None,
+            };
+            block.with_operation(app_id, operation).with_timestamp(time);
         })
         .await;
 
-    let time = validator.clock().current_time();
-    validator
-        .clock()
-        .add(arg.block_delay.saturating_sub(TimeDelta::from_millis(1)));
+    let executed_block = certificate.value().executed_block().unwrap();
+    let message_id = executed_block.message_id_for_operation(0, 0).unwrap();
+    let description = ChainDescription::Child(message_id);
+    let mut chain = ActiveChain::new(key_pair1.copy(), description, validator.clone());
 
-    chain.set_key_pair(key_pair1.copy());
     chain
         .add_block(|block| {
             block
+                .with_messages_from(&certificate)
                 .with_operation(app_id, Operation::MakeMove { x: 0, y: 0 })
                 .with_timestamp(time);
         })
@@ -127,7 +130,7 @@ async fn hex_game_clock() {
         .await
         .is_err());
 
-    validator.clock().add(arg.start_time);
+    validator.clock().add(timeouts.start_time);
     let time = validator.clock().current_time();
 
     // Player 2 has timed out.

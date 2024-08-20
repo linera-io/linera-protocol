@@ -401,6 +401,16 @@ impl ActiveChain {
         }
     }
 
+    /// Returns whether this chain has been closed.
+    pub async fn is_closed(&self) -> bool {
+        self.validator
+            .worker()
+            .chain_state_view(self.id())
+            .await
+            .expect("Failed to load chain")
+            .is_closed()
+    }
+
     /// Checks if the `bytecode_id` is missing from this microchain.
     async fn needs_bytecode_location<Abi, Parameters, InstantiationArgument>(
         &self,

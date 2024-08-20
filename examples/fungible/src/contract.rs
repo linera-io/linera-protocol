@@ -187,7 +187,3 @@ impl FungibleTokenContract {
         }
     }
 }
-
-// Dummy ComplexObject implementation, required by the graphql(complex) attribute in state.rs.
-#[async_graphql::ComplexObject]
-impl FungibleToken {}

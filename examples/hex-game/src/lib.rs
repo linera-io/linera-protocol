@@ -20,7 +20,7 @@ It consists of `s * s` hexagonal cells, indexed like this:
 
 The players alternate placing a stone in their color on an empty cell until one of them wins.
 
-This implementation shows how to write a game that is meant to be played on a shared chain:
+This implementation shows how to write a game that is played on a shared temporary chain:
 Users make turns by submitting operations to the chain, not by sending messages, so a player
 does not have to wait for any other chain owner to accept any message.
 
@@ -51,8 +51,6 @@ We use the test-only CLI option `--testing-prng-seed` to make keys deterministic
 explanation.
 
 ```bash
-OWNER_1=df44403a282330a8b086603516277c014c844a4b418835873aced1132a3adcd5
-OWNER_2=43c319a4eab3747afcd608d32b73a2472fcaee390ec6bed3e694b4908f55772d
 CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 ```
 
@@ -62,26 +60,70 @@ We open a new chain owned by both `$OWNER_1` and `$OWNER_2`, create the applicat
 start the node service.
 
 ```bash
-PUB_KEY_1=$(linera -w0 keygen)
-PUB_KEY_2=$(linera -w1 keygen)
-
-read -d '' MESSAGE_ID HEX_CHAIN < <(linera -w0 --wait-for-outgoing-messages open-multi-owner-chain \
-    --from $CHAIN_1 \
-    --owner-public-keys $PUB_KEY_1 $PUB_KEY_2 \
-    --initial-balance 1; printf '\0')
-
-linera -w0 assign --key $PUB_KEY_1 --message-id $MESSAGE_ID
-linera -w1 assign --key $PUB_KEY_2 --message-id $MESSAGE_ID
-
 APP_ID=$(linera -w0 --wait-for-outgoing-messages \
-  project publish-and-create examples/hex-game hex_game $HEX_CHAIN \
+  project publish-and-create examples/hex-game hex_game $CHAIN_1 \
     --json-argument "{
-        \"players\": [\"$OWNER_1\", \"$OWNER_2\"],
-        \"boardSize\": 9,
         \"startTime\": 600000000,
         \"increment\": 600000000,
         \"blockDelay\": 100000000
     }")
+
+PUB_KEY_1=$(linera -w0 keygen)
+PUB_KEY_2=$(linera -w1 keygen)
+
+linera -w0 service --port 8080 &
+sleep 1
+```
+
+The `start` mutation starts a new game. We specify the two players using their new public keys,
+on [`http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`][main_chain]:
+
+```gql,uri=http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+mutation {
+  start(
+    players: [
+        "8a21aedaef74697db8b676c3e03ddf965bf4a808dc2bcabb6d70d6e6e3022ff7",
+        "80265761fee067b68ba47cce7464cbc7f1da5b7044d8f68ffc898db5ccb563a5"
+    ],
+    boardSize: 11
+  )
+}
+```
+
+The app's main chain keeps track of the games in progress, by public key:
+
+```gql,uri=http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+query {
+  gameChains {
+    keys(count: 3)
+  }
+}
+```
+
+It contains the temporary chain's ID, and the ID of the message that created it:
+
+```gql,uri=http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+query {
+  gameChains {
+    entry(key: "8a21aedaef74697db8b676c3e03ddf965bf4a808dc2bcabb6d70d6e6e3022ff7") {
+      value {
+        messageId chainId
+      }
+    }
+  }
+}
+```
+
+Using the message ID, we can assign the new chain to the key in each wallet:
+
+```bash
+kill %% && sleep 1    # Kill the service so we can use CLI commands for wallet 0.
+
+HEX_CHAIN=a393137daba303e8b561cb3a5bff50efba1fb7f24950db28f1844b7ac2c1cf27
+MESSAGE_ID=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65050000000000000000000000
+
+linera -w0 assign --key $PUB_KEY_1 --message-id $MESSAGE_ID
+linera -w1 assign --key $PUB_KEY_2 --message-id $MESSAGE_ID
 
 linera -w0 service --port 8080 &
 linera -w1 service --port 8081 &
@@ -102,15 +144,16 @@ And the second player player at [`http://localhost:8080/chains/$HEX_CHAIN/applic
 mutation { makeMove(x: 4, y: 5) }
 ```
 
-[first_player]: http://localhost:8080/chains/c06f52a2a3cc991e6981d5628c11b03ad39f7509c4486893623a41d1f7ec49a0/applications/c06f52a2a3cc991e6981d5628c11b03ad39f7509c4486893623a41d1f7ec49a0000000000000000000000000c06f52a2a3cc991e6981d5628c11b03ad39f7509c4486893623a41d1f7ec49a0020000000000000000000000
-[second_player]: http://localhost:8081/chains/c06f52a2a3cc991e6981d5628c11b03ad39f7509c4486893623a41d1f7ec49a0/applications/c06f52a2a3cc991e6981d5628c11b03ad39f7509c4486893623a41d1f7ec49a0000000000000000000000000c06f52a2a3cc991e6981d5628c11b03ad39f7509c4486893623a41d1f7ec49a0020000000000000000000000
+[main_chain]: http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+[first_player]: http://localhost:8080/chains/a393137daba303e8b561cb3a5bff50efba1fb7f24950db28f1844b7ac2c1cf27/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+[second_player]: http://localhost:8081/chains/a393137daba303e8b561cb3a5bff50efba1fb7f24950db28f1844b7ac2c1cf27/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
 */
 
 use std::iter;
 
-use async_graphql::{Enum, Request, Response, SimpleObject};
+use async_graphql::{Enum, InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
-    base::{ContractAbi, Owner, ServiceAbi, TimeDelta, Timestamp},
+    base::{ContractAbi, PublicKey, ServiceAbi, TimeDelta, Timestamp},
     graphql::GraphQLMutationRoot,
 };
 use serde::{Deserialize, Serialize};
@@ -123,11 +166,21 @@ pub enum Operation {
     MakeMove { x: u16, y: u16 },
     /// Claim victory if the opponent has timed out.
     ClaimVictory,
+    /// Start a game on a new temporary chain, with the given settings.
+    Start {
+        /// The public keys of player 1 and 2, respectively.
+        players: [PublicKey; 2],
+        /// The side length of the board. A typical size is 11.
+        board_size: u16,
+        /// Settings that determine how much time the players have to think about their turns.
+        /// If this is `None`, the defaults are used.
+        timeouts: Option<Timeouts>,
+    },
 }
 
 impl ContractAbi for HexAbi {
     type Operation = Operation;
-    type Response = MoveOutcome;
+    type Response = HexOutcome;
 }
 
 impl ServiceAbi for HexAbi {
@@ -135,13 +188,11 @@ impl ServiceAbi for HexAbi {
     type QueryResponse = Response;
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]
+/// Settings that determine how much time the players have to think about their turns.
+#[derive(Clone, Debug, Deserialize, Serialize, SimpleObject, InputObject)]
+#[graphql(input_name = "TimeoutsInput")]
 #[serde(rename_all = "camelCase")]
-pub struct InstantiationArgument {
-    /// The `Owner` controlling player 1 and 2, respectively.
-    pub players: [Owner; 2],
-    /// The side length of the board. A typical size is 11.
-    pub board_size: u16,
+pub struct Timeouts {
     /// The initial time each player has to think about their turns.
     pub start_time: TimeDelta,
     /// The duration that is added to the clock after each turn.
@@ -150,6 +201,16 @@ pub struct InstantiationArgument {
     /// This should be long enough to confirm a block, but short enough for the block timestamp
     /// to accurately reflect the current time.
     pub block_delay: TimeDelta,
+}
+
+impl Default for Timeouts {
+    fn default() -> Timeouts {
+        Timeouts {
+            start_time: TimeDelta::from_secs(60),
+            increment: TimeDelta::from_secs(30),
+            block_delay: TimeDelta::from_secs(5),
+        }
+    }
 }
 
 /// A clock to track both players' time.
@@ -163,12 +224,12 @@ pub struct Clock {
 
 impl Clock {
     /// Initializes the clock.
-    pub fn new(block_time: Timestamp, arg: &InstantiationArgument) -> Self {
+    pub fn new(block_time: Timestamp, timeouts: &Timeouts) -> Self {
         Self {
-            time_left: [arg.start_time, arg.start_time],
-            increment: arg.increment,
+            time_left: [timeouts.start_time, timeouts.start_time],
+            increment: timeouts.increment,
             current_turn_start: block_time,
-            block_delay: arg.block_delay,
+            block_delay: timeouts.block_delay,
         }
     }
 
@@ -191,7 +252,7 @@ impl Clock {
 
 /// The outcome of a valid move.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum MoveOutcome {
+pub enum HexOutcome {
     /// A player wins the game.
     Winner(Player),
     /// The game continues.
@@ -282,15 +343,15 @@ impl Board {
     /// Updates the board: The active player places a stone on cell `(x, y)`.
     ///
     /// Panics if the move is invalid.
-    pub fn make_move(&mut self, x: u16, y: u16) -> MoveOutcome {
+    pub fn make_move(&mut self, x: u16, y: u16) -> HexOutcome {
         assert!(self.winner().is_none(), "Game has ended.");
         assert!(x < self.size && y < self.size, "Invalid coordinates.");
         assert!(self.cell(x, y).stone.is_none(), "Cell is not empty.");
         self.place_stone(x, y);
         if let Some(winner) = self.winner() {
-            return MoveOutcome::Winner(winner);
+            return HexOutcome::Winner(winner);
         }
-        MoveOutcome::Ok
+        HexOutcome::Ok
     }
 
     /// Places the active player's stone on the given cell, updates all cells'
@@ -371,16 +432,16 @@ mod tests {
         //  2 1 0
         //   1 0 1
         assert_eq!(Player::One, board.active_player());
-        assert_eq!(MoveOutcome::Ok, board.make_move(0, 2));
+        assert_eq!(HexOutcome::Ok, board.make_move(0, 2));
         assert_eq!(Player::Two, board.active_player());
-        assert_eq!(MoveOutcome::Ok, board.make_move(0, 1));
-        assert_eq!(MoveOutcome::Ok, board.make_move(1, 1));
-        assert_eq!(MoveOutcome::Ok, board.make_move(1, 0));
-        assert_eq!(MoveOutcome::Ok, board.make_move(2, 2));
-        assert_eq!(MoveOutcome::Ok, board.make_move(2, 0));
+        assert_eq!(HexOutcome::Ok, board.make_move(0, 1));
+        assert_eq!(HexOutcome::Ok, board.make_move(1, 1));
+        assert_eq!(HexOutcome::Ok, board.make_move(1, 0));
+        assert_eq!(HexOutcome::Ok, board.make_move(2, 2));
+        assert_eq!(HexOutcome::Ok, board.make_move(2, 0));
         assert!(board.winner().is_none());
         // Player 1 connects left to right and wins:
-        assert_eq!(MoveOutcome::Winner(Player::One), board.make_move(2, 1));
+        assert_eq!(HexOutcome::Winner(Player::One), board.make_move(2, 1));
         assert_eq!(Some(Player::One), board.winner());
     }
 }
