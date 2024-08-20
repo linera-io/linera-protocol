@@ -14,7 +14,7 @@ use crate::test_utils::generate_test_namespace;
 use crate::{
     batch::{Batch, DeletePrefixExpander, WriteOperation},
     common::{
-        get_interval, AdminKeyValueStore, CacheSize, CommonStoreConfig, Context, ContextFromStore,
+        get_interval, AdminKeyValueStore, CommonStoreConfig, Context, ContextFromStore,
         KeyIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     value_splitting::DatabaseConsistencyError,
@@ -295,12 +295,6 @@ impl MemoryStore {
         let config = MemoryStoreConfig { common_config };
         let kill_on_drop = true;
         MemoryStore::sync_maybe_create_and_connect(&config, namespace, root_key, kill_on_drop)
-    }
-}
-
-impl CacheSize for MemoryStoreConfig {
-    fn cache_size(&self) -> usize {
-        self.common_config.cache_size
     }
 }
 

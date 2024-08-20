@@ -42,7 +42,7 @@ use crate::metering::{MeteredStore, LRU_CACHING_METRICS, SCYLLA_DB_METRICS};
 use crate::{
     batch::{Batch, UnorderedBatch},
     common::{
-        get_upper_bound_option, AdminKeyValueStore, CacheSize, CommonStoreConfig, ContextFromStore,
+        get_upper_bound_option, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
         KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     journaling::{
@@ -802,12 +802,6 @@ pub struct ScyllaDbStoreConfig {
     pub uri: String,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
-}
-
-impl CacheSize for ScyllaDbStoreConfig {
-    fn cache_size(&self) -> usize {
-        self.common_config.cache_size
-    }
 }
 
 impl ReadableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStore {

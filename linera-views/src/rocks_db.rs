@@ -25,7 +25,7 @@ use crate::metering::{
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound, AdminKeyValueStore, CacheSize, CommonStoreConfig, ContextFromStore,
+        get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
         KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
@@ -64,12 +64,6 @@ pub struct RocksDbStoreConfig {
     pub path_buf: PathBuf,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
-}
-
-impl CacheSize for RocksDbStoreConfig {
-    fn cache_size(&self) -> usize {
-        self.common_config.cache_size
-    }
 }
 
 #[derive(Default)]

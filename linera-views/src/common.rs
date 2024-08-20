@@ -426,17 +426,11 @@ pub trait LocalWritableKeyValueStore<E> {
     async fn clear_journal(&self) -> Result<(), E>;
 }
 
-/// Config types need to be able to return their cache size
-pub trait CacheSize {
-    /// Get the cache size of the `Config` entry.
-    fn cache_size(&self) -> usize;
-}
-
 /// Low-level trait for the administration of stores and their namespaces.
 #[trait_variant::make(AdminKeyValueStore: Send)]
 pub trait LocalAdminKeyValueStore<E>: Sized {
     /// The configuration needed to interact with a new store.
-    type Config: Send + Sync + CacheSize;
+    type Config: Send + Sync;
 
     /// Connects to an existing namespace using the given configuration.
     async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, E>;

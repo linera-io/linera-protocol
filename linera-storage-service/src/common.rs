@@ -9,7 +9,7 @@ use linera_base::command::resolve_binary;
 #[cfg(with_metrics)]
 use linera_views::metering::KeyValueStoreMetrics;
 use linera_views::{
-    common::{CacheSize, CommonStoreConfig, MIN_VIEW_TAG},
+    common::{CommonStoreConfig, MIN_VIEW_TAG},
     value_splitting::DatabaseConsistencyError,
 };
 use thiserror::Error;
@@ -102,12 +102,6 @@ pub struct ServiceStoreConfig {
     pub endpoint: String,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
-}
-
-impl CacheSize for ServiceStoreConfig {
-    fn cache_size(&self) -> usize {
-        self.common_config.cache_size
-    }
 }
 
 /// Obtains the binary of the executable.

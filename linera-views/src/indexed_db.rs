@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound_option, CacheSize, CommonStoreConfig, ContextFromStore,
+        get_upper_bound_option, CommonStoreConfig, ContextFromStore,
         LocalAdminKeyValueStore, LocalKeyValueStore, LocalReadableKeyValueStore,
         LocalWritableKeyValueStore,
     },
@@ -23,12 +23,6 @@ use crate::{
 pub struct IndexedDbStoreConfig {
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
-}
-
-impl CacheSize for IndexedDbStoreConfig {
-    fn cache_size(&self) -> usize {
-        self.common_config.cache_size
-    }
 }
 
 impl IndexedDbStoreConfig {

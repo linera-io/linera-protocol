@@ -42,7 +42,7 @@ use crate::metering::{
 use crate::{
     batch::{Batch, SimpleUnorderedBatch},
     common::{
-        AdminKeyValueStore, CacheSize, CommonStoreConfig, ContextFromStore, KeyIterable,
+        AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable,
         KeyValueIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     journaling::{
@@ -350,12 +350,6 @@ pub struct DynamoDbStoreConfig {
     pub config: Config,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
-}
-
-impl CacheSize for DynamoDbStoreConfig {
-    fn cache_size(&self) -> usize {
-        self.common_config.cache_size
-    }
 }
 
 impl AdminKeyValueStore<DynamoDbStoreError> for DynamoDbStoreInternal {
