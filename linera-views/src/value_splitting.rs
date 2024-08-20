@@ -254,44 +254,43 @@ where
     }
 }
 
-impl<K> AdminKeyValueStore for ValueSplittingStore<K>
+impl<K> AdminKeyValueStore<K::Error> for ValueSplittingStore<K>
 where
-    K: AdminKeyValueStore + Send + Sync,
+    K: KeyValueStore + Send + Sync,
 {
-    type Error = K::Error;
     type Config = K::Config;
 
     async fn connect(
         config: &Self::Config,
         namespace: &str,
         root_key: &[u8],
-    ) -> Result<Self, Self::Error> {
+    ) -> Result<Self, K::Error> {
         let store = K::connect(config, namespace, root_key).await?;
         Ok(Self { store })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, K::Error> {
         let store = self.store.clone_with_root_key(root_key)?;
         Ok(Self { store })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, K::Error> {
         K::list_all(config).await
     }
 
-    async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
+    async fn delete_all(config: &Self::Config) -> Result<(), K::Error> {
         K::delete_all(config).await
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, K::Error> {
         K::exists(config, namespace).await
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), K::Error> {
         K::create(config, namespace).await
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), K::Error> {
         K::delete(config, namespace).await
     }
 }

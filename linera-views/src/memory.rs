@@ -304,8 +304,7 @@ impl CacheSize for MemoryStoreConfig {
     }
 }
 
-impl AdminKeyValueStore for MemoryStore {
-    type Error = MemoryStoreError;
+impl AdminKeyValueStore<MemoryStoreError> for MemoryStore {
     type Config = MemoryStoreConfig;
 
     async fn connect(

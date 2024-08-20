@@ -82,7 +82,7 @@ pub trait DirectWritableKeyValueStore<E> {
 
 /// Low-level, asynchronous direct read/write key-value operations with simplified batch
 pub trait DirectKeyValueStore:
-    ReadableKeyValueStore<Self::Error> + DirectWritableKeyValueStore<Self::Error>
+    ReadableKeyValueStore<Self::Error> + DirectWritableKeyValueStore<Self::Error> + AdminKeyValueStore<Self::Error>
 {
     /// The error type.
     type Error: Debug + From<bcs::Error>;
@@ -162,44 +162,43 @@ where
     }
 }
 
-impl<K> AdminKeyValueStore for JournalingKeyValueStore<K>
+impl<K,E> AdminKeyValueStore<E> for JournalingKeyValueStore<K>
 where
-    K: AdminKeyValueStore + Send + Sync,
+    K: AdminKeyValueStore<E> + Send + Sync,
 {
-    type Error = K::Error;
     type Config = K::Config;
 
     async fn connect(
         config: &Self::Config,
         namespace: &str,
         root_key: &[u8],
-    ) -> Result<Self, Self::Error> {
+    ) -> Result<Self, E> {
         let store = K::connect(config, namespace, root_key).await?;
         Ok(Self { store })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, E> {
         let store = self.store.clone_with_root_key(root_key)?;
         Ok(Self { store })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, E> {
         K::list_all(config).await
     }
 
-    async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
+    async fn delete_all(config: &Self::Config) -> Result<(), E> {
         K::delete_all(config).await
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, E> {
         K::exists(config, namespace).await
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), E> {
         K::create(config, namespace).await
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), E> {
         K::delete(config, namespace).await
     }
 }

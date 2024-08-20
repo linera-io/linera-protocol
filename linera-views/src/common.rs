@@ -434,10 +434,7 @@ pub trait CacheSize {
 
 /// Low-level trait for the administration of stores and their namespaces.
 #[trait_variant::make(AdminKeyValueStore: Send)]
-pub trait LocalAdminKeyValueStore: Sized {
-    /// The error type returned by the store's methods.
-    type Error;
-
+pub trait LocalAdminKeyValueStore<E>: Sized {
     /// The configuration needed to interact with a new store.
     type Config: Send + Sync + CacheSize;
 
@@ -446,16 +443,16 @@ pub trait LocalAdminKeyValueStore: Sized {
         config: &Self::Config,
         namespace: &str,
         root_key: &[u8],
-    ) -> Result<Self, Self::Error>;
+    ) -> Result<Self, E>;
 
     /// Takes a connection and creates a new one with a different `root_key`.
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error>;
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, E>;
 
     /// Obtains the list of existing namespaces.
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error>;
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, E>;
 
     /// Deletes all the existing namespaces.
-    fn delete_all(config: &Self::Config) -> impl Future<Output = Result<(), Self::Error>> {
+    fn delete_all(config: &Self::Config) -> impl Future<Output = Result<(), E>> {
         async {
             let namespaces = Self::list_all(config).await?;
             for namespace in namespaces {
@@ -466,20 +463,20 @@ pub trait LocalAdminKeyValueStore: Sized {
     }
 
     /// Tests if a given namespace exists.
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error>;
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, E>;
 
     /// Creates a namespace. Returns an error if the namespace exists.
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error>;
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), E>;
 
     /// Deletes the given namespace.
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error>;
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), E>;
 
     /// Initializes a storage if missing and provides it.
     fn maybe_create_and_connect(
         config: &Self::Config,
         namespace: &str,
         root_key: &[u8],
-    ) -> impl Future<Output = Result<Self, Self::Error>> {
+    ) -> impl Future<Output = Result<Self, E>> {
         async {
             if !Self::exists(config, namespace).await? {
                 Self::create(config, namespace).await?;
@@ -493,7 +490,7 @@ pub trait LocalAdminKeyValueStore: Sized {
         config: &Self::Config,
         namespace: &str,
         root_key: &[u8],
-    ) -> impl Future<Output = Result<Self, Self::Error>> {
+    ) -> impl Future<Output = Result<Self, E>> {
         async {
             if Self::exists(config, namespace).await? {
                 Self::delete(config, namespace).await?;
@@ -504,9 +501,10 @@ pub trait LocalAdminKeyValueStore: Sized {
     }
 }
 
+
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
 pub trait KeyValueStore:
-    ReadableKeyValueStore<Self::Error> + WritableKeyValueStore<Self::Error>
+    ReadableKeyValueStore<Self::Error> + WritableKeyValueStore<Self::Error> + AdminKeyValueStore<Self::Error>
 {
     /// The error type.
     type Error: Debug;
@@ -514,7 +512,7 @@ pub trait KeyValueStore:
 
 /// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
 pub trait LocalKeyValueStore:
-    LocalReadableKeyValueStore<Self::Error> + LocalWritableKeyValueStore<Self::Error>
+    LocalReadableKeyValueStore<Self::Error> + LocalWritableKeyValueStore<Self::Error> + LocalAdminKeyValueStore<Self::Error>
 {
     /// The error type.
     type Error: Debug;
