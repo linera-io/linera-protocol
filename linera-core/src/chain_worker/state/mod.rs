@@ -70,11 +70,13 @@ where
     ViewError: From<StorageClient::StoreError>,
 {
     /// Creates a new [`ChainWorkerState`] using the provided `storage` client.
+    #[allow(clippy::too_many_arguments)]
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
         blob_cache: Arc<ValueCache<BlobId, Blob>>,
+        tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         chain_id: ChainId,
         execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
         runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
@@ -90,7 +92,7 @@ where
             runtime_request_sender,
             recent_hashed_certificate_values: certificate_value_cache,
             recent_blobs: blob_cache,
-            tracked_chains: None,
+            tracked_chains,
             knows_chain_is_active: false,
         })
     }
