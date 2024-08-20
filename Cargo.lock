@@ -4179,6 +4179,7 @@ dependencies = [
  "chrono",
  "custom_debug_derive",
  "ed25519-dalek",
+ "futures",
  "generic-array",
  "getrandom",
  "hex",
@@ -4199,6 +4200,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "wasm-bindgen-futures",
  "web-time",
 ]
 

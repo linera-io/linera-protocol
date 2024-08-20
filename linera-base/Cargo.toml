@@ -14,7 +14,15 @@ version.workspace = true
 [features]
 test = ["test-strategy", "proptest"]
 metrics = ["prometheus"]
-web = ["getrandom/js", "rand/getrandom", "rand/std", "rand/std_rng", "web-time"]
+web = [
+    "futures",
+    "getrandom/js",
+    "rand/getrandom",
+    "rand/std",
+    "rand/std_rng",
+    "web-time",
+    "wasm-bindgen-futures",
+]
 
 [dependencies]
 anyhow.workspace = true
@@ -26,6 +34,7 @@ bcs.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
 ed25519-dalek.workspace = true
+futures = { workspace = true, optional = true }
 generic-array.workspace = true
 getrandom = { workspace = true, optional = true }
 hex.workspace = true
@@ -43,6 +52,7 @@ test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["json", "fmt", "ansi"] }
+wasm-bindgen-futures = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

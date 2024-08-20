@@ -21,6 +21,8 @@ pub mod identifiers;
 pub mod ownership;
 #[cfg(with_metrics)]
 pub mod prometheus_util;
+#[cfg(not(chain))]
+pub mod task;
 pub mod tracing;
 #[cfg(test)]
 mod unit_tests;

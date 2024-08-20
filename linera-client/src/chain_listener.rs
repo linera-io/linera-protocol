@@ -136,7 +136,7 @@ where
     ) where
         C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     {
-        let _handle = tokio::task::spawn(
+        let _handle = linera_base::task::spawn(
             async move {
                 if let Err(err) =
                     Self::run_client_stream(chain_id, clients, context, storage, config).await
@@ -174,7 +174,7 @@ where
         };
         let (listener, _listen_handle, mut local_stream) = client.listen().await?;
         client.synchronize_from_validators().await?;
-        tokio::spawn(listener.in_current_span());
+        drop(linera_base::task::spawn(listener.in_current_span()));
         let mut timeout = storage.clock().current_time();
         loop {
             let sleep = Box::pin(storage.clock().sleep_until(timeout));
