@@ -346,3 +346,39 @@ impl From<KeyValueStore> for ViewStorageContext {
         }
     }
 }
+
+#[cfg(with_testing)]
+#[tokio::test]
+async fn test_key_value_store_mock() -> anyhow::Result<()> {
+    // Create a mock key-value store for testing
+    let store = KeyValueStore::mock();
+    let mock_store = store.to_mut();
+
+    // Check if key exists
+    let is_key_existing = mock_store.contains_key(b"foo").await?;
+    assert!(!is_key_existing);
+
+    // Check if keys exist
+    let is_keys_existing = mock_store
+        .contains_keys(vec![b"foo".to_vec(), b"bar".to_vec()])
+        .await?;
+    assert!(!is_keys_existing[0]);
+    assert!(!is_keys_existing[1]);
+
+    // Read and write values
+    let mut batch = Batch::new();
+    batch.put_key_value(b"foo".to_vec(), &(32 as u128))?;
+    batch.put_key_value(b"bar".to_vec(), &(42 as u128))?;
+    mock_store.write_batch(batch).await?;
+
+    let is_key_existing = mock_store.contains_key(b"foo").await?;
+    assert!(is_key_existing);
+
+    let value = mock_store.read_value(b"foo").await?;
+    assert_eq!(value, Some(32 as u128));
+
+    let value = mock_store.read_value(b"bar").await?;
+    assert_eq!(value, Some(42 as u128));
+
+    Ok(())
+}
