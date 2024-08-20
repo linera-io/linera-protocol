@@ -16,7 +16,7 @@ use linked_hash_map::LinkedHashMap;
 use prometheus::{register_int_counter_vec, IntCounterVec};
 #[cfg(with_testing)]
 use {
-    crate::common::{CommonStoreConfig, ContextFromStore},
+    crate::common::{AdminKeyValueStore as _, CommonStoreConfig, ContextFromStore},
     crate::memory::{MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
     crate::views::ViewError,
 };
@@ -316,10 +316,10 @@ impl<E> LruCachingMemoryContext<E> {
         let config = MemoryStoreConfig { common_config };
         let namespace = "linera";
         let root_key = &[];
-        let store =
-            LruCachingStore::<MemoryStore>::maybe_create_and_connect(&config, namespace, root_key)
-                .await
-                .expect("store");
+        let store = MemoryStore::maybe_create_and_connect(&config, namespace, root_key)
+            .await
+            .expect("store");
+        let store = LruCachingStore::new(store, cache_size);
         let base_key = Vec::new();
         Ok(Self {
             store,

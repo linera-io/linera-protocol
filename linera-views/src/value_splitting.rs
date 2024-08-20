@@ -15,7 +15,7 @@ use crate::{
 };
 #[cfg(with_testing)]
 use crate::{
-    memory::{MemoryStore, MemoryStoreConfig, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
+    memory::{MemoryStore, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
     test_utils::generate_test_namespace,
 };
 
