@@ -150,6 +150,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             storage.clone(),
             10,
             delivery,
+            [chain_id0],
         )),
     };
     let key_pair = KeyPair::generate_from(&mut rng);

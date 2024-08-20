@@ -113,7 +113,9 @@ where
         storage: S,
         max_pending_messages: usize,
         cross_chain_message_delivery: CrossChainMessageDelivery,
+        tracked_chains: impl IntoIterator<Item = ChainId>,
     ) -> Self {
+        let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client("Client node".to_string(), storage.clone())
             .with_allow_inactive_chains(true)
             .with_allow_messages_from_deprecated_epochs(true);
@@ -126,7 +128,7 @@ where
             max_pending_messages,
             message_policy: MessagePolicy::new(BlanketMessagePolicy::Accept, None),
             cross_chain_message_delivery,
-            tracked_chains: Arc::default(),
+            tracked_chains,
             notifier: Arc::new(Notifier::default()),
             storage,
         }

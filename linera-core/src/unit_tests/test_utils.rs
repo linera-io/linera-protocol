@@ -796,6 +796,7 @@ where
             storage,
             10,
             CrossChainMessageDelivery::NonBlocking,
+            [chain_id],
         ));
         Ok(builder.create_chain_client(
             chain_id,
