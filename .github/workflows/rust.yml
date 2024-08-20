@@ -223,3 +223,6 @@ jobs:
       if: '!cancelled()'
       run: |
         ln -sf toolchains/build/rust-toolchain.toml
+    - name: Check linera-service GraphQL schema
+      run: |
+        diff <(cargo run --locked --bin linera-schema-export) linera-service-graphql-client/gql/service_schema.graphql
