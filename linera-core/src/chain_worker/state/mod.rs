@@ -9,7 +9,7 @@ mod temporary_changes;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    sync::Arc,
+    sync::{self, Arc},
 };
 
 use linera_base::{
@@ -60,6 +60,7 @@ where
     runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
     recent_blobs: Arc<ValueCache<BlobId, Blob>>,
+    tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     knows_chain_is_active: bool,
 }
 
@@ -89,6 +90,7 @@ where
             runtime_request_sender,
             recent_hashed_certificate_values: certificate_value_cache,
             recent_blobs: blob_cache,
+            tracked_chains: None,
             knows_chain_is_active: false,
         })
     }
