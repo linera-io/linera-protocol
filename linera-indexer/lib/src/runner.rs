@@ -5,7 +5,7 @@
 
 use linera_base::identifiers::ChainId;
 use linera_views::{
-    common::{AdminKeyValueStore, KeyValueStore},
+    common::KeyValueStore,
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
 };
@@ -49,13 +49,12 @@ impl<DB, Config> Runner<DB, Config>
 where
     Self: Send,
     Config: Clone + std::fmt::Debug + Send + Sync + clap::Parser + clap::Args,
-    DB: AdminKeyValueStore<Error = <DB as KeyValueStore>::Error>
-        + KeyValueStore
+    DB: KeyValueStore
         + Clone
         + Send
         + Sync
         + 'static,
-    <DB as KeyValueStore>::Error: From<bcs::Error>
+    DB::Error: From<bcs::Error>
         + From<DatabaseConsistencyError>
         + Send
         + Sync

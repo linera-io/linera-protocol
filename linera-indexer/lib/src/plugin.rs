@@ -9,7 +9,7 @@ use async_graphql::{EmptyMutation, EmptySubscription, ObjectType, Schema};
 use axum::Router;
 use linera_chain::data_types::HashedCertificateValue;
 use linera_views::{
-    common::{AdminKeyValueStore, ContextFromStore, KeyValueStore},
+    common::{ContextFromStore, KeyValueStore},
     views::{View, ViewError},
 };
 use tokio::sync::Mutex;
@@ -72,14 +72,13 @@ pub async fn load<S, V: View<ContextFromStore<(), S>>>(
     name: &str,
 ) -> Result<Arc<Mutex<V>>, IndexerError>
 where
-    S: AdminKeyValueStore<Error = <S as KeyValueStore>::Error>
-        + KeyValueStore
+    S: KeyValueStore
         + Clone
         + Send
         + Sync
         + 'static,
-    <S as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<<S as KeyValueStore>::Error>,
+    S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: From<S::Error>,
 {
     let root_key = name.as_bytes().to_vec();
     let store = store

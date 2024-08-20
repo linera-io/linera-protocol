@@ -329,7 +329,7 @@ impl WitInterface {
     }
 }
 
-impl linera_views::common::KeyValueStore for KeyValueStore {
+impl linera_views::common::RestrictedKeyValueStore for KeyValueStore {
     type Error = ViewError;
 }
 

@@ -20,7 +20,7 @@ use linera_chain::data_types::HashedCertificateValue;
 use linera_core::worker::Reason;
 use linera_service_graphql_client::{block, chains, notifications, Block, Chains, Notifications};
 use linera_views::{
-    common::{AdminKeyValueStore, KeyValueStore},
+    common::KeyValueStore,
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
 };
@@ -133,19 +133,18 @@ impl Listener {
         chain_id: ChainId,
     ) -> Result<ChainId, IndexerError>
     where
-        DB: AdminKeyValueStore<Error = <DB as KeyValueStore>::Error>
-            + KeyValueStore
+        DB: KeyValueStore
             + Clone
             + Send
             + Sync
             + 'static,
-        <DB as KeyValueStore>::Error: From<bcs::Error>
+        DB::Error: From<bcs::Error>
             + From<DatabaseConsistencyError>
             + Send
             + Sync
             + std::error::Error
             + 'static,
-        ViewError: From<<DB as KeyValueStore>::Error>,
+        ViewError: From<DB::Error>,
     {
         let mut request = self.service.websocket().into_client_request()?;
         request.headers_mut().insert(

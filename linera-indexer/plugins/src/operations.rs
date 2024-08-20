@@ -16,7 +16,7 @@ use linera_indexer::{
     plugin::{load, route, sdl, Plugin},
 };
 use linera_views::{
-    common::{AdminKeyValueStore, Context, ContextFromStore, KeyValueStore},
+    common::{Context, ContextFromStore, KeyValueStore},
     map_view::MapView,
     views::{RootView, ViewError},
 };
@@ -112,14 +112,13 @@ static NAME: &str = "operations";
 #[async_trait::async_trait]
 impl<S> Plugin<S> for OperationsPlugin<ContextFromStore<(), S>>
 where
-    S: AdminKeyValueStore<Error = <S as KeyValueStore>::Error>
-        + KeyValueStore
+    S: KeyValueStore
         + Clone
         + Send
         + Sync
         + 'static,
-    <S as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<<S as KeyValueStore>::Error>,
+    S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: From<S::Error>,
 {
     fn name(&self) -> String {
         NAME.to_string()
