@@ -9,7 +9,7 @@ use prometheus::HistogramVec;
 
 use crate::{
     batch::Batch,
-    common::{KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
+    common::{RestrictedKeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
 };
 
 #[derive(Clone)]
@@ -181,9 +181,9 @@ where
     }
 }
 
-impl<K> KeyValueStore for MeteredStore<K>
+impl<K> RestrictedKeyValueStore for MeteredStore<K>
 where
-    K: KeyValueStore + Send + Sync,
+    K: RestrictedKeyValueStore + Send + Sync,
 {
     type Error = K::Error;
 }

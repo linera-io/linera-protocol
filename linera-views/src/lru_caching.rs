@@ -24,7 +24,7 @@ use {
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_interval, AdminKeyValueStore, CacheSize, KeyValueStore, ReadableKeyValueStore,
+        get_interval, RestrictedKeyValueStore, ReadableKeyValueStore,
         WritableKeyValueStore,
     },
 };
@@ -109,12 +109,11 @@ pub struct LruCachingStore<K> {
     /// The inner store that is called by the LRU cache one
     pub store: K,
     lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
-    cache_size: usize,
 }
 
 impl<K> ReadableKeyValueStore<K::Error> for LruCachingStore<K>
 where
-    K: KeyValueStore + Send + Sync,
+    K: RestrictedKeyValueStore + Send + Sync,
 {
     // The LRU cache does not change the underlying store's size limits.
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
@@ -238,7 +237,7 @@ where
 
 impl<K> WritableKeyValueStore<K::Error> for LruCachingStore<K>
 where
-    K: KeyValueStore + Send + Sync,
+    K: RestrictedKeyValueStore + Send + Sync,
 {
     // The LRU cache does not change the underlying store's size limits.
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
@@ -280,70 +279,16 @@ fn new_lru_prefix_cache(cache_size: usize) -> Option<Arc<Mutex<LruPrefixCache>>>
     }
 }
 
-impl<K> AdminKeyValueStore<K::Error> for LruCachingStore<K>
+impl<K> RestrictedKeyValueStore for LruCachingStore<K>
 where
-    K: KeyValueStore + Send + Sync,
-{
-    type Config = K::Config;
-
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, K::Error> {
-        let cache_size = config.cache_size();
-        let lru_read_values = new_lru_prefix_cache(cache_size);
-        let store = K::connect(config, namespace, root_key).await?;
-        Ok(Self {
-            store,
-            lru_read_values,
-            cache_size,
-        })
-    }
-
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, K::Error> {
-        let cache_size = self.cache_size;
-        // The cloning starts with an empty cache.
-        let lru_read_values = new_lru_prefix_cache(cache_size);
-        let store = self.store.clone_with_root_key(root_key)?;
-        Ok(Self {
-            store,
-            lru_read_values,
-            cache_size,
-        })
-    }
-
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, K::Error> {
-        K::list_all(config).await
-    }
-
-    async fn delete_all(config: &Self::Config) -> Result<(), K::Error> {
-        K::delete_all(config).await
-    }
-
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, K::Error> {
-        K::exists(config, namespace).await
-    }
-
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), K::Error> {
-        K::create(config, namespace).await
-    }
-
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), K::Error> {
-        K::delete(config, namespace).await
-    }
-}
-
-impl<K> KeyValueStore for LruCachingStore<K>
-where
-    K: KeyValueStore + Send + Sync,
+    K: RestrictedKeyValueStore + Send + Sync,
 {
     type Error = K::Error;
 }
 
 impl<K> LruCachingStore<K>
 where
-    K: KeyValueStore,
+    K: RestrictedKeyValueStore,
 {
     /// Creates a new key-value store that provides LRU caching at top of the given store.
     pub fn new(store: K, cache_size: usize) -> Self {
@@ -351,7 +296,6 @@ where
         Self {
             store,
             lru_read_values,
-            cache_size,
         }
     }
 }

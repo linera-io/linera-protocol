@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        AdminKeyValueStore, KeyIterable, KeyValueIterable, KeyValueStore, ReadableKeyValueStore,
+        KeyIterable, KeyValueIterable, RestrictedKeyValueStore, ReadableKeyValueStore,
         WritableKeyValueStore,
     },
 };
@@ -49,7 +49,7 @@ pub struct ValueSplittingStore<K> {
 
 impl<K> ReadableKeyValueStore<K::Error> for ValueSplittingStore<K>
 where
-    K: KeyValueStore + Send + Sync,
+    K: RestrictedKeyValueStore + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE - 4;
@@ -211,7 +211,7 @@ where
 
 impl<K> WritableKeyValueStore<K::Error> for ValueSplittingStore<K>
 where
-    K: KeyValueStore + Send + Sync,
+    K: RestrictedKeyValueStore + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
     const MAX_VALUE_SIZE: usize = usize::MAX;
@@ -254,50 +254,9 @@ where
     }
 }
 
-impl<K> AdminKeyValueStore<K::Error> for ValueSplittingStore<K>
+impl<K> RestrictedKeyValueStore for ValueSplittingStore<K>
 where
-    K: KeyValueStore + Send + Sync,
-{
-    type Config = K::Config;
-
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, K::Error> {
-        let store = K::connect(config, namespace, root_key).await?;
-        Ok(Self { store })
-    }
-
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, K::Error> {
-        let store = self.store.clone_with_root_key(root_key)?;
-        Ok(Self { store })
-    }
-
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, K::Error> {
-        K::list_all(config).await
-    }
-
-    async fn delete_all(config: &Self::Config) -> Result<(), K::Error> {
-        K::delete_all(config).await
-    }
-
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, K::Error> {
-        K::exists(config, namespace).await
-    }
-
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), K::Error> {
-        K::create(config, namespace).await
-    }
-
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), K::Error> {
-        K::delete(config, namespace).await
-    }
-}
-
-impl<K> KeyValueStore for ValueSplittingStore<K>
-where
-    K: KeyValueStore + Send + Sync,
+    K: RestrictedKeyValueStore + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
     type Error = K::Error;
@@ -305,7 +264,7 @@ where
 
 impl<K> ValueSplittingStore<K>
 where
-    K: KeyValueStore + Send + Sync,
+    K: RestrictedKeyValueStore + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
     /// Creates a new store that deals with big values from one that does not.
@@ -425,42 +384,7 @@ impl WritableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
 }
 
 #[cfg(with_testing)]
-impl AdminKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
-    type Config = MemoryStoreConfig;
-
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, MemoryStoreError> {
-        let store = MemoryStore::connect(config, namespace, root_key).await?;
-        Ok(Self { store })
-    }
-
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, MemoryStoreError> {
-        let store = self.store.clone_with_root_key(root_key)?;
-        Ok(Self { store })
-    }
-
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, MemoryStoreError> {
-        MemoryStore::list_all(config).await
-    }
-
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, MemoryStoreError> {
-        MemoryStore::exists(config, namespace).await
-    }
-
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), MemoryStoreError> {
-        MemoryStore::create(config, namespace).await
-    }
-
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), MemoryStoreError> {
-        MemoryStore::delete(config, namespace).await
-    }
-}
-
-#[cfg(with_testing)]
-impl KeyValueStore for LimitedTestMemoryStore {
+impl RestrictedKeyValueStore for LimitedTestMemoryStore {
     type Error = MemoryStoreError;
 }
 
