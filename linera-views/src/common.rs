@@ -501,6 +501,35 @@ pub trait LocalAdminKeyValueStore<E>: Sized {
     }
 }
 
+/// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
+pub trait RestrictedKeyValueStore:
+    ReadableKeyValueStore<Self::Error> + WritableKeyValueStore<Self::Error>
+{
+    /// The error type.
+    type Error: Debug;
+}
+
+/// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
+pub trait LocalRestrictedKeyValueStore:
+    LocalReadableKeyValueStore<Self::Error> + LocalWritableKeyValueStore<Self::Error>
+{
+    /// The error type.
+    type Error: Debug;
+}
+
+impl<S: RestrictedKeyValueStore> LocalRestrictedKeyValueStore for S {
+    type Error = <Self as RestrictedKeyValueStore>::Error;
+}
+
+impl<S: KeyValueStore> RestrictedKeyValueStore for S {
+    type Error = <Self as KeyValueStore>::Error;
+}
+
+/*
+impl<S: LocalKeyValueStore> LocalRestrictedKeyValueStore for S {
+    type Error = <Self as LocalKeyValueStore>::Error;
+}
+*/
 
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
 pub trait KeyValueStore:
@@ -759,7 +788,7 @@ pub struct ContextFromStore<E, S> {
 impl<E, S> ContextFromStore<E, S>
 where
     E: Clone + Send + Sync,
-    S: KeyValueStore + Clone + Send + Sync,
+    S: RestrictedKeyValueStore + Clone + Send + Sync,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<S::Error>,
 {
@@ -807,7 +836,7 @@ where
 impl<E, S> Context for ContextFromStore<E, S>
 where
     E: Clone + Send + Sync,
-    S: KeyValueStore + Clone + Send + Sync,
+    S: RestrictedKeyValueStore + Clone + Send + Sync,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<S::Error>,
 {

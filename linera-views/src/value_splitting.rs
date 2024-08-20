@@ -15,7 +15,7 @@ use crate::{
 };
 #[cfg(with_testing)]
 use crate::{
-    memory::{MemoryStore, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
+    memory::{MemoryStore, MemoryStoreConfig, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
     test_utils::generate_test_namespace,
 };
 
@@ -421,6 +421,41 @@ impl WritableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
 
     async fn clear_journal(&self) -> Result<(), MemoryStoreError> {
         self.store.clear_journal().await
+    }
+}
+
+#[cfg(with_testing)]
+impl AdminKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
+    type Config = MemoryStoreConfig;
+
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, MemoryStoreError> {
+        let store = MemoryStore::connect(config, namespace, root_key).await?;
+        Ok(Self { store })
+    }
+
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, MemoryStoreError> {
+        let store = self.store.clone_with_root_key(root_key)?;
+        Ok(Self { store })
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, MemoryStoreError> {
+        MemoryStore::list_all(config).await
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, MemoryStoreError> {
+        MemoryStore::exists(config, namespace).await
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), MemoryStoreError> {
+        MemoryStore::create(config, namespace).await
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), MemoryStoreError> {
+        MemoryStore::delete(config, namespace).await
     }
 }
 
