@@ -367,18 +367,18 @@ async fn test_key_value_store_mock() -> anyhow::Result<()> {
 
     // Read and write values
     let mut batch = Batch::new();
-    batch.put_key_value(b"foo".to_vec(), &(32 as u128))?;
-    batch.put_key_value(b"bar".to_vec(), &(42 as u128))?;
+    batch.put_key_value(b"foo".to_vec(), &32_u128)?;
+    batch.put_key_value(b"bar".to_vec(), &42_u128)?;
     mock_store.write_batch(batch).await?;
 
     let is_key_existing = mock_store.contains_key(b"foo").await?;
     assert!(is_key_existing);
 
     let value = mock_store.read_value(b"foo").await?;
-    assert_eq!(value, Some(32 as u128));
+    assert_eq!(value, Some(32_u128));
 
     let value = mock_store.read_value(b"bar").await?;
-    assert_eq!(value, Some(42 as u128));
+    assert_eq!(value, Some(42_u128));
 
     Ok(())
 }
