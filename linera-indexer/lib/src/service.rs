@@ -125,20 +125,20 @@ pub struct Listener {
 
 impl Listener {
     /// Connects to the websocket of the service node for a particular chain
-    pub async fn listen<DB>(
+    pub async fn listen<S>(
         &self,
-        indexer: &Indexer<DB>,
+        indexer: &Indexer<S>,
         chain_id: ChainId,
     ) -> Result<ChainId, IndexerError>
     where
-        DB: KeyValueStore + Clone + Send + Sync + 'static,
-        DB::Error: From<bcs::Error>
+        S: KeyValueStore + Clone + Send + Sync + 'static,
+        S::Error: From<bcs::Error>
             + From<DatabaseConsistencyError>
             + Send
             + Sync
             + std::error::Error
             + 'static,
-        ViewError: From<DB::Error>,
+        ViewError: From<S::Error>,
     {
         let mut request = self.service.websocket().into_client_request()?;
         request.headers_mut().insert(

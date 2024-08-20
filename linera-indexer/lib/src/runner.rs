@@ -37,27 +37,27 @@ pub struct IndexerConfig<Config: clap::Args> {
     pub command: IndexerCommand,
 }
 
-pub struct Runner<DB, Config: clap::Args> {
-    pub store: DB,
+pub struct Runner<S, Config: clap::Args> {
+    pub store: S,
     pub config: IndexerConfig<Config>,
-    pub indexer: Indexer<DB>,
+    pub indexer: Indexer<S>,
 }
 
-impl<DB, Config> Runner<DB, Config>
+impl<S, Config> Runner<S, Config>
 where
     Self: Send,
     Config: Clone + std::fmt::Debug + Send + Sync + clap::Parser + clap::Args,
-    DB: KeyValueStore + Clone + Send + Sync + 'static,
-    DB::Error: From<bcs::Error>
+    S: KeyValueStore + Clone + Send + Sync + 'static,
+    S::Error: From<bcs::Error>
         + From<DatabaseConsistencyError>
         + Send
         + Sync
         + std::error::Error
         + 'static,
-    ViewError: From<<DB as KeyValueStore>::Error>,
+    ViewError: From<S::Error>,
 {
     /// Loads a new runner
-    pub async fn new(config: IndexerConfig<Config>, store: DB) -> Result<Self, IndexerError>
+    pub async fn new(config: IndexerConfig<Config>, store: S) -> Result<Self, IndexerError>
     where
         Self: Sized,
     {
@@ -72,13 +72,13 @@ where
     /// Registers a new plugin to the indexer
     pub async fn add_plugin(
         &mut self,
-        plugin: impl Plugin<DB> + 'static,
+        plugin: impl Plugin<S> + 'static,
     ) -> Result<(), IndexerError> {
         self.indexer.add_plugin(plugin).await
     }
 
     /// Runs a server from the indexer and the plugins
-    async fn server(port: u16, indexer: &Indexer<DB>) -> Result<(), IndexerError> {
+    async fn server(port: u16, indexer: &Indexer<S>) -> Result<(), IndexerError> {
         let mut app = indexer.route(None);
         for plugin in indexer.plugins.values() {
             app = plugin.route(app);
