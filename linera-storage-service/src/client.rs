@@ -373,8 +373,7 @@ impl ServiceStoreClientInternal {
     }
 }
 
-impl AdminKeyValueStore for ServiceStoreClientInternal {
-    type Error = ServiceStoreError;
+impl AdminKeyValueStore<ServiceStoreError> for ServiceStoreClientInternal {
     type Config = ServiceStoreConfig;
 
     async fn connect(
@@ -597,8 +596,7 @@ impl KeyValueStore for ServiceStoreClient {
     type Error = ServiceStoreError;
 }
 
-impl AdminKeyValueStore for ServiceStoreClient {
-    type Error = ServiceStoreError;
+impl AdminKeyValueStore<ServiceStoreError> for ServiceStoreClient {
     type Config = ServiceStoreConfig;
 
     async fn connect(
