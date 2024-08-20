@@ -63,17 +63,21 @@ impl MockApplication {
         }
     }
 
-    /// Panics if there are still expected calls in one of the [`MockApplicationInstance`]s created
-    /// from this [`MockApplication`].
+    /// Panics if there are still expected calls left in this [`MockApplication`].
     pub fn assert_no_more_expected_calls(&self) {
         assert!(
             self.expected_calls.lock().unwrap().is_empty(),
             "Missing call to instantiate a `MockApplicationInstance`"
         );
+    }
+
+    /// Panics if there are still expected calls in one of the [`MockApplicationInstance`]s created
+    /// from this [`MockApplication`].
+    pub fn assert_no_active_instances(&self) {
         assert_eq!(
             self.active_instances.load(Ordering::Acquire),
             0,
-            "`MockApplicationInstance` is still waiting for expected calls"
+            "At least one of `MockApplicationInstance` is still waiting for expected calls"
         );
     }
 }
