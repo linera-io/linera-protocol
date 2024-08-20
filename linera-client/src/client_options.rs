@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, env, iter, num::NonZeroU16, path::PathBuf, time::Duration};
+use std::{collections::HashSet, env, fmt, iter, num::NonZeroU16, path::PathBuf, time::Duration};
 
 use chrono::{DateTime, Utc};
 use linera_base::{
@@ -921,8 +921,8 @@ impl std::str::FromStr for ResourceControlPolicyConfig {
     }
 }
 
-impl std::fmt::Display for ResourceControlPolicyConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for ResourceControlPolicyConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
