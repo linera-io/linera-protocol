@@ -570,8 +570,7 @@ fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
     big_key
 }
 
-impl AdminKeyValueStore for ScyllaDbStoreInternal {
-    type Error = ScyllaDbStoreError;
+impl AdminKeyValueStore<ScyllaDbStoreError> for ScyllaDbStoreInternal {
     type Config = ScyllaDbStoreConfig;
 
     async fn connect(
@@ -872,8 +871,7 @@ impl WritableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStore {
     }
 }
 
-impl AdminKeyValueStore for ScyllaDbStore {
-    type Error = ScyllaDbStoreError;
+impl AdminKeyValueStore<ScyllaDbStoreError> for ScyllaDbStore {
     type Config = ScyllaDbStoreConfig;
 
     async fn connect(

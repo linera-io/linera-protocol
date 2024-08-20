@@ -344,8 +344,7 @@ fn root_key_as_string(root_key: &[u8]) -> String {
     format!("ROOT_KEY_{}", hex::encode(root_key))
 }
 
-impl AdminKeyValueStore for RocksDbStoreInternal {
-    type Error = RocksDbStoreError;
+impl AdminKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
     type Config = RocksDbStoreConfig;
 
     async fn connect(
@@ -576,8 +575,7 @@ impl WritableKeyValueStore<RocksDbStoreError> for RocksDbStore {
     }
 }
 
-impl AdminKeyValueStore for RocksDbStore {
-    type Error = RocksDbStoreError;
+impl AdminKeyValueStore<RocksDbStoreError> for RocksDbStore {
     type Config = RocksDbStoreConfig;
 
     async fn connect(

@@ -358,8 +358,7 @@ impl CacheSize for DynamoDbStoreConfig {
     }
 }
 
-impl AdminKeyValueStore for DynamoDbStoreInternal {
-    type Error = DynamoDbStoreError;
+impl AdminKeyValueStore<DynamoDbStoreError> for DynamoDbStoreInternal {
     type Config = DynamoDbStoreConfig;
 
     async fn connect(
@@ -1040,8 +1039,7 @@ impl KeyValueStore for DynamoDbStore {
     type Error = DynamoDbStoreError;
 }
 
-impl AdminKeyValueStore for DynamoDbStore {
-    type Error = DynamoDbStoreError;
+impl AdminKeyValueStore<DynamoDbStoreError> for DynamoDbStore {
     type Config = DynamoDbStoreConfig;
 
     async fn connect(
