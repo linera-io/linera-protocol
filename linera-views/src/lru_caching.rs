@@ -108,9 +108,9 @@ pub struct LruCachingStore<K> {
     lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
-impl<K> ReadableKeyValueStore<K::Error> for LruCachingStore<K>
+impl<K, E> ReadableKeyValueStore<E> for LruCachingStore<K>
 where
-    K: RestrictedKeyValueStore + Send + Sync,
+    K: ReadableKeyValueStore<E> + Send + Sync,
 {
     // The LRU cache does not change the underlying store's size limits.
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
@@ -121,7 +121,7 @@ where
         self.store.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, K::Error> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, E> {
         let Some(lru_read_values) = &self.lru_read_values else {
             return self.store.read_value_bytes(key).await;
         };
@@ -142,7 +142,7 @@ where
         Ok(value)
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, K::Error> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, E> {
         if let Some(values) = &self.lru_read_values {
             let values = values.lock().unwrap();
             if let Some(value) = values.query(key) {
@@ -152,7 +152,7 @@ where
         self.store.contains_key(key).await
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, K::Error> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, E> {
         let Some(values) = &self.lru_read_values else {
             return self.store.contains_keys(keys).await;
         };
@@ -178,10 +178,7 @@ where
         Ok(results)
     }
 
-    async fn read_multi_values_bytes(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, K::Error> {
+    async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, E> {
         let Some(lru_read_values) = &self.lru_read_values else {
             return self.store.read_multi_values_bytes(keys).await;
         };
@@ -220,26 +217,23 @@ where
         Ok(result)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, K::Error> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, E> {
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
-    async fn find_key_values_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, K::Error> {
+    async fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::KeyValues, E> {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
 
-impl<K> WritableKeyValueStore<K::Error> for LruCachingStore<K>
+impl<K, E> WritableKeyValueStore<E> for LruCachingStore<K>
 where
-    K: RestrictedKeyValueStore + Send + Sync,
+    K: WritableKeyValueStore<E> + Send + Sync,
 {
     // The LRU cache does not change the underlying store's size limits.
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), K::Error> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), E> {
         let Some(lru_read_values) = &self.lru_read_values else {
             return self.store.write_batch(batch).await;
         };
@@ -263,7 +257,7 @@ where
         self.store.write_batch(batch).await
     }
 
-    async fn clear_journal(&self) -> Result<(), K::Error> {
+    async fn clear_journal(&self) -> Result<(), E> {
         self.store.clear_journal().await
     }
 }
