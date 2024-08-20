@@ -5,9 +5,7 @@
 
 use linera_base::identifiers::ChainId;
 use linera_views::{
-    common::KeyValueStore,
-    value_splitting::DatabaseConsistencyError,
-    views::ViewError,
+    common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
 use tokio::select;
 use tracing::{info, warn};
@@ -49,11 +47,7 @@ impl<DB, Config> Runner<DB, Config>
 where
     Self: Send,
     Config: Clone + std::fmt::Debug + Send + Sync + clap::Parser + clap::Args,
-    DB: KeyValueStore
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    DB: KeyValueStore + Clone + Send + Sync + 'static,
     DB::Error: From<bcs::Error>
         + From<DatabaseConsistencyError>
         + Send

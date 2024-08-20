@@ -215,11 +215,7 @@ pub struct DbStorageInner<Client> {
 
 impl<Client> DbStorageInner<Client>
 where
-    Client: KeyValueStore
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    Client: KeyValueStore + Clone + Send + Sync + 'static,
     ViewError: From<<Client as KeyValueStore>::Error>,
     <Client as KeyValueStore>::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
@@ -408,11 +404,7 @@ impl TestClock {
 #[async_trait]
 impl<Client, C> Storage for DbStorage<Client, C>
 where
-    Client: KeyValueStore
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    Client: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
     ViewError: From<<Client as KeyValueStore>::Error>,
     <Client as KeyValueStore>::Error:
@@ -797,11 +789,7 @@ where
 
 impl<Client> DbStorage<Client, WallClock>
 where
-    Client: KeyValueStore
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    Client: KeyValueStore + Clone + Send + Sync + 'static,
     ViewError: From<<Client as KeyValueStore>::Error>,
     <Client as KeyValueStore>::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,

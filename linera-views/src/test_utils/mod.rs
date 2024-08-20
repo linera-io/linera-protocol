@@ -241,7 +241,10 @@ pub fn span_random_reordering_put_delete<R: Rng>(
 /// * `read_multi_values_bytes`
 /// * `find_keys_by_prefix` / `find_key_values_by_prefix`
 /// * The ordering of keys returned by `find_keys_by_prefix` and `find_key_values_by_prefix`
-pub async fn run_reads<S: LocalRestrictedKeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec<u8>)>) {
+pub async fn run_reads<S: LocalRestrictedKeyValueStore>(
+    store: S,
+    key_values: Vec<(Vec<u8>, Vec<u8>)>,
+) {
     // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix
     let mut batch = Batch::new();
     let mut keys = Vec::new();

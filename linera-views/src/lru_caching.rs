@@ -23,10 +23,7 @@ use {
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{
-        get_interval, RestrictedKeyValueStore, ReadableKeyValueStore,
-        WritableKeyValueStore,
-    },
+    common::{get_interval, ReadableKeyValueStore, RestrictedKeyValueStore, WritableKeyValueStore},
 };
 
 #[cfg(with_metrics)]

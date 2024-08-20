@@ -9,7 +9,7 @@ use prometheus::HistogramVec;
 
 use crate::{
     batch::Batch,
-    common::{RestrictedKeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
+    common::{ReadableKeyValueStore, RestrictedKeyValueStore, WritableKeyValueStore},
 };
 
 #[derive(Clone)]

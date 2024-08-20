@@ -58,11 +58,7 @@ enum LatestBlock {
 
 impl<S> Indexer<S>
 where
-    S: KeyValueStore
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    S: KeyValueStore + Clone + Send + Sync + 'static,
     S::Error: From<bcs::Error>
         + From<DatabaseConsistencyError>
         + Send

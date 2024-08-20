@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        KeyIterable, KeyValueIterable, RestrictedKeyValueStore, ReadableKeyValueStore,
+        KeyIterable, KeyValueIterable, ReadableKeyValueStore, RestrictedKeyValueStore,
         WritableKeyValueStore,
     },
 };

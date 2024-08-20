@@ -20,9 +20,7 @@ use linera_chain::data_types::HashedCertificateValue;
 use linera_core::worker::Reason;
 use linera_service_graphql_client::{block, chains, notifications, Block, Chains, Notifications};
 use linera_views::{
-    common::KeyValueStore,
-    value_splitting::DatabaseConsistencyError,
-    views::ViewError,
+    common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
 use tokio::runtime::Handle;
 use tracing::error;
@@ -133,11 +131,7 @@ impl Listener {
         chain_id: ChainId,
     ) -> Result<ChainId, IndexerError>
     where
-        DB: KeyValueStore
-            + Clone
-            + Send
-            + Sync
-            + 'static,
+        DB: KeyValueStore + Clone + Send + Sync + 'static,
         DB::Error: From<bcs::Error>
             + From<DatabaseConsistencyError>
             + Send

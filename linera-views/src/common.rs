@@ -439,11 +439,7 @@ pub trait LocalAdminKeyValueStore<E>: Sized {
     type Config: Send + Sync + CacheSize;
 
     /// Connects to an existing namespace using the given configuration.
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, E>;
+    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, E>;
 
     /// Takes a connection and creates a new one with a different `root_key`.
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, E>;
@@ -533,7 +529,9 @@ impl<S: LocalKeyValueStore> LocalRestrictedKeyValueStore for S {
 
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
 pub trait KeyValueStore:
-    ReadableKeyValueStore<Self::Error> + WritableKeyValueStore<Self::Error> + AdminKeyValueStore<Self::Error>
+    ReadableKeyValueStore<Self::Error>
+    + WritableKeyValueStore<Self::Error>
+    + AdminKeyValueStore<Self::Error>
 {
     /// The error type.
     type Error: Debug;
@@ -541,7 +539,9 @@ pub trait KeyValueStore:
 
 /// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
 pub trait LocalKeyValueStore:
-    LocalReadableKeyValueStore<Self::Error> + LocalWritableKeyValueStore<Self::Error> + LocalAdminKeyValueStore<Self::Error>
+    LocalReadableKeyValueStore<Self::Error>
+    + LocalWritableKeyValueStore<Self::Error>
+    + LocalAdminKeyValueStore<Self::Error>
 {
     /// The error type.
     type Error: Debug;

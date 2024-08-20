@@ -72,11 +72,7 @@ pub async fn load<S, V: View<ContextFromStore<(), S>>>(
     name: &str,
 ) -> Result<Arc<Mutex<V>>, IndexerError>
 where
-    S: KeyValueStore
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    S: KeyValueStore + Clone + Send + Sync + 'static,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<S::Error>,
 {

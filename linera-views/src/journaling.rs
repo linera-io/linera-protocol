@@ -82,7 +82,9 @@ pub trait DirectWritableKeyValueStore<E> {
 
 /// Low-level, asynchronous direct read/write key-value operations with simplified batch
 pub trait DirectKeyValueStore:
-    ReadableKeyValueStore<Self::Error> + DirectWritableKeyValueStore<Self::Error> + AdminKeyValueStore<Self::Error>
+    ReadableKeyValueStore<Self::Error>
+    + DirectWritableKeyValueStore<Self::Error>
+    + AdminKeyValueStore<Self::Error>
 {
     /// The error type.
     type Error: Debug + From<bcs::Error>;
@@ -162,17 +164,13 @@ where
     }
 }
 
-impl<K,E> AdminKeyValueStore<E> for JournalingKeyValueStore<K>
+impl<K, E> AdminKeyValueStore<E> for JournalingKeyValueStore<K>
 where
     K: AdminKeyValueStore<E> + Send + Sync,
 {
     type Config = K::Config;
 
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, E> {
+    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, E> {
         let store = K::connect(config, namespace, root_key).await?;
         Ok(Self { store })
     }
