@@ -180,6 +180,10 @@ pub enum ExecutionError {
     EventKeyTooLong,
     #[error("Stream names can be at most {MAX_STREAM_NAME_LEN} bytes.")]
     StreamNameTooLong,
+    // TODO(#2127): Remove this error and the unstable-oracles feature once there are fees
+    // and enforced limits for all oracles.
+    #[error("Unstable oracles are disabled on this network.")]
+    UnstableOracle,
 }
 
 /// The public entry points provided by the contract part of an application.
