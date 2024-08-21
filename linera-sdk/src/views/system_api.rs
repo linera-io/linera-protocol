@@ -9,7 +9,7 @@ use std::sync::Arc;
 use linera_base::ensure;
 use linera_views::{
     batch::Batch,
-    common::{ContextFromStore, ReadableKeyValueStore, WritableKeyValueStore},
+    common::{ContextFromStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
     views::ViewError,
 };
 
@@ -79,8 +79,11 @@ impl KeyValueStore {
     }
 }
 
+impl WithError for KeyValueStore {
+    type Error = ViewError;
+}
+
 impl ReadableKeyValueStore for KeyValueStore {
-    type ReadError = ViewError;
     // The KeyValueStore of the system_api does not have limits
     // on the size of its values.
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
@@ -151,7 +154,6 @@ impl ReadableKeyValueStore for KeyValueStore {
 }
 
 impl WritableKeyValueStore for KeyValueStore {
-    type WriteError = ViewError;
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
@@ -332,7 +334,6 @@ impl WitInterface {
 }
 
 impl linera_views::common::RestrictedKeyValueStore for KeyValueStore {
-    type Error = ViewError;
 }
 
 /// Implementation of [`linera_views::common::Context`] to be used for data storage
