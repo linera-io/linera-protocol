@@ -763,8 +763,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
     }
 }
 
-impl DirectKeyValueStore for ScyllaDbStoreInternal {
-}
+impl DirectKeyValueStore for ScyllaDbStoreInternal {}
 
 impl ScyllaDbStoreInternal {
     /// Obtains the semaphore lock on the database if needed.
@@ -911,8 +910,7 @@ impl AdminKeyValueStore for ScyllaDbStore {
     }
 }
 
-impl KeyValueStore for ScyllaDbStore {
-}
+impl KeyValueStore for ScyllaDbStore {}
 
 impl ScyllaDbStore {
     #[cfg(with_metrics)]

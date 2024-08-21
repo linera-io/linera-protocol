@@ -12,8 +12,8 @@ use linera_views::test_utils::generate_test_namespace;
 use linera_views::{
     batch::{Batch, WriteOperation},
     common::{
-        AdminKeyValueStore, CommonStoreConfig, KeyValueStore, ReadableKeyValueStore,
-        WithError, WritableKeyValueStore,
+        AdminKeyValueStore, CommonStoreConfig, KeyValueStore, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
     },
 };
 use serde::de::DeserializeOwned;
@@ -297,8 +297,7 @@ impl WritableKeyValueStore for ServiceStoreClientInternal {
     }
 }
 
-impl KeyValueStore for ServiceStoreClientInternal {
-}
+impl KeyValueStore for ServiceStoreClientInternal {}
 
 impl ServiceStoreClientInternal {
     /// Obtains the semaphore lock on the database if needed.
@@ -599,8 +598,7 @@ impl WritableKeyValueStore for ServiceStoreClient {
     }
 }
 
-impl KeyValueStore for ServiceStoreClient {
-}
+impl KeyValueStore for ServiceStoreClient {}
 
 impl AdminKeyValueStore for ServiceStoreClient {
     type Config = ServiceStoreConfig;

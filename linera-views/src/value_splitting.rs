@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        KeyIterable, KeyValueIterable, WithError, ReadableKeyValueStore, RestrictedKeyValueStore,
+        KeyIterable, KeyValueIterable, ReadableKeyValueStore, RestrictedKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
@@ -267,7 +267,6 @@ where
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
 }
-
 
 impl<K> ValueSplittingStore<K>
 where

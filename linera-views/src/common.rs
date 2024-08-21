@@ -509,17 +509,26 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
 pub trait RestrictedKeyValueStore: ReadableKeyValueStore + WritableKeyValueStore {}
 
 /// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
-pub trait LocalRestrictedKeyValueStore: LocalReadableKeyValueStore + LocalWritableKeyValueStore {}
+pub trait LocalRestrictedKeyValueStore:
+    LocalReadableKeyValueStore + LocalWritableKeyValueStore
+{
+}
 
 impl<S: RestrictedKeyValueStore> LocalRestrictedKeyValueStore for S {}
 
 impl<S: KeyValueStore> RestrictedKeyValueStore for S {}
 
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
-pub trait KeyValueStore: ReadableKeyValueStore + WritableKeyValueStore + AdminKeyValueStore {}
+pub trait KeyValueStore:
+    ReadableKeyValueStore + WritableKeyValueStore + AdminKeyValueStore
+{
+}
 
 /// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
-pub trait LocalKeyValueStore: LocalReadableKeyValueStore + LocalWritableKeyValueStore + LocalAdminKeyValueStore {}
+pub trait LocalKeyValueStore:
+    LocalReadableKeyValueStore + LocalWritableKeyValueStore + LocalAdminKeyValueStore
+{
+}
 
 impl<S: KeyValueStore> LocalKeyValueStore for S {}
 

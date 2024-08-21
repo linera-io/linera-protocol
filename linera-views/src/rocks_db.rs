@@ -432,8 +432,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     }
 }
 
-impl KeyValueStore for RocksDbStoreInternal {
-}
+impl KeyValueStore for RocksDbStoreInternal {}
 
 /// A shared DB client for RocksDB implementing LruCaching
 #[derive(Clone)]
@@ -616,8 +615,7 @@ impl AdminKeyValueStore for RocksDbStore {
     }
 }
 
-impl KeyValueStore for RocksDbStore {
-}
+impl KeyValueStore for RocksDbStore {}
 
 impl<E: Clone + Send + Sync> RocksDbContext<E> {
     /// Creates a [`RocksDbContext`].

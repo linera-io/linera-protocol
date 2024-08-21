@@ -958,8 +958,7 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
     }
 }
 
-impl DirectKeyValueStore for DynamoDbStoreInternal {
-}
+impl DirectKeyValueStore for DynamoDbStoreInternal {}
 
 /// A shared DB client for DynamoDb implementing LruCaching
 #[derive(Clone)]
@@ -1036,8 +1035,7 @@ impl WritableKeyValueStore for DynamoDbStore {
     }
 }
 
-impl KeyValueStore for DynamoDbStore {
-}
+impl KeyValueStore for DynamoDbStore {}
 
 impl AdminKeyValueStore for DynamoDbStore {
     type Config = DynamoDbStoreConfig;

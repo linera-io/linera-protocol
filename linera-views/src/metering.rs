@@ -123,7 +123,7 @@ pub struct MeteredStore<K> {
 
 impl<K> WithError for MeteredStore<K>
 where
-    K: WithError
+    K: WithError,
 {
     type Error = K::Error;
 }
@@ -194,11 +194,7 @@ where
     }
 }
 
-impl<K> RestrictedKeyValueStore for MeteredStore<K>
-where
-    K: RestrictedKeyValueStore + Send + Sync,
-{
-}
+impl<K> RestrictedKeyValueStore for MeteredStore<K> where K: RestrictedKeyValueStore + Send + Sync {}
 
 impl<K> MeteredStore<K> {
     /// Creates a new Metered store

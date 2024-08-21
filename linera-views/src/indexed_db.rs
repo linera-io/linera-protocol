@@ -12,7 +12,7 @@ use crate::{
     common::{
         get_upper_bound_option, CommonStoreConfig, ContextFromStore, LocalAdminKeyValueStore,
         LocalKeyValueStore, LocalReadableKeyValueStore, LocalRestrictedKeyValueStore,
-        LocalWritableKeyValueStore,
+        LocalWritableKeyValueStore, WithError,
     },
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
@@ -88,8 +88,11 @@ fn prefix_to_range(prefix: &[u8]) -> Result<web_sys::IdbKeyRange, wasm_bindgen::
     }
 }
 
+impl WithError for IndexedDbStore {
+    type Error = IndexedDbStoreError;
+}
+
 impl LocalReadableKeyValueStore for IndexedDbStore {
-    type ReadError = IndexedDbStoreError;
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -181,7 +184,6 @@ impl LocalReadableKeyValueStore for IndexedDbStore {
 }
 
 impl LocalWritableKeyValueStore for IndexedDbStore {
-    type WriteError = IndexedDbStoreError;
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), IndexedDbStoreError> {
@@ -225,7 +227,6 @@ impl LocalWritableKeyValueStore for IndexedDbStore {
 }
 
 impl LocalAdminKeyValueStore for IndexedDbStore {
-    type AdminError = IndexedDbStoreError;
     type Config = IndexedDbStoreConfig;
 
     async fn connect(
@@ -306,13 +307,9 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
     }
 }
 
-impl LocalKeyValueStore for IndexedDbStore {
-    type Error = IndexedDbStoreError;
-}
+impl LocalKeyValueStore for IndexedDbStore {}
 
-impl LocalRestrictedKeyValueStore for IndexedDbStore {
-    type Error = IndexedDbStoreError;
-}
+impl LocalRestrictedKeyValueStore for IndexedDbStore {}
 
 /// An implementation of [`crate::common::Context`] that stores all values in an IndexedDB
 /// database.
