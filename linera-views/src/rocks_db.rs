@@ -140,7 +140,8 @@ impl RocksDbStoreInternal {
     }
 }
 
-impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
+impl ReadableKeyValueStore for RocksDbStoreInternal {
+    type ReadError = RocksDbStoreError;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -274,7 +275,8 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
     }
 }
 
-impl WritableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
+impl WritableKeyValueStore for RocksDbStoreInternal {
+    type WriteError = RocksDbStoreError;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
     async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksDbStoreError> {
@@ -338,7 +340,8 @@ fn root_key_as_string(root_key: &[u8]) -> String {
     format!("ROOT_KEY_{}", hex::encode(root_key))
 }
 
-impl AdminKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
+impl AdminKeyValueStore for RocksDbStoreInternal {
+    type AdminError = RocksDbStoreError;
     type Config = RocksDbStoreConfig;
 
     async fn connect(
@@ -514,7 +517,8 @@ impl RocksDbStore {
     }
 }
 
-impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStore {
+impl ReadableKeyValueStore for RocksDbStore {
+    type ReadError = RocksDbStoreError;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -557,7 +561,8 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStore {
     }
 }
 
-impl WritableKeyValueStore<RocksDbStoreError> for RocksDbStore {
+impl WritableKeyValueStore for RocksDbStore {
+    type WriteError = RocksDbStoreError;
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), RocksDbStoreError> {
@@ -569,7 +574,8 @@ impl WritableKeyValueStore<RocksDbStoreError> for RocksDbStore {
     }
 }
 
-impl AdminKeyValueStore<RocksDbStoreError> for RocksDbStore {
+impl AdminKeyValueStore for RocksDbStore {
+    type AdminError = RocksDbStoreError;
     type Config = RocksDbStoreConfig;
 
     async fn connect(

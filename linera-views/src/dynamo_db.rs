@@ -352,7 +352,8 @@ pub struct DynamoDbStoreConfig {
     pub common_config: CommonStoreConfig,
 }
 
-impl AdminKeyValueStore<DynamoDbStoreError> for DynamoDbStoreInternal {
+impl AdminKeyValueStore for DynamoDbStoreInternal {
+    type AdminError = DynamoDbStoreError;
     type Config = DynamoDbStoreConfig;
 
     async fn connect(
@@ -851,7 +852,8 @@ impl KeyValueIterable<DynamoDbStoreError> for DynamoDbKeyValues {
     }
 }
 
-impl ReadableKeyValueStore<DynamoDbStoreError> for DynamoDbStoreInternal {
+impl ReadableKeyValueStore for DynamoDbStoreInternal {
+    type ReadError = DynamoDbStoreError;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
@@ -925,7 +927,8 @@ impl ReadableKeyValueStore<DynamoDbStoreError> for DynamoDbStoreInternal {
 }
 
 #[async_trait]
-impl DirectWritableKeyValueStore<DynamoDbStoreError> for DynamoDbStoreInternal {
+impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
+    type WriteError = DynamoDbStoreError;
     const MAX_BATCH_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_SIZE;
     const MAX_BATCH_TOTAL_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
     const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
@@ -974,7 +977,8 @@ pub struct DynamoDbStore {
     store: LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
 }
 
-impl ReadableKeyValueStore<DynamoDbStoreError> for DynamoDbStore {
+impl ReadableKeyValueStore for DynamoDbStore {
+    type ReadError = DynamoDbStoreError;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE - 4;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -1017,7 +1021,8 @@ impl ReadableKeyValueStore<DynamoDbStoreError> for DynamoDbStore {
     }
 }
 
-impl WritableKeyValueStore<DynamoDbStoreError> for DynamoDbStore {
+impl WritableKeyValueStore for DynamoDbStore {
+    type WriteError = DynamoDbStoreError;
     const MAX_VALUE_SIZE: usize = DynamoDbStoreInternal::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), DynamoDbStoreError> {
@@ -1033,7 +1038,8 @@ impl KeyValueStore for DynamoDbStore {
     type Error = DynamoDbStoreError;
 }
 
-impl AdminKeyValueStore<DynamoDbStoreError> for DynamoDbStore {
+impl AdminKeyValueStore for DynamoDbStore {
+    type AdminError = DynamoDbStoreError;
     type Config = DynamoDbStoreConfig;
 
     async fn connect(

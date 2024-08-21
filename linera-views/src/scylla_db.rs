@@ -454,7 +454,8 @@ impl From<ScyllaDbStoreError> for crate::views::ViewError {
     }
 }
 
-impl ReadableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStoreInternal {
+impl ReadableKeyValueStore for ScyllaDbStoreInternal {
+    type ReadError = ScyllaDbStoreError;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -538,7 +539,8 @@ impl ReadableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStoreInternal {
 }
 
 #[async_trait]
-impl DirectWritableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStoreInternal {
+impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
+    type WriteError = ScyllaDbStoreError;
     // The constant 14000 is an empirical constant that was found to be necessary
     // to make the ScyllaDb system work. We have not been able to find this or
     // a similar constant in the source code or the documentation.
@@ -570,7 +572,8 @@ fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
     big_key
 }
 
-impl AdminKeyValueStore<ScyllaDbStoreError> for ScyllaDbStoreInternal {
+impl AdminKeyValueStore for ScyllaDbStoreInternal {
+    type AdminError = ScyllaDbStoreError;
     type Config = ScyllaDbStoreConfig;
 
     async fn connect(
@@ -804,13 +807,14 @@ pub struct ScyllaDbStoreConfig {
     pub common_config: CommonStoreConfig,
 }
 
-impl ReadableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStore {
+impl ReadableKeyValueStore for ScyllaDbStore {
+    type ReadError = ScyllaDbStoreError;
     const MAX_KEY_SIZE: usize = ScyllaDbStoreInternal::MAX_KEY_SIZE;
 
-    type Keys = <ScyllaDbStoreInternal as ReadableKeyValueStore<ScyllaDbStoreError>>::Keys;
+    type Keys = <ScyllaDbStoreInternal as ReadableKeyValueStore>::Keys;
 
     type KeyValues =
-        <ScyllaDbStoreInternal as ReadableKeyValueStore<ScyllaDbStoreError>>::KeyValues;
+        <ScyllaDbStoreInternal as ReadableKeyValueStore>::KeyValues;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -853,7 +857,8 @@ impl ReadableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStore {
     }
 }
 
-impl WritableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStore {
+impl WritableKeyValueStore for ScyllaDbStore {
+    type WriteError = ScyllaDbStoreError;
     const MAX_VALUE_SIZE: usize = ScyllaDbStoreInternal::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ScyllaDbStoreError> {
@@ -865,7 +870,8 @@ impl WritableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStore {
     }
 }
 
-impl AdminKeyValueStore<ScyllaDbStoreError> for ScyllaDbStore {
+impl AdminKeyValueStore for ScyllaDbStore {
+    type AdminError = ScyllaDbStoreError;
     type Config = ScyllaDbStoreConfig;
 
     async fn connect(
