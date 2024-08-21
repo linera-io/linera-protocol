@@ -85,7 +85,8 @@ mutation {
         "8a21aedaef74697db8b676c3e03ddf965bf4a808dc2bcabb6d70d6e6e3022ff7",
         "80265761fee067b68ba47cce7464cbc7f1da5b7044d8f68ffc898db5ccb563a5"
     ],
-    boardSize: 11
+    boardSize: 11,
+    feeBudget: "1"
   )
 }
 ```
@@ -153,7 +154,7 @@ use std::iter;
 
 use async_graphql::{Enum, InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
-    base::{ContractAbi, PublicKey, ServiceAbi, TimeDelta, Timestamp},
+    base::{Amount, ContractAbi, PublicKey, ServiceAbi, TimeDelta, Timestamp},
     graphql::GraphQLMutationRoot,
 };
 use serde::{Deserialize, Serialize};
@@ -172,6 +173,8 @@ pub enum Operation {
         players: [PublicKey; 2],
         /// The side length of the board. A typical size is 11.
         board_size: u16,
+        /// An amount transferred to the temporary chain to cover the fees.
+        fee_budget: Amount,
         /// Settings that determine how much time the players have to think about their turns.
         /// If this is `None`, the defaults are used.
         timeouts: Option<Timeouts>,
