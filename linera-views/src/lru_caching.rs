@@ -179,7 +179,10 @@ where
         Ok(results)
     }
 
-    async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, Self::ReadError> {
+    async fn read_multi_values_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::ReadError> {
         let Some(lru_read_values) = &self.lru_read_values else {
             return self.store.read_multi_values_bytes(keys).await;
         };
@@ -222,7 +225,10 @@ where
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
-    async fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::KeyValues, Self::ReadError> {
+    async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValues, Self::ReadError> {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 }

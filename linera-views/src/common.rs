@@ -372,13 +372,19 @@ pub trait LocalReadableKeyValueStore {
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::ReadError>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
-    async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, Self::ReadError>;
+    async fn read_multi_values_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::ReadError>;
 
     /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::ReadError>;
 
     /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
-    async fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::KeyValues, Self::ReadError>;
+    async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValues, Self::ReadError>;
 
     // We can't use `async fn` here in the below implementations due to
     // https://github.com/rust-lang/impl-trait-utils/issues/17, but once that bug is fixed
@@ -440,7 +446,11 @@ pub trait LocalAdminKeyValueStore: Sized {
     type Config: Send + Sync;
 
     /// Connects to an existing namespace using the given configuration.
-    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, Self::AdminError>;
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, Self::AdminError>;
 
     /// Takes a connection and creates a new one with a different `root_key`.
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::AdminError>;
@@ -508,7 +518,8 @@ pub trait RestrictedKeyValueStore:
 
 /// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
 pub trait LocalRestrictedKeyValueStore:
-    LocalReadableKeyValueStore<ReadError = Self::Error> + LocalWritableKeyValueStore<WriteError = Self::Error>
+    LocalReadableKeyValueStore<ReadError = Self::Error>
+    + LocalWritableKeyValueStore<WriteError = Self::Error>
 {
     /// The error type.
     type Error: Debug;
@@ -545,7 +556,6 @@ pub trait LocalKeyValueStore:
 impl<S: KeyValueStore> LocalKeyValueStore for S {
     type Error = <Self as KeyValueStore>::Error;
 }
-
 
 #[doc(hidden)]
 /// Iterates keys by reference in a vector of keys.

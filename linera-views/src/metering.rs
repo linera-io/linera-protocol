@@ -149,7 +149,10 @@ where
         self.store.contains_keys(keys).await
     }
 
-    async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, Self::ReadError> {
+    async fn read_multi_values_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::ReadError> {
         let _metric = self.counter.read_multi_values_bytes.measure_latency();
         self.store.read_multi_values_bytes(keys).await
     }
@@ -159,7 +162,10 @@ where
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
-    async fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::KeyValues, Self::ReadError> {
+    async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValues, Self::ReadError> {
         let _metric = self.counter.find_key_values_by_prefix.measure_latency();
         self.store.find_key_values_by_prefix(key_prefix).await
     }

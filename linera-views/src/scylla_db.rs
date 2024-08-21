@@ -813,8 +813,7 @@ impl ReadableKeyValueStore for ScyllaDbStore {
 
     type Keys = <ScyllaDbStoreInternal as ReadableKeyValueStore>::Keys;
 
-    type KeyValues =
-        <ScyllaDbStoreInternal as ReadableKeyValueStore>::KeyValues;
+    type KeyValues = <ScyllaDbStoreInternal as ReadableKeyValueStore>::KeyValues;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
