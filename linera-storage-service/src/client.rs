@@ -63,7 +63,8 @@ pub struct ServiceStoreClientInternal {
     root_key: Vec<u8>,
 }
 
-impl ReadableKeyValueStore<ServiceStoreError> for ServiceStoreClientInternal {
+impl ReadableKeyValueStore for ServiceStoreClientInternal {
+    type ReadError = ServiceStoreError;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -227,7 +228,8 @@ impl ReadableKeyValueStore<ServiceStoreError> for ServiceStoreClientInternal {
     }
 }
 
-impl WritableKeyValueStore<ServiceStoreError> for ServiceStoreClientInternal {
+impl WritableKeyValueStore for ServiceStoreClientInternal {
+    type WriteError = ServiceStoreError;
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ServiceStoreError> {
@@ -373,7 +375,8 @@ impl ServiceStoreClientInternal {
     }
 }
 
-impl AdminKeyValueStore<ServiceStoreError> for ServiceStoreClientInternal {
+impl AdminKeyValueStore for ServiceStoreClientInternal {
+    type AdminError = ServiceStoreError;
     type Config = ServiceStoreConfig;
 
     async fn connect(
@@ -537,7 +540,8 @@ pub struct ServiceStoreClient {
     store: ServiceStoreClientInternal,
 }
 
-impl ReadableKeyValueStore<ServiceStoreError> for ServiceStoreClient {
+impl ReadableKeyValueStore for ServiceStoreClient {
+    type ReadError = ServiceStoreError;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -580,7 +584,8 @@ impl ReadableKeyValueStore<ServiceStoreError> for ServiceStoreClient {
     }
 }
 
-impl WritableKeyValueStore<ServiceStoreError> for ServiceStoreClient {
+impl WritableKeyValueStore for ServiceStoreClient {
+    type WriteError = ServiceStoreError;
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ServiceStoreError> {
@@ -596,7 +601,8 @@ impl KeyValueStore for ServiceStoreClient {
     type Error = ServiceStoreError;
 }
 
-impl AdminKeyValueStore<ServiceStoreError> for ServiceStoreClient {
+impl AdminKeyValueStore for ServiceStoreClient {
+    type AdminError = ServiceStoreError;
     type Config = ServiceStoreConfig;
 
     async fn connect(

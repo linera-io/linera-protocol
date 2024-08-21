@@ -79,7 +79,8 @@ impl KeyValueStore {
     }
 }
 
-impl ReadableKeyValueStore<ViewError> for KeyValueStore {
+impl ReadableKeyValueStore for KeyValueStore {
+    type ReadError = ViewError;
     // The KeyValueStore of the system_api does not have limits
     // on the size of its values.
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
@@ -149,7 +150,8 @@ impl ReadableKeyValueStore<ViewError> for KeyValueStore {
     }
 }
 
-impl WritableKeyValueStore<ViewError> for KeyValueStore {
+impl WritableKeyValueStore for KeyValueStore {
+    type WriteError = ViewError;
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
