@@ -129,7 +129,8 @@ impl Drop for MemoryStore {
     }
 }
 
-impl ReadableKeyValueStore<MemoryStoreError> for MemoryStore {
+impl ReadableKeyValueStore for MemoryStore {
+    type ReadError = MemoryStoreError;
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -214,7 +215,9 @@ impl ReadableKeyValueStore<MemoryStoreError> for MemoryStore {
     }
 }
 
-impl WritableKeyValueStore<MemoryStoreError> for MemoryStore {
+impl WritableKeyValueStore for MemoryStore {
+    type WriteError = MemoryStoreError;
+
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), MemoryStoreError> {
@@ -298,7 +301,9 @@ impl MemoryStore {
     }
 }
 
-impl AdminKeyValueStore<MemoryStoreError> for MemoryStore {
+impl AdminKeyValueStore for MemoryStore {
+    type AdminError = MemoryStoreError;
+
     type Config = MemoryStoreConfig;
 
     async fn connect(

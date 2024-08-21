@@ -1081,11 +1081,12 @@ pub struct ViewContainer<C> {
 }
 
 #[cfg(with_testing)]
-impl<C> ReadableKeyValueStore<ViewError> for ViewContainer<C>
+impl<C> ReadableKeyValueStore for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
+    type ReadError = ViewError;
     const MAX_KEY_SIZE: usize = C::MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -1132,11 +1133,12 @@ where
 }
 
 #[cfg(with_testing)]
-impl<C> WritableKeyValueStore<ViewError> for ViewContainer<C>
+impl<C> WritableKeyValueStore for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
+    type WriteError = ViewError;
     const MAX_VALUE_SIZE: usize = C::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
