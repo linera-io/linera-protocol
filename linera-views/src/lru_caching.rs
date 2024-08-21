@@ -112,7 +112,7 @@ impl<K> WithError for LruCachingStore<K>
 where
     K: WithError,
 {
-    type Error = <K as WithError>::Error;
+    type Error = K::Error;
 }
 
 impl<K> ReadableKeyValueStore for LruCachingStore<K>

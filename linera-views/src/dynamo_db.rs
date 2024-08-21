@@ -43,7 +43,7 @@ use crate::{
     batch::{Batch, SimpleUnorderedBatch},
     common::{
         AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
-        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
+        KeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
@@ -353,7 +353,6 @@ pub struct DynamoDbStoreConfig {
 }
 
 impl AdminKeyValueStore for DynamoDbStoreInternal {
-    type AdminError = DynamoDbStoreError;
     type Config = DynamoDbStoreConfig;
 
     async fn connect(
@@ -852,8 +851,11 @@ impl KeyValueIterable<DynamoDbStoreError> for DynamoDbKeyValues {
     }
 }
 
+impl WithError for DynamoDbStoreInternal {
+    type Error = DynamoDbStoreError;
+}
+
 impl ReadableKeyValueStore for DynamoDbStoreInternal {
-    type ReadError = DynamoDbStoreError;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
@@ -928,7 +930,6 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
 
 #[async_trait]
 impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
-    type WriteError = DynamoDbStoreError;
     const MAX_BATCH_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_SIZE;
     const MAX_BATCH_TOTAL_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
     const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
@@ -958,7 +959,6 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
 }
 
 impl DirectKeyValueStore for DynamoDbStoreInternal {
-    type Error = DynamoDbStoreError;
 }
 
 /// A shared DB client for DynamoDb implementing LruCaching
@@ -977,8 +977,11 @@ pub struct DynamoDbStore {
     store: LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
 }
 
+impl WithError for DynamoDbStore {
+    type Error = DynamoDbStoreError;
+}
+
 impl ReadableKeyValueStore for DynamoDbStore {
-    type ReadError = DynamoDbStoreError;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE - 4;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -1022,7 +1025,6 @@ impl ReadableKeyValueStore for DynamoDbStore {
 }
 
 impl WritableKeyValueStore for DynamoDbStore {
-    type WriteError = DynamoDbStoreError;
     const MAX_VALUE_SIZE: usize = DynamoDbStoreInternal::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), DynamoDbStoreError> {
@@ -1035,11 +1037,9 @@ impl WritableKeyValueStore for DynamoDbStore {
 }
 
 impl KeyValueStore for DynamoDbStore {
-    type Error = DynamoDbStoreError;
 }
 
 impl AdminKeyValueStore for DynamoDbStore {
-    type AdminError = DynamoDbStoreError;
     type Config = DynamoDbStoreConfig;
 
     async fn connect(

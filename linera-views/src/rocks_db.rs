@@ -26,7 +26,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyValueStore,
-        ReadableKeyValueStore, WritableKeyValueStore,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
@@ -140,8 +140,11 @@ impl RocksDbStoreInternal {
     }
 }
 
+impl WithError for RocksDbStoreInternal {
+    type Error = RocksDbStoreError;
+}
+
 impl ReadableKeyValueStore for RocksDbStoreInternal {
-    type ReadError = RocksDbStoreError;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -276,7 +279,6 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
 }
 
 impl WritableKeyValueStore for RocksDbStoreInternal {
-    type WriteError = RocksDbStoreError;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
     async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksDbStoreError> {
@@ -341,7 +343,6 @@ fn root_key_as_string(root_key: &[u8]) -> String {
 }
 
 impl AdminKeyValueStore for RocksDbStoreInternal {
-    type AdminError = RocksDbStoreError;
     type Config = RocksDbStoreConfig;
 
     async fn connect(
@@ -432,7 +433,6 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
 }
 
 impl KeyValueStore for RocksDbStoreInternal {
-    type Error = RocksDbStoreError;
 }
 
 /// A shared DB client for RocksDB implementing LruCaching
@@ -517,8 +517,11 @@ impl RocksDbStore {
     }
 }
 
+impl WithError for RocksDbStore {
+    type Error = RocksDbStoreError;
+}
+
 impl ReadableKeyValueStore for RocksDbStore {
-    type ReadError = RocksDbStoreError;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -562,7 +565,6 @@ impl ReadableKeyValueStore for RocksDbStore {
 }
 
 impl WritableKeyValueStore for RocksDbStore {
-    type WriteError = RocksDbStoreError;
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), RocksDbStoreError> {
@@ -575,7 +577,6 @@ impl WritableKeyValueStore for RocksDbStore {
 }
 
 impl AdminKeyValueStore for RocksDbStore {
-    type AdminError = RocksDbStoreError;
     type Config = RocksDbStoreConfig;
 
     async fn connect(
@@ -616,7 +617,6 @@ impl AdminKeyValueStore for RocksDbStore {
 }
 
 impl KeyValueStore for RocksDbStore {
-    type Error = RocksDbStoreError;
 }
 
 impl<E: Clone + Send + Sync> RocksDbContext<E> {

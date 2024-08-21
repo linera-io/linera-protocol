@@ -51,7 +51,7 @@ impl<K> WithError for ValueSplittingStore<K>
 where
     K: WithError,
 {
-    type Error = <K as WithError>::Error;
+    type Error = K::Error;
 }
 
 impl<K> ReadableKeyValueStore for ValueSplittingStore<K>

@@ -9,7 +9,7 @@ use prometheus::HistogramVec;
 
 use crate::{
     batch::Batch,
-    common::{ReadableKeyValueStore, RestrictedKeyValueStore, WritableKeyValueStore},
+    common::{ReadableKeyValueStore, RestrictedKeyValueStore, WithError, WritableKeyValueStore},
 };
 
 #[derive(Clone)]
@@ -121,11 +121,17 @@ pub struct MeteredStore<K> {
     pub store: K,
 }
 
+impl<K> WithError for MeteredStore<K>
+where
+    K: WithError
+{
+    type Error = K::Error;
+}
+
 impl<K> ReadableKeyValueStore for MeteredStore<K>
 where
     K: ReadableKeyValueStore + Send + Sync,
 {
-    type ReadError = K::ReadError;
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
     type Keys = K::Keys;
     type KeyValues = K::KeyValues;
@@ -134,17 +140,17 @@ where
         self.store.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::ReadError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let _metric = self.counter.read_value_bytes.measure_latency();
         self.store.read_value_bytes(key).await
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::ReadError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
         let _metric = self.counter.contains_key.measure_latency();
         self.store.contains_key(key).await
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::ReadError> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
         let _metric = self.counter.contains_keys.measure_latency();
         self.store.contains_keys(keys).await
     }
@@ -152,12 +158,12 @@ where
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::ReadError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         let _metric = self.counter.read_multi_values_bytes.measure_latency();
         self.store.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::ReadError> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
         let _metric = self.counter.find_keys_by_prefix.measure_latency();
         self.store.find_keys_by_prefix(key_prefix).await
     }
@@ -165,7 +171,7 @@ where
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::ReadError> {
+    ) -> Result<Self::KeyValues, Self::Error> {
         let _metric = self.counter.find_key_values_by_prefix.measure_latency();
         self.store.find_key_values_by_prefix(key_prefix).await
     }
@@ -175,15 +181,14 @@ impl<K> WritableKeyValueStore for MeteredStore<K>
 where
     K: WritableKeyValueStore + Send + Sync,
 {
-    type WriteError = K::WriteError;
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), Self::WriteError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
         let _metric = self.counter.write_batch.measure_latency();
         self.store.write_batch(batch).await
     }
 
-    async fn clear_journal(&self) -> Result<(), Self::WriteError> {
+    async fn clear_journal(&self) -> Result<(), Self::Error> {
         let _metric = self.counter.clear_journal.measure_latency();
         self.store.clear_journal().await
     }
@@ -193,7 +198,6 @@ impl<K> RestrictedKeyValueStore for MeteredStore<K>
 where
     K: RestrictedKeyValueStore + Send + Sync,
 {
-    type Error = K::Error;
 }
 
 impl<K> MeteredStore<K> {

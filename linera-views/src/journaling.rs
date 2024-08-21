@@ -27,7 +27,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     common::{
-        AdminKeyValueStore, KeyIterable, ReadableKeyValueStore,
+        AdminKeyValueStore, KeyIterable, KeyValueStore, ReadableKeyValueStore,
         WithError, WritableKeyValueStore, MIN_VIEW_TAG,
     },
 };
@@ -114,7 +114,7 @@ impl<K> WithError for JournalingKeyValueStore<K>
 where
     K: WithError,
 {
-    type Error = <K as WithError>::Error;
+    type Error = K::Error;
 }
 
 impl<K> ReadableKeyValueStore for JournalingKeyValueStore<K>
@@ -231,6 +231,13 @@ where
         }
         Ok(())
     }
+}
+
+impl<K> KeyValueStore for JournalingKeyValueStore<K>
+where
+    K: DirectKeyValueStore + Send + Sync,
+    K::Error: From<JournalConsistencyError>,
+{
 }
 
 impl<K> JournalingKeyValueStore<K>
