@@ -88,7 +88,8 @@ fn prefix_to_range(prefix: &[u8]) -> Result<web_sys::IdbKeyRange, wasm_bindgen::
     }
 }
 
-impl LocalReadableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
+impl LocalReadableKeyValueStore for IndexedDbStore {
+    type ReadError = IndexedDbStoreError;
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -179,7 +180,8 @@ impl LocalReadableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
     }
 }
 
-impl LocalWritableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
+impl LocalWritableKeyValueStore for IndexedDbStore {
+    type WriteError = IndexedDbStoreError;
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), IndexedDbStoreError> {
@@ -222,7 +224,8 @@ impl LocalWritableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
     }
 }
 
-impl LocalAdminKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
+impl LocalAdminKeyValueStore for IndexedDbStore {
+    type AdminError = IndexedDbStoreError;
     type Config = IndexedDbStoreConfig;
 
     async fn connect(
