@@ -2519,6 +2519,12 @@ where
                     executed_block.message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
                 })
                 .ok_or_else(|| ChainClientError::InternalError("Failed to create new chain"))?;
+            // Add the new chain to the list of tracked chains
+            self.client.track_chain(ChainId::child(message_id));
+            self.client
+                .local_node
+                .retry_pending_cross_chain_requests(self.chain_id)
+                .await?;
             return Ok(ClientOutcome::Committed((message_id, certificate)));
         }
     }
