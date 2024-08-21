@@ -347,38 +347,42 @@ impl From<KeyValueStore> for ViewStorageContext {
     }
 }
 
-#[cfg(with_testing)]
-#[tokio::test]
-async fn test_key_value_store_mock() -> anyhow::Result<()> {
-    // Create a mock key-value store for testing
-    let store = KeyValueStore::mock();
-    let mock_store = store.to_mut();
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
 
-    // Check if key exists
-    let is_key_existing = mock_store.contains_key(b"foo").await?;
-    assert!(!is_key_existing);
+    #[tokio::test]
+    async fn test_key_value_store_mock() -> anyhow::Result<()> {
+        // Create a mock key-value store for testing
+        let store = KeyValueStore::mock();
+        let mock_store = store.to_mut();
 
-    // Check if keys exist
-    let is_keys_existing = mock_store
-        .contains_keys(vec![b"foo".to_vec(), b"bar".to_vec()])
-        .await?;
-    assert!(!is_keys_existing[0]);
-    assert!(!is_keys_existing[1]);
+        // Check if key exists
+        let is_key_existing = mock_store.contains_key(b"foo").await?;
+        assert!(!is_key_existing);
 
-    // Read and write values
-    let mut batch = Batch::new();
-    batch.put_key_value(b"foo".to_vec(), &32_u128)?;
-    batch.put_key_value(b"bar".to_vec(), &42_u128)?;
-    mock_store.write_batch(batch).await?;
+        // Check if keys exist
+        let is_keys_existing = mock_store
+            .contains_keys(vec![b"foo".to_vec(), b"bar".to_vec()])
+            .await?;
+        assert!(!is_keys_existing[0]);
+        assert!(!is_keys_existing[1]);
 
-    let is_key_existing = mock_store.contains_key(b"foo").await?;
-    assert!(is_key_existing);
+        // Read and write values
+        let mut batch = Batch::new();
+        batch.put_key_value(b"foo".to_vec(), &32_u128)?;
+        batch.put_key_value(b"bar".to_vec(), &42_u128)?;
+        mock_store.write_batch(batch).await?;
 
-    let value = mock_store.read_value(b"foo").await?;
-    assert_eq!(value, Some(32_u128));
+        let is_key_existing = mock_store.contains_key(b"foo").await?;
+        assert!(is_key_existing);
 
-    let value = mock_store.read_value(b"bar").await?;
-    assert_eq!(value, Some(42_u128));
+        let value = mock_store.read_value(b"foo").await?;
+        assert_eq!(value, Some(32_u128));
 
-    Ok(())
+        let value = mock_store.read_value(b"bar").await?;
+        assert_eq!(value, Some(42_u128));
+
+        Ok(())
+    }
 }

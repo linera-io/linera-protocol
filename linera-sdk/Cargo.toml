@@ -48,10 +48,6 @@ serde.workspace = true
 serde_json.workspace = true
 wit-bindgen.workspace = true
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-anyhow.workspace = true
-tokio = { workspace = true, features = ["rt", "macros"] }
-
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-graphql.workspace = true
 anyhow.workspace = true
