@@ -150,6 +150,15 @@ where
         &self.local_node
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
+    /// Adds a chain to the set of chains tracked by the local node.
+    pub fn track_chain(&self, chain_id: ChainId) {
+        self.tracked_chains
+            .write()
+            .expect("Panics should not happen while holding a lock to `tracked_chains`")
+            .insert(chain_id);
+    }
+
     #[tracing::instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
     /// Creates a new `ChainClient`.
     #[allow(clippy::too_many_arguments)]
