@@ -69,11 +69,11 @@ jobs:
       run: |
         cargo build --release -p linera-storage-service
         target/release/linera-storage-server memory --endpoint $LINERA_STORAGE_SERVICE &
-        cargo test --features storage-service -- storage_service --nocapture
+        cargo test --features storage-service,unstable-oracles -- storage_service --nocapture
     - name: Run Ethereum tests
       run: |
         cargo test -p linera-ethereum --features ethereum
-        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service
+        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service,unstable-oracles
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
@@ -82,7 +82,7 @@ jobs:
         cargo run --bin wit-generator -- -c
     - name: Run all tests using the default features
       run: |
-        cargo test --locked
+        cargo test --features unstable-oracles --locked
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime

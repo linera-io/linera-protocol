@@ -15,6 +15,7 @@ version.workspace = true
 test = ["tokio/macros", "linera-views/test"]
 fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
+unstable-oracles = []
 wasmer = [
     "bytes",
     "dep:wasmer",

@@ -919,6 +919,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         application_id: ApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
+        ensure!(
+            cfg!(feature = "unstable-oracles"),
+            ExecutionError::UnstableOracle
+        );
         let response =
             if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
                 match response {
@@ -945,6 +949,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         content_type: String,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
+        ensure!(
+            cfg!(feature = "unstable-oracles"),
+            ExecutionError::UnstableOracle
+        );
         let bytes =
             if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
                 match response {
