@@ -55,8 +55,12 @@ impl Contract for HexContract {
             Operation::Start {
                 players,
                 board_size,
+                fee_budget,
                 timeouts,
-            } => self.execute_start(players, board_size, timeouts).await,
+            } => {
+                self.execute_start(players, board_size, fee_budget, timeouts)
+                    .await
+            }
         };
         self.handle_winner(outcome)
     }
@@ -141,6 +145,7 @@ impl HexContract {
         &mut self,
         players: [PublicKey; 2],
         board_size: u16,
+        fee_budget: Amount,
         timeouts: Option<Timeouts>,
     ) -> HexOutcome {
         assert_eq!(self.runtime.chain_id(), self.main_chain_id());
@@ -151,9 +156,7 @@ impl HexContract {
         );
         let app_id = self.runtime.application_id();
         let permissions = ApplicationPermissions::new_single(app_id.forget_abi());
-        let (message_id, chain_id) = self
-            .runtime
-            .open_chain(ownership, permissions, Amount::ZERO);
+        let (message_id, chain_id) = self.runtime.open_chain(ownership, permissions, fee_budget);
         for public_key in &players {
             self.state
                 .game_chains

@@ -7,7 +7,7 @@
 
 use hex_game::{HexAbi, Operation, Timeouts};
 use linera_sdk::{
-    base::{ChainDescription, KeyPair, TimeDelta},
+    base::{Amount, ChainDescription, KeyPair, TimeDelta},
     test::{ActiveChain, TestValidator},
 };
 
@@ -24,6 +24,7 @@ async fn hex_game() {
             let operation = Operation::Start {
                 board_size: 2,
                 players: [key_pair1.public(), key_pair2.public()],
+                fee_budget: Amount::ZERO,
                 timeouts: None,
             };
             block.with_operation(app_id, operation);
@@ -97,6 +98,7 @@ async fn hex_game_clock() {
             let operation = Operation::Start {
                 board_size: 2,
                 players: [key_pair1.public(), key_pair2.public()],
+                fee_budget: Amount::ZERO,
                 timeouts: None,
             };
             block.with_operation(app_id, operation).with_timestamp(time);

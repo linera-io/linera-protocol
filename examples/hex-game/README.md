@@ -81,7 +81,8 @@ mutation {
         "8a21aedaef74697db8b676c3e03ddf965bf4a808dc2bcabb6d70d6e6e3022ff7",
         "80265761fee067b68ba47cce7464cbc7f1da5b7044d8f68ffc898db5ccb563a5"
     ],
-    boardSize: 11
+    boardSize: 11,
+    feeBudget: "1"
   )
 }
 ```
