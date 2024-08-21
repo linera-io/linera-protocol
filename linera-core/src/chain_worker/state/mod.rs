@@ -376,8 +376,16 @@ where
     /// Loads pending cross-chain requests.
     async fn create_network_actions(&self) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
-        let pairs = self.chain.outboxes.try_load_all_entries().await?;
-        for (target, outbox) in pairs {
+        let mut targets = self.chain.outboxes.indices().await?;
+        if let Some(tracked_chains) = self.tracked_chains.as_ref() {
+            let tracked_chains = tracked_chains
+                .read()
+                .expect("Panics should not happen while holding a lock to `tracked_chains`");
+            targets.retain(|target| tracked_chains.contains(&target.recipient));
+        }
+        let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
+        for (target, outbox) in targets.into_iter().zip(outboxes) {
+            let outbox = outbox.expect("Only existing outboxes should be referenced by `indices`");
             let heights = outbox.queue.elements().await?;
             heights_by_recipient
                 .entry(target.recipient)
