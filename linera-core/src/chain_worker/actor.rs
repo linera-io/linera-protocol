@@ -26,10 +26,7 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use tokio::{
-    sync::{mpsc, oneshot, OwnedRwLockReadGuard},
-    task::JoinHandle,
-};
+use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, warn};
 #[cfg(with_testing)]
 use {linera_base::identifiers::BytecodeId, linera_execution::BytecodeLocation};
@@ -150,7 +147,7 @@ where
     ViewError: From<StorageClient::StoreError>,
 {
     worker: ChainWorkerState<StorageClient>,
-    service_runtime_thread: JoinHandle<()>,
+    service_runtime_thread: linera_base::task::BlockingFuture<()>,
 }
 
 impl<StorageClient> ChainWorkerActor<StorageClient>
@@ -193,7 +190,7 @@ where
     fn spawn_service_runtime_actor(
         chain_id: ChainId,
     ) -> (
-        JoinHandle<()>,
+        linera_base::task::BlockingFuture<()>,
         futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
         std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) {
@@ -207,7 +204,7 @@ where
             futures::channel::mpsc::unbounded();
         let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
 
-        let service_runtime_thread = tokio::task::spawn_blocking(move || {
+        let service_runtime_thread = linera_base::task::spawn_blocking(move || {
             ServiceSyncRuntime::new(execution_state_sender, context).run(runtime_request_receiver)
         });
 

@@ -191,7 +191,7 @@ where
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let txn_tracker_moved = mem::take(txn_tracker);
-        let execution_outcomes_future = tokio::task::spawn_blocking(move || {
+        let execution_outcomes_future = linera_base::task::spawn_blocking(move || {
             ContractSyncRuntime::run_action(
                 execution_state_sender,
                 application_id,

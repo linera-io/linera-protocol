@@ -124,7 +124,7 @@ pub enum ExecutionError {
     #[error(transparent)]
     WasmError(#[from] WasmExecutionError),
     #[error(transparent)]
-    JoinError(#[from] tokio::task::JoinError),
+    JoinError(#[from] linera_base::task::Error),
     #[error("The given promise is invalid or was polled once already")]
     InvalidPromise,
 
