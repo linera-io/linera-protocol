@@ -4,7 +4,7 @@
 
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     sync::Arc,
 };
 
@@ -569,5 +569,24 @@ where
                 None
             }
         }
+    }
+
+    /// Handles any pending local cross-chain requests.
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub async fn retry_pending_cross_chain_requests(
+        &self,
+        sender_chain: ChainId,
+    ) -> Result<(), LocalNodeError> {
+        let (_response, actions) = self
+            .node
+            .state
+            .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
+            .await?;
+        let mut requests = VecDeque::from_iter(actions.cross_chain_requests);
+        while let Some(request) = requests.pop_front() {
+            let new_actions = self.node.state.handle_cross_chain_request(request).await?;
+            requests.extend(new_actions.cross_chain_requests);
+        }
+        Ok(())
     }
 }
