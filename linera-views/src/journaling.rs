@@ -27,8 +27,8 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     common::{
-        AdminKeyValueStore, KeyIterable, KeyValueStore, ReadableKeyValueStore,
-        WritableKeyValueStore, MIN_VIEW_TAG,
+        AdminKeyValueStore, KeyIterable, ReadableKeyValueStore,
+        WithError, WritableKeyValueStore, MIN_VIEW_TAG,
     },
 };
 
@@ -63,10 +63,7 @@ fn get_journaling_key(tag: u8, pos: u32) -> Result<Vec<u8>, bcs::Error> {
 
 /// Low-level, asynchronous direct write key-value operations with simplified batch
 #[async_trait]
-pub trait DirectWritableKeyValueStore {
-    /// Error type for writing
-    type WriteError: Debug;
-
+pub trait DirectWritableKeyValueStore: WithError {
     /// The maximal number of items in a batch.
     const MAX_BATCH_SIZE: usize;
 
@@ -80,18 +77,11 @@ pub trait DirectWritableKeyValueStore {
     type Batch: SimplifiedBatch + Serialize + DeserializeOwned + Default;
 
     /// Writes the batch to the database.
-    async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::WriteError>;
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error>;
 }
 
 /// Low-level, asynchronous direct read/write key-value operations with simplified batch
-pub trait DirectKeyValueStore:
-    ReadableKeyValueStore<ReadError = Self::Error>
-    + DirectWritableKeyValueStore<WriteError = Self::Error>
-    + AdminKeyValueStore<AdminError = Self::Error>
-{
-    /// The error type.
-    type Error: Debug + From<bcs::Error>;
-}
+pub trait DirectKeyValueStore: ReadableKeyValueStore + DirectWritableKeyValueStore + AdminKeyValueStore {}
 
 /// The header that contains the current state of the journal.
 #[derive(Serialize, Deserialize, Default, Debug)]
@@ -120,13 +110,18 @@ where
     }
 }
 
+impl<K> WithError for JournalingKeyValueStore<K>
+where
+    K: WithError,
+{
+    type Error = <K as WithError>::Error;
+}
+
 impl<K> ReadableKeyValueStore for JournalingKeyValueStore<K>
 where
     K: ReadableKeyValueStore + Send + Sync,
-    K::ReadError: From<JournalConsistencyError>,
+    K::Error: From<JournalConsistencyError>,
 {
-    type ReadError = K::ReadError;
-
     /// The size constant do not change
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
     /// The basic types do not change
@@ -138,33 +133,33 @@ where
         self.store.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::ReadError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         self.store.read_value_bytes(key).await
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::ReadError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
         self.store.contains_key(key).await
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::ReadError> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
         self.store.contains_keys(keys).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::ReadError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         self.store.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::ReadError> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::ReadError> {
+    ) -> Result<Self::KeyValues, Self::Error> {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
@@ -173,41 +168,39 @@ impl<K> AdminKeyValueStore for JournalingKeyValueStore<K>
 where
     K: AdminKeyValueStore + Send + Sync,
 {
-    type AdminError = K::AdminError;
-
     type Config = K::Config;
 
     async fn connect(
         config: &Self::Config,
         namespace: &str,
         root_key: &[u8],
-    ) -> Result<Self, Self::AdminError> {
+    ) -> Result<Self, Self::Error> {
         let store = K::connect(config, namespace, root_key).await?;
         Ok(Self { store })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::AdminError> {
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
         let store = self.store.clone_with_root_key(root_key)?;
         Ok(Self { store })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::AdminError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
         K::list_all(config).await
     }
 
-    async fn delete_all(config: &Self::Config) -> Result<(), Self::AdminError> {
+    async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
         K::delete_all(config).await
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::AdminError> {
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
         K::exists(config, namespace).await
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::AdminError> {
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
         K::create(config, namespace).await
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::AdminError> {
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
         K::delete(config, namespace).await
     }
 }
@@ -217,12 +210,10 @@ where
     K: DirectKeyValueStore + Send + Sync,
     K::Error: From<JournalConsistencyError>,
 {
-    type WriteError = K::Error;
-
     /// The size constant do not change
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), Self::WriteError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
         let batch = K::Batch::from_batch(self, batch).await?;
         if Self::is_fastpath_feasible(&batch) {
             self.store.write_batch(batch).await
@@ -232,7 +223,7 @@ where
         }
     }
 
-    async fn clear_journal(&self) -> Result<(), Self::WriteError> {
+    async fn clear_journal(&self) -> Result<(), Self::Error> {
         let key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         let value = self.read_value::<JournalHeader>(&key).await?;
         if let Some(header) = value {
@@ -240,14 +231,6 @@ where
         }
         Ok(())
     }
-}
-
-impl<K> KeyValueStore for JournalingKeyValueStore<K>
-where
-    K: DirectKeyValueStore + Send + Sync,
-    K::Error: From<JournalConsistencyError> + From<bcs::Error>,
-{
-    type Error = K::Error;
 }
 
 impl<K> JournalingKeyValueStore<K>

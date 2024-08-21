@@ -42,7 +42,7 @@ static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new
 #[cfg(with_testing)]
 use {
     crate::common::{
-        ContextFromStore, ReadableKeyValueStore, RestrictedKeyValueStore, WritableKeyValueStore,
+        ContextFromStore, WithError, ReadableKeyValueStore, RestrictedKeyValueStore, WritableKeyValueStore,
     },
     crate::memory::{create_test_memory_context, MemoryContext},
     async_lock::RwLock,
@@ -1081,12 +1081,18 @@ pub struct ViewContainer<C> {
 }
 
 #[cfg(with_testing)]
+impl<C> WithError for ViewContainer<C>
+where
+{
+    type Error = ViewError;
+}
+
+#[cfg(with_testing)]
 impl<C> ReadableKeyValueStore for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
-    type ReadError = ViewError;
     const MAX_KEY_SIZE: usize = C::MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -1138,7 +1144,6 @@ where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
-    type WriteError = ViewError;
     const MAX_VALUE_SIZE: usize = C::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
@@ -1161,7 +1166,6 @@ where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
-    type Error = ViewError;
 }
 
 #[cfg(with_testing)]

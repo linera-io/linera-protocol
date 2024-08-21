@@ -23,7 +23,7 @@ use {
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_interval, ReadableKeyValueStore, RestrictedKeyValueStore, WritableKeyValueStore},
+    common::{get_interval, WithError, ReadableKeyValueStore, RestrictedKeyValueStore, WritableKeyValueStore},
 };
 
 #[cfg(with_metrics)]
@@ -108,11 +108,17 @@ pub struct LruCachingStore<K> {
     lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
+impl<K> WithError for LruCachingStore<K>
+where
+    K: WithError,
+{
+    type Error = <K as WithError>::Error;
+}
+
 impl<K> ReadableKeyValueStore for LruCachingStore<K>
 where
     K: ReadableKeyValueStore + Send + Sync,
 {
-    type ReadError = K::ReadError;
     // The LRU cache does not change the underlying store's size limits.
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
     type Keys = K::Keys;
@@ -122,7 +128,7 @@ where
         self.store.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::ReadError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let Some(lru_read_values) = &self.lru_read_values else {
             return self.store.read_value_bytes(key).await;
         };
@@ -143,7 +149,7 @@ where
         Ok(value)
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::ReadError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
         if let Some(values) = &self.lru_read_values {
             let values = values.lock().unwrap();
             if let Some(value) = values.query(key) {
@@ -153,7 +159,7 @@ where
         self.store.contains_key(key).await
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::ReadError> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
         let Some(values) = &self.lru_read_values else {
             return self.store.contains_keys(keys).await;
         };
@@ -182,7 +188,7 @@ where
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::ReadError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         let Some(lru_read_values) = &self.lru_read_values else {
             return self.store.read_multi_values_bytes(keys).await;
         };
@@ -221,14 +227,14 @@ where
         Ok(result)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::ReadError> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::ReadError> {
+    ) -> Result<Self::KeyValues, Self::Error> {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
@@ -237,11 +243,10 @@ impl<K> WritableKeyValueStore for LruCachingStore<K>
 where
     K: WritableKeyValueStore + Send + Sync,
 {
-    type WriteError = K::WriteError;
     // The LRU cache does not change the underlying store's size limits.
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), Self::WriteError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
         let Some(lru_read_values) = &self.lru_read_values else {
             return self.store.write_batch(batch).await;
         };
@@ -265,9 +270,15 @@ where
         self.store.write_batch(batch).await
     }
 
-    async fn clear_journal(&self) -> Result<(), Self::WriteError> {
+    async fn clear_journal(&self) -> Result<(), Self::Error> {
         self.store.clear_journal().await
     }
+}
+
+impl<K> RestrictedKeyValueStore for LruCachingStore<K>
+where
+    K: RestrictedKeyValueStore + Send + Sync,
+{
 }
 
 fn new_lru_prefix_cache(cache_size: usize) -> Option<Arc<Mutex<LruPrefixCache>>> {
@@ -276,13 +287,6 @@ fn new_lru_prefix_cache(cache_size: usize) -> Option<Arc<Mutex<LruPrefixCache>>>
     } else {
         Some(Arc::new(Mutex::new(LruPrefixCache::new(cache_size))))
     }
-}
-
-impl<K> RestrictedKeyValueStore for LruCachingStore<K>
-where
-    K: RestrictedKeyValueStore + Send + Sync,
-{
-    type Error = <K as RestrictedKeyValueStore>::Error;
 }
 
 impl<K> LruCachingStore<K>

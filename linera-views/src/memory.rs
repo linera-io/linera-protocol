@@ -15,7 +15,7 @@ use crate::{
     batch::{Batch, DeletePrefixExpander, WriteOperation},
     common::{
         get_interval, AdminKeyValueStore, CommonStoreConfig, Context, ContextFromStore,
-        KeyIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
+        KeyIterable, KeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
@@ -129,8 +129,11 @@ impl Drop for MemoryStore {
     }
 }
 
+impl WithError for MemoryStore {
+    type Error = MemoryStoreError;
+}
+
 impl ReadableKeyValueStore for MemoryStore {
-    type ReadError = MemoryStoreError;
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -216,8 +219,6 @@ impl ReadableKeyValueStore for MemoryStore {
 }
 
 impl WritableKeyValueStore for MemoryStore {
-    type WriteError = MemoryStoreError;
-
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), MemoryStoreError> {
@@ -302,8 +303,6 @@ impl MemoryStore {
 }
 
 impl AdminKeyValueStore for MemoryStore {
-    type AdminError = MemoryStoreError;
-
     type Config = MemoryStoreConfig;
 
     async fn connect(
@@ -365,9 +364,7 @@ impl AdminKeyValueStore for MemoryStore {
     }
 }
 
-impl KeyValueStore for MemoryStore {
-    type Error = MemoryStoreError;
-}
+impl KeyValueStore for MemoryStore {}
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
 pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
