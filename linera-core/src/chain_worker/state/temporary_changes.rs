@@ -6,15 +6,18 @@
 use linera_base::{
     data_types::{ArithmeticError, Timestamp},
     ensure,
+    identifiers::GenericApplicationId,
 };
 use linera_chain::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, HashedCertificateValue,
-        IncomingBundle, MessageAction, ProposalContent,
+        Block, BlockExecutionOutcome, BlockProposal, ChannelFullName, ExecutedBlock,
+        HashedCertificateValue, IncomingBundle, Medium, MessageAction, ProposalContent,
     },
     manager,
 };
-use linera_execution::{Query, Response, UserApplicationDescription, UserApplicationId};
+use linera_execution::{
+    ChannelSubscription, Query, Response, UserApplicationDescription, UserApplicationId,
+};
 use linera_storage::Storage;
 use linera_views::views::{View, ViewError};
 #[cfg(with_testing)]
@@ -311,7 +314,21 @@ where
             } else {
                 MessageAction::Accept
             };
+            let subscriptions = &chain.execution_state.system.subscriptions;
             for (origin, inbox) in pairs {
+                if let Medium::Channel(ChannelFullName {
+                    application_id: GenericApplicationId::System,
+                    name,
+                }) = &origin.medium
+                {
+                    let subscription = ChannelSubscription {
+                        chain_id: origin.sender,
+                        name: name.clone(),
+                    };
+                    if !subscriptions.contains(&subscription).await? {
+                        continue; // We are not subscribed to this channel.
+                    }
+                }
                 for bundle in inbox.added_bundles.elements().await? {
                     messages.push(IncomingBundle {
                         origin: origin.clone(),
