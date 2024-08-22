@@ -42,7 +42,7 @@ static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new
 #[cfg(with_testing)]
 use {
     crate::common::{
-        ContextFromStore, ReadableKeyValueStore, RestrictedKeyValueStore, WithError,
+        ContextFromStore, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
     crate::memory::{create_test_memory_context, MemoryContext},
@@ -1157,14 +1157,6 @@ where
     async fn clear_journal(&self) -> Result<(), ViewError> {
         Ok(())
     }
-}
-
-#[cfg(with_testing)]
-impl<C> RestrictedKeyValueStore for ViewContainer<C>
-where
-    C: Context + Sync + Send + Clone,
-    ViewError: From<C::Error>,
-{
 }
 
 #[cfg(with_testing)]

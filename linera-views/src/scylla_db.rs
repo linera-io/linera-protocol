@@ -43,10 +43,10 @@ use crate::{
     batch::{Batch, UnorderedBatch},
     common::{
         get_upper_bound_option, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
-        KeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     journaling::{
-        DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
+        DirectWritableKeyValueStore, JournalConsistencyError,
         JournalingKeyValueStore,
     },
     lru_caching::LruCachingStore,
@@ -763,8 +763,6 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
     }
 }
 
-impl DirectKeyValueStore for ScyllaDbStoreInternal {}
-
 impl ScyllaDbStoreInternal {
     /// Obtains the semaphore lock on the database if needed.
     async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
@@ -909,8 +907,6 @@ impl AdminKeyValueStore for ScyllaDbStore {
         ScyllaDbStoreInternal::delete(config, namespace).await
     }
 }
-
-impl KeyValueStore for ScyllaDbStore {}
 
 impl ScyllaDbStore {
     #[cfg(with_metrics)]

@@ -9,7 +9,7 @@ use prometheus::HistogramVec;
 
 use crate::{
     batch::Batch,
-    common::{ReadableKeyValueStore, RestrictedKeyValueStore, WithError, WritableKeyValueStore},
+    common::{ReadableKeyValueStore, WithError, WritableKeyValueStore},
 };
 
 #[derive(Clone)]
@@ -193,8 +193,6 @@ where
         self.store.clear_journal().await
     }
 }
-
-impl<K> RestrictedKeyValueStore for MeteredStore<K> where K: RestrictedKeyValueStore + Send + Sync {}
 
 impl<K> MeteredStore<K> {
     /// Creates a new Metered store

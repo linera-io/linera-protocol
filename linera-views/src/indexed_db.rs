@@ -11,7 +11,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         get_upper_bound_option, CommonStoreConfig, ContextFromStore, LocalAdminKeyValueStore,
-        LocalKeyValueStore, LocalReadableKeyValueStore, LocalRestrictedKeyValueStore,
+        LocalReadableKeyValueStore,
         LocalWritableKeyValueStore, WithError,
     },
     value_splitting::DatabaseConsistencyError,
@@ -306,10 +306,6 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
             .delete_object_store(namespace)?)
     }
 }
-
-impl LocalKeyValueStore for IndexedDbStore {}
-
-impl LocalRestrictedKeyValueStore for IndexedDbStore {}
 
 /// An implementation of [`crate::common::Context`] that stores all values in an IndexedDB
 /// database.

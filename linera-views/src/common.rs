@@ -508,15 +508,15 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
 pub trait RestrictedKeyValueStore: ReadableKeyValueStore + WritableKeyValueStore {}
 
+impl<T> RestrictedKeyValueStore for T where T: ReadableKeyValueStore + WritableKeyValueStore {}
+
 /// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
 pub trait LocalRestrictedKeyValueStore:
     LocalReadableKeyValueStore + LocalWritableKeyValueStore
 {
 }
 
-impl<S: RestrictedKeyValueStore> LocalRestrictedKeyValueStore for S {}
-
-impl<S: KeyValueStore> RestrictedKeyValueStore for S {}
+impl<T> LocalRestrictedKeyValueStore for T where T: LocalReadableKeyValueStore + LocalWritableKeyValueStore {}
 
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
 pub trait KeyValueStore:
@@ -524,13 +524,15 @@ pub trait KeyValueStore:
 {
 }
 
+impl<T> KeyValueStore for T where T: ReadableKeyValueStore + WritableKeyValueStore + AdminKeyValueStore {}
+
 /// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
 pub trait LocalKeyValueStore:
     LocalReadableKeyValueStore + LocalWritableKeyValueStore + LocalAdminKeyValueStore
 {
 }
 
-impl<S: KeyValueStore> LocalKeyValueStore for S {}
+impl<T> LocalKeyValueStore for T where T: LocalReadableKeyValueStore + LocalWritableKeyValueStore + LocalAdminKeyValueStore {}
 
 #[doc(hidden)]
 /// Iterates keys by reference in a vector of keys.

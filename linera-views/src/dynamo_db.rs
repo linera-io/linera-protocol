@@ -43,10 +43,10 @@ use crate::{
     batch::{Batch, SimpleUnorderedBatch},
     common::{
         AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
-        KeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     journaling::{
-        DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
+        DirectWritableKeyValueStore, JournalConsistencyError,
         JournalingKeyValueStore,
     },
     lru_caching::LruCachingStore,
@@ -958,8 +958,6 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
     }
 }
 
-impl DirectKeyValueStore for DynamoDbStoreInternal {}
-
 /// A shared DB client for DynamoDb implementing LruCaching
 #[derive(Clone)]
 #[allow(clippy::type_complexity)]
@@ -1034,8 +1032,6 @@ impl WritableKeyValueStore for DynamoDbStore {
         self.store.clear_journal().await
     }
 }
-
-impl KeyValueStore for DynamoDbStore {}
 
 impl AdminKeyValueStore for DynamoDbStore {
     type Config = DynamoDbStoreConfig;

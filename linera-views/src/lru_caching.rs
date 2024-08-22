@@ -278,9 +278,6 @@ where
     }
 }
 
-impl<K> RestrictedKeyValueStore for LruCachingStore<K> where K: RestrictedKeyValueStore + Send + Sync
-{}
-
 fn new_lru_prefix_cache(cache_size: usize) -> Option<Arc<Mutex<LruPrefixCache>>> {
     if cache_size == 0 {
         None

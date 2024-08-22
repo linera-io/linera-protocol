@@ -25,7 +25,7 @@ use crate::metering::{
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyValueStore,
+        get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
@@ -432,8 +432,6 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     }
 }
 
-impl KeyValueStore for RocksDbStoreInternal {}
-
 /// A shared DB client for RocksDB implementing LruCaching
 #[derive(Clone)]
 pub struct RocksDbStore {
@@ -614,8 +612,6 @@ impl AdminKeyValueStore for RocksDbStore {
         RocksDbStoreInternal::delete(config, namespace).await
     }
 }
-
-impl KeyValueStore for RocksDbStore {}
 
 impl<E: Clone + Send + Sync> RocksDbContext<E> {
     /// Creates a [`RocksDbContext`].

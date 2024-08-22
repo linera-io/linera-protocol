@@ -15,7 +15,7 @@ use crate::{
     batch::{Batch, DeletePrefixExpander, WriteOperation},
     common::{
         get_interval, AdminKeyValueStore, CommonStoreConfig, Context, ContextFromStore,
-        KeyIterable, KeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        KeyIterable, ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
@@ -363,8 +363,6 @@ impl AdminKeyValueStore for MemoryStore {
         Ok(())
     }
 }
-
-impl KeyValueStore for MemoryStore {}
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
 pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;

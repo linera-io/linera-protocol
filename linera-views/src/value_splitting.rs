@@ -261,13 +261,6 @@ where
     }
 }
 
-impl<K> RestrictedKeyValueStore for ValueSplittingStore<K>
-where
-    K: RestrictedKeyValueStore + Send + Sync,
-    K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
-{
-}
-
 impl<K> ValueSplittingStore<K>
 where
     K: RestrictedKeyValueStore + Send + Sync,
@@ -393,9 +386,6 @@ impl WritableKeyValueStore for LimitedTestMemoryStore {
         self.store.clear_journal().await
     }
 }
-
-#[cfg(with_testing)]
-impl RestrictedKeyValueStore for LimitedTestMemoryStore {}
 
 #[cfg(with_testing)]
 impl LimitedTestMemoryStore {
