@@ -339,7 +339,7 @@ impl StorageConfigNamespace {
             #[cfg(feature = "rocksdb")]
             StorageConfig::RocksDb { path } => {
                 let path_buf = path.to_path_buf();
-                let path_dir = PathDir { path_buf, _dir: None };
+                let path_dir = PathDir::new(path_buf);
                 let config = RocksDbStoreConfig {
                     path_dir,
                     common_config,

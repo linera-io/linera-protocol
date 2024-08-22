@@ -44,7 +44,7 @@ impl RocksDbRunner {
             cache_size: config.client.cache_size,
         };
         let path_buf = config.client.storage.as_path().to_path_buf();
-        let path_dir = PathDir { path_buf, _dir: None };
+        let path_dir = PathDir::new(path_buf);
         let store_config = RocksDbStoreConfig {
             path_dir,
             common_config,

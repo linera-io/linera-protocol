@@ -460,7 +460,14 @@ pub struct PathDir {
     /// The path to the data
     pub path_buf: PathBuf,
     /// The guard for the directory if one is needed
-    pub _dir: Option<Arc<TempDir>>,
+    _dir: Option<Arc<TempDir>>,
+}
+
+impl PathDir {
+    /// Create a PathDir from an existing path.
+    pub fn new(path_buf: PathBuf) -> Self {
+        Self { path_buf, _dir: None }
+    }
 }
 
 /// Returns the test path for RocksDB without common config.
