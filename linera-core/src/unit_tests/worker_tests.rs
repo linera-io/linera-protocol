@@ -2399,11 +2399,7 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: vec![vec![direct_outgoing_message(
-                    user_id,
-                    MessageKind::Protected,
-                    SystemMessage::Notify { id: user_id },
-                )]],
+                messages: vec![Vec::new()],
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     // The root chain knows both committees at the end.
@@ -2489,13 +2485,11 @@ where
                 .added_bundles
                 .read_front(10)
                 .await?[..],
-            [bundle1, bundle2, bundle3]
+            [bundle1, bundle2]
             if matches!(bundle1.messages[..], [PostedMessage {
                  message: Message::System(SystemMessage::OpenChain(_)), ..
             }]) && matches!(bundle2.messages[..], [PostedMessage {
                 message: Message::System(SystemMessage::Credit { .. }), ..
-            }]) && matches!(bundle3.messages[..], [PostedMessage {
-                message: Message::System(SystemMessage::Notify { .. }), ..
             }])
         );
         let channel_inbox = user_chain
@@ -2517,8 +2511,8 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: vec![Vec::new(); 4],
-                events: vec![Vec::new(); 4],
+                messages: vec![Vec::new(); 3],
+                events: vec![Vec::new(); 3],
                 state_hash: SystemExecutionState {
                     subscriptions: [ChannelSubscription {
                         chain_id: admin_id,
@@ -2534,7 +2528,7 @@ where
                 }
                 .into_hash()
                 .await,
-                oracle_responses: vec![Vec::new(); 4],
+                oracle_responses: vec![Vec::new(); 3],
             }
             .with(
                 make_first_block(user_id)
@@ -2585,18 +2579,6 @@ where
                                 .to_posted(1, MessageKind::Tracked)],
                         },
                         action: MessageAction::Accept,
-                    })
-                    .with_incoming_bundle(IncomingBundle {
-                        origin: Origin::chain(admin_id),
-                        bundle: MessageBundle {
-                            certificate_hash: certificate2.value.hash(),
-                            height: BlockHeight::from(2),
-                            timestamp: Timestamp::from(0),
-                            transaction_index: 0,
-                            messages: vec![Message::System(SystemMessage::Notify { id: user_id })
-                                .to_posted(0, MessageKind::Protected)],
-                        },
-                        action: MessageAction::Accept,
                     }),
             ),
         ),
@@ -2633,7 +2615,7 @@ where
                 .try_load_entry(&Origin::chain(admin_id))
                 .await?
                 .expect("Missing inbox for admin chain in user chain");
-            assert_eq!(inbox.next_block_height_to_receive()?, BlockHeight(3));
+            assert_eq!(inbox.next_block_height_to_receive()?, BlockHeight(2));
             assert_eq!(inbox.added_bundles.count(), 0);
             assert_eq!(inbox.removed_bundles.count(), 0);
         }

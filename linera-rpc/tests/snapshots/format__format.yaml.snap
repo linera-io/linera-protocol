@@ -923,11 +923,6 @@ SystemMessage:
               SEQ:
                 TYPENAME: UserApplicationDescription
     10:
-      Notify:
-        STRUCT:
-          - id:
-              TYPENAME: ChainId
-    11:
       RequestApplication:
         NEWTYPE:
           TYPENAME: ApplicationId
