@@ -275,9 +275,9 @@ type ChannelStateView {
 	"""
 	subscribers: [ChainId!]!
 	"""
-	The latest block height, if any, to be sent to future subscribers.
+	The block heights so far, to be sent to future subscribers.
 	"""
-	blockHeight: BlockHeight
+	blockHeights: QueueView_BlockHeight_f5d50b5f!
 }
 
 """

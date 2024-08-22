@@ -999,6 +999,24 @@ impl Message {
             Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
         }
     }
+
+    pub fn subscribe(&self) -> Option<(&ChainId, &ChannelSubscription)> {
+        match self {
+            Message::System(SystemMessage::Subscribe { id, subscription }) => {
+                Some((id, subscription))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn unsubscribe(&self) -> Option<(&ChainId, &ChannelSubscription)> {
+        match self {
+            Message::System(SystemMessage::Unsubscribe { id, subscription }) => {
+                Some((id, subscription))
+            }
+            _ => None,
+        }
+    }
 }
 
 impl From<SystemQuery> for Query {

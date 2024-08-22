@@ -2337,12 +2337,6 @@ where
             *admin_chain.execution_state.system.admin_id.get(),
             Some(admin_id)
         );
-        // The root chain has no subscribers yet.
-        assert!(!admin_chain
-            .channels
-            .indices()
-            .await?
-            .contains(&admin_channel_full_name));
     }
 
     // Create a new committee and transfer money before accepting the subscription.
@@ -2387,50 +2381,8 @@ where
         .fully_handle_certificate(certificate1.clone(), vec![])
         .await?;
 
-    // Have the admin chain accept the subscription now.
-    let certificate2 = make_certificate(
-        &committee,
-        &worker,
-        HashedCertificateValue::new_confirmed(
-            BlockExecutionOutcome {
-                messages: vec![Vec::new()],
-                events: vec![Vec::new()],
-                state_hash: SystemExecutionState {
-                    // The root chain knows both committees at the end.
-                    committees: committees2.clone(),
-                    ownership: ChainOwnership::single(key_pair.public()),
-                    ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
-                }
-                .into_hash()
-                .await,
-                oracle_responses: vec![Vec::new()],
-            }
-            .with(
-                make_child_block(&certificate1.value)
-                    .with_epoch(1)
-                    .with_incoming_bundle(IncomingBundle {
-                        origin: Origin::chain(admin_id),
-                        bundle: MessageBundle {
-                            certificate_hash: certificate0.value.hash(),
-                            height: BlockHeight::ZERO,
-                            timestamp: Timestamp::from(0),
-                            transaction_index: 0,
-                            messages: vec![Message::System(SystemMessage::Subscribe {
-                                id: user_id,
-                                subscription: admin_channel_subscription.clone(),
-                            })
-                            .to_posted(1, MessageKind::Protected)],
-                        },
-                        action: MessageAction::Accept,
-                    }),
-            ),
-        ),
-    );
-    worker
-        .fully_handle_certificate(certificate2.clone(), vec![])
-        .await?;
     {
-        // The root chain has 1 subscribers.
+        // The root chain has 1 subscriber.
         let admin_chain = worker.chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
         admin_chain.validate_incoming_bundles().await?;
@@ -2439,7 +2391,7 @@ where
                 .channels
                 .try_load_entry(&admin_channel_full_name)
                 .await?
-                .expect("Missing channel for admin channel in `ChainId::root(1)`")
+                .expect("Missing channel for admin channel in `ChainId::root(0)`")
                 .subscribers
                 .indices()
                 .await?
