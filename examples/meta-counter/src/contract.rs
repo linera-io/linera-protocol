@@ -54,6 +54,7 @@ impl Contract for MetaCounterContract {
             recipient_id,
             authenticated,
             is_tracked,
+            query_service,
             fuel_grant,
             message,
         } = operation;
@@ -67,6 +68,13 @@ impl Contract for MetaCounterContract {
         }
         if is_tracked {
             message = message.with_tracking();
+        }
+        if query_service {
+            // Make a service query: The result will be logged in the executed block.
+            let counter_id = self.counter_id();
+            let _ = self
+                .runtime
+                .query_service(counter_id, "query { value }".into());
         }
         message.send_to(recipient_id);
     }
@@ -86,10 +94,6 @@ impl Contract for MetaCounterContract {
             }
             Message::Increment(value) => {
                 let counter_id = self.counter_id();
-                // Make a service query: The result will be logged in the executed block.
-                let _ = self
-                    .runtime
-                    .query_service(counter_id, "query { value }".into());
                 log::trace!("executing {} via {:?}", value, counter_id);
                 self.runtime.call_application(true, counter_id, &value);
             }
