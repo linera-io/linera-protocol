@@ -6,16 +6,14 @@ use std::{collections::VecDeque, fmt::Debug, marker::PhantomData};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use test_case::test_case;
-#[cfg(with_rocksdb)]
-use {
-    crate::rocks_db::{create_rocks_db_test_config, RocksDbContext, RocksDbStore},
-};
 
 #[cfg(with_dynamodb)]
 use crate::dynamo_db::{
     create_dynamo_db_common_config, DynamoDbContext, DynamoDbStore, DynamoDbStoreConfig,
     LocalStackTestContext,
 };
+#[cfg(with_rocksdb)]
+use crate::rocks_db::{create_rocks_db_test_config, RocksDbContext, RocksDbStore};
 #[cfg(with_scylladb)]
 use crate::scylla_db::{create_scylla_db_test_config, ScyllaDbContext, ScyllaDbStore};
 use crate::{
@@ -210,8 +208,7 @@ impl TestContextFactory for MemoryContextFactory {
 
 #[cfg(with_rocksdb)]
 #[derive(Default)]
-struct RocksDbContextFactory {
-}
+struct RocksDbContextFactory {}
 
 #[cfg(with_rocksdb)]
 #[async_trait]

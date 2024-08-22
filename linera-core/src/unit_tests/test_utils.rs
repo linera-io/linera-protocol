@@ -37,8 +37,8 @@ use {
 #[cfg(feature = "rocksdb")]
 use {
     linera_storage::RocksDbStorage,
-    linera_views::rocks_db::{create_rocks_db_test_path, create_rocks_db_common_config},
     linera_views::rocks_db::RocksDbStoreConfig,
+    linera_views::rocks_db::{create_rocks_db_common_config, create_rocks_db_test_path},
     tokio::sync::{Semaphore, SemaphorePermit},
 };
 #[cfg(feature = "scylladb")]

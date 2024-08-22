@@ -32,7 +32,10 @@ use tonic_health::pb::{
 };
 use tracing::{info, warn};
 #[cfg(all(feature = "rocksdb", with_testing))]
-use {linera_views::rocks_db::{PathDir, create_rocks_db_test_path}, std::ops::Deref};
+use {
+    linera_views::rocks_db::{create_rocks_db_test_path, PathDir},
+    std::ops::Deref,
+};
 
 use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},

@@ -11,12 +11,8 @@ use std::{
 
 use futures::future::join_all;
 use linera_base::{ensure, hex};
-use thiserror::Error;
 use tempfile::TempDir;
-#[cfg(with_testing)]
-use {
-    crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace},
-};
+use thiserror::Error;
 
 #[cfg(with_metrics)]
 use crate::metering::{
@@ -31,6 +27,8 @@ use crate::{
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
+#[cfg(with_testing)]
+use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace};
 
 /// The number of streams for the test
 #[cfg(with_testing)]
@@ -455,7 +453,7 @@ pub fn create_rocks_db_common_config() -> CommonStoreConfig {
 }
 
 /// A path and the guard for the temporary directory if needed
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct PathDir {
     /// The path to the data
     pub path_buf: PathBuf,
@@ -466,7 +464,10 @@ pub struct PathDir {
 impl PathDir {
     /// Create a PathDir from an existing path.
     pub fn new(path_buf: PathBuf) -> Self {
-        Self { path_buf, _dir: None }
+        Self {
+            path_buf,
+            _dir: None,
+        }
     }
 }
 
