@@ -8,7 +8,6 @@ use {
     linera_execution::WasmRuntime,
     linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStoreConfig, RocksDbStoreError},
     linera_views::test_utils::generate_test_namespace,
-    tempfile::TempDir,
 };
 
 use crate::db_storage::DbStorage;
@@ -17,11 +16,11 @@ pub type RocksDbStorage<C> = DbStorage<RocksDbStore, C>;
 
 #[cfg(with_testing)]
 impl RocksDbStorage<TestClock> {
-    pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> (Self, TempDir) {
-        let (store_config, dir) = create_rocks_db_test_config().await;
+    pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
+        let store_config = create_rocks_db_test_config().await;
         let namespace = generate_test_namespace();
         let root_key = &[];
-        let storage = RocksDbStorage::new_for_testing(
+        RocksDbStorage::new_for_testing(
             store_config,
             &namespace,
             root_key,
@@ -29,8 +28,7 @@ impl RocksDbStorage<TestClock> {
             TestClock::new(),
         )
         .await
-        .expect("storage");
-        (storage, dir)
+        .expect("storage")
     }
 
     pub async fn new_for_testing(

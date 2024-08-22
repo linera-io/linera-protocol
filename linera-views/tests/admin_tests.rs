@@ -21,7 +21,7 @@ async fn admin_test_memory() {
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
 async fn admin_test_rocks_db() {
-    let (config, _dir) = create_rocks_db_test_config().await;
+    let config = create_rocks_db_test_config().await;
     admin_test::<RocksDbStore>(&config).await;
 }
 

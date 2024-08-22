@@ -43,7 +43,6 @@ use rand::{Rng, RngCore};
 #[cfg(with_rocksdb)]
 use {
     linera_views::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDbStore},
-    tempfile::TempDir,
 };
 
 #[allow(clippy::type_complexity)]
@@ -183,7 +182,6 @@ impl StateStore for LruMemoryStore {
 pub struct RocksDbTestStore {
     store: RocksDbStore,
     accessed_chains: BTreeSet<usize>,
-    _dir: TempDir,
 }
 
 #[cfg(with_rocksdb)]
@@ -192,12 +190,11 @@ impl StateStore for RocksDbTestStore {
     type Context = RocksDbContext<usize>;
 
     async fn new() -> Self {
-        let (store, dir) = create_rocks_db_test_store().await;
+        let store = create_rocks_db_test_store().await;
         let accessed_chains = BTreeSet::new();
         RocksDbTestStore {
             store,
             accessed_chains,
-            _dir: dir,
         }
     }
 
