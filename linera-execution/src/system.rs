@@ -1040,7 +1040,7 @@ where
         id: ChainId,
     ) -> Result<Vec<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
         let mut messages = Vec::new();
-        // Unsubscribe to all channels.
+        // Unsubscribe from all channels.
         self.subscriptions
             .for_each_index(|subscription| {
                 let message = RawOutgoingMessage {

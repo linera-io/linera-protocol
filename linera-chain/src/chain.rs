@@ -1182,16 +1182,15 @@ where
         }
         let full_names = raw_outcome
             .subscribe
-            .clone()
-            .into_iter()
+            .iter()
             .map(|(name, _id)| ChannelFullName {
                 application_id,
-                name,
+                name: name.clone(),
             })
             .collect::<Vec<_>>();
         let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        let stream = raw_outcome.subscribe.into_iter().zip(channels);
-        let stream = stream::iter(stream)
+        let subscribe_channels = raw_outcome.subscribe.into_iter().zip(channels);
+        let stream = stream::iter(subscribe_channels)
             .map(|((name, id), mut channel)| async move {
                 let mut result = None;
                 let full_name = ChannelFullName {
