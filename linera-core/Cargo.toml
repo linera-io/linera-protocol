@@ -31,6 +31,7 @@ rocksdb = ["linera-views/rocksdb", "linera-storage/rocksdb"]
 dynamodb = ["linera-views/dynamodb", "linera-storage/dynamodb"]
 scylladb = ["linera-views/scylladb", "linera-storage/scylladb"]
 storage-service = []
+unstable-oracles = []
 metrics = [
     "prometheus",
     "linera-base/metrics",
