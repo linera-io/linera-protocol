@@ -326,7 +326,7 @@ impl ActiveChain {
             })
             .await;
 
-        assert_eq!(accept_certificate.outgoing_message_count(), 1);
+        assert_eq!(accept_certificate.outgoing_message_count(), 0);
 
         self.add_block(|block| {
             block.with_system_messages_from(&accept_certificate, SystemChannel::PublishedBytecodes);

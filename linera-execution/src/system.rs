@@ -247,8 +247,6 @@ pub enum SystemMessage {
     RegisterApplications {
         applications: Vec<UserApplicationDescription>,
     },
-    /// Does nothing. Used to debug the intended recipients of a block.
-    Notify { id: ChainId },
     /// Requests a `RegisterApplication` message from the target chain to register the specified
     /// application on the sender chain.
     RequestApplication(UserApplicationId),
@@ -281,7 +279,6 @@ impl SystemMessage {
             | SystemMessage::Subscribe { .. }
             | SystemMessage::Unsubscribe { .. }
             | SystemMessage::ApplicationCreated
-            | SystemMessage::Notify { .. }
             | SystemMessage::RequestApplication(_) => Box::new(iter::empty()),
         }
     }
@@ -874,16 +871,6 @@ where
                     subscription.chain_id == context.chain_id,
                     SystemExecutionError::IncorrectChainId(subscription.chain_id)
                 );
-                // Notify the subscriber about this block, so that it is included in the
-                // received_log of the subscriber and correctly synchronized.
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
-                    message: SystemMessage::Notify { id },
-                };
-                outcome.messages.push(message);
                 outcome.subscribe.push((subscription.name.clone(), id));
             }
             Unsubscribe { id, subscription } => {
@@ -891,14 +878,6 @@ where
                     subscription.chain_id == context.chain_id,
                     SystemExecutionError::IncorrectChainId(subscription.chain_id)
                 );
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
-                    message: SystemMessage::Notify { id },
-                };
-                outcome.messages.push(message);
                 outcome.unsubscribe.push((subscription.name.clone(), id));
             }
             BytecodePublished { transaction_index } => {
@@ -951,7 +930,7 @@ where
             OpenChain(_) => {
                 // This special message is executed immediately when cross-chain requests are received.
             }
-            ApplicationCreated | Notify { .. } => (),
+            ApplicationCreated => (),
         }
         Ok(outcome)
     }
@@ -1061,7 +1040,7 @@ where
         id: ChainId,
     ) -> Result<Vec<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
         let mut messages = Vec::new();
-        // Unsubscribe to all channels.
+        // Unsubscribe from all channels.
         self.subscriptions
             .for_each_index(|subscription| {
                 let message = RawOutgoingMessage {

@@ -339,16 +339,7 @@ where
     let publisher_state_hash = publisher_system_state.into_hash().await;
     let accept_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![vec![OutgoingMessage {
-                destination: Destination::Recipient(creator_chain.into()),
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                message: Message::System(SystemMessage::Notify {
-                    id: creator_chain.into(),
-                }),
-            }]],
+            messages: vec![Vec::new()],
             events: vec![Vec::new()],
             state_hash: publisher_state_hash,
             oracle_responses: vec![Vec::new()],
