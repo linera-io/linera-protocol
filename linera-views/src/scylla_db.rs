@@ -45,10 +45,7 @@ use crate::{
         get_upper_bound_option, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
-    journaling::{
-        DirectWritableKeyValueStore, JournalConsistencyError,
-        JournalingKeyValueStore,
-    },
+    journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::LruCachingStore,
     value_splitting::DatabaseConsistencyError,
 };

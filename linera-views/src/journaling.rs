@@ -27,8 +27,8 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     common::{
-        AdminKeyValueStore, KeyIterable, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore, MIN_VIEW_TAG,
+        AdminKeyValueStore, KeyIterable, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        MIN_VIEW_TAG,
     },
 };
 
@@ -86,7 +86,10 @@ pub trait DirectKeyValueStore:
 {
 }
 
-impl<T> DirectKeyValueStore for T where T: ReadableKeyValueStore + DirectWritableKeyValueStore + AdminKeyValueStore {}
+impl<T> DirectKeyValueStore for T where
+    T: ReadableKeyValueStore + DirectWritableKeyValueStore + AdminKeyValueStore
+{
+}
 
 /// The header that contains the current state of the journal.
 #[derive(Serialize, Deserialize, Default, Debug)]

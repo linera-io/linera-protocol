@@ -12,7 +12,7 @@ use linera_views::test_utils::generate_test_namespace;
 use linera_views::{
     batch::{Batch, WriteOperation},
     common::{
-        AdminKeyValueStore, CommonStoreConfig, KeyValueStore, ReadableKeyValueStore, WithError,
+        AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
@@ -296,8 +296,6 @@ impl WritableKeyValueStore for ServiceStoreClientInternal {
         Ok(())
     }
 }
-
-impl KeyValueStore for ServiceStoreClientInternal {}
 
 impl ServiceStoreClientInternal {
     /// Obtains the semaphore lock on the database if needed.
@@ -597,8 +595,6 @@ impl WritableKeyValueStore for ServiceStoreClient {
         self.store.clear_journal().await
     }
 }
-
-impl KeyValueStore for ServiceStoreClient {}
 
 impl AdminKeyValueStore for ServiceStoreClient {
     type Config = ServiceStoreConfig;

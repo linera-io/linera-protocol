@@ -11,8 +11,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         get_upper_bound_option, CommonStoreConfig, ContextFromStore, LocalAdminKeyValueStore,
-        LocalReadableKeyValueStore,
-        LocalWritableKeyValueStore, WithError,
+        LocalReadableKeyValueStore, LocalWritableKeyValueStore, WithError,
     },
     value_splitting::DatabaseConsistencyError,
     views::ViewError,

@@ -333,8 +333,6 @@ impl WitInterface {
     }
 }
 
-impl linera_views::common::RestrictedKeyValueStore for KeyValueStore {}
-
 /// Implementation of [`linera_views::common::Context`] to be used for data storage
 /// by Linera applications.
 pub type ViewStorageContext = ContextFromStore<(), KeyValueStore>;
