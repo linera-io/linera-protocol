@@ -25,8 +25,8 @@ use crate::metering::{
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound, AdminKeyValueStore, CacheSize, CommonStoreConfig, ContextFromStore,
-        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
+        get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
@@ -64,12 +64,6 @@ pub struct RocksDbStoreConfig {
     pub path_buf: PathBuf,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
-}
-
-impl CacheSize for RocksDbStoreConfig {
-    fn cache_size(&self) -> usize {
-        self.common_config.cache_size
-    }
 }
 
 #[derive(Default)]
@@ -146,7 +140,11 @@ impl RocksDbStoreInternal {
     }
 }
 
-impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
+impl WithError for RocksDbStoreInternal {
+    type Error = RocksDbStoreError;
+}
+
+impl ReadableKeyValueStore for RocksDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -280,7 +278,7 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
     }
 }
 
-impl WritableKeyValueStore<RocksDbStoreError> for RocksDbStoreInternal {
+impl WritableKeyValueStore for RocksDbStoreInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
     async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksDbStoreError> {
@@ -345,7 +343,6 @@ fn root_key_as_string(root_key: &[u8]) -> String {
 }
 
 impl AdminKeyValueStore for RocksDbStoreInternal {
-    type Error = RocksDbStoreError;
     type Config = RocksDbStoreConfig;
 
     async fn connect(
@@ -435,10 +432,6 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     }
 }
 
-impl KeyValueStore for RocksDbStoreInternal {
-    type Error = RocksDbStoreError;
-}
-
 /// A shared DB client for RocksDB implementing LruCaching
 #[derive(Clone)]
 pub struct RocksDbStore {
@@ -521,7 +514,11 @@ impl RocksDbStore {
     }
 }
 
-impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStore {
+impl WithError for RocksDbStore {
+    type Error = RocksDbStoreError;
+}
+
+impl ReadableKeyValueStore for RocksDbStore {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -564,7 +561,7 @@ impl ReadableKeyValueStore<RocksDbStoreError> for RocksDbStore {
     }
 }
 
-impl WritableKeyValueStore<RocksDbStoreError> for RocksDbStore {
+impl WritableKeyValueStore for RocksDbStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), RocksDbStoreError> {
@@ -577,7 +574,6 @@ impl WritableKeyValueStore<RocksDbStoreError> for RocksDbStore {
 }
 
 impl AdminKeyValueStore for RocksDbStore {
-    type Error = RocksDbStoreError;
     type Config = RocksDbStoreConfig;
 
     async fn connect(
@@ -615,10 +611,6 @@ impl AdminKeyValueStore for RocksDbStore {
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), RocksDbStoreError> {
         RocksDbStoreInternal::delete(config, namespace).await
     }
-}
-
-impl KeyValueStore for RocksDbStore {
-    type Error = RocksDbStoreError;
 }
 
 impl<E: Clone + Send + Sync> RocksDbContext<E> {

@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        AdminKeyValueStore, KeyIterable, KeyValueIterable, KeyValueStore, ReadableKeyValueStore,
+        KeyIterable, KeyValueIterable, ReadableKeyValueStore, RestrictedKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
@@ -47,9 +47,16 @@ pub struct ValueSplittingStore<K> {
     pub store: K,
 }
 
-impl<K> ReadableKeyValueStore<K::Error> for ValueSplittingStore<K>
+impl<K> WithError for ValueSplittingStore<K>
 where
-    K: KeyValueStore + Send + Sync,
+    K: WithError,
+{
+    type Error = K::Error;
+}
+
+impl<K> ReadableKeyValueStore for ValueSplittingStore<K>
+where
+    K: RestrictedKeyValueStore + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE - 4;
@@ -60,7 +67,7 @@ where
         self.store.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, K::Error> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let mut big_key = key.to_vec();
         big_key.extend(&[0, 0, 0, 0]);
         let value = self.store.read_value_bytes(&big_key).await?;
@@ -91,13 +98,13 @@ where
         Ok(Some(big_value))
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, K::Error> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
         let mut big_key = key.to_vec();
         big_key.extend(&[0, 0, 0, 0]);
         self.store.contains_key(&big_key).await
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, K::Error> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
         let big_keys = keys
             .into_iter()
             .map(|key| {
@@ -112,7 +119,7 @@ where
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, K::Error> {
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         let mut big_keys = Vec::new();
         for key in &keys {
             let mut big_key = key.clone();
@@ -162,7 +169,7 @@ where
         Ok(big_values)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, K::Error> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
         let mut keys = Vec::new();
         for big_key in self.store.find_keys_by_prefix(key_prefix).await?.iterator() {
             let big_key = big_key?;
@@ -178,7 +185,7 @@ where
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, K::Error> {
+    ) -> Result<Self::KeyValues, Self::Error> {
         let small_key_values = self.store.find_key_values_by_prefix(key_prefix).await?;
         let mut small_kv_iterator = small_key_values.into_iterator_owned();
         let mut key_values = Vec::new();
@@ -209,14 +216,14 @@ where
     }
 }
 
-impl<K> WritableKeyValueStore<K::Error> for ValueSplittingStore<K>
+impl<K> WritableKeyValueStore for ValueSplittingStore<K>
 where
-    K: KeyValueStore + Send + Sync,
+    K: RestrictedKeyValueStore + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), K::Error> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
         let mut batch_new = Batch::new();
         for operation in batch.operations {
             match operation {
@@ -249,64 +256,14 @@ where
         self.store.write_batch(batch_new).await
     }
 
-    async fn clear_journal(&self) -> Result<(), K::Error> {
+    async fn clear_journal(&self) -> Result<(), Self::Error> {
         self.store.clear_journal().await
     }
 }
 
-impl<K> AdminKeyValueStore for ValueSplittingStore<K>
-where
-    K: AdminKeyValueStore + Send + Sync,
-{
-    type Error = K::Error;
-    type Config = K::Config;
-
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, Self::Error> {
-        let store = K::connect(config, namespace, root_key).await?;
-        Ok(Self { store })
-    }
-
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let store = self.store.clone_with_root_key(root_key)?;
-        Ok(Self { store })
-    }
-
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
-        K::list_all(config).await
-    }
-
-    async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
-        K::delete_all(config).await
-    }
-
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
-        K::exists(config, namespace).await
-    }
-
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        K::create(config, namespace).await
-    }
-
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        K::delete(config, namespace).await
-    }
-}
-
-impl<K> KeyValueStore for ValueSplittingStore<K>
-where
-    K: KeyValueStore + Send + Sync,
-    K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
-{
-    type Error = K::Error;
-}
-
 impl<K> ValueSplittingStore<K>
 where
-    K: KeyValueStore + Send + Sync,
+    K: RestrictedKeyValueStore + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
     /// Creates a new store that deals with big values from one that does not.
@@ -366,7 +323,12 @@ impl Default for LimitedTestMemoryStore {
 }
 
 #[cfg(with_testing)]
-impl ReadableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
+impl WithError for LimitedTestMemoryStore {
+    type Error = MemoryStoreError;
+}
+
+#[cfg(with_testing)]
+impl ReadableKeyValueStore for LimitedTestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -407,7 +369,7 @@ impl ReadableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
 }
 
 #[cfg(with_testing)]
-impl WritableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
+impl WritableKeyValueStore for LimitedTestMemoryStore {
     // We set up the MAX_VALUE_SIZE to the artificially low value of 100
     // purely for testing purposes.
     const MAX_VALUE_SIZE: usize = 100;
@@ -423,11 +385,6 @@ impl WritableKeyValueStore<MemoryStoreError> for LimitedTestMemoryStore {
     async fn clear_journal(&self) -> Result<(), MemoryStoreError> {
         self.store.clear_journal().await
     }
-}
-
-#[cfg(with_testing)]
-impl KeyValueStore for LimitedTestMemoryStore {
-    type Error = MemoryStoreError;
 }
 
 #[cfg(with_testing)]

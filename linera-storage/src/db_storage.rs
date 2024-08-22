@@ -22,7 +22,7 @@ use linera_execution::{
 };
 use linera_views::{
     batch::Batch,
-    common::{from_bytes_option, AdminKeyValueStore, ContextFromStore, KeyValueStore},
+    common::{from_bytes_option, ContextFromStore, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
@@ -215,14 +215,9 @@ pub struct DbStorageInner<Client> {
 
 impl<Client> DbStorageInner<Client>
 where
-    Client: KeyValueStore
-        + AdminKeyValueStore<Error = <Client as KeyValueStore>::Error>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
-    ViewError: From<<Client as KeyValueStore>::Error>,
-    <Client as KeyValueStore>::Error:
+    Client: KeyValueStore + Clone + Send + Sync + 'static,
+    ViewError: From<Client::Error>,
+    Client::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     pub(crate) fn new(client: Client, wasm_runtime: Option<WasmRuntime>) -> Self {
@@ -240,7 +235,7 @@ where
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, <Client as KeyValueStore>::Error> {
+    ) -> Result<Self, Client::Error> {
         let client = Client::recreate_and_connect(&store_config, namespace, root_key).await?;
         let storage = Self::new(client, wasm_runtime);
         Ok(storage)
@@ -251,7 +246,7 @@ where
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, <Client as KeyValueStore>::Error> {
+    ) -> Result<Self, Client::Error> {
         let store = Client::maybe_create_and_connect(&store_config, namespace, root_key).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok(storage)
@@ -262,7 +257,7 @@ where
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, <Client as KeyValueStore>::Error> {
+    ) -> Result<Self, Client::Error> {
         let client = Client::connect(&store_config, namespace, root_key).await?;
         let storage = Self::new(client, wasm_runtime);
         Ok(storage)
@@ -409,19 +404,14 @@ impl TestClock {
 #[async_trait]
 impl<Client, C> Storage for DbStorage<Client, C>
 where
-    Client: AdminKeyValueStore<Error = <Client as KeyValueStore>::Error>
-        + KeyValueStore
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    Client: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
-    ViewError: From<<Client as KeyValueStore>::Error>,
-    <Client as KeyValueStore>::Error:
+    ViewError: From<Client::Error>,
+    Client::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     type Context = ContextFromStore<ChainRuntimeContext<Self>, Client>;
-    type StoreError = <Client as KeyValueStore>::Error;
+    type StoreError = Client::Error;
 
     fn clock(&self) -> &dyn Clock {
         &self.clock
@@ -735,8 +725,8 @@ impl<Client, C> DbStorage<Client, C>
 where
     Client: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock,
-    ViewError: From<<Client as KeyValueStore>::Error>,
-    <Client as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
+    ViewError: From<Client::Error>,
+    Client::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
     fn add_hashed_cert_value_to_batch(
         value: &HashedCertificateValue,
@@ -799,14 +789,9 @@ where
 
 impl<Client> DbStorage<Client, WallClock>
 where
-    Client: KeyValueStore
-        + AdminKeyValueStore<Error = <Client as KeyValueStore>::Error>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
-    ViewError: From<<Client as KeyValueStore>::Error>,
-    <Client as KeyValueStore>::Error:
+    Client: KeyValueStore + Clone + Send + Sync + 'static,
+    ViewError: From<Client::Error>,
+    Client::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     pub async fn initialize(
@@ -814,7 +799,7 @@ where
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, <Client as KeyValueStore>::Error> {
+    ) -> Result<Self, Client::Error> {
         let storage =
             DbStorageInner::<Client>::initialize(store_config, namespace, root_key, wasm_runtime)
                 .await?;
@@ -826,7 +811,7 @@ where
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, <Client as KeyValueStore>::Error> {
+    ) -> Result<Self, Client::Error> {
         let storage =
             DbStorageInner::<Client>::make(store_config, namespace, root_key, wasm_runtime).await?;
         Ok(Self::create(storage, WallClock))

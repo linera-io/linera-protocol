@@ -344,38 +344,50 @@ pub trait KeyValueIterable<Error> {
     fn into_iterator_owned(self) -> Self::IteratorOwned;
 }
 
+/// The error type for the Key Value Stores
+pub trait WithError {
+    /// The error type.
+    type Error: Debug + From<bcs::Error>;
+}
+
 /// Low-level, asynchronous read key-value operations. Useful for storage APIs not based on views.
 #[trait_variant::make(ReadableKeyValueStore: Send)]
-pub trait LocalReadableKeyValueStore<E> {
+pub trait LocalReadableKeyValueStore: WithError {
     /// The maximal size of keys that can be stored.
     const MAX_KEY_SIZE: usize;
 
     /// Returns type for key search operations.
-    type Keys: KeyIterable<E>;
+    type Keys: KeyIterable<Self::Error>;
 
     /// Returns type for key-value search operations.
-    type KeyValues: KeyValueIterable<E>;
+    type KeyValues: KeyValueIterable<Self::Error>;
 
     /// Retrieve the number of stream queries.
     fn max_stream_queries(&self) -> usize;
 
     /// Retrieves a `Vec<u8>` from the database using the provided `key`.
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, E>;
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Tests whether a key exists in the database
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, E>;
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
 
     /// Tests whether a list of keys exist in the database
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, E>;
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
-    async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, E>;
+    async fn read_multi_values_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
 
     /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, E>;
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
 
     /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
-    async fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::KeyValues, E>;
+    async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValues, Self::Error>;
 
     // We can't use `async fn` here in the below implementations due to
     // https://github.com/rust-lang/impl-trait-utils/issues/17, but once that bug is fixed
@@ -385,10 +397,9 @@ pub trait LocalReadableKeyValueStore<E> {
     fn read_value<V: DeserializeOwned>(
         &self,
         key: &[u8],
-    ) -> impl Future<Output = Result<Option<V>, E>>
+    ) -> impl Future<Output = Result<Option<V>, Self::Error>>
     where
         Self: Sync,
-        E: From<bcs::Error>,
     {
         async { from_bytes_option(&self.read_value_bytes(key).await?) }
     }
@@ -397,10 +408,9 @@ pub trait LocalReadableKeyValueStore<E> {
     fn read_multi_values<V: DeserializeOwned + Send>(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> impl Future<Output = Result<Vec<Option<V>>, E>>
+    ) -> impl Future<Output = Result<Vec<Option<V>>, Self::Error>>
     where
         Self: Sync,
-        E: From<bcs::Error>,
     {
         async {
             let mut values = Vec::with_capacity(keys.len());
@@ -414,32 +424,23 @@ pub trait LocalReadableKeyValueStore<E> {
 
 /// Low-level, asynchronous write key-value operations. Useful for storage APIs not based on views.
 #[trait_variant::make(WritableKeyValueStore: Send)]
-pub trait LocalWritableKeyValueStore<E> {
+pub trait LocalWritableKeyValueStore: WithError {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
     /// Writes the `batch` in the database.
-    async fn write_batch(&self, batch: Batch) -> Result<(), E>;
+    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 
     /// Clears any journal entry that may remain.
     /// The journal is located at the `root_key`.
-    async fn clear_journal(&self) -> Result<(), E>;
-}
-
-/// Config types need to be able to return their cache size
-pub trait CacheSize {
-    /// Get the cache size of the `Config` entry.
-    fn cache_size(&self) -> usize;
+    async fn clear_journal(&self) -> Result<(), Self::Error>;
 }
 
 /// Low-level trait for the administration of stores and their namespaces.
 #[trait_variant::make(AdminKeyValueStore: Send)]
-pub trait LocalAdminKeyValueStore: Sized {
-    /// The error type returned by the store's methods.
-    type Error;
-
+pub trait LocalAdminKeyValueStore: WithError + Sized {
     /// The configuration needed to interact with a new store.
-    type Config: Send + Sync + CacheSize;
+    type Config: Send + Sync;
 
     /// Connects to an existing namespace using the given configuration.
     async fn connect(
@@ -505,23 +506,41 @@ pub trait LocalAdminKeyValueStore: Sized {
 }
 
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
-pub trait KeyValueStore:
-    ReadableKeyValueStore<Self::Error> + WritableKeyValueStore<Self::Error>
+pub trait RestrictedKeyValueStore: ReadableKeyValueStore + WritableKeyValueStore {}
+
+impl<T> RestrictedKeyValueStore for T where T: ReadableKeyValueStore + WritableKeyValueStore {}
+
+/// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
+pub trait LocalRestrictedKeyValueStore:
+    LocalReadableKeyValueStore + LocalWritableKeyValueStore
 {
-    /// The error type.
-    type Error: Debug;
+}
+
+impl<T> LocalRestrictedKeyValueStore for T where
+    T: LocalReadableKeyValueStore + LocalWritableKeyValueStore
+{
+}
+
+/// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
+pub trait KeyValueStore:
+    ReadableKeyValueStore + WritableKeyValueStore + AdminKeyValueStore
+{
+}
+
+impl<T> KeyValueStore for T where
+    T: ReadableKeyValueStore + WritableKeyValueStore + AdminKeyValueStore
+{
 }
 
 /// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
 pub trait LocalKeyValueStore:
-    LocalReadableKeyValueStore<Self::Error> + LocalWritableKeyValueStore<Self::Error>
+    LocalReadableKeyValueStore + LocalWritableKeyValueStore + LocalAdminKeyValueStore
 {
-    /// The error type.
-    type Error: Debug;
 }
 
-impl<S: KeyValueStore> LocalKeyValueStore for S {
-    type Error = <Self as KeyValueStore>::Error;
+impl<T> LocalKeyValueStore for T where
+    T: LocalReadableKeyValueStore + LocalWritableKeyValueStore + LocalAdminKeyValueStore
+{
 }
 
 #[doc(hidden)]
@@ -761,7 +780,7 @@ pub struct ContextFromStore<E, S> {
 impl<E, S> ContextFromStore<E, S>
 where
     E: Clone + Send + Sync,
-    S: KeyValueStore + Clone + Send + Sync,
+    S: RestrictedKeyValueStore + Clone + Send + Sync,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<S::Error>,
 {
@@ -809,7 +828,7 @@ where
 impl<E, S> Context for ContextFromStore<E, S>
 where
     E: Clone + Send + Sync,
-    S: KeyValueStore + Clone + Send + Sync,
+    S: RestrictedKeyValueStore + Clone + Send + Sync,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<S::Error>,
 {

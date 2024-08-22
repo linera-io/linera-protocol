@@ -10,9 +10,8 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound_option, CacheSize, CommonStoreConfig, ContextFromStore,
-        LocalAdminKeyValueStore, LocalKeyValueStore, LocalReadableKeyValueStore,
-        LocalWritableKeyValueStore,
+        get_upper_bound_option, CommonStoreConfig, ContextFromStore, LocalAdminKeyValueStore,
+        LocalReadableKeyValueStore, LocalWritableKeyValueStore, WithError,
     },
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
@@ -23,12 +22,6 @@ use crate::{
 pub struct IndexedDbStoreConfig {
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
-}
-
-impl CacheSize for IndexedDbStoreConfig {
-    fn cache_size(&self) -> usize {
-        self.common_config.cache_size
-    }
 }
 
 impl IndexedDbStoreConfig {
@@ -94,7 +87,11 @@ fn prefix_to_range(prefix: &[u8]) -> Result<web_sys::IdbKeyRange, wasm_bindgen::
     }
 }
 
-impl LocalReadableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
+impl WithError for IndexedDbStore {
+    type Error = IndexedDbStoreError;
+}
+
+impl LocalReadableKeyValueStore for IndexedDbStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -185,7 +182,7 @@ impl LocalReadableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
     }
 }
 
-impl LocalWritableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
+impl LocalWritableKeyValueStore for IndexedDbStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), IndexedDbStoreError> {
@@ -229,7 +226,6 @@ impl LocalWritableKeyValueStore<IndexedDbStoreError> for IndexedDbStore {
 }
 
 impl LocalAdminKeyValueStore for IndexedDbStore {
-    type Error = IndexedDbStoreError;
     type Config = IndexedDbStoreConfig;
 
     async fn connect(
@@ -308,10 +304,6 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
             .database
             .delete_object_store(namespace)?)
     }
-}
-
-impl LocalKeyValueStore for IndexedDbStore {
-    type Error = IndexedDbStoreError;
 }
 
 /// An implementation of [`crate::common::Context`] that stores all values in an IndexedDB

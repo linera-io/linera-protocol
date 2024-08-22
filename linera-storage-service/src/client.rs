@@ -12,7 +12,7 @@ use linera_views::test_utils::generate_test_namespace;
 use linera_views::{
     batch::{Batch, WriteOperation},
     common::{
-        AdminKeyValueStore, CommonStoreConfig, KeyValueStore, ReadableKeyValueStore,
+        AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
@@ -63,7 +63,11 @@ pub struct ServiceStoreClientInternal {
     root_key: Vec<u8>,
 }
 
-impl ReadableKeyValueStore<ServiceStoreError> for ServiceStoreClientInternal {
+impl WithError for ServiceStoreClientInternal {
+    type Error = ServiceStoreError;
+}
+
+impl ReadableKeyValueStore for ServiceStoreClientInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -227,7 +231,7 @@ impl ReadableKeyValueStore<ServiceStoreError> for ServiceStoreClientInternal {
     }
 }
 
-impl WritableKeyValueStore<ServiceStoreError> for ServiceStoreClientInternal {
+impl WritableKeyValueStore for ServiceStoreClientInternal {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ServiceStoreError> {
@@ -291,10 +295,6 @@ impl WritableKeyValueStore<ServiceStoreError> for ServiceStoreClientInternal {
     async fn clear_journal(&self) -> Result<(), ServiceStoreError> {
         Ok(())
     }
-}
-
-impl KeyValueStore for ServiceStoreClientInternal {
-    type Error = ServiceStoreError;
 }
 
 impl ServiceStoreClientInternal {
@@ -374,7 +374,6 @@ impl ServiceStoreClientInternal {
 }
 
 impl AdminKeyValueStore for ServiceStoreClientInternal {
-    type Error = ServiceStoreError;
     type Config = ServiceStoreConfig;
 
     async fn connect(
@@ -538,7 +537,11 @@ pub struct ServiceStoreClient {
     store: ServiceStoreClientInternal,
 }
 
-impl ReadableKeyValueStore<ServiceStoreError> for ServiceStoreClient {
+impl WithError for ServiceStoreClient {
+    type Error = ServiceStoreError;
+}
+
+impl ReadableKeyValueStore for ServiceStoreClient {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -581,7 +584,7 @@ impl ReadableKeyValueStore<ServiceStoreError> for ServiceStoreClient {
     }
 }
 
-impl WritableKeyValueStore<ServiceStoreError> for ServiceStoreClient {
+impl WritableKeyValueStore for ServiceStoreClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ServiceStoreError> {
@@ -593,12 +596,7 @@ impl WritableKeyValueStore<ServiceStoreError> for ServiceStoreClient {
     }
 }
 
-impl KeyValueStore for ServiceStoreClient {
-    type Error = ServiceStoreError;
-}
-
 impl AdminKeyValueStore for ServiceStoreClient {
-    type Error = ServiceStoreError;
     type Config = ServiceStoreConfig;
 
     async fn connect(

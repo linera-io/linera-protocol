@@ -42,13 +42,10 @@ use crate::metering::{MeteredStore, LRU_CACHING_METRICS, SCYLLA_DB_METRICS};
 use crate::{
     batch::{Batch, UnorderedBatch},
     common::{
-        get_upper_bound_option, AdminKeyValueStore, CacheSize, CommonStoreConfig, ContextFromStore,
-        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
+        get_upper_bound_option, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
-    journaling::{
-        DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
-        JournalingKeyValueStore,
-    },
+    journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::LruCachingStore,
     value_splitting::DatabaseConsistencyError,
 };
@@ -454,7 +451,11 @@ impl From<ScyllaDbStoreError> for crate::views::ViewError {
     }
 }
 
-impl ReadableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStoreInternal {
+impl WithError for ScyllaDbStoreInternal {
+    type Error = ScyllaDbStoreError;
+}
+
+impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -538,7 +539,7 @@ impl ReadableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStoreInternal {
 }
 
 #[async_trait]
-impl DirectWritableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStoreInternal {
+impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     // The constant 14000 is an empirical constant that was found to be necessary
     // to make the ScyllaDb system work. We have not been able to find this or
     // a similar constant in the source code or the documentation.
@@ -571,7 +572,6 @@ fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
 }
 
 impl AdminKeyValueStore for ScyllaDbStoreInternal {
-    type Error = ScyllaDbStoreError;
     type Config = ScyllaDbStoreConfig;
 
     async fn connect(
@@ -760,10 +760,6 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
     }
 }
 
-impl DirectKeyValueStore for ScyllaDbStoreInternal {
-    type Error = ScyllaDbStoreError;
-}
-
 impl ScyllaDbStoreInternal {
     /// Obtains the semaphore lock on the database if needed.
     async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
@@ -805,19 +801,16 @@ pub struct ScyllaDbStoreConfig {
     pub common_config: CommonStoreConfig,
 }
 
-impl CacheSize for ScyllaDbStoreConfig {
-    fn cache_size(&self) -> usize {
-        self.common_config.cache_size
-    }
+impl WithError for ScyllaDbStore {
+    type Error = ScyllaDbStoreError;
 }
 
-impl ReadableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStore {
+impl ReadableKeyValueStore for ScyllaDbStore {
     const MAX_KEY_SIZE: usize = ScyllaDbStoreInternal::MAX_KEY_SIZE;
 
-    type Keys = <ScyllaDbStoreInternal as ReadableKeyValueStore<ScyllaDbStoreError>>::Keys;
+    type Keys = <ScyllaDbStoreInternal as ReadableKeyValueStore>::Keys;
 
-    type KeyValues =
-        <ScyllaDbStoreInternal as ReadableKeyValueStore<ScyllaDbStoreError>>::KeyValues;
+    type KeyValues = <ScyllaDbStoreInternal as ReadableKeyValueStore>::KeyValues;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -860,7 +853,7 @@ impl ReadableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStore {
     }
 }
 
-impl WritableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStore {
+impl WritableKeyValueStore for ScyllaDbStore {
     const MAX_VALUE_SIZE: usize = ScyllaDbStoreInternal::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ScyllaDbStoreError> {
@@ -873,7 +866,6 @@ impl WritableKeyValueStore<ScyllaDbStoreError> for ScyllaDbStore {
 }
 
 impl AdminKeyValueStore for ScyllaDbStore {
-    type Error = ScyllaDbStoreError;
     type Config = ScyllaDbStoreConfig;
 
     async fn connect(
@@ -911,10 +903,6 @@ impl AdminKeyValueStore for ScyllaDbStore {
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbStoreError> {
         ScyllaDbStoreInternal::delete(config, namespace).await
     }
-}
-
-impl KeyValueStore for ScyllaDbStore {
-    type Error = ScyllaDbStoreError;
 }
 
 impl ScyllaDbStore {

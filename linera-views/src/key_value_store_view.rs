@@ -41,9 +41,7 @@ static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new
 
 #[cfg(with_testing)]
 use {
-    crate::common::{
-        ContextFromStore, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
-    },
+    crate::common::{ContextFromStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
     crate::memory::{create_test_memory_context, MemoryContext},
     async_lock::RwLock,
     std::sync::Arc,
@@ -1081,7 +1079,12 @@ pub struct ViewContainer<C> {
 }
 
 #[cfg(with_testing)]
-impl<C> ReadableKeyValueStore<ViewError> for ViewContainer<C>
+impl<C> WithError for ViewContainer<C> {
+    type Error = ViewError;
+}
+
+#[cfg(with_testing)]
+impl<C> ReadableKeyValueStore for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
@@ -1132,7 +1135,7 @@ where
 }
 
 #[cfg(with_testing)]
-impl<C> WritableKeyValueStore<ViewError> for ViewContainer<C>
+impl<C> WritableKeyValueStore for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
@@ -1151,15 +1154,6 @@ where
     async fn clear_journal(&self) -> Result<(), ViewError> {
         Ok(())
     }
-}
-
-#[cfg(with_testing)]
-impl<C> KeyValueStore for ViewContainer<C>
-where
-    C: Context + Sync + Send + Clone,
-    ViewError: From<C::Error>,
-{
-    type Error = ViewError;
 }
 
 #[cfg(with_testing)]
