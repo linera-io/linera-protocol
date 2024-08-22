@@ -97,7 +97,7 @@ struct JournalHeader {
     block_count: u32,
 }
 
-/// A journaling [`KeyValueStore`] built from an inner [`DirectKeyValueStore`].
+/// A journaling Key Value Store built from an inner [`DirectKeyValueStore`].
 #[derive(Clone)]
 pub struct JournalingKeyValueStore<K> {
     /// The inner store.
