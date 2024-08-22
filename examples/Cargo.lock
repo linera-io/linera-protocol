@@ -3379,7 +3379,6 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "tempfile",
  "test-log",
  "test-strategy",
  "thiserror",
@@ -3502,7 +3501,6 @@ dependencies = [
  "linera-views",
  "prometheus",
  "serde",
- "tempfile",
  "tokio",
 ]
 
