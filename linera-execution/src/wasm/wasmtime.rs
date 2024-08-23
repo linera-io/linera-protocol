@@ -55,8 +55,7 @@ where
     initial_fuel: u64,
 }
 
-// TODO(#1785): Simplify by using proper fuel getter and setter methods from Wasmtime once the
-// dependency is updated
+// TODO(#1967): Remove once fuel consumption is instrumented in the bytecode
 impl<Runtime> WasmtimeContractInstance<Runtime>
 where
     Runtime: ContractRuntime,
