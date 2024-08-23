@@ -3,7 +3,7 @@
 
 //! Code specific to the usage of the [Wasmtime](https://wasmtime.dev/) runtime.
 
-use std::{error::Error, sync::LazyLock};
+use std::sync::LazyLock;
 
 use linera_base::data_types::Bytecode;
 use linera_witty::{wasmtime::EntrypointInstance, ExportTo, Instance};
@@ -227,18 +227,5 @@ where
         Ok(ServiceEntrypoints::new(&mut self.instance)
             .handle_query(argument)
             .map_err(WasmExecutionError::from)?)
-    }
-}
-
-impl From<ExecutionError> for wasmtime::Trap {
-    fn from(error: ExecutionError) -> Self {
-        let boxed_error: Box<dyn Error + Send + Sync + 'static> = Box::new(error);
-        wasmtime::Trap::from(boxed_error)
-    }
-}
-
-impl From<wasmtime::Trap> for ExecutionError {
-    fn from(trap: wasmtime::Trap) -> Self {
-        ExecutionError::WasmError(WasmExecutionError::ExecuteModuleInWasmtime(trap))
     }
 }
