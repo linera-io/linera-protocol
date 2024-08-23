@@ -601,7 +601,12 @@ where
             }
         }
         // Remember the certificate for future validator/client synchronizations.
-        self.received_log.push(chain_and_height);
+        let log_count = self.received_log.count();
+        if log_count == 0
+            || self.received_log.get(log_count - 1).await?.as_ref() != Some(&chain_and_height)
+        {
+            self.received_log.push(chain_and_height);
+        }
         Ok(())
     }
 
