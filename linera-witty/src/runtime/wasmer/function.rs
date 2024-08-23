@@ -78,5 +78,6 @@ repeat_macro!(impl_instance_with_function =>
     m: M,
     n: N,
     o: O,
-    p: P
+    p: P,
+    q: Q
 );

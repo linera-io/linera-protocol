@@ -67,10 +67,11 @@ repeat_macro!(parameters =>
     m: M,
     n: N,
     o: O,
-    p: P
+    p: P,
+    q: Q
 );
 
-impl<A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, Rest> WasmtimeParameters for HList![A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, ...Rest]
+impl<A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, Rest> WasmtimeParameters for HList![A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, ...Rest]
 where
     A: FlatType,
     B: FlatType,
@@ -89,6 +90,7 @@ where
     O: FlatType,
     P: FlatType,
     Q: FlatType,
+    R: FlatType,
     Rest: Layout,
 {
     type Parameters = (i32,);
