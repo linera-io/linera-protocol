@@ -350,8 +350,9 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     ) -> Result<Self, RocksDbStoreError> {
         Self::check_namespace(namespace)?;
         let mut path_buf = config.path_dir.path_buf.clone();
-        let path_dir = config.path_dir.clone();
+        let mut path_dir = config.path_dir.clone();
         path_buf.push(namespace);
+        path_dir.path_buf = path_buf;
         let max_stream_queries = config.common_config.max_stream_queries;
         let cache_size = config.common_config.cache_size;
         RocksDbStoreInternal::connect_from_path(
