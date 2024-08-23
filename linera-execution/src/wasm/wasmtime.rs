@@ -69,22 +69,8 @@ where
         self.initial_fuel = fuel;
 
         context
-            .add_fuel(1)
+            .set_fuel(fuel)
             .expect("Fuel consumption should be enabled");
-
-        let existing_fuel = context
-            .consume_fuel(0)
-            .expect("Fuel consumption should be enabled");
-
-        if existing_fuel > fuel {
-            context
-                .consume_fuel(existing_fuel - fuel)
-                .expect("Existing fuel was incorrectly calculated");
-        } else {
-            context
-                .add_fuel(fuel - existing_fuel)
-                .expect("Fuel consumption wasn't properly enabled");
-        }
 
         Ok(())
     }
@@ -93,7 +79,7 @@ where
         let remaining_fuel = self
             .instance
             .as_context_mut()
-            .consume_fuel(0)
+            .get_fuel()
             .expect("Failed to read remaining fuel");
         let runtime = &mut self.instance.user_data_mut().runtime_mut();
 
