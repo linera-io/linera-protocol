@@ -6,6 +6,7 @@
 use std::{
     fmt::{self, Debug, Display},
     hash::{Hash, Hasher},
+    marker::PhantomData,
     str::FromStr,
 };
 
@@ -330,7 +331,7 @@ pub struct BytecodeId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     /// The message ID that published the bytecode.
     pub message_id: MessageId,
     #[witty(skip)]
-    _phantom: std::marker::PhantomData<(Abi, Parameters, InstantiationArgument)>,
+    _phantom: PhantomData<(Abi, Parameters, InstantiationArgument)>,
 }
 
 /// The name of a subscription channel.
@@ -579,13 +580,13 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
                 bcs::from_bytes(&message_id_bytes).map_err(serde::de::Error::custom)?;
             Ok(BytecodeId {
                 message_id,
-                _phantom: std::marker::PhantomData,
+                _phantom: PhantomData,
             })
         } else {
             let value = SerializableBytecodeId::deserialize(deserializer)?;
             Ok(BytecodeId {
                 message_id: value.message_id,
-                _phantom: std::marker::PhantomData,
+                _phantom: PhantomData,
             })
         }
     }
@@ -596,7 +597,7 @@ impl BytecodeId {
     pub fn new(message_id: MessageId) -> Self {
         BytecodeId {
             message_id,
-            _phantom: std::marker::PhantomData,
+            _phantom: PhantomData,
         }
     }
 
@@ -606,7 +607,7 @@ impl BytecodeId {
     ) -> BytecodeId<Abi, Parameters, InstantiationArgument> {
         BytecodeId {
             message_id: self.message_id,
-            _phantom: std::marker::PhantomData,
+            _phantom: PhantomData,
         }
     }
 }
@@ -616,7 +617,7 @@ impl<Abi, Parameters, InstantiationArgument> BytecodeId<Abi, Parameters, Instant
     pub fn forget_abi(self) -> BytecodeId {
         BytecodeId {
             message_id: self.message_id,
-            _phantom: std::marker::PhantomData,
+            _phantom: PhantomData,
         }
     }
 
@@ -624,7 +625,7 @@ impl<Abi, Parameters, InstantiationArgument> BytecodeId<Abi, Parameters, Instant
     pub fn just_abi(self) -> BytecodeId<Abi> {
         BytecodeId {
             message_id: self.message_id,
-            _phantom: std::marker::PhantomData,
+            _phantom: PhantomData,
         }
     }
 }
@@ -776,7 +777,7 @@ impl<A> ApplicationId<A> {
 }
 
 impl Display for Owner {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.0, f)
     }
 }
@@ -901,7 +902,7 @@ impl TryFrom<&[u8]> for ChainId {
 }
 
 impl fmt::Debug for ChainId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
     }
 }

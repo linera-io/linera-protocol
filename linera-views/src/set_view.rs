@@ -34,7 +34,7 @@ static SET_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
     .expect("Histogram can be created")
 });
 
-/// A view that supports inserting and removing values indexed by a key.
+/// A [`View`] that supports inserting and removing values indexed by a key.
 #[derive(Debug)]
 pub struct ByteSetView<C> {
     context: C,
@@ -356,7 +356,7 @@ where
     }
 }
 
-/// A ['View'] implementing the set functionality with the index I being a non-trivial type.
+/// A [`View`] implementing the set functionality with the index `I` being any serializable type.
 #[derive(Debug)]
 pub struct SetView<C, I> {
     set: ByteSetView<C>,
@@ -619,7 +619,8 @@ where
     }
 }
 
-/// A ['View'] implementing the set functionality with the index I being a non-trivial type.
+/// A [`View`] implementing the set functionality with the index `I` being a type with a custom
+/// serialization format.
 #[derive(Debug)]
 pub struct CustomSetView<C, I> {
     set: ByteSetView<C>,

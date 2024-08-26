@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
@@ -366,8 +366,8 @@ impl StorageConfigNamespace {
     }
 }
 
-impl std::fmt::Display for StorageConfigNamespace {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for StorageConfigNamespace {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let namespace = &self.namespace;
         match &self.storage_config {
             #[cfg(feature = "storage-service")]

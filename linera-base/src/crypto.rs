@@ -4,7 +4,7 @@
 
 //! Define the cryptographic primitives used by the Linera protocol.
 
-use std::{borrow::Cow, num::ParseIntError, str::FromStr};
+use std::{borrow::Cow, fmt, io, num::ParseIntError, str::FromStr};
 
 use ed25519_dalek::{self as dalek, Signer, Verifier};
 use generic_array::typenum::Unsigned;
@@ -321,40 +321,40 @@ impl From<CryptoHash> for [u64; 4] {
     }
 }
 
-impl std::fmt::Display for Signature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+impl fmt::Display for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = hex::encode(self.0.to_bytes());
         write!(f, "{}", s)
     }
 }
 
-impl std::fmt::Display for PublicKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(&self.0[..]))
     }
 }
 
-impl std::fmt::Display for CryptoHash {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for CryptoHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let prec = f.precision().unwrap_or(self.0.len() * 2);
         hex::encode(&self.0[..((prec + 1) / 2)]).fmt(f)
     }
 }
 
-impl std::fmt::Debug for Signature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+impl fmt::Debug for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(&self.0.to_bytes()[0..8]))
     }
 }
 
-impl std::fmt::Debug for PublicKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+impl fmt::Debug for PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(&self.0[..8]))
     }
 }
 
-impl std::fmt::Debug for CryptoHash {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+impl fmt::Debug for CryptoHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(&self.0[..8]))
     }
 }
@@ -386,7 +386,7 @@ impl<T: BcsSignable> BcsHashable for T {}
 impl<T, Hasher> Hashable<Hasher> for T
 where
     T: BcsHashable,
-    Hasher: std::io::Write,
+    Hasher: io::Write,
 {
     fn write(&self, hasher: &mut Hasher) {
         let name = <Self as HasTypeName>::type_name();
@@ -398,7 +398,7 @@ where
 
 impl<Hasher> Hashable<Hasher> for [u8]
 where
-    Hasher: std::io::Write,
+    Hasher: io::Write,
 {
     fn write(&self, hasher: &mut Hasher) {
         hasher.write_all(self).expect("Hasher should not fail");
@@ -461,7 +461,7 @@ impl Signature {
     /// Checks a signature.
     pub fn check<T>(&self, value: &T, author: PublicKey) -> Result<(), CryptoError>
     where
-        T: BcsSignable + std::fmt::Debug,
+        T: BcsSignable + fmt::Debug,
     {
         self.check_internal(value, author)
             .map_err(|error| CryptoError::InvalidSignature {
@@ -477,7 +477,7 @@ impl Signature {
         author: &PublicKey,
     ) -> Result<(), CryptoError>
     where
-        T: BcsSignable + std::fmt::Debug,
+        T: BcsSignable + fmt::Debug,
     {
         match signature {
             Some(sig) => sig.check(value, *author),

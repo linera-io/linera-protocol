@@ -195,7 +195,7 @@ impl Project {
         Ok(())
     }
 
-    /// Resolves ['linera-sdk'] and [`linera-views`] dependencies.
+    /// Resolves [`linera_sdk`] and [`linera_views`] dependencies.
     fn linera_sdk_dependencies(linera_root: Option<&Path>) -> (String, String) {
         match linera_root {
             Some(path) => Self::linera_sdk_testing_dependencies(path),
@@ -203,7 +203,7 @@ impl Project {
         }
     }
 
-    /// Resolves ['linera-sdk'] and [`linera-views`] dependencies in testing mode.
+    /// Resolves [`linera_sdk`] and [`linera_views`] dependencies in testing mode.
     fn linera_sdk_testing_dependencies(linera_root: &Path) -> (String, String) {
         // We're putting the Cargo.toml file one level above the current directory.
         let linera_root = PathBuf::from("..").join(linera_root);
@@ -219,7 +219,7 @@ impl Project {
         (linera_sdk_dep, linera_sdk_dev_dep)
     }
 
-    /// Adds ['linera-sdk'] dependencies in production mode.
+    /// Adds [`linera_sdk`] dependencies in production mode.
     fn linera_sdk_production_dependencies() -> (String, String) {
         let version = env!("CARGO_PKG_VERSION");
         let linera_sdk_dep = format!("linera-sdk = \"{}\"", version);
