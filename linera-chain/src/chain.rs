@@ -1139,9 +1139,6 @@ where
             });
         }
 
-        self.process_unsubscribes(raw_outcome.unsubscribe, application_id)
-            .await?;
-
         // Update the (regular) outboxes.
         let outbox_counters = self.outbox_counters.get_mut();
         let targets = recipients
@@ -1156,6 +1153,9 @@ where
         }
 
         // Update the channels.
+        self.process_unsubscribes(raw_outcome.unsubscribe, application_id)
+            .await?;
+
         let full_names = channel_broadcasts
             .into_iter()
             .map(|name| ChannelFullName {
@@ -1179,6 +1179,7 @@ where
         let infos = stream.try_collect::<Vec<_>>().await?;
         let targets = infos.into_iter().flatten().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
+        let outbox_counters = self.outbox_counters.get_mut();
         for mut outbox in outboxes {
             if outbox.schedule_message(height)? {
                 *outbox_counters.entry(height).or_default() += 1;
