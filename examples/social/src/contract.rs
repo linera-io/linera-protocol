@@ -15,8 +15,6 @@ use state::Social;
 
 /// The channel name the application uses for cross-chain messages about new posts.
 const POSTS_CHANNEL_NAME: &[u8] = b"posts";
-/// The number of recent posts sent in each cross-chain message.
-const RECENT_POSTS: usize = 10;
 
 pub struct SocialContract {
     state: Social,
@@ -76,7 +74,7 @@ impl Contract for SocialContract {
                 message_id.chain_id,
                 ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
             ),
-            Message::Posts { count, posts } => self.execute_posts_message(message_id, count, posts),
+            Message::Post { index, post } => self.execute_post_message(message_id, index, post),
             Message::Like { key } => self.execute_like_message(key).await,
             Message::Comment {
                 key,
@@ -98,36 +96,26 @@ impl SocialContract {
         image_url: Option<String>,
     ) -> (Destination, Message) {
         let timestamp = self.runtime.system_time();
-        self.state.own_posts.push(OwnPost {
+        let post = OwnPost {
             timestamp,
             text,
             image_url,
-        });
-        let count = self.state.own_posts.count();
-        let mut posts = vec![];
-        for index in (0..count).rev().take(RECENT_POSTS) {
-            let maybe_post = self
-                .state
-                .own_posts
-                .get(index)
-                .await
-                .expect("Failed to retrieve post from storage");
-            let own_post = maybe_post
-                .expect("post with valid index missing; this is a bug in the social application!");
-            posts.push(own_post);
-        }
-        let count = count as u64;
+        };
+        let index = self.state.own_posts.count() as u64;
+        self.state.own_posts.push(post.clone());
         (
             ChannelName::from(POSTS_CHANNEL_NAME.to_vec()).into(),
-            Message::Posts { count, posts },
+            Message::Post { index, post },
         )
     }
+
     async fn execute_like_operation(&mut self, key: Key) -> (Destination, Message) {
         (
             ChannelName::from(POSTS_CHANNEL_NAME.to_vec()).into(),
             Message::Like { key },
         )
     }
+
     async fn execute_comment_operation(
         &mut self,
         key: Key,
@@ -144,27 +132,26 @@ impl SocialContract {
         )
     }
 
-    fn execute_posts_message(&mut self, message_id: MessageId, count: u64, posts: Vec<OwnPost>) {
-        for (index, post) in (0..count).rev().zip(posts) {
-            let key = Key {
-                timestamp: post.timestamp,
-                author: message_id.chain_id,
-                index,
-            };
-            let new_post = Post {
-                key: key.clone(),
-                text: post.text,
-                image_url: post.image_url,
-                likes: 0,
-                comments: vec![],
-            };
+    fn execute_post_message(&mut self, message_id: MessageId, index: u64, post: OwnPost) {
+        let key = Key {
+            timestamp: post.timestamp,
+            author: message_id.chain_id,
+            index,
+        };
+        let new_post = Post {
+            key: key.clone(),
+            text: post.text,
+            image_url: post.image_url,
+            likes: 0,
+            comments: vec![],
+        };
 
-            self.state
-                .received_posts
-                .insert(&key, new_post)
-                .expect("Failed to insert received post");
-        }
+        self.state
+            .received_posts
+            .insert(&key, new_post)
+            .expect("Failed to insert received post");
     }
+
     async fn execute_like_message(&mut self, key: Key) {
         let mut post = self
             .state
@@ -181,6 +168,7 @@ impl SocialContract {
             .insert(&key, post)
             .expect("Failed to insert received post");
     }
+
     async fn execute_comment_message(&mut self, key: Key, chain_id: ChainId, comment: String) {
         let mut post = self
             .state

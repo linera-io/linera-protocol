@@ -567,7 +567,7 @@ where
         }
         self.process_unsubscribes(unsubscribe_names_and_ids, GenericApplicationId::System)
             .await?;
-        self.process_subscribes(subscribe_names_and_ids, GenericApplicationId::System, true)
+        self.process_subscribes(subscribe_names_and_ids, GenericApplicationId::System)
             .await?;
 
         if bundle.goes_to_inbox() {
@@ -1154,7 +1154,7 @@ where
             }
         }
 
-        self.process_subscribes(raw_outcome.subscribe, application_id, false)
+        self.process_subscribes(raw_outcome.subscribe, application_id)
             .await?;
         Ok(())
     }
@@ -1163,7 +1163,6 @@ where
         &mut self,
         names_and_ids: Vec<(ChannelName, ChainId)>,
         application_id: GenericApplicationId,
-        send_all: bool,
     ) -> Result<(), ChainError> {
         if names_and_ids.is_empty() {
             return Ok(());
@@ -1184,17 +1183,8 @@ where
                     return Ok(None); // Was already a subscriber.
                 }
                 channel.subscribers.insert(&id)?;
-                let heights = if send_all {
-                    // Send all messages.
-                    channel.block_heights.read(..).await?
-                } else {
-                    // Send the latest message if any.
-                    if let Some(last) = channel.block_heights.count().checked_sub(1) {
-                        channel.block_heights.get(last).await?.into_iter().collect()
-                    } else {
-                        vec![]
-                    }
-                };
+                // Send all messages.
+                let heights = channel.block_heights.read(..).await?;
                 if heights.is_empty() {
                     return Ok(None); // No messages on this channel yet.
                 }
