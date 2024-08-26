@@ -92,6 +92,7 @@ where
     /// Whether to block on cross-chain message delivery.
     cross_chain_message_delivery: CrossChainMessageDelivery,
     /// Chains that should be tracked by the client.
+    // TODO(#2412): Merge with set of chains the client is receiving notifications from validators
     tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
     /// References to clients waiting for chain notifications.
     notifier: Arc<Notifier<Notification>>,
