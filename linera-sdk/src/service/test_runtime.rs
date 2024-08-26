@@ -359,25 +359,25 @@ where
             })
     }
 
-    /// Configures the blobs returned when fetching from hashes during the test.
+    /// Configures the `blobs` returned when fetching from hashes during the test.
     pub fn with_blobs(self, blobs: impl IntoIterator<Item = (DataBlobHash, Vec<u8>)>) -> Self {
         *self.blobs.borrow_mut() = Some(blobs.into_iter().collect());
         self
     }
 
-    /// Configures the blobs returned when fetching from hashes during the test.
+    /// Configures the `blobs` returned when fetching from hashes during the test.
     pub fn set_blobs(&self, blobs: impl IntoIterator<Item = (DataBlobHash, Vec<u8>)>) -> &Self {
         *self.blobs.borrow_mut() = Some(blobs.into_iter().collect());
         self
     }
 
-    /// Configures the blob returned when fetching from the given hash during the test.
+    /// Configures the `blob` returned when fetching from the given hash during the test.
     pub fn with_blob(self, hash: impl Into<DataBlobHash>, blob: Vec<u8>) -> Self {
         self.set_blob(hash, blob);
         self
     }
 
-    /// Configures the blob returned when fetching from the hash during the test.
+    /// Configures the `blob` returned when fetching from the hash during the test.
     pub fn set_blob(&self, hash: impl Into<DataBlobHash>, blob: Vec<u8>) -> &Self {
         self.blobs
             .borrow_mut()

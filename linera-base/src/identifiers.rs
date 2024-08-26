@@ -777,7 +777,7 @@ impl<A> ApplicationId<A> {
 }
 
 impl Display for Owner {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.0, f)
     }
 }
@@ -902,7 +902,7 @@ impl TryFrom<&[u8]> for ChainId {
 }
 
 impl fmt::Debug for ChainId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
     }
 }
