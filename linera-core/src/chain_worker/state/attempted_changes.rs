@@ -464,7 +464,7 @@ where
         let chain = &mut self.state.chain;
         if let (Some(epoch), Some(entry)) = (
             chain.execution_state.system.epoch.get(),
-            chain.unskippable.front().await?,
+            chain.unskippable_entries.front().await?,
         ) {
             let ownership = chain.execution_state.system.ownership.get();
             let elapsed = self

@@ -258,7 +258,7 @@ where
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, Origin, InboxStateView<C>>,
     /// A queue of unskippable bundles, with the timestamp when we added them to the inbox.
-    pub unskippable: QueueView<C, TimestampedInboxEntry>,
+    pub unskippable_entries: QueueView<C, TimestampedInboxEntry>,
     /// Non-skippable bundles that have been removed but are still in the queue.
     pub removed_unskippable: SetView<C, InboxEntry>,
     /// Mailboxes used to send messages, indexed by their target.
@@ -569,16 +569,16 @@ where
                 .filter_map(|posted_message| posted_message.message.unsubscribe())
                 .map(|(id, subscription)| (subscription.name.clone(), *id))
                 .collect();
-            self.unsubscribe(names_and_ids, GenericApplicationId::System)
+            self.process_unsubscribes(names_and_ids, GenericApplicationId::System)
                 .await?;
 
             let names_and_ids = bundle
                 .messages
                 .iter()
-                .filter_map(|posted_message| posted_message.message.subscribe())
+                .filter_map(|posted_message| posted_message.message.matches_subscribe())
                 .map(|(id, subscription)| (subscription.name.clone(), *id))
                 .collect();
-            self.subscribe(names_and_ids, GenericApplicationId::System, true)
+            self.process_subscribes(names_and_ids, GenericApplicationId::System, true)
                 .await?;
         } else {
             // Process the inbox bundle and update the inbox state.
@@ -596,7 +596,7 @@ where
                 })?;
             if newly_added && !skippable {
                 let seen = local_time;
-                self.unskippable
+                self.unskippable_entries
                     .push_back(TimestampedInboxEntry { entry, seen });
             }
         }
@@ -672,17 +672,17 @@ where
         }
         if !removed_unskippable.is_empty() {
             // Delete all removed bundles from the front of the unskippable queue.
-            let maybe_front = self.unskippable.front().await?;
+            let maybe_front = self.unskippable_entries.front().await?;
             if maybe_front.is_some_and(|ts_entry| removed_unskippable.remove(&ts_entry.entry)) {
-                self.unskippable.delete_front();
-                while let Some(ts_entry) = self.unskippable.front().await? {
+                self.unskippable_entries.delete_front();
+                while let Some(ts_entry) = self.unskippable_entries.front().await? {
                     if !removed_unskippable.remove(&ts_entry.entry) {
                         if !self.removed_unskippable.contains(&ts_entry.entry).await? {
                             break;
                         }
                         self.removed_unskippable.remove(&ts_entry.entry)?;
                     }
-                    self.unskippable.delete_front();
+                    self.unskippable_entries.delete_front();
                 }
             }
             for entry in removed_unskippable {
@@ -1139,7 +1139,7 @@ where
             });
         }
 
-        self.unsubscribe(raw_outcome.unsubscribe, application_id)
+        self.process_unsubscribes(raw_outcome.unsubscribe, application_id)
             .await?;
 
         // Update the (regular) outboxes.
@@ -1185,12 +1185,12 @@ where
             }
         }
 
-        self.subscribe(raw_outcome.subscribe, application_id, false)
+        self.process_subscribes(raw_outcome.subscribe, application_id, false)
             .await?;
         Ok(())
     }
 
-    async fn subscribe(
+    async fn process_subscribes(
         &mut self,
         names_and_ids: Vec<(ChannelName, ChainId)>,
         application_id: GenericApplicationId,
@@ -1244,7 +1244,7 @@ where
         Ok(())
     }
 
-    async fn unsubscribe(
+    async fn process_unsubscribes(
         &mut self,
         names_and_ids: Vec<(ChannelName, ChainId)>,
         application_id: GenericApplicationId,

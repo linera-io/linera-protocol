@@ -1000,7 +1000,7 @@ impl Message {
         }
     }
 
-    pub fn subscribe(&self) -> Option<(&ChainId, &ChannelSubscription)> {
+    pub fn matches_subscribe(&self) -> Option<(&ChainId, &ChannelSubscription)> {
         match self {
             Message::System(SystemMessage::Subscribe { id, subscription }) => {
                 Some((id, subscription))

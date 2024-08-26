@@ -205,7 +205,7 @@ type ChainStateExtendedView {
 	"""
 	A queue of unskippable bundles, with the timestamp when we added them to the inbox.
 	"""
-	unskippable: QueueView_TimestampedInboxEntry_ce4d8b86!
+	unskippableEntries: QueueView_TimestampedInboxEntry_ce4d8b86!
 	"""
 	Non-skippable bundles that have been removed but are still in the queue.
 	"""
