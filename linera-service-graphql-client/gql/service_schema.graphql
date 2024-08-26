@@ -277,7 +277,7 @@ type ChannelStateView {
 	"""
 	The block heights so far, to be sent to future subscribers.
 	"""
-	blockHeights: QueueView_BlockHeight_f5d50b5f!
+	blockHeights: LogView_BlockHeight_a5612a40!
 }
 
 """
@@ -490,6 +490,10 @@ type IncomingBundle {
 A scalar that can represent any JSON Object value.
 """
 scalar JSONObject
+
+type LogView_BlockHeight_a5612a40 {
+	entries(start: Int, end: Int): [BlockHeight!]!
+}
 
 type LogView_ChainAndHeight_de85b393 {
 	entries(start: Int, end: Int): [ChainAndHeight!]!

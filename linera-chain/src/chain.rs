@@ -358,7 +358,7 @@ where
     /// The current subscribers.
     pub subscribers: SetView<C, ChainId>,
     /// The block heights so far, to be sent to future subscribers.
-    pub block_heights: QueueView<C, BlockHeight>,
+    pub block_heights: LogView<C, BlockHeight>,
 }
 
 impl<C> ChainStateView<C>
@@ -1168,7 +1168,7 @@ where
         let stream = stream::iter(stream)
             .map(|(full_name, mut channel)| async move {
                 let recipients = channel.subscribers.indices().await?;
-                channel.block_heights.push_back(height);
+                channel.block_heights.push(height);
                 let targets = recipients
                     .into_iter()
                     .map(|recipient| Target::channel(recipient, full_name.clone()))
@@ -1215,10 +1215,14 @@ where
                 channel.subscribers.insert(&id)?;
                 let heights = if send_all {
                     // Send all messages.
-                    channel.block_heights.elements().await?
+                    channel.block_heights.read(..).await?
                 } else {
                     // Send the latest message if any.
-                    channel.block_heights.back().await?.into_iter().collect()
+                    if let Some(last) = channel.block_heights.count().checked_sub(1) {
+                        channel.block_heights.get(last).await?.into_iter().collect()
+                    } else {
+                        vec![]
+                    }
                 };
                 if heights.is_empty() {
                     return Ok(None); // No messages on this channel yet.
