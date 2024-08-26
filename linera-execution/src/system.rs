@@ -185,10 +185,10 @@ pub enum SystemOperation {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum AdminOperation {
     /// Registers a new committee. This will notify the subscribers of the admin chain so that they
-    /// can migrate to the new epoch by accepting the resulting `SetCommittees` as an incoming
+    /// can migrate to the new epoch by accepting the resulting `CreateCommittee` as an incoming
     /// message in a block.
     CreateCommittee { epoch: Epoch, committee: Committee },
-    /// Removes a committee. Once the resulting `SetCommittees` message is accepted by a chain,
+    /// Removes a committee. Once the resulting `RemoveCommittee` message is accepted by a chain,
     /// blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
     RemoveCommittee { epoch: Epoch },
@@ -215,11 +215,10 @@ pub enum SystemMessage {
     },
     /// Creates (or activates) a new chain.
     OpenChain(OpenChainConfig),
-    /// Sets the current epoch and the recognized committees.
-    SetCommittees {
-        epoch: Epoch,
-        committees: BTreeMap<Epoch, Committee>,
-    },
+    /// Adds a new epoch and committee.
+    CreateCommittee { epoch: Epoch, committee: Committee },
+    /// Removes an old committee.
+    RemoveCommittee { epoch: Epoch },
     /// Subscribes to a channel.
     Subscribe {
         id: ChainId,
@@ -520,17 +519,14 @@ where
                             epoch == self.epoch.get().expect("chain is active").try_add_one()?,
                             SystemExecutionError::InvalidCommitteeCreation
                         );
-                        self.committees.get_mut().insert(epoch, committee);
+                        self.committees.get_mut().insert(epoch, committee.clone());
                         self.epoch.set(Some(epoch));
                         let message = RawOutgoingMessage {
                             destination: Destination::Subscribers(SystemChannel::Admin.name()),
                             authenticated: false,
                             grant: Amount::ZERO,
                             kind: MessageKind::Protected,
-                            message: SystemMessage::SetCommittees {
-                                epoch,
-                                committees: self.committees.get().clone(),
-                            },
+                            message: SystemMessage::CreateCommittee { epoch, committee },
                         };
                         outcome.messages.push(message);
                     }
@@ -544,10 +540,7 @@ where
                             authenticated: false,
                             grant: Amount::ZERO,
                             kind: MessageKind::Protected,
-                            message: SystemMessage::SetCommittees {
-                                epoch: self.epoch.get().expect("chain is active"),
-                                committees: self.committees.get().clone(),
-                            },
+                            message: SystemMessage::RemoveCommittee { epoch },
                         };
                         outcome.messages.push(message);
                     }
@@ -807,13 +800,19 @@ where
                     Recipient::Burn => (),
                 }
             }
-            SetCommittees { epoch, committees } => {
+            CreateCommittee { epoch, committee } => {
                 ensure!(
-                    epoch >= self.epoch.get().expect("chain is active"),
-                    SystemExecutionError::CannotRewindEpoch
+                    epoch == self.epoch.get().expect("chain is active").try_add_one()?,
+                    SystemExecutionError::InvalidCommitteeCreation
                 );
+                self.committees.get_mut().insert(epoch, committee.clone());
                 self.epoch.set(Some(epoch));
-                self.committees.set(committees);
+            }
+            RemoveCommittee { epoch } => {
+                ensure!(
+                    self.committees.get_mut().remove(&epoch).is_some(),
+                    SystemExecutionError::InvalidCommitteeRemoval
+                );
             }
             Subscribe { id, subscription } => {
                 ensure!(

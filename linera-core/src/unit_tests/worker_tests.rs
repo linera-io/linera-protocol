@@ -2350,9 +2350,9 @@ where
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
                 messages: vec![
-                    vec![channel_admin_message(SystemMessage::SetCommittees {
+                    vec![channel_admin_message(SystemMessage::CreateCommittee {
                         epoch: Epoch::from(1),
-                        committees: committees2.clone(),
+                        committee: committee.clone(),
                     })],
                     vec![direct_credit_message(user_id, Amount::from_tokens(2))],
                 ],
@@ -2445,7 +2445,7 @@ where
             .expect("Missing inbox for admin channel in user chain");
         matches!(&channel_inbox.added_bundles.read_front(10).await?[..], [bundle]
             if matches!(bundle.messages[..], [PostedMessage {
-                message: Message::System(SystemMessage::SetCommittees { .. }), ..
+                message: Message::System(SystemMessage::CreateCommittee { .. }), ..
             }])
         );
         assert_eq!(channel_inbox.removed_bundles.count(), 0);
@@ -2506,9 +2506,9 @@ where
                             height: BlockHeight::from(1),
                             timestamp: Timestamp::from(0),
                             transaction_index: 0,
-                            messages: vec![Message::System(SystemMessage::SetCommittees {
+                            messages: vec![Message::System(SystemMessage::CreateCommittee {
                                 epoch: Epoch::from(1),
-                                committees: committees2.clone(),
+                                committee: committee.clone(),
                             })
                             .to_posted(0, MessageKind::Protected)],
                         },
@@ -2639,10 +2639,12 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: vec![vec![channel_admin_message(SystemMessage::SetCommittees {
-                    epoch: Epoch::from(1),
-                    committees: committees2.clone(),
-                })]],
+                messages: vec![vec![channel_admin_message(
+                    SystemMessage::CreateCommittee {
+                        epoch: Epoch::from(1),
+                        committee: committee.clone(),
+                    },
+                )]],
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees2.clone(),
@@ -2760,10 +2762,6 @@ where
         ),
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
-    let committees2 = BTreeMap::from_iter([
-        (Epoch::ZERO, committee.clone()),
-        (Epoch::from(1), committee.clone()),
-    ]);
     let committees3 = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
     let certificate1 = make_certificate(
         &committee,
@@ -2771,13 +2769,12 @@ where
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
                 messages: vec![
-                    vec![channel_admin_message(SystemMessage::SetCommittees {
+                    vec![channel_admin_message(SystemMessage::CreateCommittee {
                         epoch: Epoch::from(1),
-                        committees: committees2.clone(),
+                        committee: committee.clone(),
                     })],
-                    vec![channel_admin_message(SystemMessage::SetCommittees {
-                        epoch: Epoch::from(1),
-                        committees: committees3.clone(),
+                    vec![channel_admin_message(SystemMessage::RemoveCommittee {
+                        epoch: Epoch::from(0),
                     })],
                 ],
                 events: vec![Vec::new(); 2],
