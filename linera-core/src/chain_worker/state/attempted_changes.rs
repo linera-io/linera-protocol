@@ -395,12 +395,15 @@ where
         };
         // Process the received messages in certificates.
         let local_time = self.state.storage.clock().current_time();
+        let mut previous_height = None;
         for bundle in bundles {
+            let add_to_received_log = previous_height != Some(bundle.height);
+            previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
             self.state
                 .chain
-                .receive_message_bundle(&origin, bundle, local_time)
-                .await?
+                .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
+                .await?;
         }
         if !self.state.config.allow_inactive_chains && !self.state.chain.is_active() {
             // Refuse to create a chain state if the chain is still inactive by

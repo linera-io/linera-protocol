@@ -533,6 +533,7 @@ where
         origin: &Origin,
         bundle: MessageBundle,
         local_time: Timestamp,
+        add_to_received_log: bool,
     ) -> Result<(), ChainError> {
         assert!(!bundle.messages.is_empty());
         let chain_id = self.chain_id();
@@ -601,10 +602,7 @@ where
             }
         }
         // Remember the certificate for future validator/client synchronizations.
-        let log_count = self.received_log.count();
-        if log_count == 0
-            || self.received_log.get(log_count - 1).await?.as_ref() != Some(&chain_and_height)
-        {
+        if add_to_received_log {
             self.received_log.push(chain_and_height);
         }
         Ok(())
