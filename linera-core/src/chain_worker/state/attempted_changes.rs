@@ -253,24 +253,22 @@ where
         }
         // TODO(#2351): This sets the committee and then checks that committee's signatures.
         if tip.is_first_block() && !self.state.chain.is_active() {
-            if let Some(incoming_bundle) = block.incoming_bundles.first() {
-                if let Some(posted_message) = incoming_bundle.bundle.messages.first() {
-                    let message_id = MessageId {
-                        chain_id: incoming_bundle.origin.sender,
-                        height: incoming_bundle.bundle.height,
-                        index: posted_message.index,
-                    };
-                    let local_time = self.state.storage.clock().current_time();
-                    self.state
-                        .chain
-                        .execute_init_message(
-                            message_id,
-                            &posted_message.message,
-                            incoming_bundle.bundle.timestamp,
-                            local_time,
-                        )
-                        .await?;
-                }
+            if let Some((incoming_bundle, posted_message, config)) = block.open_chain_message() {
+                let message_id = MessageId {
+                    chain_id: incoming_bundle.origin.sender,
+                    height: incoming_bundle.bundle.height,
+                    index: posted_message.index,
+                };
+                let local_time = self.state.storage.clock().current_time();
+                self.state
+                    .chain
+                    .execute_init_message(
+                        message_id,
+                        config,
+                        incoming_bundle.bundle.timestamp,
+                        local_time,
+                    )
+                    .await?;
             }
         }
         self.state.ensure_is_active()?;

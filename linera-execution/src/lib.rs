@@ -45,6 +45,7 @@ use linera_base::{
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
+use system::OpenChainConfig;
 use thiserror::Error;
 
 #[cfg(with_testing)]
@@ -1000,6 +1001,14 @@ impl Message {
         }
     }
 
+    /// Returns whether this message must be added to the inbox.
+    pub fn goes_to_inbox(&self) -> bool {
+        !matches!(
+            self,
+            Message::System(SystemMessage::Subscribe { .. } | SystemMessage::Unsubscribe { .. })
+        )
+    }
+
     pub fn matches_subscribe(&self) -> Option<(&ChainId, &ChannelSubscription)> {
         match self {
             Message::System(SystemMessage::Subscribe { id, subscription }) => {
@@ -1009,11 +1018,18 @@ impl Message {
         }
     }
 
-    pub fn unsubscribe(&self) -> Option<(&ChainId, &ChannelSubscription)> {
+    pub fn matches_unsubscribe(&self) -> Option<(&ChainId, &ChannelSubscription)> {
         match self {
             Message::System(SystemMessage::Unsubscribe { id, subscription }) => {
                 Some((id, subscription))
             }
+            _ => None,
+        }
+    }
+
+    pub fn matches_open_chain(&self) -> Option<&OpenChainConfig> {
+        match self {
+            Message::System(SystemMessage::OpenChain(config)) => Some(config),
             _ => None,
         }
     }

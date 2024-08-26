@@ -16,6 +16,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
+    system::OpenChainConfig,
     Message, MessageKind, Operation, SystemOperation,
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
@@ -111,6 +112,18 @@ impl Block {
             .map(Transaction::ReceiveMessages);
         let operations = self.operations.iter().map(Transaction::ExecuteOperation);
         (0u32..).zip(bundles.chain(operations))
+    }
+
+    pub fn open_chain_message(
+        &self,
+    ) -> Option<(&IncomingBundle, &PostedMessage, &OpenChainConfig)> {
+        let in_bundle = self.incoming_bundles.first()?;
+        if in_bundle.action != MessageAction::Accept {
+            return None;
+        }
+        let posted_message = in_bundle.bundle.messages.first()?;
+        let config = posted_message.message.matches_open_chain()?;
+        Some((in_bundle, posted_message, config))
     }
 }
 
@@ -751,6 +764,15 @@ impl MessageBundle {
 
     pub fn is_protected(&self) -> bool {
         self.messages.iter().any(PostedMessage::is_protected)
+    }
+
+    /// Returns whether this bundle must be added to the inbox.
+    ///
+    /// If this is `false`, it gets handled immediately and should never be received in a block.
+    pub fn goes_to_inbox(&self) -> bool {
+        self.messages
+            .iter()
+            .any(|posted_message| posted_message.message.goes_to_inbox())
     }
 }
 

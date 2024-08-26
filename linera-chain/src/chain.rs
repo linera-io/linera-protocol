@@ -19,7 +19,7 @@ use linera_base::{
     },
 };
 use linera_execution::{
-    system::SystemMessage, ExecutionError, ExecutionOutcome, ExecutionRequest,
+    system::OpenChainConfig, ExecutionError, ExecutionOutcome, ExecutionRequest,
     ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, Operation,
     OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
     ResourceController, ResourceTracker, Response, ServiceRuntimeRequest, TransactionTracker,
@@ -547,41 +547,30 @@ where
             chain_id: origin.sender,
             height: bundle.height,
         };
-        if self.execution_state.system.description.get().is_none() {
-            // The chain isn't initialized yet. Process the OpenChain message.
-            if let Some(posted_message) = bundle.messages.first() {
-                let message_id = chain_and_height.to_message_id(posted_message.index);
-                let message = &posted_message.message;
-                self.execute_init_message(message_id, message, bundle.timestamp, local_time)
-                    .await?;
+        let mut subscribe_names_and_ids = Vec::new();
+        let mut unsubscribe_names_and_ids = Vec::new();
+
+        // Handle immediate messages.
+        for posted_message in &bundle.messages {
+            if let Some(config) = posted_message.message.matches_open_chain() {
+                if self.execution_state.system.description.get().is_none() {
+                    let message_id = chain_and_height.to_message_id(posted_message.index);
+                    self.execute_init_message(message_id, config, bundle.timestamp, local_time)
+                        .await?;
+                }
+            } else if let Some((id, subscription)) = posted_message.message.matches_subscribe() {
+                subscribe_names_and_ids.push((subscription.name.clone(), *id));
+            }
+            if let Some((id, subscription)) = posted_message.message.matches_unsubscribe() {
+                unsubscribe_names_and_ids.push((subscription.name.clone(), *id));
             }
         }
-        if bundle.messages.iter().all(|posted_message| {
-            matches!(
-                posted_message.message,
-                Message::System(
-                    SystemMessage::Subscribe { .. } | SystemMessage::Unsubscribe { .. }
-                )
-            )
-        }) {
-            let names_and_ids = bundle
-                .messages
-                .iter()
-                .filter_map(|posted_message| posted_message.message.unsubscribe())
-                .map(|(id, subscription)| (subscription.name.clone(), *id))
-                .collect();
-            self.process_unsubscribes(names_and_ids, GenericApplicationId::System)
-                .await?;
+        self.process_unsubscribes(unsubscribe_names_and_ids, GenericApplicationId::System)
+            .await?;
+        self.process_subscribes(subscribe_names_and_ids, GenericApplicationId::System, true)
+            .await?;
 
-            let names_and_ids = bundle
-                .messages
-                .iter()
-                .filter_map(|posted_message| posted_message.message.matches_subscribe())
-                .map(|(id, subscription)| (subscription.name.clone(), *id))
-                .collect();
-            self.process_subscribes(names_and_ids, GenericApplicationId::System, true)
-                .await?;
-        } else {
+        if bundle.goes_to_inbox() {
             // Process the inbox bundle and update the inbox state.
             let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
             let entry = InboxEntry::new(origin.clone(), &bundle);
@@ -601,6 +590,7 @@ where
                     .push_back(TimestampedInboxEntry { entry, seen });
             }
         }
+
         // Remember the certificate for future validator/client synchronizations.
         if add_to_received_log {
             self.received_log.push(chain_and_height);
@@ -611,13 +601,10 @@ where
     pub async fn execute_init_message(
         &mut self,
         message_id: MessageId,
-        message: &Message,
+        config: &OpenChainConfig,
         timestamp: Timestamp,
         local_time: Timestamp,
     ) -> Result<bool, ChainError> {
-        let Message::System(SystemMessage::OpenChain(config)) = message else {
-            return Ok(false);
-        };
         // Initialize ourself.
         self.execution_state
             .system
@@ -716,34 +703,17 @@ where
                 .get()
                 .map_or(true, |description| description.is_child())
         {
-            let Some(in_bundle) = block
-                .incoming_bundles
-                .first()
-                .filter(|in_bundle| in_bundle.action == MessageAction::Accept)
-            else {
-                return Err(ChainError::InactiveChain(chain_id));
-            };
-            let Some(posted_message) =
-                in_bundle.bundle.messages.first().filter(|pm| {
-                    matches!(pm.message, Message::System(SystemMessage::OpenChain(_)))
-                })
-            else {
-                return Err(ChainError::InactiveChain(chain_id));
-            };
-
+            let (in_bundle, posted_message, config) = block
+                .open_chain_message()
+                .ok_or_else(|| ChainError::InactiveChain(chain_id))?;
             if !self.is_active() {
                 let message_id = MessageId {
                     chain_id: in_bundle.origin.sender,
                     height: in_bundle.bundle.height,
                     index: posted_message.index,
                 };
-                self.execute_init_message(
-                    message_id,
-                    &posted_message.message,
-                    block.timestamp,
-                    local_time,
-                )
-                .await?;
+                self.execute_init_message(message_id, config, block.timestamp, local_time)
+                    .await?;
             }
         }
 
@@ -1195,6 +1165,9 @@ where
         application_id: GenericApplicationId,
         send_all: bool,
     ) -> Result<(), ChainError> {
+        if names_and_ids.is_empty() {
+            return Ok(());
+        }
         let full_names = names_and_ids
             .iter()
             .map(|(name, _)| ChannelFullName {
@@ -1252,6 +1225,9 @@ where
         names_and_ids: Vec<(ChannelName, ChainId)>,
         application_id: GenericApplicationId,
     ) -> Result<(), ChainError> {
+        if names_and_ids.is_empty() {
+            return Ok(());
+        }
         let full_names = names_and_ids
             .iter()
             .map(|(name, _)| ChannelFullName {
