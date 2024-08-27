@@ -15,7 +15,7 @@ use linera_views::{
 #[cfg(feature = "rocksdb")]
 use linera_views::{
     common::AdminKeyValueStore,
-    rocks_db::{PathDir, RocksDbStore, RocksDbStoreConfig},
+    rocks_db::{PathWithGuard, RocksDbStore, RocksDbStoreConfig},
 };
 use serde::Serialize;
 use tonic::{transport::Server, Request, Response, Status};
@@ -584,9 +584,9 @@ async fn main() {
         #[cfg(feature = "rocksdb")]
         ServiceStoreServerOptions::RocksDb { path, endpoint } => {
             let path_buf = path.into();
-            let path_dir = PathDir::new(path_buf);
+            let path_with_guard = PathWithGuard::new(path_buf);
             let config = RocksDbStoreConfig {
-                path_dir,
+                path_with_guard,
                 common_config,
             };
             let store = RocksDbStore::maybe_create_and_connect(&config, namespace, root_key)

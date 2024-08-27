@@ -49,7 +49,7 @@ pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 #[derive(Clone)]
 struct RocksDbStoreInternal {
     db: Arc<DB>,
-    path_dir: PathDir,
+    path_with_guard: PathWithGuard,
     namespace: String,
     max_stream_queries: usize,
     cache_size: usize,
@@ -59,7 +59,7 @@ struct RocksDbStoreInternal {
 #[derive(Clone, Debug)]
 pub struct RocksDbStoreConfig {
     /// The path to the storage containing the namespaces..
-    pub path_dir: PathDir,
+    pub path_with_guard: PathWithGuard,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
 }
@@ -85,13 +85,13 @@ impl RocksDbStoreInternal {
     }
 
     fn build(
-        path_dir: PathDir,
+        path_with_guard: PathWithGuard,
         namespace: &str,
         max_stream_queries: usize,
         cache_size: usize,
         root_key: &[u8],
     ) -> Result<RocksDbStoreInternal, RocksDbStoreError> {
-        let mut full_path_buf = path_dir.path_buf.clone();
+        let mut full_path_buf = path_with_guard.path_buf.clone();
         full_path_buf.push(root_key_as_string(root_key));
         if !std::path::Path::exists(&full_path_buf) {
             std::fs::create_dir(full_path_buf.clone())?;
@@ -102,7 +102,7 @@ impl RocksDbStoreInternal {
         let namespace = namespace.to_string();
         Ok(RocksDbStoreInternal {
             db: Arc::new(db),
-            path_dir,
+            path_with_guard,
             namespace,
             max_stream_queries,
             cache_size,
@@ -110,7 +110,7 @@ impl RocksDbStoreInternal {
     }
 
     fn connect_from_path(
-        path_dir: PathDir,
+        path_with_guard: PathWithGuard,
         namespace: &str,
         max_stream_queries: usize,
         cache_size: usize,
@@ -125,7 +125,7 @@ impl RocksDbStoreInternal {
             }
             Entry::Vacant(entry) => {
                 let store = Self::build(
-                    path_dir,
+                    path_with_guard,
                     namespace,
                     max_stream_queries,
                     cache_size,
@@ -349,14 +349,14 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         root_key: &[u8],
     ) -> Result<Self, RocksDbStoreError> {
         Self::check_namespace(namespace)?;
-        let mut path_buf = config.path_dir.path_buf.clone();
-        let mut path_dir = config.path_dir.clone();
+        let mut path_buf = config.path_with_guard.path_buf.clone();
+        let mut path_with_guard = config.path_with_guard.clone();
         path_buf.push(namespace);
-        path_dir.path_buf = path_buf;
+        path_with_guard.path_buf = path_buf;
         let max_stream_queries = config.common_config.max_stream_queries;
         let cache_size = config.common_config.cache_size;
         RocksDbStoreInternal::connect_from_path(
-            path_dir,
+            path_with_guard,
             namespace,
             max_stream_queries,
             cache_size,
@@ -365,11 +365,11 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreError> {
-        let path_dir = self.path_dir.clone();
+        let path_with_guard = self.path_with_guard.clone();
         let max_stream_queries = self.max_stream_queries;
         let cache_size = self.cache_size;
         RocksDbStoreInternal::connect_from_path(
-            path_dir,
+            path_with_guard,
             &self.namespace,
             max_stream_queries,
             cache_size,
@@ -378,7 +378,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbStoreError> {
-        let entries = std::fs::read_dir(config.path_dir.path_buf.clone())?;
+        let entries = std::fs::read_dir(config.path_with_guard.path_buf.clone())?;
         let mut namespaces = Vec::new();
         for entry in entries {
             let entry = entry?;
@@ -399,7 +399,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     async fn delete_all(config: &Self::Config) -> Result<(), RocksDbStoreError> {
         let namespaces = RocksDbStoreInternal::list_all(config).await?;
         for namespace in namespaces {
-            let mut path_buf = config.path_dir.path_buf.clone();
+            let mut path_buf = config.path_with_guard.path_buf.clone();
             path_buf.push(&namespace);
             std::fs::remove_dir_all(path_buf.as_path())?;
         }
@@ -408,7 +408,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, RocksDbStoreError> {
         Self::check_namespace(namespace)?;
-        let mut path_buf = config.path_dir.path_buf.clone();
+        let mut path_buf = config.path_with_guard.path_buf.clone();
         path_buf.push(namespace);
         let test = std::path::Path::exists(&path_buf);
         Ok(test)
@@ -416,7 +416,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), RocksDbStoreError> {
         Self::check_namespace(namespace)?;
-        let mut path_buf = config.path_dir.path_buf.clone();
+        let mut path_buf = config.path_with_guard.path_buf.clone();
         path_buf.push(namespace);
         std::fs::create_dir_all(path_buf)?;
         Ok(())
@@ -424,7 +424,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), RocksDbStoreError> {
         Self::check_namespace(namespace)?;
-        let mut path_buf = config.path_dir.path_buf.clone();
+        let mut path_buf = config.path_with_guard.path_buf.clone();
         path_buf.push(namespace);
         let path = path_buf.as_path();
         std::fs::remove_dir_all(path)?;
@@ -455,15 +455,15 @@ pub fn create_rocks_db_common_config() -> CommonStoreConfig {
 
 /// A path and the guard for the temporary directory if needed
 #[derive(Clone, Debug)]
-pub struct PathDir {
+pub struct PathWithGuard {
     /// The path to the data
     pub path_buf: PathBuf,
     /// The guard for the directory if one is needed
     _dir: Option<Arc<TempDir>>,
 }
 
-impl PathDir {
-    /// Create a PathDir from an existing path.
+impl PathWithGuard {
+    /// Create a PathWithGuard from an existing path.
     pub fn new(path_buf: PathBuf) -> Self {
         Self {
             path_buf,
@@ -474,20 +474,20 @@ impl PathDir {
 
 /// Returns the test path for RocksDB without common config.
 #[cfg(with_testing)]
-pub fn create_rocks_db_test_path() -> PathDir {
+pub fn create_rocks_db_test_path() -> PathWithGuard {
     let dir = TempDir::new().unwrap();
     let path_buf = dir.path().to_path_buf();
     let _dir = Some(Arc::new(dir));
-    PathDir { path_buf, _dir }
+    PathWithGuard { path_buf, _dir }
 }
 
 /// Returns the test config and a guard for the temporary directory
 #[cfg(with_testing)]
 pub async fn create_rocks_db_test_config() -> RocksDbStoreConfig {
-    let path_dir = create_rocks_db_test_path();
+    let path_with_guard = create_rocks_db_test_path();
     let common_config = create_rocks_db_common_config();
     RocksDbStoreConfig {
-        path_dir,
+        path_with_guard,
         common_config,
     }
 }

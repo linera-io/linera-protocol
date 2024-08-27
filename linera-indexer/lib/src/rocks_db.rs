@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use clap::Parser as _;
 use linera_views::{
     common::{AdminKeyValueStore, CommonStoreConfig},
-    rocks_db::{PathDir, RocksDbStore, RocksDbStoreConfig},
+    rocks_db::{PathWithGuard, RocksDbStore, RocksDbStoreConfig},
 };
 
 use crate::{
@@ -44,9 +44,9 @@ impl RocksDbRunner {
             cache_size: config.client.cache_size,
         };
         let path_buf = config.client.storage.as_path().to_path_buf();
-        let path_dir = PathDir::new(path_buf);
+        let path_with_guard = PathWithGuard::new(path_buf);
         let store_config = RocksDbStoreConfig {
-            path_dir,
+            path_with_guard,
             common_config,
         };
         let namespace = config.client.table.clone();

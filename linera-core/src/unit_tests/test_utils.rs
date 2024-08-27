@@ -973,10 +973,10 @@ impl StorageBuilder for RocksDbStorageBuilder {
     type Storage = RocksDbStorage<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        let path_dir = create_rocks_db_test_path();
+        let path_with_guard = create_rocks_db_test_path();
         let common_config = create_rocks_db_common_config();
         let store_config = RocksDbStoreConfig {
-            path_dir,
+            path_with_guard,
             common_config,
         };
         let namespace = generate_test_namespace();
