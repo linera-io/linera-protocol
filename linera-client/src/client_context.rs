@@ -147,6 +147,7 @@ where
             options.max_pending_messages,
             delivery,
             wallet.chain_ids(),
+            "Client node",
         );
 
         ClientContext {

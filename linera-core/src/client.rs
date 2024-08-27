@@ -115,15 +115,13 @@ where
         max_pending_messages: usize,
         cross_chain_message_delivery: CrossChainMessageDelivery,
         tracked_chains: impl IntoIterator<Item = ChainId>,
+        name: impl Into<String>,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
-        let state = WorkerState::new_for_client(
-            "Client node".to_string(),
-            storage.clone(),
-            tracked_chains.clone(),
-        )
-        .with_allow_inactive_chains(true)
-        .with_allow_messages_from_deprecated_epochs(true);
+        let state =
+            WorkerState::new_for_client(name.into(), storage.clone(), tracked_chains.clone())
+                .with_allow_inactive_chains(true)
+                .with_allow_messages_from_deprecated_epochs(true);
         let local_node = LocalNodeClient::new(state);
 
         Self {
