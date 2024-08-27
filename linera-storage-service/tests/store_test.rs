@@ -5,8 +5,7 @@
 
 use anyhow::Result;
 use linera_storage_service::{
-    client::{create_service_test_store, service_config_from_endpoint, ServiceStoreClient},
-    storage_service_test_endpoint,
+    client::{create_service_test_store, ServiceStoreClient},
 };
 use linera_views::{
     batch::Batch,
@@ -42,8 +41,7 @@ async fn test_storage_service_writes_from_state() -> Result<()> {
 
 #[tokio::test]
 async fn test_storage_service_admin() -> Result<()> {
-    let config = service_config_from_endpoint()?;
-    admin_test::<ServiceStoreClient>(&config).await;
+    admin_test::<ServiceStoreClient>().await;
     Ok(())
 }
 

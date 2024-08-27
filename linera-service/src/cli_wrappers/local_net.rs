@@ -22,7 +22,7 @@ use linera_base::{
 use linera_client::storage::{StorageConfig, StorageConfigNamespace};
 use linera_execution::ResourceControlPolicy;
 #[cfg(all(feature = "storage-service", with_testing))]
-use linera_storage_service::storage_service_test_endpoint;
+use linera_storage_service::common::storage_service_test_endpoint;
 #[cfg(all(feature = "scylladb", with_testing))]
 use linera_views::scylla_db::create_scylla_db_test_uri;
 use tempfile::{tempdir, TempDir};
