@@ -7,6 +7,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 #[cfg(any(with_dynamodb, with_rocksdb, with_scylladb))]
 use linera_views::common::AdminKeyValueStore as _;
+#[cfg(with_rocksdb)]
+use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDbStore};
 #[cfg(with_scylladb)]
 use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
 use linera_views::{
@@ -40,11 +42,6 @@ use linera_views::{
     test_utils::generate_test_namespace,
 };
 use rand::{Rng, RngCore};
-#[cfg(with_rocksdb)]
-use {
-    linera_views::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDbStore},
-    tempfile::TempDir,
-};
 
 #[allow(clippy::type_complexity)]
 #[derive(CryptoHashRootView)]
@@ -183,7 +180,6 @@ impl StateStore for LruMemoryStore {
 pub struct RocksDbTestStore {
     store: RocksDbStore,
     accessed_chains: BTreeSet<usize>,
-    _dir: TempDir,
 }
 
 #[cfg(with_rocksdb)]
@@ -192,12 +188,11 @@ impl StateStore for RocksDbTestStore {
     type Context = RocksDbContext<usize>;
 
     async fn new() -> Self {
-        let (store, dir) = create_rocks_db_test_store().await;
+        let store = create_rocks_db_test_store().await;
         let accessed_chains = BTreeSet::new();
         RocksDbTestStore {
             store,
             accessed_chains,
-            _dir: dir,
         }
     }
 

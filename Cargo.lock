@@ -4317,7 +4317,6 @@ dependencies = [
  "serde",
  "serde_json",
  "social",
- "tempfile",
  "test-case",
  "test-log",
  "test-strategy",
@@ -4713,7 +4712,6 @@ dependencies = [
  "linera-views",
  "prometheus",
  "serde",
- "tempfile",
  "tokio",
 ]
 

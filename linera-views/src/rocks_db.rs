@@ -11,12 +11,8 @@ use std::{
 
 use futures::future::join_all;
 use linera_base::{ensure, hex};
+use tempfile::TempDir;
 use thiserror::Error;
-#[cfg(with_testing)]
-use {
-    crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace},
-    tempfile::TempDir,
-};
 
 #[cfg(with_metrics)]
 use crate::metering::{
@@ -31,6 +27,8 @@ use crate::{
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
+#[cfg(with_testing)]
+use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace};
 
 /// The number of streams for the test
 #[cfg(with_testing)]
@@ -51,7 +49,7 @@ pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 #[derive(Clone)]
 struct RocksDbStoreInternal {
     db: Arc<DB>,
-    path_buf: PathBuf,
+    path_with_guard: PathWithGuard,
     namespace: String,
     max_stream_queries: usize,
     cache_size: usize,
@@ -60,8 +58,8 @@ struct RocksDbStoreInternal {
 /// The initial configuration of the system
 #[derive(Clone, Debug)]
 pub struct RocksDbStoreConfig {
-    /// The path to the storage containing the namespaces.
-    pub path_buf: PathBuf,
+    /// The path to the storage containing the namespaces..
+    pub path_with_guard: PathWithGuard,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
 }
@@ -87,13 +85,13 @@ impl RocksDbStoreInternal {
     }
 
     fn build(
-        path_buf: PathBuf,
+        path_with_guard: PathWithGuard,
         namespace: &str,
         max_stream_queries: usize,
         cache_size: usize,
         root_key: &[u8],
     ) -> Result<RocksDbStoreInternal, RocksDbStoreError> {
-        let mut full_path_buf = path_buf.clone();
+        let mut full_path_buf = path_with_guard.path_buf.clone();
         full_path_buf.push(root_key_as_string(root_key));
         if !std::path::Path::exists(&full_path_buf) {
             std::fs::create_dir(full_path_buf.clone())?;
@@ -104,7 +102,7 @@ impl RocksDbStoreInternal {
         let namespace = namespace.to_string();
         Ok(RocksDbStoreInternal {
             db: Arc::new(db),
-            path_buf,
+            path_with_guard,
             namespace,
             max_stream_queries,
             cache_size,
@@ -112,7 +110,7 @@ impl RocksDbStoreInternal {
     }
 
     fn connect_from_path(
-        path_buf: PathBuf,
+        path_with_guard: PathWithGuard,
         namespace: &str,
         max_stream_queries: usize,
         cache_size: usize,
@@ -127,7 +125,7 @@ impl RocksDbStoreInternal {
             }
             Entry::Vacant(entry) => {
                 let store = Self::build(
-                    path_buf,
+                    path_with_guard,
                     namespace,
                     max_stream_queries,
                     cache_size,
@@ -351,12 +349,14 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         root_key: &[u8],
     ) -> Result<Self, RocksDbStoreError> {
         Self::check_namespace(namespace)?;
-        let mut path_buf = config.path_buf.clone();
+        let mut path_buf = config.path_with_guard.path_buf.clone();
+        let mut path_with_guard = config.path_with_guard.clone();
         path_buf.push(namespace);
+        path_with_guard.path_buf = path_buf;
         let max_stream_queries = config.common_config.max_stream_queries;
         let cache_size = config.common_config.cache_size;
         RocksDbStoreInternal::connect_from_path(
-            path_buf,
+            path_with_guard,
             namespace,
             max_stream_queries,
             cache_size,
@@ -365,11 +365,11 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreError> {
-        let path_buf = self.path_buf.clone();
+        let path_with_guard = self.path_with_guard.clone();
         let max_stream_queries = self.max_stream_queries;
         let cache_size = self.cache_size;
         RocksDbStoreInternal::connect_from_path(
-            path_buf,
+            path_with_guard,
             &self.namespace,
             max_stream_queries,
             cache_size,
@@ -378,7 +378,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbStoreError> {
-        let entries = std::fs::read_dir(config.path_buf.clone())?;
+        let entries = std::fs::read_dir(config.path_with_guard.path_buf.clone())?;
         let mut namespaces = Vec::new();
         for entry in entries {
             let entry = entry?;
@@ -399,7 +399,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     async fn delete_all(config: &Self::Config) -> Result<(), RocksDbStoreError> {
         let namespaces = RocksDbStoreInternal::list_all(config).await?;
         for namespace in namespaces {
-            let mut path_buf = config.path_buf.clone();
+            let mut path_buf = config.path_with_guard.path_buf.clone();
             path_buf.push(&namespace);
             std::fs::remove_dir_all(path_buf.as_path())?;
         }
@@ -408,7 +408,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, RocksDbStoreError> {
         Self::check_namespace(namespace)?;
-        let mut path_buf = config.path_buf.clone();
+        let mut path_buf = config.path_with_guard.path_buf.clone();
         path_buf.push(namespace);
         let test = std::path::Path::exists(&path_buf);
         Ok(test)
@@ -416,7 +416,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), RocksDbStoreError> {
         Self::check_namespace(namespace)?;
-        let mut path_buf = config.path_buf.clone();
+        let mut path_buf = config.path_with_guard.path_buf.clone();
         path_buf.push(namespace);
         std::fs::create_dir_all(path_buf)?;
         Ok(())
@@ -424,7 +424,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), RocksDbStoreError> {
         Self::check_namespace(namespace)?;
-        let mut path_buf = config.path_buf.clone();
+        let mut path_buf = config.path_with_guard.path_buf.clone();
         path_buf.push(namespace);
         let path = path_buf.as_path();
         std::fs::remove_dir_all(path)?;
@@ -453,38 +453,56 @@ pub fn create_rocks_db_common_config() -> CommonStoreConfig {
     }
 }
 
+/// A path and the guard for the temporary directory if needed
+#[derive(Clone, Debug)]
+pub struct PathWithGuard {
+    /// The path to the data
+    pub path_buf: PathBuf,
+    /// The guard for the directory if one is needed
+    _dir: Option<Arc<TempDir>>,
+}
+
+impl PathWithGuard {
+    /// Create a PathWithGuard from an existing path.
+    pub fn new(path_buf: PathBuf) -> Self {
+        Self {
+            path_buf,
+            _dir: None,
+        }
+    }
+}
+
 /// Returns the test path for RocksDB without common config.
 #[cfg(with_testing)]
-pub fn create_rocks_db_test_path() -> (PathBuf, TempDir) {
+pub fn create_rocks_db_test_path() -> PathWithGuard {
     let dir = TempDir::new().unwrap();
     let path_buf = dir.path().to_path_buf();
-    (path_buf, dir)
+    let _dir = Some(Arc::new(dir));
+    PathWithGuard { path_buf, _dir }
 }
 
 /// Returns the test config and a guard for the temporary directory
 #[cfg(with_testing)]
-pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
-    let (path_buf, tmp_dir) = create_rocks_db_test_path();
+pub async fn create_rocks_db_test_config() -> RocksDbStoreConfig {
+    let path_with_guard = create_rocks_db_test_path();
     let common_config = create_rocks_db_common_config();
-    let store_config = RocksDbStoreConfig {
-        path_buf,
+    RocksDbStoreConfig {
+        path_with_guard,
         common_config,
-    };
-    (store_config, tmp_dir)
+    }
 }
 
 /// Creates a RocksDB database client to be used for tests.
 /// The temporary directory has to be carried because if it goes
 /// out of scope then the RocksDB client can become unstable.
 #[cfg(with_testing)]
-pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
-    let (store_config, dir) = create_rocks_db_test_config().await;
+pub async fn create_rocks_db_test_store() -> RocksDbStore {
+    let store_config = create_rocks_db_test_config().await;
     let namespace = generate_test_namespace();
     let root_key = &[];
-    let store = RocksDbStore::recreate_and_connect(&store_config, &namespace, root_key)
+    RocksDbStore::recreate_and_connect(&store_config, &namespace, root_key)
         .await
-        .expect("client");
-    (store, dir)
+        .expect("store")
 }
 
 /// An implementation of [`crate::common::Context`] based on RocksDB

@@ -18,7 +18,7 @@ use {
 #[cfg(feature = "rocksdb")]
 use {
     linera_storage::RocksDbStorage,
-    linera_views::rocks_db::{RocksDbStore, RocksDbStoreConfig},
+    linera_views::rocks_db::{PathWithGuard, RocksDbStore, RocksDbStoreConfig},
     std::path::PathBuf,
 };
 #[cfg(feature = "scylladb")]
@@ -339,8 +339,9 @@ impl StorageConfigNamespace {
             #[cfg(feature = "rocksdb")]
             StorageConfig::RocksDb { path } => {
                 let path_buf = path.to_path_buf();
+                let path_with_guard = PathWithGuard::new(path_buf);
                 let config = RocksDbStoreConfig {
-                    path_buf,
+                    path_with_guard,
                     common_config,
                 };
                 Ok(StoreConfig::RocksDb(config, namespace))

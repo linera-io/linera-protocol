@@ -6,17 +6,14 @@ use std::{collections::VecDeque, fmt::Debug, marker::PhantomData};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use test_case::test_case;
-#[cfg(with_rocksdb)]
-use {
-    crate::rocks_db::{create_rocks_db_test_config, RocksDbContext, RocksDbStore},
-    tempfile::TempDir,
-};
 
 #[cfg(with_dynamodb)]
 use crate::dynamo_db::{
     create_dynamo_db_common_config, DynamoDbContext, DynamoDbStore, DynamoDbStoreConfig,
     LocalStackTestContext,
 };
+#[cfg(with_rocksdb)]
+use crate::rocks_db::{create_rocks_db_test_config, RocksDbContext, RocksDbStore};
 #[cfg(with_scylladb)]
 use crate::scylla_db::{create_scylla_db_test_config, ScyllaDbContext, ScyllaDbStore};
 use crate::{
@@ -211,9 +208,7 @@ impl TestContextFactory for MemoryContextFactory {
 
 #[cfg(with_rocksdb)]
 #[derive(Default)]
-struct RocksDbContextFactory {
-    temporary_directories: Vec<TempDir>,
-}
+struct RocksDbContextFactory {}
 
 #[cfg(with_rocksdb)]
 #[async_trait]
@@ -221,15 +216,13 @@ impl TestContextFactory for RocksDbContextFactory {
     type Context = RocksDbContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let (store_config, directory) = create_rocks_db_test_config().await;
+        let store_config = create_rocks_db_test_config().await;
         let namespace = generate_test_namespace();
         let root_key = &[];
         let store = RocksDbStore::recreate_and_connect(&store_config, &namespace, root_key)
             .await
             .expect("store");
         let context = RocksDbContext::new(store, ());
-
-        self.temporary_directories.push(directory);
 
         Ok(context)
     }

@@ -38,7 +38,7 @@ async fn test_reads_memory() {
 #[tokio::test]
 async fn test_reads_rocks_db() {
     for scenario in get_random_test_scenarios() {
-        let (key_value_store, _dir) = linera_views::rocks_db::create_rocks_db_test_store().await;
+        let key_value_store = linera_views::rocks_db::create_rocks_db_test_store().await;
         run_reads(key_value_store, scenario).await;
     }
 }
@@ -113,7 +113,7 @@ async fn test_key_value_store_view_memory_writes_from_blank() {
 #[cfg(with_rocksdb)]
 #[tokio::test]
 async fn test_rocks_db_writes_from_blank() {
-    let (key_value_store, _dir) = linera_views::rocks_db::create_rocks_db_test_store().await;
+    let key_value_store = linera_views::rocks_db::create_rocks_db_test_store().await;
     run_writes_from_blank(&key_value_store).await;
 }
 
@@ -190,7 +190,7 @@ async fn test_memory_big_write_read() {
 #[cfg(with_rocksdb)]
 #[tokio::test]
 async fn test_rocks_db_big_write_read() {
-    let (key_value_store, _dir) = linera_views::rocks_db::create_rocks_db_test_store().await;
+    let key_value_store = linera_views::rocks_db::create_rocks_db_test_store().await;
     let value_sizes = vec![100, 1000, 200000, 5000000];
     let target_size = 20000000;
     run_big_write_read(key_value_store, target_size, value_sizes).await;
@@ -223,7 +223,7 @@ async fn test_memory_writes_from_state() {
 #[cfg(with_rocksdb)]
 #[tokio::test]
 async fn test_rocks_db_writes_from_state() {
-    let (key_value_store, _dir) = linera_views::rocks_db::create_rocks_db_test_store().await;
+    let key_value_store = linera_views::rocks_db::create_rocks_db_test_store().await;
     run_writes_from_state(&key_value_store).await;
 }
 

@@ -58,7 +58,7 @@ async fn test_memory_handle_certificates_to_create_application(
 async fn test_rocks_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let (storage, _dir) = RocksDbStorage::make_test_storage(Some(wasm_runtime)).await;
+    let storage = RocksDbStorage::make_test_storage(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 

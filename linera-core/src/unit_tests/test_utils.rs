@@ -37,8 +37,8 @@ use {
 #[cfg(feature = "rocksdb")]
 use {
     linera_storage::RocksDbStorage,
-    linera_views::rocks_db::create_rocks_db_common_config,
     linera_views::rocks_db::RocksDbStoreConfig,
+    linera_views::rocks_db::{create_rocks_db_common_config, create_rocks_db_test_path},
     tokio::sync::{Semaphore, SemaphorePermit},
 };
 #[cfg(feature = "scylladb")]
@@ -921,7 +921,6 @@ impl MemoryStorageBuilder {
 
 #[cfg(feature = "rocksdb")]
 pub struct RocksDbStorageBuilder {
-    temp_dirs: Vec<tempfile::TempDir>,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
     _permit: SemaphorePermit<'static>,
@@ -931,7 +930,6 @@ pub struct RocksDbStorageBuilder {
 impl RocksDbStorageBuilder {
     pub async fn new() -> Self {
         RocksDbStorageBuilder {
-            temp_dirs: Vec::new(),
             wasm_runtime: None,
             clock: TestClock::default(),
             _permit: ROCKS_DB_SEMAPHORE.acquire().await.unwrap(),
@@ -955,12 +953,10 @@ impl StorageBuilder for RocksDbStorageBuilder {
     type Storage = RocksDbStorage<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        let dir = tempfile::TempDir::new()?;
-        let path_buf = dir.path().to_path_buf();
-        self.temp_dirs.push(dir);
+        let path_with_guard = create_rocks_db_test_path();
         let common_config = create_rocks_db_common_config();
         let store_config = RocksDbStoreConfig {
-            path_buf,
+            path_with_guard,
             common_config,
         };
         let namespace = generate_test_namespace();

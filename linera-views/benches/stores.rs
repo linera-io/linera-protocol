@@ -91,7 +91,7 @@ fn bench_contains_key(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let (store, _dir) = create_rocks_db_test_store().await;
+                let store = create_rocks_db_test_store().await;
                 performance_contains_key(store, iterations).await
             })
     });
@@ -162,7 +162,7 @@ fn bench_contains_keys(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let (store, _dir) = create_rocks_db_test_store().await;
+                let store = create_rocks_db_test_store().await;
                 performance_contains_keys(store, iterations).await
             })
     });
@@ -232,7 +232,7 @@ fn bench_find_keys_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let (store, _dir) = create_rocks_db_test_store().await;
+                let store = create_rocks_db_test_store().await;
                 performance_find_keys_by_prefix(store, iterations).await
             })
     });
@@ -307,7 +307,7 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let (store, _dir) = create_rocks_db_test_store().await;
+                let store = create_rocks_db_test_store().await;
                 performance_find_key_values_by_prefix(store, iterations).await
             })
     });
@@ -379,7 +379,7 @@ fn bench_read_value_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let (store, _dir) = create_rocks_db_test_store().await;
+                let store = create_rocks_db_test_store().await;
                 performance_read_value_bytes(store, iterations).await
             })
     });
@@ -453,7 +453,7 @@ fn bench_read_multi_values_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let (store, _dir) = create_rocks_db_test_store().await;
+                let store = create_rocks_db_test_store().await;
                 performance_read_multi_values_bytes(store, iterations).await
             })
     });
@@ -519,7 +519,7 @@ fn bench_write_batch(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let (store, _dir) = create_rocks_db_test_store().await;
+                let store = create_rocks_db_test_store().await;
                 performance_write_batch(store, iterations).await
             })
     });

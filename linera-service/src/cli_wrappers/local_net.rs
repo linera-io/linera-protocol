@@ -32,7 +32,10 @@ use tonic_health::pb::{
 };
 use tracing::{info, warn};
 #[cfg(all(feature = "rocksdb", with_testing))]
-use {linera_views::rocks_db::create_rocks_db_test_path, std::ops::Deref};
+use {
+    linera_views::rocks_db::{create_rocks_db_test_path, PathWithGuard},
+    std::ops::Deref,
+};
 
 use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
@@ -55,8 +58,7 @@ trait LocalServerInternal: Sized {
 
 #[cfg(all(feature = "rocksdb", with_testing))]
 struct LocalServerRocksDbInternal {
-    rocks_db_path: PathBuf,
-    _temp_dir: Option<TempDir>,
+    rocks_db_path: PathWithGuard,
 }
 
 #[cfg(all(feature = "rocksdb", with_testing))]
@@ -64,16 +66,12 @@ impl LocalServerInternal for LocalServerRocksDbInternal {
     type Config = PathBuf;
 
     async fn new_test() -> Result<Self> {
-        let (rocks_db_path, temp_dir) = create_rocks_db_test_path();
-        let _temp_dir = Some(temp_dir);
-        Ok(Self {
-            rocks_db_path,
-            _temp_dir,
-        })
+        let rocks_db_path = create_rocks_db_test_path();
+        Ok(Self { rocks_db_path })
     }
 
     fn get_config(&self) -> Self::Config {
-        self.rocks_db_path.clone()
+        self.rocks_db_path.path_buf.clone()
     }
 }
 
