@@ -693,12 +693,13 @@ where
 /// Exercises the functionalities of the `AdminKeyValueStore`.
 /// This tests everything except the `delete_all` which would
 /// interact with other namespaces.
-pub async fn admin_test<S: LocalKeyValueStore>(config: &S::Config)
+pub async fn admin_test<S: LocalKeyValueStore>()
 where
     S::Error: Debug,
 {
+    let config = S::get_test_config().await.expect("config");
     let prefix = generate_test_namespace();
-    let namespaces = namespaces_with_prefix::<S>(config, &prefix).await;
+    let namespaces = namespaces_with_prefix::<S>(&config, &prefix).await;
     assert_eq!(namespaces.len(), 0);
     let mut rng = make_deterministic_rng();
     let size = 9;
@@ -706,50 +707,50 @@ where
     let mut working_namespaces = BTreeSet::new();
     for i in 0..size {
         let namespace = format!("{}_{}", prefix, i);
-        assert!(!S::exists(config, &namespace).await.expect("test"));
+        assert!(!S::exists(&config, &namespace).await.expect("test"));
         working_namespaces.insert(namespace);
     }
     // Creating the namespaces
     for namespace in &working_namespaces {
-        S::create(config, namespace)
+        S::create(&config, namespace)
             .await
             .expect("creation of a namespace");
-        assert!(S::exists(config, namespace).await.expect("test"));
+        assert!(S::exists(&config, namespace).await.expect("test"));
     }
     // Connecting to all of them at once
     {
         let mut connections = Vec::new();
         let root_key = &[];
         for namespace in &working_namespaces {
-            let connection = S::connect(config, namespace, root_key)
+            let connection = S::connect(&config, namespace, root_key)
                 .await
                 .expect("a connection to the namespace");
             connections.push(connection);
         }
     }
     // Listing all of them
-    let namespaces = namespaces_with_prefix::<S>(config, &prefix).await;
+    let namespaces = namespaces_with_prefix::<S>(&config, &prefix).await;
     assert_eq!(namespaces, working_namespaces);
     // Selecting at random some for deletion
     let mut kept_namespaces = BTreeSet::new();
     for namespace in working_namespaces {
         let delete = rng.gen::<bool>();
         if delete {
-            S::delete(config, &namespace)
+            S::delete(&config, &namespace)
                 .await
                 .expect("A successful deletion");
-            assert!(!S::exists(config, &namespace).await.expect("test"));
+            assert!(!S::exists(&config, &namespace).await.expect("test"));
         } else {
             kept_namespaces.insert(namespace);
         }
     }
     for namespace in &kept_namespaces {
-        assert!(S::exists(config, namespace).await.expect("test"));
+        assert!(S::exists(&config, namespace).await.expect("test"));
     }
-    let namespaces = namespaces_with_prefix::<S>(config, &prefix).await;
+    let namespaces = namespaces_with_prefix::<S>(&config, &prefix).await;
     assert_eq!(namespaces, kept_namespaces);
     for namespace in kept_namespaces {
-        S::delete(config, &namespace)
+        S::delete(&config, &namespace)
             .await
             .expect("A successful deletion");
     }

@@ -9,33 +9,28 @@ use linera_views::rocks_db::RocksDbStore;
 use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{
     memory::MemoryStore,
-    common::{AdminKeyValueStore as _},
     test_utils::admin_test,
 };
 
 #[tokio::test]
 async fn admin_test_memory() {
-    let config = MemoryStore::get_test_config().await.expect("config");
-    admin_test::<MemoryStore>(&config).await;
+    admin_test::<MemoryStore>().await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
 async fn admin_test_rocks_db() {
-    let config = RocksDbStore::get_test_config().await.expect("config");
-    admin_test::<RocksDbStore>(&config).await;
+    admin_test::<RocksDbStore>().await;
 }
 
 #[cfg(feature = "dynamodb")]
 #[tokio::test]
 async fn admin_test_dynamo_db() {
-    let config = DynamoDbStore::get_test_config().await.expect("config");
-    admin_test::<DynamoDbStore>(&config).await;
+    admin_test::<DynamoDbStore>().await;
 }
 
 #[cfg(feature = "scylladb")]
 #[tokio::test]
 async fn admin_test_scylla_db() {
-    let config = ScyllaDbStore::get_test_config().await.expect("config");
-    admin_test::<ScyllaDbStore>(&config).await;
+    admin_test::<ScyllaDbStore>().await;
 }
