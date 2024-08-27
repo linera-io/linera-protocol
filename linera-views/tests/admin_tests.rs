@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::{create_dynamo_db_test_config, DynamoDbStore};
+use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::RocksDbStore;
 #[cfg(feature = "scylladb")]
@@ -29,7 +29,7 @@ async fn admin_test_rocks_db() {
 #[cfg(feature = "dynamodb")]
 #[tokio::test]
 async fn admin_test_dynamo_db() {
-    let config = create_dynamo_db_test_config().await;
+    let config = DynamoDbStore::get_test_config().await.expect("config");
     admin_test::<DynamoDbStore>(&config).await;
 }
 
