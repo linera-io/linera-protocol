@@ -29,8 +29,8 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
 use {
-    linera_views::test_utils::generate_test_namespace,
     futures::channel::oneshot::{self, Receiver},
+    linera_views::test_utils::generate_test_namespace,
     std::{cmp::Reverse, collections::BTreeMap},
 };
 #[cfg(with_metrics)]
@@ -855,4 +855,3 @@ where
         Ok(Self::create(storage, clock))
     }
 }
-

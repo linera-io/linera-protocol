@@ -29,16 +29,17 @@ use linera_execution::{
     Message, MessageKind, Operation, OperationContext, ResourceController, TransactionTracker,
     UserApplicationDescription, UserApplicationId, WasmContractModule, WasmRuntime,
 };
-use linera_storage::DbStorage;
+use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]
 use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::ScyllaDbStore;
-#[cfg(feature = "scylladb")]
 use linera_views::rocks_db::RocksDbStore;
-use linera_views::memory::MemoryStore;
-use linera_storage::Storage;
-use linera_views::views::{CryptoHashView, ViewError};
+#[cfg(feature = "scylladb")]
+use linera_views::scylla_db::ScyllaDbStore;
+use linera_views::{
+    memory::MemoryStore,
+    views::{CryptoHashView, ViewError},
+};
 use test_case::test_case;
 
 use super::{init_worker_with_chains, make_certificate};

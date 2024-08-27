@@ -22,7 +22,10 @@ use tonic::transport::{Channel, Endpoint};
 #[cfg(with_metrics)]
 use crate::common::STORAGE_SERVICE_METRICS;
 use crate::{
-    common::{storage_service_test_endpoint, KeyTag, ServiceStoreConfig, ServiceStoreError, MAX_PAYLOAD_SIZE},
+    common::{
+        storage_service_test_endpoint, KeyTag, ServiceStoreConfig, ServiceStoreError,
+        MAX_PAYLOAD_SIZE,
+    },
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
         KeyValueAppend, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,

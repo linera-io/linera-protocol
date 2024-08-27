@@ -4,9 +4,7 @@
 #![cfg(feature = "storage-service")]
 
 use anyhow::Result;
-use linera_storage_service::{
-    client::{create_service_test_store, ServiceStoreClient},
-};
+use linera_storage_service::client::{create_service_test_store, ServiceStoreClient};
 use linera_views::{
     batch::Batch,
     test_utils,

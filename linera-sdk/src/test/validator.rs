@@ -22,8 +22,8 @@ use linera_execution::{
     system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
     WasmRuntime,
 };
-use linera_views::memory::MemoryStore;
 use linera_storage::{DbStorage, Storage, TestClock};
+use linera_views::memory::MemoryStore;
 use serde::Serialize;
 
 use super::ActiveChain;
@@ -42,7 +42,7 @@ use crate::ContractAbi;
 pub struct TestValidator {
     key_pair: KeyPair,
     committee: Committee,
-    worker: WorkerState<DbStorage<MemoryStore,TestClock>>,
+    worker: WorkerState<DbStorage<MemoryStore, TestClock>>,
     clock: TestClock,
     chains: Arc<DashMap<ChainId, ActiveChain>>,
 }
@@ -65,7 +65,7 @@ impl TestValidator {
         let key_pair = KeyPair::generate();
         let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
         let wasm_runtime = Some(WasmRuntime::default());
-        let storage = DbStorage::<MemoryStore,_>::make_test_storage(wasm_runtime)
+        let storage = DbStorage::<MemoryStore, _>::make_test_storage(wasm_runtime)
             .now_or_never()
             .expect("execution of DbStorage::new should not await anything");
         let clock = storage.clock.clone();
@@ -133,7 +133,7 @@ impl TestValidator {
     }
 
     /// Returns the locked [`WorkerState`] of this validator.
-    pub(crate) fn worker(&self) -> WorkerState<DbStorage<MemoryStore,TestClock>> {
+    pub(crate) fn worker(&self) -> WorkerState<DbStorage<MemoryStore, TestClock>> {
         self.worker.clone()
     }
 

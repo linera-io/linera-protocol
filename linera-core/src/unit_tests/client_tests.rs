@@ -55,7 +55,7 @@ use crate::{
 };
 
 type MemoryChainClient =
-    ChainClient<NodeProvider<DbStorage<MemoryStore,TestClock>>, DbStorage<MemoryStore,TestClock>>;
+    ChainClient<NodeProvider<DbStorage<MemoryStore, TestClock>>, DbStorage<MemoryStore, TestClock>>;
 
 /// A test to ensure that our chain client listener remains `Send`.  This is a bit of a
 /// hack, but requires that we not hold a `std::sync::Mutex` over `await` points, a

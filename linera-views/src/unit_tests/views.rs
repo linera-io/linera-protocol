@@ -219,8 +219,7 @@ impl TestContextFactory for RocksDbContextFactory {
         let config = RocksDbStore::get_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
-        let store = RocksDbStore::recreate_and_connect(&config, &namespace, root_key)
-            .await?;
+        let store = RocksDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
         let context = RocksDbContext::new(store, ());
 
         Ok(context)

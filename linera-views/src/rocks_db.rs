@@ -18,17 +18,17 @@ use thiserror::Error;
 use crate::metering::{
     MeteredStore, LRU_CACHING_METRICS, ROCKS_DB_METRICS, VALUE_SPLITTING_METRICS,
 };
+#[cfg(with_testing)]
+use crate::test_utils::generate_test_namespace;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
         get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
-    lru_caching::{TEST_CACHE_SIZE, LruCachingStore},
+    lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
-#[cfg(with_testing)]
-use crate::test_utils::generate_test_namespace;
 
 /// The number of streams for the test
 const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
@@ -588,7 +588,6 @@ impl WritableKeyValueStore for RocksDbStore {
 
 impl AdminKeyValueStore for RocksDbStore {
     type Config = RocksDbStoreConfig;
-
 
     async fn get_test_config() -> Result<RocksDbStoreConfig, RocksDbStoreError> {
         RocksDbStoreInternal::get_test_config().await

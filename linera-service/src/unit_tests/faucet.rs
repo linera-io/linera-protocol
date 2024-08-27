@@ -17,8 +17,8 @@ use linera_core::{
     client::ChainClient,
     test_utils::{FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
 };
-use linera_views::memory::MemoryStore;
 use linera_storage::{DbStorage, TestClock};
+use linera_views::memory::MemoryStore;
 
 use super::MutationRoot;
 

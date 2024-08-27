@@ -23,26 +23,33 @@ use linera_execution::{
     committee::{Committee, ValidatorName},
     ResourceControlPolicy, WasmRuntime,
 };
-use linera_views::memory::MemoryStore;
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_version::VersionInfo;
-use linera_views::{memory::create_memory_store_test_config, views::ViewError};
-use tokio::sync::oneshot;
-use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::{create_dynamo_db_common_config, DynamoDbStore, DynamoDbStoreConfig, LocalStackTestContext};
-#[cfg(feature = "rocksdb")]
-use {
-    linera_views::common::{AdminKeyValueStore as _},
-    linera_views::rocks_db::RocksDbStore,
-    tokio::sync::{Semaphore, SemaphorePermit},
+use linera_views::dynamo_db::{
+    create_dynamo_db_common_config, DynamoDbStore, DynamoDbStoreConfig, LocalStackTestContext,
 };
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::{create_scylla_db_common_config, ScyllaDbStore, ScyllaDbStoreConfig};
+use linera_views::{
+    memory::{create_memory_store_test_config, MemoryStore},
+    views::ViewError,
+};
+use tokio::sync::oneshot;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(not(target_arch = "wasm32"))]
 use {
-    linera_storage_service::{client::{service_config_from_endpoint, ServiceStoreClient}, common::storage_service_test_endpoint},
+    linera_storage_service::{
+        client::{service_config_from_endpoint, ServiceStoreClient},
+        common::storage_service_test_endpoint,
+    },
     linera_views::test_utils::generate_test_namespace,
+};
+#[cfg(feature = "rocksdb")]
+use {
+    linera_views::common::AdminKeyValueStore as _,
+    linera_views::rocks_db::RocksDbStore,
+    tokio::sync::{Semaphore, SemaphorePermit},
 };
 
 use crate::{

@@ -7,10 +7,7 @@ use linera_views::dynamo_db::DynamoDbStore;
 use linera_views::rocks_db::RocksDbStore;
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::ScyllaDbStore;
-use linera_views::{
-    memory::MemoryStore,
-    test_utils::admin_test,
-};
+use linera_views::{memory::MemoryStore, test_utils::admin_test};
 
 #[tokio::test]
 async fn admin_test_memory() {
