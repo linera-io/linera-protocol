@@ -253,24 +253,24 @@ where
         }
         // TODO(#2351): This sets the committee and then checks that committee's signatures.
         if tip.is_first_block() && !self.state.chain.is_active() {
-            if let Some(incoming_bundle) = block.incoming_bundles.first() {
-                if let Some(posted_message) = incoming_bundle.bundle.messages.first() {
-                    let message_id = MessageId {
-                        chain_id: incoming_bundle.origin.sender,
-                        height: incoming_bundle.bundle.height,
-                        index: posted_message.index,
-                    };
-                    let local_time = self.state.storage.clock().current_time();
-                    self.state
-                        .chain
-                        .execute_init_message(
-                            message_id,
-                            &posted_message.message,
-                            incoming_bundle.bundle.timestamp,
-                            local_time,
-                        )
-                        .await?;
-                }
+            if let Some((incoming_bundle, posted_message, config)) =
+                block.starts_with_open_chain_message()
+            {
+                let message_id = MessageId {
+                    chain_id: incoming_bundle.origin.sender,
+                    height: incoming_bundle.bundle.height,
+                    index: posted_message.index,
+                };
+                let local_time = self.state.storage.clock().current_time();
+                self.state
+                    .chain
+                    .execute_init_message(
+                        message_id,
+                        config,
+                        incoming_bundle.bundle.timestamp,
+                        local_time,
+                    )
+                    .await?;
             }
         }
         self.state.ensure_is_active()?;
@@ -395,12 +395,15 @@ where
         };
         // Process the received messages in certificates.
         let local_time = self.state.storage.clock().current_time();
+        let mut previous_height = None;
         for bundle in bundles {
+            let add_to_received_log = previous_height != Some(bundle.height);
+            previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
             self.state
                 .chain
-                .receive_message_bundle(&origin, bundle, local_time)
-                .await?
+                .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
+                .await?;
         }
         if !self.state.config.allow_inactive_chains && !self.state.chain.is_active() {
             // Refuse to create a chain state if the chain is still inactive by
@@ -464,7 +467,7 @@ where
         let chain = &mut self.state.chain;
         if let (Some(epoch), Some(entry)) = (
             chain.execution_state.system.epoch.get(),
-            chain.unskippable.front().await?,
+            chain.unskippable_bundles.front().await?,
         ) {
             let ownership = chain.execution_state.system.ownership.get();
             let elapsed = self

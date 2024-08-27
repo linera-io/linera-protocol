@@ -16,8 +16,8 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::OpenChainConfig,
     test_utils::{ExpectedCall, MockApplication},
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageKind, Operation, SystemMessage,
-    TestExecutionRuntimeContext, UserApplicationDescription,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind, Operation,
+    SystemMessage, TestExecutionRuntimeContext, UserApplicationDescription,
 };
 use linera_views::{
     memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
@@ -112,11 +112,11 @@ async fn test_application_permissions() {
         application_permissions: ApplicationPermissions::new_single(application_id),
         ..make_open_chain_config()
     };
-    let open_chain_message = SystemMessage::OpenChain(config).into();
     chain
-        .execute_init_message(message_id, &open_chain_message, time, time)
+        .execute_init_message(message_id, &config, time, time)
         .await
         .unwrap();
+    let open_chain_message = Message::System(SystemMessage::OpenChain(config));
 
     let register_app_message = SystemMessage::RegisterApplications {
         applications: vec![app_description],

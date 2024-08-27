@@ -1297,7 +1297,7 @@ where
     // Create a new committee.
     let committee = Committee::new(validators, ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
-    assert_eq!(admin.next_block_height(), BlockHeight::from(4));
+    assert_eq!(admin.next_block_height(), BlockHeight::from(3));
     assert!(admin.pending_block().is_none());
     assert!(admin.key_pair().await.is_ok());
     assert_eq!(admin.epoch().await.unwrap(), Epoch::from(2));
@@ -1333,7 +1333,7 @@ where
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
     user.synchronize_from_validators().await.unwrap();
 
-    // User is a unsubscribed, so the migration message is not even in the inbox yet.
+    // User is unsubscribed, so the migration message is not even in the inbox yet.
     user.process_inbox().await.unwrap();
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
 

@@ -245,9 +245,7 @@ pub enum Message {
     /// The origin chain wants to unsubscribe from the target chain.
     Unsubscribe,
     /// The origin chain made a post, and the target chain is subscribed.
-    /// This includes the most recent posts in reverse order, and the total count of posts by the
-    /// sender. I.e. the indices of the posts in the `Vec` are `count - 1, count - 2, ...`.
-    Posts { count: u64, posts: Vec<OwnPost> },
+    Post { index: u64, post: OwnPost },
     /// A Chain liked a post
     Like { key: Key },
     /// A Chain commented on a post

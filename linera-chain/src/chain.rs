@@ -14,10 +14,12 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, OracleResponse, Timestamp},
     ensure,
-    identifiers::{ChainId, Destination, GenericApplicationId, MessageId, Owner, StreamId},
+    identifiers::{
+        ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner, StreamId,
+    },
 };
 use linera_execution::{
-    system::SystemMessage, ExecutionError, ExecutionOutcome, ExecutionRequest,
+    system::OpenChainConfig, ExecutionError, ExecutionOutcome, ExecutionRequest,
     ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, Operation,
     OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
     ResourceController, ResourceTracker, Response, ServiceRuntimeRequest, TransactionTracker,
@@ -199,29 +201,29 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
     .expect("Histogram can be created")
 });
 
-/// An origin, cursor and timestamp of a unskippable message in our inbox.
+/// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
-pub struct TimestampedInboxEntry {
-    /// The origin and cursor of the message.
-    pub entry: InboxEntry,
-    /// The timestamp when the message was added to the inbox.
+pub struct TimestampedBundleInInbox {
+    /// The origin and cursor of the bundle.
+    pub entry: BundleInInbox,
+    /// The timestamp when the bundle was added to the inbox.
     pub seen: Timestamp,
 }
 
-/// An origin and cursor of a unskippable message that is no longer in our inbox.
+/// An origin and cursor of a unskippable bundle that is no longer in our inbox.
 #[derive(
     Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize, async_graphql::SimpleObject,
 )]
-pub struct InboxEntry {
-    /// The origin from which we received the message.
+pub struct BundleInInbox {
+    /// The origin from which we received the bundle.
     pub origin: Origin,
-    /// The cursor of the message in the inbox.
+    /// The cursor of the bundle in the inbox.
     pub cursor: Cursor,
 }
 
-impl InboxEntry {
+impl BundleInInbox {
     fn new(origin: Origin, bundle: &MessageBundle) -> Self {
-        InboxEntry {
+        BundleInInbox {
             cursor: Cursor::from(bundle),
             origin,
         }
@@ -256,9 +258,9 @@ where
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, Origin, InboxStateView<C>>,
     /// A queue of unskippable bundles, with the timestamp when we added them to the inbox.
-    pub unskippable: QueueView<C, TimestampedInboxEntry>,
-    /// Non-skippable bundles that have been removed but are still in the queue.
-    pub removed_unskippable: SetView<C, InboxEntry>,
+    pub unskippable_bundles: QueueView<C, TimestampedBundleInInbox>,
+    /// Unskippable bundles that have been removed but are still in the queue.
+    pub removed_unskippable_bundles: SetView<C, BundleInInbox>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, Target, OutboxStateView<C>>,
     /// Number of outgoing messages in flight for each block height.
@@ -355,8 +357,8 @@ where
 {
     /// The current subscribers.
     pub subscribers: SetView<C, ChainId>,
-    /// The latest block height, if any, to be sent to future subscribers.
-    pub block_height: RegisterView<C, Option<BlockHeight>>,
+    /// The block heights so far, to be sent to future subscribers.
+    pub block_heights: LogView<C, BlockHeight>,
 }
 
 impl<C> ChainStateView<C>
@@ -531,6 +533,7 @@ where
         origin: &Origin,
         bundle: MessageBundle,
         local_time: Timestamp,
+        add_to_received_log: bool,
     ) -> Result<(), ChainError> {
         assert!(!bundle.messages.is_empty());
         let chain_id = self.chain_id();
@@ -544,48 +547,64 @@ where
             chain_id: origin.sender,
             height: bundle.height,
         };
-        if self.execution_state.system.description.get().is_none() {
-            // The chain isn't initialized yet. Process the OpenChain message.
-            if let Some(posted_message) = bundle.messages.first() {
-                let message_id = chain_and_height.to_message_id(posted_message.index);
-                let message = &posted_message.message;
-                self.execute_init_message(message_id, message, bundle.timestamp, local_time)
-                    .await?;
+        let mut subscribe_names_and_ids = Vec::new();
+        let mut unsubscribe_names_and_ids = Vec::new();
+
+        // Handle immediate messages.
+        for posted_message in &bundle.messages {
+            if let Some(config) = posted_message.message.matches_open_chain() {
+                if self.execution_state.system.description.get().is_none() {
+                    let message_id = chain_and_height.to_message_id(posted_message.index);
+                    self.execute_init_message(message_id, config, bundle.timestamp, local_time)
+                        .await?;
+                }
+            } else if let Some((id, subscription)) = posted_message.message.matches_subscribe() {
+                subscribe_names_and_ids.push((subscription.name.clone(), *id));
+            }
+            if let Some((id, subscription)) = posted_message.message.matches_unsubscribe() {
+                unsubscribe_names_and_ids.push((subscription.name.clone(), *id));
             }
         }
-        // Process the inbox bundle and update the inbox state.
-        let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
-        let entry = InboxEntry::new(origin.clone(), &bundle);
-        let skippable = bundle.is_skippable();
-        let newly_added = inbox
-            .add_bundle(bundle)
-            .await
-            .map_err(|error| match error {
-                InboxError::ViewError(error) => ChainError::ViewError(error),
-                error => ChainError::InternalError(format!(
-                    "while processing messages in certified block: {error}"
-                )),
-            })?;
-        if newly_added && !skippable {
-            let seen = local_time;
-            self.unskippable
-                .push_back(TimestampedInboxEntry { entry, seen });
+        self.process_unsubscribes(unsubscribe_names_and_ids, GenericApplicationId::System)
+            .await?;
+        self.process_subscribes(subscribe_names_and_ids, GenericApplicationId::System)
+            .await?;
+
+        if bundle.goes_to_inbox() {
+            // Process the inbox bundle and update the inbox state.
+            let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
+            let entry = BundleInInbox::new(origin.clone(), &bundle);
+            let skippable = bundle.is_skippable();
+            let newly_added = inbox
+                .add_bundle(bundle)
+                .await
+                .map_err(|error| match error {
+                    InboxError::ViewError(error) => ChainError::ViewError(error),
+                    error => ChainError::InternalError(format!(
+                        "while processing messages in certified block: {error}"
+                    )),
+                })?;
+            if newly_added && !skippable {
+                let seen = local_time;
+                self.unskippable_bundles
+                    .push_back(TimestampedBundleInInbox { entry, seen });
+            }
         }
+
         // Remember the certificate for future validator/client synchronizations.
-        self.received_log.push(chain_and_height);
+        if add_to_received_log {
+            self.received_log.push(chain_and_height);
+        }
         Ok(())
     }
 
     pub async fn execute_init_message(
         &mut self,
         message_id: MessageId,
-        message: &Message,
+        config: &OpenChainConfig,
         timestamp: Timestamp,
         local_time: Timestamp,
     ) -> Result<bool, ChainError> {
-        let Message::System(SystemMessage::OpenChain(config)) = message else {
-            return Ok(false);
-        };
         // Initialize ourself.
         self.execution_state
             .system
@@ -632,27 +651,31 @@ where
                     .await
                     .map_err(|error| ChainError::from((chain_id, origin.clone(), error)))?;
                 if was_present && !bundle.is_skippable() {
-                    removed_unskippable.insert(InboxEntry::new(origin.clone(), bundle));
+                    removed_unskippable.insert(BundleInInbox::new(origin.clone(), bundle));
                 }
             }
         }
         if !removed_unskippable.is_empty() {
             // Delete all removed bundles from the front of the unskippable queue.
-            let maybe_front = self.unskippable.front().await?;
+            let maybe_front = self.unskippable_bundles.front().await?;
             if maybe_front.is_some_and(|ts_entry| removed_unskippable.remove(&ts_entry.entry)) {
-                self.unskippable.delete_front();
-                while let Some(ts_entry) = self.unskippable.front().await? {
+                self.unskippable_bundles.delete_front();
+                while let Some(ts_entry) = self.unskippable_bundles.front().await? {
                     if !removed_unskippable.remove(&ts_entry.entry) {
-                        if !self.removed_unskippable.contains(&ts_entry.entry).await? {
+                        if !self
+                            .removed_unskippable_bundles
+                            .contains(&ts_entry.entry)
+                            .await?
+                        {
                             break;
                         }
-                        self.removed_unskippable.remove(&ts_entry.entry)?;
+                        self.removed_unskippable_bundles.remove(&ts_entry.entry)?;
                     }
-                    self.unskippable.delete_front();
+                    self.unskippable_bundles.delete_front();
                 }
             }
             for entry in removed_unskippable {
-                self.removed_unskippable.insert(&entry)?;
+                self.removed_unskippable_bundles.insert(&entry)?;
             }
         }
         Ok(())
@@ -684,34 +707,17 @@ where
                 .get()
                 .map_or(true, |description| description.is_child())
         {
-            let Some(in_bundle) = block
-                .incoming_bundles
-                .first()
-                .filter(|in_bundle| in_bundle.action == MessageAction::Accept)
-            else {
-                return Err(ChainError::InactiveChain(chain_id));
-            };
-            let Some(posted_message) =
-                in_bundle.bundle.messages.first().filter(|pm| {
-                    matches!(pm.message, Message::System(SystemMessage::OpenChain(_)))
-                })
-            else {
-                return Err(ChainError::InactiveChain(chain_id));
-            };
-
+            let (in_bundle, posted_message, config) = block
+                .starts_with_open_chain_message()
+                .ok_or_else(|| ChainError::InactiveChain(chain_id))?;
             if !self.is_active() {
                 let message_id = MessageId {
                     chain_id: in_bundle.origin.sender,
                     height: in_bundle.bundle.height,
                     index: posted_message.index,
                 };
-                self.execute_init_message(
-                    message_id,
-                    &posted_message.message,
-                    block.timestamp,
-                    local_time,
-                )
-                .await?;
+                self.execute_init_message(message_id, config, block.timestamp, local_time)
+                    .await?;
             }
         }
 
@@ -1119,20 +1125,9 @@ where
         }
 
         // Update the channels.
-        let full_names = raw_outcome
-            .unsubscribe
-            .clone()
-            .into_iter()
-            .map(|(name, _id)| ChannelFullName {
-                application_id,
-                name,
-            })
-            .collect::<Vec<_>>();
-        let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        for ((_name, id), mut channel) in raw_outcome.unsubscribe.into_iter().zip(channels) {
-            // Remove subscriber. Do not remove the channel outbox yet.
-            channel.subscribers.remove(&id)?;
-        }
+        self.process_unsubscribes(raw_outcome.unsubscribe, application_id)
+            .await?;
+
         let full_names = channel_broadcasts
             .into_iter()
             .map(|name| ChannelFullName {
@@ -1145,7 +1140,7 @@ where
         let stream = stream::iter(stream)
             .map(|(full_name, mut channel)| async move {
                 let recipients = channel.subscribers.indices().await?;
-                channel.block_height.set(Some(height));
+                channel.block_heights.push(height);
                 let targets = recipients
                     .into_iter()
                     .map(|recipient| Target::channel(recipient, full_name.clone()))
@@ -1156,47 +1151,88 @@ where
         let infos = stream.try_collect::<Vec<_>>().await?;
         let targets = infos.into_iter().flatten().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
+        let outbox_counters = self.outbox_counters.get_mut();
         for mut outbox in outboxes {
             if outbox.schedule_message(height)? {
                 *outbox_counters.entry(height).or_default() += 1;
             }
         }
-        let full_names = raw_outcome
-            .subscribe
+
+        self.process_subscribes(raw_outcome.subscribe, application_id)
+            .await?;
+        Ok(())
+    }
+
+    async fn process_subscribes(
+        &mut self,
+        names_and_ids: Vec<(ChannelName, ChainId)>,
+        application_id: GenericApplicationId,
+    ) -> Result<(), ChainError> {
+        if names_and_ids.is_empty() {
+            return Ok(());
+        }
+        let full_names = names_and_ids
             .iter()
-            .map(|(name, _id)| ChannelFullName {
+            .map(|(name, _)| ChannelFullName {
                 application_id,
                 name: name.clone(),
             })
             .collect::<Vec<_>>();
         let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        let subscribe_channels = raw_outcome.subscribe.into_iter().zip(channels);
+        let subscribe_channels = names_and_ids.into_iter().zip(channels);
+        let max_stream_queries = self.context().max_stream_queries();
         let stream = stream::iter(subscribe_channels)
             .map(|((name, id), mut channel)| async move {
-                let mut result = None;
+                if channel.subscribers.contains(&id).await? {
+                    return Ok(None); // Was already a subscriber.
+                }
+                channel.subscribers.insert(&id)?;
+                // Send all messages.
+                let heights = channel.block_heights.read(..).await?;
+                if heights.is_empty() {
+                    return Ok(None); // No messages on this channel yet.
+                }
                 let full_name = ChannelFullName {
                     application_id,
                     name,
                 };
-                // Add subscriber.
-                if !channel.subscribers.contains(&id).await? {
-                    // Send the latest message if any.
-                    if let Some(latest_height) = channel.block_height.get() {
-                        let target = Target::channel(id, full_name.clone());
-                        result = Some((target, *latest_height));
-                    }
-                    channel.subscribers.insert(&id)?;
-                }
-                Ok::<_, ChainError>(result)
+                let target = Target::channel(id, full_name.clone());
+                Ok::<_, ChainError>(Some((target, heights)))
             })
             .buffer_unordered(max_stream_queries);
         let infos = stream.try_collect::<Vec<_>>().await?;
         let (targets, heights): (Vec<_>, Vec<_>) = infos.into_iter().flatten().unzip();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
-        for (height, mut outbox) in heights.into_iter().zip(outboxes) {
-            if outbox.schedule_message(height)? {
-                *outbox_counters.entry(height).or_default() += 1;
+        let outbox_counters = self.outbox_counters.get_mut();
+        for (heights, mut outbox) in heights.into_iter().zip(outboxes) {
+            for height in heights {
+                if outbox.schedule_message(height)? {
+                    *outbox_counters.entry(height).or_default() += 1;
+                }
             }
+        }
+        Ok(())
+    }
+
+    async fn process_unsubscribes(
+        &mut self,
+        names_and_ids: Vec<(ChannelName, ChainId)>,
+        application_id: GenericApplicationId,
+    ) -> Result<(), ChainError> {
+        if names_and_ids.is_empty() {
+            return Ok(());
+        }
+        let full_names = names_and_ids
+            .iter()
+            .map(|(name, _)| ChannelFullName {
+                application_id,
+                name: name.clone(),
+            })
+            .collect::<Vec<_>>();
+        let channels = self.channels.try_load_entries_mut(&full_names).await?;
+        for ((_name, id), mut channel) in names_and_ids.into_iter().zip(channels) {
+            // Remove subscriber. Do not remove the channel outbox yet.
+            channel.subscribers.remove(&id)?;
         }
         Ok(())
     }

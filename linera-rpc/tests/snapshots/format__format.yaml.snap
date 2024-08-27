@@ -866,39 +866,40 @@ SystemMessage:
         NEWTYPE:
           TYPENAME: OpenChainConfig
     3:
-      SetCommittees:
+      CreateCommittee:
         STRUCT:
           - epoch:
               TYPENAME: Epoch
-          - committees:
-              MAP:
-                KEY:
-                  TYPENAME: Epoch
-                VALUE:
-                  TYPENAME: Committee
+          - committee:
+              TYPENAME: Committee
     4:
+      RemoveCommittee:
+        STRUCT:
+          - epoch:
+              TYPENAME: Epoch
+    5:
       Subscribe:
         STRUCT:
           - id:
               TYPENAME: ChainId
           - subscription:
               TYPENAME: ChannelSubscription
-    5:
+    6:
       Unsubscribe:
         STRUCT:
           - id:
               TYPENAME: ChainId
           - subscription:
               TYPENAME: ChannelSubscription
-    6:
-      ApplicationCreated: UNIT
     7:
+      ApplicationCreated: UNIT
+    8:
       RegisterApplications:
         STRUCT:
           - applications:
               SEQ:
                 TYPENAME: UserApplicationDescription
-    8:
+    9:
       RequestApplication:
         NEWTYPE:
           TYPENAME: ApplicationId

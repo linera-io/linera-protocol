@@ -28,7 +28,9 @@ query ChainChannel($chainId: ChainId!, $channelFullName: ChannelFullName!) {
         key
         value {
           subscribers
-          blockHeight
+          blockHeights {
+            entries
+          }
         }
       }
     }
@@ -135,7 +137,9 @@ query Chain(
         key
         value {
           subscribers
-          blockHeight
+          blockHeights {
+            entries
+          }
         }
       }
     }
