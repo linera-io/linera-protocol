@@ -201,29 +201,29 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
     .expect("Histogram can be created")
 });
 
-/// An origin, cursor and timestamp of a unskippable message in our inbox.
+/// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
-pub struct TimestampedInboxEntry {
-    /// The origin and cursor of the message.
-    pub entry: InboxEntry,
-    /// The timestamp when the message was added to the inbox.
+pub struct TimestampedBundleInInbox {
+    /// The origin and cursor of the bundle.
+    pub entry: BundleInInbox,
+    /// The timestamp when the bundle was added to the inbox.
     pub seen: Timestamp,
 }
 
-/// An origin and cursor of a unskippable message that is no longer in our inbox.
+/// An origin and cursor of a unskippable bundle that is no longer in our inbox.
 #[derive(
     Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize, async_graphql::SimpleObject,
 )]
-pub struct InboxEntry {
-    /// The origin from which we received the message.
+pub struct BundleInInbox {
+    /// The origin from which we received the bundle.
     pub origin: Origin,
-    /// The cursor of the message in the inbox.
+    /// The cursor of the bundle in the inbox.
     pub cursor: Cursor,
 }
 
-impl InboxEntry {
+impl BundleInInbox {
     fn new(origin: Origin, bundle: &MessageBundle) -> Self {
-        InboxEntry {
+        BundleInInbox {
             cursor: Cursor::from(bundle),
             origin,
         }
@@ -258,9 +258,9 @@ where
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, Origin, InboxStateView<C>>,
     /// A queue of unskippable bundles, with the timestamp when we added them to the inbox.
-    pub unskippable_entries: QueueView<C, TimestampedInboxEntry>,
-    /// Non-skippable bundles that have been removed but are still in the queue.
-    pub removed_unskippable: SetView<C, InboxEntry>,
+    pub unskippable_bundles: QueueView<C, TimestampedBundleInInbox>,
+    /// Unskippable bundles that have been removed but are still in the queue.
+    pub removed_unskippable_bundles: SetView<C, BundleInInbox>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, Target, OutboxStateView<C>>,
     /// Number of outgoing messages in flight for each block height.
@@ -573,7 +573,7 @@ where
         if bundle.goes_to_inbox() {
             // Process the inbox bundle and update the inbox state.
             let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
-            let entry = InboxEntry::new(origin.clone(), &bundle);
+            let entry = BundleInInbox::new(origin.clone(), &bundle);
             let skippable = bundle.is_skippable();
             let newly_added = inbox
                 .add_bundle(bundle)
@@ -586,8 +586,8 @@ where
                 })?;
             if newly_added && !skippable {
                 let seen = local_time;
-                self.unskippable_entries
-                    .push_back(TimestampedInboxEntry { entry, seen });
+                self.unskippable_bundles
+                    .push_back(TimestampedBundleInInbox { entry, seen });
             }
         }
 
@@ -651,27 +651,31 @@ where
                     .await
                     .map_err(|error| ChainError::from((chain_id, origin.clone(), error)))?;
                 if was_present && !bundle.is_skippable() {
-                    removed_unskippable.insert(InboxEntry::new(origin.clone(), bundle));
+                    removed_unskippable.insert(BundleInInbox::new(origin.clone(), bundle));
                 }
             }
         }
         if !removed_unskippable.is_empty() {
             // Delete all removed bundles from the front of the unskippable queue.
-            let maybe_front = self.unskippable_entries.front().await?;
+            let maybe_front = self.unskippable_bundles.front().await?;
             if maybe_front.is_some_and(|ts_entry| removed_unskippable.remove(&ts_entry.entry)) {
-                self.unskippable_entries.delete_front();
-                while let Some(ts_entry) = self.unskippable_entries.front().await? {
+                self.unskippable_bundles.delete_front();
+                while let Some(ts_entry) = self.unskippable_bundles.front().await? {
                     if !removed_unskippable.remove(&ts_entry.entry) {
-                        if !self.removed_unskippable.contains(&ts_entry.entry).await? {
+                        if !self
+                            .removed_unskippable_bundles
+                            .contains(&ts_entry.entry)
+                            .await?
+                        {
                             break;
                         }
-                        self.removed_unskippable.remove(&ts_entry.entry)?;
+                        self.removed_unskippable_bundles.remove(&ts_entry.entry)?;
                     }
-                    self.unskippable_entries.delete_front();
+                    self.unskippable_bundles.delete_front();
                 }
             }
             for entry in removed_unskippable {
-                self.removed_unskippable.insert(&entry)?;
+                self.removed_unskippable_bundles.insert(&entry)?;
             }
         }
         Ok(())
@@ -704,7 +708,7 @@ where
                 .map_or(true, |description| description.is_child())
         {
             let (in_bundle, posted_message, config) = block
-                .open_chain_message()
+                .starts_with_open_chain_message()
                 .ok_or_else(|| ChainError::InactiveChain(chain_id))?;
             if !self.is_active() {
                 let message_id = MessageId {

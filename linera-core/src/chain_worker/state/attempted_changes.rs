@@ -253,7 +253,9 @@ where
         }
         // TODO(#2351): This sets the committee and then checks that committee's signatures.
         if tip.is_first_block() && !self.state.chain.is_active() {
-            if let Some((incoming_bundle, posted_message, config)) = block.open_chain_message() {
+            if let Some((incoming_bundle, posted_message, config)) =
+                block.starts_with_open_chain_message()
+            {
                 let message_id = MessageId {
                     chain_id: incoming_bundle.origin.sender,
                     height: incoming_bundle.bundle.height,
@@ -465,7 +467,7 @@ where
         let chain = &mut self.state.chain;
         if let (Some(epoch), Some(entry)) = (
             chain.execution_state.system.epoch.get(),
-            chain.unskippable_entries.front().await?,
+            chain.unskippable_bundles.front().await?,
         ) {
             let ownership = chain.execution_state.system.ownership.get();
             let elapsed = self

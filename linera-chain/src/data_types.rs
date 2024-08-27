@@ -114,7 +114,9 @@ impl Block {
         (0u32..).zip(bundles.chain(operations))
     }
 
-    pub fn open_chain_message(
+    /// If the block's first message is `OpenChain`, returns the bundle, the message and
+    /// the configuration for the new chain.
+    pub fn starts_with_open_chain_message(
         &self,
     ) -> Option<(&IncomingBundle, &PostedMessage, &OpenChainConfig)> {
         let in_bundle = self.incoming_bundles.first()?;

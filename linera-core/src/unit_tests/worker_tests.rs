@@ -2337,6 +2337,12 @@ where
             *admin_chain.execution_state.system.admin_id.get(),
             Some(admin_id)
         );
+        // The new chain is subscribed to the admin chain.
+        assert!(admin_chain
+            .channels
+            .indices()
+            .await?
+            .contains(&admin_channel_full_name));
     }
 
     // Create a new committee and transfer money before accepting the subscription.

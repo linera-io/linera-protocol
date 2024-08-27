@@ -129,6 +129,20 @@ scalar BlockHeight
 
 
 """
+An origin and cursor of a unskippable bundle that is no longer in our inbox.
+"""
+type BundleInInbox {
+	"""
+	The origin from which we received the bundle.
+	"""
+	origin: Origin!
+	"""
+	The cursor of the bundle in the inbox.
+	"""
+	cursor: Cursor!
+}
+
+"""
 A WebAssembly module's bytecode
 """
 scalar Bytecode
@@ -205,11 +219,11 @@ type ChainStateExtendedView {
 	"""
 	A queue of unskippable bundles, with the timestamp when we added them to the inbox.
 	"""
-	unskippableEntries: QueueView_TimestampedInboxEntry_ce4d8b86!
+	unskippableBundles: QueueView_TimestampedBundleInInbox_c9bca311!
 	"""
-	Non-skippable bundles that have been removed but are still in the queue.
+	Unskippable bundles that have been removed but are still in the queue.
 	"""
-	removedUnskippable: [InboxEntry!]!
+	removedUnskippableBundles: [BundleInInbox!]!
 	"""
 	Mailboxes used to send messages, indexed by their target.
 	"""
@@ -418,20 +432,6 @@ type HashedCertificateValue {
 	value: CertificateValue!
 }
 
-
-"""
-An origin and cursor of a unskippable message that is no longer in our inbox.
-"""
-type InboxEntry {
-	"""
-	The origin from which we received the message.
-	"""
-	origin: Origin!
-	"""
-	The cursor of the message in the inbox.
-	"""
-	cursor: Cursor!
-}
 
 """
 The state of an inbox.
@@ -781,8 +781,8 @@ type QueueView_MessageBundle_f33fd73d {
 	entries(count: Int): [MessageBundle!]!
 }
 
-type QueueView_TimestampedInboxEntry_ce4d8b86 {
-	entries(count: Int): [TimestampedInboxEntry!]!
+type QueueView_TimestampedBundleInInbox_c9bca311 {
+	entries(count: Int): [TimestampedBundleInInbox!]!
 }
 
 """
@@ -926,15 +926,15 @@ A timestamp, in microseconds since the Unix epoch
 scalar Timestamp
 
 """
-An origin, cursor and timestamp of a unskippable message in our inbox.
+An origin, cursor and timestamp of a unskippable bundle in our inbox.
 """
-type TimestampedInboxEntry {
+type TimestampedBundleInInbox {
 	"""
-	The origin and cursor of the message.
+	The origin and cursor of the bundle.
 	"""
-	entry: InboxEntry!
+	entry: BundleInInbox!
 	"""
-	The timestamp when the message was added to the inbox.
+	The timestamp when the bundle was added to the inbox.
 	"""
 	seen: Timestamp!
 }

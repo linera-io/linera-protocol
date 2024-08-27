@@ -814,20 +814,6 @@ where
                     SystemExecutionError::InvalidCommitteeRemoval
                 );
             }
-            Subscribe { id, subscription } => {
-                ensure!(
-                    subscription.chain_id == context.chain_id,
-                    SystemExecutionError::IncorrectChainId(subscription.chain_id)
-                );
-                outcome.subscribe.push((subscription.name.clone(), id));
-            }
-            Unsubscribe { id, subscription } => {
-                ensure!(
-                    subscription.chain_id == context.chain_id,
-                    SystemExecutionError::IncorrectChainId(subscription.chain_id)
-                );
-                outcome.unsubscribe.push((subscription.name.clone(), id));
-            }
             RegisterApplications { applications } => {
                 for application in applications {
                     self.registry
@@ -852,10 +838,10 @@ where
                 };
                 outcome.messages.push(message);
             }
-            OpenChain(_) => {
-                // This special message is executed immediately when cross-chain requests are received.
-            }
-            ApplicationCreated => (),
+            // These messages are executed immediately when cross-chain requests are received.
+            Subscribe { .. } | Unsubscribe { .. } | OpenChain(_) => {}
+            // This message is only a placeholder: Its ID is part of the application ID.
+            ApplicationCreated => {}
         }
         Ok(outcome)
     }
