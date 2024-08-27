@@ -19,9 +19,8 @@ use linera_views::{
 
 #[tokio::test]
 async fn test_storage_service_reads() -> Result<()> {
-    let endpoint = storage_service_test_endpoint()?;
     for scenario in get_random_test_scenarios() {
-        let key_value_store = create_service_test_store(&endpoint).await?;
+        let key_value_store = create_service_test_store().await?;
         run_reads(key_value_store, scenario).await;
     }
     Ok(())
@@ -29,32 +28,28 @@ async fn test_storage_service_reads() -> Result<()> {
 
 #[tokio::test]
 async fn test_storage_service_writes_from_blank() -> Result<()> {
-    let endpoint = storage_service_test_endpoint()?;
-    let key_value_store = create_service_test_store(&endpoint).await?;
+    let key_value_store = create_service_test_store().await?;
     run_writes_from_blank(&key_value_store).await;
     Ok(())
 }
 
 #[tokio::test]
 async fn test_storage_service_writes_from_state() -> Result<()> {
-    let endpoint = storage_service_test_endpoint()?;
-    let key_value_store = create_service_test_store(&endpoint).await?;
+    let key_value_store = create_service_test_store().await?;
     run_writes_from_state(&key_value_store).await;
     Ok(())
 }
 
 #[tokio::test]
 async fn test_storage_service_admin() -> Result<()> {
-    let endpoint = storage_service_test_endpoint()?;
-    let config = service_config_from_endpoint(&endpoint)?;
+    let config = service_config_from_endpoint()?;
     admin_test::<ServiceStoreClient>(&config).await;
     Ok(())
 }
 
 #[tokio::test]
 async fn test_storage_service_big_raw_write() -> Result<()> {
-    let endpoint = storage_service_test_endpoint()?;
-    let key_value_store = create_service_test_store(&endpoint).await?;
+    let key_value_store = create_service_test_store().await?;
     let n = 5000000;
     let mut rng = test_utils::make_deterministic_rng();
     let vector = get_random_byte_vector(&mut rng, &[], n);
