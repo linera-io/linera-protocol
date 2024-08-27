@@ -14,7 +14,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
-    BytecodeLocation, ExecutionError, SystemExecutionError,
+    ExecutionError, SystemExecutionError,
 };
 use linera_version::VersionInfo;
 use linera_views::views::ViewError;
@@ -61,7 +61,6 @@ pub trait LocalValidatorNode {
     async fn handle_certificate(
         &self,
         certificate: Certificate,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
@@ -176,8 +175,8 @@ pub enum NodeError {
         height: BlockHeight,
     },
 
-    #[error("The following values containing application bytecode are missing: {0:?} and the following blobs are missing: {1:?}.")]
-    ApplicationBytecodesOrBlobsNotFound(Vec<BytecodeLocation>, Vec<BlobId>),
+    #[error("The following blobs are missing: {0:?}.")]
+    BlobsNotFound(Vec<BlobId>),
 
     // This error must be normalized during conversions.
     #[error("We don't have the value for the certificate.")]
@@ -297,9 +296,7 @@ impl From<WorkerError> for NodeError {
         match error {
             WorkerError::ChainError(error) => (*error).into(),
             WorkerError::MissingCertificateValue => Self::MissingCertificateValue,
-            WorkerError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids) => {
-                NodeError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids)
-            }
+            WorkerError::BlobsNotFound(blob_ids) => NodeError::BlobsNotFound(blob_ids),
             error => Self::WorkerError {
                 error: error.to_string(),
             },

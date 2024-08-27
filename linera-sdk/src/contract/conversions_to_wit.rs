@@ -90,7 +90,8 @@ impl From<ApplicationId> for wit_system_api::ApplicationId {
 impl From<BytecodeId> for wit_system_api::BytecodeId {
     fn from(bytecode_id: BytecodeId) -> Self {
         wit_system_api::BytecodeId {
-            message_id: bytecode_id.message_id.into(),
+            contract_blob_hash: bytecode_id.contract_blob_hash.into(),
+            service_blob_hash: bytecode_id.service_blob_hash.into(),
         }
     }
 }

@@ -897,10 +897,6 @@ enum SystemChannel {
 	Channel used to broadcast reconfigurations.
 	"""
 	ADMIN
-	"""
-	Channel used to broadcast new published bytecodes.
-	"""
-	PUBLISHED_BYTECODES
 }
 
 type SystemExecutionStateView {

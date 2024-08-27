@@ -656,16 +656,12 @@ where
         self.write_batch(batch).await
     }
 
-    async fn write_hashed_certificate_values_blobs_certificate(
+    async fn write_blobs_and_certificate(
         &self,
-        values: &[HashedCertificateValue],
         blobs: &[Blob],
         certificate: &Certificate,
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        for value in values {
-            Self::add_hashed_cert_value_to_batch(value, &mut batch)?;
-        }
         for blob in blobs {
             Self::add_blob_to_batch(blob, &mut batch)?;
         }

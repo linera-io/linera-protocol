@@ -12,8 +12,6 @@ use std::{
     sync::Arc,
 };
 
-#[cfg(with_testing)]
-use linera_base::identifiers::BytecodeId;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
@@ -28,8 +26,8 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, BytecodeLocation, ExecutionRequest, Query, QueryContext, Response,
-    ServiceRuntimeRequest, UserApplicationDescription, UserApplicationId,
+    committee::Epoch, ExecutionRequest, Query, QueryContext, Response, ServiceRuntimeRequest,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::{ClonableView, ViewError};
@@ -167,19 +165,6 @@ where
             .await
     }
 
-    /// Returns the [`BytecodeLocation`] for the requested [`BytecodeId`], if it is known by the
-    /// chain.
-    #[cfg(with_testing)]
-    pub(super) async fn read_bytecode_location(
-        &mut self,
-        bytecode_id: BytecodeId,
-    ) -> Result<Option<BytecodeLocation>, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges::new(self)
-            .await
-            .read_bytecode_location(bytecode_id)
-            .await
-    }
-
     /// Returns an application's description.
     pub(super) async fn describe_application(
         &mut self,
@@ -243,12 +228,11 @@ where
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: Certificate,
-        hashed_certificate_values: &[HashedCertificateValue],
         blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .process_validated_block(certificate, hashed_certificate_values, blobs)
+            .process_validated_block(certificate, blobs)
             .await
     }
 
@@ -256,12 +240,11 @@ where
     pub(super) async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
-        hashed_certificate_values: &[HashedCertificateValue],
         blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .process_confirmed_block(certificate, hashed_certificate_values, blobs)
+            .process_confirmed_block(certificate, blobs)
             .await
     }
 
@@ -323,28 +306,19 @@ where
         Ok(())
     }
 
-    /// Returns an error if the block requires bytecode or a blob we don't have, or if unrelated bytecode
-    /// hashed certificate values or blobs were provided.
+    /// Returns an error if the block requires a blob we don't have, or if unrelated blobs were provided.
     async fn check_no_missing_blobs(
         &self,
-        block: &Block,
         blobs_in_block: HashSet<BlobId>,
-        hashed_certificate_values: &[HashedCertificateValue],
         blobs: &[Blob],
     ) -> Result<(), WorkerError> {
-        let missing_bytecodes = self
-            .get_missing_bytecodes(block, hashed_certificate_values)
-            .await?;
         let missing_blobs = self.get_missing_blobs(blobs_in_block, blobs).await?;
 
-        if missing_bytecodes.is_empty() && missing_blobs.is_empty() {
+        if missing_blobs.is_empty() {
             return Ok(());
         }
 
-        Err(WorkerError::ApplicationBytecodesOrBlobsNotFound(
-            missing_bytecodes,
-            missing_blobs,
-        ))
+        Err(WorkerError::BlobsNotFound(missing_blobs))
     }
 
     /// Returns the blobs required by the block that we don't have, or an error if unrelated blobs were provided.
@@ -388,53 +362,6 @@ where
         }
 
         Ok(blobs)
-    }
-
-    /// Returns an error if the block requires bytecode we don't have, or if unrelated bytecode
-    /// hashed certificate values were provided.
-    async fn get_missing_bytecodes(
-        &self,
-        block: &Block,
-        hashed_certificate_values: &[HashedCertificateValue],
-    ) -> Result<Vec<BytecodeLocation>, WorkerError> {
-        // Find all certificates containing bytecode used when executing this block.
-        let mut required_locations_left: HashMap<_, _> = block
-            .bytecode_locations()
-            .into_iter()
-            .map(|bytecode_location| (bytecode_location.certificate_hash, bytecode_location))
-            .collect();
-        for value in hashed_certificate_values {
-            let value_hash = value.hash();
-            ensure!(
-                required_locations_left.remove(&value_hash).is_some(),
-                WorkerError::UnneededValue { value_hash }
-            );
-        }
-        let locations = self
-            .recent_hashed_certificate_values
-            .subtract_cached_items_from::<_, Vec<_>>(
-                required_locations_left.into_values(),
-                |location| &location.certificate_hash,
-            )
-            .await
-            .into_iter()
-            .collect::<Vec<_>>();
-        let hashes = locations
-            .iter()
-            .map(|location| location.certificate_hash)
-            .collect::<Vec<_>>();
-        let results = self
-            .storage
-            .contains_hashed_certificate_values(hashes)
-            .await?;
-        let mut missing_locations = vec![];
-        for (location, result) in locations.into_iter().zip(results) {
-            if !result {
-                missing_locations.push(location);
-            }
-        }
-
-        Ok(missing_locations)
     }
 
     /// Inserts a [`Blob`] into the worker's cache.

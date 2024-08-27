@@ -10,10 +10,9 @@
 
 use std::{borrow::Cow, mem, ops::Range};
 
+use linera_base::data_types::Bytecode;
 use wasm_encoder::{Encode, Function};
 use wasmparser::{BinaryReaderError, FunctionBody, Parser, Payload};
-
-use crate::Bytecode;
 
 /// Sanitizes the input `bytecode`, ensuring that all functions end with a `return` instruction.
 ///
@@ -407,8 +406,9 @@ impl<'bytecode> Sanitizer<'bytecode> {
 
 #[cfg(all(test, with_wasmer))]
 mod tests {
+    use linera_base::data_types::Bytecode;
+
     use super::sanitize;
-    use crate::Bytecode;
 
     /// Tests if an already sanitized bytecode isn't changed.
     #[test]

@@ -12,8 +12,8 @@ use linera_base::{
 };
 use linera_core::client::BlanketMessagePolicy;
 use linera_execution::{
-    committee::ValidatorName, system::SystemChannel, ResourceControlPolicy, UserApplicationId,
-    WasmRuntime, WithWasmDefault as _,
+    committee::ValidatorName, ResourceControlPolicy, UserApplicationId, WasmRuntime,
+    WithWasmDefault as _,
 };
 use linera_views::common::CommonStoreConfig;
 
@@ -311,36 +311,6 @@ pub enum ClientCommand {
         /// balance.
         #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
-    },
-
-    /// Subscribe to a system channel.
-    Subscribe {
-        /// Chain ID (must be one of our chains).
-        #[arg(long)]
-        subscriber: Option<ChainId>,
-
-        /// Chain ID.
-        #[arg(long)]
-        publisher: Option<ChainId>,
-
-        /// System channel available in the system application.
-        #[arg(long)]
-        channel: SystemChannel,
-    },
-
-    /// Unsubscribe from a system channel.
-    Unsubscribe {
-        /// Chain ID (must be one of our chains).
-        #[arg(long)]
-        subscriber: Option<ChainId>,
-
-        /// Chain ID.
-        #[arg(long)]
-        publisher: Option<ChainId>,
-
-        /// System channel available in the system application.
-        #[arg(long)]
-        channel: SystemChannel,
     },
 
     /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.

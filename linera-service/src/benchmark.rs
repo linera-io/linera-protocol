@@ -11,7 +11,6 @@ use linera_base::{
     data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, Owner},
 };
-use linera_execution::system::SystemChannel;
 use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
 use linera_service::cli_wrappers::{
     local_net::{PathProvider, ProcessInbox},
@@ -108,17 +107,11 @@ async fn benchmark_with_fungible(
     .await?;
 
     info!("Starting the node services and subscribing to the publisher chain.");
-    let publisher_chain_id = publisher.default_chain().context("missing default chain")?;
     let mut services = Vec::new();
     for client in &clients {
         let free_port = random_free_tcp_port().context("no free TCP port")?;
-        let chain_id = client.default_chain().context("missing default chain")?;
         let node_service = client
             .run_node_service(free_port, ProcessInbox::Automatic)
-            .await?;
-        let channel = SystemChannel::PublishedBytecodes;
-        node_service
-            .subscribe(chain_id, publisher_chain_id, channel)
             .await?;
         services.push(node_service);
     }

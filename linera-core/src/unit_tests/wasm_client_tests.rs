@@ -19,7 +19,7 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, Blob, OracleResponse},
+    data_types::{Amount, Blob, Bytecode, OracleResponse},
     identifiers::{
         AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner, StreamId,
         StreamName,
@@ -28,7 +28,7 @@ use linera_base::{
 };
 use linera_chain::data_types::{CertificateValue, EventRecord, MessageAction, OutgoingMessage};
 use linera_execution::{
-    Bytecode, Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage,
+    Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage,
     UserApplicationDescription, WasmRuntime,
 };
 use linera_storage::Storage;
@@ -104,24 +104,13 @@ where
         .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
 
-    let cert = creator
-        .subscribe_to_published_bytecodes(publisher.chain_id)
-        .await
-        .unwrap()
-        .unwrap();
-    publisher
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    publisher.process_inbox().await.unwrap();
-
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
 
     let contract_blob = Blob::load_data_blob_from_file(contract_path.clone()).await?;
     let expected_contract_blob_id = contract_blob.id();
     let certificate = publisher
-        .publish_blob(contract_blob.clone())
+        .publish_data_blob(contract_blob.content().clone())
         .await
         .unwrap()
         .unwrap();
@@ -136,7 +125,11 @@ where
 
     let service_blob = Blob::load_data_blob_from_file(service_path.clone()).await?;
     let expected_service_blob_id = service_blob.id();
-    let certificate = publisher.publish_blob(service_blob).await.unwrap().unwrap();
+    let certificate = publisher
+        .publish_data_blob(service_blob.content().clone())
+        .await
+        .unwrap()
+        .unwrap();
     assert!(certificate
         .value()
         .executed_block()
@@ -148,7 +141,7 @@ where
 
     // If I try to upload the contract blob again, I should get the same blob ID
     let certificate = publisher
-        .publish_blob(contract_blob)
+        .publish_data_blob(contract_blob.into_inner())
         .await
         .unwrap()
         .unwrap();
@@ -161,7 +154,7 @@ where
         .iter()
         .any(|responses| responses.contains(&OracleResponse::Blob(expected_contract_blob_id))));
 
-    let (bytecode_id, cert) = publisher
+    let (bytecode_id, _cert) = publisher
         .publish_bytecode(
             Bytecode::load_from_file(contract_path).await?,
             Bytecode::load_from_file(service_path).await?,
@@ -170,19 +163,13 @@ where
         .unwrap()
         .unwrap();
     let bytecode_id = bytecode_id.with_abi::<counter::CounterAbi, (), u64>();
-    // Receive our own cert to broadcast the bytecode location.
-    publisher
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    publisher.process_inbox().await.unwrap();
 
     creator.synchronize_from_validators().await.unwrap();
     creator.process_inbox().await.unwrap();
 
-    // No fuel was used so far, but some storage for messages and operations in three blocks.
+    // No fuel was used so far.
     let balance_after_messaging = creator.local_balance().await?;
-    assert!(balance_after_messaging < Amount::ONE);
+    assert_eq!(balance_after_messaging, Amount::ONE);
 
     let initial_value = 10_u64;
     let (application_id, _) = creator
@@ -324,18 +311,7 @@ where
         .await
         .unwrap();
 
-    let cert = creator
-        .subscribe_to_published_bytecodes(publisher.chain_id)
-        .await
-        .unwrap()
-        .unwrap();
-    publisher
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    publisher.process_inbox().await.unwrap();
-
-    let (bytecode_id1, cert1) = {
+    let (bytecode_id1, _cert1) = {
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
         publisher
@@ -348,7 +324,7 @@ where
             .unwrap()
     };
     let bytecode_id1 = bytecode_id1.with_abi::<counter::CounterAbi, (), u64>();
-    let (bytecode_id2, cert2) = {
+    let (bytecode_id2, _cert2) = {
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths("meta_counter")?;
         publisher
@@ -362,20 +338,9 @@ where
     };
     let bytecode_id2 =
         bytecode_id2.with_abi::<meta_counter::MetaCounterAbi, ApplicationId<CounterAbi>, ()>();
-    // Receive our own certs to broadcast the bytecode locations.
-    publisher
-        .receive_certificate_and_update_validators(cert1)
-        .await
-        .unwrap();
-    publisher
-        .receive_certificate_and_update_validators(cert2)
-        .await
-        .unwrap();
-    publisher.process_inbox().await.unwrap();
 
     // Creator receives the bytecodes then creates the app.
     creator.synchronize_from_validators().await.unwrap();
-    creator.process_inbox().await.unwrap();
     let initial_value = 10_u64;
     let (application_id1, _) = creator
         .create_application(bytecode_id1, &(), &initial_value, vec![])
@@ -431,6 +396,7 @@ where
         assert!(responses.is_empty());
     }
 
+    receiver.synchronize_from_validators().await.unwrap();
     receiver
         .receive_certificate_and_update_validators(cert)
         .await
@@ -596,7 +562,7 @@ where
         .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
 
-    let (bytecode_id, pub_cert) = {
+    let (bytecode_id, _pub_cert) = {
         let bytecode_name = "fungible";
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths(bytecode_name)?;
@@ -611,13 +577,6 @@ where
     };
     let bytecode_id = bytecode_id
         .with_abi::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>();
-
-    // Receive our own cert to broadcast the bytecode location.
-    sender
-        .receive_certificate_and_update_validators(pub_cert.clone())
-        .await
-        .unwrap();
-    sender.process_inbox().await.unwrap();
 
     let sender_owner = AccountOwner::User(Owner::from(sender.key_pair().await?.public()));
     let receiver_owner = AccountOwner::User(Owner::from(receiver.key_pair().await?.public()));
@@ -679,7 +638,7 @@ where
     assert!(messages.iter().any(|msg| matches!(
         &msg.bundle.messages[0].message,
         Message::System(SystemMessage::RegisterApplications { applications })
-        if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.hash())
+        if applications.iter().any(|app| app.bytecode_id == bytecode_id.forget_abi())
     )));
     assert!(messages
         .iter()
@@ -810,7 +769,7 @@ where
         .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
 
-    let (bytecode_id, pub_cert) = {
+    let (bytecode_id, _pub_cert) = {
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths("social")?;
         receiver
@@ -823,13 +782,6 @@ where
             .unwrap()
     };
     let bytecode_id = bytecode_id.with_abi::<social::SocialAbi, (), ()>();
-
-    // Receive our own cert to broadcast the bytecode location.
-    receiver
-        .receive_certificate_and_update_validators(pub_cert.clone())
-        .await
-        .unwrap();
-    receiver.process_inbox().await.unwrap();
 
     let (application_id, _cert) = receiver
         .create_application(bytecode_id, &(), &(), vec![])

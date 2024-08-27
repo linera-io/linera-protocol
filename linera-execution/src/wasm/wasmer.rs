@@ -6,6 +6,7 @@
 use std::{marker::Unpin, sync::LazyLock};
 
 use bytes::Bytes;
+use linera_base::data_types::Bytecode;
 use linera_witty::{
     wasmer::{EntrypointInstance, InstanceBuilder},
     ExportTo,
@@ -21,7 +22,7 @@ use super::{
 };
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
-    Bytecode, ContractRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
+    ContractRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
     QueryContext, ServiceRuntime,
 };
 
@@ -239,9 +240,7 @@ pub fn add_metering(bytecode: Bytecode) -> anyhow::Result<Bytecode> {
     )
     .map_err(|_| anyhow::anyhow!("failed to instrument module"))?;
 
-    Ok(Bytecode {
-        bytes: instrumented_module.into_bytes()?,
-    })
+    Ok(Bytecode::new(instrumented_module.into_bytes()?))
 }
 
 impl CachedContractModule {

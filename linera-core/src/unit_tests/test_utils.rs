@@ -133,12 +133,11 @@ where
     async fn handle_certificate(
         &self,
         certificate: Certificate,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
         blobs: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, hashed_certificate_values, blobs, sender)
+            validator.do_handle_certificate(certificate, blobs, sender)
         })
         .await
     }
@@ -264,10 +263,7 @@ where
         let handle_block_proposal_result =
             Self::handle_block_proposal(proposal, &mut validator).await;
         let result = match handle_block_proposal_result {
-            Some(Err(
-                NodeError::ApplicationBytecodesOrBlobsNotFound(_, _)
-                | NodeError::BlobNotFoundOnRead(_),
-            )) => {
+            Some(Err(NodeError::BlobsNotFound(_) | NodeError::BlobNotFoundOnRead(_))) => {
                 handle_block_proposal_result.expect("handle_block_proposal_result should be Some")
             }
             _ => match validator.fault_type {
@@ -311,7 +307,6 @@ where
         certificate: Certificate,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         notifications: &mut Vec<Notification>,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
         blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
@@ -325,7 +320,6 @@ where
                     .state
                     .fully_handle_certificate_with_notifications(
                         certificate,
-                        hashed_certificate_values,
                         blobs,
                         Some(notifications),
                     )
@@ -345,7 +339,7 @@ where
         let mut validator = client.lock().await;
         let result = async move {
             let certificate = validator.state.full_certificate(certificate).await?;
-            self.do_handle_certificate_internal(certificate, &mut validator, vec![], vec![])
+            self.do_handle_certificate_internal(certificate, &mut validator, vec![])
                 .await
         }
         .await;
@@ -356,24 +350,16 @@ where
         &self,
         certificate: Certificate,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
         let mut notifications = Vec::new();
         let is_validated = certificate.value().is_validated();
-        let handle_certificate_result = Self::handle_certificate(
-            certificate,
-            validator,
-            &mut notifications,
-            hashed_certificate_values,
-            blobs,
-        )
-        .await;
+        let handle_certificate_result =
+            Self::handle_certificate(certificate, validator, &mut notifications, blobs).await;
         let result = match handle_certificate_result {
-            Some(Err(
-                NodeError::ApplicationBytecodesOrBlobsNotFound(_, _)
-                | NodeError::BlobNotFoundOnRead(_),
-            )) => handle_certificate_result.expect("handle_certificate_result should be Some"),
+            Some(Err(NodeError::BlobsNotFound(_) | NodeError::BlobNotFoundOnRead(_))) => {
+                handle_certificate_result.expect("handle_certificate_result should be Some")
+            }
             _ => match validator.fault_type {
                 FaultType::DontSendConfirmVote | FaultType::DontProcessValidated
                     if is_validated =>
@@ -401,18 +387,12 @@ where
     async fn do_handle_certificate(
         self,
         certificate: Certificate,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
         blobs: Vec<Blob>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;
         let result = self
-            .do_handle_certificate_internal(
-                certificate,
-                &mut validator,
-                hashed_certificate_values,
-                blobs,
-            )
+            .do_handle_certificate_internal(certificate, &mut validator, blobs)
             .await;
         sender.send(result)
     }

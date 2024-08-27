@@ -252,12 +252,7 @@ where
                 match self
                     .server
                     .state
-                    .handle_certificate(
-                        request.certificate,
-                        request.hashed_certificate_values,
-                        request.blobs,
-                        sender,
-                    )
+                    .handle_certificate(request.certificate, request.blobs, sender)
                     .await
                 {
                     Ok((info, actions)) => {

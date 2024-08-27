@@ -14,11 +14,9 @@ use linera_views::{common::Context, map_view::MapView, views::ViewError};
 use crate::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
     system::{Recipient, UserData},
-    Bytecode, ChannelSubscription, ExecutionStateView, SystemExecutionStateView,
-    UserApplicationDescription,
+    ChannelSubscription, ExecutionStateView, SystemExecutionStateView, UserApplicationDescription,
 };
 
-doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(
     Epoch,
     "A number identifying the configuration of the chain (aka the committee)"

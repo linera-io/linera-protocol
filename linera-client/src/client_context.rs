@@ -57,10 +57,9 @@ use {
 #[cfg(feature = "fs")]
 use {
     linera_base::{
-        data_types::Blob,
+        data_types::{BlobContent, Bytecode},
         identifiers::{BlobId, BytecodeId},
     },
-    linera_execution::Bytecode,
     std::path::PathBuf,
 };
 
@@ -415,18 +414,20 @@ where
         blob_path: PathBuf,
     ) -> Result<BlobId, Error> {
         info!("Loading data blob file");
-        let blob = Blob::load_data_blob_from_file(&blob_path)
+        let blob_content = BlobContent::load_from_file(&blob_path)
             .await
-            .context(format!("failed to load data blob from {:?}", &blob_path))?;
-        let blob_id = blob.id();
+            .context(format!(
+                "failed to load data blob content from {:?}",
+                &blob_path
+            ))?;
 
         info!("Publishing data blob");
         self.apply_client_command(chain_client, |chain_client| {
-            let blob = blob.clone();
+            let blob_content = blob_content.clone();
             let chain_client = chain_client.clone();
             async move {
                 chain_client
-                    .publish_blob(blob)
+                    .publish_data_blob(blob_content)
                     .await
                     .context("Failed to publish data blob")
             }
@@ -434,7 +435,7 @@ where
         .await?;
 
         info!("{}", "Data blob published successfully!");
-        Ok(blob_id)
+        Ok(BlobId::new_data(&blob_content))
     }
 }
 
@@ -656,7 +657,6 @@ where
                 block.clone(),
                 key_pair,
                 vec![],
-                vec![],
             );
             proposals.push(proposal.into());
             next_recipient = chain.chain_id;
@@ -776,7 +776,7 @@ where
         // Replay the certificates locally.
         for certificate in certificates {
             // No required certificates from other chains: This is only used with benchmark.
-            node.handle_certificate(certificate, vec![], vec![], &mut vec![])
+            node.handle_certificate(certificate, vec![], &mut vec![])
                 .await
                 .unwrap();
         }

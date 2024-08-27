@@ -19,14 +19,12 @@ use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlobContent},
+    data_types::{Amount, BlobContent, Bytecode},
     identifiers::{Account, ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_client::{config::GenesisConfig, wallet::Wallet};
 use linera_core::worker::Notification;
-use linera_execution::{
-    committee::ValidatorName, system::SystemChannel, Bytecode, ResourceControlPolicy,
-};
+use linera_execution::{committee::ValidatorName, system::SystemChannel, ResourceControlPolicy};
 use linera_version::VersionInfo;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_json::{json, Value};

@@ -919,16 +919,11 @@ where
         .await
         .unwrap()
         .unwrap();
-    client2
-        .subscribe_to_published_bytecodes(ChainId::root(1))
-        .await
-        .unwrap()
-        .unwrap();
     client1.synchronize_from_validators().await.unwrap();
     let (certificates, _) = client1.process_inbox().await.unwrap();
     let block = certificates[0].value().block().unwrap();
     assert!(block.operations.is_empty());
-    assert_eq!(block.incoming_bundles.len(), 2);
+    assert_eq!(block.incoming_bundles.len(), 1);
     assert_matches!(
         &block.incoming_bundles[0],
         IncomingBundle {
@@ -942,23 +937,6 @@ where
             [PostedMessage {
                 message: Message::System(SystemMessage::Credit { .. }),
                 kind: MessageKind::Tracked,
-                ..
-            }]
-        )
-    );
-    assert_matches!(
-        &block.incoming_bundles[1],
-        IncomingBundle {
-            origin: Origin { sender, medium: Medium::Direct },
-            action: MessageAction::Reject,
-            bundle: MessageBundle {
-                messages,
-                ..
-            },
-        } if *sender == ChainId::root(2) && matches!(messages[..],
-            [PostedMessage {
-                message: Message::System(SystemMessage::Subscribe { .. }),
-                kind: MessageKind::Protected,
                 ..
             }]
         )
@@ -1508,7 +1486,7 @@ where
 
     let description2 = ChainDescription::Root(2);
     let chain_id2 = ChainId::from(description2);
-    let mut client2_a = builder
+    let client2_a = builder
         .add_initial_chain(description2, Amount::from_tokens(10))
         .await?;
     let pub_key2_a = client2_a.public_key().await.unwrap();
@@ -1547,7 +1525,11 @@ where
     builder.set_fault_type([2], FaultType::Offline).await;
 
     // Publish blob on chain 1
-    let publish_certificate = client1_a.publish_blob(blob0).await.unwrap().unwrap();
+    let publish_certificate = client1_a
+        .publish_data_blob(blob0.into_inner())
+        .await
+        .unwrap()
+        .unwrap();
     assert!(publish_certificate
         .value()
         .executed_block()
@@ -1579,12 +1561,14 @@ where
 
     client2_a.synchronize_from_validators().await.unwrap();
     let blob1 = Blob::test_data_blob("blob1");
-    let blob1_id = blob1.id();
+    let blob1_hash = blob1.id().hash;
 
-    client2_a.add_pending_blobs(&[blob1]).await;
+    client2_a.add_pending_blobs([blob1]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
-        Operation::System(SystemOperation::PublishBlob { blob_id: blob1_id }),
+        Operation::System(SystemOperation::PublishDataBlob {
+            blob_hash: blob1_hash,
+        }),
     ];
     let b0_result = client2_a
         .execute_operations(blob_0_1_operations.clone())
@@ -1671,7 +1655,7 @@ where
     let client1 = builder
         .add_initial_chain(description1, Amount::ZERO)
         .await?;
-    let mut client2_a = builder
+    let client2_a = builder
         .add_initial_chain(description2, Amount::from_tokens(10))
         .await?;
     let pub_key2_a = client2_a.public_key().await.unwrap();
@@ -1703,7 +1687,11 @@ where
     let blob0_id = blob0.id();
 
     // Publish blob on chain 1
-    let publish_certificate = client1.publish_blob(blob0).await.unwrap().unwrap();
+    let publish_certificate = client1
+        .publish_data_blob(blob0.into_inner())
+        .await
+        .unwrap()
+        .unwrap();
     assert!(publish_certificate
         .value()
         .executed_block()
@@ -1716,12 +1704,14 @@ where
 
     client2_a.synchronize_from_validators().await.unwrap();
     let blob1 = Blob::test_data_blob("blob1");
-    let blob1_id = blob1.id();
+    let blob1_hash = blob1.id().hash;
 
-    client2_a.add_pending_blobs(&[blob1]).await;
+    client2_a.add_pending_blobs([blob1]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
-        Operation::System(SystemOperation::PublishBlob { blob_id: blob1_id }),
+        Operation::System(SystemOperation::PublishDataBlob {
+            blob_hash: blob1_hash,
+        }),
     ];
     let b0_result = client2_a
         .execute_operations(blob_0_1_operations.clone())
@@ -1808,7 +1798,7 @@ where
     let client2 = builder
         .add_initial_chain(description2, Amount::ZERO)
         .await?;
-    let mut client3_a = builder
+    let client3_a = builder
         .add_initial_chain(description3, Amount::from_tokens(10))
         .await?;
     let pub_key3_a = client3_a.public_key().await.unwrap();
@@ -1826,7 +1816,7 @@ where
         .execute_operation(owner_change_op.clone())
         .await
         .unwrap();
-    let mut client3_b = builder
+    let client3_b = builder
         .make_client(
             chain_id3,
             key_pair3_b,
@@ -1851,7 +1841,11 @@ where
 
     client1.synchronize_from_validators().await.unwrap();
     // Publish blob0 on chain 1
-    let publish_certificate0 = client1.publish_blob(blob0).await.unwrap().unwrap();
+    let publish_certificate0 = client1
+        .publish_data_blob(blob0.into_inner())
+        .await
+        .unwrap()
+        .unwrap();
     assert!(publish_certificate0
         .value()
         .executed_block()
@@ -1863,7 +1857,11 @@ where
 
     client2.synchronize_from_validators().await.unwrap();
     // Publish blob2 on chain 2
-    let publish_certificate2 = client2.publish_blob(blob2).await.unwrap().unwrap();
+    let publish_certificate2 = client2
+        .publish_data_blob(blob2.into_inner())
+        .await
+        .unwrap()
+        .unwrap();
     assert!(publish_certificate2
         .value()
         .executed_block()
@@ -1879,12 +1877,14 @@ where
 
     client3_a.synchronize_from_validators().await.unwrap();
     let blob1 = Blob::test_data_blob("blob1");
-    let blob1_id = blob1.id();
+    let blob1_hash = blob1.id().hash;
 
-    client3_a.add_pending_blobs(&[blob1]).await;
+    client3_a.add_pending_blobs([blob1]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
-        Operation::System(SystemOperation::PublishBlob { blob_id: blob1_id }),
+        Operation::System(SystemOperation::PublishDataBlob {
+            blob_hash: blob1_hash,
+        }),
     ];
     let b0_result = client3_a
         .execute_operations(blob_0_1_operations.clone())
@@ -1906,7 +1906,6 @@ where
         .node(2)
         .handle_certificate(
             validated_block_certificate,
-            Vec::new(),
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )
@@ -1953,12 +1952,14 @@ where
 
     client3_b.synchronize_from_validators().await.unwrap();
     let blob3 = Blob::test_data_blob("blob3");
-    let blob3_id = blob3.id();
+    let blob3_hash = blob3.id().hash;
 
-    client3_b.add_pending_blobs(&[blob3]).await;
+    client3_b.add_pending_blobs([blob3]).await;
     let blob_2_3_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob2_id }),
-        Operation::System(SystemOperation::PublishBlob { blob_id: blob3_id }),
+        Operation::System(SystemOperation::PublishDataBlob {
+            blob_hash: blob3_hash,
+        }),
     ];
     let b1_result = client3_b
         .execute_operations(blob_2_3_operations.clone())
@@ -1978,7 +1979,6 @@ where
         .node(3)
         .handle_certificate(
             validated_block_certificate,
-            Vec::new(),
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )
@@ -2249,7 +2249,9 @@ where
         .manager;
     assert!(manager.requested_proposed.is_some());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
-    let result = client1.publish_blob(Blob::test_data_blob("blob1")).await;
+    let result = client1
+        .publish_data_blob(BlobContent::test_blob_content("blob1"))
+        .await;
     assert!(result.is_err());
     assert!(client1.pending_block().is_some());
     assert!(!client1.pending_blobs().is_empty());
@@ -2407,7 +2409,6 @@ where
         .node(0)
         .handle_certificate(
             validated_block_certificate,
-            Vec::new(),
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )

@@ -4202,6 +4202,7 @@ dependencies = [
  "tracing-subscriber",
  "wasm-bindgen-futures",
  "web-time",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -4391,7 +4392,6 @@ dependencies = [
  "wasm-instrument",
  "wasmparser 0.101.1",
  "wasmtime",
- "zstd 0.13.2",
 ]
 
 [[package]]

@@ -179,9 +179,6 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
             content: bincode::serialize(&block_proposal.content)?,
             owner: Some(block_proposal.owner.into()),
             signature: Some(block_proposal.signature.into()),
-            hashed_certificate_values: bincode::serialize(
-                &block_proposal.hashed_certificate_values,
-            )?,
             blobs: bincode::serialize(&block_proposal.blobs)?,
             validated_block_certificate: block_proposal
                 .validated_block_certificate
@@ -204,9 +201,6 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
             content,
             owner: try_proto_convert(block_proposal.owner)?,
             signature: try_proto_convert(block_proposal.signature)?,
-            hashed_certificate_values: bincode::deserialize(
-                &block_proposal.hashed_certificate_values,
-            )?,
             blobs: bincode::deserialize(&block_proposal.blobs)?,
             validated_block_certificate: block_proposal
                 .validated_block_certificate
@@ -322,12 +316,10 @@ impl TryFrom<api::HandleCertificateRequest> for HandleCertificateRequest {
             Some(value.inner().chain_id().into()) == cert_request.chain_id,
             GrpcProtoConversionError::InconsistentChainId
         );
-        let values = bincode::deserialize(&cert_request.hashed_certificate_values)?;
         let blobs = bincode::deserialize(&cert_request.blobs)?;
         Ok(HandleCertificateRequest {
             certificate: certificate.try_into()?,
             wait_for_outgoing_messages: cert_request.wait_for_outgoing_messages,
-            hashed_certificate_values: values,
             blobs,
         })
     }
@@ -340,7 +332,6 @@ impl TryFrom<HandleCertificateRequest> for api::HandleCertificateRequest {
         Ok(Self {
             chain_id: Some(request.certificate.value().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
-            hashed_certificate_values: bincode::serialize(&request.hashed_certificate_values)?,
             blobs: bincode::serialize(&request.blobs)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
         })
@@ -792,16 +783,8 @@ pub mod tests {
                 Signature::new(&Foo("test".into()), &key_pair),
             )],
         );
-        let values = vec![HashedCertificateValue::new_validated(
-            BlockExecutionOutcome {
-                state_hash: CryptoHash::new(&Foo("also test".into())),
-                ..BlockExecutionOutcome::default()
-            }
-            .with(get_block()),
-        )];
         let request = HandleCertificateRequest {
             certificate,
-            hashed_certificate_values: values,
             blobs: vec![],
             wait_for_outgoing_messages: false,
         };
@@ -859,13 +842,6 @@ pub mod tests {
             },
             owner: Owner::from(KeyPair::generate().public()),
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
-            hashed_certificate_values: vec![HashedCertificateValue::new_confirmed(
-                BlockExecutionOutcome {
-                    state_hash: CryptoHash::new(&Foo("execution state".into())),
-                    ..BlockExecutionOutcome::default()
-                }
-                .with(get_block()),
-            )],
             blobs: vec![],
             validated_block_certificate: Some(cert),
         };

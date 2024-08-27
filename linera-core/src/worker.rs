@@ -11,11 +11,11 @@ use std::{
 };
 
 #[cfg(with_testing)]
-use linera_base::{crypto::PublicKey, identifiers::BytecodeId};
+use linera_base::crypto::PublicKey;
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
     data_types::{ArithmeticError, Blob, BlockHeight, Round},
-    doc_scalar, ensure,
+    doc_scalar,
     identifiers::{BlobId, ChainId, Owner},
 };
 use linera_chain::{
@@ -26,8 +26,7 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, BytecodeLocation, Query, Response, UserApplicationDescription,
-    UserApplicationId,
+    committee::Epoch, Query, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -206,8 +205,8 @@ pub enum WorkerError {
     MissingExecutedBlockInProposal,
     #[error("Fast blocks cannot query oracles")]
     FastBlockUsingOracles,
-    #[error("The following values containing application bytecode are missing: {0:?} and the following blobs are missing: {1:?}.")]
-    ApplicationBytecodesOrBlobsNotFound(Vec<BytecodeLocation>, Vec<BlobId>),
+    #[error("The following blobs are missing: {0:?}.")]
+    BlobsNotFound(Vec<BlobId>),
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
 }
@@ -362,41 +361,30 @@ where
     ViewError: From<StorageClient::StoreError>,
 {
     // NOTE: This only works for non-sharded workers!
-    #[tracing::instrument(
-        level = "trace",
-        skip(self, certificate, hashed_certificate_values, blobs)
-    )]
+    #[tracing::instrument(level = "trace", skip(self, certificate, blobs))]
     #[cfg(with_testing)]
     pub async fn fully_handle_certificate(
         &self,
         certificate: Certificate,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.fully_handle_certificate_with_notifications(
             certificate,
-            hashed_certificate_values,
             blobs,
             None::<&mut Vec<Notification>>,
         )
         .await
     }
 
-    #[tracing::instrument(
-        level = "trace",
-        skip(self, certificate, hashed_certificate_values, blobs, notifications)
-    )]
+    #[tracing::instrument(level = "trace", skip(self, certificate, blobs, notifications))]
     #[inline]
     pub(crate) async fn fully_handle_certificate_with_notifications(
         &self,
         certificate: Certificate,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
         blobs: Vec<Blob>,
         mut notifications: Option<&mut impl Extend<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let (response, actions) = self
-            .handle_certificate(certificate, hashed_certificate_values, blobs, None)
-            .await?;
+        let (response, actions) = self.handle_certificate(certificate, blobs, None).await?;
         if let Some(ref mut notifications) = notifications {
             notifications.extend(actions.notifications);
         }
@@ -472,22 +460,6 @@ where
         .await
     }
 
-    #[tracing::instrument(level = "trace", skip(self, chain_id, bytecode_id))]
-    #[cfg(with_testing)]
-    pub async fn read_bytecode_location(
-        &self,
-        chain_id: ChainId,
-        bytecode_id: BytecodeId,
-    ) -> Result<Option<BytecodeLocation>, WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::ReadBytecodeLocation {
-                bytecode_id,
-                callback,
-            }
-        })
-        .await
-    }
-
     #[tracing::instrument(level = "trace", skip(self, chain_id, application_id))]
     pub async fn describe_application(
         &self,
@@ -506,18 +478,11 @@ where
     /// Processes a confirmed block (aka a commit).
     #[tracing::instrument(
         level = "trace",
-        skip(
-            self,
-            certificate,
-            hashed_certificate_values,
-            blobs,
-            notify_when_messages_are_delivered
-        )
+        skip(self, certificate, blobs, notify_when_messages_are_delivered)
     )]
     async fn process_confirmed_block(
         &self,
         certificate: Certificate,
-        hashed_certificate_values: &[HashedCertificateValue],
         blobs: &[Blob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -531,7 +496,6 @@ where
             .query_chain_worker(chain_id, move |callback| {
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
-                    hashed_certificate_values: hashed_certificate_values.to_owned(),
                     blobs: blobs.to_owned(),
                     callback,
                 }
@@ -557,7 +521,6 @@ where
     async fn process_validated_block(
         &self,
         certificate: Certificate,
-        hashed_certificate_values: &[HashedCertificateValue],
         blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let CertificateValue::ValidatedBlock {
@@ -569,7 +532,6 @@ where
         self.query_chain_worker(block.chain_id, move |callback| {
             ChainWorkerRequest::ProcessValidatedBlock {
                 certificate,
-                hashed_certificate_values: hashed_certificate_values.to_owned(),
                 blobs: blobs.to_owned(),
                 callback,
             }
@@ -748,13 +710,8 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let full_cert = self.full_certificate(certificate).await?;
-        self.handle_certificate(
-            full_cert,
-            vec![],
-            vec![],
-            notify_when_messages_are_delivered,
-        )
-        .await
+        self.handle_certificate(full_cert, vec![], notify_when_messages_are_delivered)
+            .await
     }
 
     /// Processes a certificate.
@@ -766,17 +723,10 @@ where
     pub async fn handle_certificate(
         &self,
         certificate: Certificate,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
         blobs: Vec<Blob>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
-        ensure!(
-            certificate.value().is_confirmed() || hashed_certificate_values.is_empty(),
-            WorkerError::UnneededValue {
-                value_hash: hashed_certificate_values[0].hash(),
-            }
-        );
 
         #[cfg(with_metrics)]
         let (round, log_str, mut confirmed_transactions, mut duplicated) = (
@@ -789,9 +739,7 @@ where
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                let validation_outcomes = self
-                    .process_validated_block(certificate, &hashed_certificate_values, &blobs)
-                    .await?;
+                let validation_outcomes = self.process_validated_block(certificate, &blobs).await?;
                 #[cfg(with_metrics)]
                 {
                     duplicated = validation_outcomes.2;
@@ -811,7 +759,6 @@ where
                 // Execute the confirmed block.
                 self.process_confirmed_block(
                     certificate,
-                    &hashed_certificate_values,
                     &blobs,
                     notify_when_messages_are_delivered,
                 )

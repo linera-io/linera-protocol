@@ -121,8 +121,8 @@ Using the message ID, we can assign the new chain to the key in each wallet:
 ```bash
 kill %% && sleep 1    # Kill the service so we can use CLI commands for wallet 0.
 
-HEX_CHAIN=a393137daba303e8b561cb3a5bff50efba1fb7f24950db28f1844b7ac2c1cf27
-MESSAGE_ID=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65050000000000000000000000
+HEX_CHAIN=ae41b40b288a1e7ed064e2ff749a9ce3e780a5742dca074e6015e77e9dd373f8
+MESSAGE_ID=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000
 
 linera -w0 assign --key $PUB_KEY_1 --message-id $MESSAGE_ID
 linera -w1 assign --key $PUB_KEY_2 --message-id $MESSAGE_ID

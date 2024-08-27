@@ -3331,6 +3331,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -3444,7 +3445,6 @@ dependencies = [
  "wasm-encoder 0.24.1",
  "wasm-instrument",
  "wasmparser 0.101.1",
- "zstd 0.13.2",
 ]
 
 [[package]]

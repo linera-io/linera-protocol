@@ -99,11 +99,10 @@ fn message_id_test_case() -> MessageId {
 /// Creates a dummy [`ApplicationId`] instance to use for the WIT roundtrip test.
 fn application_id_test_case() -> ApplicationId {
     ApplicationId {
-        bytecode_id: BytecodeId::new(MessageId {
-            chain_id: ChainId(CryptoHash::test_hash("bytecode")),
-            height: BlockHeight(521),
-            index: 2_048,
-        }),
+        bytecode_id: BytecodeId::new(
+            CryptoHash::test_hash("contract bytecode"),
+            CryptoHash::test_hash("service bytecode"),
+        ),
         creation: MessageId {
             chain_id: ChainId::root(0),
             height: BlockHeight(0),
@@ -114,11 +113,10 @@ fn application_id_test_case() -> ApplicationId {
 
 /// Creates a dummy [`BytecodeId`] instance to use for the WIT roundtrip test.
 fn bytecode_id_test_case() -> BytecodeId {
-    BytecodeId::new(MessageId {
-        chain_id: ChainId(CryptoHash::test_hash("another bytecode")),
-        height: BlockHeight(9_136),
-        index: 1,
-    })
+    BytecodeId::new(
+        CryptoHash::test_hash("another contract bytecode"),
+        CryptoHash::test_hash("another service bytecode"),
+    )
 }
 
 /// Creates a dummy [`TimeoutConfig`] instance to use for the WIT roundtrip test.

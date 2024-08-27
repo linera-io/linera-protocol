@@ -13,8 +13,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
-        HashedCertificateValue, MessageBundle, Origin, Target,
+        BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, MessageBundle, Origin,
+        Target,
     },
     manager, ChainStateView,
 };
@@ -157,7 +157,6 @@ where
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: Certificate,
-        hashed_certificate_values: &[HashedCertificateValue],
         blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let executed_block = match certificate.value() {
@@ -209,12 +208,7 @@ where
         // Verify that all required bytecode hashed certificate values and blobs are available, and no
         // unrelated ones provided.
         self.state
-            .check_no_missing_blobs(
-                block,
-                executed_block.required_blob_ids(),
-                hashed_certificate_values,
-                blobs,
-            )
+            .check_no_missing_blobs(executed_block.required_blob_ids(), blobs)
             .await?;
         let old_round = self.state.chain.manager.get().current_round;
         self.state.chain.manager.get_mut().create_final_vote(
@@ -238,7 +232,6 @@ where
     pub(super) async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
-        hashed_certificate_values: &[HashedCertificateValue],
         blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
@@ -301,18 +294,8 @@ where
         // Verify that all required bytecode hashed certificate values and blobs are available, and no
         // unrelated ones provided.
         self.state
-            .check_no_missing_blobs(
-                block,
-                required_blob_ids.clone(),
-                hashed_certificate_values,
-                blobs,
-            )
+            .check_no_missing_blobs(required_blob_ids.clone(), blobs)
             .await?;
-        // Persist certificate and hashed certificate values.
-        self.state
-            .recent_hashed_certificate_values
-            .insert_all(hashed_certificate_values.iter().map(Cow::Borrowed))
-            .await;
         for blob in blobs {
             self.state.cache_recent_blob(Cow::Borrowed(blob)).await;
         }
@@ -322,11 +305,7 @@ where
 
         self.state
             .storage
-            .write_hashed_certificate_values_blobs_certificate(
-                hashed_certificate_values,
-                &blobs_in_block,
-                &certificate,
-            )
+            .write_blobs_and_certificate(&blobs_in_block, &certificate)
             .await?;
 
         // Update the blob state with last used certificate hash.

@@ -36,7 +36,6 @@ pub struct HandleLiteCertRequest<'a> {
 pub struct HandleCertificateRequest {
     pub certificate: linera_chain::data_types::Certificate,
     pub wait_for_outgoing_messages: bool,
-    pub hashed_certificate_values: Vec<linera_chain::data_types::HashedCertificateValue>,
     pub blobs: Vec<linera_base::data_types::Blob>,
 }
 

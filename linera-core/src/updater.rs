@@ -219,7 +219,7 @@ where
             }
         }
         self.node
-            .handle_certificate(certificate.clone(), vec![], vec![], delivery)
+            .handle_certificate(certificate.clone(), vec![], delivery)
             .await
     }
 
@@ -233,23 +233,14 @@ where
             .await;
 
         let response = match &result {
-            Err(
-                original_err @ NodeError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids),
-            ) => {
-                let values = self
-                    .local_node
-                    .find_missing_application_bytecodes(&certificate, locations)
-                    .await?;
+            Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
                 let blobs = self
                     .local_node
                     .find_missing_blobs(&certificate, blob_ids, certificate.value().chain_id())
                     .await?;
-                ensure!(
-                    values.len() == locations.len() && blobs.len() == blob_ids.len(),
-                    original_err.clone()
-                );
+                ensure!(blobs.len() == blob_ids.len(), original_err.clone());
                 self.node
-                    .handle_certificate(certificate, values, blobs, delivery)
+                    .handle_certificate(certificate, blobs, delivery)
                     .await
             }
             _ => result,
@@ -274,18 +265,9 @@ where
                 self.send_chain_information_for_senders(chain_id).await?;
                 self.node.handle_block_proposal(proposal.clone()).await?
             }
-            Err(
-                ref e @ NodeError::ApplicationBytecodesOrBlobsNotFound(ref locations, ref blob_ids),
-            ) => {
+            Err(ref e @ NodeError::BlobsNotFound(ref blob_ids)) => {
                 if !blob_ids.is_empty() {
                     return Err(e.clone());
-                }
-
-                if !locations.is_empty() {
-                    // Some received certificates may be missing for this validator
-                    // (e.g. to create the chain or make the balance sufficient) so we are going to
-                    // synchronize them now and retry.
-                    self.send_chain_information_for_senders(chain_id).await?;
                 }
 
                 self.node.handle_block_proposal(proposal.clone()).await?
