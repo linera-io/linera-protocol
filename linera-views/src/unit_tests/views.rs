@@ -15,7 +15,7 @@ use crate::dynamo_db::{
 #[cfg(with_rocksdb)]
 use crate::rocks_db::{RocksDbContext, RocksDbStore};
 #[cfg(with_scylladb)]
-use crate::scylla_db::{create_scylla_db_test_config, ScyllaDbContext, ScyllaDbStore};
+use crate::scylla_db::{ScyllaDbContext, ScyllaDbStore};
 use crate::{
     batch::Batch,
     common::Context,
@@ -267,7 +267,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
     type Context = ScyllaDbContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let config = create_scylla_db_test_config().await;
+        let config = ScyllaDbStore::get_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
         let store = ScyllaDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
