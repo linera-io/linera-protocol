@@ -29,6 +29,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
 use {
+    linera_views::test_utils::generate_test_namespace,
     futures::channel::oneshot::{self, Receiver},
     std::{cmp::Reverse, collections::BTreeMap},
 };
@@ -813,3 +814,45 @@ where
         Ok(Self::create(storage, WallClock))
     }
 }
+
+#[cfg(with_testing)]
+impl<Client> DbStorage<Client, TestClock>
+where
+    Client: KeyValueStore + Clone + Send + Sync + 'static,
+    ViewError: From<Client::Error>,
+    Client::Error:
+        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+{
+    pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
+        let config = Client::get_test_config().await.expect("config");
+        let namespace = generate_test_namespace();
+        let root_key = &[];
+        DbStorage::<Client, TestClock>::new_for_testing(
+            config,
+            &namespace,
+            root_key,
+            wasm_runtime,
+            TestClock::new(),
+        )
+        .await
+        .expect("storage")
+    }
+
+    pub async fn new_for_testing(
+        store_config: Client::Config,
+        namespace: &str,
+        root_key: &[u8],
+        wasm_runtime: Option<WasmRuntime>,
+        clock: TestClock,
+    ) -> Result<Self, Client::Error> {
+        let storage = DbStorageInner::<Client>::new_for_testing(
+            store_config,
+            namespace,
+            root_key,
+            wasm_runtime,
+        )
+        .await?;
+        Ok(Self::create(storage, clock))
+    }
+}
+
