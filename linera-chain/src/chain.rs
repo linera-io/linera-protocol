@@ -1193,7 +1193,7 @@ where
                     return Ok(None); // No messages on this channel yet.
                 }
                 let full_name = ChannelFullName {
-                    application_id: GenericApplicationId::System,
+                    application_id,
                     name,
                 };
                 let target = Target::channel(id, full_name.clone());
