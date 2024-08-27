@@ -7,7 +7,8 @@ use {
     crate::db_storage::{DbStorageInner, TestClock},
     linera_execution::WasmRuntime,
     linera_views::{
-        dynamo_db::{create_dynamo_db_test_config, DynamoDbStoreConfig, DynamoDbStoreError},
+        dynamo_db::{DynamoDbStoreConfig, DynamoDbStoreError},
+        common::{AdminKeyValueStore as _},
         test_utils::generate_test_namespace,
     },
 };
@@ -19,11 +20,11 @@ pub type DynamoDbStorage<C> = DbStorage<DynamoDbStore, C>;
 #[cfg(with_testing)]
 impl DynamoDbStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
-        let store_config = create_dynamo_db_test_config().await;
+        let config = DynamoDbStore::get_test_config().await.expect("config");
         let namespace = generate_test_namespace();
         let root_key = &[];
         DynamoDbStorage::new_for_testing(
-            store_config,
+            config,
             &namespace,
             root_key,
             wasm_runtime,

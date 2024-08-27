@@ -37,7 +37,8 @@ use {
 #[cfg(feature = "rocksdb")]
 use {
     linera_storage::RocksDbStorage,
-    linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStoreConfig},
+    linera_views::common::{AdminKeyValueStore as _},
+    linera_views::rocks_db::RocksDbStore,
     tokio::sync::{Semaphore, SemaphorePermit},
 };
 #[cfg(feature = "scylladb")]
@@ -48,7 +49,7 @@ use {
 #[cfg(not(target_arch = "wasm32"))]
 use {
     linera_storage::ServiceStorage,
-    linera_storage_service::{client::service_config_from_endpoint, storage_service_test_endpoint},
+    linera_storage_service::{client::service_config_from_endpoint, common::storage_service_test_endpoint},
     linera_views::test_utils::generate_test_namespace,
 };
 
@@ -952,7 +953,7 @@ impl StorageBuilder for RocksDbStorageBuilder {
     type Storage = RocksDbStorage<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        let store_config = create_rocks_db_test_config();
+        let store_config = RocksDbStore::get_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
         let storage = RocksDbStorage::new_for_testing(

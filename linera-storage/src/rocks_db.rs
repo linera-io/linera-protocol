@@ -6,7 +6,8 @@ use linera_views::rocks_db::RocksDbStore;
 use {
     crate::db_storage::{DbStorageInner, TestClock},
     linera_execution::WasmRuntime,
-    linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStoreConfig, RocksDbStoreError},
+    linera_views::rocks_db::{RocksDbStoreConfig, RocksDbStoreError},
+    linera_views::common::{AdminKeyValueStore as _},
     linera_views::test_utils::generate_test_namespace,
 };
 
@@ -17,11 +18,11 @@ pub type RocksDbStorage<C> = DbStorage<RocksDbStore, C>;
 #[cfg(with_testing)]
 impl RocksDbStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
-        let store_config = create_rocks_db_test_config().await;
+        let config = RocksDbStore::get_test_config().await.expect("config");
         let namespace = generate_test_namespace();
         let root_key = &[];
         RocksDbStorage::new_for_testing(
-            store_config,
+            config,
             &namespace,
             root_key,
             wasm_runtime,
