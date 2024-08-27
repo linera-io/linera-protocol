@@ -24,14 +24,13 @@ use crate::{
         get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
-    lru_caching::LruCachingStore,
+    lru_caching::{TEST_CACHE_SIZE, LruCachingStore},
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 #[cfg(with_testing)]
-use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace};
+use crate::test_utils::generate_test_namespace;
 
 /// The number of streams for the test
-#[cfg(with_testing)]
 const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
 
 // The maximum size of values in RocksDB is 3 GB
@@ -343,6 +342,15 @@ fn root_key_as_string(root_key: &[u8]) -> String {
 impl AdminKeyValueStore for RocksDbStoreInternal {
     type Config = RocksDbStoreConfig;
 
+    async fn get_test_config() -> Result<RocksDbStoreConfig, RocksDbStoreError> {
+        let path_with_guard = create_rocks_db_test_path();
+        let common_config = create_rocks_db_common_config();
+        Ok(RocksDbStoreConfig {
+            path_with_guard,
+            common_config,
+        })
+    }
+
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -444,7 +452,6 @@ pub struct RocksDbStore {
 }
 
 /// Creates the common initialization for RocksDB
-#[cfg(with_testing)]
 pub fn create_rocks_db_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
         max_concurrent_queries: None,
@@ -473,7 +480,6 @@ impl PathWithGuard {
 }
 
 /// Returns the test path for RocksDB without common config.
-#[cfg(with_testing)]
 pub fn create_rocks_db_test_path() -> PathWithGuard {
     let dir = TempDir::new().unwrap();
     let path_buf = dir.path().to_path_buf();
@@ -481,26 +487,15 @@ pub fn create_rocks_db_test_path() -> PathWithGuard {
     PathWithGuard { path_buf, _dir }
 }
 
-/// Returns the test config and a guard for the temporary directory
-#[cfg(with_testing)]
-pub async fn create_rocks_db_test_config() -> RocksDbStoreConfig {
-    let path_with_guard = create_rocks_db_test_path();
-    let common_config = create_rocks_db_common_config();
-    RocksDbStoreConfig {
-        path_with_guard,
-        common_config,
-    }
-}
-
 /// Creates a RocksDB database client to be used for tests.
 /// The temporary directory has to be carried because if it goes
 /// out of scope then the RocksDB client can become unstable.
 #[cfg(with_testing)]
 pub async fn create_rocks_db_test_store() -> RocksDbStore {
-    let store_config = create_rocks_db_test_config().await;
+    let config = RocksDbStore::get_test_config().await.expect("config");
     let namespace = generate_test_namespace();
     let root_key = &[];
-    RocksDbStore::recreate_and_connect(&store_config, &namespace, root_key)
+    RocksDbStore::recreate_and_connect(&config, &namespace, root_key)
         .await
         .expect("store")
 }
@@ -593,6 +588,11 @@ impl WritableKeyValueStore for RocksDbStore {
 
 impl AdminKeyValueStore for RocksDbStore {
     type Config = RocksDbStoreConfig;
+
+
+    async fn get_test_config() -> Result<RocksDbStoreConfig, RocksDbStoreError> {
+        RocksDbStoreInternal::get_test_config().await
+    }
 
     async fn connect(
         config: &Self::Config,

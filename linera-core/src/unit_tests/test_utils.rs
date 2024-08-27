@@ -37,8 +37,7 @@ use {
 #[cfg(feature = "rocksdb")]
 use {
     linera_storage::RocksDbStorage,
-    linera_views::rocks_db::RocksDbStoreConfig,
-    linera_views::rocks_db::{create_rocks_db_common_config, create_rocks_db_test_path},
+    linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStoreConfig},
     tokio::sync::{Semaphore, SemaphorePermit},
 };
 #[cfg(feature = "scylladb")]
@@ -953,12 +952,7 @@ impl StorageBuilder for RocksDbStorageBuilder {
     type Storage = RocksDbStorage<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        let path_with_guard = create_rocks_db_test_path();
-        let common_config = create_rocks_db_common_config();
-        let store_config = RocksDbStoreConfig {
-            path_with_guard,
-            common_config,
-        };
+        let store_config = create_rocks_db_test_config();
         let namespace = generate_test_namespace();
         let root_key = &[];
         let storage = RocksDbStorage::new_for_testing(
