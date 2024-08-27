@@ -28,7 +28,9 @@ use linera_base::{
         Timestamp,
     },
     ensure,
-    identifiers::{Account, ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{
+        Account, ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner, UserApplicationId,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -46,7 +48,7 @@ use linera_execution::{
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
     },
     ExecutionError, Message, Operation, Query, Response, SystemExecutionError, SystemMessage,
-    SystemQuery, SystemResponse, UserApplicationId,
+    SystemQuery, SystemResponse,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;

@@ -6,9 +6,9 @@
 use std::borrow::Cow;
 
 use linera_base::{
-    data_types::{ArithmeticError, Timestamp},
+    data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
     ensure,
-    identifiers::GenericApplicationId,
+    identifiers::{GenericApplicationId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{
@@ -17,9 +17,7 @@ use linera_chain::{
     },
     manager,
 };
-use linera_execution::{
-    ChannelSubscription, Query, Response, UserApplicationDescription, UserApplicationId,
-};
+use linera_execution::{ChannelSubscription, Query, Response};
 use linera_storage::Storage;
 use linera_views::views::{View, ViewError};
 #[cfg(with_testing)]

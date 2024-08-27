@@ -3,17 +3,12 @@
 
 use std::collections::{HashMap, HashSet};
 
-use custom_debug_derive::Debug;
-use linera_base::{
-    hex_debug,
-    identifiers::{BytecodeId, MessageId},
-};
+use linera_base::{data_types::UserApplicationDescription, identifiers::UserApplicationId};
 use linera_views::{
     common::Context,
     map_view::HashedMapView,
     views::{ClonableView, HashableView, ViewError},
 };
-use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
 use {
     linera_views::memory::{create_test_memory_context, MemoryContext},
@@ -26,35 +21,6 @@ use crate::SystemExecutionError;
 #[cfg(test)]
 #[path = "unit_tests/applications_tests.rs"]
 mod applications_tests;
-
-/// Alias for `linera_base::identifiers::ApplicationId`. Use this alias in the core
-/// protocol where the distinction with the more general enum `GenericApplicationId` matters.
-pub type UserApplicationId<A = ()> = linera_base::identifiers::ApplicationId<A>;
-
-/// Description of the necessary information to run a user application.
-#[allow(clippy::large_enum_variant)]
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
-pub struct UserApplicationDescription {
-    /// The unique ID of the bytecode to use for the application.
-    pub bytecode_id: BytecodeId,
-    /// The unique ID of the application's creation.
-    pub creation: MessageId,
-    /// The parameters of the application.
-    #[serde(with = "serde_bytes")]
-    #[debug(with = "hex_debug")]
-    pub parameters: Vec<u8>,
-    /// Required dependencies.
-    pub required_application_ids: Vec<UserApplicationId>,
-}
-
-impl From<&UserApplicationDescription> for UserApplicationId {
-    fn from(description: &UserApplicationDescription) -> Self {
-        UserApplicationId {
-            bytecode_id: description.bytecode_id,
-            creation: description.creation,
-        }
-    }
-}
 
 #[derive(Debug, ClonableView, HashableView)]
 pub struct ApplicationRegistryView<C> {

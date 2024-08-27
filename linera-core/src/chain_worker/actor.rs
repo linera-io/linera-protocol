@@ -11,8 +11,8 @@ use std::{
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, BlockHeight, Timestamp},
-    identifiers::{BlobId, ChainId},
+    data_types::{Blob, BlockHeight, Timestamp, UserApplicationDescription},
+    identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{
@@ -23,7 +23,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::Epoch, ExecutionRequest, Query, QueryContext, Response, ServiceRuntimeRequest,
-    ServiceSyncRuntime, UserApplicationDescription, UserApplicationId,
+    ServiceSyncRuntime,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;

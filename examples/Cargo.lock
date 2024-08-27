@@ -3313,6 +3313,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "chrono",
+ "custom_debug_derive",
  "ed25519-dalek",
  "generic-array",
  "hex",

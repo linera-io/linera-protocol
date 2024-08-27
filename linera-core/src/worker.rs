@@ -14,9 +14,9 @@ use std::{
 use linera_base::crypto::PublicKey;
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, Blob, BlockHeight, Round},
+    data_types::{ArithmeticError, Blob, BlockHeight, Round, UserApplicationDescription},
     doc_scalar,
-    identifiers::{BlobId, ChainId, Owner},
+    identifiers::{BlobId, ChainId, Owner, UserApplicationId},
 };
 use linera_chain::{
     data_types::{
@@ -25,9 +25,7 @@ use linera_chain::{
     },
     ChainStateView,
 };
-use linera_execution::{
-    committee::Epoch, Query, Response, UserApplicationDescription, UserApplicationId,
-};
+use linera_execution::{committee::Epoch, Query, Response};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;

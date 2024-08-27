@@ -14,8 +14,12 @@ use std::{borrow::Cow, sync::Arc};
 
 use linera_base::{
     crypto::KeyPair,
-    data_types::{Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp},
-    identifiers::{BytecodeId, ChainDescription, ChainId, Destination, MessageId},
+    data_types::{
+        Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
+    },
+    identifiers::{
+        BytecodeId, ChainDescription, ChainId, Destination, MessageId, UserApplicationId,
+    },
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -27,7 +31,7 @@ use linera_execution::{
     system::{SystemMessage, SystemOperation},
     test_utils::SystemExecutionState,
     Message, MessageKind, Operation, OperationContext, ResourceController, TransactionTracker,
-    UserApplicationDescription, UserApplicationId, WasmContractModule, WasmRuntime,
+    WasmContractModule, WasmRuntime,
 };
 #[cfg(feature = "dynamodb")]
 use linera_storage::DynamoDbStorage;
