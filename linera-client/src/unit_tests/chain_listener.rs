@@ -26,7 +26,8 @@ use linera_rpc::{
     config::{NetworkProtocol, ValidatorPublicNetworkPreConfig},
     simple::TransportProtocol,
 };
-use linera_storage::{MemoryStorage, TestClock};
+use linera_views::memory::MemoryStore;
+use linera_storage::{DbStorage, TestClock};
 use rand::SeedableRng as _;
 
 use crate::{
@@ -35,7 +36,7 @@ use crate::{
     wallet::{UserChain, Wallet},
 };
 
-type TestStorage = MemoryStorage<TestClock>;
+type TestStorage = DbStorage<MemoryStore, TestClock>;
 type TestProvider = NodeProvider<TestStorage>;
 
 struct ClientContext {

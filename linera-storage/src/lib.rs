@@ -6,15 +6,6 @@
 #![deny(clippy::large_futures)]
 
 mod db_storage;
-#[cfg(with_dynamodb)]
-mod dynamo_db;
-mod memory;
-#[cfg(with_rocksdb)]
-mod rocks_db;
-#[cfg(with_scylladb)]
-mod scylla_db;
-#[cfg(not(target_arch = "wasm32"))]
-mod service;
 
 use std::{fmt::Debug, sync::Arc};
 
@@ -52,18 +43,7 @@ pub use crate::db_storage::{
     READ_CERTIFICATE_COUNTER, READ_HASHED_CERTIFICATE_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
     WRITE_HASHED_CERTIFICATE_VALUE_COUNTER,
 };
-#[cfg(with_dynamodb)]
-pub use crate::dynamo_db::DynamoDbStorage;
-#[cfg(with_rocksdb)]
-pub use crate::rocks_db::RocksDbStorage;
-#[cfg(with_scylladb)]
-pub use crate::scylla_db::ScyllaDbStorage;
-#[cfg(not(target_arch = "wasm32"))]
-pub use crate::service::ServiceStorage;
-pub use crate::{
-    db_storage::{Clock, DbStorage, WallClock},
-    memory::MemoryStorage,
-};
+pub use crate::db_storage::{Clock, DbStorage, WallClock};
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
