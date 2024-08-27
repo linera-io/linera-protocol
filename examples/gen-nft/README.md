@@ -84,20 +84,37 @@ linera service --port $PORT &
 
 ### Using GraphiQL
 
+Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
+
 - Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`.
 - To mint an NFT, run the query:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     mutation {
         mint(
-            minter: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            minter: "User:$OWNER_1",
             prompt: "Hello!"
         )
     }
 ```
-- To check that it's there, run the query:
+
+- To check that it's assigned to the owner, run the query:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
-        nft(tokenId: "9NMD4q5nf2rNy2JQQ9MpUR0c55M8cqeE+Yjngi7t8i0") {
+        ownedNfts(owner: "User:$OWNER_1")
+    }
+```
+
+```bash
+TOKEN_ID=$(echo "$QUERY_RESULT" | jq -r '.ownedNfts[].tokenId')
+```
+
+- To check that it's there, run the query:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    query {
+        nft(tokenId: "$TOKEN_ID") {
             tokenId,
             owner,
             prompt,
@@ -105,27 +122,25 @@ linera service --port $PORT &
         }
     }
 ```
-- To check that it's assigned to the owner, run the query:
-```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query {
-        ownedNfts(owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f")
-    }
-```
+
 - To check everything that it's there, run the query:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
         nfts
     }
 ```
+
 - To transfer the NFT to user `$OWNER_2`, still on chain `$CHAIN_1`, run the query:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     mutation {
         transfer(
-            sourceOwner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
-            tokenId: "9NMD4q5nf2rNy2JQQ9MpUR0c55M8cqeE+Yjngi7t8i0",
+            sourceOwner: "User:$OWNER_1",
+            tokenId: "$TOKEN_ID",
             targetAccount: {
-                chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
-                owner: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
+                chainId: "$CHAIN_1",
+                owner: "User:$OWNER_2"
             }
         )
     }

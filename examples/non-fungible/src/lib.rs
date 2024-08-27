@@ -88,13 +88,15 @@ linera service --port $PORT &
 
 ### Using GraphiQL
 
+Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
+
 - Navigate to `http://localhost:8080/`.
 - To publish a blob, run the mutation:
 
 ```gql,uri=http://localhost:8080/
     mutation {
         publishDataBlob(
-          chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+          chainId: "$CHAIN_1",
           blobContent: {
             bytes: [1, 2, 3, 4]
           }
@@ -108,24 +110,10 @@ linera service --port $PORT &
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     mutation {
         mint(
-            minter: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            minter: "User:$OWNER_1",
             name: "nft1",
             blobHash: "34a20da0fdd7e24ddbff60cb7f952b053b3f0e196e622d47c3a368f690f01326",
         )
-    }
-```
-
-- To check that it's there, run the query:
-
-```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query {
-        nft(tokenId: "iQe01ZJeKo8E7HPr+MfwFedBZMdZ2v3UDI0F0kHMY+A") {
-            tokenId,
-            owner,
-            name,
-            minter,
-            payload
-        }
     }
 ```
 
@@ -133,7 +121,25 @@ linera service --port $PORT &
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
-        ownedNfts(owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f")
+        ownedNfts(owner: "User:$OWNER_1")
+    }
+```
+
+```bash
+TOKEN_ID=$(echo "$QUERY_RESULT" | jq -r '.ownedNfts[].tokenId')
+```
+
+- To check that it's there, run the query:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    query {
+        nft(tokenId: "$TOKEN_ID") {
+            tokenId,
+            owner,
+            name,
+            minter,
+            payload
+        }
     }
 ```
 
@@ -150,11 +156,11 @@ linera service --port $PORT &
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     mutation {
         transfer(
-            sourceOwner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
-            tokenId: "iQe01ZJeKo8E7HPr+MfwFedBZMdZ2v3UDI0F0kHMY+A",
+            sourceOwner: "User:$OWNER_1",
+            tokenId: "$TOKEN_ID",
             targetAccount: {
-                chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
-                owner: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
+                chainId: "$CHAIN_1",
+                owner: "User:$OWNER_2"
             }
         )
     }

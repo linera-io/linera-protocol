@@ -67,6 +67,7 @@ explanation.
 ```bash
 OWNER_1=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f
 OWNER_2=90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f
+OWNER_3=598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3
 CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 CHAIN_2=e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3
 PUB_KEY_1=fcf518d56455283ace2bbc11c71e684eb58af81bc98b96a18129e825ce24ea84
@@ -112,7 +113,7 @@ And make sure chain 2 also has it:
 ```bash
 linera --wait-for-outgoing-messages request-application \
     --requester-chain-id $CHAIN_2 $MATCHING_ENGINE
-````
+```
 
 ## Using the Matching Engine Application
 
@@ -125,8 +126,9 @@ linera service --port $PORT &
 
 ### Using GraphiQL
 
-Navigate to
-[`http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE`][chain1_matching_engine]:
+Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
+
+Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE`:
 
 To create a `Bid` order as owner 1, offering to buy 1 FUN1 for 5 FUN2:
 
@@ -135,7 +137,7 @@ mutation {
   executeOrder(
     order: {
         Insert : {
-        owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+        owner: "User:$OWNER_1",
         amount: "1",
         nature: Bid,
         price: {
@@ -158,7 +160,6 @@ query {
   }
 }
 ```
-
 
 ### Atomic Swaps
 
@@ -184,53 +185,51 @@ linera --wait-for-outgoing-messages change-application-permissions \
 linera service --port $PORT &
 ```
 
-First, owner 2 should claim their tokens. Navigate to
-[`http://localhost:8080/chains/$CHAIN_2/applications/$FUN1_APP_ID`][chain2_fun1]:
+First, owner 2 should claim their tokens. Navigate to `http://localhost:8080/chains/$CHAIN_2/applications/$FUN1_APP_ID`:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$FUN1_APP_ID
 mutation {
     claim(
         sourceAccount: {
-            chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
-            owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
+            chainId: "$CHAIN_1",
+            owner: "User:$OWNER_2",
         }
         amount: "100.",
         targetAccount: {
-            chainId: "e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3",
-            owner: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
+            chainId: "$CHAIN_2",
+            owner: "User:$OWNER_3"
         }
     )
 }
 ```
 
-And to [`http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID`][chain2_fun2]:
+And to `http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID`:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID
 mutation {
     claim(
         sourceAccount: {
-            chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
-            owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
+            chainId: "$CHAIN_1",
+            owner: "User:$OWNER_2",
         }
         amount: "150.",
         targetAccount: {
-            chainId: "e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3",
-            owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f"
+            chainId: "$CHAIN_2",
+            owner: "User:$OWNER_2"
         }
     )
 }
 ```
 
 Owner 2 offers to buy 2 FUN1 for 10 FUN2. This gets partially filled, and they buy 1 FUN1
-for 5 FUN2 from owner 1. This leaves 5 FUN2 of owner 2 on chain 1. On
-[`http://localhost:8080/chains/$CHAIN_2/applications/$MATCHING_ENGINE`][chain2_matching_engine]:
+for 5 FUN2 from owner 1. This leaves 5 FUN2 of owner 2 on chain 1. On `http://localhost:8080/chains/$CHAIN_2/applications/$MATCHING_ENGINE`:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$MATCHING_ENGINE
 mutation {
   executeOrder(
     order: {
         Insert : {
-        owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
+        owner: "User:$OWNER_2",
         amount: "2",
         nature: Ask,
         price: {
@@ -242,32 +241,25 @@ mutation {
 }
 ```
 
-The only way to close the chain is via the application now. On
-[`http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE`][chain1_matching_engine]:
+The only way to close the chain is via the application now. On `http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE`:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE
 mutation { closeChain }
 ```
 
-Owner 2 should now get back their tokens, and have 145 FUN2 left. On
-[`http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID`][chain2_fun2]
+Owner 2 should now get back their tokens, and have 145 FUN2 left. On `http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID`
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID
 query {
     accounts {
         entry(
-            key: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f"
+            key: "User:$OWNER_2"
         ) {
             value
         }
     }
 }
 ```
-
-[chain1_matching_engine]: http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65080000000000000000000000
-[chain2_matching_engine]: http://localhost:8080/chains/e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65080000000000000000000000
-[chain2_fun1]: http://localhost:8080/chains/e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65000000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65020000000000000000000000
-[chain2_fun2]: http://localhost:8080/chains/e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65050000000000000000000000
 */
 
 use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
