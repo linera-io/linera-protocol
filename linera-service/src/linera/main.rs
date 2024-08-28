@@ -182,7 +182,9 @@ impl Runnable for Job {
                     } => block.timestamp,
                     _ => panic!("Unexpected certificate."),
                 };
-                context.update_wallet_for_new_chain(id, key_pair, timestamp).await?;
+                context
+                    .update_wallet_for_new_chain(id, key_pair, timestamp)
+                    .await?;
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
@@ -230,7 +232,9 @@ impl Runnable for Job {
                     } => block.timestamp,
                     _ => panic!("Unexpected certificate."),
                 };
-                context.update_wallet_for_new_chain(id, key_pair, timestamp).await?;
+                context
+                    .update_wallet_for_new_chain(id, key_pair, timestamp)
+                    .await?;
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
@@ -1054,7 +1058,10 @@ impl Runnable for Job {
                     Owner::from(&public_key),
                     faucet_url,
                 );
-                context.wallet_mut().mutate(|w| w.add_unassigned_key_pair(key_pair)).await?;
+                context
+                    .wallet_mut()
+                    .mutate(|w| w.add_unassigned_key_pair(key_pair))
+                    .await?;
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let outcome = faucet.claim(&public_key).await?;
                 let validators = faucet.current_validators().await?;
@@ -1075,7 +1082,10 @@ impl Runnable for Job {
                     .into_iter()
                     .chain([admin_id, outcome.chain_id]);
                 Self::print_peg_certificate_hash(storage, chains, &context).await?;
-                context.wallet_mut().mutate(|w| w.set_default_chain(outcome.chain_id)).await??;
+                context
+                    .wallet_mut()
+                    .mutate(|w| w.set_default_chain(outcome.chain_id))
+                    .await??;
             }
 
             CreateGenesisConfig { .. } | Keygen | Net(_) | Wallet(_) | HelpMarkdown => {
@@ -1158,7 +1168,9 @@ impl Job {
         );
         context
             .wallet_mut()
-            .mutate(|w| w.assign_new_chain_to_key(public_key, chain_id, executed_block.block.timestamp))
+            .mutate(|w| {
+                w.assign_new_chain_to_key(public_key, chain_id, executed_block.block.timestamp)
+            })
             .await?
             .context("could not assign the new chain")?;
         Ok(())
@@ -1364,7 +1376,9 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
             let mut wallet = options.wallet()?;
             let key_pair = wallet.generate_key_pair();
             let public = key_pair.public();
-            wallet.mutate(|w| w.add_unassigned_key_pair(key_pair)).await?;
+            wallet
+                .mutate(|w| w.add_unassigned_key_pair(key_pair))
+                .await?;
             println!("{}", public);
             Ok(())
         }
@@ -1440,17 +1454,26 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
             }
 
             WalletCommand::SetDefault { chain_id } => {
-                options.wallet()?.mutate(|w| w.set_default_chain(*chain_id)).await??;
+                options
+                    .wallet()?
+                    .mutate(|w| w.set_default_chain(*chain_id))
+                    .await??;
                 Ok(())
             }
 
             WalletCommand::ForgetKeys { chain_id } => {
-                options.wallet()?.mutate(|w| w.forget_keys(chain_id)).await??;
+                options
+                    .wallet()?
+                    .mutate(|w| w.forget_keys(chain_id))
+                    .await??;
                 Ok(())
             }
 
             WalletCommand::ForgetChain { chain_id } => {
-                options.wallet()?.mutate(|w| w.forget_chain(chain_id)).await??;
+                options
+                    .wallet()?
+                    .mutate(|w| w.forget_chain(chain_id))
+                    .await??;
                 Ok(())
             }
 

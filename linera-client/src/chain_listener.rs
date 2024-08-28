@@ -58,7 +58,8 @@ pub struct ChainListenerConfig {
     pub delay_after_ms: u64,
 }
 
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 pub trait ClientContext {
     type ValidatorNodeProvider: LocalValidatorNodeProvider;
     type Storage: Storage;
@@ -82,7 +83,8 @@ pub trait ClientContext {
     async fn update_wallet(
         &mut self,
         client: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
-    ) -> Result<(), Error> where
+    ) -> Result<(), Error>
+    where
         ViewError: From<<Self::Storage as Storage>::StoreError>;
 }
 
@@ -264,7 +266,9 @@ where
                 let key_pair = owners
                     .iter()
                     .find_map(|public_key| context_guard.wallet().key_pair_for_pk(public_key));
-                context_guard.update_wallet_for_new_chain(new_id, key_pair, timestamp).await?;
+                context_guard
+                    .update_wallet_for_new_chain(new_id, key_pair, timestamp)
+                    .await?;
                 Self::run_with_chain_id(
                     new_id,
                     clients.clone(),

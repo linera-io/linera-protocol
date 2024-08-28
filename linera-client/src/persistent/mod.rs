@@ -5,6 +5,13 @@ mod dirty;
 use dirty::Dirty;
 
 cfg_if::cfg_if! {
+    if #[cfg(feature = "indexed-db")] {
+        pub mod indexed_db;
+        pub use indexed_db::IndexedDb;
+    }
+}
+
+cfg_if::cfg_if! {
     if #[cfg(feature = "local-storage")] {
         pub mod local_storage;
         pub use local_storage::LocalStorage;
@@ -19,8 +26,7 @@ cfg_if::cfg_if! {
 }
 
 pub mod memory;
-use std::ops::Deref;
-use std::future::Future;
+use std::{future::Future, ops::Deref};
 
 pub use memory::Memory;
 
@@ -40,10 +46,15 @@ pub trait Persist: Deref + Send {
     fn persist(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Takes the value out.
-    fn into_value(self) -> Self::Target where Self::Target: Sized;
+    fn into_value(self) -> Self::Target
+    where
+        Self::Target: Sized;
 
     /// Applies a mutation to the value, persisting when done.
-    fn mutate<R: Send>(&mut self, mutation: impl FnOnce(&mut Self::Target) -> R) -> impl Future<Output = Result<R, Self::Error>> + Send {
+    fn mutate<R: Send>(
+        &mut self,
+        mutation: impl FnOnce(&mut Self::Target) -> R,
+    ) -> impl Future<Output = Result<R, Self::Error>> + Send {
         let output = mutation(self.as_mut());
         async {
             self.persist().await?;
@@ -71,10 +82,15 @@ pub trait LocalPersist: Deref {
     async fn persist(&mut self) -> Result<(), Self::Error>;
 
     /// Takes the value out.
-    fn into_value(self) -> Self::Target where Self::Target: Sized;
+    fn into_value(self) -> Self::Target
+    where
+        Self::Target: Sized;
 
     /// Applies a mutation to the value, persisting when done.
-    async fn mutate<R>(&mut self, mutation: impl FnOnce(&mut Self::Target) -> R) -> Result<R, Self::Error> {
+    async fn mutate<R>(
+        &mut self,
+        mutation: impl FnOnce(&mut Self::Target) -> R,
+    ) -> Result<R, Self::Error> {
         let output = mutation(self.as_mut());
         self.persist().await?;
         Ok(output)

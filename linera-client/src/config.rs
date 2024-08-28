@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{iter::IntoIterator, ops::{Deref, DerefMut}};
+use std::{
+    iter::IntoIterator,
+    ops::{Deref, DerefMut},
+};
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, CryptoRng, KeyPair, PublicKey},
@@ -90,9 +93,14 @@ pub struct WalletState<W> {
 }
 
 impl<W: LocalPersist<Target = Wallet>> WalletState<W> {
-    pub async fn add_chains<Chains: IntoIterator<Item = UserChain>>(&mut self, chains: Chains) -> Result<(), Error> {
+    pub async fn add_chains<Chains: IntoIterator<Item = UserChain>>(
+        &mut self,
+        chains: Chains,
+    ) -> Result<(), Error> {
         self.wallet.as_mut().extend(chains);
-        W::persist(&mut self.wallet).await.map_err(|e| Error::Persistence(Box::new(e)))
+        W::persist(&mut self.wallet)
+            .await
+            .map_err(|e| Error::Persistence(Box::new(e)))
     }
 }
 
@@ -117,7 +125,9 @@ impl<W: LocalPersist<Target = Wallet>> LocalPersist for WalletState<W> {
     }
 
     async fn persist(&mut self) -> Result<(), W::Error> {
-        self.wallet.mutate(|w| w.refresh_prng_seed(&mut self.prng)).await?;
+        self.wallet
+            .mutate(|w| w.refresh_prng_seed(&mut self.prng))
+            .await?;
         tracing::debug!("Persisted user chains");
         Ok(())
     }
@@ -127,7 +137,6 @@ impl<W: LocalPersist<Target = Wallet>> LocalPersist for WalletState<W> {
     }
 }
 
-
 impl<W: Persist<Target = Wallet> + Send> Persist for WalletState<W> {
     type Error = W::Error;
 
@@ -136,7 +145,9 @@ impl<W: Persist<Target = Wallet> + Send> Persist for WalletState<W> {
     }
 
     async fn persist(&mut self) -> Result<(), W::Error> {
-        self.wallet.mutate(|w| w.refresh_prng_seed(&mut self.prng)).await?;
+        self.wallet
+            .mutate(|w| w.refresh_prng_seed(&mut self.prng))
+            .await?;
         tracing::debug!("Persisted user chains");
         Ok(())
     }

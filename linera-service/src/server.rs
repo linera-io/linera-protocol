@@ -491,7 +491,9 @@ async fn run(options: ServerOptions) {
                 let path = options.server_config_path.clone();
                 let mut server = make_server_config(&path, &mut rng, options)
                     .expect("Unable to open server config file");
-                Persist::persist(&mut server).await.expect("Unable to write server config file");
+                Persist::persist(&mut server)
+                    .await
+                    .expect("Unable to write server config file");
                 info!("Wrote server config {}", path.to_str().unwrap());
                 println!("{}", server.validator.name);
                 config_validators.push(Persist::into_value(server).validator);

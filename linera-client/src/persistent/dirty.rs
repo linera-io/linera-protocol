@@ -12,11 +12,15 @@ impl Dirty {
 
 impl std::ops::Deref for Dirty {
     type Target = bool;
-    fn deref(&self) -> &bool { &self.0 }
+    fn deref(&self) -> &bool {
+        &self.0
+    }
 }
 
 impl std::ops::DerefMut for Dirty {
-    fn deref_mut(&mut self) -> &mut bool { &mut self.0 }
+    fn deref_mut(&mut self) -> &mut bool {
+        &mut self.0
+    }
 }
 
 impl Drop for Dirty {

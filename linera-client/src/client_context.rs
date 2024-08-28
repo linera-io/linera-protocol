@@ -63,21 +63,18 @@ use {
     std::path::PathBuf,
 };
 
-use crate::{
-    chain_listener,
-    client_options::{ChainOwnershipConfig, ClientOptions},
-    config::WalletState,
-    error,
-    util,
-    wallet::{UserChain, Wallet},
-    Error,
-};
-
 #[cfg(web)]
 use crate::persistent::LocalPersist as Persist;
 #[cfg(not(web))]
 use crate::persistent::Persist;
-
+use crate::{
+    chain_listener,
+    client_options::{ChainOwnershipConfig, ClientOptions},
+    config::WalletState,
+    error, util,
+    wallet::{UserChain, Wallet},
+    Error,
+};
 
 pub struct ClientContext<Storage, W>
 where
@@ -94,7 +91,8 @@ where
     pub chain_listeners: JoinSet<()>,
 }
 
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 impl<S, W> chain_listener::ClientContext for ClientContext<S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
@@ -118,7 +116,8 @@ where
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain(chain_id, key_pair, timestamp).await?;
+        self.update_wallet_for_new_chain(chain_id, key_pair, timestamp)
+            .await?;
         self.save_wallet().await
     }
 
@@ -138,8 +137,14 @@ where
         &mut self.wallet
     }
 
-    pub async fn mutate_wallet<R: Send>(&mut self, mutation: impl FnOnce(&mut Wallet) -> R) -> Result<R, Error> {
-        self.wallet.mutate(mutation).await.map_err(|e| error::Inner::Persistence(Box::new(e)).into())
+    pub async fn mutate_wallet<R: Send>(
+        &mut self,
+        mutation: impl FnOnce(&mut Wallet) -> R,
+    ) -> Result<R, Error> {
+        self.wallet
+            .mutate(mutation)
+            .await
+            .map_err(|e| error::Inner::Persistence(Box::new(e)).into())
     }
 
     pub fn new(storage: S, options: ClientOptions, wallet: WalletState<W>) -> Self {
@@ -227,16 +232,25 @@ where
     }
 
     pub async fn save_wallet(&mut self) -> Result<(), Error> {
-        self.wallet.persist().await.map_err(|e| error::Inner::Persistence(Box::new(e)).into())
+        self.wallet
+            .persist()
+            .await
+            .map_err(|e| error::Inner::Persistence(Box::new(e)).into())
     }
 
-    async fn update_wallet_from_client(&mut self, client: &ChainClient<NodeProvider, S>) -> Result<(), Error> {
+    async fn update_wallet_from_client(
+        &mut self,
+        client: &ChainClient<NodeProvider, S>,
+    ) -> Result<(), Error> {
         self.wallet.as_mut().update_from_state(client).await;
         self.save_wallet().await?;
         Ok(())
     }
 
-    pub async fn update_and_save_wallet(&mut self, client: &ChainClient<NodeProvider, S>) -> Result<(), Error> {
+    pub async fn update_and_save_wallet(
+        &mut self,
+        client: &ChainClient<NodeProvider, S>,
+    ) -> Result<(), Error> {
         self.update_wallet_from_client(client).await?;
         self.save_wallet().await
     }
@@ -249,15 +263,18 @@ where
         timestamp: Timestamp,
     ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
-            self.mutate_wallet(|w| w.insert(UserChain {
-                chain_id,
-                key_pair: key_pair.as_ref().map(|kp| kp.copy()),
-                block_hash: None,
-                timestamp,
-                next_block_height: BlockHeight::ZERO,
-                pending_block: None,
-                pending_blobs: BTreeMap::new(),
-            })).await?;
+            self.mutate_wallet(|w| {
+                w.insert(UserChain {
+                    chain_id,
+                    key_pair: key_pair.as_ref().map(|kp| kp.copy()),
+                    block_hash: None,
+                    timestamp,
+                    next_block_height: BlockHeight::ZERO,
+                    pending_block: None,
+                    pending_blobs: BTreeMap::new(),
+                })
+            })
+            .await?;
         }
 
         Ok(())
@@ -364,6 +381,7 @@ where
                     chain_client
                         .change_ownership(ownership)
                         .await
+                        .map_err(Error::from)
                         .context("Failed to change ownership")
                 }
             })
@@ -389,10 +407,9 @@ where
         service: PathBuf,
     ) -> Result<BytecodeId, Error> {
         info!("Loading bytecode files");
-        let contract_bytecode = Bytecode::load_from_file(&contract).await.context(format!(
-            "failed to load contract bytecode from {:?}",
-            &contract
-        ))?;
+        let contract_bytecode: Bytecode = Bytecode::load_from_file(&contract).await.context(
+            format!("failed to load contract bytecode from {:?}", &contract),
+        )?;
         let service_bytecode = Bytecode::load_from_file(&service).await.context(format!(
             "failed to load service bytecode from {:?}",
             &service

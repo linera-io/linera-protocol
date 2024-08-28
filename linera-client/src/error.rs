@@ -15,7 +15,7 @@ pub(crate) enum Inner {
     #[error("options error: {0}")]
     Options(#[from] crate::client_options::Error),
     #[error("persistence error: {0}")]
-    Persistence(#[source] Box<dyn std::error::Error + Send + Sync + 'static>),
+    Persistence(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("view error: {0}")]
     View(#[from] linera_views::views::ViewError),
     #[error("non-existent chain: {0:?}")]

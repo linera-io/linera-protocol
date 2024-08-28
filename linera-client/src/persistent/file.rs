@@ -67,7 +67,6 @@ impl Lock {
     }
 }
 
-
 impl Drop for Lock {
     fn drop(&mut self) {
         if let Err(error) = self.0.file().unlock() {

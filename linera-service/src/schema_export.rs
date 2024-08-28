@@ -148,7 +148,12 @@ impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientConte
         unimplemented!()
     }
 
-    async fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) -> Result<(), Error> {
+    async fn update_wallet_for_new_chain(
+        &mut self,
+        _: ChainId,
+        _: Option<KeyPair>,
+        _: Timestamp,
+    ) -> Result<(), Error> {
         Ok(())
     }
 
