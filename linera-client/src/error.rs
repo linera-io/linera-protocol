@@ -8,6 +8,8 @@ use crate::{persistent, util};
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub(crate) enum Inner {
+    #[error("chain error: {0}")]
+    Chain(#[from] linera_chain::ChainError),
     #[error("chain client error: {0}")]
     ChainClient(#[from] linera_core::client::ChainClientError),
     #[error("options error: {0}")]

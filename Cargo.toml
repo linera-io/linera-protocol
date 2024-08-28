@@ -69,7 +69,7 @@ convert_case = "0.6.0"
 criterion = { version = "0.5.1", default-features = false }
 custom_debug_derive = "0.6.1"
 dashmap = "5.5.3"
-derive_more = "0.99.17"
+derive_more = "1.0.0"
 dirs = "5.0.1"
 ed25519-dalek = { version = "2.1.1", features = ["batch", "serde"] }
 either = "1.10.0"

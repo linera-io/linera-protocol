@@ -72,17 +72,17 @@ pub trait ClientContext {
     where
         ViewError: From<<Self::Storage as Storage>::StoreError>;
 
-    fn update_wallet_for_new_chain(
+    async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
-    );
+    ) -> Result<(), Error>;
 
     async fn update_wallet(
         &mut self,
         client: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
-    ) where
+    ) -> Result<(), Error> where
         ViewError: From<<Self::Storage as Storage>::StoreError>;
 }
 
@@ -203,7 +203,7 @@ where
                             timeout = new_timeout.timestamp;
                         }
                     }
-                    context.lock().await.update_wallet(&client).await;
+                    context.lock().await.update_wallet(&client).await?;
                     continue;
                 }
             };
@@ -226,7 +226,7 @@ where
                 continue;
             };
             {
-                context.lock().await.update_wallet(&client).await;
+                context.lock().await.update_wallet(&client).await?;
             }
             let value = storage.read_hashed_certificate_value(hash).await?;
             let Some(executed_block) = value.inner().executed_block() else {
@@ -264,7 +264,7 @@ where
                 let key_pair = owners
                     .iter()
                     .find_map(|public_key| context_guard.wallet().key_pair_for_pk(public_key));
-                context_guard.update_wallet_for_new_chain(new_id, key_pair, timestamp);
+                context_guard.update_wallet_for_new_chain(new_id, key_pair, timestamp).await?;
                 Self::run_with_chain_id(
                     new_id,
                     clients.clone(),

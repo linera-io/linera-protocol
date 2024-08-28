@@ -6,18 +6,14 @@ use std::ops::Deref;
 pub use gloo_storage::errors::StorageError as Error;
 use gloo_storage::Storage as _;
 
-use super::Persist;
+use super::{Dirty, Persist};
 
+#[derive(DerefMut)]
 pub struct LocalStorage<T> {
     key: String,
+    #[deref_mut]
     value: T,
-}
-
-impl<T> Deref for LocalStorage<T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        &self.value
-    }
+    dirty: Dirty,
 }
 
 impl<T: serde::Serialize + serde::de::DeserializeOwned> LocalStorage<T> {

@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{iter::IntoIterator, ops::Deref};
+use std::{iter::IntoIterator, ops::{Deref, DerefMut}};
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, CryptoRng, KeyPair, PublicKey},
@@ -29,7 +29,7 @@ pub enum Error {
 }
 
 use crate::{
-    persistent::{self, Persist},
+    persistent::{self, LocalPersist, Persist},
     util,
     wallet::{UserChain, Wallet},
 };
@@ -89,35 +89,60 @@ pub struct WalletState<W> {
     prng: Box<dyn CryptoRng>,
 }
 
-impl<W: Deref> Deref for WalletState<W> {
-    type Target = W::Target;
-
-    fn deref(&self) -> &Self::Target {
-        &self.wallet
+impl<W: LocalPersist<Target = Wallet>> WalletState<W> {
+    pub async fn add_chains<Chains: IntoIterator<Item = UserChain>>(&mut self, chains: Chains) -> Result<(), Error> {
+        self.wallet.as_mut().extend(chains);
+        W::persist(&mut self.wallet).await.map_err(|e| Error::Persistence(Box::new(e)))
     }
 }
 
-impl<W: Persist<Target = Wallet>> Persist for WalletState<W> {
+impl<W: Deref> Deref for WalletState<W> {
+    type Target = W::Target;
+    fn deref(&self) -> &W::Target {
+        self.wallet.deref()
+    }
+}
+
+impl<W: DerefMut> DerefMut for WalletState<W> {
+    fn deref_mut(&mut self) -> &mut W::Target {
+        self.wallet.deref_mut()
+    }
+}
+
+impl<W: LocalPersist<Target = Wallet>> LocalPersist for WalletState<W> {
     type Error = W::Error;
 
-    fn persist(this: &mut Self) -> Result<(), W::Error> {
-        Persist::mutate(&mut this.wallet).refresh_prng_seed(&mut this.prng);
+    fn as_mut(&mut self) -> &mut Wallet {
+        self.wallet.as_mut()
+    }
+
+    async fn persist(&mut self) -> Result<(), W::Error> {
+        self.wallet.mutate(|w| w.refresh_prng_seed(&mut self.prng)).await?;
         tracing::debug!("Persisted user chains");
         Ok(())
     }
 
-    fn as_mut(this: &mut Self) -> &mut Wallet {
-        Persist::as_mut(&mut this.wallet)
-    }
-
-    fn into_value(this: Self) -> Wallet {
-        Persist::into_value(this.wallet)
+    fn into_value(self) -> Wallet {
+        self.wallet.into_value()
     }
 }
 
-impl<W: Persist<Target = Wallet>> Extend<UserChain> for WalletState<W> {
-    fn extend<Chains: IntoIterator<Item = UserChain>>(&mut self, chains: Chains) {
-        Persist::mutate(self).extend(chains);
+
+impl<W: Persist<Target = Wallet> + Send> Persist for WalletState<W> {
+    type Error = W::Error;
+
+    fn as_mut(&mut self) -> &mut Wallet {
+        self.wallet.as_mut()
+    }
+
+    async fn persist(&mut self) -> Result<(), W::Error> {
+        self.wallet.mutate(|w| w.refresh_prng_seed(&mut self.prng)).await?;
+        tracing::debug!("Persisted user chains");
+        Ok(())
+    }
+
+    fn into_value(self) -> Wallet {
+        self.wallet.into_value()
     }
 }
 

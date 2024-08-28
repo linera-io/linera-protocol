@@ -1096,7 +1096,7 @@ pub struct BlobState {
 pub enum WasmRuntime {
     #[cfg(with_wasmer)]
     #[default]
-    #[display(fmt = "wasmer")]
+    #[display("wasmer")]
     Wasmer,
     #[cfg(with_wasmtime)]
     #[cfg_attr(not(with_wasmer), default)]

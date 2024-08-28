@@ -2158,6 +2158,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_more"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.72",
+ "unicode-xid",
+]
+
+[[package]]
 name = "digest"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3925,7 +3946,7 @@ dependencies = [
  "bytes",
  "cfg-if",
  "const-hex",
- "derive_more",
+ "derive_more 0.99.18",
  "hex-literal",
  "itoa",
  "k256",
@@ -4264,6 +4285,7 @@ dependencies = [
  "clap",
  "counter",
  "crowd-funding",
+ "derive_more 1.0.0",
  "dirs",
  "ethereum-tracker",
  "flarch",
@@ -4302,6 +4324,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "trait-variant",
  "wasm-bindgen-futures",
  "web-sys",
 ]
@@ -4388,7 +4411,7 @@ dependencies = [
  "counter",
  "custom_debug_derive",
  "dashmap 5.5.3",
- "derive_more",
+ "derive_more 1.0.0",
  "futures",
  "linera-base",
  "linera-execution",
