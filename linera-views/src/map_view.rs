@@ -168,9 +168,9 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   assert_eq!(map.keys().await.unwrap(), vec![vec![0,1]]);
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// assert_eq!(map.keys().await.unwrap(), vec![vec![0, 1]]);
     /// # })
     /// ```
     pub fn insert(&mut self, short_key: Vec<u8>, value: V) {
@@ -184,9 +184,9 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], "Hello");
-    ///   map.remove(vec![0,1]);
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], "Hello");
+    /// map.remove(vec![0, 1]);
     /// # })
     /// ```
     pub fn remove(&mut self, short_key: Vec<u8>) {
@@ -205,11 +205,11 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   map.insert(vec![0,2], String::from("Bonjour"));
-    ///   map.remove_by_prefix(vec![0]);
-    ///   assert!(map.keys().await.unwrap().is_empty());
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// map.insert(vec![0, 2], String::from("Bonjour"));
+    /// map.remove_by_prefix(vec![0]);
+    /// assert!(map.keys().await.unwrap().is_empty());
     /// # })
     /// ```
     pub fn remove_by_prefix(&mut self, key_prefix: Vec<u8>) {
@@ -236,10 +236,10 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0, 1], String::from("Hello"));
-    ///   assert!(map.contains_key(&[0,1]).await.unwrap());
-    ///   assert!(!map.contains_key(&[0,2]).await.unwrap());
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// assert!(map.contains_key(&[0, 1]).await.unwrap());
+    /// assert!(!map.contains_key(&[0, 2]).await.unwrap());
     /// # })
     /// ```
     pub async fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
@@ -271,9 +271,9 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   assert_eq!(map.get(&[0,1]).await.unwrap(), Some(String::from("Hello")));
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// assert_eq!(map.get(&[0, 1]).await.unwrap(), Some(String::from("Hello")));
     /// # })
     /// ```
     pub async fn get(&self, short_key: &[u8]) -> Result<Option<V>, ViewError> {
@@ -298,10 +298,10 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   let values = map.multi_get(vec![vec![0,1],vec![0,2]]).await.unwrap();
-    ///   assert_eq!(values, vec![Some(String::from("Hello")), None]);
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// let values = map.multi_get(vec![vec![0, 1], vec![0, 2]]).await.unwrap();
+    /// assert_eq!(values, vec![Some(String::from("Hello")), None]);
     /// # })
     /// ```
     pub async fn multi_get(&self, short_keys: Vec<Vec<u8>>) -> Result<Vec<Option<V>>, ViewError> {
@@ -334,12 +334,12 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   let value = map.get_mut(&[0,1]).await.unwrap().unwrap();
-    ///   assert_eq!(*value, String::from("Hello"));
-    ///   *value = String::from("Hola");
-    ///   assert_eq!(map.get(&[0,1]).await.unwrap(), Some(String::from("Hola")));
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// let value = map.get_mut(&[0, 1]).await.unwrap().unwrap();
+    /// assert_eq!(*value, String::from("Hello"));
+    /// *value = String::from("Hola");
+    /// assert_eq!(map.get(&[0, 1]).await.unwrap(), Some(String::from("Hola")));
     /// # })
     /// ```
     pub async fn get_mut(&mut self, short_key: &[u8]) -> Result<Option<&mut V>, ViewError> {
@@ -377,17 +377,22 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   map.insert(vec![1,2], String::from("Bonjour"));
-    ///   map.insert(vec![1,3], String::from("Bonjour"));
-    ///   let prefix = vec![1];
-    ///   let mut count = 0;
-    ///   map.for_each_key_while(|_key| {
-    ///     count += 1;
-    ///     Ok(count < 3)
-    ///   }, prefix).await.unwrap();
-    ///   assert_eq!(count, 2);
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// map.insert(vec![1, 2], String::from("Bonjour"));
+    /// map.insert(vec![1, 3], String::from("Bonjour"));
+    /// let prefix = vec![1];
+    /// let mut count = 0;
+    /// map.for_each_key_while(
+    ///     |_key| {
+    ///         count += 1;
+    ///         Ok(count < 3)
+    ///     },
+    ///     prefix,
+    /// )
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 2);
     /// # })
     /// ```
     pub async fn for_each_key_while<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
@@ -449,15 +454,20 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   let mut count = 0;
-    ///   let prefix = Vec::new();
-    ///   map.for_each_key(|_key| {
-    ///     count += 1;
-    ///     Ok(())
-    ///   }, prefix).await.unwrap();
-    ///   assert_eq!(count, 1);
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// let mut count = 0;
+    /// let prefix = Vec::new();
+    /// map.for_each_key(
+    ///     |_key| {
+    ///         count += 1;
+    ///         Ok(())
+    ///     },
+    ///     prefix,
+    /// )
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 1);
     /// # })
     /// ```
     pub async fn for_each_key<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
@@ -481,11 +491,14 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   map.insert(vec![1,2], String::from("Bonjour"));
-    ///   map.insert(vec![2,2], String::from("Hallo"));
-    ///   assert_eq!(map.keys().await.unwrap(), vec![vec![0,1], vec![1,2], vec![2,2]]);
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// map.insert(vec![1, 2], String::from("Bonjour"));
+    /// map.insert(vec![2, 2], String::from("Hallo"));
+    /// assert_eq!(
+    ///     map.keys().await.unwrap(),
+    ///     vec![vec![0, 1], vec![1, 2], vec![2, 2]]
+    /// );
     /// # })
     /// ```
     pub async fn keys(&self) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -510,11 +523,14 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   map.insert(vec![1,2], String::from("Bonjour"));
-    ///   map.insert(vec![1,3], String::from("Hallo"));
-    ///   assert_eq!(map.keys_by_prefix(vec![1]).await.unwrap(), vec![vec![1,2], vec![1,3]]);
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// map.insert(vec![1, 2], String::from("Bonjour"));
+    /// map.insert(vec![1, 3], String::from("Hallo"));
+    /// assert_eq!(
+    ///     map.keys_by_prefix(vec![1]).await.unwrap(),
+    ///     vec![vec![1, 2], vec![1, 3]]
+    /// );
     /// # })
     /// ```
     pub async fn keys_by_prefix(&self, prefix: Vec<u8>) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -540,11 +556,11 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   map.insert(vec![1,2], String::from("Bonjour"));
-    ///   map.insert(vec![2,2], String::from("Hallo"));
-    ///   assert_eq!(map.count().await.unwrap(), 3);
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// map.insert(vec![1, 2], String::from("Bonjour"));
+    /// map.insert(vec![2, 2], String::from("Hallo"));
+    /// assert_eq!(map.count().await.unwrap(), 3);
     /// # })
     /// ```
     pub async fn count(&self) -> Result<usize, ViewError> {
@@ -571,17 +587,22 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   map.insert(vec![1,2], String::from("Bonjour"));
-    ///   map.insert(vec![1,3], String::from("Hallo"));
-    ///   let mut part_keys = Vec::new();
-    ///   let prefix = vec![1];
-    ///   map.for_each_key_value_while(|key, _value| {
-    ///     part_keys.push(key.to_vec());
-    ///     Ok(part_keys.len() < 2)
-    ///   }, prefix).await.unwrap();
-    ///   assert_eq!(part_keys.len(), 2);
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// map.insert(vec![1, 2], String::from("Bonjour"));
+    /// map.insert(vec![1, 3], String::from("Hallo"));
+    /// let mut part_keys = Vec::new();
+    /// let prefix = vec![1];
+    /// map.for_each_key_value_while(
+    ///     |key, _value| {
+    ///         part_keys.push(key.to_vec());
+    ///         Ok(part_keys.len() < 2)
+    ///     },
+    ///     prefix,
+    /// )
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(part_keys.len(), 2);
     /// # })
     /// ```
     pub async fn for_each_key_value_while<F>(
@@ -654,15 +675,20 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   let mut count = 0;
-    ///   let prefix = Vec::new();
-    ///   map.for_each_key_value(|_key, _value| {
-    ///     count += 1;
-    ///     Ok(())
-    ///   }, prefix).await.unwrap();
-    ///   assert_eq!(count, 1);
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// let mut count = 0;
+    /// let prefix = Vec::new();
+    /// map.for_each_key_value(
+    ///     |_key, _value| {
+    ///         count += 1;
+    ///         Ok(())
+    ///     },
+    ///     prefix,
+    /// )
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 1);
     /// # })
     /// ```
     pub async fn for_each_key_value<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
@@ -694,10 +720,13 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![1,2], String::from("Hello"));
-    ///   let prefix = vec![1];
-    ///   assert_eq!(map.key_values_by_prefix(prefix).await.unwrap(), vec![(vec![1,2], String::from("Hello"))]);
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![1, 2], String::from("Hello"));
+    /// let prefix = vec![1];
+    /// assert_eq!(
+    ///     map.key_values_by_prefix(prefix).await.unwrap(),
+    ///     vec![(vec![1, 2], String::from("Hello"))]
+    /// );
     /// # })
     /// ```
     pub async fn key_values_by_prefix(
@@ -727,9 +756,12 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![1,2], String::from("Hello"));
-    ///   assert_eq!(map.key_values().await.unwrap(), vec![(vec![1,2], String::from("Hello"))]);
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![1, 2], String::from("Hello"));
+    /// assert_eq!(
+    ///     map.key_values().await.unwrap(),
+    ///     vec![(vec![1, 2], String::from("Hello"))]
+    /// );
     /// # })
     /// ```
     pub async fn key_values(&self) -> Result<Vec<(Vec<u8>, V)>, ViewError> {
@@ -751,13 +783,13 @@ where
     /// # use linera_views::map_view::ByteMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = ByteMapView::load(context).await.unwrap();
-    ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   assert_eq!(map.get_mut_or_default(&[7]).await.unwrap(), "");
-    ///   let value = map.get_mut_or_default(&[0,1]).await.unwrap();
-    ///   assert_eq!(*value, String::from("Hello"));
-    ///   *value = String::from("Hola");
-    ///   assert_eq!(map.get(&[0,1]).await.unwrap(), Some(String::from("Hola")));
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// assert_eq!(map.get_mut_or_default(&[7]).await.unwrap(), "");
+    /// let value = map.get_mut_or_default(&[0, 1]).await.unwrap();
+    /// assert_eq!(*value, String::from("Hello"));
+    /// *value = String::from("Hola");
+    /// assert_eq!(map.get(&[0, 1]).await.unwrap(), Some(String::from("Hola")));
     /// # })
     /// ```
     pub async fn get_mut_or_default(&mut self, short_key: &[u8]) -> Result<&mut V, ViewError> {
@@ -905,9 +937,12 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : MapView<_,u32,_> = MapView::load(context).await.unwrap();
-    ///   map.insert(&(24 as u32), String::from("Hello"));
-    ///   assert_eq!(map.get(&(24 as u32)).await.unwrap(), Some(String::from("Hello")));
+    /// let mut map: MapView<_, u32, _> = MapView::load(context).await.unwrap();
+    /// map.insert(&(24 as u32), String::from("Hello"));
+    /// assert_eq!(
+    ///     map.get(&(24 as u32)).await.unwrap(),
+    ///     Some(String::from("Hello"))
+    /// );
     /// # })
     /// ```
     pub fn insert<Q>(&mut self, index: &Q, value: V) -> Result<(), ViewError>
@@ -927,9 +962,9 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = MapView::<_,u32,String>::load(context).await.unwrap();
-    ///   map.remove(&(37 as u32));
-    ///   assert_eq!(map.get(&(37 as u32)).await.unwrap(), None);
+    /// let mut map = MapView::<_, u32, String>::load(context).await.unwrap();
+    /// map.remove(&(37 as u32));
+    /// assert_eq!(map.get(&(37 as u32)).await.unwrap(), None);
     /// # })
     /// ```
     pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
@@ -954,10 +989,10 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = MapView::<_,u32,String>::load(context).await.unwrap();
-    ///   map.insert(&(37 as u32), String::from("Hello"));
-    ///   assert!(map.contains_key(&(37 as u32)).await.unwrap());
-    ///   assert!(!map.contains_key(&(34 as u32)).await.unwrap());
+    /// let mut map = MapView::<_, u32, String>::load(context).await.unwrap();
+    /// map.insert(&(37 as u32), String::from("Hello"));
+    /// assert!(map.contains_key(&(37 as u32)).await.unwrap());
+    /// assert!(!map.contains_key(&(34 as u32)).await.unwrap());
     /// # })
     /// ```
     pub async fn contains_key<Q>(&self, index: &Q) -> Result<bool, ViewError>
@@ -984,10 +1019,13 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : MapView<_, u32,_> = MapView::load(context).await.unwrap();
-    ///   map.insert(&(37 as u32), String::from("Hello"));
-    ///   assert_eq!(map.get(&(37 as u32)).await.unwrap(), Some(String::from("Hello")));
-    ///   assert_eq!(map.get(&(34 as u32)).await.unwrap(), None);
+    /// let mut map: MapView<_, u32, _> = MapView::load(context).await.unwrap();
+    /// map.insert(&(37 as u32), String::from("Hello"));
+    /// assert_eq!(
+    ///     map.get(&(37 as u32)).await.unwrap(),
+    ///     Some(String::from("Hello"))
+    /// );
+    /// assert_eq!(map.get(&(34 as u32)).await.unwrap(), None);
     /// # })
     /// ```
     pub async fn get<Q>(&self, index: &Q) -> Result<Option<V>, ViewError>
@@ -1006,12 +1044,15 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : MapView::<_,u32,String> = MapView::load(context).await.unwrap();
-    ///   map.insert(&(37 as u32), String::from("Hello"));
-    ///   assert_eq!(map.get_mut(&(34 as u32)).await.unwrap(), None);
-    ///   let value = map.get_mut(&(37 as u32)).await.unwrap().unwrap();
-    ///   *value = String::from("Hola");
-    ///   assert_eq!(map.get(&(37 as u32)).await.unwrap(), Some(String::from("Hola")));
+    /// let mut map: MapView<_, u32, String> = MapView::load(context).await.unwrap();
+    /// map.insert(&(37 as u32), String::from("Hello"));
+    /// assert_eq!(map.get_mut(&(34 as u32)).await.unwrap(), None);
+    /// let value = map.get_mut(&(37 as u32)).await.unwrap().unwrap();
+    /// *value = String::from("Hola");
+    /// assert_eq!(
+    ///     map.get(&(37 as u32)).await.unwrap(),
+    ///     Some(String::from("Hola"))
+    /// );
     /// # })
     /// ```
     pub async fn get_mut<Q>(&mut self, index: &Q) -> Result<Option<&mut V>, ViewError>
@@ -1038,9 +1079,9 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : MapView::<_,u32,String> = MapView::load(context).await.unwrap();
-    ///   map.insert(&(37 as u32), String::from("Hello"));
-    ///   assert_eq!(map.indices().await.unwrap(), vec![37 as u32]);
+    /// let mut map: MapView<_, u32, String> = MapView::load(context).await.unwrap();
+    /// map.insert(&(37 as u32), String::from("Hello"));
+    /// assert_eq!(map.indices().await.unwrap(), vec![37 as u32]);
     /// # })
     /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
@@ -1062,16 +1103,18 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : MapView<_, u128, String> = MapView::load(context).await.unwrap();
-    ///   map.insert(&(34 as u128), String::from("Thanks"));
-    ///   map.insert(&(37 as u128), String::from("Spasiba"));
-    ///   map.insert(&(38 as u128), String::from("Merci"));
-    ///   let mut count = 0;
-    ///   map.for_each_index_while(|_index| {
+    /// let mut map: MapView<_, u128, String> = MapView::load(context).await.unwrap();
+    /// map.insert(&(34 as u128), String::from("Thanks"));
+    /// map.insert(&(37 as u128), String::from("Spasiba"));
+    /// map.insert(&(38 as u128), String::from("Merci"));
+    /// let mut count = 0;
+    /// map.for_each_index_while(|_index| {
     ///     count += 1;
     ///     Ok(count < 2)
-    ///   }).await.unwrap();
-    ///   assert_eq!(count, 2);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 2);
     /// # })
     /// ```
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -1099,14 +1142,16 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : MapView<_, u128, String> = MapView::load(context).await.unwrap();
-    ///   map.insert(&(34 as u128), String::from("Hello"));
-    ///   let mut count = 0;
-    ///   map.for_each_index(|_index| {
+    /// let mut map: MapView<_, u128, String> = MapView::load(context).await.unwrap();
+    /// map.insert(&(34 as u128), String::from("Hello"));
+    /// let mut count = 0;
+    /// map.for_each_index(|_index| {
     ///     count += 1;
     ///     Ok(())
-    ///   }).await.unwrap();
-    ///   assert_eq!(count, 1);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 1);
     /// # })
     /// ```
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -1135,16 +1180,18 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : MapView<_, u128, String> = MapView::load(context).await.unwrap();
-    ///   map.insert(&(34 as u128), String::from("Thanks"));
-    ///   map.insert(&(37 as u128), String::from("Spasiba"));
-    ///   map.insert(&(38 as u128), String::from("Merci"));
-    ///   let mut values = Vec::new();
-    ///   map.for_each_index_value_while(|_index, value| {
+    /// let mut map: MapView<_, u128, String> = MapView::load(context).await.unwrap();
+    /// map.insert(&(34 as u128), String::from("Thanks"));
+    /// map.insert(&(37 as u128), String::from("Spasiba"));
+    /// map.insert(&(38 as u128), String::from("Merci"));
+    /// let mut values = Vec::new();
+    /// map.for_each_index_value_while(|_index, value| {
     ///     values.push(value);
     ///     Ok(values.len() < 2)
-    ///   }).await.unwrap();
-    ///   assert_eq!(values.len(), 2);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(values.len(), 2);
     /// # })
     /// ```
     pub async fn for_each_index_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -1173,14 +1220,16 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : MapView<_,Vec<u8>,_> = MapView::load(context).await.unwrap();
-    ///   map.insert(&vec![0,1], String::from("Hello"));
-    ///   let mut count = 0;
-    ///   map.for_each_index_value(|_index, _value| {
+    /// let mut map: MapView<_, Vec<u8>, _> = MapView::load(context).await.unwrap();
+    /// map.insert(&vec![0, 1], String::from("Hello"));
+    /// let mut count = 0;
+    /// map.for_each_index_value(|_index, _value| {
     ///     count += 1;
     ///     Ok(())
-    ///   }).await.unwrap();
-    ///   assert_eq!(count, 1);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 1);
     /// # })
     /// ```
     pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -1217,9 +1266,9 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : MapView<_,u32,u128> = MapView::load(context).await.unwrap();
-    ///   let value = map.get_mut_or_default(&(34 as u32)).await.unwrap();
-    ///   assert_eq!(*value, 0 as u128);
+    /// let mut map: MapView<_, u32, u128> = MapView::load(context).await.unwrap();
+    /// let value = map.get_mut_or_default(&(34 as u32)).await.unwrap();
+    /// assert_eq!(*value, 0 as u128);
     /// # })
     /// ```
     pub async fn get_mut_or_default<Q>(&mut self, index: &Q) -> Result<&mut V, ViewError>
@@ -1333,9 +1382,12 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : MapView<_,u128,_> = MapView::load(context).await.unwrap();
-    ///   map.insert(&(24 as u128), String::from("Hello"));
-    ///   assert_eq!(map.get(&(24 as u128)).await.unwrap(), Some(String::from("Hello")));
+    /// let mut map: MapView<_, u128, _> = MapView::load(context).await.unwrap();
+    /// map.insert(&(24 as u128), String::from("Hello"));
+    /// assert_eq!(
+    ///     map.get(&(24 as u128)).await.unwrap(),
+    ///     Some(String::from("Hello"))
+    /// );
     /// # })
     /// ```
     pub fn insert<Q>(&mut self, index: &Q, value: V) -> Result<(), ViewError>
@@ -1355,9 +1407,9 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = MapView::<_,u128,String>::load(context).await.unwrap();
-    ///   map.remove(&(37 as u128));
-    ///   assert_eq!(map.get(&(37 as u128)).await.unwrap(), None);
+    /// let mut map = MapView::<_, u128, String>::load(context).await.unwrap();
+    /// map.remove(&(37 as u128));
+    /// assert_eq!(map.get(&(37 as u128)).await.unwrap(), None);
     /// # })
     /// ```
     pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
@@ -1382,10 +1434,10 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = MapView::<_,u128,String>::load(context).await.unwrap();
-    ///   map.insert(&(37 as u128), String::from("Hello"));
-    ///   assert!(map.contains_key(&(37 as u128)).await.unwrap());
-    ///   assert!(!map.contains_key(&(34 as u128)).await.unwrap());
+    /// let mut map = MapView::<_, u128, String>::load(context).await.unwrap();
+    /// map.insert(&(37 as u128), String::from("Hello"));
+    /// assert!(map.contains_key(&(37 as u128)).await.unwrap());
+    /// assert!(!map.contains_key(&(34 as u128)).await.unwrap());
     /// # })
     /// ```
     pub async fn contains_key<Q>(&self, index: &Q) -> Result<bool, ViewError>
@@ -1413,9 +1465,13 @@ where
     /// # use linera_views::memory::MemoryContext;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : CustomMapView<MemoryContext<()>, u128, String> = CustomMapView::load(context).await.unwrap();
-    ///   map.insert(&(34 as u128), String::from("Hello"));
-    ///   assert_eq!(map.get(&(34 as u128)).await.unwrap(), Some(String::from("Hello")));
+    /// let mut map: CustomMapView<MemoryContext<()>, u128, String> =
+    ///     CustomMapView::load(context).await.unwrap();
+    /// map.insert(&(34 as u128), String::from("Hello"));
+    /// assert_eq!(
+    ///     map.get(&(34 as u128)).await.unwrap(),
+    ///     Some(String::from("Hello"))
+    /// );
     /// # })
     /// ```
     pub async fn get<Q>(&self, index: &Q) -> Result<Option<V>, ViewError>
@@ -1434,11 +1490,14 @@ where
     /// # use linera_views::map_view::CustomMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : CustomMapView<_, u128, String> = CustomMapView::load(context).await.unwrap();
-    ///   map.insert(&(34 as u128), String::from("Hello"));
-    ///   let value = map.get_mut(&(34 as u128)).await.unwrap().unwrap();
-    ///   *value = String::from("Hola");
-    ///   assert_eq!(map.get(&(34 as u128)).await.unwrap(), Some(String::from("Hola")));
+    /// let mut map: CustomMapView<_, u128, String> = CustomMapView::load(context).await.unwrap();
+    /// map.insert(&(34 as u128), String::from("Hello"));
+    /// let value = map.get_mut(&(34 as u128)).await.unwrap().unwrap();
+    /// *value = String::from("Hola");
+    /// assert_eq!(
+    ///     map.get(&(34 as u128)).await.unwrap(),
+    ///     Some(String::from("Hola"))
+    /// );
     /// # })
     /// ```
     pub async fn get_mut<Q>(&mut self, index: &Q) -> Result<Option<&mut V>, ViewError>
@@ -1466,10 +1525,10 @@ where
     /// # use linera_views::map_view::MapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : MapView::<_,u128,String> = MapView::load(context).await.unwrap();
-    ///   map.insert(&(34 as u128), String::from("Hello"));
-    ///   map.insert(&(37 as u128), String::from("Bonjour"));
-    ///   assert_eq!(map.indices().await.unwrap(), vec![34 as u128,37 as u128]);
+    /// let mut map: MapView<_, u128, String> = MapView::load(context).await.unwrap();
+    /// map.insert(&(34 as u128), String::from("Hello"));
+    /// map.insert(&(37 as u128), String::from("Bonjour"));
+    /// assert_eq!(map.indices().await.unwrap(), vec![34 as u128, 37 as u128]);
     /// # })
     /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
@@ -1491,15 +1550,17 @@ where
     /// # use linera_views::map_view::CustomMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = CustomMapView::load(context).await.unwrap();
-    ///   map.insert(&(34 as u128), String::from("Hello"));
-    ///   map.insert(&(37 as u128), String::from("Hola"));
-    ///   let mut indices = Vec::<u128>::new();
-    ///   map.for_each_index_while(|index| {
+    /// let mut map = CustomMapView::load(context).await.unwrap();
+    /// map.insert(&(34 as u128), String::from("Hello"));
+    /// map.insert(&(37 as u128), String::from("Hola"));
+    /// let mut indices = Vec::<u128>::new();
+    /// map.for_each_index_while(|index| {
     ///     indices.push(index);
     ///     Ok(indices.len() < 5)
-    ///   }).await.unwrap();
-    ///   assert_eq!(indices.len(), 2);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(indices.len(), 2);
     /// # })
     /// ```
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -1527,15 +1588,17 @@ where
     /// # use linera_views::map_view::CustomMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = CustomMapView::load(context).await.unwrap();
-    ///   map.insert(&(34 as u128), String::from("Hello"));
-    ///   map.insert(&(37 as u128), String::from("Hola"));
-    ///   let mut indices = Vec::<u128>::new();
-    ///   map.for_each_index(|index| {
+    /// let mut map = CustomMapView::load(context).await.unwrap();
+    /// map.insert(&(34 as u128), String::from("Hello"));
+    /// map.insert(&(37 as u128), String::from("Hola"));
+    /// let mut indices = Vec::<u128>::new();
+    /// map.for_each_index(|index| {
     ///     indices.push(index);
     ///     Ok(())
-    ///   }).await.unwrap();
-    ///   assert_eq!(indices, vec![34,37]);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(indices, vec![34, 37]);
     /// # })
     /// ```
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -1564,15 +1627,19 @@ where
     /// # use linera_views::map_view::CustomMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map = CustomMapView::<_,u128,String>::load(context).await.unwrap();
-    ///   map.insert(&(34 as u128), String::from("Hello"));
-    ///   map.insert(&(37 as u128), String::from("Hola"));
-    ///   let mut values = Vec::new();
-    ///   map.for_each_index_value_while(|_index, value| {
+    /// let mut map = CustomMapView::<_, u128, String>::load(context)
+    ///     .await
+    ///     .unwrap();
+    /// map.insert(&(34 as u128), String::from("Hello"));
+    /// map.insert(&(37 as u128), String::from("Hola"));
+    /// let mut values = Vec::new();
+    /// map.for_each_index_value_while(|_index, value| {
     ///     values.push(value);
     ///     Ok(values.len() < 5)
-    ///   }).await.unwrap();
-    ///   assert_eq!(values.len(), 2);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(values.len(), 2);
     /// # })
     /// ```
     pub async fn for_each_index_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -1601,15 +1668,17 @@ where
     /// # use linera_views::map_view::CustomMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : CustomMapView<_, u128, String> = CustomMapView::load(context).await.unwrap();
-    ///   map.insert(&(34 as u128), String::from("Hello"));
-    ///   map.insert(&(37 as u128), String::from("Hola"));
-    ///   let mut indices = Vec::<u128>::new();
-    ///   map.for_each_index_value(|index, _value| {
+    /// let mut map: CustomMapView<_, u128, String> = CustomMapView::load(context).await.unwrap();
+    /// map.insert(&(34 as u128), String::from("Hello"));
+    /// map.insert(&(37 as u128), String::from("Hola"));
+    /// let mut indices = Vec::<u128>::new();
+    /// map.for_each_index_value(|index, _value| {
     ///     indices.push(index);
     ///     Ok(())
-    ///   }).await.unwrap();
-    ///   assert_eq!(indices, vec![34,37]);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(indices, vec![34, 37]);
     /// # })
     /// ```
     pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -1646,8 +1715,11 @@ where
     /// # use linera_views::map_view::CustomMapView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut map : CustomMapView<_, u128, String> = CustomMapView::load(context).await.unwrap();
-    ///   assert_eq!(*map.get_mut_or_default(&(34 as u128)).await.unwrap(), String::new());
+    /// let mut map: CustomMapView<_, u128, String> = CustomMapView::load(context).await.unwrap();
+    /// assert_eq!(
+    ///     *map.get_mut_or_default(&(34 as u128)).await.unwrap(),
+    ///     String::new()
+    /// );
     /// # })
     /// ```
     pub async fn get_mut_or_default<Q>(&mut self, index: &Q) -> Result<&mut V, ViewError>

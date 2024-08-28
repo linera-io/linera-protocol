@@ -462,7 +462,6 @@ where
     }
 
     /// Votes for falling back to a public chain.
-    ///
     pub(super) async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
         let chain = &mut self.state.chain;
         if let (Some(epoch), Some(entry)) = (

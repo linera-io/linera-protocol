@@ -310,9 +310,9 @@ where
     /// # use linera_views::key_value_store_view::{KeyValueStoreView, SizeData};
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   let total_size = view.total_size();
-    ///   assert_eq!(total_size, SizeData::default());
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let total_size = view.total_size();
+    /// assert_eq!(total_size, SizeData::default());
     /// # })
     /// ```
     pub fn total_size(&self) -> SizeData {
@@ -327,16 +327,18 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
-    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
-    ///   view.insert(vec![0,3], vec![0]).await.unwrap();
-    ///   let mut count = 0;
-    ///   view.for_each_index_while(|_key| {
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 3], vec![0]).await.unwrap();
+    /// let mut count = 0;
+    /// view.for_each_index_while(|_key| {
     ///     count += 1;
     ///     Ok(count < 2)
-    ///   }).await.unwrap();
-    ///   assert_eq!(count, 2);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 2);
     /// # })
     /// ```
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -397,16 +399,18 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
-    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
-    ///   view.insert(vec![0,3], vec![0]).await.unwrap();
-    ///   let mut count = 0;
-    ///   view.for_each_index(|_key| {
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 3], vec![0]).await.unwrap();
+    /// let mut count = 0;
+    /// view.for_each_index(|_key| {
     ///     count += 1;
     ///     Ok(())
-    ///   }).await.unwrap();
-    ///   assert_eq!(count, 3);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 3);
     /// # })
     /// ```
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -428,15 +432,17 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
-    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
-    ///   let mut values = Vec::new();
-    ///   view.for_each_index_value_while(|_key, value| {
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
+    /// let mut values = Vec::new();
+    /// view.for_each_index_value_while(|_key, value| {
     ///     values.push(value.to_vec());
     ///     Ok(values.len() < 1)
-    ///   }).await.unwrap();
-    ///   assert_eq!(values, vec![vec![0]]);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(values, vec![vec![0]]);
     /// # })
     /// ```
     pub async fn for_each_index_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -497,15 +503,17 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
-    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
-    ///   let mut part_keys = Vec::new();
-    ///   view.for_each_index_while(|key| {
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
+    /// let mut part_keys = Vec::new();
+    /// view.for_each_index_while(|key| {
     ///     part_keys.push(key.to_vec());
     ///     Ok(part_keys.len() < 1)
-    ///   }).await.unwrap();
-    ///   assert_eq!(part_keys, vec![vec![0,1]]);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(part_keys, vec![vec![0, 1]]);
     /// # })
     /// ```
     pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -526,11 +534,11 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
-    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
-    ///   let indices = view.indices().await.unwrap();
-    ///   assert_eq!(indices, vec![vec![0,1],vec![0,2]]);
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
+    /// let indices = view.indices().await.unwrap();
+    /// assert_eq!(indices, vec![vec![0, 1], vec![0, 2]]);
     /// # })
     /// ```
     pub async fn indices(&self) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -550,11 +558,11 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
-    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
-    ///   let key_values = view.indices().await.unwrap();
-    ///   assert_eq!(key_values, vec![vec![0,1],vec![0,2]]);
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
+    /// let key_values = view.indices().await.unwrap();
+    /// assert_eq!(key_values, vec![vec![0, 1], vec![0, 2]]);
     /// # })
     /// ```
     pub async fn index_values(&self) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
@@ -574,11 +582,11 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
-    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
-    ///   let count = view.count().await.unwrap();
-    ///   assert_eq!(count, 2);
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
+    /// let count = view.count().await.unwrap();
+    /// assert_eq!(count, 2);
     /// # })
     /// ```
     pub async fn count(&self) -> Result<usize, ViewError> {
@@ -598,10 +606,10 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![42]).await.unwrap();
-    ///   assert_eq!(view.get(&[0,1]).await.unwrap(), Some(vec![42]));
-    ///   assert_eq!(view.get(&[0,2]).await.unwrap(), None);
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![42]).await.unwrap();
+    /// assert_eq!(view.get(&[0, 1]).await.unwrap(), Some(vec![42]));
+    /// assert_eq!(view.get(&[0, 2]).await.unwrap(), None);
     /// # })
     /// ```
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
@@ -627,10 +635,10 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![42]).await.unwrap();
-    ///   assert!(view.contains_key(&[0,1]).await.unwrap());
-    ///   assert!(!view.contains_key(&[0,2]).await.unwrap());
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![42]).await.unwrap();
+    /// assert!(view.contains_key(&[0, 1]).await.unwrap());
+    /// assert!(!view.contains_key(&[0, 2]).await.unwrap());
     /// # })
     /// ```
     pub async fn contains_key(&self, index: &[u8]) -> Result<bool, ViewError> {
@@ -656,11 +664,11 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![42]).await.unwrap();
-    ///   let keys = vec![vec![0,1], vec![0,2]];
-    ///   let results = view.contains_keys(keys).await.unwrap();
-    ///   assert_eq!(results, vec![true, false]);
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![42]).await.unwrap();
+    /// let keys = vec![vec![0, 1], vec![0, 2]];
+    /// let results = view.contains_keys(keys).await.unwrap();
+    /// assert_eq!(results, vec![true, false]);
     /// # })
     /// ```
     pub async fn contains_keys(&self, indices: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
@@ -698,9 +706,12 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![42]).await.unwrap();
-    ///   assert_eq!(view.multi_get(vec![vec![0,1], vec![0,2]]).await.unwrap(), vec![Some(vec![42]), None]);
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![42]).await.unwrap();
+    /// assert_eq!(
+    ///     view.multi_get(vec![vec![0, 1], vec![0, 2]]).await.unwrap(),
+    ///     vec![Some(vec![42]), None]
+    /// );
     /// # })
     /// ```
     pub async fn multi_get(
@@ -742,14 +753,14 @@ where
     /// # use linera_views::batch::Batch;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![34]).await.unwrap();
-    ///   view.insert(vec![3,4], vec![42]).await.unwrap();
-    ///   let mut batch = Batch::new();
-    ///   batch.delete_key_prefix(vec![0]);
-    ///   view.write_batch(batch).await.unwrap();
-    ///   let key_values = view.find_key_values_by_prefix(&[0]).await.unwrap();
-    ///   assert_eq!(key_values, vec![]);
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![34]).await.unwrap();
+    /// view.insert(vec![3, 4], vec![42]).await.unwrap();
+    /// let mut batch = Batch::new();
+    /// batch.delete_key_prefix(vec![0]);
+    /// view.write_batch(batch).await.unwrap();
+    /// let key_values = view.find_key_values_by_prefix(&[0]).await.unwrap();
+    /// assert_eq!(key_values, vec![]);
     /// # })
     /// ```
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
@@ -825,9 +836,9 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![34]).await.unwrap();
-    ///   assert_eq!(view.get(&[0,1]).await.unwrap(), Some(vec![34]));
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![34]).await.unwrap();
+    /// assert_eq!(view.get(&[0, 1]).await.unwrap(), Some(vec![34]));
     /// # })
     /// ```
     pub async fn insert(&mut self, index: Vec<u8>, value: Vec<u8>) -> Result<(), ViewError> {
@@ -843,10 +854,10 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![34]).await.unwrap();
-    ///   view.remove(vec![0,1]).await.unwrap();
-    ///   assert_eq!(view.get(&[0,1]).await.unwrap(), None);
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![34]).await.unwrap();
+    /// view.remove(vec![0, 1]).await.unwrap();
+    /// assert_eq!(view.get(&[0, 1]).await.unwrap(), None);
     /// # })
     /// ```
     pub async fn remove(&mut self, index: Vec<u8>) -> Result<(), ViewError> {
@@ -862,10 +873,10 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![34]).await.unwrap();
-    ///   view.remove_by_prefix(vec![0]).await.unwrap();
-    ///   assert_eq!(view.get(&[0,1]).await.unwrap(), None);
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![34]).await.unwrap();
+    /// view.remove_by_prefix(vec![0]).await.unwrap();
+    /// assert_eq!(view.get(&[0, 1]).await.unwrap(), None);
     /// # })
     /// ```
     pub async fn remove_by_prefix(&mut self, key_prefix: Vec<u8>) -> Result<(), ViewError> {
@@ -881,11 +892,11 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![34]).await.unwrap();
-    ///   view.insert(vec![3,4], vec![42]).await.unwrap();
-    ///   let keys = view.find_keys_by_prefix(&[0]).await.unwrap();
-    ///   assert_eq!(keys, vec![vec![1]]);
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![34]).await.unwrap();
+    /// view.insert(vec![3, 4], vec![42]).await.unwrap();
+    /// let keys = view.find_keys_by_prefix(&[0]).await.unwrap();
+    /// assert_eq!(keys, vec![vec![1]]);
     /// # })
     /// ```
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -952,11 +963,11 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![34]).await.unwrap();
-    ///   view.insert(vec![3,4], vec![42]).await.unwrap();
-    ///   let key_values = view.find_key_values_by_prefix(&[0]).await.unwrap();
-    ///   assert_eq!(key_values, vec![(vec![1],vec![34])]);
+    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// view.insert(vec![0, 1], vec![34]).await.unwrap();
+    /// view.insert(vec![3, 4], vec![42]).await.unwrap();
+    /// let key_values = view.find_key_values_by_prefix(&[0]).await.unwrap();
+    /// assert_eq!(key_values, vec![(vec![1], vec![34])]);
     /// # })
     /// ```
     pub async fn find_key_values_by_prefix(

@@ -138,9 +138,9 @@ where
     /// # use linera_views::{memory::create_test_memory_context, set_view::ByteSetView};
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = ByteSetView::load(context).await.unwrap();
-    ///   set.insert(vec![0,1]);
-    ///   assert_eq!(set.contains(&[0,1]).await.unwrap(), true);
+    /// let mut set = ByteSetView::load(context).await.unwrap();
+    /// set.insert(vec![0, 1]);
+    /// assert_eq!(set.contains(&[0, 1]).await.unwrap(), true);
     /// # })
     /// ```
     pub fn insert(&mut self, short_key: Vec<u8>) {
@@ -153,9 +153,9 @@ where
     /// # use linera_views::{memory::create_test_memory_context, set_view::ByteSetView};
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = ByteSetView::load(context).await.unwrap();
-    ///   set.remove(vec![0,1]);
-    ///   assert_eq!(set.contains(&[0,1]).await.unwrap(), false);
+    /// let mut set = ByteSetView::load(context).await.unwrap();
+    /// set.remove(vec![0, 1]);
+    /// assert_eq!(set.contains(&[0, 1]).await.unwrap(), false);
     /// # })
     /// ```
     pub fn remove(&mut self, short_key: Vec<u8>) {
@@ -184,10 +184,10 @@ where
     /// # use linera_views::{memory::create_test_memory_context, set_view::ByteSetView};
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = ByteSetView::load(context).await.unwrap();
-    ///   set.insert(vec![0,1]);
-    ///   assert_eq!(set.contains(&[34]).await.unwrap(), false);
-    ///   assert_eq!(set.contains(&[0,1]).await.unwrap(), true);
+    /// let mut set = ByteSetView::load(context).await.unwrap();
+    /// set.insert(vec![0, 1]);
+    /// assert_eq!(set.contains(&[34]).await.unwrap(), false);
+    /// assert_eq!(set.contains(&[0, 1]).await.unwrap(), true);
     /// # })
     /// ```
     pub async fn contains(&self, short_key: &[u8]) -> Result<bool, ViewError> {
@@ -217,10 +217,10 @@ where
     /// # use linera_views::{memory::create_test_memory_context, set_view::ByteSetView};
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = ByteSetView::load(context).await.unwrap();
-    ///   set.insert(vec![0,1]);
-    ///   set.insert(vec![0,2]);
-    ///   assert_eq!(set.keys().await.unwrap(), vec![vec![0,1], vec![0,2]]);
+    /// let mut set = ByteSetView::load(context).await.unwrap();
+    /// set.insert(vec![0, 1]);
+    /// set.insert(vec![0, 2]);
+    /// assert_eq!(set.keys().await.unwrap(), vec![vec![0, 1], vec![0, 2]]);
     /// # })
     /// ```
     pub async fn keys(&self) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -241,16 +241,18 @@ where
     /// # use linera_views::{memory::create_test_memory_context, set_view::ByteSetView};
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = ByteSetView::load(context).await.unwrap();
-    ///   set.insert(vec![0,1]);
-    ///   set.insert(vec![0,2]);
-    ///   set.insert(vec![3]);
-    ///   let mut count = 0;
-    ///   set.for_each_key_while(|_key| {
+    /// let mut set = ByteSetView::load(context).await.unwrap();
+    /// set.insert(vec![0, 1]);
+    /// set.insert(vec![0, 2]);
+    /// set.insert(vec![3]);
+    /// let mut count = 0;
+    /// set.for_each_key_while(|_key| {
     ///     count += 1;
     ///     Ok(count < 2)
-    ///   }).await.unwrap();
-    ///   assert_eq!(count, 2);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 2);
     /// # })
     /// ```
     pub async fn for_each_key_while<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -304,16 +306,18 @@ where
     /// # use linera_views::{memory::create_test_memory_context, set_view::ByteSetView};
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = ByteSetView::load(context).await.unwrap();
-    ///   set.insert(vec![0,1]);
-    ///   set.insert(vec![0,2]);
-    ///   set.insert(vec![3]);
-    ///   let mut count = 0;
-    ///   set.for_each_key(|_key| {
+    /// let mut set = ByteSetView::load(context).await.unwrap();
+    /// set.insert(vec![0, 1]);
+    /// set.insert(vec![0, 2]);
+    /// set.insert(vec![3]);
+    /// let mut count = 0;
+    /// set.for_each_key(|_key| {
     ///     count += 1;
     ///     Ok(())
-    ///   }).await.unwrap();
-    ///   assert_eq!(count, 3);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 3);
     /// # })
     /// ```
     pub async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -436,9 +440,9 @@ where
     /// # use linera_views::set_view::SetView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
-    ///   set.insert(&(34 as u32));
-    ///   assert_eq!(set.indices().await.unwrap().len(), 1);
+    /// let mut set = SetView::<_, u32>::load(context).await.unwrap();
+    /// set.insert(&(34 as u32));
+    /// assert_eq!(set.indices().await.unwrap().len(), 1);
     /// # })
     /// ```
     pub fn insert<Q>(&mut self, index: &Q) -> Result<(), ViewError>
@@ -457,9 +461,9 @@ where
     /// # use linera_views::{memory::create_test_memory_context, set_view::SetView};
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
-    ///   set.remove(&(34 as u32));
-    ///   assert_eq!(set.indices().await.unwrap().len(), 0);
+    /// let mut set = SetView::<_, u32>::load(context).await.unwrap();
+    /// set.remove(&(34 as u32));
+    /// assert_eq!(set.indices().await.unwrap().len(), 0);
     /// # })
     /// ```
     pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
@@ -490,10 +494,10 @@ where
     /// # use linera_views::{memory::create_test_memory_context, set_view::SetView};
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set : SetView<_,u32> = SetView::load(context).await.unwrap();
-    ///   set.insert(&(34 as u32));
-    ///   assert_eq!(set.contains(&(34 as u32)).await.unwrap(), true);
-    ///   assert_eq!(set.contains(&(45 as u32)).await.unwrap(), false);
+    /// let mut set: SetView<_, u32> = SetView::load(context).await.unwrap();
+    /// set.insert(&(34 as u32));
+    /// assert_eq!(set.contains(&(34 as u32)).await.unwrap(), true);
+    /// assert_eq!(set.contains(&(45 as u32)).await.unwrap(), false);
     /// # })
     /// ```
     pub async fn contains<Q>(&self, index: &Q) -> Result<bool, ViewError>
@@ -518,9 +522,9 @@ where
     /// # use linera_views::{memory::create_test_memory_context, set_view::SetView};
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set : SetView<_,u32> = SetView::load(context).await.unwrap();
-    ///   set.insert(&(34 as u32));
-    ///   assert_eq!(set.indices().await.unwrap(), vec![34 as u32]);
+    /// let mut set: SetView<_, u32> = SetView::load(context).await.unwrap();
+    /// set.insert(&(34 as u32));
+    /// assert_eq!(set.indices().await.unwrap(), vec![34 as u32]);
     /// # })
     /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
@@ -542,16 +546,18 @@ where
     /// # use linera_views::set_view::SetView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
-    ///   set.insert(&(34 as u32));
-    ///   set.insert(&(37 as u32));
-    ///   set.insert(&(42 as u32));
-    ///   let mut count = 0;
-    ///   set.for_each_index_while(|_key| {
+    /// let mut set = SetView::<_, u32>::load(context).await.unwrap();
+    /// set.insert(&(34 as u32));
+    /// set.insert(&(37 as u32));
+    /// set.insert(&(42 as u32));
+    /// let mut count = 0;
+    /// set.for_each_index_while(|_key| {
     ///     count += 1;
     ///     Ok(count < 2)
-    ///   }).await.unwrap();
-    ///   assert_eq!(count, 2);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 2);
     /// # })
     /// ```
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -575,16 +581,18 @@ where
     /// # use linera_views::set_view::SetView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
-    ///   set.insert(&(34 as u32));
-    ///   set.insert(&(37 as u32));
-    ///   set.insert(&(42 as u32));
-    ///   let mut count = 0;
-    ///   set.for_each_index(|_key| {
+    /// let mut set = SetView::<_, u32>::load(context).await.unwrap();
+    /// set.insert(&(34 as u32));
+    /// set.insert(&(37 as u32));
+    /// set.insert(&(42 as u32));
+    /// let mut count = 0;
+    /// set.for_each_index(|_key| {
     ///     count += 1;
     ///     Ok(())
-    ///   }).await.unwrap();
-    ///   assert_eq!(count, 3);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 3);
     /// # })
     /// ```
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -700,9 +708,9 @@ where
     /// # use linera_views::set_view::CustomSetView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
-    ///   set.insert(&(34 as u128));
-    ///   assert_eq!(set.indices().await.unwrap().len(), 1);
+    /// let mut set = CustomSetView::<_, u128>::load(context).await.unwrap();
+    /// set.insert(&(34 as u128));
+    /// assert_eq!(set.indices().await.unwrap().len(), 1);
     /// # })
     /// ```
     pub fn insert<Q>(&mut self, index: &Q) -> Result<(), ViewError>
@@ -722,9 +730,9 @@ where
     /// # use linera_views::set_view::CustomSetView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
-    ///   set.remove(&(34 as u128));
-    ///   assert_eq!(set.indices().await.unwrap().len(), 0);
+    /// let mut set = CustomSetView::<_, u128>::load(context).await.unwrap();
+    /// set.remove(&(34 as u128));
+    /// assert_eq!(set.indices().await.unwrap().len(), 0);
     /// # })
     /// ```
     pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
@@ -756,10 +764,10 @@ where
     /// # use linera_views::set_view::CustomSetView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
-    ///   set.insert(&(34 as u128));
-    ///   assert_eq!(set.contains(&(34 as u128)).await.unwrap(), true);
-    ///   assert_eq!(set.contains(&(37 as u128)).await.unwrap(), false);
+    /// let mut set = CustomSetView::<_, u128>::load(context).await.unwrap();
+    /// set.insert(&(34 as u128));
+    /// assert_eq!(set.contains(&(34 as u128)).await.unwrap(), true);
+    /// assert_eq!(set.contains(&(37 as u128)).await.unwrap(), false);
     /// # })
     /// ```
     pub async fn contains<Q>(&self, index: &Q) -> Result<bool, ViewError>
@@ -786,10 +794,10 @@ where
     /// # use linera_views::set_view::CustomSetView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
-    ///   set.insert(&(34 as u128));
-    ///   set.insert(&(37 as u128));
-    ///   assert_eq!(set.indices().await.unwrap(), vec![34 as u128,37 as u128]);
+    /// let mut set = CustomSetView::<_, u128>::load(context).await.unwrap();
+    /// set.insert(&(34 as u128));
+    /// set.insert(&(37 as u128));
+    /// assert_eq!(set.indices().await.unwrap(), vec![34 as u128, 37 as u128]);
     /// # })
     /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
@@ -811,16 +819,18 @@ where
     /// # use linera_views::set_view::CustomSetView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
-    ///   set.insert(&(34 as u128));
-    ///   set.insert(&(37 as u128));
-    ///   set.insert(&(42 as u128));
-    ///   let mut count = 0;
-    ///   set.for_each_index_while(|_key| {
+    /// let mut set = CustomSetView::<_, u128>::load(context).await.unwrap();
+    /// set.insert(&(34 as u128));
+    /// set.insert(&(37 as u128));
+    /// set.insert(&(42 as u128));
+    /// let mut count = 0;
+    /// set.for_each_index_while(|_key| {
     ///     count += 1;
     ///     Ok(count < 5)
-    ///   }).await.unwrap();
-    ///   assert_eq!(count, 3);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 3);
     /// # })
     /// ```
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
@@ -844,16 +854,18 @@ where
     /// # use linera_views::set_view::CustomSetView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
-    ///   set.insert(&(34 as u128));
-    ///   set.insert(&(37 as u128));
-    ///   set.insert(&(42 as u128));
-    ///   let mut count = 0;
-    ///   set.for_each_index(|_key| {
+    /// let mut set = CustomSetView::<_, u128>::load(context).await.unwrap();
+    /// set.insert(&(34 as u128));
+    /// set.insert(&(37 as u128));
+    /// set.insert(&(42 as u128));
+    /// let mut count = 0;
+    /// set.for_each_index(|_key| {
     ///     count += 1;
     ///     Ok(())
-    ///   }).await.unwrap();
-    ///   assert_eq!(count, 3);
+    /// })
+    /// .await
+    /// .unwrap();
+    /// assert_eq!(count, 3);
     /// # })
     /// ```
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>

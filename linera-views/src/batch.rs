@@ -208,13 +208,13 @@ impl Batch {
     /// or matched by a delete prefix.
     /// ```rust
     /// # use linera_views::batch::Batch;
-    ///   let mut batch = Batch::new();
-    ///   batch.put_key_value(vec![0, 1], &(34 as u128));
-    ///   batch.delete_key(vec![0, 1]);
-    ///   let unordered_batch = batch.simplify();
-    ///   assert_eq!(unordered_batch.key_prefix_deletions.len(), 0);
-    ///   assert_eq!(unordered_batch.simple_unordered_batch.insertions.len(), 0);
-    ///   assert_eq!(unordered_batch.simple_unordered_batch.deletions.len(), 1);
+    /// let mut batch = Batch::new();
+    /// batch.put_key_value(vec![0, 1], &(34 as u128));
+    /// batch.delete_key(vec![0, 1]);
+    /// let unordered_batch = batch.simplify();
+    /// assert_eq!(unordered_batch.key_prefix_deletions.len(), 0);
+    /// assert_eq!(unordered_batch.simple_unordered_batch.insertions.len(), 0);
+    /// assert_eq!(unordered_batch.simple_unordered_batch.deletions.len(), 1);
     /// ```
     pub fn simplify(self) -> UnorderedBatch {
         let mut delete_and_insert_map = BTreeMap::new();
@@ -296,8 +296,8 @@ impl Batch {
     /// Adds the insertion of a key-value pair into the batch with a serializable value.
     /// ```rust
     /// # use linera_views::batch::Batch;
-    ///   let mut batch = Batch::new();
-    ///   batch.put_key_value(vec![0, 1], &(34 as u128));
+    /// let mut batch = Batch::new();
+    /// batch.put_key_value(vec![0, 1], &(34 as u128));
     /// ```
     #[inline]
     pub fn put_key_value(
@@ -313,8 +313,8 @@ impl Batch {
     /// Adds the insertion of a `(key, value)` pair into the batch with `value` a vector of `u8`.
     /// ```rust
     /// # use linera_views::batch::Batch;
-    ///   let mut batch = Batch::new();
-    ///   batch.put_key_value_bytes(vec![0, 1], vec![3, 4, 5]);
+    /// let mut batch = Batch::new();
+    /// batch.put_key_value_bytes(vec![0, 1], vec![3, 4, 5]);
     /// ```
     #[inline]
     pub fn put_key_value_bytes(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -324,8 +324,8 @@ impl Batch {
     /// Inserts the deletion of a `key` into the batch.
     /// ```rust
     /// # use linera_views::batch::Batch;
-    ///   let mut batch = Batch::new();
-    ///   batch.delete_key(vec![0, 1]);
+    /// let mut batch = Batch::new();
+    /// batch.delete_key(vec![0, 1]);
     /// ```
     #[inline]
     pub fn delete_key(&mut self, key: Vec<u8>) {
@@ -335,8 +335,8 @@ impl Batch {
     /// Inserts the deletion of a `key_prefix` into the batch.
     /// ```rust
     /// # use linera_views::batch::Batch;
-    ///   let mut batch = Batch::new();
-    ///   batch.delete_key_prefix(vec![0, 1]);
+    /// let mut batch = Batch::new();
+    /// batch.delete_key_prefix(vec![0, 1]);
     /// ```
     #[inline]
     pub fn delete_key_prefix(&mut self, key_prefix: Vec<u8>) {
