@@ -29,7 +29,6 @@ use linera_base::ensure;
 use thiserror::Error;
 #[cfg(with_testing)]
 use {
-    crate::lru_caching::TEST_CACHE_SIZE,
     crate::test_utils::generate_test_namespace,
     anyhow::Error,
     tokio::sync::{Mutex, MutexGuard},
@@ -46,7 +45,7 @@ use crate::{
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::LruCachingStore,
+    lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 
@@ -171,11 +170,9 @@ const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 4000000;
 /// The DynamoDb database is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of
 /// connections.
-#[cfg(with_testing)]
 const TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
 /// The number of entries in a stream of the tests can be controlled by this parameter for tests.
-#[cfg(with_testing)]
 const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 100.

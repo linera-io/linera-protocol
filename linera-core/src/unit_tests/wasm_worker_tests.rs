@@ -32,7 +32,7 @@ use linera_execution::{
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]
 use linera_views::dynamo_db::DynamoDbStore;
-#[cfg(feature = "scylladb")]
+#[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::RocksDbStore;
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::ScyllaDbStore;
