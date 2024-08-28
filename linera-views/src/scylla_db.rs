@@ -39,6 +39,8 @@ use thiserror::Error;
 
 #[cfg(with_metrics)]
 use crate::metering::{MeteredStore, LRU_CACHING_METRICS, SCYLLA_DB_METRICS};
+#[cfg(with_testing)]
+use crate::test_utils::generate_test_namespace;
 use crate::{
     batch::{Batch, UnorderedBatch},
     common::{
@@ -46,11 +48,9 @@ use crate::{
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::LruCachingStore,
+    lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
     value_splitting::DatabaseConsistencyError,
 };
-#[cfg(with_testing)]
-use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace};
 
 /// The client for ScyllaDb.
 /// * The session allows to pass queries
@@ -373,11 +373,9 @@ impl ScyllaDbClient {
 }
 
 /// We limit the number of connections that can be done for tests.
-#[cfg(with_testing)]
 const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
 /// The number of connections in the stream is limited for tests.
-#[cfg(with_testing)]
 const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// The maximal size of an operation on ScyllaDB seems to be 16M
