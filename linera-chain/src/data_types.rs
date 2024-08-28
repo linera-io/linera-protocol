@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, collections::HashSet};
+use std::{borrow::Cow, collections::HashSet, fmt};
 
 use async_graphql::SimpleObject;
 use linera_base::{
@@ -231,6 +231,16 @@ pub struct ChannelFullName {
     pub application_id: GenericApplicationId,
     /// The name of the channel.
     pub name: ChannelName,
+}
+
+impl fmt::Display for ChannelFullName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = hex::encode(&self.name);
+        match self.application_id {
+            GenericApplicationId::System => write!(f, "system channel {name}"),
+            GenericApplicationId::User(app_id) => write!(f, "user channel {name} for app {app_id}"),
+        }
+    }
 }
 
 /// The origin of a message coming from a particular chain. Used to identify each inbox.
@@ -578,6 +588,15 @@ pub struct Certificate {
     pub round: Round,
     /// Signatures on the value.
     signatures: Vec<(ValidatorName, Signature)>,
+}
+
+impl fmt::Display for Origin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.medium {
+            Medium::Direct => write!(f, "{:.8} (direct)", self.sender),
+            Medium::Channel(full_name) => write!(f, "{:.8} via {full_name:.8}", self.sender),
+        }
+    }
 }
 
 impl Origin {

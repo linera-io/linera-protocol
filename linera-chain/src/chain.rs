@@ -447,7 +447,7 @@ where
     /// block height.
     pub fn all_messages_delivered_up_to(&mut self, height: BlockHeight) -> bool {
         tracing::debug!(
-            "Messages left in {:?}'s outbox: {:?}",
+            "Messages left in {:.8}'s outbox: {:?}",
             self.chain_id(),
             self.outbox_counters.get()
         );
@@ -538,9 +538,7 @@ where
         assert!(!bundle.messages.is_empty());
         let chain_id = self.chain_id();
         tracing::trace!(
-            "Processing new messages to {:?} from {:?} at height {}",
-            chain_id,
-            origin,
+            "Processing new messages to {chain_id:.8} from {origin} at height {}",
             bundle.height,
         );
         let chain_and_height = ChainAndHeight {
@@ -643,7 +641,13 @@ where
         let inboxes = self.inboxes.try_load_entries_mut(origins).await?;
         let mut removed_unskippable = HashSet::new();
         for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
-            tracing::trace!("Updating inbox {:?} in chain {:?}", origin, chain_id);
+            tracing::trace!(
+                "Removing {:?} from {chain_id:.8}'s inbox for {origin:}",
+                bundles
+                    .iter()
+                    .map(|bundle| bundle.height)
+                    .collect::<Vec<_>>()
+            );
             for bundle in bundles {
                 // Mark the message as processed in the inbox.
                 let was_present = inbox
@@ -1186,16 +1190,17 @@ where
                 if channel.subscribers.contains(&id).await? {
                     return Ok(None); // Was already a subscriber.
                 }
+                let full_name = ChannelFullName {
+                    application_id,
+                    name,
+                };
+                tracing::trace!("Adding subscriber {id:.8} for {full_name:}");
                 channel.subscribers.insert(&id)?;
                 // Send all messages.
                 let heights = channel.block_heights.read(..).await?;
                 if heights.is_empty() {
                     return Ok(None); // No messages on this channel yet.
                 }
-                let full_name = ChannelFullName {
-                    application_id,
-                    name,
-                };
                 let target = Target::channel(id, full_name.clone());
                 Ok::<_, ChainError>(Some((target, heights)))
             })

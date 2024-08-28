@@ -348,6 +348,11 @@ where
         let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
         self.state.track_newly_created_chains(executed_block);
         let mut actions = self.state.create_network_actions().await?;
+        tracing::trace!(
+            "Processed confirmed block {} on chain {:.8}",
+            block.height,
+            block.chain_id
+        );
         actions.notifications.push(Notification {
             chain_id: block.chain_id,
             reason: Reason::NewBlock {
@@ -586,7 +591,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
         if skipped_len > 0 {
             let (_, sample_bundle) = &bundles[skipped_len - 1];
             debug!(
-                "Ignoring repeated messages to {recipient:?} from {origin:?} at height {}",
+                "Ignoring repeated messages to {recipient:.8} from {origin:} at height {}",
                 sample_bundle.height,
             );
         }
