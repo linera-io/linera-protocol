@@ -158,8 +158,8 @@ where
     /// # use linera_views::log_view::LogView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut log = LogView::load(context).await.unwrap();
-    ///   log.push(34);
+    /// let mut log = LogView::load(context).await.unwrap();
+    /// log.push(34);
     /// # })
     /// ```
     pub fn push(&mut self, value: T) {
@@ -173,10 +173,10 @@ where
     /// # use linera_views::log_view::LogView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut log = LogView::load(context).await.unwrap();
-    ///   log.push(34);
-    ///   log.push(42);
-    ///   assert_eq!(log.count(), 2);
+    /// let mut log = LogView::load(context).await.unwrap();
+    /// log.push(34);
+    /// log.push(42);
+    /// assert_eq!(log.count(), 2);
     /// # })
     /// ```
     pub fn count(&self) -> usize {
@@ -206,9 +206,9 @@ where
     /// # use linera_views::log_view::LogView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut log = LogView::load(context).await.unwrap();
-    ///   log.push(34);
-    ///   assert_eq!(log.get(0).await.unwrap(), Some(34));
+    /// let mut log = LogView::load(context).await.unwrap();
+    /// log.push(34);
+    /// assert_eq!(log.get(0).await.unwrap(), Some(34));
     /// # })
     /// ```
     pub async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
@@ -230,10 +230,13 @@ where
     /// # use linera_views::log_view::LogView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut log = LogView::load(context).await.unwrap();
-    ///   log.push(34);
-    ///   log.push(42);
-    ///   assert_eq!(log.multi_get(vec![0,1]).await.unwrap(), vec![Some(34),Some(42)]);
+    /// let mut log = LogView::load(context).await.unwrap();
+    /// log.push(34);
+    /// log.push(42);
+    /// assert_eq!(
+    ///     log.multi_get(vec![0, 1]).await.unwrap(),
+    ///     vec![Some(34), Some(42)]
+    /// );
     /// # })
     /// ```
     pub async fn multi_get(&self, indices: Vec<usize>) -> Result<Vec<Option<T>>, ViewError> {
@@ -289,11 +292,11 @@ where
     /// # use linera_views::log_view::LogView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut log = LogView::load(context).await.unwrap();
-    ///   log.push(34);
-    ///   log.push(42);
-    ///   log.push(56);
-    ///   assert_eq!(log.read(0..2).await.unwrap(), vec![34,42]);
+    /// let mut log = LogView::load(context).await.unwrap();
+    /// log.push(34);
+    /// log.push(42);
+    /// log.push(56);
+    /// assert_eq!(log.read(0..2).await.unwrap(), vec![34, 42]);
     /// # })
     /// ```
     pub async fn read<R>(&self, range: R) -> Result<Vec<T>, ViewError>

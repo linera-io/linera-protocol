@@ -197,10 +197,10 @@ where
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut queue = QueueView::load(context).await.unwrap();
-    ///   queue.push_back(34);
-    ///   queue.push_back(42);
-    ///   assert_eq!(queue.front().await.unwrap(), Some(34));
+    /// let mut queue = QueueView::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// assert_eq!(queue.front().await.unwrap(), Some(34));
     /// # })
     /// ```
     pub async fn front(&self) -> Result<Option<T>, ViewError> {
@@ -220,10 +220,10 @@ where
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut queue = QueueView::load(context).await.unwrap();
-    ///   queue.push_back(34);
-    ///   queue.push_back(42);
-    ///   assert_eq!(queue.back().await.unwrap(), Some(42));
+    /// let mut queue = QueueView::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// assert_eq!(queue.back().await.unwrap(), Some(42));
     /// # })
     /// ```
     pub async fn back(&self) -> Result<Option<T>, ViewError> {
@@ -241,10 +241,10 @@ where
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut queue = QueueView::load(context).await.unwrap();
-    ///   queue.push_back(34 as u128);
-    ///   queue.delete_front();
-    ///   assert_eq!(queue.elements().await.unwrap(), Vec::<u128>::new());
+    /// let mut queue = QueueView::load(context).await.unwrap();
+    /// queue.push_back(34 as u128);
+    /// queue.delete_front();
+    /// assert_eq!(queue.elements().await.unwrap(), Vec::<u128>::new());
     /// # })
     /// ```
     pub fn delete_front(&mut self) {
@@ -262,10 +262,10 @@ where
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut queue = QueueView::load(context).await.unwrap();
-    ///   queue.push_back(34);
-    ///   queue.push_back(37);
-    ///   assert_eq!(queue.elements().await.unwrap(), vec![34,37]);
+    /// let mut queue = QueueView::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(37);
+    /// assert_eq!(queue.elements().await.unwrap(), vec![34, 37]);
     /// # })
     /// ```
     pub fn push_back(&mut self, value: T) {
@@ -279,9 +279,9 @@ where
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut queue = QueueView::load(context).await.unwrap();
-    ///   queue.push_back(34);
-    ///   assert_eq!(queue.count(), 1);
+    /// let mut queue = QueueView::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// assert_eq!(queue.count(), 1);
     /// # })
     /// ```
     pub fn count(&self) -> usize {
@@ -319,10 +319,10 @@ where
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut queue = QueueView::load(context).await.unwrap();
-    ///   queue.push_back(34);
-    ///   queue.push_back(42);
-    ///   assert_eq!(queue.read_front(1).await.unwrap(), vec![34]);
+    /// let mut queue = QueueView::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// assert_eq!(queue.read_front(1).await.unwrap(), vec![34]);
     /// # })
     /// ```
     pub async fn read_front(&self, mut count: usize) -> Result<Vec<T>, ViewError> {
@@ -359,10 +359,10 @@ where
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut queue = QueueView::load(context).await.unwrap();
-    ///   queue.push_back(34);
-    ///   queue.push_back(42);
-    ///   assert_eq!(queue.read_back(1).await.unwrap(), vec![42]);
+    /// let mut queue = QueueView::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// assert_eq!(queue.read_back(1).await.unwrap(), vec![42]);
     /// # })
     /// ```
     pub async fn read_back(&self, mut count: usize) -> Result<Vec<T>, ViewError> {
@@ -395,10 +395,10 @@ where
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut queue = QueueView::load(context).await.unwrap();
-    ///   queue.push_back(34);
-    ///   queue.push_back(37);
-    ///   assert_eq!(queue.elements().await.unwrap(), vec![34,37]);
+    /// let mut queue = QueueView::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(37);
+    /// assert_eq!(queue.elements().await.unwrap(), vec![34, 37]);
     /// # })
     /// ```
     pub async fn elements(&self) -> Result<Vec<T>, ViewError> {
@@ -432,12 +432,12 @@ where
     /// # use linera_views::queue_view::QueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    ///   let mut queue = QueueView::load(context).await.unwrap();
-    ///   queue.push_back(34);
-    ///   let mut iter = queue.iter_mut().await.unwrap();
-    ///   let value = iter.next().unwrap();
-    ///   *value = 42;
-    ///   assert_eq!(queue.elements().await.unwrap(), vec![42]);
+    /// let mut queue = QueueView::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// let mut iter = queue.iter_mut().await.unwrap();
+    /// let value = iter.next().unwrap();
+    /// *value = 42;
+    /// assert_eq!(queue.elements().await.unwrap(), vec![42]);
     /// # })
     /// ```
     pub async fn iter_mut(&'a mut self) -> Result<IterMut<'a, T>, ViewError> {
