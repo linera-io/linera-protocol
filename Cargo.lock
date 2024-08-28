@@ -4567,6 +4567,7 @@ dependencies = [
  "linera-core",
  "linera-ethereum",
  "linera-execution",
+ "linera-sdk",
  "linera-sdk-derive",
  "linera-storage",
  "linera-views",
