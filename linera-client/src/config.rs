@@ -37,8 +37,8 @@ use crate::{
 };
 
 util::impl_from_dynamic!(Error:Persistence, persistent::memory::Error);
-#[cfg(with_local_storage)]
-util::impl_from_dynamic!(Error:Persistence, persistent::local_storage::Error);
+#[cfg(with_indexed_db)]
+util::impl_from_dynamic!(Error:Persistence, persistent::indexed_db::Error);
 #[cfg(feature = "fs")]
 util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
 
@@ -154,17 +154,16 @@ impl WalletState<persistent::File<Wallet>> {
     }
 }
 
-#[cfg(with_local_storage)]
-impl WalletState<persistent::LocalStorage<Wallet>> {
-    pub fn create_from_local_storage(key: &str, wallet: Wallet) -> Result<Self, Error> {
-        Ok(Self::new(persistent::LocalStorage::read_or_create(
-            key,
-            || Ok(wallet),
-        )?))
+#[cfg(with_indexed_db)]
+impl WalletState<persistent::IndexedDb<Wallet>> {
+    pub async fn create_from_indexed_db(key: &str, wallet: Wallet) -> Result<Self, Error> {
+        Ok(Self::new(
+            persistent::IndexedDb::read_or_create(key, || Ok::<_, Error>(wallet)).await??,
+        ))
     }
 
-    pub fn read_from_local_storage(key: &str) -> Result<Self, Error> {
-        Ok(Self::new(persistent::LocalStorage::read(key)?))
+    pub async fn read_from_indexed_db(key: &str) -> Result<Self, Error> {
+        Ok(Self::new(persistent::IndexedDb::read(key).await?))
     }
 }
 

@@ -33,7 +33,6 @@ metrics = [
     "linera-views/metrics",
 ]
 web = [
-    "flarch/wasm",
     "dep:web-sys",
     "dep:wasm-bindgen-futures",
     "linera-base/web",
@@ -45,9 +44,8 @@ web = [
     "linera-execution/web",
     "linera-rpc/web",
 ]
-local-storage = ["web", "gloo-storage"]
 indexed-db = ["web", "indexed_db_futures", "serde-wasm-bindgen", "gloo-utils"]
-web-default = ["web", "wasmer", "local-storage"]
+web-default = ["web", "wasmer", "indexed-db"]
 
 [dependencies]
 async-trait.workspace = true
@@ -80,7 +78,6 @@ trait-variant.workspace = true
 
 [target.wasm32-unknown-unknown.dependencies]
 flarch = { workspace = true, optional = true }
-gloo-storage = { workspace = true, optional = true }
 gloo-utils = { workspace = true, optional = true }
 indexed_db_futures = { workspace = true, optional = true }
 serde-wasm-bindgen = { workspace = true, optional = true }

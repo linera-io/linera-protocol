@@ -31,5 +31,5 @@ thiserror_context::impl_context!(Error(Inner));
 util::impl_from_dynamic!(Inner:Persistence, persistent::memory::Error);
 #[cfg(feature = "fs")]
 util::impl_from_dynamic!(Inner:Persistence, persistent::file::Error);
-#[cfg(with_local_storage)]
-util::impl_from_dynamic!(Inner:Persistence, persistent::local_storage::Error);
+#[cfg(with_indexed_db)]
+util::impl_from_dynamic!(Inner:Persistence, persistent::indexed_db::Error);

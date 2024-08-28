@@ -12,13 +12,6 @@ cfg_if::cfg_if! {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "local-storage")] {
-        pub mod local_storage;
-        pub use local_storage::LocalStorage;
-    }
-}
-
-cfg_if::cfg_if! {
     if #[cfg(feature = "fs")] {
         pub mod file;
         pub use file::File;

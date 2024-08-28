@@ -106,7 +106,7 @@ impl Runnable for Job {
         ViewError: From<S::StoreError>,
     {
         let Job(options) = self;
-        let wallet = options.wallet()?;
+        let wallet = options.wallet().await?;
         let mut context = ClientContext::new(storage.clone(), options.clone(), wallet);
         let command = options.command;
 
@@ -1375,7 +1375,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
         },
 
         ClientCommand::Keygen => {
-            let mut wallet = options.wallet()?;
+            let mut wallet = options.wallet().await?;
             let key_pair = wallet.generate_key_pair();
             let public = key_pair.public();
             wallet
@@ -1451,13 +1451,14 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {
             WalletCommand::Show { chain_id } => {
-                wallet::pretty_print(&*options.wallet()?, *chain_id);
+                wallet::pretty_print(&*options.wallet().await?, *chain_id);
                 Ok(())
             }
 
             WalletCommand::SetDefault { chain_id } => {
                 options
-                    .wallet()?
+                    .wallet()
+                    .await?
                     .mutate(|w| w.set_default_chain(*chain_id))
                     .await??;
                 Ok(())
@@ -1465,7 +1466,8 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
 
             WalletCommand::ForgetKeys { chain_id } => {
                 options
-                    .wallet()?
+                    .wallet()
+                    .await?
                     .mutate(|w| w.forget_keys(chain_id))
                     .await??;
                 Ok(())
@@ -1473,7 +1475,8 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
 
             WalletCommand::ForgetChain { chain_id } => {
                 options
-                    .wallet()?
+                    .wallet()
+                    .await?
                     .mutate(|w| w.forget_chain(chain_id))
                     .await??;
                 Ok(())
