@@ -64,11 +64,12 @@ serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 wasmtime.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+linera-sdk = { path = ".", features = ["test"] }
+tokio-test.workspace = true
+
 [build-dependencies]
 cfg_aliases.workspace = true
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-tokio-test.workspace = true
 
 [[bin]]
 name = "wit-generator"
