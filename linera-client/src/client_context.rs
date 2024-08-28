@@ -64,9 +64,9 @@ use {
 };
 
 #[cfg(web)]
-use crate::persistent::LocalPersist as Persist;
+use crate::persistent::{LocalPersist as Persist, LocalPersistExt as _};
 #[cfg(not(web))]
-use crate::persistent::Persist;
+use crate::persistent::{Persist, PersistExt as _};
 use crate::{
     chain_listener,
     client_options::{ChainOwnershipConfig, ClientOptions},
@@ -139,7 +139,7 @@ where
 
     pub async fn mutate_wallet<R: Send>(
         &mut self,
-        mutation: impl FnOnce(&mut Wallet) -> R,
+        mutation: impl FnOnce(&mut Wallet) -> R + Send,
     ) -> Result<R, Error> {
         self.wallet
             .mutate(mutation)

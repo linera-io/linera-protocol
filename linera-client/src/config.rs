@@ -32,8 +32,7 @@ pub enum Error {
 }
 
 use crate::{
-    persistent::{self, LocalPersist, Persist},
-    util,
+    persistent, util,
     wallet::{UserChain, Wallet},
 };
 
@@ -59,6 +58,11 @@ pub struct ValidatorServerConfig {
     pub key: KeyPair,
     pub internal_network: ValidatorInternalNetworkConfig,
 }
+
+#[cfg(web)]
+use crate::persistent::{LocalPersist as Persist, LocalPersistExt as _};
+#[cfg(not(web))]
+use crate::persistent::{Persist, PersistExt as _};
 
 /// The (public) configuration for all validators.
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -92,7 +96,7 @@ pub struct WalletState<W> {
     prng: Box<dyn CryptoRng>,
 }
 
-impl<W: LocalPersist<Target = Wallet>> WalletState<W> {
+impl<W: Persist<Target = Wallet>> WalletState<W> {
     pub async fn add_chains<Chains: IntoIterator<Item = UserChain>>(
         &mut self,
         chains: Chains,
@@ -117,27 +121,7 @@ impl<W: DerefMut> DerefMut for WalletState<W> {
     }
 }
 
-impl<W: LocalPersist<Target = Wallet>> LocalPersist for WalletState<W> {
-    type Error = W::Error;
-
-    fn as_mut(&mut self) -> &mut Wallet {
-        self.wallet.as_mut()
-    }
-
-    async fn persist(&mut self) -> Result<(), W::Error> {
-        self.wallet
-            .mutate(|w| w.refresh_prng_seed(&mut self.prng))
-            .await?;
-        tracing::debug!("Persisted user chains");
-        Ok(())
-    }
-
-    fn into_value(self) -> Wallet {
-        self.wallet.into_value()
-    }
-}
-
-impl<W: Persist<Target = Wallet> + Send> Persist for WalletState<W> {
+impl<W: Persist<Target = Wallet>> Persist for WalletState<W> {
     type Error = W::Error;
 
     fn as_mut(&mut self) -> &mut Wallet {

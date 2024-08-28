@@ -4327,6 +4327,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "trait-variant",
  "wasm-bindgen-futures",
  "web-sys",
 ]

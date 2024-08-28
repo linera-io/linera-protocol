@@ -76,6 +76,7 @@ thiserror-context.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 tracing.workspace = true
+trait-variant.workspace = true
 
 [target.wasm32-unknown-unknown.dependencies]
 flarch = { workspace = true, optional = true }

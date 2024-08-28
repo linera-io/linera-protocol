@@ -64,6 +64,8 @@ use {
     tracing::error,
 };
 
+use crate::persistent::PersistExt as _;
+
 #[cfg(feature = "benchmark")]
 fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
     match response {
