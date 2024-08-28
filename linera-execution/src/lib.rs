@@ -33,7 +33,7 @@ use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, CompressionError,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, DecompressionError,
         Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
     },
     doc_scalar, hex_debug,
@@ -125,7 +125,7 @@ pub enum ExecutionError {
     #[error(transparent)]
     JoinError(#[from] linera_base::task::Error),
     #[error(transparent)]
-    CompressionError(#[from] CompressionError),
+    DecompressionError(#[from] DecompressionError),
     #[error("The given promise is invalid or was polled once already")]
     InvalidPromise,
 
