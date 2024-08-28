@@ -345,8 +345,7 @@ where
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter
             .debug_struct("ChainClient")
-            .field("chain_id", &self.chain_id)
-            .field("options", &self.options)
+            .field("chain_id", &format!("{:.8}", self.chain_id))
             .finish_non_exhaustive()
     }
 }
@@ -1122,8 +1121,8 @@ where
             if block.epoch > max_epoch {
                 // We don't accept a certificate from a committee in the future.
                 warn!(
-                    "Postponing received certificate from future epoch {:?}",
-                    block.epoch
+                    "Postponing received certificate from {:.8} at height {} from future epoch {}",
+                    entry.chain_id, entry.height, block.epoch
                 );
                 // Stop the synchronization here. Do not increment the tracker further so
                 // that this certificate can still be downloaded later, once our committee

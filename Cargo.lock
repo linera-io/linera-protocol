@@ -4214,6 +4214,7 @@ dependencies = [
  "async-trait",
  "cfg_aliases",
  "futures",
+ "hex",
  "linera-base",
  "linera-chain",
  "linera-execution",

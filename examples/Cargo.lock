@@ -3342,6 +3342,7 @@ dependencies = [
  "async-trait",
  "cfg_aliases",
  "futures",
+ "hex",
  "linera-base",
  "linera-execution",
  "linera-views",
