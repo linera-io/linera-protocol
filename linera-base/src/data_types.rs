@@ -17,14 +17,18 @@ use std::{
 use anyhow::Context as _;
 use async_graphql::InputObject;
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
+use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 use crate::{
     crypto::BcsHashable,
-    doc_scalar,
-    identifiers::{ApplicationId, BlobId, BlobType, Destination, GenericApplicationId},
+    doc_scalar, hex_debug,
+    identifiers::{
+        ApplicationId, BlobId, BlobType, BytecodeId, Destination, GenericApplicationId, MessageId,
+        UserApplicationId,
+    },
     time::{Duration, SystemTime},
 };
 
@@ -777,6 +781,31 @@ impl FromStr for OracleResponse {
     }
 }
 
+/// Description of the necessary information to run a user application.
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
+pub struct UserApplicationDescription {
+    /// The unique ID of the bytecode to use for the application.
+    pub bytecode_id: BytecodeId,
+    /// The unique ID of the application's creation.
+    pub creation: MessageId,
+    /// The parameters of the application.
+    #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
+    pub parameters: Vec<u8>,
+    /// Required dependencies.
+    pub required_application_ids: Vec<UserApplicationId>,
+}
+
+impl From<&UserApplicationDescription> for UserApplicationId {
+    fn from(description: &UserApplicationDescription) -> Self {
+        UserApplicationId {
+            bytecode_id: description.bytecode_id,
+            creation: description.creation,
+        }
+    }
+}
+
 /// A WebAssembly module's bytecode.
 #[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Bytecode {
@@ -1149,6 +1178,10 @@ doc_scalar!(BlobContent, "A blob of binary data.");
 doc_scalar!(
     Blob,
     "A blob of binary data, with its content-addressed blob ID."
+);
+doc_scalar!(
+    UserApplicationDescription,
+    "Description of the necessary information to run a user application"
 );
 
 #[cfg(test)]

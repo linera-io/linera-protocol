@@ -34,12 +34,12 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, CompressionError,
-        Resources, SendMessageRequest, Timestamp,
+        Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
     },
     doc_scalar, hex_debug,
     identifiers::{
         Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination,
-        GenericApplicationId, MessageId, Owner, StreamName,
+        GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
     },
     ownership::ChainOwnership,
 };
@@ -59,7 +59,7 @@ pub use crate::wasm::{
     ViewSystemApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
-    applications::{ApplicationRegistryView, UserApplicationDescription, UserApplicationId},
+    applications::ApplicationRegistryView,
     execution::ExecutionStateView,
     execution_state_actor::ExecutionRequest,
     policy::ResourceControlPolicy,

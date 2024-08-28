@@ -12,10 +12,13 @@ use async_graphql::SimpleObject;
 use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ArithmeticError, BlockHeight, OracleResponse, Timestamp},
+    data_types::{
+        Amount, ArithmeticError, BlockHeight, OracleResponse, Timestamp, UserApplicationDescription,
+    },
     ensure,
     identifiers::{
         ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner, StreamId,
+        UserApplicationId,
     },
 };
 use linera_execution::{
@@ -23,7 +26,6 @@ use linera_execution::{
     ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, Operation,
     OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
     ResourceController, ResourceTracker, Response, ServiceRuntimeRequest, TransactionTracker,
-    UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,

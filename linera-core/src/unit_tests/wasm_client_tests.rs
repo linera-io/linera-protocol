@@ -19,7 +19,7 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, Blob, Bytecode, OracleResponse},
+    data_types::{Amount, Blob, Bytecode, OracleResponse, UserApplicationDescription},
     identifiers::{
         AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner, StreamId,
         StreamName,
@@ -28,8 +28,7 @@ use linera_base::{
 };
 use linera_chain::data_types::{CertificateValue, EventRecord, MessageAction, OutgoingMessage};
 use linera_execution::{
-    Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage,
-    UserApplicationDescription, WasmRuntime,
+    Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage, WasmRuntime,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;

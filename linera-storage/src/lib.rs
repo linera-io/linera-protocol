@@ -23,8 +23,8 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, Blob, BlockHeight, Timestamp},
-    identifiers::{BlobId, ChainDescription, ChainId, GenericApplicationId},
+    data_types::{Amount, Blob, BlockHeight, Timestamp, UserApplicationDescription},
+    identifiers::{BlobId, ChainDescription, ChainId, GenericApplicationId, UserApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -35,8 +35,7 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::SystemChannel,
     BlobState, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, UserApplicationDescription, UserApplicationId, UserContractCode,
-    UserServiceCode, WasmRuntime,
+    ExecutionRuntimeContext, UserContractCode, UserServiceCode, WasmRuntime,
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};

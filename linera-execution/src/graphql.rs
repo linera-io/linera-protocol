@@ -14,7 +14,7 @@ use linera_views::{common::Context, map_view::MapView, views::ViewError};
 use crate::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
     system::{Recipient, UserData},
-    ChannelSubscription, ExecutionStateView, SystemExecutionStateView, UserApplicationDescription,
+    ChannelSubscription, ExecutionStateView, SystemExecutionStateView,
 };
 
 doc_scalar!(
@@ -22,10 +22,6 @@ doc_scalar!(
     "A number identifying the configuration of the chain (aka the committee)"
 );
 doc_scalar!(Recipient, "The recipient of a transfer");
-doc_scalar!(
-    UserApplicationDescription,
-    "Description of the necessary information to run a user application"
-);
 doc_scalar!(UserData, "Optional user message attached to a transfer");
 doc_scalar!(ValidatorName, "The identity of a validator");
 

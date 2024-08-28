@@ -19,8 +19,11 @@ use futures::{
 };
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
-    data_types::{Amount, ApplicationPermissions, BlobContent, Bytecode, TimeDelta, Timestamp},
-    identifiers::{ApplicationId, BlobId, BytecodeId, ChainId, Owner},
+    data_types::{
+        Amount, ApplicationPermissions, BlobContent, Bytecode, TimeDelta, Timestamp,
+        UserApplicationDescription,
+    },
+    identifiers::{ApplicationId, BlobId, BytecodeId, ChainId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
 };
@@ -38,7 +41,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{AdminOperation, Recipient, SystemChannel, UserData},
-    Operation, Query, Response, SystemOperation, UserApplicationDescription, UserApplicationId,
+    Operation, Query, Response, SystemOperation,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;

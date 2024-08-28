@@ -10,15 +10,15 @@ use dashmap::DashMap;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlobContent, TimeDelta, Timestamp},
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, BlobState, ExecutionRuntimeConfig, UserApplicationId, UserContractCode,
-    UserServiceCode, WasmRuntime,
+    committee::Epoch, BlobState, ExecutionRuntimeConfig, UserContractCode, UserServiceCode,
+    WasmRuntime,
 };
 use linera_views::{
     batch::Batch,

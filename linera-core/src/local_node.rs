@@ -10,8 +10,8 @@ use std::{
 
 use futures::future;
 use linera_base::{
-    data_types::{ArithmeticError, Blob, BlockHeight},
-    identifiers::{BlobId, ChainId, MessageId},
+    data_types::{ArithmeticError, Blob, BlockHeight, UserApplicationDescription},
+    identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{
@@ -19,9 +19,7 @@ use linera_chain::{
     },
     ChainStateView,
 };
-use linera_execution::{
-    committee::ValidatorName, Query, Response, UserApplicationDescription, UserApplicationId,
-};
+use linera_execution::{committee::ValidatorName, Query, Response};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;

@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use assert_matches::assert_matches;
-use linera_base::{crypto::CryptoHash, data_types::Timestamp};
-use linera_execution::{Message, MessageKind, UserApplicationId};
+use linera_base::{crypto::CryptoHash, data_types::Timestamp, identifiers::UserApplicationId};
+use linera_execution::{Message, MessageKind};
 
 use super::*;
 use crate::test::MessageTestExt as _;

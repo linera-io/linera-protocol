@@ -33,6 +33,7 @@ base64.workspace = true
 bcs.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
+custom_debug_derive.workspace = true
 ed25519-dalek.workspace = true
 futures = { workspace = true, optional = true }
 generic-array.workspace = true
@@ -63,7 +64,6 @@ prometheus.workspace = true
 zstd.workspace = true
 
 [dev-dependencies]
-custom_debug_derive.workspace = true
 linera-base = { path = ".", features = ["test"] }
 linera-witty = { workspace = true, features = ["test"] }
 test-case.workspace = true

@@ -314,6 +314,10 @@ pub struct ApplicationId<A = ()> {
     pub creation: MessageId,
 }
 
+/// Alias for `ApplicationId`. Use this alias in the core
+/// protocol where the distinction with the more general enum `GenericApplicationId` matters.
+pub type UserApplicationId<A = ()> = ApplicationId<A>;
+
 /// A unique identifier for an application.
 #[derive(
     Eq,

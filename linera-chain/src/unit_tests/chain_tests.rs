@@ -8,7 +8,9 @@ use std::{iter, sync::Arc};
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, ApplicationPermissions, BlockHeight, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, BlockHeight, Timestamp, UserApplicationDescription,
+    },
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
     ownership::ChainOwnership,
 };
@@ -17,7 +19,7 @@ use linera_execution::{
     system::OpenChainConfig,
     test_utils::{ExpectedCall, MockApplication},
     ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind, Operation,
-    SystemMessage, TestExecutionRuntimeContext, UserApplicationDescription,
+    SystemMessage, TestExecutionRuntimeContext,
 };
 use linera_views::{
     memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
