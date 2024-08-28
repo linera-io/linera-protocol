@@ -7,7 +7,7 @@ use std::{
     convert::Infallible,
     iter,
     ops::{Deref, DerefMut},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 use dashmap::{
@@ -91,6 +91,9 @@ where
     message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
     cross_chain_message_delivery: CrossChainMessageDelivery,
+    /// Chains that should be tracked by the client.
+    // TODO(#2412): Merge with set of chains the client is receiving notifications from validators
+    tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
     /// References to clients waiting for chain notifications.
     notifier: Arc<Notifier<Notification>>,
     /// A copy of the storage client so that we don't have to lock the local node client
@@ -111,10 +114,16 @@ where
         storage: S,
         max_pending_messages: usize,
         cross_chain_message_delivery: CrossChainMessageDelivery,
+        tracked_chains: impl IntoIterator<Item = ChainId>,
     ) -> Self {
-        let state = WorkerState::new_for_client("Client node".to_string(), storage.clone())
-            .with_allow_inactive_chains(true)
-            .with_allow_messages_from_deprecated_epochs(true);
+        let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
+        let state = WorkerState::new_for_client(
+            "Client node".to_string(),
+            storage.clone(),
+            tracked_chains.clone(),
+        )
+        .with_allow_inactive_chains(true)
+        .with_allow_messages_from_deprecated_epochs(true);
         let local_node = LocalNodeClient::new(state);
 
         Self {
@@ -124,6 +133,7 @@ where
             max_pending_messages,
             message_policy: MessagePolicy::new(BlanketMessagePolicy::Accept, None),
             cross_chain_message_delivery,
+            tracked_chains,
             notifier: Arc::new(Notifier::default()),
             storage,
         }
@@ -139,6 +149,15 @@ where
     /// Returns a reference to the [`LocalNodeClient`] of the client.
     pub fn local_node(&self) -> &LocalNodeClient<S> {
         &self.local_node
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    /// Adds a chain to the set of chains tracked by the local node.
+    pub fn track_chain(&self, chain_id: ChainId) {
+        self.tracked_chains
+            .write()
+            .expect("Panics should not happen while holding a lock to `tracked_chains`")
+            .insert(chain_id);
     }
 
     #[tracing::instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
@@ -2501,6 +2520,12 @@ where
                     executed_block.message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
                 })
                 .ok_or_else(|| ChainClientError::InternalError("Failed to create new chain"))?;
+            // Add the new chain to the list of tracked chains
+            self.client.track_chain(ChainId::child(message_id));
+            self.client
+                .local_node
+                .retry_pending_cross_chain_requests(self.chain_id)
+                .await?;
             return Ok(ClientOutcome::Committed((message_id, certificate)));
         }
     }
@@ -2789,6 +2814,16 @@ where
             .storage_client()
             .read_hashed_certificate_value(hash)
             .await
+    }
+
+    #[tracing::instrument(level = "trace")]
+    /// Handles any cross-chain requests for any pending outgoing messages.
+    pub async fn retry_pending_outgoing_messages(&self) -> Result<(), ChainClientError> {
+        self.client
+            .local_node
+            .retry_pending_cross_chain_requests(self.chain_id)
+            .await?;
+        Ok(())
     }
 
     #[tracing::instrument(level = "trace", skip(from, limit))]

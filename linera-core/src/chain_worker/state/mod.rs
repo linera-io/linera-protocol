@@ -9,7 +9,7 @@ mod temporary_changes;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    sync::Arc,
+    sync::{self, Arc},
 };
 
 use linera_base::{
@@ -26,8 +26,8 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, ExecutionRequest, Query, QueryContext, Response, ServiceRuntimeRequest,
-    UserApplicationDescription, UserApplicationId,
+    committee::Epoch, ExecutionRequest, Message, Query, QueryContext, Response,
+    ServiceRuntimeRequest, SystemMessage, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::{ClonableView, ViewError};
@@ -60,6 +60,7 @@ where
     runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
     recent_blobs: Arc<ValueCache<BlobId, Blob>>,
+    tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     knows_chain_is_active: bool,
 }
 
@@ -69,11 +70,13 @@ where
     ViewError: From<StorageClient::StoreError>,
 {
     /// Creates a new [`ChainWorkerState`] using the provided `storage` client.
+    #[allow(clippy::too_many_arguments)]
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
         blob_cache: Arc<ValueCache<BlobId, Blob>>,
+        tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         chain_id: ChainId,
         execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
         runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
@@ -89,6 +92,7 @@ where
             runtime_request_sender,
             recent_hashed_certificate_values: certificate_value_cache,
             recent_blobs: blob_cache,
+            tracked_chains,
             knows_chain_is_active: false,
         })
     }
@@ -369,11 +373,41 @@ where
         self.recent_blobs.insert(blob).await
     }
 
+    /// Adds any newly created chains to the set of `tracked_chains`.
+    fn track_newly_created_chains(&self, block: &ExecutedBlock) {
+        if let Some(tracked_chains) = self.tracked_chains.as_ref() {
+            let messages = block.messages().iter().flatten();
+            let open_chain_message_indices =
+                messages
+                    .enumerate()
+                    .filter_map(|(index, outgoing_message)| match outgoing_message.message {
+                        Message::System(SystemMessage::OpenChain(_)) => Some(index),
+                        _ => None,
+                    });
+            let open_chain_message_ids =
+                open_chain_message_indices.map(|index| block.message_id(index as u32));
+            let new_chain_ids = open_chain_message_ids.map(ChainId::child);
+
+            tracked_chains
+                .write()
+                .expect("Panics should not happen while holding a lock to `tracked_chains`")
+                .extend(new_chain_ids);
+        }
+    }
+
     /// Loads pending cross-chain requests.
     async fn create_network_actions(&self) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
-        let pairs = self.chain.outboxes.try_load_all_entries().await?;
-        for (target, outbox) in pairs {
+        let mut targets = self.chain.outboxes.indices().await?;
+        if let Some(tracked_chains) = self.tracked_chains.as_ref() {
+            let tracked_chains = tracked_chains
+                .read()
+                .expect("Panics should not happen while holding a lock to `tracked_chains`");
+            targets.retain(|target| tracked_chains.contains(&target.recipient));
+        }
+        let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
+        for (target, outbox) in targets.into_iter().zip(outboxes) {
+            let outbox = outbox.expect("Only existing outboxes should be referenced by `indices`");
             let heights = outbox.queue.elements().await?;
             heights_by_recipient
                 .entry(target.recipient)
