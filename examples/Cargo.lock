@@ -3497,7 +3497,6 @@ dependencies = [
  "linera-base",
  "linera-chain",
  "linera-execution",
- "linera-storage-service",
  "linera-views",
  "prometheus",
  "serde",
