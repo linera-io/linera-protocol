@@ -193,7 +193,7 @@ impl HexContract {
     }
 
     fn main_chain_id(&mut self) -> ChainId {
-        self.runtime.application_id().creation.chain_id
+        self.runtime.application_creator_chain_id()
     }
 }
 

@@ -555,6 +555,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         self.inner().application_id()
     }
 
+    fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError> {
+        self.inner().application_creator_chain_id()
+    }
+
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
         self.inner().application_parameters()
     }
@@ -710,6 +714,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
 
     fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError> {
         Ok(self.current_application().id)
+    }
+
+    fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError> {
+        Ok(self.current_application().id.creation.chain_id)
     }
 
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
