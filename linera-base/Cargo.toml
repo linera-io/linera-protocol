@@ -56,6 +56,9 @@ tracing-subscriber = { workspace = true, features = ["json", "fmt", "ansi"] }
 wasm-bindgen-futures = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ruzstd.workspace = true
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono.workspace = true
 rand = { workspace = true, features = ["getrandom", "std", "std_rng"] }

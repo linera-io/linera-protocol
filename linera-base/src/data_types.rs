@@ -839,12 +839,18 @@ impl fmt::Debug for Bytecode {
     }
 }
 
-/// A type for errors happening during compression.
+/// A type for errors happening during decompression.
 #[derive(Error, Debug)]
-pub enum CompressionError {
+pub enum DecompressionError {
     /// Compressed bytecode is invalid, and could not be decompressed.
+    #[cfg(not(target_arch = "wasm32"))]
     #[error("Bytecode could not be decompressed")]
     InvalidCompressedBytecode(#[source] io::Error),
+
+    /// Compressed bytecode is invalid, and could not be decompressed.
+    #[cfg(target_arch = "wasm32")]
+    #[error("Bytecode could not be decompressed")]
+    InvalidCompressedBytecode(#[from] ruzstd::frame_decoder::FrameDecoderError),
 }
 
 /// A compressed WebAssembly module's bytecode.
@@ -874,19 +880,41 @@ impl From<Bytecode> for CompressedBytecode {
 
 #[cfg(not(target_arch = "wasm32"))]
 impl TryFrom<&CompressedBytecode> for Bytecode {
-    type Error = CompressionError;
+    type Error = DecompressionError;
 
     fn try_from(compressed_bytecode: &CompressedBytecode) -> Result<Self, Self::Error> {
         let bytes = zstd::stream::decode_all(&*compressed_bytecode.compressed_bytes)
-            .map_err(CompressionError::InvalidCompressedBytecode)?;
+            .map_err(DecompressionError::InvalidCompressedBytecode)?;
 
         Ok(Bytecode { bytes })
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(target_arch = "wasm32")]
+impl TryFrom<&CompressedBytecode> for Bytecode {
+    type Error = DecompressionError;
+
+    fn try_from(compressed_bytecode: &CompressedBytecode) -> Result<Self, Self::Error> {
+        use ruzstd::{io::Read, streaming_decoder::StreamingDecoder};
+
+        let compressed_bytes = &*compressed_bytecode.compressed_bytes;
+        let mut bytes = Vec::new();
+        let mut decoder = StreamingDecoder::new(compressed_bytes)?;
+
+        // Decode multiple frames, if present
+        // (https://github.com/KillingSpark/zstd-rs/issues/57)
+        while !decoder.get_ref().is_empty() {
+            decoder
+                .read_to_end(&mut bytes)
+                .expect("Reading from a slice in memory should not result in IO errors");
+        }
+
+        Ok(Bytecode { bytes })
+    }
+}
+
 impl TryFrom<CompressedBytecode> for Bytecode {
-    type Error = CompressionError;
+    type Error = DecompressionError;
 
     fn try_from(compressed_bytecode: CompressedBytecode) -> Result<Self, Self::Error> {
         Bytecode::try_from(&compressed_bytecode)

@@ -4189,6 +4189,7 @@ dependencies = [
  "prometheus",
  "proptest",
  "rand",
+ "ruzstd",
  "serde",
  "serde-name",
  "serde_bytes",
@@ -6583,6 +6584,16 @@ dependencies = [
  "quick-error",
  "tempfile",
  "wait-timeout",
+]
+
+[[package]]
+name = "ruzstd"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c8b8f3d26bd9f945e5cbae77f7cdfbf37af9a66956f1115eb4516e45df519f4"
+dependencies = [
+ "byteorder",
+ "twox-hash",
 ]
 
 [[package]]
