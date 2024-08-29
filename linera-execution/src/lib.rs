@@ -1100,7 +1100,7 @@ pub enum WasmRuntime {
     Wasmer,
     #[cfg(with_wasmtime)]
     #[cfg_attr(not(with_wasmer), default)]
-    #[display(fmt = "wasmtime")]
+    #[display("wasmtime")]
     Wasmtime,
     #[cfg(with_wasmer)]
     WasmerWithSanitizer,
