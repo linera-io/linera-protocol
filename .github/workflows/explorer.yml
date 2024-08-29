@@ -43,7 +43,7 @@ jobs:
       run: |
         cd linera-explorer
         npm cache clean --force
-        npm install
+        npm ci
         npm run full
     - name: Test
       run: |
