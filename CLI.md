@@ -26,7 +26,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera service`↴](#linera-service)
 * [`linera faucet`↴](#linera-faucet)
 * [`linera publish-bytecode`↴](#linera-publish-bytecode)
-* [`linera publish-blob`↴](#linera-publish-blob)
+* [`linera publish-data-blob`↴](#linera-publish-data-blob)
 * [`linera create-application`↴](#linera-create-application)
 * [`linera publish-and-create`↴](#linera-publish-and-create)
 * [`linera request-application`↴](#linera-request-application)
@@ -76,7 +76,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `service` — Run a GraphQL service to explore and extend the chains of the wallet
 * `faucet` — Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 * `publish-bytecode` — Publish bytecode
-* `publish-blob` — Publish a blob of binary data
+* `publish-data-blob` — Publish a data blob of binary data
 * `create-application` — Create an application
 * `publish-and-create` — Create an application, and publish the required bytecode
 * `request-application` — Request an application from another chain, so it can be used on this one
@@ -535,15 +535,15 @@ Publish bytecode
 
 
 
-## `linera publish-blob`
+## `linera publish-data-blob`
 
-Publish a blob of binary data
+Publish a data blob of binary data
 
-**Usage:** `linera publish-blob <BLOB_PATH> [PUBLISHER]`
+**Usage:** `linera publish-data-blob <BLOB_PATH> [PUBLISHER]`
 
 ###### **Arguments:**
 
-* `<BLOB_PATH>` — Path to blob file to be published
+* `<BLOB_PATH>` — Path to data blob file to be published
 * `<PUBLISHER>` — An optional chain ID to publish the blob. The default chain of the wallet is used otherwise
 
 
