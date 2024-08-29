@@ -112,10 +112,10 @@ fn open_options() -> fs_err::OpenOptions {
     options
 }
 
-impl<T: serde::de::DeserializeOwned> File<T> {
+impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
     /// Creates a new persistent file at `path` containing `value`.
     pub fn new(path: &Path, value: T) -> Result<Self, Error> {
-        Ok(Self {
+        let this = Self {
             _lock: Lock::new(
                 fs_err::OpenOptions::new()
                     .read(true)
@@ -127,7 +127,8 @@ impl<T: serde::de::DeserializeOwned> File<T> {
             path: path.into(),
             value,
             dirty: Dirty::new(true),
-        })
+        };
+        Ok(this)
     }
 
     /// Reads the value from a file at `path`, returning an error if it does not exist.
@@ -166,6 +167,26 @@ impl<T: serde::de::DeserializeOwned> File<T> {
             _lock: lock,
         })
     }
+
+    fn save(&mut self) -> Result<(), Error> {
+        let mut temp_file_path = self.path.clone();
+        temp_file_path.set_extension("json.new");
+        let temp_file = open_options().open(&temp_file_path)?;
+        let mut temp_file_writer = std::io::BufWriter::new(temp_file);
+
+        let remove_temp_file = || fs_err::remove_file(&temp_file_path);
+
+        serde_json::to_writer_pretty(&mut temp_file_writer, &self.value)
+            .map_err(Error::from)
+            .or_cleanup(remove_temp_file)?;
+        temp_file_writer
+            .flush()
+            .map_err(Error::from)
+            .or_cleanup(remove_temp_file)?;
+        fs_err::rename(&temp_file_path, &self.path)?;
+        *self.dirty = false;
+        Ok(())
+    }
 }
 
 impl<T: serde::Serialize + serde::de::DeserializeOwned + Send> Persist for File<T> {
@@ -185,23 +206,7 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned + Send> Persist for File<
     /// serialization or writing to disk fails, the temporary file is
     /// deleted.
     async fn persist(&mut self) -> Result<(), Error> {
-        let mut temp_file_path = self.path.clone();
-        temp_file_path.set_extension("json.new");
-        let temp_file = open_options().open(&temp_file_path)?;
-        let mut temp_file_writer = std::io::BufWriter::new(temp_file);
-
-        let remove_temp_file = || fs_err::remove_file(&temp_file_path);
-
-        serde_json::to_writer_pretty(&mut temp_file_writer, &self.value)
-            .map_err(Error::from)
-            .or_cleanup(remove_temp_file)?;
-        temp_file_writer
-            .flush()
-            .map_err(Error::from)
-            .or_cleanup(remove_temp_file)?;
-        fs_err::rename(&temp_file_path, &self.path)?;
-        *self.dirty = false;
-        Ok(())
+        self.save()
     }
 
     /// Takes the value out, releasing the lock on the persistent file.
