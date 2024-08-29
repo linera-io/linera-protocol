@@ -1,25 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Dirty(bool);
+#[derive(Clone, Debug, PartialEq, Eq, derive_more::Deref, derive_more::DerefMut)]
+pub struct Dirty(
+    #[deref]
+    #[deref_mut]
+    bool,
+);
 
 impl Dirty {
     pub fn new(dirty: bool) -> Self {
         Self(dirty)
-    }
-}
-
-impl std::ops::Deref for Dirty {
-    type Target = bool;
-    fn deref(&self) -> &bool {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for Dirty {
-    fn deref_mut(&mut self) -> &mut bool {
-        &mut self.0
     }
 }
 
