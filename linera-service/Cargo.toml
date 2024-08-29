@@ -14,7 +14,12 @@ version.workspace = true
 [features]
 ethereum = []
 default = ["wasmer", "rocksdb"]
-test = ["linera-views/test", "linera-execution/test", "dep:stdext"]
+test = [
+    "linera-base/test",
+    "linera-views/test",
+    "linera-execution/test",
+    "dep:stdext",
+]
 benchmark = ["linera-base/test", "linera-client/benchmark", "dep:linera-sdk"]
 wasmer = ["linera-client/wasmer", "linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = [
@@ -49,7 +54,7 @@ kubernetes = [
 ]
 remote-net = ["dep:k8s-openapi", "dep:kube"]
 metrics = ["prometheus", "linera-base/metrics", "linera-client/metrics"]
-storage-service = []
+storage-service = ["linera-client/storage-service"]
 
 [dependencies]
 anyhow.workspace = true
@@ -77,7 +82,7 @@ k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
 linera-base.workspace = true
 linera-chain.workspace = true
-linera-client = { workspace = true, features = ["fs", "storage-service"] }
+linera-client = { workspace = true, features = ["fs"] }
 linera-core.workspace = true
 linera-execution = { workspace = true, features = ["fs"] }
 linera-rpc = { workspace = true, features = ["server", "simple-network"] }
