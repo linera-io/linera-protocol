@@ -824,17 +824,17 @@ impl Runnable for Job {
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
             }
 
-            PublishBlob {
+            PublishDataBlob {
                 blob_path,
                 publisher,
             } => {
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
-                info!("Publishing blob on chain {}", publisher);
+                info!("Publishing data blob on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher);
                 let blob_id = context.publish_data_blob(&chain_client, blob_path).await?;
                 println!("{}", blob_id);
-                info!("{}", "Blob published successfully!".green().bold());
+                info!("{}", "Data blob published successfully!".green().bold());
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
             }
 
