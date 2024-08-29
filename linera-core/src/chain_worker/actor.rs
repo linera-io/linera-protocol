@@ -114,7 +114,7 @@ where
     ProcessCrossChainUpdate {
         origin: Origin,
         bundles: Vec<(Epoch, MessageBundle)>,
-        callback: oneshot::Sender<Result<Option<BlockHeight>, WorkerError>>,
+        callback: oneshot::Sender<Result<Option<(BlockHeight, NetworkActions)>, WorkerError>>,
     },
 
     /// Handle cross-chain request to confirm that the recipient was updated.

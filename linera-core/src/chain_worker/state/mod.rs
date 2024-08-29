@@ -257,7 +257,7 @@ where
         &mut self,
         origin: Origin,
         bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
+    ) -> Result<Option<(BlockHeight, NetworkActions)>, WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
             .process_cross_chain_update(origin, bundles)
@@ -419,7 +419,7 @@ where
             let request = self
                 .create_cross_chain_request(height_map.into_iter().collect(), recipient)
                 .await?;
-            actions.cross_chain_requests.push(request);
+            actions.cross_chain_requests.extend(request);
         }
         Ok(actions)
     }
@@ -430,7 +430,7 @@ where
         &self,
         height_map: Vec<(Medium, Vec<BlockHeight>)>,
         recipient: ChainId,
-    ) -> Result<CrossChainRequest, WorkerError> {
+    ) -> Result<Option<CrossChainRequest>, WorkerError> {
         // Load all the certificates we will need, regardless of the medium.
         let heights =
             BTreeSet::from_iter(height_map.iter().flat_map(|(_, heights)| heights).copied());
@@ -469,11 +469,13 @@ where
                 bundle_vecs.push((medium, bundles));
             }
         }
-        Ok(CrossChainRequest::UpdateRecipient {
-            sender: self.chain.chain_id(),
-            recipient,
-            bundle_vecs,
-        })
+        Ok(
+            (!bundle_vecs.is_empty()).then(|| CrossChainRequest::UpdateRecipient {
+                sender: self.chain.chain_id(),
+                recipient,
+                bundle_vecs,
+            }),
+        )
     }
 }
 

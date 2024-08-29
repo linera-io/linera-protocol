@@ -104,6 +104,13 @@ pub struct NetworkActions {
     pub notifications: Vec<Notification>,
 }
 
+impl NetworkActions {
+    pub fn extend(&mut self, other: NetworkActions) {
+        self.cross_chain_requests.extend(other.cross_chain_requests);
+        self.notifications.extend(other.notifications);
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 /// Notification that a chain has a new certified block or a new message.
 pub struct Notification {
@@ -587,7 +594,7 @@ where
         origin: Origin,
         recipient: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
+    ) -> Result<Option<(BlockHeight, NetworkActions)>, WorkerError> {
         self.query_chain_worker(recipient, move |callback| {
             ChainWorkerRequest::ProcessCrossChainUpdate {
                 origin,
@@ -843,36 +850,36 @@ where
                 bundle_vecs,
             } => {
                 let mut height_by_origin = Vec::new();
+                let mut actions = NetworkActions::default();
                 for (medium, bundles) in bundle_vecs {
                     let origin = Origin { sender, medium };
-                    if let Some(height) = self
+                    if let Some((height, new_actions)) = self
                         .process_cross_chain_update(origin.clone(), recipient, bundles)
                         .await?
                     {
+                        actions.extend(new_actions);
                         height_by_origin.push((origin, height));
                     }
                 }
                 if height_by_origin.is_empty() {
                     return Ok(NetworkActions::default());
                 }
-                let mut notifications = Vec::new();
                 let mut latest_heights = Vec::new();
                 for (origin, height) in height_by_origin {
                     latest_heights.push((origin.medium.clone(), height));
-                    notifications.push(Notification {
+                    actions.notifications.push(Notification {
                         chain_id: recipient,
                         reason: Reason::NewIncomingBundle { origin, height },
                     });
                 }
-                let cross_chain_requests = vec![CrossChainRequest::ConfirmUpdatedRecipient {
-                    sender,
-                    recipient,
-                    latest_heights,
-                }];
-                Ok(NetworkActions {
-                    cross_chain_requests,
-                    notifications,
-                })
+                actions
+                    .cross_chain_requests
+                    .push(CrossChainRequest::ConfirmUpdatedRecipient {
+                        sender,
+                        recipient,
+                        latest_heights,
+                    });
+                Ok(actions)
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
                 sender,

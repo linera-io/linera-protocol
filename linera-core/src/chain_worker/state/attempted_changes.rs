@@ -375,7 +375,7 @@ where
         &mut self,
         origin: Origin,
         bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
+    ) -> Result<Option<(BlockHeight, NetworkActions)>, WorkerError> {
         // Only process certificates with relevant heights and epochs.
         let next_height_to_receive = self
             .state
@@ -402,14 +402,17 @@ where
         // Process the received messages in certificates.
         let local_time = self.state.storage.clock().current_time();
         let mut previous_height = None;
+        let mut new_outbox_entries = false;
         for bundle in bundles {
             let add_to_received_log = previous_height != Some(bundle.height);
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
-            self.state
-                .chain
-                .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
-                .await?;
+            new_outbox_entries = new_outbox_entries
+                || self
+                    .state
+                    .chain
+                    .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
+                    .await?;
         }
         if !self.state.config.allow_inactive_chains && !self.state.chain.is_active() {
             // Refuse to create a chain state if the chain is still inactive by
@@ -421,9 +424,15 @@ where
             );
             return Ok(None);
         }
+        let actions = if new_outbox_entries {
+            self.state.create_network_actions().await?
+        } else {
+            // Don't create network actions, so that old entries don't cause retry loops.
+            NetworkActions::default()
+        };
         // Save the chain.
         self.save().await?;
-        Ok(Some(last_updated_height))
+        Ok(Some((last_updated_height, actions)))
     }
 
     /// Handles the cross-chain request confirming that the recipient was updated.
@@ -598,8 +607,8 @@ impl<'a> CrossChainUpdateHelper<'a> {
         if skipped_len < bundles.len() && trusted_len < bundles.len() {
             let (sample_epoch, sample_bundle) = &bundles[trusted_len];
             warn!(
-                "Refusing messages to {recipient:?} from {origin:?} at height {} \
-                 because the epoch {:?} is not trusted any more",
+                "Refusing messages to {recipient:.8} from {origin:} at height {} \
+                 because the epoch {} is not trusted any more",
                 sample_bundle.height, sample_epoch,
             );
         }

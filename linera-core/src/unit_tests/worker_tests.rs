@@ -2261,16 +2261,12 @@ where
     };
     let admin_channel_origin = Origin::channel(admin_id, admin_channel_full_name.clone());
     // Have the admin chain create a user chain.
-    let user_id = ChainId::child(MessageId {
-        chain_id: admin_id,
-        height: BlockHeight::ZERO,
-        index: 0,
-    });
     let user_description = ChainDescription::Child(MessageId {
         chain_id: admin_id,
         height: BlockHeight::ZERO,
         index: 0,
     });
+    let user_id = ChainId::from(user_description);
     let certificate0 = make_certificate(
         &committee,
         &worker,
