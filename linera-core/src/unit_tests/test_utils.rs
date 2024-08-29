@@ -952,7 +952,7 @@ impl StorageBuilder for RocksDbStorageBuilder {
     type Storage = DbStorage<RocksDbStore, TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        let store_config = RocksDbStore::get_test_config().await?;
+        let store_config = RocksDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
         let storage = DbStorage::new_for_testing(

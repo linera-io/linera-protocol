@@ -697,7 +697,7 @@ pub async fn admin_test<S: LocalKeyValueStore>()
 where
     S::Error: Debug,
 {
-    let config = S::get_test_config().await.expect("config");
+    let config = S::new_test_config().await.expect("config");
     let prefix = generate_test_namespace();
     let namespaces = namespaces_with_prefix::<S>(&config, &prefix).await;
     assert_eq!(namespaces.len(), 0);

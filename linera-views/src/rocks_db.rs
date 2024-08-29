@@ -342,7 +342,7 @@ fn root_key_as_string(root_key: &[u8]) -> String {
 impl AdminKeyValueStore for RocksDbStoreInternal {
     type Config = RocksDbStoreConfig;
 
-    async fn get_test_config() -> Result<RocksDbStoreConfig, RocksDbStoreError> {
+    async fn new_test_config() -> Result<RocksDbStoreConfig, RocksDbStoreError> {
         let path_with_guard = create_rocks_db_test_path();
         let common_config = create_rocks_db_common_config();
         Ok(RocksDbStoreConfig {
@@ -492,7 +492,7 @@ pub fn create_rocks_db_test_path() -> PathWithGuard {
 /// out of scope then the RocksDB client can become unstable.
 #[cfg(with_testing)]
 pub async fn create_rocks_db_test_store() -> RocksDbStore {
-    let config = RocksDbStore::get_test_config().await.expect("config");
+    let config = RocksDbStore::new_test_config().await.expect("config");
     let namespace = generate_test_namespace();
     let root_key = &[];
     RocksDbStore::recreate_and_connect(&config, &namespace, root_key)
@@ -589,8 +589,8 @@ impl WritableKeyValueStore for RocksDbStore {
 impl AdminKeyValueStore for RocksDbStore {
     type Config = RocksDbStoreConfig;
 
-    async fn get_test_config() -> Result<RocksDbStoreConfig, RocksDbStoreError> {
-        RocksDbStoreInternal::get_test_config().await
+    async fn new_test_config() -> Result<RocksDbStoreConfig, RocksDbStoreError> {
+        RocksDbStoreInternal::new_test_config().await
     }
 
     async fn connect(

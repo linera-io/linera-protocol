@@ -443,7 +443,7 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
     type Config: Send + Sync;
 
     /// Obtains a test config
-    async fn get_test_config() -> Result<Self::Config, Self::Error>;
+    async fn new_test_config() -> Result<Self::Config, Self::Error>;
 
     /// Connects to an existing namespace using the given configuration.
     async fn connect(

@@ -178,8 +178,8 @@ where
 {
     type Config = K::Config;
 
-    async fn get_test_config() -> Result<K::Config, Self::Error> {
-        K::get_test_config().await
+    async fn new_test_config() -> Result<K::Config, Self::Error> {
+        K::new_test_config().await
     }
 
     async fn connect(

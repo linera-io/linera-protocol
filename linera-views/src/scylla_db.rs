@@ -572,7 +572,7 @@ fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
 impl AdminKeyValueStore for ScyllaDbStoreInternal {
     type Config = ScyllaDbStoreConfig;
 
-    async fn get_test_config() -> Result<ScyllaDbStoreConfig, ScyllaDbStoreError> {
+    async fn new_test_config() -> Result<ScyllaDbStoreConfig, ScyllaDbStoreError> {
         let uri = create_scylla_db_test_uri();
         let common_config = create_scylla_db_common_config();
         Ok(ScyllaDbStoreConfig { uri, common_config })
@@ -872,8 +872,8 @@ impl WritableKeyValueStore for ScyllaDbStore {
 impl AdminKeyValueStore for ScyllaDbStore {
     type Config = ScyllaDbStoreConfig;
 
-    async fn get_test_config() -> Result<ScyllaDbStoreConfig, ScyllaDbStoreError> {
-        ScyllaDbStoreInternal::get_test_config().await
+    async fn new_test_config() -> Result<ScyllaDbStoreConfig, ScyllaDbStoreError> {
+        ScyllaDbStoreInternal::new_test_config().await
     }
 
     async fn connect(
@@ -952,7 +952,7 @@ pub fn create_scylla_db_test_uri() -> String {
 /// Creates a ScyllaDB test store.
 #[cfg(with_testing)]
 pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
-    let config = ScyllaDbStore::get_test_config().await.expect("config");
+    let config = ScyllaDbStore::new_test_config().await.expect("config");
     let namespace = generate_test_namespace();
     let root_key = &[];
     ScyllaDbStore::recreate_and_connect(&config, &namespace, root_key)

@@ -349,7 +349,7 @@ pub struct DynamoDbStoreConfig {
 impl AdminKeyValueStore for DynamoDbStoreInternal {
     type Config = DynamoDbStoreConfig;
 
-    async fn get_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreError> {
+    async fn new_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreError> {
         let common_config = create_dynamo_db_common_config();
         let use_localstack = true;
         let config = get_config(use_localstack).await?;
@@ -1040,8 +1040,8 @@ impl WritableKeyValueStore for DynamoDbStore {
 impl AdminKeyValueStore for DynamoDbStore {
     type Config = DynamoDbStoreConfig;
 
-    async fn get_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreError> {
-        DynamoDbStoreInternal::get_test_config().await
+    async fn new_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreError> {
+        DynamoDbStoreInternal::new_test_config().await
     }
 
     async fn connect(
@@ -1324,7 +1324,7 @@ pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
 /// Creates a basic client that can be used for tests.
 #[cfg(with_testing)]
 pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
-    let config = DynamoDbStore::get_test_config().await.expect("config");
+    let config = DynamoDbStore::new_test_config().await.expect("config");
     let namespace = generate_test_namespace();
     let root_key = &[];
     DynamoDbStore::recreate_and_connect(&config, &namespace, root_key)

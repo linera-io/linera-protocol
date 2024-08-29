@@ -216,7 +216,7 @@ impl TestContextFactory for RocksDbContextFactory {
     type Context = RocksDbContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let config = RocksDbStore::get_test_config().await?;
+        let config = RocksDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
         let store = RocksDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
@@ -266,7 +266,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
     type Context = ScyllaDbContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let config = ScyllaDbStore::get_test_config().await?;
+        let config = ScyllaDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
         let store = ScyllaDbStore::recreate_and_connect(&config, &namespace, root_key).await?;

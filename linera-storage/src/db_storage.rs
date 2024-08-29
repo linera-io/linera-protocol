@@ -824,7 +824,7 @@ where
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
-        let config = Client::get_test_config().await.expect("config");
+        let config = Client::new_test_config().await.unwrap();
         let namespace = generate_test_namespace();
         let root_key = &[];
         DbStorage::<Client, TestClock>::new_for_testing(
@@ -835,7 +835,7 @@ where
             TestClock::new(),
         )
         .await
-        .expect("storage")
+        .unwrap()
     }
 
     pub async fn new_for_testing(

@@ -227,7 +227,7 @@ impl LocalWritableKeyValueStore for IndexedDbStore {
 impl LocalAdminKeyValueStore for IndexedDbStore {
     type Config = IndexedDbStoreConfig;
 
-    async fn get_test_config() -> Result<IndexedDbStoreConfig, IndexedDbStoreError> {
+    async fn new_test_config() -> Result<IndexedDbStoreConfig, IndexedDbStoreError> {
         Ok(IndexedDbStoreConfig::new(TEST_INDEX_DB_MAX_STREAM_QUERIES))
     }
 

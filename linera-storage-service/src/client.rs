@@ -379,7 +379,7 @@ impl ServiceStoreClientInternal {
 impl AdminKeyValueStore for ServiceStoreClientInternal {
     type Config = ServiceStoreConfig;
 
-    async fn get_test_config() -> Result<ServiceStoreConfig, ServiceStoreError> {
+    async fn new_test_config() -> Result<ServiceStoreConfig, ServiceStoreError> {
         let endpoint = storage_service_test_endpoint()?;
         service_config_from_endpoint(&endpoint)
     }
@@ -529,7 +529,7 @@ pub async fn storage_service_check_validity(endpoint: &str) -> Result<(), Servic
 /// Creates a test store with an endpoint. The namespace is random.
 #[cfg(with_testing)]
 pub async fn create_service_test_store() -> Result<ServiceStoreClientInternal, ServiceStoreError> {
-    let config = ServiceStoreClientInternal::get_test_config().await?;
+    let config = ServiceStoreClientInternal::new_test_config().await?;
     let namespace = generate_test_namespace();
     let root_key = &[];
     ServiceStoreClientInternal::connect(&config, &namespace, root_key).await
@@ -605,8 +605,8 @@ impl WritableKeyValueStore for ServiceStoreClient {
 impl AdminKeyValueStore for ServiceStoreClient {
     type Config = ServiceStoreConfig;
 
-    async fn get_test_config() -> Result<ServiceStoreConfig, ServiceStoreError> {
-        ServiceStoreClientInternal::get_test_config().await
+    async fn new_test_config() -> Result<ServiceStoreConfig, ServiceStoreError> {
+        ServiceStoreClientInternal::new_test_config().await
     }
 
     async fn connect(

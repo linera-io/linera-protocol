@@ -305,7 +305,7 @@ impl MemoryStore {
 impl AdminKeyValueStore for MemoryStore {
     type Config = MemoryStoreConfig;
 
-    async fn get_test_config() -> Result<MemoryStoreConfig, MemoryStoreError> {
+    async fn new_test_config() -> Result<MemoryStoreConfig, MemoryStoreError> {
         let max_stream_queries = TEST_MEMORY_MAX_STREAM_QUERIES;
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
