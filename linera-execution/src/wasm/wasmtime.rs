@@ -3,7 +3,7 @@
 
 //! Code specific to the usage of the [Wasmtime](https://wasmtime.dev/) runtime.
 
-use std::{error::Error, sync::LazyLock};
+use std::sync::LazyLock;
 
 use linera_base::data_types::Bytecode;
 use linera_witty::{wasmtime::EntrypointInstance, ExportTo, Instance};
@@ -55,8 +55,7 @@ where
     initial_fuel: u64,
 }
 
-// TODO(#1785): Simplify by using proper fuel getter and setter methods from Wasmtime once the
-// dependency is updated
+// TODO(#1967): Remove once fuel consumption is instrumented in the bytecode
 impl<Runtime> WasmtimeContractInstance<Runtime>
 where
     Runtime: ContractRuntime,
@@ -69,22 +68,8 @@ where
         self.initial_fuel = fuel;
 
         context
-            .add_fuel(1)
+            .set_fuel(fuel)
             .expect("Fuel consumption should be enabled");
-
-        let existing_fuel = context
-            .consume_fuel(0)
-            .expect("Fuel consumption should be enabled");
-
-        if existing_fuel > fuel {
-            context
-                .consume_fuel(existing_fuel - fuel)
-                .expect("Existing fuel was incorrectly calculated");
-        } else {
-            context
-                .add_fuel(fuel - existing_fuel)
-                .expect("Fuel consumption wasn't properly enabled");
-        }
 
         Ok(())
     }
@@ -93,7 +78,7 @@ where
         let remaining_fuel = self
             .instance
             .as_context_mut()
-            .consume_fuel(0)
+            .get_fuel()
             .expect("Failed to read remaining fuel");
         let runtime = &mut self.instance.user_data_mut().runtime_mut();
 
@@ -242,18 +227,5 @@ where
         Ok(ServiceEntrypoints::new(&mut self.instance)
             .handle_query(argument)
             .map_err(WasmExecutionError::from)?)
-    }
-}
-
-impl From<ExecutionError> for wasmtime::Trap {
-    fn from(error: ExecutionError) -> Self {
-        let boxed_error: Box<dyn Error + Send + Sync + 'static> = Box::new(error);
-        wasmtime::Trap::from(boxed_error)
-    }
-}
-
-impl From<wasmtime::Trap> for ExecutionError {
-    fn from(trap: wasmtime::Trap) -> Self {
-        ExecutionError::WasmError(WasmExecutionError::ExecuteModuleInWasmtime(trap))
     }
 }
