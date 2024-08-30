@@ -22,7 +22,7 @@ use linera_execution::{
     committee::{Committee, Epoch},
     BlobState,
 };
-use linera_storage::Storage;
+use linera_storage::{Clock as _, Storage};
 use linera_views::{
     common::Context,
     views::{RootView, View, ViewError},

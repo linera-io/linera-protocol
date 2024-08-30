@@ -14,7 +14,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, Blob, BlockHeight, Timestamp, UserApplicationDescription},
+    data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp, UserApplicationDescription},
     identifiers::{BlobId, ChainDescription, ChainId, GenericApplicationId, UserApplicationId},
     ownership::ChainOwnership,
 };
@@ -37,7 +37,7 @@ use linera_views::{
 
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
-pub use crate::db_storage::{Clock, DbStorage, WallClock};
+pub use crate::db_storage::{DbStorage, WallClock};
 #[cfg(with_metrics)]
 pub use crate::db_storage::{
     READ_CERTIFICATE_COUNTER, READ_HASHED_CERTIFICATE_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
@@ -57,8 +57,11 @@ pub trait Storage: Sized {
     /// Alias to provide simpler trait bounds `ViewError: From<Self::StoreError>`
     type StoreError: std::error::Error + Debug + Sync + Send;
 
+    /// The clock type being used.
+    type Clock: Clock;
+
     /// Returns the current wall clock time.
-    fn clock(&self) -> &dyn Clock;
+    fn clock(&self) -> &Self::Clock;
 
     /// Loads the view of a chain state.
     ///
@@ -430,4 +433,14 @@ where
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         self.storage.contains_blob(blob_id).await
     }
+}
+
+/// A clock that can be used to get the current `Timestamp`.
+#[async_trait]
+pub trait Clock {
+    fn current_time(&self) -> Timestamp;
+
+    async fn sleep(&self, delta: TimeDelta);
+
+    async fn sleep_until(&self, timestamp: Timestamp);
 }

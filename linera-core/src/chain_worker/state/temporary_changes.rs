@@ -18,7 +18,7 @@ use linera_chain::{
     manager,
 };
 use linera_execution::{ChannelSubscription, Query, Response};
-use linera_storage::Storage;
+use linera_storage::{Clock as _, Storage};
 use linera_views::views::{View, ViewError};
 #[cfg(with_testing)]
 use {

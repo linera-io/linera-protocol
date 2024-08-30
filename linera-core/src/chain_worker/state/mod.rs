@@ -29,7 +29,7 @@ use linera_execution::{
     committee::Epoch, ExecutionRequest, Message, Query, QueryContext, Response,
     ServiceRuntimeRequest, SystemMessage,
 };
-use linera_storage::Storage;
+use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
 use tokio::sync::{OwnedRwLockReadGuard, RwLock};
 

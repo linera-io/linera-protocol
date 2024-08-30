@@ -21,7 +21,7 @@ use linera_core::{
     worker::Reason,
 };
 use linera_execution::{Message, SystemMessage};
-use linera_storage::Storage;
+use linera_storage::{Clock as _, Storage};
 use linera_views::views::ViewError;
 use tracing::{debug, error, info, warn, Instrument as _};
 

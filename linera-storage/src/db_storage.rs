@@ -39,7 +39,7 @@ use {
     prometheus::{HistogramVec, IntCounterVec},
 };
 
-use crate::{ChainRuntimeContext, Storage};
+use crate::{ChainRuntimeContext, Clock, Storage};
 
 /// The metric counting how often a hashed certificate value is tested for existence from storage.
 #[cfg(with_metrics)]
@@ -269,8 +269,8 @@ where
 #[derive(Clone)]
 pub struct DbStorage<Client, Clock> {
     pub(crate) client: Arc<DbStorageInner<Client>>,
-    pub clock: Clock,
-    pub execution_runtime_config: ExecutionRuntimeConfig,
+    pub(crate) clock: Clock,
+    pub(crate) execution_runtime_config: ExecutionRuntimeConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -280,16 +280,6 @@ enum BaseKey {
     CertificateValue(CryptoHash),
     Blob(BlobId),
     BlobState(BlobId),
-}
-
-/// A clock that can be used to get the current `Timestamp`.
-#[async_trait]
-pub trait Clock {
-    fn current_time(&self) -> Timestamp;
-
-    async fn sleep(&self, delta: TimeDelta);
-
-    async fn sleep_until(&self, timestamp: Timestamp);
 }
 
 /// A `Clock` implementation using the system clock.
@@ -413,8 +403,9 @@ where
 {
     type Context = ContextFromStore<ChainRuntimeContext<Self>, Client>;
     type StoreError = Client::Error;
+    type Clock = C;
 
-    fn clock(&self) -> &dyn Clock {
+    fn clock(&self) -> &C {
         &self.clock
     }
 
