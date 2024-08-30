@@ -320,7 +320,6 @@ where
         caller: &mut Caller,
         application_id: ApplicationId,
         query: Vec<u8>,
-        _dummy: u32,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
@@ -493,7 +492,6 @@ where
         caller: &mut Caller,
         application: ApplicationId,
         argument: Vec<u8>,
-        _dummy: u32,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
@@ -516,7 +514,6 @@ where
         caller: &mut Caller,
         application_id: ApplicationId,
         query: Vec<u8>,
-        _dummy: u32,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
