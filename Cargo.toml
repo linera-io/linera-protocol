@@ -159,7 +159,7 @@ wasm-instrument = "0.4.0"
 wasmer = { package = "linera-wasmer", version = "4.3.6-linera.3", default-features = false }
 wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.3.6-linera.3" }
 wasmparser = "0.101.1"
-wasmtime = "24.0.0"
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", rev = "58f82587462543e912b4edcbb247842711ba6415" }
 wasmtimer = "0.2.0"
 webassembly-test = "0.1.0"
 web-sys = "0.3.69"
