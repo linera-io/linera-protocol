@@ -13,9 +13,9 @@ use crate::dynamo_db::{
     LocalStackTestContext,
 };
 #[cfg(with_rocksdb)]
-use crate::rocks_db::{create_rocks_db_test_config, RocksDbContext, RocksDbStore};
+use crate::rocks_db::{RocksDbContext, RocksDbStore};
 #[cfg(with_scylladb)]
-use crate::scylla_db::{create_scylla_db_test_config, ScyllaDbContext, ScyllaDbStore};
+use crate::scylla_db::{ScyllaDbContext, ScyllaDbStore};
 use crate::{
     batch::Batch,
     common::Context,
@@ -216,12 +216,10 @@ impl TestContextFactory for RocksDbContextFactory {
     type Context = RocksDbContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let store_config = create_rocks_db_test_config().await;
+        let config = RocksDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
-        let store = RocksDbStore::recreate_and_connect(&store_config, &namespace, root_key)
-            .await
-            .expect("store");
+        let store = RocksDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
         let context = RocksDbContext::new(store, ());
 
         Ok(context)
@@ -268,7 +266,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
     type Context = ScyllaDbContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let config = create_scylla_db_test_config().await;
+        let config = ScyllaDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
         let store = ScyllaDbStore::recreate_and_connect(&config, &namespace, root_key).await?;

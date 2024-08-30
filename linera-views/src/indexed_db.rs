@@ -37,7 +37,6 @@ impl IndexedDbStoreConfig {
 }
 
 /// The number of streams for the test
-#[cfg(with_testing)]
 pub const TEST_INDEX_DB_MAX_STREAM_QUERIES: usize = 10;
 
 const DATABASE_NAME: &str = "linera";
@@ -227,6 +226,10 @@ impl LocalWritableKeyValueStore for IndexedDbStore {
 
 impl LocalAdminKeyValueStore for IndexedDbStore {
     type Config = IndexedDbStoreConfig;
+
+    async fn new_test_config() -> Result<IndexedDbStoreConfig, IndexedDbStoreError> {
+        Ok(IndexedDbStoreConfig::new(TEST_INDEX_DB_MAX_STREAM_QUERIES))
+    }
 
     async fn connect(
         config: &Self::Config,

@@ -24,10 +24,10 @@ use linera_core::{
 };
 use linera_execution::committee::{Committee, ValidatorName};
 use linera_service::node_service::NodeService;
-use linera_storage::{MemoryStorage, Storage};
+use linera_storage::{DbStorage, Storage};
 use linera_version::VersionInfo;
 use linera_views::{
-    memory::{MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
+    memory::{MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
     views::ViewError,
 };
 
@@ -163,7 +163,7 @@ async fn main() -> std::io::Result<()> {
     let store_config = MemoryStoreConfig::new(TEST_MEMORY_MAX_STREAM_QUERIES);
     let namespace = "schema_export";
     let root_key = &[];
-    let storage = MemoryStorage::initialize(store_config, namespace, root_key, None)
+    let storage = DbStorage::<MemoryStore, _>::initialize(store_config, namespace, root_key, None)
         .await
         .expect("storage");
     let config = ChainListenerConfig::default();

@@ -41,9 +41,9 @@ use linera_execution::{
     ChannelSubscription, ExecutionError, Message, MessageKind, Query, QueryContext, Response,
     SystemExecutionError, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
-use linera_storage::{MemoryStorage, Storage, TestClock};
+use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
-    memory::{create_memory_store_test_config, MemoryContext},
+    memory::{create_memory_store_test_config, MemoryContext, MemoryStore},
     test_utils::generate_test_namespace,
     views::{CryptoHashView, RootView, ViewError},
 };
@@ -2908,9 +2908,14 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let store_config = create_memory_store_test_config();
     let namespace = generate_test_namespace();
     let root_key = &[];
-    let store =
-        MemoryStorage::new_for_testing(store_config, &namespace, root_key, None, TestClock::new())
-            .await?;
+    let store = DbStorage::<MemoryStore, _>::new_for_testing(
+        store_config,
+        &namespace,
+        root_key,
+        None,
+        TestClock::new(),
+    )
+    .await?;
     let (committee, worker) = init_worker(store, true);
     let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
 

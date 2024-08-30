@@ -29,7 +29,6 @@ use linera_base::ensure;
 use thiserror::Error;
 #[cfg(with_testing)]
 use {
-    crate::lru_caching::TEST_CACHE_SIZE,
     crate::test_utils::generate_test_namespace,
     anyhow::Error,
     tokio::sync::{Mutex, MutexGuard},
@@ -46,7 +45,7 @@ use crate::{
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::LruCachingStore,
+    lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 
@@ -171,11 +170,9 @@ const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 4000000;
 /// The DynamoDb database is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of
 /// connections.
-#[cfg(with_testing)]
 const TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
 /// The number of entries in a stream of the tests can be controlled by this parameter for tests.
-#[cfg(with_testing)]
 const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 100.
@@ -351,6 +348,16 @@ pub struct DynamoDbStoreConfig {
 
 impl AdminKeyValueStore for DynamoDbStoreInternal {
     type Config = DynamoDbStoreConfig;
+
+    async fn new_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreError> {
+        let common_config = create_dynamo_db_common_config();
+        let use_localstack = true;
+        let config = get_config(use_localstack).await?;
+        Ok(DynamoDbStoreConfig {
+            config,
+            common_config,
+        })
+    }
 
     async fn connect(
         config: &Self::Config,
@@ -1033,6 +1040,10 @@ impl WritableKeyValueStore for DynamoDbStore {
 impl AdminKeyValueStore for DynamoDbStore {
     type Config = DynamoDbStoreConfig;
 
+    async fn new_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreError> {
+        DynamoDbStoreInternal::new_test_config().await
+    }
+
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -1302,7 +1313,6 @@ impl From<DynamoDbStoreError> for crate::views::ViewError {
 static LOCALSTACK_GUARD: Mutex<()> = Mutex::const_new(());
 
 /// Creates the common initialization for RocksDB
-#[cfg(with_testing)]
 pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
         max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
@@ -1311,25 +1321,13 @@ pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
     }
 }
 
-/// Creates a configuration for tests
-#[cfg(with_testing)]
-pub async fn create_dynamo_db_test_config() -> DynamoDbStoreConfig {
-    let common_config = create_dynamo_db_common_config();
-    let use_localstack = true;
-    let config = get_config(use_localstack).await.expect("config");
-    DynamoDbStoreConfig {
-        config,
-        common_config,
-    }
-}
-
 /// Creates a basic client that can be used for tests.
 #[cfg(with_testing)]
 pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
-    let store_config = create_dynamo_db_test_config().await;
+    let config = DynamoDbStore::new_test_config().await.expect("config");
     let namespace = generate_test_namespace();
     let root_key = &[];
-    DynamoDbStore::recreate_and_connect(&store_config, &namespace, root_key)
+    DynamoDbStore::recreate_and_connect(&config, &namespace, root_key)
         .await
         .expect("key_value_store")
 }

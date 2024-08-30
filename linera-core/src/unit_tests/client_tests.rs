@@ -26,8 +26,8 @@ use linera_execution::{
     ExecutionError, Message, MessageKind, Operation, ResourceControlPolicy, SystemExecutionError,
     SystemMessage, SystemQuery, SystemResponse,
 };
-use linera_storage::{MemoryStorage, Storage, TestClock};
-use linera_views::views::ViewError;
+use linera_storage::{DbStorage, Storage, TestClock};
+use linera_views::{memory::MemoryStore, views::ViewError};
 use test_case::test_case;
 
 #[cfg(feature = "dynamodb")]
@@ -55,7 +55,7 @@ use crate::{
 };
 
 type MemoryChainClient =
-    ChainClient<NodeProvider<MemoryStorage<TestClock>>, MemoryStorage<TestClock>>;
+    ChainClient<NodeProvider<DbStorage<MemoryStore, TestClock>>, DbStorage<MemoryStore, TestClock>>;
 
 /// A test to ensure that our chain client listener remains `Send`.  This is a bit of a
 /// hack, but requires that we not hold a `std::sync::Mutex` over `await` points, a

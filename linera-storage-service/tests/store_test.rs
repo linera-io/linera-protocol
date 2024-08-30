@@ -4,10 +4,7 @@
 #![cfg(feature = "storage-service")]
 
 use anyhow::Result;
-use linera_storage_service::{
-    client::{create_service_test_store, service_config_from_endpoint, ServiceStoreClient},
-    storage_service_test_endpoint,
-};
+use linera_storage_service::client::{create_service_test_store, ServiceStoreClient};
 use linera_views::{
     batch::Batch,
     test_utils,
@@ -19,9 +16,8 @@ use linera_views::{
 
 #[tokio::test]
 async fn test_storage_service_reads() -> Result<()> {
-    let endpoint = storage_service_test_endpoint()?;
     for scenario in get_random_test_scenarios() {
-        let key_value_store = create_service_test_store(&endpoint).await?;
+        let key_value_store = create_service_test_store().await?;
         run_reads(key_value_store, scenario).await;
     }
     Ok(())
@@ -29,32 +25,27 @@ async fn test_storage_service_reads() -> Result<()> {
 
 #[tokio::test]
 async fn test_storage_service_writes_from_blank() -> Result<()> {
-    let endpoint = storage_service_test_endpoint()?;
-    let key_value_store = create_service_test_store(&endpoint).await?;
+    let key_value_store = create_service_test_store().await?;
     run_writes_from_blank(&key_value_store).await;
     Ok(())
 }
 
 #[tokio::test]
 async fn test_storage_service_writes_from_state() -> Result<()> {
-    let endpoint = storage_service_test_endpoint()?;
-    let key_value_store = create_service_test_store(&endpoint).await?;
+    let key_value_store = create_service_test_store().await?;
     run_writes_from_state(&key_value_store).await;
     Ok(())
 }
 
 #[tokio::test]
 async fn test_storage_service_admin() -> Result<()> {
-    let endpoint = storage_service_test_endpoint()?;
-    let config = service_config_from_endpoint(&endpoint)?;
-    admin_test::<ServiceStoreClient>(&config).await;
+    admin_test::<ServiceStoreClient>().await;
     Ok(())
 }
 
 #[tokio::test]
 async fn test_storage_service_big_raw_write() -> Result<()> {
-    let endpoint = storage_service_test_endpoint()?;
-    let key_value_store = create_service_test_store(&endpoint).await?;
+    let key_value_store = create_service_test_store().await?;
     let n = 5000000;
     let mut rng = test_utils::make_deterministic_rng();
     let vector = get_random_byte_vector(&mut rng, &[], n);

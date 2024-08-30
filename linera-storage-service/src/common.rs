@@ -65,6 +65,10 @@ pub enum ServiceStoreError {
     #[error(transparent)]
     TransportError(#[from] tonic::transport::Error),
 
+    /// Var error
+    #[error(transparent)]
+    VarError(#[from] std::env::VarError),
+
     /// An error occurred during BCS serialization
     #[error("An error occurred during BCS serialization")]
     Serialization(#[from] bcs::Error),
@@ -90,6 +94,10 @@ pub fn create_shared_store_common_config() -> CommonStoreConfig {
         max_stream_queries: TEST_SHARED_STORE_MAX_STREAM_QUERIES,
         cache_size: usize::MAX,
     }
+}
+
+pub fn storage_service_test_endpoint() -> Result<String, ServiceStoreError> {
+    Ok(std::env::var("LINERA_STORAGE_SERVICE")?)
 }
 
 #[cfg(with_metrics)]

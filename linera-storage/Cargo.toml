@@ -50,9 +50,6 @@ prometheus.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-linera-storage-service.workspace = true
-
 [dev-dependencies]
 anyhow.workspace = true
 linera-storage = { path = ".", features = ["test"] }

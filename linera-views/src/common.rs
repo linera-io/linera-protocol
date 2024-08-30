@@ -442,6 +442,9 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
     /// The configuration needed to interact with a new store.
     type Config: Send + Sync;
 
+    /// Obtains a test config
+    async fn new_test_config() -> Result<Self::Config, Self::Error>;
+
     /// Connects to an existing namespace using the given configuration.
     async fn connect(
         config: &Self::Config,
