@@ -4,6 +4,7 @@ interface service-system-api {
     get-chain-id: func() -> chain-id;
     get-next-block-height: func() -> block-height;
     get-application-id: func() -> application-id;
+    get-application-creator-chain-id: func() -> chain-id;
     get-application-parameters: func() -> list<u8>;
     read-chain-balance: func() -> amount;
     read-owner-balance: func(owner: owner) -> amount;

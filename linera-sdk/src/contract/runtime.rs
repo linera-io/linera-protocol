@@ -28,6 +28,7 @@ where
 {
     application_parameters: Option<Application::Parameters>,
     application_id: Option<ApplicationId<Application::Abi>>,
+    application_creator_chain_id: Option<ChainId>,
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
     block_height: Option<BlockHeight>,
@@ -46,6 +47,7 @@ where
         ContractRuntime {
             application_parameters: None,
             application_id: None,
+            application_creator_chain_id: None,
             chain_id: None,
             authenticated_signer: None,
             block_height: None,
@@ -77,6 +79,13 @@ where
         *self
             .application_id
             .get_or_insert_with(|| ApplicationId::from(wit::get_application_id()).with_abi())
+    }
+
+    /// Returns the chain ID of the current application creator.
+    pub fn application_creator_chain_id(&mut self) -> ChainId {
+        *self
+            .application_creator_chain_id
+            .get_or_insert_with(|| wit::get_application_creator_chain_id().into())
     }
 
     /// Returns the ID of the current chain.

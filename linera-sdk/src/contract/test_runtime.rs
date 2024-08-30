@@ -29,6 +29,7 @@ where
 {
     application_parameters: Option<Application::Parameters>,
     application_id: Option<ApplicationId<Application::Abi>>,
+    application_creator_chain_id: Option<ChainId>,
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
     block_height: Option<BlockHeight>,
@@ -74,6 +75,7 @@ where
         MockContractRuntime {
             application_parameters: None,
             application_id: None,
+            application_creator_chain_id: None,
             chain_id: None,
             authenticated_signer: None,
             block_height: None,
@@ -152,6 +154,26 @@ where
         self.application_id.expect(
             "Application ID has not been mocked, \
             please call `MockContractRuntime::set_application_id` first",
+        )
+    }
+
+    /// Configures the application creator chain ID to return during the test.
+    pub fn with_application_creator_chain_id(mut self, chain_id: ChainId) -> Self {
+        self.application_creator_chain_id = Some(chain_id);
+        self
+    }
+
+    /// Configures the application creator chain ID to return during the test.
+    pub fn set_application_creator_chain_id(&mut self, chain_id: ChainId) -> &mut Self {
+        self.application_creator_chain_id = Some(chain_id);
+        self
+    }
+
+    /// Returns the chain ID of the current application creator.
+    pub fn application_creator_chain_id(&mut self) -> ChainId {
+        self.application_creator_chain_id.expect(
+            "Application creator chain ID has not been mocked, \
+            please call `MockContractRuntime::set_application_creator_chain_id` first",
         )
     }
 

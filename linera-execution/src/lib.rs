@@ -342,6 +342,9 @@ pub trait BaseRuntime {
     /// The current application ID.
     fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError>;
 
+    /// The current application creator's chain ID.
+    fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError>;
+
     /// The current application parameters.
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError>;
 

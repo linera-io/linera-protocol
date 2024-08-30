@@ -46,7 +46,7 @@ impl Contract for AmmContract {
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
-        if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
+        if self.runtime.chain_id() == self.runtime.application_creator_chain_id() {
             self.execute_order_local(operation).await;
         } else {
             self.execute_order_remote(operation).await;
@@ -56,7 +56,7 @@ impl Contract for AmmContract {
     async fn execute_message(&mut self, message: Self::Message) {
         assert_eq!(
             self.runtime.chain_id(),
-            self.runtime.application_id().creation.chain_id,
+            self.runtime.application_creator_chain_id(),
             "Action can only be executed on the chain that created the AMM"
         );
 
@@ -444,7 +444,7 @@ impl AmmContract {
     }
 
     fn get_amm_chain_id(&mut self) -> ChainId {
-        self.runtime.application_id().creation.chain_id
+        self.runtime.application_creator_chain_id()
     }
 
     fn get_amm_account(&mut self) -> Account {
