@@ -206,7 +206,7 @@ pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     .expect("Histogram creation should not fail")
 });
 
-/// A DbStorage wrapping with Arc
+/// Main implementation of the [`Storage`] trait.
 #[derive(Clone)]
 pub struct DbStorage<Store, Clock> {
     store: Arc<Store>,
