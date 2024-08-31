@@ -103,5 +103,6 @@ repeat_macro!(parameters =>
     m: M,
     n: N,
     o: O,
-    p: P
+    p: P,
+    q: Q
 );
