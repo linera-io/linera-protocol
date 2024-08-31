@@ -50,7 +50,7 @@ use linera_execution::{
     ExecutionError, Message, Operation, Query, Response, SystemExecutionError, SystemMessage,
     SystemQuery, SystemResponse,
 };
-use linera_storage::Storage;
+use linera_storage::{Clock as _, Storage};
 use linera_views::views::ViewError;
 use serde::Serialize;
 use thiserror::Error;

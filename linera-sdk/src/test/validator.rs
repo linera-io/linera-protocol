@@ -71,7 +71,7 @@ impl TestValidator {
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(wasm_runtime)
             .now_or_never()
             .expect("execution of DbStorage::new should not await anything");
-        let clock = storage.clock.clone();
+        let clock = storage.clock().clone();
         let worker = WorkerState::new(
             "Single validator node".to_string(),
             Some(key_pair.copy()),

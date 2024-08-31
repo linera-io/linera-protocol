@@ -31,19 +31,16 @@ rocksdb = [
     "linera-client/rocksdb",
     "linera-views/rocksdb",
     "linera-core/rocksdb",
-    "linera-storage/rocksdb",
 ]
 dynamodb = [
     "linera-client/dynamodb",
     "linera-views/dynamodb",
     "linera-core/dynamodb",
-    "linera-storage/dynamodb",
 ]
 scylladb = [
     "linera-client/scylladb",
     "linera-views/scylladb",
     "linera-core/scylladb",
-    "linera-storage/scylladb",
 ]
 kubernetes = [
     "linera-client/kubernetes",

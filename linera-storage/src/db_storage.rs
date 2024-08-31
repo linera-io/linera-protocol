@@ -39,7 +39,7 @@ use {
     prometheus::{HistogramVec, IntCounterVec},
 };
 
-use crate::{ChainRuntimeContext, Storage};
+use crate::{ChainRuntimeContext, Clock, Storage};
 
 /// The metric counting how often a hashed certificate value is tested for existence from storage.
 #[cfg(with_metrics)]
@@ -206,71 +206,15 @@ pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     .expect("Histogram creation should not fail")
 });
 
-/// A storage implemented from a [`KeyValueStore`]
-pub struct DbStorageInner<Client> {
-    client: Client,
+/// Main implementation of the [`Storage`] trait.
+#[derive(Clone)]
+pub struct DbStorage<Store, Clock> {
+    store: Arc<Store>,
+    clock: Clock,
+    wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
-    wasm_runtime: Option<WasmRuntime>,
-}
-
-impl<Client> DbStorageInner<Client>
-where
-    Client: KeyValueStore + Clone + Send + Sync + 'static,
-    ViewError: From<Client::Error>,
-    Client::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
-{
-    pub(crate) fn new(client: Client, wasm_runtime: Option<WasmRuntime>) -> Self {
-        Self {
-            client,
-            user_contracts: Arc::new(DashMap::new()),
-            user_services: Arc::new(DashMap::new()),
-            wasm_runtime,
-        }
-    }
-
-    #[cfg(with_testing)]
-    pub async fn new_for_testing(
-        store_config: Client::Config,
-        namespace: &str,
-        root_key: &[u8],
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Client::Error> {
-        let client = Client::recreate_and_connect(&store_config, namespace, root_key).await?;
-        let storage = Self::new(client, wasm_runtime);
-        Ok(storage)
-    }
-
-    pub async fn initialize(
-        store_config: Client::Config,
-        namespace: &str,
-        root_key: &[u8],
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Client::Error> {
-        let store = Client::maybe_create_and_connect(&store_config, namespace, root_key).await?;
-        let storage = Self::new(store, wasm_runtime);
-        Ok(storage)
-    }
-
-    pub async fn make(
-        store_config: Client::Config,
-        namespace: &str,
-        root_key: &[u8],
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Client::Error> {
-        let client = Client::connect(&store_config, namespace, root_key).await?;
-        let storage = Self::new(client, wasm_runtime);
-        Ok(storage)
-    }
-}
-
-/// A DbStorage wrapping with Arc
-#[derive(Clone)]
-pub struct DbStorage<Client, Clock> {
-    pub(crate) client: Arc<DbStorageInner<Client>>,
-    pub clock: Clock,
-    pub execution_runtime_config: ExecutionRuntimeConfig,
+    execution_runtime_config: ExecutionRuntimeConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -280,16 +224,6 @@ enum BaseKey {
     CertificateValue(CryptoHash),
     Blob(BlobId),
     BlobState(BlobId),
-}
-
-/// A clock that can be used to get the current `Timestamp`.
-#[async_trait]
-pub trait Clock {
-    fn current_time(&self) -> Timestamp;
-
-    async fn sleep(&self, delta: TimeDelta);
-
-    async fn sleep_until(&self, timestamp: Timestamp);
 }
 
 /// A `Clock` implementation using the system clock.
@@ -403,18 +337,19 @@ impl TestClock {
 }
 
 #[async_trait]
-impl<Client, C> Storage for DbStorage<Client, C>
+impl<Store, C> Storage for DbStorage<Store, C>
 where
-    Client: KeyValueStore + Clone + Send + Sync + 'static,
+    Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
-    ViewError: From<Client::Error>,
-    Client::Error:
+    ViewError: From<Store::Error>,
+    Store::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
-    type Context = ContextFromStore<ChainRuntimeContext<Self>, Client>;
-    type StoreError = Client::Error;
+    type Context = ContextFromStore<ChainRuntimeContext<Self>, Store>;
+    type StoreError = Store::Error;
+    type Clock = C;
 
-    fn clock(&self) -> &dyn Clock {
+    fn clock(&self) -> &C {
         &self.clock
     }
 
@@ -428,18 +363,18 @@ where
             storage: self.clone(),
             chain_id,
             execution_runtime_config: self.execution_runtime_config,
-            user_contracts: self.client.user_contracts.clone(),
-            user_services: self.client.user_services.clone(),
+            user_contracts: self.user_contracts.clone(),
+            user_services: self.user_services.clone(),
         };
         let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
-        let client = self.client.client.clone_with_root_key(&root_key)?;
-        let context = ContextFromStore::create(client, runtime_context).await?;
+        let store = self.store.clone_with_root_key(&root_key)?;
+        let context = ContextFromStore::create(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
 
     async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
-        let test = self.client.client.contains_key(&value_key).await?;
+        let test = self.store.contains_key(&value_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER
             .with_label_values(&[])
@@ -456,7 +391,7 @@ where
             let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
             keys.push(value_key);
         }
-        let test = self.client.client.contains_keys(keys).await?;
+        let test = self.store.contains_keys(keys).await?;
         #[cfg(with_metrics)]
         CONTAINS_HASHED_CERTIFICATE_VALUES_COUNTER
             .with_label_values(&[])
@@ -466,7 +401,7 @@ where
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let test = self.client.client.contains_key(&blob_key).await?;
+        let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(test)
@@ -478,7 +413,7 @@ where
             let key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
             keys.push(key);
         }
-        let results = self.client.client.contains_keys(keys).await?;
+        let results = self.store.contains_keys(keys).await?;
         let mut missing_blobs = Vec::new();
         for (blob_id, result) in blob_ids.into_iter().zip(results) {
             if !result {
@@ -492,7 +427,7 @@ where
 
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let test = self.client.client.contains_key(&blob_key).await?;
+        let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
         Ok(test)
@@ -504,8 +439,7 @@ where
     ) -> Result<HashedCertificateValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let maybe_value = self
-            .client
-            .client
+            .store
             .read_value::<CertificateValue>(&value_key)
             .await?;
         #[cfg(with_metrics)]
@@ -518,11 +452,7 @@ where
 
     async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let maybe_blob_content = self
-            .client
-            .client
-            .read_value::<BlobContent>(&blob_key)
-            .await?;
+        let maybe_blob_content = self.store.read_value::<BlobContent>(&blob_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob_content =
@@ -536,8 +466,7 @@ where
             .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
             .collect::<Result<Vec<_>, _>>()?;
         let maybe_blob_contents = self
-            .client
-            .client
+            .store
             .read_multi_values::<BlobContent>(blob_keys)
             .await?;
         #[cfg(with_metrics)]
@@ -556,11 +485,7 @@ where
 
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError> {
         let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let maybe_blob_state = self
-            .client
-            .client
-            .read_value::<BlobState>(&blob_state_key)
-            .await?;
+        let maybe_blob_state = self.store.read_value::<BlobState>(&blob_state_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
         let blob_state = maybe_blob_state
@@ -674,7 +599,7 @@ where
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let keys = vec![cert_key, value_key];
-        let results = self.client.client.contains_keys(keys).await?;
+        let results = self.store.contains_keys(keys).await?;
         #[cfg(with_metrics)]
         CONTAINS_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         Ok(results[0] && results[1])
@@ -684,7 +609,7 @@ where
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let keys = vec![cert_key, value_key];
-        let values = self.client.client.read_multi_values_bytes(keys).await;
+        let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
             #[cfg(with_metrics)]
             READ_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
@@ -714,16 +639,16 @@ where
     }
 
     fn wasm_runtime(&self) -> Option<WasmRuntime> {
-        self.client.wasm_runtime
+        self.wasm_runtime
     }
 }
 
-impl<Client, C> DbStorage<Client, C>
+impl<Store, C> DbStorage<Store, C>
 where
-    Client: KeyValueStore + Clone + Send + Sync + 'static,
+    Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock,
-    ViewError: From<Client::Error>,
-    Client::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
+    ViewError: From<Store::Error>,
+    Store::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
     fn add_hashed_cert_value_to_batch(
         value: &HashedCertificateValue,
@@ -771,63 +696,63 @@ where
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        self.client.client.write_batch(batch).await?;
+        self.store.write_batch(batch).await?;
         Ok(())
     }
 
-    pub fn create(storage: DbStorageInner<Client>, clock: C) -> Self {
+    fn create(store: Store, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
         Self {
-            client: Arc::new(storage),
+            store: Arc::new(store),
             clock,
+            wasm_runtime,
+            user_contracts: Arc::new(DashMap::new()),
+            user_services: Arc::new(DashMap::new()),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }
 }
 
-impl<Client> DbStorage<Client, WallClock>
+impl<Store> DbStorage<Store, WallClock>
 where
-    Client: KeyValueStore + Clone + Send + Sync + 'static,
-    ViewError: From<Client::Error>,
-    Client::Error:
+    Store: KeyValueStore + Clone + Send + Sync + 'static,
+    ViewError: From<Store::Error>,
+    Store::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     pub async fn initialize(
-        store_config: Client::Config,
+        config: Store::Config,
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Client::Error> {
-        let storage =
-            DbStorageInner::<Client>::initialize(store_config, namespace, root_key, wasm_runtime)
-                .await?;
-        Ok(Self::create(storage, WallClock))
+    ) -> Result<Self, Store::Error> {
+        let store = Store::maybe_create_and_connect(&config, namespace, root_key).await?;
+        Ok(Self::create(store, wasm_runtime, WallClock))
     }
 
     pub async fn new(
-        store_config: Client::Config,
+        config: Store::Config,
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Client::Error> {
-        let storage =
-            DbStorageInner::<Client>::make(store_config, namespace, root_key, wasm_runtime).await?;
-        Ok(Self::create(storage, WallClock))
+    ) -> Result<Self, Store::Error> {
+        let store = Store::connect(&config, namespace, root_key).await?;
+        Ok(Self::create(store, wasm_runtime, WallClock))
     }
 }
 
 #[cfg(with_testing)]
-impl<Client> DbStorage<Client, TestClock>
+impl<Store> DbStorage<Store, TestClock>
 where
-    Client: KeyValueStore + Clone + Send + Sync + 'static,
-    ViewError: From<Client::Error>,
-    Client::Error:
+    Store: KeyValueStore + Clone + Send + Sync + 'static,
+    ViewError: From<Store::Error>,
+    Store::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
-        let config = Client::new_test_config().await.unwrap();
+        let config = Store::new_test_config().await.unwrap();
         let namespace = generate_test_namespace();
         let root_key = &[];
-        DbStorage::<Client, TestClock>::new_for_testing(
+        DbStorage::<Store, TestClock>::new_for_testing(
             config,
             &namespace,
             root_key,
@@ -839,19 +764,13 @@ where
     }
 
     pub async fn new_for_testing(
-        store_config: Client::Config,
+        config: Store::Config,
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
-    ) -> Result<Self, Client::Error> {
-        let storage = DbStorageInner::<Client>::new_for_testing(
-            store_config,
-            namespace,
-            root_key,
-            wasm_runtime,
-        )
-        .await?;
-        Ok(Self::create(storage, clock))
+    ) -> Result<Self, Store::Error> {
+        let store = Store::recreate_and_connect(&config, namespace, root_key).await?;
+        Ok(Self::create(store, wasm_runtime, clock))
     }
 }

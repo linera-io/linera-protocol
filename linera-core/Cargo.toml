@@ -26,9 +26,9 @@ test = [
     "test-strategy",
     "tokio/parking_lot",
 ]
-rocksdb = ["linera-views/rocksdb", "linera-storage/rocksdb"]
-dynamodb = ["linera-views/dynamodb", "linera-storage/dynamodb"]
-scylladb = ["linera-views/scylladb", "linera-storage/scylladb"]
+rocksdb = ["linera-views/rocksdb"]
+dynamodb = ["linera-views/dynamodb"]
+scylladb = ["linera-views/scylladb"]
 storage-service = []
 unstable-oracles = []
 metrics = [

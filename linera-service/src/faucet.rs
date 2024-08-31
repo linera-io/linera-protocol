@@ -16,7 +16,7 @@ use linera_base::{
 use linera_client::{chain_listener::ClientContext, config::GenesisConfig};
 use linera_core::{client::ChainClient, data_types::ClientOutcome, node::ValidatorNodeProvider};
 use linera_execution::committee::ValidatorName;
-use linera_storage::Storage;
+use linera_storage::{Clock as _, Storage};
 use linera_views::views::ViewError;
 use serde::Deserialize;
 use tower_http::cors::CorsLayer;
