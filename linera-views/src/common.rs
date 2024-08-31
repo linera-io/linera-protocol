@@ -26,10 +26,6 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{batch::Batch, views::ViewError};
 
-#[cfg(test)]
-#[path = "unit_tests/common_tests.rs"]
-mod common_tests;
-
 #[doc(hidden)]
 pub type HasherOutputSize = <sha3::Sha3_256 as sha3::digest::OutputSizeUser>::OutputSize;
 #[doc(hidden)]
@@ -991,4 +987,13 @@ mod tests {
             assert_eq!(val2, val_ret2);
         }
     }
+}
+
+#[test]
+fn test_upper_bound() {
+    assert_eq!(get_upper_bound(&[255]), Unbounded);
+    assert_eq!(get_upper_bound(&[255, 255, 255, 255]), Unbounded);
+    assert_eq!(get_upper_bound(&[0, 2]), Excluded(vec![0, 3]));
+    assert_eq!(get_upper_bound(&[0, 255]), Excluded(vec![1]));
+    assert_eq!(get_upper_bound(&[255, 0]), Excluded(vec![255, 1]));
 }

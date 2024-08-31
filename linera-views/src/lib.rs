@@ -73,74 +73,31 @@ pub mod batch;
 /// The definitions used for the `KeyValueStore` and `Context`.
 pub mod common;
 
-/// The code to turn a `DirectKeyValueStore` into a `KeyValueStore` by adding journaling.
-pub mod journaling;
-
-/// The code for encapsulating one key_value store into another that does metric
-#[cfg(with_metrics)]
-pub mod metering;
-
-/// The code for handling big values by splitting them into several small ones.
-pub mod value_splitting;
-
-/// The definition of the `View` and related traits.
+/// Elementary data-structures implementing the [`View`] trait.
 pub mod views;
 
-/// The `RegisterView` implements a register for a single value.
-pub mod register_view;
-
-/// The `LogView` implements a log list that can be pushed.
-pub mod log_view;
-
-/// The `QueueView` implements a queue that can push on the back and delete on the front.
-pub mod queue_view;
-
-/// The `MapView` implements a map with ordered keys.
-pub mod map_view;
-
-/// The `SetView` implements a set with ordered entries.
-pub mod set_view;
-
-mod graphql;
-
-/// The `CollectionView` implements a map structure whose keys are ordered and the values are views.
-pub mod collection_view;
-
-/// Helper definitions for in-memory storage.
-pub mod memory;
-
-/// The LRU (least recently used) caching.
-pub mod lru_caching;
-
-/// The `ReentrantCollectionView` implements a map structure whose keys are ordered and the values are views with concurrent access.
-pub mod reentrant_collection_view;
-
-/// The implementation of a key-value store view.
-pub mod key_value_store_view;
-
-/// Wrapping a view to compute a hash.
-pub mod hashable_wrapper;
-
-/// A storage backend for views based on ScyllaDB
-#[cfg(with_scylladb)]
-pub mod scylla_db;
-
-/// A storage backend for views based on RocksDB
-#[cfg(with_rocksdb)]
-pub mod rocks_db;
-
-/// A storage backend for views based on DynamoDB
-#[cfg(with_dynamodb)]
-pub mod dynamo_db;
-
-/// A storage backend for views in the browser based on IndexedDB
-#[cfg(with_indexeddb)]
-pub mod indexed_db;
+/// Backend implementing the [`KeyValueStore`] trait.
+pub mod backends;
 
 /// Helper types for tests.
 #[cfg(with_testing)]
 pub mod test_utils;
 
+#[cfg(with_dynamodb)]
+pub use backends::dynamo_db;
+#[cfg(with_indexeddb)]
+pub use backends::indexed_db;
+#[cfg(with_metrics)]
+pub use backends::metering;
+#[cfg(with_rocksdb)]
+pub use backends::rocks_db;
+#[cfg(with_scylladb)]
+pub use backends::scylla_db;
+pub use backends::{journaling, lru_caching, memory, value_splitting};
+pub use views::{
+    collection_view, hashable_wrapper, key_value_store_view, log_view, map_view, queue_view,
+    reentrant_collection_view, register_view, set_view,
+};
 /// Re-exports used by the derive macros of this library.
 #[doc(hidden)]
 pub use {
