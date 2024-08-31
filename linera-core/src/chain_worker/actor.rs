@@ -26,7 +26,6 @@ use linera_execution::{
     ServiceSyncRuntime,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, warn};
 
@@ -41,7 +40,6 @@ use crate::{
 pub enum ChainWorkerRequest<Context>
 where
     Context: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<Context::Error>,
 {
     /// Reads the certificate for a requested [`BlockHeight`].
     #[cfg(with_testing)]
@@ -327,7 +325,6 @@ where
 impl<Context> Debug for ChainWorkerRequest<Context>
 where
     Context: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<Context::Error>,
 {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         match self {

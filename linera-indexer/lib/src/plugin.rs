@@ -10,7 +10,7 @@ use axum::Router;
 use linera_chain::data_types::HashedCertificateValue;
 use linera_views::{
     common::{ContextFromStore, KeyValueStore},
-    views::{View, ViewError},
+    views::View,
 };
 use tokio::sync::Mutex;
 
@@ -21,7 +21,6 @@ pub trait Plugin<S>: Send + Sync
 where
     S: KeyValueStore + Clone + Send + Sync + 'static,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<S::Error>,
 {
     /// Gets the name of the plugin
     fn name(&self) -> String
@@ -74,7 +73,6 @@ pub async fn load<S, V: View<ContextFromStore<(), S>>>(
 where
     S: KeyValueStore + Clone + Send + Sync + 'static,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<S::Error>,
 {
     let root_key = name.as_bytes().to_vec();
     let store = store

@@ -647,7 +647,6 @@ impl<Store, C> DbStorage<Store, C>
 where
     Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock,
-    ViewError: From<Store::Error>,
     Store::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
     fn add_hashed_cert_value_to_batch(
@@ -715,7 +714,6 @@ where
 impl<Store> DbStorage<Store, WallClock>
 where
     Store: KeyValueStore + Clone + Send + Sync + 'static,
-    ViewError: From<Store::Error>,
     Store::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
@@ -744,7 +742,6 @@ where
 impl<Store> DbStorage<Store, TestClock>
 where
     Store: KeyValueStore + Clone + Send + Sync + 'static,
-    ViewError: From<Store::Error>,
     Store::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {

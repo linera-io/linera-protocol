@@ -4550,7 +4550,6 @@ dependencies = [
  "linera-rpc",
  "linera-storage",
  "linera-version",
- "linera-views",
  "prometheus",
  "proptest",
  "prost",

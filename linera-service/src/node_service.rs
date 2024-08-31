@@ -44,7 +44,6 @@ use linera_execution::{
     Operation, Query, Response, SystemOperation,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error as ThisError;
@@ -778,20 +777,17 @@ impl ChainStateViewExtension {
 struct ChainStateExtendedView<C>(ChainStateViewExtension, ReadOnlyChainStateView<C>)
 where
     C: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
     C::Extra: linera_execution::ExecutionRuntimeContext;
 
 /// A wrapper type that allows proxying GraphQL queries to a [`ChainStateView`] that's behind an
 /// [`OwnedRwLockReadGuard`].
 pub struct ReadOnlyChainStateView<C>(OwnedRwLockReadGuard<ChainStateView<C>>)
 where
-    C: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>;
+    C: linera_views::common::Context + Clone + Send + Sync + 'static;
 
 impl<C> ContainerType for ReadOnlyChainStateView<C>
 where
     C: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     async fn resolve_field(
         &self,
@@ -804,7 +800,6 @@ where
 impl<C> OutputType for ReadOnlyChainStateView<C>
 where
     C: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     fn type_name() -> Cow<'static, str> {
         ChainStateView::<C>::type_name()
@@ -826,7 +821,6 @@ where
 impl<C> ChainStateExtendedView<C>
 where
     C: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
     C::Extra: linera_execution::ExecutionRuntimeContext,
 {
     fn new(view: OwnedRwLockReadGuard<ChainStateView<C>>) -> Self {

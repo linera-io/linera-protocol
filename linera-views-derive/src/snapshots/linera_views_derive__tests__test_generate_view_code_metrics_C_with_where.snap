@@ -7,7 +7,6 @@ impl<C, MyParam> linera_views::views::View<C> for TestView<C, MyParam>
 where
     MyParam: Send + Sync + 'static,
     C: linera_views::common::Context + Send + Sync + Clone + 'static,
-    linera_views::views::ViewError: From<C::Error>,
 {
     const NUM_INIT_KEYS: usize = RegisterView::<C, usize>::NUM_INIT_KEYS
         + CollectionView::<C, usize, RegisterView<C, usize>>::NUM_INIT_KEYS;

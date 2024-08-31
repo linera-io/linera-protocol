@@ -15,11 +15,7 @@ use linera_base::{
     identifiers::{Account, BlobId, MessageId, Owner},
     ownership::ChainOwnership,
 };
-use linera_views::{
-    batch::Batch,
-    common::Context,
-    views::{View, ViewError},
-};
+use linera_views::{batch::Batch, common::Context, views::View};
 use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
@@ -68,7 +64,6 @@ pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<ExecutionRequest>;
 impl<C> ExecutionStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
     // TODO(#1416): Support concurrent I/O.

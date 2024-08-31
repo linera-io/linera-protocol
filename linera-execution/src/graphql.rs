@@ -9,7 +9,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Owner},
     ownership::ChainOwnership,
 };
-use linera_views::{common::Context, map_view::MapView, views::ViewError};
+use linera_views::{common::Context, map_view::MapView};
 
 use crate::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
@@ -49,10 +49,7 @@ impl Committee {
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<C: Send + Sync + Context> ExecutionStateView<C>
-where
-    ViewError: From<C::Error>,
-{
+impl<C: Send + Sync + Context> ExecutionStateView<C> {
     #[graphql(derived(name = "system"))]
     async fn _system(&self) -> &SystemExecutionStateView<C> {
         &self.system
@@ -60,10 +57,7 @@ where
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<C: Send + Sync + Context> SystemExecutionStateView<C>
-where
-    ViewError: From<C::Error>,
-{
+impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
     #[graphql(derived(name = "description"))]
     async fn _description(&self) -> &Option<ChainDescription> {
         self.description.get()
