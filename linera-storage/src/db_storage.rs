@@ -207,7 +207,7 @@ pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
 });
 
 /// A storage implemented from a [`KeyValueStore`]
-pub struct DbStorageInner<Client> {
+struct DbStorageInner<Client> {
     client: Client,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
@@ -268,9 +268,9 @@ where
 /// A DbStorage wrapping with Arc
 #[derive(Clone)]
 pub struct DbStorage<Client, Clock> {
-    pub(crate) client: Arc<DbStorageInner<Client>>,
-    pub(crate) clock: Clock,
-    pub(crate) execution_runtime_config: ExecutionRuntimeConfig,
+    client: Arc<DbStorageInner<Client>>,
+    clock: Clock,
+    execution_runtime_config: ExecutionRuntimeConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -766,7 +766,7 @@ where
         Ok(())
     }
 
-    pub fn create(storage: DbStorageInner<Client>, clock: C) -> Self {
+    fn create(storage: DbStorageInner<Client>, clock: C) -> Self {
         Self {
             client: Arc::new(storage),
             clock,
