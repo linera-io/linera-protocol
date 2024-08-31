@@ -15,7 +15,6 @@ use linera_execution::{
 };
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
@@ -194,7 +193,6 @@ impl GenesisConfig {
     pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), Error>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let committee = self.create_committee();
         for (chain_number, (public_key, balance)) in (0..).zip(&self.chains) {

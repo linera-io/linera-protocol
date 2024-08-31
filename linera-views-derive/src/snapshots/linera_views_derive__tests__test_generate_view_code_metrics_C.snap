@@ -6,7 +6,6 @@ expression: "pretty(generate_view_code(input, true))"
 impl<C> linera_views::views::View<C> for TestView<C>
 where
     C: linera_views::common::Context + Send + Sync + Clone + 'static,
-    linera_views::views::ViewError: From<C::Error>,
 {
     const NUM_INIT_KEYS: usize = RegisterView::<C, usize>::NUM_INIT_KEYS
         + CollectionView::<C, usize, RegisterView<C, usize>>::NUM_INIT_KEYS;

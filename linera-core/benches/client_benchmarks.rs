@@ -14,10 +14,10 @@ use linera_core::{
 };
 use linera_execution::system::{Recipient, UserData};
 use linera_storage::{
-    Storage, READ_CERTIFICATE_COUNTER, READ_HASHED_CERTIFICATE_VALUE_COUNTER,
-    WRITE_CERTIFICATE_COUNTER, WRITE_HASHED_CERTIFICATE_VALUE_COUNTER,
+    READ_CERTIFICATE_COUNTER, READ_HASHED_CERTIFICATE_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
+    WRITE_HASHED_CERTIFICATE_VALUE_COUNTER,
 };
-use linera_views::{views::ViewError, LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
+use linera_views::{LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
 use prometheus::core::Collector;
 use recorder::BenchRecorderMeasurement;
 use tokio::runtime;
@@ -33,7 +33,6 @@ mod recorder;
 pub fn setup_claim_bench<B>() -> (ChainClient<B>, ChainClient<B>)
 where
     B: StorageBuilder + Default,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage_builder = B::default();
     // Criterion doesn't allow setup functions to be async, but it runs them inside an async
@@ -59,7 +58,6 @@ where
 pub async fn run_claim_bench<B>((chain1, chain2): (ChainClient<B>, ChainClient<B>))
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let owner1 = chain1.identity().await.unwrap();
     let amt = Amount::ONE;

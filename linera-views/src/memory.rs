@@ -15,10 +15,9 @@ use crate::{
     batch::{Batch, DeletePrefixExpander, WriteOperation},
     common::{
         get_interval, AdminKeyValueStore, CommonStoreConfig, Context, ContextFromStore,
-        KeyIterable, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        KeyIterable, KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     value_splitting::DatabaseConsistencyError,
-    views::ViewError,
 };
 
 /// The initial configuration of the system
@@ -456,13 +455,8 @@ pub enum MemoryStoreError {
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
-impl From<MemoryStoreError> for ViewError {
-    fn from(error: MemoryStoreError) -> Self {
-        Self::StoreError {
-            backend: "memory".to_string(),
-            error: error.to_string(),
-        }
-    }
+impl KeyValueStoreError for MemoryStoreError {
+    const BACKEND: &'static str = "memory";
 }
 
 impl DeletePrefixExpander for MemoryContext<()> {

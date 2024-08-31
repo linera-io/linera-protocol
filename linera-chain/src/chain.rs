@@ -34,7 +34,7 @@ use linera_views::{
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     set_view::SetView,
-    views::{ClonableView, CryptoHashView, RootView, View, ViewError},
+    views::{ClonableView, CryptoHashView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
 
@@ -238,7 +238,6 @@ impl BundleInInbox {
 pub struct ChainStateView<C>
 where
     C: Clone + Context + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     /// Execution state, including system and user applications.
     pub execution_state: ExecutionStateView<C>,
@@ -355,7 +354,6 @@ impl ChainTipState {
 pub struct ChannelStateView<C>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
 {
     /// The current subscribers.
     pub subscribers: SetView<C, ChainId>,
@@ -366,7 +364,6 @@ where
 impl<C> ChainStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
     /// Returns the [`ChainId`] of the chain this [`ChainStateView`] represents.

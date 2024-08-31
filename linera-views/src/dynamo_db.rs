@@ -42,7 +42,7 @@ use crate::{
     batch::{Batch, SimpleUnorderedBatch},
     common::{
         AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
-        ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
@@ -1298,13 +1298,8 @@ impl DynamoDbStoreError {
     }
 }
 
-impl From<DynamoDbStoreError> for crate::views::ViewError {
-    fn from(error: DynamoDbStoreError) -> Self {
-        Self::StoreError {
-            backend: "DynamoDB".to_string(),
-            error: error.to_string(),
-        }
-    }
+impl KeyValueStoreError for DynamoDbStoreError {
+    const BACKEND: &'static str = "dynamo_db";
 }
 
 /// A static lock to prevent multiple tests from using the same LocalStack instance at the same

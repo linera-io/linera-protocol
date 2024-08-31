@@ -50,7 +50,6 @@ use crate::{
 pub struct ChainWorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     config: ChainWorkerConfig,
     storage: StorageClient,
@@ -67,7 +66,6 @@ where
 impl<StorageClient> ChainWorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     /// Creates a new [`ChainWorkerState`] using the provided `storage` client.
     #[allow(clippy::too_many_arguments)]

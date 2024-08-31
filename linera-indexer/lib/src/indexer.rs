@@ -16,7 +16,7 @@ use linera_views::{
     register_view::RegisterView,
     set_view::SetView,
     value_splitting::DatabaseConsistencyError,
-    views::{RootView, View, ViewError},
+    views::{RootView, View},
 };
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
@@ -65,7 +65,6 @@ where
         + Sync
         + std::error::Error
         + 'static,
-    ViewError: From<S::Error>,
 {
     /// Loads the indexer using a database backend with an `indexer` prefix.
     pub async fn load(store: S) -> Result<Self, IndexerError> {
@@ -217,7 +216,6 @@ pub struct HighestBlock {
 impl<C> State<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     /// Gets the plugins registered in the indexer
     pub async fn plugins(&self) -> Result<Vec<String>, IndexerError> {
@@ -245,7 +243,6 @@ where
 impl<C> State<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     pub fn schema(self) -> Schema<Self, EmptyMutation, EmptySubscription> {
         Schema::build(self, EmptyMutation, EmptySubscription).finish()

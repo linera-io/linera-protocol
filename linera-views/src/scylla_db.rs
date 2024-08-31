@@ -45,7 +45,7 @@ use crate::{
     batch::{Batch, UnorderedBatch},
     common::{
         get_upper_bound_option, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
-        ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
@@ -440,13 +440,8 @@ pub enum ScyllaDbStoreError {
     JournalConsistencyError(#[from] JournalConsistencyError),
 }
 
-impl From<ScyllaDbStoreError> for crate::views::ViewError {
-    fn from(error: ScyllaDbStoreError) -> Self {
-        Self::StoreError {
-            backend: "scylla_db".to_string(),
-            error: error.to_string(),
-        }
-    }
+impl KeyValueStoreError for ScyllaDbStoreError {
+    const BACKEND: &'static str = "scylla_db";
 }
 
 impl WithError for ScyllaDbStoreInternal {

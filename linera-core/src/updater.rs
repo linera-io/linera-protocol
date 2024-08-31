@@ -19,7 +19,6 @@ use linera_base::{
 use linera_chain::data_types::{BlockProposal, Certificate, LiteVote};
 use linera_execution::committee::{Committee, ValidatorName};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use thiserror::Error;
 use tracing::{error, warn};
 
@@ -64,7 +63,6 @@ pub enum CommunicateAction {
 pub struct ValidatorUpdater<A, S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     pub name: ValidatorName,
     pub node: A,
@@ -194,7 +192,6 @@ impl<A, S> ValidatorUpdater<A, S>
 where
     A: LocalValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     async fn send_optimized_certificate(
         &mut self,

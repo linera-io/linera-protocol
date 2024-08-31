@@ -102,10 +102,6 @@ pub enum ViewError {
     #[error("The key must not be too long")]
     KeyTooLong,
 
-    /// Errors can happen within the Wasm guest and have to be transmitted within the Host/Guest where only elementary types can pass.
-    #[error("Following error occurs in wasm code: {0}")]
-    WasmHostGuestError(String),
-
     /// FIXME(#148): This belongs to a future `linera_storage::StoreError`.
     #[error("Entry does not exist in memory: {0}")]
     NotFound(String),

@@ -7,7 +7,7 @@ use linera_base::{data_types::UserApplicationDescription, identifiers::UserAppli
 use linera_views::{
     common::Context,
     map_view::HashedMapView,
-    views::{ClonableView, HashableView, ViewError},
+    views::{ClonableView, HashableView},
 };
 #[cfg(with_testing)]
 use {
@@ -37,7 +37,6 @@ pub struct ApplicationRegistry {
 impl<C> ApplicationRegistryView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     #[cfg(with_testing)]
     pub fn import(&mut self, registry: ApplicationRegistry) -> Result<(), SystemExecutionError> {
@@ -168,7 +167,6 @@ where
 impl ApplicationRegistryView<MemoryContext<()>>
 where
     MemoryContext<()>: Context + Clone + Send + Sync + 'static,
-    ViewError: From<<MemoryContext<()> as linera_views::common::Context>::Error>,
 {
     pub async fn new() -> Self {
         let context = create_test_memory_context();

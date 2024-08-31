@@ -5,7 +5,6 @@ expression: pretty(generate_clonable_view_code(input))
 impl<C, MyParam> linera_views::views::ClonableView<C> for TestView<C, MyParam>
 where
     C: linera_views::common::Context + Send + Sync + Clone + 'static,
-    linera_views::views::ViewError: From<C::Error>,
 {
     fn clone_unchecked(&mut self) -> Result<Self, linera_views::views::ViewError> {
         Ok(Self {

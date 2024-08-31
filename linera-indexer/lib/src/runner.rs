@@ -4,9 +4,7 @@
 //! This module defines the trait for indexer runners.
 
 use linera_base::identifiers::ChainId;
-use linera_views::{
-    common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
-};
+use linera_views::{common::KeyValueStore, value_splitting::DatabaseConsistencyError};
 use tokio::select;
 use tracing::{info, warn};
 
@@ -54,7 +52,6 @@ where
         + Sync
         + std::error::Error
         + 'static,
-    ViewError: From<S::Error>,
 {
     /// Loads a new runner
     pub async fn new(config: IndexerConfig<Config>, store: S) -> Result<Self, IndexerError>

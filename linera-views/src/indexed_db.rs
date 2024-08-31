@@ -10,11 +10,10 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound_option, CommonStoreConfig, ContextFromStore, LocalAdminKeyValueStore,
-        LocalReadableKeyValueStore, LocalWritableKeyValueStore, WithError,
+        get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStoreError,
+        LocalAdminKeyValueStore, LocalReadableKeyValueStore, LocalWritableKeyValueStore, WithError,
     },
     value_splitting::DatabaseConsistencyError,
-    views::ViewError,
 };
 
 /// The initial configuration of the system
@@ -395,11 +394,6 @@ impl From<wasm_bindgen::JsValue> for IndexedDbStoreError {
     }
 }
 
-impl From<IndexedDbStoreError> for ViewError {
-    fn from(error: IndexedDbStoreError) -> Self {
-        Self::StoreError {
-            backend: "indexed_db".to_string(),
-            error: error.to_string(),
-        }
-    }
+impl KeyValueStoreError for IndexedDbStoreError {
+    const BACKEND: &'static str = "indexed_db";
 }

@@ -40,10 +40,7 @@ use linera_views::dynamo_db::DynamoDbStore;
 use linera_views::rocks_db::RocksDbStore;
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::ScyllaDbStore;
-use linera_views::{
-    memory::MemoryStore,
-    views::{CryptoHashView, ViewError},
-};
+use linera_views::{memory::MemoryStore, views::CryptoHashView};
 use test_case::test_case;
 
 use super::{init_worker_with_chains, make_certificate};
@@ -97,7 +94,6 @@ async fn run_test_handle_certificates_to_create_application<S>(
 ) -> anyhow::Result<()>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     let admin_id = ChainDescription::Root(0);
     let publisher_key_pair = KeyPair::generate();
