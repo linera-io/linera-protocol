@@ -232,34 +232,34 @@ where
 
     #[cfg(with_testing)]
     pub async fn new_for_testing(
-        store_config: Store::Config,
+        config: Store::Config,
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
-        let store = Store::recreate_and_connect(&store_config, namespace, root_key).await?;
+        let store = Store::recreate_and_connect(&config, namespace, root_key).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }
 
     pub async fn initialize(
-        store_config: Store::Config,
+        config: Store::Config,
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
-        let store = Store::maybe_create_and_connect(&store_config, namespace, root_key).await?;
+        let store = Store::maybe_create_and_connect(&config, namespace, root_key).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }
 
     pub async fn make(
-        store_config: Store::Config,
+        config: Store::Config,
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
-        let store = Store::connect(&store_config, namespace, root_key).await?;
+        let store = Store::connect(&config, namespace, root_key).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }
@@ -783,25 +783,24 @@ where
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     pub async fn initialize(
-        store_config: Store::Config,
+        config: Store::Config,
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
         let storage =
-            DbStorageInner::<Store>::initialize(store_config, namespace, root_key, wasm_runtime)
-                .await?;
+            DbStorageInner::<Store>::initialize(config, namespace, root_key, wasm_runtime).await?;
         Ok(Self::create(storage, WallClock))
     }
 
     pub async fn new(
-        store_config: Store::Config,
+        config: Store::Config,
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
         let storage =
-            DbStorageInner::<Store>::make(store_config, namespace, root_key, wasm_runtime).await?;
+            DbStorageInner::<Store>::make(config, namespace, root_key, wasm_runtime).await?;
         Ok(Self::create(storage, WallClock))
     }
 }
@@ -830,19 +829,15 @@ where
     }
 
     pub async fn new_for_testing(
-        store_config: Store::Config,
+        config: Store::Config,
         namespace: &str,
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
     ) -> Result<Self, Store::Error> {
-        let storage = DbStorageInner::<Store>::new_for_testing(
-            store_config,
-            namespace,
-            root_key,
-            wasm_runtime,
-        )
-        .await?;
+        let storage =
+            DbStorageInner::<Store>::new_for_testing(config, namespace, root_key, wasm_runtime)
+                .await?;
         Ok(Self::create(storage, clock))
     }
 }
