@@ -1328,6 +1328,9 @@ where
         .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
+    builder
+        .check_that_validators_have_empty_outboxes(ChainId::root(0))
+        .await;
     admin.process_inbox().await.unwrap();
 
     // Have the admin chain deprecate the previous epoch.

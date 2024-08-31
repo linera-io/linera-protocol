@@ -255,7 +255,7 @@ where
         &mut self,
         origin: Origin,
         bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
+    ) -> Result<Option<(BlockHeight, NetworkActions)>, WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
             .process_cross_chain_update(origin, bundles)

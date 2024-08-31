@@ -858,6 +858,15 @@ where
         }
         assert!(count >= target_count);
     }
+
+    /// Panics if any validator has a nonempty outbox for the given chain.
+    pub async fn check_that_validators_have_empty_outboxes(&self, chain_id: ChainId) {
+        for validator in &self.validator_clients {
+            let guard = validator.client.lock().await;
+            let chain = guard.state.chain_state_view(chain_id).await.unwrap();
+            assert_eq!(chain.outboxes.indices().await.unwrap(), []);
+        }
+    }
 }
 
 #[cfg(feature = "rocksdb")]
