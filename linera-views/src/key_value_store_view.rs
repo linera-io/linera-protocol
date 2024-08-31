@@ -8,6 +8,7 @@ use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included, sync::Mu
 use async_trait::async_trait;
 use linera_base::{data_types::ArithmeticError, ensure};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{self, MeasureLatency},
@@ -18,8 +19,8 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         from_bytes_option, from_bytes_option_or_default, get_interval, get_upper_bound, Context,
-        DeletionSet, HasherOutput, KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update,
-        MIN_VIEW_TAG,
+        DeletionSet, HasherOutput, KeyIterable, KeyValueIterable, KeyValueStoreError,
+        SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
     },
     map_view::ByteMapView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
@@ -1091,7 +1092,23 @@ pub struct ViewContainer<C> {
 
 #[cfg(with_testing)]
 impl<C> WithError for ViewContainer<C> {
-    type Error = ViewError;
+    type Error = ViewContainerError;
+}
+
+/// The error type for [`ViewContainer`] operations.
+#[derive(Error, Debug)]
+pub enum ViewContainerError {
+    /// View error.
+    #[error(transparent)]
+    ViewError(#[from] ViewError),
+
+    /// BCS serialization error.
+    #[error("BCS error: {0}")]
+    Bcs(#[from] bcs::Error),
+}
+
+impl KeyValueStoreError for ViewContainerError {
+    const BACKEND: &'static str = "view_container";
 }
 
 #[cfg(with_testing)]
@@ -1108,40 +1125,43 @@ where
         1
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewContainerError> {
         let view = self.view.read().await;
-        view.get(key).await
+        Ok(view.get(key).await?)
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, ViewError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, ViewContainerError> {
         let view = self.view.read().await;
-        view.contains_key(key).await
+        Ok(view.contains_key(key).await?)
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewContainerError> {
         let view = self.view.read().await;
-        view.contains_keys(keys).await
+        Ok(view.contains_keys(keys).await?)
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, ViewContainerError> {
         let view = self.view.read().await;
-        view.multi_get(keys).await
+        Ok(view.multi_get(keys).await?)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, ViewContainerError> {
         let view = self.view.read().await;
-        view.find_keys_by_prefix(key_prefix).await
+        Ok(view.find_keys_by_prefix(key_prefix).await?)
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, ViewError> {
+    ) -> Result<Self::KeyValues, ViewContainerError> {
         let view = self.view.read().await;
-        view.find_key_values_by_prefix(key_prefix).await
+        Ok(view.find_key_values_by_prefix(key_prefix).await?)
     }
 }
 
@@ -1153,16 +1173,19 @@ where
 {
     const MAX_VALUE_SIZE: usize = C::MAX_VALUE_SIZE;
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewContainerError> {
         let mut view = self.view.write().await;
         view.write_batch(batch).await?;
         let mut batch = Batch::new();
         view.flush(&mut batch)?;
-        view.context().write_batch(batch).await?;
+        view.context()
+            .write_batch(batch)
+            .await
+            .map_err(ViewError::from)?;
         Ok(())
     }
 
-    async fn clear_journal(&self) -> Result<(), ViewError> {
+    async fn clear_journal(&self) -> Result<(), ViewContainerError> {
         Ok(())
     }
 }

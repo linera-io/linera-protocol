@@ -24,7 +24,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
-        ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
@@ -690,11 +690,6 @@ pub enum RocksDbStoreError {
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
-impl From<RocksDbStoreError> for crate::views::ViewError {
-    fn from(error: RocksDbStoreError) -> Self {
-        Self::StoreError {
-            backend: "rocks_db".to_string(),
-            error: error.to_string(),
-        }
-    }
+impl KeyValueStoreError for RocksDbStoreError {
+    const BACKEND: &'static str = "rocks_db";
 }

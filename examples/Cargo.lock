@@ -3500,6 +3500,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
  "wasmtime",
  "wit-bindgen",

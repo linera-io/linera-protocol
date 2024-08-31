@@ -46,6 +46,7 @@ linera-views.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
 wit-bindgen.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

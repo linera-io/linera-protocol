@@ -344,10 +344,25 @@ pub trait KeyValueIterable<Error> {
     fn into_iterator_owned(self) -> Self::IteratorOwned;
 }
 
-/// The error type for the Key Value Stores
+/// The error type for the key-value stores.
+pub trait KeyValueStoreError: std::error::Error + Debug + From<bcs::Error> {
+    /// The name of the backend.
+    const BACKEND: &'static str;
+}
+
+impl<E: KeyValueStoreError> From<E> for ViewError {
+    fn from(error: E) -> Self {
+        Self::StoreError {
+            backend: E::BACKEND.to_string(),
+            error: error.to_string(),
+        }
+    }
+}
+
+/// Define an associated [`KeyValueStoreError`].
 pub trait WithError {
     /// The error type.
-    type Error: Debug + From<bcs::Error>;
+    type Error: KeyValueStoreError;
 }
 
 /// Low-level, asynchronous read key-value operations. Useful for storage APIs not based on views.
@@ -638,8 +653,7 @@ pub trait Context: Clone {
     type Extra: Clone + Send + Sync;
 
     /// The error type in use by internal operations.
-    /// In practice, we always want `ViewError: From<Self::Error>` here.
-    type Error: std::error::Error + Debug + Send + Sync + 'static + From<bcs::Error>;
+    type Error: KeyValueStoreError + Send + Sync + 'static;
 
     /// Returns type for key search operations.
     type Keys: KeyIterable<Self::Error>;
@@ -785,7 +799,6 @@ where
     E: Clone + Send + Sync,
     S: RestrictedKeyValueStore + Clone + Send + Sync,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<S::Error>,
 {
     /// Creates a context from store that also clears the journal before making it available.
     pub async fn create(store: S, extra: E) -> Result<Self, S::Error> {
@@ -830,7 +843,6 @@ where
     E: Clone + Send + Sync,
     S: RestrictedKeyValueStore + Clone + Send + Sync,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<S::Error>,
 {
     const MAX_VALUE_SIZE: usize = S::MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE;

@@ -9,7 +9,7 @@ use linera_base::command::resolve_binary;
 #[cfg(with_metrics)]
 use linera_views::metering::KeyValueStoreMetrics;
 use linera_views::{
-    common::{CommonStoreConfig, MIN_VIEW_TAG},
+    common::{CommonStoreConfig, KeyValueStoreError, MIN_VIEW_TAG},
     value_splitting::DatabaseConsistencyError,
 };
 use thiserror::Error;
@@ -78,13 +78,8 @@ pub enum ServiceStoreError {
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
-impl From<ServiceStoreError> for linera_views::views::ViewError {
-    fn from(error: ServiceStoreError) -> Self {
-        Self::StoreError {
-            backend: "service".to_string(),
-            error: error.to_string(),
-        }
-    }
+impl KeyValueStoreError for ServiceStoreError {
+    const BACKEND: &'static str = "service";
 }
 
 #[cfg(with_testing)]
