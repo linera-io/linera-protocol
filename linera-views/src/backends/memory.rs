@@ -388,36 +388,6 @@ pub fn create_memory_store_test_config() -> MemoryStoreConfig {
     MemoryStoreConfig { common_config }
 }
 
-impl<E> MemoryContext<E> {
-    /// Creates a [`MemoryContext`].
-    pub fn new(max_stream_queries: usize, namespace: &str, root_key: &[u8], extra: E) -> Self {
-        let store = MemoryStore::new(max_stream_queries, namespace, root_key).unwrap();
-        let base_key = Vec::new();
-        Self {
-            store,
-            base_key,
-            extra,
-        }
-    }
-
-    /// Creates a [`MemoryContext`] for testing.
-    #[cfg(with_testing)]
-    pub fn new_for_testing(
-        max_stream_queries: usize,
-        namespace: &str,
-        root_key: &[u8],
-        extra: E,
-    ) -> Self {
-        let store = MemoryStore::new_for_testing(max_stream_queries, namespace, root_key).unwrap();
-        let base_key = Vec::new();
-        Self {
-            store,
-            base_key,
-            extra,
-        }
-    }
-}
-
 /// Provides a `MemoryContext<()>` that can be used for tests.
 /// It is not named create_memory_test_context because it is massively
 /// used and so we want to have a short name.

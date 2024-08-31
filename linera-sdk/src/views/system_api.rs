@@ -356,11 +356,7 @@ pub type ViewStorageContext = ContextFromStore<(), KeyValueStore>;
 
 impl From<KeyValueStore> for ViewStorageContext {
     fn from(store: KeyValueStore) -> Self {
-        ContextFromStore {
-            store,
-            base_key: vec![],
-            extra: (),
-        }
+        ContextFromStore::new_unsafe(store, Vec::new(), ())
     }
 }
 

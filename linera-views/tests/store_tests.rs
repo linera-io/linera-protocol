@@ -3,7 +3,7 @@
 
 use linera_views::{
     batch::Batch,
-    common::{ReadableKeyValueStore, WritableKeyValueStore},
+    context::Context as _,
     key_value_store_view::ViewContainer,
     memory::{create_test_memory_context, create_test_memory_store},
     test_utils::{
@@ -152,13 +152,8 @@ async fn test_big_value_read_write() {
         let mut batch = Batch::new();
         let key = vec![43, 23, 56];
         batch.put_key_value(key.clone(), &test_string).unwrap();
-        context.store.write_batch(batch).await.unwrap();
-        let read_string = context
-            .store
-            .read_value::<String>(&key)
-            .await
-            .unwrap()
-            .unwrap();
+        context.write_batch(batch).await.unwrap();
+        let read_string = context.read_value::<String>(&key).await.unwrap().unwrap();
         assert_eq!(read_string, test_string);
     }
 }

@@ -320,8 +320,9 @@ mod testing {
 
     /// Provides a `IndexedDbContext<()>` that can be used for tests.
     pub async fn create_indexed_db_test_context() -> IndexedDbContext<()> {
-        IndexedDbContext::create(
+        IndexedDbContext::new_unsafe(
             create_indexed_db_store_stream_queries(TEST_INDEX_DB_MAX_STREAM_QUERIES).await,
+            Vec::new(),
             (),
         )
     }

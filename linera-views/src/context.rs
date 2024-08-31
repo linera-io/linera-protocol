@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
+    backends::memory::MemoryStore,
     batch::Batch,
     common::{
         from_bytes_option, KeyIterable, KeyValueIterable, KeyValueStoreError,
@@ -166,28 +167,36 @@ pub trait Context: Clone {
 #[derive(Debug, Default, Clone)]
 pub struct ContextFromStore<E, S> {
     /// The DB client that is shared between views.
-    pub store: S,
+    store: S,
     /// The base key for the context.
-    pub base_key: Vec<u8>,
+    base_key: Vec<u8>,
     /// User-defined data attached to the view.
-    pub extra: E,
+    extra: E,
 }
 
 impl<E, S> ContextFromStore<E, S>
 where
-    E: Clone + Send + Sync,
-    S: RestrictedKeyValueStore + Clone + Send + Sync,
-    S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    S: RestrictedKeyValueStore,
 {
-    /// Creates a context from store that also clears the journal before making it available.
+    /// Creates a context suitable for a root view, using the given store. If the
+    /// journal's store is non-empty, it will be cleared first, before the context is
+    /// returned.
     pub async fn create(store: S, extra: E) -> Result<Self, S::Error> {
         store.clear_journal().await?;
-        let base_key = Vec::new();
-        Ok(ContextFromStore {
+        Ok(Self::new_unsafe(store, Vec::new(), extra))
+    }
+}
+
+impl<E, S> ContextFromStore<E, S> {
+    /// Creates a context for the given base key, store, and an extra argument. NOTE: this
+    /// constructor doesn't check the journal of the store. In doubt, use
+    /// [`create`] instead.
+    pub fn new_unsafe(store: S, base_key: Vec<u8>, extra: E) -> Self {
+        Self {
             store,
             base_key,
             extra,
-        })
+        }
     }
 }
 
@@ -293,6 +302,25 @@ where
             store: self.store.clone(),
             base_key,
             extra: self.extra.clone(),
+        }
+    }
+}
+
+impl<E> ContextFromStore<E, MemoryStore> {
+    /// Creates a [`Context`] instance in memory for testing.
+    #[cfg(with_testing)]
+    pub fn new_for_testing(
+        max_stream_queries: usize,
+        namespace: &str,
+        root_key: &[u8],
+        extra: E,
+    ) -> Self {
+        let store = MemoryStore::new_for_testing(max_stream_queries, namespace, root_key).unwrap();
+        let base_key = Vec::new();
+        Self {
+            store,
+            base_key,
+            extra,
         }
     }
 }
