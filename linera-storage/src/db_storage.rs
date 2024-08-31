@@ -22,7 +22,7 @@ use linera_execution::{
 };
 use linera_views::{
     batch::Batch,
-    common::{from_bytes_option, ContextFromStore, KeyValueStore},
+    common::{ContextFromStore, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
@@ -613,10 +613,14 @@ where
             READ_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         }
         let values = values?;
-        let cert_result = from_bytes_option::<LiteCertificate, Store::Error>(&values[0])?;
-        let value_result = from_bytes_option::<CertificateValue, Store::Error>(&values[1])?;
-        let value = value_result.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-        let cert = cert_result.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
+        let cert_bytes = values[0]
+            .as_ref()
+            .ok_or_else(|| ViewError::not_found("certificate bytes for hash", hash))?;
+        let value_bytes = values[1]
+            .as_ref()
+            .ok_or_else(|| ViewError::not_found("value bytes for hash", hash))?;
+        let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
+        let value = bcs::from_bytes::<CertificateValue>(value_bytes)?;
         Ok(cert
             .with_value(value.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)?)

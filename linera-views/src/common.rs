@@ -39,37 +39,37 @@ pub(crate) enum Update<T> {
 
 #[derive(Clone, Debug)]
 pub(crate) struct DeletionSet {
-    pub delete_storage_first: bool,
-    pub deleted_prefixes: BTreeSet<Vec<u8>>,
+    pub(crate) delete_storage_first: bool,
+    pub(crate) deleted_prefixes: BTreeSet<Vec<u8>>,
 }
 
 impl DeletionSet {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             delete_storage_first: false,
             deleted_prefixes: BTreeSet::new(),
         }
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.delete_storage_first = true;
         self.deleted_prefixes.clear();
     }
 
-    pub fn rollback(&mut self) {
+    pub(crate) fn rollback(&mut self) {
         self.delete_storage_first = false;
         self.deleted_prefixes.clear();
     }
 
-    pub fn contains_prefix_of(&self, index: &[u8]) -> bool {
+    pub(crate) fn contains_prefix_of(&self, index: &[u8]) -> bool {
         self.delete_storage_first || contains_prefix_of(&self.deleted_prefixes, index)
     }
 
-    pub fn has_pending_changes(&self) -> bool {
+    pub(crate) fn has_pending_changes(&self) -> bool {
         self.delete_storage_first || !self.deleted_prefixes.is_empty()
     }
 
-    pub fn insert_key_prefix(&mut self, key_prefix: Vec<u8>) {
+    pub(crate) fn insert_key_prefix(&mut self, key_prefix: Vec<u8>) {
         if !self.delete_storage_first {
             insert_key_prefix(&mut self.deleted_prefixes, key_prefix);
         }
@@ -131,13 +131,15 @@ pub(crate) fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
 
 /// Computes an interval so that a vector has `key_prefix` as a prefix
 /// if and only if it belongs to the range.
-pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
+pub(crate) fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     let upper_bound = get_upper_bound(&key_prefix);
     (Included(key_prefix), upper_bound)
 }
 
 /// Deserializes an Optional vector of u8
-pub fn from_bytes_option<V: DeserializeOwned, E>(key_opt: &Option<Vec<u8>>) -> Result<Option<V>, E>
+pub(crate) fn from_bytes_option<V: DeserializeOwned, E>(
+    key_opt: &Option<Vec<u8>>,
+) -> Result<Option<V>, E>
 where
     E: From<bcs::Error>,
 {
@@ -944,7 +946,7 @@ impl CustomSerialize for u128 {
 /// The formula that should be satisfied is
 /// serialized_size(vec![v_1, ...., v_n]) = get_uleb128_size(n)
 ///  + serialized_size(v_1)? + .... serialized_size(v_n)?
-pub fn get_uleb128_size(len: usize) -> usize {
+pub(crate) fn get_uleb128_size(len: usize) -> usize {
     let mut power = 128;
     let mut expo = 1;
     while len >= power {

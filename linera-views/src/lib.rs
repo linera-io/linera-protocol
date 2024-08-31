@@ -94,7 +94,6 @@ pub use views::{
     collection_view, hashable_wrapper, key_value_store_view, log_view, map_view, queue_view,
     reentrant_collection_view, register_view, set_view,
 };
-
 /// Re-exports used by the derive macros of this library.
 #[doc(hidden)]
 pub use {
