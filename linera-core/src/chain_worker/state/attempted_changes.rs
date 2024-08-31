@@ -24,7 +24,7 @@ use linera_execution::{
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
-    common::Context,
+    context::Context,
     views::{RootView, View},
 };
 use tracing::{debug, warn};

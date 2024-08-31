@@ -16,7 +16,8 @@ use linera_indexer::{
     plugin::{load, route, sdl, Plugin},
 };
 use linera_views::{
-    common::{Context, ContextFromStore, KeyValueStore},
+    common::KeyValueStore,
+    context::{Context, ContextFromStore},
     map_view::MapView,
     views::RootView,
 };

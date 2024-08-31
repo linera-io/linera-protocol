@@ -12,7 +12,8 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
-    common::{from_bytes_option, Context, MIN_VIEW_TAG},
+    common::{from_bytes_option, MIN_VIEW_TAG},
+    context::Context,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 

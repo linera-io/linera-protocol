@@ -64,7 +64,7 @@ fn context_and_constraints(
         });
         constraints = parse_quote! {
             where
-                #context: linera_views::common::Context + Send + Sync + Clone + 'static,
+                #context: linera_views::context::Context + Send + Sync + Clone + 'static,
         };
     }
 
@@ -174,21 +174,21 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             }
 
             fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
-                use linera_views::common::Context as _;
+                use linera_views::context::Context as _;
                 let mut keys = Vec::new();
                 #(#pre_load_keys_quotes)*
                 Ok(keys)
             }
 
             fn post_load(context: #context, values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::views::ViewError> {
-                use linera_views::common::Context as _;
+                use linera_views::context::Context as _;
                 let mut pos = 0;
                 #(#post_load_keys_quotes)*
                 Ok(Self {#(#name_quotes),*})
             }
 
             async fn load(context: #context) -> Result<Self, linera_views::views::ViewError> {
-                use linera_views::common::Context as _;
+                use linera_views::context::Context as _;
                 #load_metrics
                 let keys = Self::pre_load(&context)?;
                 let values = context.read_multi_values_bytes(keys).await?;
@@ -259,7 +259,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
         #where_clause
         {
             async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
-                use linera_views::{common::Context, batch::Batch, views::View};
+                use linera_views::{context::Context, batch::Batch, views::View};
                 #increment_counter
                 let mut batch = Batch::new();
                 #(#flushes)*

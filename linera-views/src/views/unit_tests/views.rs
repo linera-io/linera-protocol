@@ -18,7 +18,7 @@ use crate::rocks_db::{RocksDbContext, RocksDbStore};
 use crate::scylla_db::{ScyllaDbContext, ScyllaDbStore};
 use crate::{
     batch::Batch,
-    common::Context,
+    context::Context,
     memory::{create_test_memory_context, MemoryContext},
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,

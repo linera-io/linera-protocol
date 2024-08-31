@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 
 use linera_base::{data_types::UserApplicationDescription, identifiers::UserApplicationId};
 use linera_views::{
-    common::Context,
+    context::Context,
     map_view::HashedMapView,
     views::{ClonableView, HashableView},
 };

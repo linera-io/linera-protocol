@@ -41,9 +41,10 @@ use crate::metering::{
 use crate::{
     batch::{Batch, SimpleUnorderedBatch},
     common::{
-        AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
-        KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        AdminKeyValueStore, CommonStoreConfig, KeyIterable, KeyValueIterable, KeyValueStoreError,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
+    context::ContextFromStore,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
@@ -1108,7 +1109,7 @@ impl DynamoDbStore {
 
 /// An implementation of [`Context`][trait1] based on [`DynamoDbStore`].
 ///
-/// [trait1]: crate::common::Context
+/// [trait1]: crate::context::Context
 pub type DynamoDbContext<E> = ContextFromStore<E, DynamoDbStore>;
 
 /// Error when validating a table name.

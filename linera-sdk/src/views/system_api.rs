@@ -9,10 +9,8 @@ use std::sync::Arc;
 use linera_base::ensure;
 use linera_views::{
     batch::Batch,
-    common::{
-        ContextFromStore, KeyValueStoreError, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
-    },
+    common::{KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    context::ContextFromStore,
 };
 use thiserror::Error;
 
@@ -352,7 +350,7 @@ impl WitInterface {
     }
 }
 
-/// Implementation of [`linera_views::common::Context`] to be used for data storage
+/// Implementation of [`linera_views::context::Context`] to be used for data storage
 /// by Linera applications.
 pub type ViewStorageContext = ContextFromStore<(), KeyValueStore>;
 

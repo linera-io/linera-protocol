@@ -62,7 +62,10 @@ The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analo
 /// The definition of the batches for writing in the database.
 pub mod batch;
 
-/// The definitions used for the `KeyValueStore` and `Context`.
+/// The `Context` trait and related definitions.
+pub mod context;
+
+/// Common definitions used for views and backends.
 pub mod common;
 
 /// Elementary data-structures implementing the [`View`] trait.

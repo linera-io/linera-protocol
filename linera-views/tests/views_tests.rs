@@ -17,7 +17,7 @@ use linera_views::{
         WriteOperation::{Delete, DeletePrefix, Put},
     },
     collection_view::HashedCollectionView,
-    common::Context,
+    context::Context,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView, ViewContainer},
     log_view::HashedLogView,
     lru_caching::{LruCachingMemoryContext, LruCachingStore},

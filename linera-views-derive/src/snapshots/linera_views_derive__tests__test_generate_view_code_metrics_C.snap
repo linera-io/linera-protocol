@@ -5,7 +5,7 @@ expression: "pretty(generate_view_code(input, true))"
 #[linera_views::async_trait]
 impl<C> linera_views::views::View<C> for TestView<C>
 where
-    C: linera_views::common::Context + Send + Sync + Clone + 'static,
+    C: linera_views::context::Context + Send + Sync + Clone + 'static,
 {
     const NUM_INIT_KEYS: usize = RegisterView::<C, usize>::NUM_INIT_KEYS
         + CollectionView::<C, usize, RegisterView<C, usize>>::NUM_INIT_KEYS;
@@ -14,7 +14,7 @@ where
         self.register.context()
     }
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let mut keys = Vec::new();
         let index = 0;
         let base_key = context
@@ -38,7 +38,7 @@ where
         context: C,
         values: &[Option<Vec<u8>>],
     ) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let mut pos = 0;
         let index = 0;
         let pos_next = pos + RegisterView::<C, usize>::NUM_INIT_KEYS;
@@ -63,7 +63,7 @@ where
         Ok(Self { register, collection })
     }
     async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         #[cfg(not(target_arch = "wasm32"))]
         linera_views::increment_counter(
             &linera_views::LOAD_VIEW_COUNTER,

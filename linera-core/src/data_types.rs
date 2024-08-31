@@ -19,7 +19,7 @@ use linera_execution::{
     ExecutionRuntimeContext,
 };
 use linera_storage::ChainRuntimeContext;
-use linera_views::common::Context;
+use linera_views::context::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::client::ChainClientError;

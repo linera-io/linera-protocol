@@ -23,9 +23,10 @@ use crate::test_utils::generate_test_namespace;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
-        KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        get_upper_bound, AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
+    context::ContextFromStore,
     lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
@@ -500,7 +501,7 @@ pub async fn create_rocks_db_test_store() -> RocksDbStore {
         .expect("store")
 }
 
-/// An implementation of [`crate::common::Context`] based on RocksDB
+/// An implementation of [`crate::context::Context`] based on RocksDB
 pub type RocksDbContext<E> = ContextFromStore<E, RocksDbStore>;
 
 impl RocksDbStore {

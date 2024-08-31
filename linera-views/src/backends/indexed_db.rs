@@ -10,9 +10,10 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStoreError,
-        LocalAdminKeyValueStore, LocalReadableKeyValueStore, LocalWritableKeyValueStore, WithError,
+        get_upper_bound_option, CommonStoreConfig, KeyValueStoreError, LocalAdminKeyValueStore,
+        LocalReadableKeyValueStore, LocalWritableKeyValueStore, WithError,
     },
+    context::ContextFromStore,
     value_splitting::DatabaseConsistencyError,
 };
 
@@ -308,7 +309,7 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
     }
 }
 
-/// An implementation of [`crate::common::Context`] that stores all values in an IndexedDB
+/// An implementation of [`crate::context::Context`] that stores all values in an IndexedDB
 /// database.
 pub type IndexedDbContext<E> = ContextFromStore<E, IndexedDbStore>;
 

@@ -4,7 +4,7 @@
 use std::borrow::Cow;
 
 use crate::{
-    common::Context,
+    context::Context,
     views::{View, ViewError},
 };
 

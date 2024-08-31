@@ -13,7 +13,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_views::{
-    common::Context,
+    context::Context,
     memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
     test_utils::generate_test_namespace,
     views::{CryptoHashView, View, ViewError},

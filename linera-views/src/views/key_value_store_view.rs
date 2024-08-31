@@ -18,10 +18,11 @@ use {
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        from_bytes_option, from_bytes_option_or_default, get_interval, get_upper_bound, Context,
+        from_bytes_option, from_bytes_option_or_default, get_interval, get_upper_bound,
         DeletionSet, HasherOutput, KeyIterable, KeyValueIterable, KeyValueStoreError,
         SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
     },
+    context::Context,
     map_view::ByteMapView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
@@ -42,7 +43,8 @@ static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new
 
 #[cfg(with_testing)]
 use {
-    crate::common::{ContextFromStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    crate::common::{ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    crate::context::ContextFromStore,
     crate::memory::MemoryContext,
     async_lock::RwLock,
     std::sync::Arc,

@@ -11,7 +11,8 @@ use axum::{extract::Extension, routing::get, Router};
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::HashedCertificateValue;
 use linera_views::{
-    common::{Context, ContextFromStore, KeyValueStore},
+    common::KeyValueStore,
+    context::{Context, ContextFromStore},
     map_view::MapView,
     register_view::RegisterView,
     set_view::SetView,

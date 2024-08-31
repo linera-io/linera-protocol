@@ -23,7 +23,8 @@ use {
 
 use crate::{
     batch::Batch,
-    common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
+    common::{CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
+    context::Context,
     hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };

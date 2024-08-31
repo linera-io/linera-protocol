@@ -14,9 +14,10 @@ use crate::test_utils::generate_test_namespace;
 use crate::{
     batch::{Batch, DeletePrefixExpander, WriteOperation},
     common::{
-        get_interval, AdminKeyValueStore, CommonStoreConfig, Context, ContextFromStore,
-        KeyIterable, KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        get_interval, AdminKeyValueStore, CommonStoreConfig, KeyIterable, KeyValueStoreError,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
+    context::{Context, ContextFromStore},
     value_splitting::DatabaseConsistencyError,
 };
 
@@ -373,7 +374,7 @@ impl AdminKeyValueStore for MemoryStore {
     }
 }
 
-/// An implementation of [`crate::common::Context`] that stores all values in memory.
+/// An implementation of [`crate::context::Context`] that stores all values in memory.
 pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
 
 /// Creates a default memory test config

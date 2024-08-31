@@ -12,7 +12,7 @@ use linera_base::{
     identifiers::{Account, ChainId, Destination, Owner},
 };
 use linera_views::{
-    common::Context,
+    context::Context,
     key_value_store_view::KeyValueStoreView,
     reentrant_collection_view::HashedReentrantCollectionView,
     views::{ClonableView, View},

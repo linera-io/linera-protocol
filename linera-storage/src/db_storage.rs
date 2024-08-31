@@ -22,7 +22,8 @@ use linera_execution::{
 };
 use linera_views::{
     batch::Batch,
-    common::{ContextFromStore, KeyValueStore},
+    common::KeyValueStore,
+    context::ContextFromStore,
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };

@@ -15,7 +15,7 @@ use linked_hash_map::LinkedHashMap;
 #[cfg(with_metrics)]
 use prometheus::{register_int_counter_vec, IntCounterVec};
 #[cfg(with_testing)]
-use {crate::common::ContextFromStore, crate::memory::MemoryStore};
+use {crate::context::ContextFromStore, crate::memory::MemoryStore};
 
 use crate::{
     batch::{Batch, WriteOperation},

@@ -6,10 +6,10 @@ expression: pretty(generate_save_delete_view_code(input))
 impl<C, MyParam> linera_views::views::RootView<C> for TestView<C, MyParam>
 where
     MyParam: Send + Sync + 'static,
-    C: linera_views::common::Context + Send + Sync + Clone + 'static,
+    C: linera_views::context::Context + Send + Sync + Clone + 'static,
 {
     async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
-        use linera_views::{common::Context, batch::Batch, views::View};
+        use linera_views::{context::Context, batch::Batch, views::View};
         #[cfg(not(target_arch = "wasm32"))]
         linera_views::increment_counter(
             &linera_views::SAVE_VIEW_COUNTER,
