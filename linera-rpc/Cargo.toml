@@ -41,6 +41,8 @@ web = [
     "linera-views/web",
 ]
 
+web-default = ["web"]
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true

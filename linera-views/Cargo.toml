@@ -23,6 +23,7 @@ metrics = ["dep:hex", "linera-base/metrics", "linera-views-derive/metrics"]
 test = ["tokio/macros", "rand"]
 web = ["linera-base/web"]
 indexeddb = ["indexed_db_futures", "wasm-bindgen"]
+web-default = ["web", "indexeddb"]
 
 dynamodb = ["aws-config", "aws-sdk-dynamodb", "aws-smithy-types"]
 scylladb = ["scylla"]

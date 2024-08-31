@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, rc::Rc};
 
 use futures::future;
 use indexed_db_futures::{js_sys, prelude::*, web_sys};
@@ -45,7 +45,7 @@ const DATABASE_NAME: &str = "linera";
 /// API](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API#:~:text=IndexedDB%20is%20a%20low%2Dlevel,larger%20amounts%20of%20structured%20data.).
 pub struct IndexedDbStore {
     /// The database used for storing the data.
-    pub database: Arc<IdbDatabase>,
+    pub database: Rc<IdbDatabase>,
     /// The object store name used for storing the data.
     pub object_store_name: String,
     /// The maximum number of queries used for the stream.
@@ -250,7 +250,7 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
             }));
             database = db_req.await?;
         }
-        let database = Arc::new(database);
+        let database = Rc::new(database);
         let root_key = root_key.to_vec();
         Ok(IndexedDbStore {
             database,
@@ -375,11 +375,11 @@ pub enum IndexedDbStoreError {
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 
     /// A DOM exception occurred in the IndexedDB operations
-    #[error("DOM exception: {}", self.to_string())]
+    #[error("DOM exception: {0:?}")]
     Dom(web_sys::DomException),
 
     /// JavaScript threw an exception whilst handling IndexedDB operations
-    #[error("JavaScript exception: {}", self.to_string())]
+    #[error("JavaScript exception: {0:?}")]
     Js(wasm_bindgen::JsValue),
 }
 
