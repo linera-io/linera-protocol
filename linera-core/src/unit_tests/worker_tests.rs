@@ -43,7 +43,8 @@ use linera_execution::{
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
-    memory::{create_memory_store_test_config, MemoryContext, MemoryStore},
+    context::MemoryContext,
+    memory::{create_memory_store_test_config, MemoryStore},
     test_utils::generate_test_namespace,
     views::{CryptoHashView, RootView},
 };

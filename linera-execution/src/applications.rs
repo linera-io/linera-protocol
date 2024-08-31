@@ -11,7 +11,7 @@ use linera_views::{
 };
 #[cfg(with_testing)]
 use {
-    linera_views::memory::{create_test_memory_context, MemoryContext},
+    linera_views::context::{create_test_memory_context, MemoryContext},
     linera_views::views::View,
     std::collections::BTreeMap,
 };

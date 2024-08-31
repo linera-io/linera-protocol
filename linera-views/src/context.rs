@@ -12,7 +12,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     backends::memory::MemoryStore,
-    batch::Batch,
+    batch::{Batch, DeletePrefixExpander},
     common::{
         from_bytes_option, KeyIterable, KeyValueIterable, KeyValueStoreError,
         RestrictedKeyValueStore, MIN_VIEW_TAG,
@@ -306,7 +306,25 @@ where
     }
 }
 
-impl<E> ContextFromStore<E, MemoryStore> {
+/// An implementation of [`crate::context::Context`] that stores all values in memory.
+pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
+
+/// Provides a `MemoryContext<()>` that can be used for tests.
+/// It is not named create_memory_test_context because it is massively
+/// used and so we want to have a short name.
+#[cfg(with_testing)]
+pub fn create_test_memory_context() -> MemoryContext<()> {
+    let namespace = crate::test_utils::generate_test_namespace();
+    let root_key = &[];
+    MemoryContext::new_for_testing(
+        crate::memory::TEST_MEMORY_MAX_STREAM_QUERIES,
+        &namespace,
+        root_key,
+        (),
+    )
+}
+
+impl<E> MemoryContext<E> {
     /// Creates a [`Context`] instance in memory for testing.
     #[cfg(with_testing)]
     pub fn new_for_testing(
@@ -322,5 +340,19 @@ impl<E> ContextFromStore<E, MemoryStore> {
             base_key,
             extra,
         }
+    }
+}
+
+impl DeletePrefixExpander for MemoryContext<()> {
+    type Error = crate::memory::MemoryStoreError;
+
+    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+        let mut vector_list = Vec::new();
+        for key in <Vec<Vec<u8>> as KeyIterable<Self::Error>>::iterator(
+            &self.find_keys_by_prefix(key_prefix).await?,
+        ) {
+            vector_list.push(key?.to_vec());
+        }
+        Ok(vector_list)
     }
 }

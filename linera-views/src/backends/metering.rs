@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Adds metrics to a key-value store.
+
 use std::sync::LazyLock;
 
 use convert_case::{Case, Casing};

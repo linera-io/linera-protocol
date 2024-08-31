@@ -4,8 +4,8 @@
 use anyhow::Result;
 use linera_views::{
     common::HasherOutput,
+    context::create_test_memory_context,
     hashable_wrapper::WrappedHashableContainerView,
-    memory::create_test_memory_context,
     register_view::{HashedRegisterView, RegisterView},
     views::{HashableView, View},
 };

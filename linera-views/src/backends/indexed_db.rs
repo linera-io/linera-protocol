@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Implements [`crate::common::KeyValueStore`] for the IndexedDB Web database.
+
 use std::{fmt::Debug, rc::Rc};
 
 use futures::future;
@@ -13,7 +15,6 @@ use crate::{
         get_upper_bound_option, CommonStoreConfig, KeyValueStoreError, LocalAdminKeyValueStore,
         LocalReadableKeyValueStore, LocalWritableKeyValueStore, WithError,
     },
-    context::ContextFromStore,
     value_splitting::DatabaseConsistencyError,
 };
 
@@ -309,23 +310,10 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
     }
 }
 
-/// An implementation of [`crate::context::Context`] that stores all values in an IndexedDB
-/// database.
-pub type IndexedDbContext<E> = ContextFromStore<E, IndexedDbStore>;
-
 #[cfg(with_testing)]
 mod testing {
     use super::*;
     use crate::test_utils::generate_test_namespace;
-
-    /// Provides a `IndexedDbContext<()>` that can be used for tests.
-    pub async fn create_indexed_db_test_context() -> IndexedDbContext<()> {
-        IndexedDbContext::new_unsafe(
-            create_indexed_db_store_stream_queries(TEST_INDEX_DB_MAX_STREAM_QUERIES).await,
-            Vec::new(),
-            (),
-        )
-    }
 
     /// Creates a test IndexedDB client for working.
     pub async fn create_indexed_db_store_stream_queries(
@@ -349,7 +337,7 @@ mod testing {
 #[cfg(with_testing)]
 pub use testing::*;
 
-/// The error type for [`IndexedDbContext`].
+/// The error type for [`IndexedDbStore`].
 #[derive(Error, Debug)]
 pub enum IndexedDbStoreError {
     /// Serialization error with BCS.

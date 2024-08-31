@@ -3,9 +3,9 @@
 
 use linera_views::{
     batch::Batch,
-    context::Context as _,
+    context::{create_test_memory_context, Context as _},
     key_value_store_view::ViewContainer,
-    memory::{create_test_memory_context, create_test_memory_store},
+    memory::create_test_memory_store,
     test_utils::{
         self, get_random_test_scenarios, run_big_write_read, run_reads, run_writes_from_blank,
         run_writes_from_state,

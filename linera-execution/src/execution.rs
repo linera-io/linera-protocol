@@ -23,7 +23,7 @@ use {
     crate::{
         ResourceControlPolicy, ResourceTracker, TestExecutionRuntimeContext, UserContractCode,
     },
-    linera_views::memory::MemoryContext,
+    linera_views::context::MemoryContext,
     std::sync::Arc,
 };
 

@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Implements [`crate::common::KeyValueStore`] for the DynamoDB database.
+
 use std::{collections::HashMap, env, sync::Arc};
 
 use async_lock::{Semaphore, SemaphoreGuard};
@@ -44,7 +46,6 @@ use crate::{
         AdminKeyValueStore, CommonStoreConfig, KeyIterable, KeyValueIterable, KeyValueStoreError,
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
-    context::ContextFromStore,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
@@ -1107,11 +1108,6 @@ impl DynamoDbStore {
     }
 }
 
-/// An implementation of [`Context`][trait1] based on [`DynamoDbStore`].
-///
-/// [trait1]: crate::context::Context
-pub type DynamoDbContext<E> = ContextFromStore<E, DynamoDbStore>;
-
 /// Error when validating a table name.
 #[derive(Debug, Error)]
 pub enum InvalidTableName {
@@ -1128,7 +1124,7 @@ pub enum InvalidTableName {
     InvalidCharacter,
 }
 
-/// Errors that occur when using [`DynamoDbContext`].
+/// Errors that occur when using [`DynamoDbStore`].
 #[derive(Debug, Error)]
 pub enum DynamoDbStoreError {
     /// An error occurred while getting the item.
