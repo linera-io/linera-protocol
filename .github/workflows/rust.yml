@@ -209,9 +209,13 @@ jobs:
         cargo clippy --all-targets --all-features --target x86_64-unknown-linux-gnu --locked
     - name: Run clippy
       run: |
-        cargo clippy --all-targets --all-features --locked
-        cargo clippy --no-default-features --features kubernetes --locked
-        cargo clippy --no-default-features --locked
+        cargo clippy --locked --all-targets --all-features
+        cargo clippy --locked --no-default-features --features kubernetes
+        cargo clippy --locked --no-default-features
+        cargo clippy --locked --target wasm32-unknown-unknown --no-default-features --features web-default \
+          -p linera-client \
+          -p linera-rpc \
+          -p linera-views
     - name: Run cargo doc
       run: |
         cargo doc --locked --all-features
