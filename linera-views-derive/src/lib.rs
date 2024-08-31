@@ -148,14 +148,14 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let load_metrics = if root && cfg!(feature = "metrics") {
         quote! {
             #[cfg(not(target_arch = "wasm32"))]
-            linera_views::increment_counter(
-                &linera_views::LOAD_VIEW_COUNTER,
+            linera_views::metrics::increment_counter(
+                &linera_views::metrics::LOAD_VIEW_COUNTER,
                 stringify!(#struct_name),
                 &context.base_key(),
             );
             #[cfg(not(target_arch = "wasm32"))]
-            use linera_views::prometheus_util::MeasureLatency as _;
-            let _latency = linera_views::LOAD_VIEW_LATENCY.measure_latency();
+            use linera_views::metrics::prometheus_util::MeasureLatency as _;
+            let _latency = linera_views::metrics::LOAD_VIEW_LATENCY.measure_latency();
         }
     } else {
         quote! {}
@@ -243,8 +243,8 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
     let increment_counter = if cfg!(feature = "metrics") {
         quote! {
             #[cfg(not(target_arch = "wasm32"))]
-            linera_views::increment_counter(
-                &linera_views::SAVE_VIEW_COUNTER,
+            linera_views::metrics::increment_counter(
+                &linera_views::metrics::SAVE_VIEW_COUNTER,
                 stringify!(#struct_name),
                 &self.context().base_key(),
             );

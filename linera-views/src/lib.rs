@@ -59,14 +59,6 @@ The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analo
 #![deny(missing_docs)]
 #![deny(clippy::large_futures)]
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
-
-#[cfg(with_metrics)]
-pub use linera_base::prometheus_util;
-#[cfg(with_metrics)]
-use prometheus::IntCounterVec;
-
 /// The definition of the batches for writing in the database.
 pub mod batch;
 
@@ -78,6 +70,10 @@ pub mod views;
 
 /// Backend implementing the [`KeyValueStore`] trait.
 pub mod backends;
+
+/// Support for metrics.
+#[cfg(with_metrics)]
+pub mod metrics;
 
 /// Helper types for tests.
 #[cfg(with_testing)]
@@ -98,48 +94,9 @@ pub use views::{
     collection_view, hashable_wrapper, key_value_store_view, log_view, map_view, queue_view,
     reentrant_collection_view, register_view, set_view,
 };
+
 /// Re-exports used by the derive macros of this library.
 #[doc(hidden)]
 pub use {
     async_lock, async_trait::async_trait, futures, generic_array, linera_base::crypto, serde, sha3,
 };
-
-/// Increments the metrics counter with the given name, with the struct and base key as labels.
-#[cfg(with_metrics)]
-pub fn increment_counter(counter: &LazyLock<IntCounterVec>, struct_name: &str, base_key: &[u8]) {
-    let base_key = hex::encode(base_key);
-    let labels = [struct_name, &base_key];
-    counter.with_label_values(&labels).inc();
-}
-
-/// The metric tracking the latency of the loading of views.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static LOAD_VIEW_LATENCY: LazyLock<prometheus::HistogramVec> = LazyLock::new(|| {
-    use prometheus::register_histogram_vec;
-    register_histogram_vec!("load_view_latency", "Load view latency", &[])
-        .expect("Load view latency should not fail")
-});
-
-/// The metric counting how often a view is read from storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static LOAD_VIEW_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
-        "load_view",
-        "The metric counting how often a view is read from storage",
-        &["type", "base_key"],
-    )
-    .expect("Counter creation should not fail")
-});
-/// The metric counting how often a view is written from storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static SAVE_VIEW_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
-        "save_view",
-        "The metric counting how often a view is written from storage",
-        &["type", "base_key"],
-    )
-    .expect("Counter creation should not fail")
-});

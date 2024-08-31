@@ -17,7 +17,7 @@ use linera_storage::{
     READ_CERTIFICATE_COUNTER, READ_HASHED_CERTIFICATE_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
     WRITE_HASHED_CERTIFICATE_VALUE_COUNTER,
 };
-use linera_views::{LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
+use linera_views::metrics::{LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
 use prometheus::core::Collector;
 use recorder::BenchRecorderMeasurement;
 use tokio::runtime;
