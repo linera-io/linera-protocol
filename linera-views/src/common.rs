@@ -788,10 +788,7 @@ where
     ViewError: From<S::Error>,
 {
     /// Creates a context from store that also clears the journal before making it available.
-    pub async fn create(
-        store: S,
-        extra: E,
-    ) -> Result<Self, <ContextFromStore<E, S> as Context>::Error> {
+    pub async fn create(store: S, extra: E) -> Result<Self, S::Error> {
         store.clear_journal().await?;
         let base_key = Vec::new();
         Ok(ContextFromStore {
