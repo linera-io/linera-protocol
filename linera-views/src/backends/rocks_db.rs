@@ -630,18 +630,6 @@ impl AdminKeyValueStore for RocksDbStore {
     }
 }
 
-impl<E: Clone + Send + Sync> RocksDbContext<E> {
-    /// Creates a [`RocksDbContext`].
-    pub fn new(store: RocksDbStore, extra: E) -> Self {
-        let base_key = Vec::new();
-        Self {
-            store,
-            base_key,
-            extra,
-        }
-    }
-}
-
 /// The error type for [`RocksDbContext`]
 #[derive(Error, Debug)]
 pub enum RocksDbStoreError {

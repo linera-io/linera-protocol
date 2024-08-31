@@ -312,17 +312,6 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
 /// database.
 pub type IndexedDbContext<E> = ContextFromStore<E, IndexedDbStore>;
 
-impl<E> IndexedDbContext<E> {
-    /// Creates a [`IndexedDbContext`].
-    pub fn new(store: IndexedDbStore, extra: E) -> Self {
-        Self {
-            store,
-            base_key: vec![],
-            extra,
-        }
-    }
-}
-
 #[cfg(with_testing)]
 mod testing {
     use super::*;
@@ -330,7 +319,7 @@ mod testing {
 
     /// Provides a `IndexedDbContext<()>` that can be used for tests.
     pub async fn create_indexed_db_test_context() -> IndexedDbContext<()> {
-        IndexedDbContext::new(
+        IndexedDbContext::create(
             create_indexed_db_store_stream_queries(TEST_INDEX_DB_MAX_STREAM_QUERIES).await,
             (),
         )

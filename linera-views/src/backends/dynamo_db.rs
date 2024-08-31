@@ -1111,21 +1111,6 @@ impl DynamoDbStore {
 /// [trait1]: crate::common::Context
 pub type DynamoDbContext<E> = ContextFromStore<E, DynamoDbStore>;
 
-impl<E> DynamoDbContext<E>
-where
-    E: Clone + Sync + Send,
-{
-    /// Creates a new [`DynamoDbContext`] instance from the given AWS configuration.
-    pub fn new(store: DynamoDbStore, extra: E) -> Self {
-        let base_key = Vec::new();
-        DynamoDbContext {
-            store,
-            base_key,
-            extra,
-        }
-    }
-}
-
 /// Error when validating a table name.
 #[derive(Debug, Error)]
 pub enum InvalidTableName {

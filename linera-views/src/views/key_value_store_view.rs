@@ -43,7 +43,7 @@ static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new
 #[cfg(with_testing)]
 use {
     crate::common::{ContextFromStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
-    crate::memory::{create_test_memory_context, MemoryContext},
+    crate::memory::MemoryContext,
     async_lock::RwLock,
     std::sync::Arc,
 };
@@ -1207,18 +1207,3 @@ where
 /// A context that stores all values in memory.
 #[cfg(with_testing)]
 pub type KeyValueStoreMemoryContext<E> = ContextFromStore<E, ViewContainer<MemoryContext<()>>>;
-
-#[cfg(with_testing)]
-impl<E> KeyValueStoreMemoryContext<E> {
-    /// Creates a [`KeyValueStoreMemoryContext`].
-    pub async fn new(extra: E) -> Result<Self, ViewError> {
-        let context = create_test_memory_context();
-        let store = ViewContainer::new(context).await?;
-        let base_key = Vec::new();
-        Ok(Self {
-            store,
-            base_key,
-            extra,
-        })
-    }
-}

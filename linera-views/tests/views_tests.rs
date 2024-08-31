@@ -202,7 +202,7 @@ impl StateStore for RocksDbTestStore {
         tracing::trace!("Acquiring lock on {:?}", id);
         let root_key = bcs::to_bytes(&id)?;
         let store = self.store.clone_with_root_key(&root_key)?;
-        let context = RocksDbContext::new(store, id);
+        let context = RocksDbContext::create(store, id).await?;
         StateView::load(context).await
     }
 }
@@ -233,7 +233,7 @@ impl StateStore for ScyllaDbTestStore {
         tracing::trace!("Acquiring lock on {:?}", id);
         let root_key = bcs::to_bytes(&id)?;
         let store = self.store.clone_with_root_key(&root_key)?;
-        let context = ScyllaDbContext::new(store, id);
+        let context = ScyllaDbContext::create(store, id).await?;
         StateView::load(context).await
     }
 }
@@ -274,7 +274,7 @@ impl StateStore for DynamoDbTestStore {
         tracing::trace!("Acquiring lock on {:?}", id);
         let root_key = bcs::to_bytes(&id)?;
         let store = self.store.clone_with_root_key(&root_key)?;
-        let context = DynamoDbContext::new(store, id);
+        let context = DynamoDbContext::create(store, id).await?;
         StateView::load(context).await
     }
 }

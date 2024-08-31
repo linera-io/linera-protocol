@@ -957,15 +957,3 @@ pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
 
 /// An implementation of [`crate::common::Context`] based on ScyllaDB
 pub type ScyllaDbContext<E> = ContextFromStore<E, ScyllaDbStore>;
-
-impl<E: Clone + Send + Sync> ScyllaDbContext<E> {
-    /// Creates a [`ScyllaDbContext`].
-    pub fn new(store: ScyllaDbStore, extra: E) -> Self {
-        let base_key = Vec::new();
-        Self {
-            store,
-            base_key,
-            extra,
-        }
-    }
-}
