@@ -27,7 +27,6 @@ use linera_chain::{
 };
 use linera_execution::{committee::Epoch, Query, Response};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -221,7 +220,6 @@ impl From<linera_chain::ChainError> for WorkerError {
 pub struct WorkerState<StorageClient>
 where
     StorageClient: Storage,
-    ViewError: From<StorageClient::StoreError>,
 {
     /// A name used for logging
     nickname: String,
@@ -254,7 +252,6 @@ pub(crate) type DeliveryNotifiers =
 impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage,
-    ViewError: From<StorageClient::StoreError>,
 {
     #[tracing::instrument(level = "trace", skip(nickname, key_pair, storage))]
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
@@ -382,7 +379,6 @@ where
 impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     // NOTE: This only works for non-sharded workers!
     #[tracing::instrument(level = "trace", skip(self, certificate, blobs))]
@@ -921,7 +917,6 @@ where
 impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage,
-    ViewError: From<StorageClient::StoreError>,
 {
     /// Gets a reference to the validator's [`PublicKey`].
     ///

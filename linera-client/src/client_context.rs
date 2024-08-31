@@ -24,7 +24,6 @@ use linera_core::{
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use thiserror_context::Context;
 use tokio::task::JoinSet;
 use tracing::{debug, info};
@@ -76,7 +75,6 @@ use crate::{
 pub struct ClientContext<Storage, W>
 where
     Storage: linera_storage::Storage,
-    ViewError: From<Storage::StoreError>,
 {
     pub wallet: WalletState<W>,
     pub client: Arc<Client<NodeProvider, Storage>>,
@@ -92,7 +90,6 @@ where
 impl<S, W> chain_listener::ClientContext for ClientContext<S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<<S as Storage>::StoreError>,
     W: Persist<Target = Wallet> + Send,
 {
     type ValidatorNodeProvider = NodeProvider;
@@ -124,7 +121,6 @@ where
 impl<S, W> ClientContext<S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
     W: Persist<Target = Wallet>,
 {
     /// Returns the [`Wallet`] as a mutable reference.
@@ -368,7 +364,6 @@ where
 impl<S, W> ClientContext<S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
     W: Persist<Target = Wallet>,
 {
     pub async fn publish_bytecode(
@@ -445,7 +440,6 @@ where
 impl<S, W> ClientContext<S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
     W: Persist<Target = Wallet>,
 {
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {

@@ -132,7 +132,6 @@ where
 pub struct ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     worker: ChainWorkerState<StorageClient>,
     service_runtime_thread: linera_base::task::BlockingFuture<()>,
@@ -141,7 +140,6 @@ where
 impl<StorageClient> ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     /// Spawns a new task to run the [`ChainWorkerActor`], returning an endpoint for sending
     /// requests to the worker.

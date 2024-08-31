@@ -7,20 +7,17 @@ use futures::lock::{Mutex, MutexGuard};
 use linera_base::identifiers::ChainId;
 use linera_core::client::ChainClient;
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 
 use crate::error::{self, Error};
 
 pub type ClientMapInner<P, S> = BTreeMap<ChainId, ChainClient<P, S>>;
 pub struct ChainClients<P, S>(pub Arc<Mutex<ClientMapInner<P, S>>>)
 where
-    S: Storage,
-    ViewError: From<S::StoreError>;
+    S: Storage;
 
 impl<P, S> Clone for ChainClients<P, S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     fn clone(&self) -> Self {
         ChainClients(self.0.clone())
@@ -30,7 +27,6 @@ where
 impl<P, S> Default for ChainClients<P, S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     fn default() -> Self {
         Self(Arc::new(Mutex::new(BTreeMap::new())))
@@ -40,7 +36,6 @@ where
 impl<P, S> ChainClients<P, S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     async fn client(&self, chain_id: &ChainId) -> Option<ChainClient<P, S>> {
         Some(self.0.lock().await.get(chain_id)?.clone())

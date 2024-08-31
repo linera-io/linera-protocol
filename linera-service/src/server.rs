@@ -31,7 +31,7 @@ use linera_rpc::{
 use linera_service::prometheus_server;
 use linera_service::util;
 use linera_storage::Storage;
-use linera_views::{common::CommonStoreConfig, views::ViewError};
+use linera_views::common::CommonStoreConfig;
 use serde::Deserialize;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -54,7 +54,6 @@ impl ServerContext {
     ) -> (WorkerState<S>, ShardId, ShardConfig)
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let shard = self.server_config.internal_network.shard(shard_id);
         info!("Shard booted on {}", shard.host);
@@ -78,7 +77,6 @@ impl ServerContext {
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let mut join_set = JoinSet::new();
         let handles = FuturesUnordered::new();
@@ -131,7 +129,6 @@ impl ServerContext {
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let mut join_set = JoinSet::new();
         let handles = FuturesUnordered::new();
@@ -187,7 +184,6 @@ impl Runnable for ServerContext {
     async fn run<S>(self, storage: S) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let shutdown_notifier = CancellationToken::new();
         let listen_address = self.get_listen_address();

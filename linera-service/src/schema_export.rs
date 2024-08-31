@@ -26,10 +26,7 @@ use linera_execution::committee::{Committee, ValidatorName};
 use linera_service::node_service::NodeService;
 use linera_storage::{DbStorage, Storage};
 use linera_version::VersionInfo;
-use linera_views::{
-    memory::{MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
-    views::ViewError,
-};
+use linera_views::memory::{MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES};
 
 #[derive(Clone)]
 struct DummyValidatorNode;
@@ -140,20 +137,13 @@ impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientConte
         unimplemented!()
     }
 
-    fn make_chain_client(&self, _: ChainId) -> ChainClient<P, S>
-    where
-        ViewError: From<S::StoreError>,
-    {
+    fn make_chain_client(&self, _: ChainId) -> ChainClient<P, S> {
         unimplemented!()
     }
 
     fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {}
 
-    async fn update_wallet(&mut self, _: &ChainClient<P, S>)
-    where
-        ViewError: From<S::StoreError>,
-    {
-    }
+    async fn update_wallet(&mut self, _: &ChainClient<P, S>) {}
 }
 
 #[tokio::main]

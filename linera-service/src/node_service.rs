@@ -64,7 +64,6 @@ pub struct Chains {
 pub struct QueryRoot<P, S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     clients: ChainClients<P, S>,
     port: NonZeroU16,
@@ -75,7 +74,6 @@ where
 pub struct SubscriptionRoot<P, S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     clients: ChainClients<P, S>,
 }
@@ -84,7 +82,6 @@ where
 pub struct MutationRoot<P, S, C>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     clients: ChainClients<P, S>,
     context: Arc<Mutex<C>>,
@@ -173,7 +170,6 @@ impl<P, S> SubscriptionRoot<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     /// Subscribes to notifications from the specified chain.
     async fn notifications(
@@ -190,7 +186,6 @@ where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-    ViewError: From<S::StoreError>,
 {
     async fn execute_system_operation(
         &self,
@@ -245,7 +240,6 @@ where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-    ViewError: From<S::StoreError>,
 {
     /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
@@ -677,7 +671,6 @@ impl<P, S> QueryRoot<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     async fn chain(&self, chain_id: ChainId) -> Result<ChainStateExtendedView<S::Context>, Error> {
         let client = self.clients.try_client_lock(&chain_id).await?;
@@ -913,7 +906,6 @@ fn bytes_from_list(list: &[async_graphql::Value]) -> Option<Vec<u8>> {
 pub struct NodeService<P, S, C>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     clients: ChainClients<P, S>,
     config: ChainListenerConfig,
@@ -926,7 +918,6 @@ where
 impl<P, S: Clone, C> Clone for NodeService<P, S, C>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     fn clone(&self) -> Self {
         Self {
@@ -946,7 +937,6 @@ where
     <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-    ViewError: From<S::StoreError>,
 {
     /// Creates a new instance of the node service given a client chain and a port.
     pub fn new(

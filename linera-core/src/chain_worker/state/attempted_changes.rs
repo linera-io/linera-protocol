@@ -25,7 +25,7 @@ use linera_execution::{
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
     common::Context,
-    views::{RootView, View, ViewError},
+    views::{RootView, View},
 };
 use tracing::{debug, warn};
 
@@ -40,7 +40,6 @@ use crate::{
 pub struct ChainWorkerStateWithAttemptedChanges<'state, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     state: &'state mut ChainWorkerState<StorageClient>,
     succeeded: bool,
@@ -49,7 +48,6 @@ where
 impl<'state, StorageClient> ChainWorkerStateWithAttemptedChanges<'state, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     /// Creates a new [`ChainWorkerStateWithAttemptedChanges`] instance to change the
     /// `state`.
@@ -518,7 +516,6 @@ where
 impl<StorageClient> Drop for ChainWorkerStateWithAttemptedChanges<'_, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     fn drop(&mut self) {
         if !self.succeeded {
@@ -539,7 +536,6 @@ impl<'a> CrossChainUpdateHelper<'a> {
     pub fn new<C>(config: &ChainWorkerConfig, chain: &'a ChainStateView<C>) -> Self
     where
         C: Context + Clone + Send + Sync + 'static,
-        ViewError: From<C::Error>,
     {
         CrossChainUpdateHelper {
             allow_messages_from_deprecated_epochs: config.allow_messages_from_deprecated_epochs,

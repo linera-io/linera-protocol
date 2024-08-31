@@ -48,7 +48,6 @@ use linera_service::{
     util, wallet,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use serde_json::Value;
 use tokio::task::JoinSet;
 use tracing::{debug, info, warn, Instrument as _};
@@ -101,7 +100,6 @@ impl Runnable for Job {
     async fn run<S>(self, storage: S) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let Job(options) = self;
         let wallet = options.wallet()?;
@@ -1097,7 +1095,6 @@ impl Job {
     ) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let state = WorkerState::new("Local node".to_string(), None, storage)
             .with_tracked_chains([message_id.chain_id, chain_id])
@@ -1173,7 +1170,6 @@ impl Job {
     ) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let mut chains = HashMap::new();
         for chain_id in chain_ids {
