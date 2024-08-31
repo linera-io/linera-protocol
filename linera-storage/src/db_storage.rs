@@ -206,70 +206,14 @@ pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     .expect("Histogram creation should not fail")
 });
 
-/// A storage implemented from a [`KeyValueStore`]
-struct DbStorageInner<Store> {
-    store: Store,
-    user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
-    user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
-    wasm_runtime: Option<WasmRuntime>,
-}
-
-impl<Store> DbStorageInner<Store>
-where
-    Store: KeyValueStore + Clone + Send + Sync + 'static,
-    ViewError: From<Store::Error>,
-    Store::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
-{
-    pub(crate) fn new(store: Store, wasm_runtime: Option<WasmRuntime>) -> Self {
-        Self {
-            store,
-            user_contracts: Arc::new(DashMap::new()),
-            user_services: Arc::new(DashMap::new()),
-            wasm_runtime,
-        }
-    }
-
-    #[cfg(with_testing)]
-    pub async fn new_for_testing(
-        config: Store::Config,
-        namespace: &str,
-        root_key: &[u8],
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Store::Error> {
-        let store = Store::recreate_and_connect(&config, namespace, root_key).await?;
-        let storage = Self::new(store, wasm_runtime);
-        Ok(storage)
-    }
-
-    pub async fn initialize(
-        config: Store::Config,
-        namespace: &str,
-        root_key: &[u8],
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Store::Error> {
-        let store = Store::maybe_create_and_connect(&config, namespace, root_key).await?;
-        let storage = Self::new(store, wasm_runtime);
-        Ok(storage)
-    }
-
-    pub async fn make(
-        config: Store::Config,
-        namespace: &str,
-        root_key: &[u8],
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Store::Error> {
-        let store = Store::connect(&config, namespace, root_key).await?;
-        let storage = Self::new(store, wasm_runtime);
-        Ok(storage)
-    }
-}
-
 /// A DbStorage wrapping with Arc
 #[derive(Clone)]
 pub struct DbStorage<Store, Clock> {
-    store: Arc<DbStorageInner<Store>>,
+    store: Arc<Store>,
     clock: Clock,
+    wasm_runtime: Option<WasmRuntime>,
+    user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
+    user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
     execution_runtime_config: ExecutionRuntimeConfig,
 }
 
@@ -419,18 +363,18 @@ where
             storage: self.clone(),
             chain_id,
             execution_runtime_config: self.execution_runtime_config,
-            user_contracts: self.store.user_contracts.clone(),
-            user_services: self.store.user_services.clone(),
+            user_contracts: self.user_contracts.clone(),
+            user_services: self.user_services.clone(),
         };
         let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
-        let store = self.store.store.clone_with_root_key(&root_key)?;
+        let store = self.store.clone_with_root_key(&root_key)?;
         let context = ContextFromStore::create(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
 
     async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
-        let test = self.store.store.contains_key(&value_key).await?;
+        let test = self.store.contains_key(&value_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER
             .with_label_values(&[])
@@ -447,7 +391,7 @@ where
             let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
             keys.push(value_key);
         }
-        let test = self.store.store.contains_keys(keys).await?;
+        let test = self.store.contains_keys(keys).await?;
         #[cfg(with_metrics)]
         CONTAINS_HASHED_CERTIFICATE_VALUES_COUNTER
             .with_label_values(&[])
@@ -457,7 +401,7 @@ where
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let test = self.store.store.contains_key(&blob_key).await?;
+        let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(test)
@@ -469,7 +413,7 @@ where
             let key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
             keys.push(key);
         }
-        let results = self.store.store.contains_keys(keys).await?;
+        let results = self.store.contains_keys(keys).await?;
         let mut missing_blobs = Vec::new();
         for (blob_id, result) in blob_ids.into_iter().zip(results) {
             if !result {
@@ -483,7 +427,7 @@ where
 
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let test = self.store.store.contains_key(&blob_key).await?;
+        let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
         Ok(test)
@@ -495,7 +439,6 @@ where
     ) -> Result<HashedCertificateValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let maybe_value = self
-            .store
             .store
             .read_value::<CertificateValue>(&value_key)
             .await?;
@@ -509,11 +452,7 @@ where
 
     async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let maybe_blob_content = self
-            .store
-            .store
-            .read_value::<BlobContent>(&blob_key)
-            .await?;
+        let maybe_blob_content = self.store.read_value::<BlobContent>(&blob_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob_content =
@@ -527,7 +466,6 @@ where
             .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
             .collect::<Result<Vec<_>, _>>()?;
         let maybe_blob_contents = self
-            .store
             .store
             .read_multi_values::<BlobContent>(blob_keys)
             .await?;
@@ -547,11 +485,7 @@ where
 
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError> {
         let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let maybe_blob_state = self
-            .store
-            .store
-            .read_value::<BlobState>(&blob_state_key)
-            .await?;
+        let maybe_blob_state = self.store.read_value::<BlobState>(&blob_state_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
         let blob_state = maybe_blob_state
@@ -665,7 +599,7 @@ where
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let keys = vec![cert_key, value_key];
-        let results = self.store.store.contains_keys(keys).await?;
+        let results = self.store.contains_keys(keys).await?;
         #[cfg(with_metrics)]
         CONTAINS_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         Ok(results[0] && results[1])
@@ -675,7 +609,7 @@ where
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let keys = vec![cert_key, value_key];
-        let values = self.store.store.read_multi_values_bytes(keys).await;
+        let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
             #[cfg(with_metrics)]
             READ_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
@@ -705,7 +639,7 @@ where
     }
 
     fn wasm_runtime(&self) -> Option<WasmRuntime> {
-        self.store.wasm_runtime
+        self.wasm_runtime
     }
 }
 
@@ -762,14 +696,17 @@ where
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        self.store.store.write_batch(batch).await?;
+        self.store.write_batch(batch).await?;
         Ok(())
     }
 
-    fn create(storage: DbStorageInner<Store>, clock: C) -> Self {
+    fn create(store: Store, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
         Self {
-            store: Arc::new(storage),
+            store: Arc::new(store),
             clock,
+            wasm_runtime,
+            user_contracts: Arc::new(DashMap::new()),
+            user_services: Arc::new(DashMap::new()),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }
@@ -788,9 +725,8 @@ where
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
-        let storage =
-            DbStorageInner::<Store>::initialize(config, namespace, root_key, wasm_runtime).await?;
-        Ok(Self::create(storage, WallClock))
+        let store = Store::maybe_create_and_connect(&config, namespace, root_key).await?;
+        Ok(Self::create(store, wasm_runtime, WallClock))
     }
 
     pub async fn new(
@@ -799,9 +735,8 @@ where
         root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
-        let storage =
-            DbStorageInner::<Store>::make(config, namespace, root_key, wasm_runtime).await?;
-        Ok(Self::create(storage, WallClock))
+        let store = Store::connect(&config, namespace, root_key).await?;
+        Ok(Self::create(store, wasm_runtime, WallClock))
     }
 }
 
@@ -835,9 +770,7 @@ where
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
     ) -> Result<Self, Store::Error> {
-        let storage =
-            DbStorageInner::<Store>::new_for_testing(config, namespace, root_key, wasm_runtime)
-                .await?;
-        Ok(Self::create(storage, clock))
+        let store = Store::recreate_and_connect(&config, namespace, root_key).await?;
+        Ok(Self::create(store, wasm_runtime, clock))
     }
 }
