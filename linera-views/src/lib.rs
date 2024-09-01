@@ -78,6 +78,9 @@ pub mod backends;
 #[cfg(with_metrics)]
 pub mod metrics;
 
+/// GraphQL implementations.
+mod graphql;
+
 /// Helper types for tests.
 #[cfg(with_testing)]
 pub mod test_utils;
