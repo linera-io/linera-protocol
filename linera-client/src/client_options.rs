@@ -267,7 +267,7 @@ impl ClientOptions {
 
 #[cfg(not(with_persist))]
 impl ClientOptions {
-    pub fn wallet(&self) -> Result<WalletState<persistent::Memory<Wallet>>, Error> {
+    pub async fn wallet(&self) -> Result<WalletState<persistent::Memory<Wallet>>, Error> {
         #![allow(unreachable_code)]
         let _wallet = unimplemented!("No persistence backend selected for wallet; please use one of the `fs` or `indexed-db` features");
         Ok(WalletState::new(persistent::Memory::new(_wallet)))

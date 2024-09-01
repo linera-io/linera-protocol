@@ -35,7 +35,7 @@ pub trait LocalPersist: Deref {
 
     /// Get a mutable reference to the value.  This is not expressed as a
     /// [`DerefMut`](std::ops::DerefMut) bound because it is discouraged to consume this
-    /// function!  Instead, use [`mutate`].
+    /// function!  Instead, use `mutate`.
     fn as_mut(&mut self) -> &mut Self::Target;
 
     /// Saves the value to persistent storage.

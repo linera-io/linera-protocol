@@ -55,12 +55,7 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> IndexedDb<T> {
     ) -> Result<Result<Self, E>, Error> {
         let mut db_req = IdbDatabase::open_u32(DATABASE_NAME, 1)?;
         db_req.set_on_upgrade_needed(Some(|evt: &IdbVersionChangeEvent| -> Result<(), JsValue> {
-            if evt
-                .db()
-                .object_store_names()
-                .find(|n| n == STORE_NAME)
-                .is_none()
-            {
+            if !evt.db().object_store_names().any(|n| n == STORE_NAME) {
                 evt.db().create_object_store(STORE_NAME)?;
             }
             Ok(())
