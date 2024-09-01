@@ -5,7 +5,7 @@ mod dirty;
 use dirty::Dirty;
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "indexed-db")] {
+    if #[cfg(with_indexed_db)] {
         pub mod indexed_db;
         pub use indexed_db::IndexedDb;
     }
