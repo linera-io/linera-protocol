@@ -16,8 +16,6 @@ impl Dirty {
 
 impl Drop for Dirty {
     fn drop(&mut self) {
-        if self.0 {
-            tracing::warn!("object dropped while dirty");
-        }
+        assert!(!self.0, "object dropped while dirty")
     }
 }

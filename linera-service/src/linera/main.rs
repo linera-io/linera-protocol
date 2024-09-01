@@ -1354,7 +1354,8 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
             genesis_config.persist().await?;
             options
                 .create_wallet(genesis_config.into_value(), *testing_prng_seed)?
-                .extend(chains);
+                .mutate(|wallet| wallet.extend(chains))
+                .await?;
             options.initialize_storage().boxed().await?;
             Ok(())
         }
@@ -1519,12 +1520,11 @@ Make sure to use a Linera client compatible with this network.
                     (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
                 };
                 let timestamp = genesis_config.timestamp;
-                let mut wallet = options.create_wallet(genesis_config, *testing_prng_seed)?;
-                wallet.extend(
+                options.create_wallet(genesis_config, *testing_prng_seed)?.mutate(|wallet| wallet.extend(
                     with_other_chains
                         .iter()
                         .map(|chain_id| UserChain::make_other(*chain_id, timestamp)),
-                );
+                )).await?;
                 options.initialize_storage().boxed().await?;
                 if *with_new_chain {
                     ensure!(
