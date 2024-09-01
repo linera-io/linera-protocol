@@ -755,7 +755,7 @@ impl Runnable for Job {
 
                 info!("Updating local state of user chains");
                 context.update_wallet_from_certificates(certificates).await;
-                context.save_wallet();
+                context.save_wallet().await?;
             }
 
             Watch { chain_id, raw } => {

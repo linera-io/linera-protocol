@@ -544,7 +544,8 @@ where
                 let chain_id = ChainId::child(message_id);
                 key_pairs.insert(chain_id, key_pair.copy());
                 self.client.track_chain(chain_id);
-                self.update_wallet_for_new_chain(chain_id, Some(key_pair.copy()), timestamp);
+                self.update_wallet_for_new_chain(chain_id, Some(key_pair.copy()), timestamp)
+                    .await?;
             }
         }
         let updated_chain_client = self.make_chain_client(default_chain_id);
@@ -556,8 +557,8 @@ where
         for chain_id in key_pairs.keys() {
             let child_client = self.make_chain_client(*chain_id);
             child_client.process_inbox().await?;
-            self.wallet.update_from_state(&child_client).await;
-            self.save_wallet()?;
+            self.wallet.as_mut().update_from_state(&child_client).await;
+            self.save_wallet().await?;
         }
         Ok(key_pairs)
     }
@@ -812,7 +813,7 @@ where
                 .unwrap();
         }
         // Last update the wallet.
-        for chain in self.wallet.chains_mut() {
+        for chain in self.wallet.as_mut().chains_mut() {
             let query = ChainInfoQuery::new(chain.chain_id);
             let info = node.handle_chain_info_query(query).await.unwrap().info;
             // We don't have private keys but that's ok.
