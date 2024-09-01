@@ -163,7 +163,7 @@ pub trait Context: Clone {
 }
 
 /// Implementation of the [`Context`] trait on top of a DB client implementing
-/// [`KeyValueStore`].
+/// [`crate::common::KeyValueStore`].
 #[derive(Debug, Default, Clone)]
 pub struct ContextFromStore<E, S> {
     /// The DB client that is shared between views.
@@ -190,7 +190,7 @@ where
 impl<E, S> ContextFromStore<E, S> {
     /// Creates a context for the given base key, store, and an extra argument. NOTE: this
     /// constructor doesn't check the journal of the store. In doubt, use
-    /// [`create`] instead.
+    /// [`ContextFromStore::create`] instead.
     pub fn new_unsafe(store: S, base_key: Vec<u8>, extra: E) -> Self {
         Self {
             store,

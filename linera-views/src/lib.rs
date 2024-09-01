@@ -68,10 +68,10 @@ pub mod context;
 /// Common definitions used for views and backends.
 pub mod common;
 
-/// Elementary data-structures implementing the [`View`] trait.
+/// Elementary data-structures implementing the [`views::View`] trait.
 pub mod views;
 
-/// Backend implementing the [`KeyValueStore`] trait.
+/// Backend implementing the [`common::KeyValueStore`] trait.
 pub mod backends;
 
 /// Support for metrics.

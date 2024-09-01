@@ -1,19 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This provides a KeyValueStore for the ScyllaDB database.
+//! This provides a `KeyValueStore for the ScyllaDB database.
 //! The code is functional but some aspects are missing.
 //!
 //! The current connection is done via a Session and a corresponding
 //! primary key that we name `namespace`. The maximum number of
 //! concurrent queries is controlled by max_concurrent_queries.
-//!
-//! We thus implement the
-//! * [`KeyValueStore`][trait1] for a database access.
-//! * [`Context`][trait2] for the context.
-//!
-//! [trait1]: common::KeyValueStore
-//! [trait2]: context::Context
 
 /// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
 /// The limit is in reality 100. But we need one entry for the root key.

@@ -8,7 +8,6 @@ use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included, sync::Mu
 use async_trait::async_trait;
 use linera_base::{data_types::ArithmeticError, ensure};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{self, MeasureLatency},
@@ -19,8 +18,8 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         from_bytes_option, from_bytes_option_or_default, get_interval, get_upper_bound,
-        DeletionSet, HasherOutput, KeyIterable, KeyValueIterable, KeyValueStoreError,
-        SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
+        DeletionSet, HasherOutput, KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update,
+        MIN_VIEW_TAG,
     },
     context::Context,
     map_view::ByteMapView,
@@ -43,11 +42,12 @@ static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new
 
 #[cfg(with_testing)]
 use {
-    crate::common::{ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    crate::common::{KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore},
     crate::context::ContextFromStore,
     crate::memory::MemoryContext,
     async_lock::RwLock,
     std::sync::Arc,
+    thiserror::Error,
 };
 
 /// We implement two types:
@@ -1097,6 +1097,7 @@ impl<C> WithError for ViewContainer<C> {
     type Error = ViewContainerError;
 }
 
+#[cfg(with_testing)]
 /// The error type for [`ViewContainer`] operations.
 #[derive(Error, Debug)]
 pub enum ViewContainerError {
@@ -1109,6 +1110,7 @@ pub enum ViewContainerError {
     Bcs(#[from] bcs::Error),
 }
 
+#[cfg(with_testing)]
 impl KeyValueStoreError for ViewContainerError {
     const BACKEND: &'static str = "view_container";
 }
