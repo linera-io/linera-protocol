@@ -14,7 +14,7 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, Owner},
 };
 
-use crate::{DataBlobHash, KeyValueStore, Service};
+use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
 
 /// The runtime available during execution of a query.
 pub struct MockServiceRuntime<Application>
@@ -67,6 +67,11 @@ where
     /// Returns the key-value store to interface with storage.
     pub fn key_value_store(&self) -> KeyValueStore {
         self.key_value_store.clone()
+    }
+
+    /// Returns a storage context suitable for a root view.
+    pub fn root_view_storage_context(&self) -> ViewStorageContext {
+        ViewStorageContext::new_unsafe(self.key_value_store(), Vec::new(), ())
     }
 
     /// Configures the application parameters to return during the test.

@@ -65,7 +65,7 @@ pub use self::{
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
     service::ServiceRuntime,
-    views::KeyValueStore,
+    views::{KeyValueStore, ViewStorageContext},
 };
 
 /// Hash of a data blob.

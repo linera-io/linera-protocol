@@ -9,10 +9,7 @@ use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use linera_sdk::{
-    base::WithServiceAbi,
-    graphql::GraphQLMutationRoot,
-    views::{View, ViewStorageContext},
-    Service, ServiceRuntime,
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
 };
 use social::Operation;
 use state::Social;
@@ -31,7 +28,7 @@ impl Service for SocialService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = Social::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = Social::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         SocialService {

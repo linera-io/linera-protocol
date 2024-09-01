@@ -12,7 +12,7 @@ use linera_sdk::{
         Amount, ApplicationPermissions, ChainId, ChainOwnership, Owner, PublicKey, TimeoutConfig,
         WithContractAbi,
     },
-    views::{RootView, View, ViewStorageContext},
+    views::{RootView, View},
     Contract, ContractRuntime,
 };
 use serde::{Deserialize, Serialize};
@@ -35,7 +35,7 @@ impl Contract for HexContract {
     type Parameters = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = HexState::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = HexState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         HexContract { state, runtime }
