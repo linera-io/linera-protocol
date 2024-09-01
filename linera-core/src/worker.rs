@@ -27,7 +27,6 @@ use linera_chain::{
 };
 use linera_execution::{committee::Epoch, Query, Response};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -102,6 +101,13 @@ pub struct NetworkActions {
     pub cross_chain_requests: Vec<CrossChainRequest>,
     /// The push notifications.
     pub notifications: Vec<Notification>,
+}
+
+impl NetworkActions {
+    pub fn extend(&mut self, other: NetworkActions) {
+        self.cross_chain_requests.extend(other.cross_chain_requests);
+        self.notifications.extend(other.notifications);
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -221,7 +227,6 @@ impl From<linera_chain::ChainError> for WorkerError {
 pub struct WorkerState<StorageClient>
 where
     StorageClient: Storage,
-    ViewError: From<StorageClient::StoreError>,
 {
     /// A name used for logging
     nickname: String,
@@ -254,7 +259,6 @@ pub(crate) type DeliveryNotifiers =
 impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage,
-    ViewError: From<StorageClient::StoreError>,
 {
     #[tracing::instrument(level = "trace", skip(nickname, key_pair, storage))]
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
@@ -382,7 +386,6 @@ where
 impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     // NOTE: This only works for non-sharded workers!
     #[tracing::instrument(level = "trace", skip(self, certificate, blobs))]
@@ -587,7 +590,7 @@ where
         origin: Origin,
         recipient: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
+    ) -> Result<Option<(BlockHeight, NetworkActions)>, WorkerError> {
         self.query_chain_worker(recipient, move |callback| {
             ChainWorkerRequest::ProcessCrossChainUpdate {
                 origin,
@@ -843,36 +846,36 @@ where
                 bundle_vecs,
             } => {
                 let mut height_by_origin = Vec::new();
+                let mut actions = NetworkActions::default();
                 for (medium, bundles) in bundle_vecs {
                     let origin = Origin { sender, medium };
-                    if let Some(height) = self
+                    if let Some((height, new_actions)) = self
                         .process_cross_chain_update(origin.clone(), recipient, bundles)
                         .await?
                     {
+                        actions.extend(new_actions);
                         height_by_origin.push((origin, height));
                     }
                 }
                 if height_by_origin.is_empty() {
                     return Ok(NetworkActions::default());
                 }
-                let mut notifications = Vec::new();
                 let mut latest_heights = Vec::new();
                 for (origin, height) in height_by_origin {
                     latest_heights.push((origin.medium.clone(), height));
-                    notifications.push(Notification {
+                    actions.notifications.push(Notification {
                         chain_id: recipient,
                         reason: Reason::NewIncomingBundle { origin, height },
                     });
                 }
-                let cross_chain_requests = vec![CrossChainRequest::ConfirmUpdatedRecipient {
-                    sender,
-                    recipient,
-                    latest_heights,
-                }];
-                Ok(NetworkActions {
-                    cross_chain_requests,
-                    notifications,
-                })
+                actions
+                    .cross_chain_requests
+                    .push(CrossChainRequest::ConfirmUpdatedRecipient {
+                        sender,
+                        recipient,
+                        latest_heights,
+                    });
+                Ok(actions)
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
                 sender,
@@ -921,7 +924,6 @@ where
 impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage,
-    ViewError: From<StorageClient::StoreError>,
 {
     /// Gets a reference to the validator's [`PublicKey`].
     ///

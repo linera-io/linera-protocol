@@ -45,7 +45,7 @@ use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
     memory::{create_memory_store_test_config, MemoryContext, MemoryStore},
     test_utils::generate_test_namespace,
-    views::{CryptoHashView, RootView, ViewError},
+    views::{CryptoHashView, RootView},
 };
 use test_case::test_case;
 use test_log::test;
@@ -75,7 +75,6 @@ const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;
 fn init_worker<S>(storage: S, is_client: bool) -> (Committee, WorkerState<S>)
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     let key_pair = KeyPair::generate();
     let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
@@ -91,7 +90,6 @@ async fn init_worker_with_chains<S, I>(storage: S, balances: I) -> (Committee, W
 where
     I: IntoIterator<Item = (ChainDescription, PublicKey, Amount)>,
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     let (committee, worker) = init_worker(storage, /* is_client */ false);
     for (description, pubk, balance) in balances {
@@ -120,7 +118,6 @@ async fn init_worker_with_chain<S>(
 ) -> (Committee, WorkerState<S>)
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     init_worker_with_chains(storage, [(description, owner, balance)]).await
 }
@@ -132,7 +129,6 @@ fn make_certificate<S>(
 ) -> Certificate
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     make_certificate_with_round(committee, worker, value, Round::Fast)
 }
@@ -145,7 +141,6 @@ fn make_certificate_with_round<S>(
 ) -> Certificate
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     let vote = LiteVote::new(
         value.lite(),
@@ -173,7 +168,6 @@ async fn make_simple_transfer_certificate<S>(
 ) -> Certificate
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     make_transfer_certificate_for_epoch(
         chain_description,
@@ -208,7 +202,6 @@ async fn make_transfer_certificate<S>(
 ) -> Certificate
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     make_transfer_certificate_for_epoch(
         chain_description,
@@ -244,7 +237,6 @@ async fn make_transfer_certificate_for_epoch<S>(
 ) -> Certificate
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     let chain_id = chain_description.into();
     let system_state = SystemExecutionState {
@@ -401,7 +393,6 @@ fn update_recipient_direct(recipient: ChainId, certificate: &Certificate) -> Cro
 async fn test_handle_block_proposal_bad_signature<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, worker) = init_worker_with_chains(
@@ -447,7 +438,6 @@ where
 async fn test_handle_block_proposal_zero_amount<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, worker) = init_worker_with_chains(
@@ -498,7 +488,6 @@ where
 async fn test_handle_block_proposal_ticks<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
@@ -569,7 +558,6 @@ where
 async fn test_handle_block_proposal_unknown_sender<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, worker) = init_worker_with_chains(
@@ -612,7 +600,6 @@ where
 async fn test_handle_block_proposal_with_chaining<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -684,7 +671,6 @@ async fn test_handle_block_proposal_with_incoming_bundles<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
@@ -1047,7 +1033,6 @@ where
 async fn test_handle_block_proposal_exceed_balance<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, worker) = init_worker_with_chains(
@@ -1095,7 +1080,6 @@ where
 async fn test_handle_block_proposal<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, worker) = init_worker_with_chains(
@@ -1131,7 +1115,6 @@ where
 async fn test_handle_block_proposal_replay<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, worker) = init_worker_with_chains(
@@ -1173,7 +1156,6 @@ where
 async fn test_handle_certificate_unknown_sender<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1214,7 +1196,6 @@ where
 async fn test_handle_certificate_with_open_chain<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1293,7 +1274,6 @@ where
 async fn test_handle_certificate_wrong_owner<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1334,7 +1314,6 @@ where
 async fn test_handle_certificate_bad_block_height<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1383,7 +1362,6 @@ async fn test_handle_certificate_with_anticipated_incoming_bundle<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1485,7 +1463,6 @@ async fn test_handle_certificate_receiver_balance_overflow<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1554,7 +1531,6 @@ async fn test_handle_certificate_receiver_equal_sender<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let key_pair = KeyPair::generate();
@@ -1624,7 +1600,6 @@ where
 async fn test_handle_cross_chain_request<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1702,7 +1677,6 @@ async fn test_handle_cross_chain_request_no_recipient_chain<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let sender_key_pair = KeyPair::generate();
@@ -1740,7 +1714,6 @@ async fn test_handle_cross_chain_request_no_recipient_chain_on_client<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let sender_key_pair = KeyPair::generate();
@@ -1790,7 +1763,6 @@ async fn test_handle_certificate_to_active_recipient<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
@@ -1944,7 +1916,6 @@ async fn test_handle_certificate_to_inactive_recipient<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1991,7 +1962,6 @@ async fn test_handle_certificate_with_rejected_transfer<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let sender = Owner::from(sender_key_pair.public());
@@ -2236,7 +2206,6 @@ async fn run_test_chain_creation_with_committee_creation<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -2261,16 +2230,12 @@ where
     };
     let admin_channel_origin = Origin::channel(admin_id, admin_channel_full_name.clone());
     // Have the admin chain create a user chain.
-    let user_id = ChainId::child(MessageId {
-        chain_id: admin_id,
-        height: BlockHeight::ZERO,
-        index: 0,
-    });
     let user_description = ChainDescription::Child(MessageId {
         chain_id: admin_id,
         height: BlockHeight::ZERO,
         index: 0,
     });
+    let user_id = ChainId::from(user_description);
     let certificate0 = make_certificate(
         &committee,
         &worker,
@@ -2593,7 +2558,6 @@ where
 async fn test_transfers_and_committee_creation<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
@@ -2725,7 +2689,6 @@ where
 async fn test_transfers_and_committee_removal<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
@@ -3128,7 +3091,6 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
 async fn test_timeouts<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
@@ -3329,7 +3291,6 @@ where
 async fn test_round_types<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
@@ -3417,7 +3378,6 @@ where
 async fn test_fast_proposal_is_locked<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
@@ -3520,7 +3480,6 @@ where
 async fn test_fallback<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
@@ -3588,7 +3547,6 @@ where
 async fn test_long_lived_service<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     const NUM_QUERIES: usize = 5;
 
@@ -3668,7 +3626,6 @@ where
 async fn test_new_block_causes_service_restart<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     const NUM_QUERIES: usize = 2;
     const BLOCK_TIMESTAMP: u64 = 10;

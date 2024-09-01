@@ -11,7 +11,6 @@ use linera_core::{
     JoinSetExt as _,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use rand::Rng;
 use tokio::{sync::oneshot, task::JoinSet};
 use tokio_util::sync::CancellationToken;
@@ -27,7 +26,6 @@ use crate::{
 pub struct Server<S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
     host: String,
@@ -43,7 +41,6 @@ where
 impl<S> Server<S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -78,7 +75,6 @@ where
 impl<S> Server<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     #[allow(clippy::too_many_arguments)]
     async fn forward_cross_chain_queries(
@@ -183,7 +179,6 @@ where
 struct RunningServerState<S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     server: Server<S>,
     cross_chain_sender: mpsc::Sender<(RpcMessage, ShardId)>,
@@ -193,7 +188,6 @@ where
 impl<S> MessageHandler for RunningServerState<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     #[instrument(target = "simple_server", skip_all, fields(nickname = self.server.state.nickname(), chain_id = ?message.target_chain_id()))]
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage> {
@@ -348,7 +342,6 @@ where
 impl<S> RunningServerState<S>
 where
     S: Storage + Send,
-    ViewError: From<S::StoreError>,
 {
     fn handle_network_actions(&mut self, actions: NetworkActions) {
         for request in actions.cross_chain_requests {

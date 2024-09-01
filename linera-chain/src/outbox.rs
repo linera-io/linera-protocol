@@ -26,7 +26,6 @@ mod outbox_tests;
 pub struct OutboxStateView<C>
 where
     C: Context + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     /// The minimum block height accepted in the future.
     pub next_height_to_schedule: RegisterView<C, BlockHeight>,
@@ -38,7 +37,6 @@ where
 impl<C> OutboxStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     /// Schedules a message at the given height if we haven't already.
     /// Returns true if a change was made.
@@ -76,7 +74,6 @@ where
 impl OutboxStateView<MemoryContext<()>>
 where
     MemoryContext<()>: Context + Clone + Send + Sync + 'static,
-    ViewError: From<<MemoryContext<()> as linera_views::common::Context>::Error>,
 {
     pub async fn new() -> Self {
         let context = create_test_memory_context();

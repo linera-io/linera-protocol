@@ -15,7 +15,6 @@ use linera_base::{
 use linera_chain::data_types::Block;
 use linera_core::{client::ChainClient, node::LocalValidatorNodeProvider};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use rand::Rng as _;
 use serde::{Deserialize, Serialize};
 
@@ -167,7 +166,6 @@ impl Wallet {
     where
         P: LocalValidatorNodeProvider + Sync + 'static,
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let key_pair = chain_client.key_pair().await.map(|k| k.copy()).ok();
         let state = chain_client.state();

@@ -38,7 +38,6 @@ use crate::{
 pub struct LocalNode<S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     state: WorkerState<S>,
 }
@@ -48,7 +47,6 @@ where
 pub struct LocalNodeClient<S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     node: Arc<LocalNode<S>>,
 }
@@ -90,7 +88,6 @@ pub enum LocalNodeError {
 impl<S> LocalNodeClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     #[tracing::instrument(level = "trace", skip_all)]
     pub async fn handle_block_proposal(
@@ -147,7 +144,6 @@ where
 impl<S> LocalNodeClient<S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     #[tracing::instrument(level = "trace", skip_all)]
     pub fn new(state: WorkerState<S>) -> Self {
@@ -160,7 +156,6 @@ where
 impl<S> LocalNodeClient<S>
 where
     S: Storage + Clone,
-    ViewError: From<S::StoreError>,
 {
     #[tracing::instrument(level = "trace", skip_all)]
     pub(crate) fn storage_client(&self) -> S {
@@ -171,7 +166,6 @@ where
 impl<S> LocalNodeClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     #[tracing::instrument(level = "trace", skip_all)]
     pub async fn stage_block_execution(

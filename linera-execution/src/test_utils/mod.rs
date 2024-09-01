@@ -63,7 +63,6 @@ pub async fn register_mock_applications<C>(
 where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
-    ViewError: From<C::Error>,
 {
     let mock_applications: Vec<_> =
         create_dummy_user_application_registrations(&mut state.system.registry, count)
@@ -91,7 +90,6 @@ pub async fn create_dummy_user_application_registrations<C>(
 ) -> anyhow::Result<Vec<(UserApplicationId, UserApplicationDescription)>>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     let mut ids = Vec::with_capacity(count as usize);
 

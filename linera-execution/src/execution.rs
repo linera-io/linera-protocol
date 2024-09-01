@@ -15,7 +15,7 @@ use linera_views::{
     common::Context,
     key_value_store_view::KeyValueStoreView,
     reentrant_collection_view::HashedReentrantCollectionView,
-    views::{ClonableView, View, ViewError},
+    views::{ClonableView, View},
 };
 use linera_views_derive::CryptoHashView;
 #[cfg(with_testing)]
@@ -49,8 +49,6 @@ pub struct ExecutionStateView<C> {
 impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
 where
     MemoryContext<TestExecutionRuntimeContext>: Context + Clone + Send + Sync + 'static,
-    ViewError:
-        From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::common::Context>::Error>,
 {
     /// Simulates the instantiation of an application.
     pub async fn simulate_instantiation(
@@ -136,7 +134,6 @@ impl UserAction {
 impl<C> ExecutionStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
     #[allow(clippy::too_many_arguments)]

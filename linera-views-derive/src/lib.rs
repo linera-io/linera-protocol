@@ -65,7 +65,6 @@ fn context_and_constraints(
         constraints = parse_quote! {
             where
                 #context: linera_views::common::Context + Send + Sync + Clone + 'static,
-                linera_views::views::ViewError: From<#context::Error>,
         };
     }
 

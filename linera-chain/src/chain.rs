@@ -34,7 +34,7 @@ use linera_views::{
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     set_view::SetView,
-    views::{ClonableView, CryptoHashView, RootView, View, ViewError},
+    views::{ClonableView, CryptoHashView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
 
@@ -238,7 +238,6 @@ impl BundleInInbox {
 pub struct ChainStateView<C>
 where
     C: Clone + Context + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     /// Execution state, including system and user applications.
     pub execution_state: ExecutionStateView<C>,
@@ -355,7 +354,6 @@ impl ChainTipState {
 pub struct ChannelStateView<C>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
 {
     /// The current subscribers.
     pub subscribers: SetView<C, ChainId>,
@@ -366,7 +364,6 @@ where
 impl<C> ChainStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
     /// Returns the [`ChainId`] of the chain this [`ChainStateView`] represents.
@@ -530,13 +527,15 @@ where
     /// internal error if the bundle doesn't appear to be new, based on the sender's
     /// height. The value `local_time` is specific to each validator and only used for
     /// round timeouts.
+    ///
+    /// Returns `true` if incoming `Subscribe` messages created new outbox entries.
     pub async fn receive_message_bundle(
         &mut self,
         origin: &Origin,
         bundle: MessageBundle,
         local_time: Timestamp,
         add_to_received_log: bool,
-    ) -> Result<(), ChainError> {
+    ) -> Result<bool, ChainError> {
         assert!(!bundle.messages.is_empty());
         let chain_id = self.chain_id();
         tracing::trace!(
@@ -567,7 +566,8 @@ where
         }
         self.process_unsubscribes(unsubscribe_names_and_ids, GenericApplicationId::System)
             .await?;
-        self.process_subscribes(subscribe_names_and_ids, GenericApplicationId::System)
+        let new_outbox_entries = self
+            .process_subscribes(subscribe_names_and_ids, GenericApplicationId::System)
             .await?;
 
         if bundle.goes_to_inbox() {
@@ -595,7 +595,7 @@ where
         if add_to_received_log {
             self.received_log.push(chain_and_height);
         }
-        Ok(())
+        Ok(new_outbox_entries)
     }
 
     pub async fn execute_init_message(
@@ -1169,13 +1169,15 @@ where
         Ok(())
     }
 
+    /// Processes new subscriptions. Returns `true` if at least one new subscriber was added for
+    /// which we have outgoing messages.
     async fn process_subscribes(
         &mut self,
         names_and_ids: Vec<(ChannelName, ChainId)>,
         application_id: GenericApplicationId,
-    ) -> Result<(), ChainError> {
+    ) -> Result<bool, ChainError> {
         if names_and_ids.is_empty() {
-            return Ok(());
+            return Ok(false);
         }
         let full_names = names_and_ids
             .iter()
@@ -1209,16 +1211,18 @@ where
             .buffer_unordered(max_stream_queries);
         let infos = stream.try_collect::<Vec<_>>().await?;
         let (targets, heights): (Vec<_>, Vec<_>) = infos.into_iter().flatten().unzip();
+        let mut new_outbox_entries = false;
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         let outbox_counters = self.outbox_counters.get_mut();
         for (heights, mut outbox) in heights.into_iter().zip(outboxes) {
             for height in heights {
                 if outbox.schedule_message(height)? {
                     *outbox_counters.entry(height).or_default() += 1;
+                    new_outbox_entries = true;
                 }
             }
         }
-        Ok(())
+        Ok(new_outbox_entries)
     }
 
     async fn process_unsubscribes(

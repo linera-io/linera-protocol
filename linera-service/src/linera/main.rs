@@ -48,7 +48,6 @@ use linera_service::{
     util, wallet,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use serde_json::Value;
 use tokio::task::JoinSet;
 use tracing::{debug, info, warn, Instrument as _};
@@ -103,7 +102,6 @@ impl Runnable for Job {
     async fn run<S>(self, storage: S) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let Job(options) = self;
         let wallet = options.wallet().await?;
@@ -1109,7 +1107,6 @@ impl Job {
     ) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let state = WorkerState::new("Local node".to_string(), None, storage)
             .with_tracked_chains([message_id.chain_id, chain_id])
@@ -1188,7 +1185,6 @@ impl Job {
     ) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let mut chains = HashMap::new();
         for chain_id in chain_ids {
@@ -1520,11 +1516,16 @@ Make sure to use a Linera client compatible with this network.
                     (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
                 };
                 let timestamp = genesis_config.timestamp;
-                options.create_wallet(genesis_config, *testing_prng_seed)?.mutate(|wallet| wallet.extend(
-                    with_other_chains
-                        .iter()
-                        .map(|chain_id| UserChain::make_other(*chain_id, timestamp)),
-                )).await?;
+                options
+                    .create_wallet(genesis_config, *testing_prng_seed)?
+                    .mutate(|wallet| {
+                        wallet.extend(
+                            with_other_chains
+                                .iter()
+                                .map(|chain_id| UserChain::make_other(*chain_id, timestamp)),
+                        )
+                    })
+                    .await?;
                 options.initialize_storage().boxed().await?;
                 if *with_new_chain {
                     ensure!(

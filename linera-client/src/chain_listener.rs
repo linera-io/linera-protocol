@@ -22,7 +22,6 @@ use linera_core::{
 };
 use linera_execution::{Message, SystemMessage};
 use linera_storage::{Clock as _, Storage};
-use linera_views::views::ViewError;
 use tracing::{debug, error, info, warn, Instrument as _};
 
 use crate::{chain_clients::ChainClients, wallet::Wallet, Error};
@@ -69,9 +68,7 @@ pub trait ClientContext {
     fn make_chain_client(
         &self,
         chain_id: ChainId,
-    ) -> ChainClient<Self::ValidatorNodeProvider, Self::Storage>
-    where
-        ViewError: From<<Self::Storage as Storage>::StoreError>;
+    ) -> ChainClient<Self::ValidatorNodeProvider, Self::Storage>;
 
     async fn update_wallet_for_new_chain(
         &mut self,
@@ -83,9 +80,7 @@ pub trait ClientContext {
     async fn update_wallet(
         &mut self,
         client: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
-    ) -> Result<(), Error>
-    where
-        ViewError: From<<Self::Storage as Storage>::StoreError>;
+    ) -> Result<(), Error>;
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
@@ -93,7 +88,6 @@ pub trait ClientContext {
 pub struct ChainListener<P, S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     config: ChainListenerConfig,
     clients: ChainClients<P, S>,
@@ -104,7 +98,6 @@ where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     /// Creates a new chain listener given client chains.
     pub fn new(config: ChainListenerConfig, clients: ChainClients<P, S>) -> Self {

@@ -7,7 +7,7 @@
 
 mod db_storage;
 
-use std::{fmt::Debug, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use dashmap::{mapref::entry::Entry, DashMap};
@@ -48,14 +48,7 @@ pub use crate::db_storage::{
 #[async_trait]
 pub trait Storage: Sized {
     /// The low-level storage implementation in use.
-    type Context: Context<Extra = ChainRuntimeContext<Self>, Error = Self::StoreError>
-        + Clone
-        + Send
-        + Sync
-        + 'static;
-
-    /// Alias to provide simpler trait bounds `ViewError: From<Self::StoreError>`
-    type StoreError: std::error::Error + Debug + Sync + Send;
+    type Context: Context<Extra = ChainRuntimeContext<Self>> + Clone + Send + Sync + 'static;
 
     /// The clock type being used.
     type Clock: Clock;
@@ -74,9 +67,7 @@ pub trait Storage: Sized {
     /// Other methods that also create [`ChainStateView`] instances that can cause conflicts are:
     /// [`load_active_chain`][`Self::load_active_chain`] and
     /// [`create_chain`][`Self::create_chain`].
-    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>
-    where
-        ViewError: From<Self::StoreError>;
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>;
 
     /// Tests existence of a hashed certificate value with the given hash.
     async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError>;
@@ -185,7 +176,6 @@ pub trait Storage: Sized {
     ) -> Result<ChainStateView<Self::Context>, linera_chain::ChainError>
     where
         ChainRuntimeContext<Self>: ExecutionRuntimeContext,
-        ViewError: From<Self::StoreError>,
     {
         let chain = self.load_chain(id).await?;
         chain.ensure_is_active()?;
@@ -236,7 +226,6 @@ pub trait Storage: Sized {
     ) -> Result<(), ChainError>
     where
         ChainRuntimeContext<Self>: ExecutionRuntimeContext,
-        ViewError: From<Self::StoreError>,
     {
         let id = description.into();
         let mut chain = self.load_chain(id).await?;

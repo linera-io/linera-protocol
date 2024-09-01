@@ -19,7 +19,7 @@ use linera_execution::{
     ExecutionRuntimeContext,
 };
 use linera_storage::ChainRuntimeContext;
-use linera_views::{common::Context, views::ViewError};
+use linera_views::common::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::client::ChainClientError;
@@ -220,7 +220,6 @@ impl<C, S> From<&ChainStateView<C>> for ChainInfo
 where
     C: Context<Extra = ChainRuntimeContext<S>> + Clone + Send + Sync + 'static,
     ChainRuntimeContext<S>: ExecutionRuntimeContext,
-    ViewError: From<C::Error>,
 {
     fn from(view: &ChainStateView<C>) -> Self {
         let system_state = &view.execution_state.system;

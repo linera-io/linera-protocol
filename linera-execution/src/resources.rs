@@ -322,7 +322,6 @@ impl ResourceController<Option<Owner>, ResourceTracker> {
     ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
     where
         C: Context + Clone + Send + Sync + 'static,
-        ViewError: From<C::Error>,
     {
         self.with_state_and_grant(view, None).await
     }
@@ -337,7 +336,6 @@ impl ResourceController<Option<Owner>, ResourceTracker> {
     ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
     where
         C: Context + Clone + Send + Sync + 'static,
-        ViewError: From<C::Error>,
     {
         let mut sources = Vec::new();
         // First, use the grant (e.g. for messages) and otherwise use the chain account

@@ -407,7 +407,6 @@ pub enum SystemExecutionError {
 impl<C> SystemExecutionStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
     /// Invariant for the states of active chains.

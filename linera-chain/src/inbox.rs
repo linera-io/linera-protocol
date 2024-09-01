@@ -40,7 +40,6 @@ mod inbox_tests;
 pub struct InboxStateView<C>
 where
     C: Clone + Context + Send + Sync,
-    ViewError: From<C::Error>,
 {
     /// We have already added all the messages below this height and index.
     pub next_cursor_to_add: RegisterView<C, Cursor>,
@@ -152,7 +151,6 @@ impl From<(ChainId, Origin, InboxError)> for ChainError {
 impl<C> InboxStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     /// Converts the internal cursor for added bundles into an externally-visible block height.
     /// This makes sense because the rest of the system always adds bundles one block at a time.
@@ -280,7 +278,6 @@ where
 impl InboxStateView<MemoryContext<()>>
 where
     MemoryContext<()>: Context + Clone + Send + Sync + 'static,
-    ViewError: From<<MemoryContext<()> as linera_views::common::Context>::Error>,
 {
     pub async fn new() -> Self {
         let context = create_test_memory_context();

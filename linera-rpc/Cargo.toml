@@ -27,7 +27,6 @@ metrics = [
     "linera-core/metrics",
     "linera-execution/metrics",
     "linera-storage/metrics",
-    "linera-views/metrics",
 ]
 
 server = ["tokio-util", "tonic-health", "tonic-reflection"]
@@ -38,8 +37,9 @@ web = [
     "linera-chain/web",
     "linera-core/web",
     "linera-execution/web",
-    "linera-views/web",
 ]
+
+web-default = ["web"]
 
 [dependencies]
 anyhow.workspace = true
@@ -58,7 +58,6 @@ linera-core.workspace = true
 linera-execution.workspace = true
 linera-storage.workspace = true
 linera-version.workspace = true
-linera-views.workspace = true
 prometheus = { workspace = true, optional = true }
 prost.workspace = true
 rand.workspace = true

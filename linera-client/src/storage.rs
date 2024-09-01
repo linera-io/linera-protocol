@@ -545,8 +545,7 @@ pub trait Runnable {
 
     async fn run<S>(self, storage: S) -> Self::Output
     where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>;
+        S: Storage + Clone + Send + Sync + 'static;
 }
 
 // The design is that the initialization of the accounts should be separate

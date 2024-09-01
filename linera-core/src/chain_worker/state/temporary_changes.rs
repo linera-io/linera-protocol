@@ -19,7 +19,7 @@ use linera_chain::{
 };
 use linera_execution::{ChannelSubscription, Query, Response};
 use linera_storage::{Clock as _, Storage};
-use linera_views::views::{View, ViewError};
+use linera_views::views::View;
 #[cfg(with_testing)]
 use {
     linera_base::{crypto::CryptoHash, data_types::BlockHeight},
@@ -37,13 +37,11 @@ pub struct ChainWorkerStateWithTemporaryChanges<'state, StorageClient>(
     &'state mut ChainWorkerState<StorageClient>,
 )
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>;
+    StorageClient: Storage + Clone + Send + Sync + 'static;
 
 impl<'state, StorageClient> ChainWorkerStateWithTemporaryChanges<'state, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     /// Creates a new [`ChainWorkerStateWithAttemptedChanges`] instance to temporarily change the
     /// `state`.
@@ -345,7 +343,6 @@ where
 impl<StorageClient> Drop for ChainWorkerStateWithTemporaryChanges<'_, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     fn drop(&mut self) {
         self.0.chain.rollback();

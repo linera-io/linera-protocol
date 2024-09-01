@@ -19,9 +19,7 @@ use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::Chai
 use linera_chain::data_types::HashedCertificateValue;
 use linera_core::worker::Reason;
 use linera_service_graphql_client::{block, chains, notifications, Block, Chains, Notifications};
-use linera_views::{
-    common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
-};
+use linera_views::{common::KeyValueStore, value_splitting::DatabaseConsistencyError};
 use tokio::runtime::Handle;
 use tracing::error;
 
@@ -138,7 +136,6 @@ impl Listener {
             + Sync
             + std::error::Error
             + 'static,
-        ViewError: From<S::Error>,
     {
         let mut request = self.service.websocket().into_client_request()?;
         request.headers_mut().insert(

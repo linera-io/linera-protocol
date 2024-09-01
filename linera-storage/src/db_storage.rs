@@ -341,12 +341,10 @@ impl<Store, C> Storage for DbStorage<Store, C>
 where
     Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
-    ViewError: From<Store::Error>,
     Store::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     type Context = ContextFromStore<ChainRuntimeContext<Self>, Store>;
-    type StoreError = Store::Error;
     type Clock = C;
 
     fn clock(&self) -> &C {
@@ -615,8 +613,8 @@ where
             READ_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         }
         let values = values?;
-        let cert_result = from_bytes_option::<LiteCertificate, _>(&values[0])?;
-        let value_result = from_bytes_option::<CertificateValue, _>(&values[1])?;
+        let cert_result = from_bytes_option::<LiteCertificate, Store::Error>(&values[0])?;
+        let value_result = from_bytes_option::<CertificateValue, Store::Error>(&values[1])?;
         let value = value_result.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         let cert = cert_result.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
         Ok(cert
@@ -647,7 +645,6 @@ impl<Store, C> DbStorage<Store, C>
 where
     Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock,
-    ViewError: From<Store::Error>,
     Store::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
     fn add_hashed_cert_value_to_batch(
@@ -715,7 +712,6 @@ where
 impl<Store> DbStorage<Store, WallClock>
 where
     Store: KeyValueStore + Clone + Send + Sync + 'static,
-    ViewError: From<Store::Error>,
     Store::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
@@ -744,7 +740,6 @@ where
 impl<Store> DbStorage<Store, TestClock>
 where
     Store: KeyValueStore + Clone + Send + Sync + 'static,
-    ViewError: From<Store::Error>,
     Store::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {

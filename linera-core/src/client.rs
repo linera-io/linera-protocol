@@ -80,7 +80,6 @@ mod client_tests;
 pub struct Client<ValidatorNodeProvider, Storage>
 where
     Storage: linera_storage::Storage,
-    ViewError: From<Storage::StoreError>,
 {
     /// How to talk to the validators.
     validator_node_provider: ValidatorNodeProvider,
@@ -105,10 +104,7 @@ where
     chains: DashMap<ChainId, ChainState>,
 }
 
-impl<P, S: Storage + Clone> Client<P, S>
-where
-    ViewError: From<S::StoreError>,
-{
+impl<P, S: Storage + Clone> Client<P, S> {
     #[tracing::instrument(level = "trace", skip_all)]
     /// Creates a new `Client` with a new cache and notifiers.
     pub fn new(
@@ -173,10 +169,7 @@ where
         next_block_height: BlockHeight,
         pending_block: Option<Block>,
         pending_blobs: BTreeMap<BlobId, Blob>,
-    ) -> ChainClient<P, S>
-    where
-        ViewError: From<S::StoreError>,
-    {
+    ) -> ChainClient<P, S> {
         let known_key_pairs = known_key_pairs
             .into_iter()
             .map(|kp| (Owner::from(kp.public()), kp))
@@ -315,7 +308,6 @@ pub struct ChainClientOptions {
 pub struct ChainClient<ValidatorNodeProvider, Storage>
 where
     Storage: linera_storage::Storage,
-    ViewError: From<<Storage as linera_storage::Storage>::StoreError>,
 {
     /// The Linera [`Client`] that manages operations for this chain client.
     client: Arc<Client<ValidatorNodeProvider, Storage>>,
@@ -328,7 +320,6 @@ where
 impl<P, S> Clone for ChainClient<P, S>
 where
     S: linera_storage::Storage,
-    ViewError: From<<S as linera_storage::Storage>::StoreError>,
 {
     fn clone(&self) -> Self {
         Self {
@@ -342,7 +333,6 @@ where
 impl<P, S> std::fmt::Debug for ChainClient<P, S>
 where
     S: linera_storage::Storage,
-    ViewError: From<<S as linera_storage::Storage>::StoreError>,
 {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter
@@ -456,7 +446,6 @@ pub type ChainGuardMapped<'a, T> = Unsend<DashMapMappedRef<'a, ChainId, ChainSta
 impl<P, S> ChainClient<P, S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     #[tracing::instrument(level = "trace", skip(self))]
     /// Gets a shared reference to the chain's state.
@@ -539,7 +528,6 @@ impl<P, S> ChainClient<P, S>
 where
     P: LocalValidatorNodeProvider + Sync,
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     #[tracing::instrument(level = "trace")]
     /// Obtains a `ChainStateView` for a given `ChainId`.

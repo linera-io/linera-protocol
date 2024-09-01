@@ -26,7 +26,6 @@ use linera_execution::{
     ServiceSyncRuntime,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, warn};
 
@@ -41,7 +40,6 @@ use crate::{
 pub enum ChainWorkerRequest<Context>
 where
     Context: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<Context::Error>,
 {
     /// Reads the certificate for a requested [`BlockHeight`].
     #[cfg(with_testing)]
@@ -114,7 +112,7 @@ where
     ProcessCrossChainUpdate {
         origin: Origin,
         bundles: Vec<(Epoch, MessageBundle)>,
-        callback: oneshot::Sender<Result<Option<BlockHeight>, WorkerError>>,
+        callback: oneshot::Sender<Result<Option<(BlockHeight, NetworkActions)>, WorkerError>>,
     },
 
     /// Handle cross-chain request to confirm that the recipient was updated.
@@ -134,7 +132,6 @@ where
 pub struct ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     worker: ChainWorkerState<StorageClient>,
     service_runtime_thread: linera_base::task::BlockingFuture<()>,
@@ -143,7 +140,6 @@ where
 impl<StorageClient> ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     /// Spawns a new task to run the [`ChainWorkerActor`], returning an endpoint for sending
     /// requests to the worker.
@@ -327,7 +323,6 @@ where
 impl<Context> Debug for ChainWorkerRequest<Context>
 where
     Context: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<Context::Error>,
 {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         match self {
