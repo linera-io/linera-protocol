@@ -15,7 +15,7 @@ use linera_base::{
     identifiers::{Account, BlobId, MessageId, Owner},
     ownership::ChainOwnership,
 };
-use linera_views::{batch::Batch, common::Context, views::View};
+use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;

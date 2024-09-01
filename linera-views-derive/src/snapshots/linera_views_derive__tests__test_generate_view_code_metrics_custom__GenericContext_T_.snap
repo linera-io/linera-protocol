@@ -20,7 +20,7 @@ impl linera_views::views::View<custom::GenericContext<T>> for TestView {
     fn pre_load(
         context: &custom::GenericContext<T>,
     ) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let mut keys = Vec::new();
         let index = 0;
         let base_key = context
@@ -47,7 +47,7 @@ impl linera_views::views::View<custom::GenericContext<T>> for TestView {
         context: custom::GenericContext<T>,
         values: &[Option<Vec<u8>>],
     ) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let mut pos = 0;
         let index = 0;
         let pos_next = pos
@@ -79,16 +79,16 @@ impl linera_views::views::View<custom::GenericContext<T>> for TestView {
     async fn load(
         context: custom::GenericContext<T>,
     ) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         #[cfg(not(target_arch = "wasm32"))]
-        linera_views::increment_counter(
-            &linera_views::LOAD_VIEW_COUNTER,
+        linera_views::metrics::increment_counter(
+            &linera_views::metrics::LOAD_VIEW_COUNTER,
             stringify!(TestView),
             &context.base_key(),
         );
         #[cfg(not(target_arch = "wasm32"))]
-        use linera_views::prometheus_util::MeasureLatency as _;
-        let _latency = linera_views::LOAD_VIEW_LATENCY.measure_latency();
+        use linera_views::metrics::prometheus_util::MeasureLatency as _;
+        let _latency = linera_views::metrics::LOAD_VIEW_LATENCY.measure_latency();
         let keys = Self::pre_load(&context)?;
         let values = context.read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)

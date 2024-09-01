@@ -39,7 +39,7 @@ use crate::{
 /// A request for the [`ChainWorkerActor`].
 pub enum ChainWorkerRequest<Context>
 where
-    Context: linera_views::common::Context + Clone + Send + Sync + 'static,
+    Context: linera_views::context::Context + Clone + Send + Sync + 'static,
 {
     /// Reads the certificate for a requested [`BlockHeight`].
     #[cfg(with_testing)]
@@ -322,7 +322,7 @@ where
 
 impl<Context> Debug for ChainWorkerRequest<Context>
 where
-    Context: linera_views::common::Context + Clone + Send + Sync + 'static,
+    Context: linera_views::context::Context + Clone + Send + Sync + 'static,
 {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         match self {

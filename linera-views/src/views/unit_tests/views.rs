@@ -18,7 +18,7 @@ use crate::rocks_db::{RocksDbContext, RocksDbStore};
 use crate::scylla_db::{ScyllaDbContext, ScyllaDbStore};
 use crate::{
     batch::Batch,
-    common::Context,
+    context::Context,
     memory::{create_test_memory_context, MemoryContext},
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
@@ -220,7 +220,7 @@ impl TestContextFactory for RocksDbContextFactory {
         let namespace = generate_test_namespace();
         let root_key = &[];
         let store = RocksDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
-        let context = RocksDbContext::new(store, ());
+        let context = RocksDbContext::create(store, ()).await?;
 
         Ok(context)
     }
@@ -252,7 +252,7 @@ impl TestContextFactory for DynamoDbContextFactory {
         };
         let store =
             DynamoDbStore::recreate_and_connect(&store_config, &namespace, root_key).await?;
-        Ok(DynamoDbContext::new(store, ()))
+        Ok(DynamoDbContext::create(store, ()).await?)
     }
 }
 
@@ -270,7 +270,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
         let namespace = generate_test_namespace();
         let root_key = &[];
         let store = ScyllaDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
-        let context = ScyllaDbContext::new(store, ());
+        let context = ScyllaDbContext::create(store, ()).await?;
         Ok(context)
     }
 }

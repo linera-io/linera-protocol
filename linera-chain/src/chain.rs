@@ -28,7 +28,7 @@ use linera_execution::{
     ResourceController, ResourceTracker, Response, ServiceRuntimeRequest, TransactionTracker,
 };
 use linera_views::{
-    common::Context,
+    context::Context,
     log_view::LogView,
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,

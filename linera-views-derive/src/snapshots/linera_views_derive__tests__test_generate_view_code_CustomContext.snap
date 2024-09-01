@@ -17,7 +17,7 @@ impl linera_views::views::View<CustomContext> for TestView {
     fn pre_load(
         context: &CustomContext,
     ) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let mut keys = Vec::new();
         let index = 0;
         let base_key = context
@@ -44,7 +44,7 @@ impl linera_views::views::View<CustomContext> for TestView {
         context: CustomContext,
         values: &[Option<Vec<u8>>],
     ) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let mut pos = 0;
         let index = 0;
         let pos_next = pos + RegisterView::<CustomContext, usize>::NUM_INIT_KEYS;
@@ -75,7 +75,7 @@ impl linera_views::views::View<CustomContext> for TestView {
     async fn load(
         context: CustomContext,
     ) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let keys = Self::pre_load(&context)?;
         let values = context.read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)

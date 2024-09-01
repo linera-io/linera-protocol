@@ -10,9 +10,10 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStoreError,
-        LocalAdminKeyValueStore, LocalReadableKeyValueStore, LocalWritableKeyValueStore, WithError,
+        get_upper_bound_option, CommonStoreConfig, KeyValueStoreError, LocalAdminKeyValueStore,
+        LocalReadableKeyValueStore, LocalWritableKeyValueStore, WithError,
     },
+    context::ContextFromStore,
     value_splitting::DatabaseConsistencyError,
 };
 
@@ -308,20 +309,9 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
     }
 }
 
-/// An implementation of [`crate::common::Context`] that stores all values in an IndexedDB
+/// An implementation of [`crate::context::Context`] that stores all values in an IndexedDB
 /// database.
 pub type IndexedDbContext<E> = ContextFromStore<E, IndexedDbStore>;
-
-impl<E> IndexedDbContext<E> {
-    /// Creates a [`IndexedDbContext`].
-    pub fn new(store: IndexedDbStore, extra: E) -> Self {
-        Self {
-            store,
-            base_key: vec![],
-            extra,
-        }
-    }
-}
 
 #[cfg(with_testing)]
 mod testing {
@@ -330,8 +320,9 @@ mod testing {
 
     /// Provides a `IndexedDbContext<()>` that can be used for tests.
     pub async fn create_indexed_db_test_context() -> IndexedDbContext<()> {
-        IndexedDbContext::new(
+        IndexedDbContext::new_unsafe(
             create_indexed_db_store_stream_queries(TEST_INDEX_DB_MAX_STREAM_QUERIES).await,
+            Vec::new(),
             (),
         )
     }

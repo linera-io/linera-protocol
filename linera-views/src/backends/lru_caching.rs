@@ -15,11 +15,7 @@ use linked_hash_map::LinkedHashMap;
 #[cfg(with_metrics)]
 use prometheus::{register_int_counter_vec, IntCounterVec};
 #[cfg(with_testing)]
-use {
-    crate::common::{AdminKeyValueStore as _, CommonStoreConfig, ContextFromStore},
-    crate::memory::{MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
-    crate::views::ViewError,
-};
+use {crate::context::ContextFromStore, crate::memory::MemoryStore};
 
 use crate::{
     batch::{Batch, WriteOperation},
@@ -304,6 +300,7 @@ where
 #[cfg(with_testing)]
 pub type LruCachingMemoryContext<E> = ContextFromStore<E, LruCachingStore<MemoryStore>>;
 
+/*
 #[cfg(with_testing)]
 impl<E> LruCachingMemoryContext<E> {
     /// Creates a [`crate::key_value_store_view::KeyValueStoreMemoryContext`].
@@ -328,3 +325,4 @@ impl<E> LruCachingMemoryContext<E> {
         })
     }
 }
+*/

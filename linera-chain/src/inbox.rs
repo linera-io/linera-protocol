@@ -10,7 +10,7 @@ use linera_base::{
 #[cfg(with_testing)]
 use linera_views::memory::{create_test_memory_context, MemoryContext};
 use linera_views::{
-    common::Context,
+    context::Context,
     queue_view::QueueView,
     register_view::RegisterView,
     views::{ClonableView, View, ViewError},

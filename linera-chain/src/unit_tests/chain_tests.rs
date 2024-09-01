@@ -22,6 +22,7 @@ use linera_execution::{
     SystemMessage, TestExecutionRuntimeContext,
 };
 use linera_views::{
+    context::Context as _,
     memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
     test_utils::generate_test_namespace,
     views::{View, ViewError},
@@ -36,9 +37,9 @@ use crate::{
 impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>>
 where
     MemoryContext<TestExecutionRuntimeContext>:
-        linera_views::common::Context + Clone + Send + Sync + 'static,
+        linera_views::context::Context + Clone + Send + Sync + 'static,
     ViewError:
-        From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::common::Context>::Error>,
+        From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::context::Context>::Error>,
 {
     pub async fn new(chain_id: ChainId) -> Self {
         let exec_runtime_context =
@@ -104,7 +105,7 @@ async fn test_application_permissions() {
     let app_description = make_app_description();
     let application_id = ApplicationId::from(&app_description);
     let application = Arc::new(MockApplication::default());
-    let extra = &chain.context().extra;
+    let extra = &chain.context().extra();
     extra
         .user_contracts()
         .insert(application_id, application.clone());

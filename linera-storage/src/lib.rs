@@ -31,7 +31,7 @@ use linera_execution::{
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
 use linera_views::{
-    common::Context,
+    context::Context,
     views::{CryptoHashView, RootView, ViewError},
 };
 

@@ -10,7 +10,7 @@ use linera_base::{
     data_types::{Amount, ArithmeticError},
     identifiers::Owner,
 };
-use linera_views::{common::Context, views::ViewError};
+use linera_views::{context::Context, views::ViewError};
 
 use crate::{
     system::SystemExecutionError, ExecutionError, ExecutionStateView, Message, Operation,

@@ -8,7 +8,6 @@ use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included, sync::Mu
 use async_trait::async_trait;
 use linera_base::{data_types::ArithmeticError, ensure};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{self, MeasureLatency},
@@ -18,10 +17,11 @@ use {
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        from_bytes_option, from_bytes_option_or_default, get_interval, get_upper_bound, Context,
-        DeletionSet, HasherOutput, KeyIterable, KeyValueIterable, KeyValueStoreError,
-        SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
+        from_bytes_option, from_bytes_option_or_default, get_interval, get_upper_bound,
+        DeletionSet, HasherOutput, KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update,
+        MIN_VIEW_TAG,
     },
+    context::Context,
     map_view::ByteMapView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
@@ -42,10 +42,12 @@ static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new
 
 #[cfg(with_testing)]
 use {
-    crate::common::{ContextFromStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
-    crate::memory::{create_test_memory_context, MemoryContext},
+    crate::common::{KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    crate::context::ContextFromStore,
+    crate::memory::MemoryContext,
     async_lock::RwLock,
     std::sync::Arc,
+    thiserror::Error,
 };
 
 /// We implement two types:
@@ -1095,6 +1097,7 @@ impl<C> WithError for ViewContainer<C> {
     type Error = ViewContainerError;
 }
 
+#[cfg(with_testing)]
 /// The error type for [`ViewContainer`] operations.
 #[derive(Error, Debug)]
 pub enum ViewContainerError {
@@ -1107,6 +1110,7 @@ pub enum ViewContainerError {
     Bcs(#[from] bcs::Error),
 }
 
+#[cfg(with_testing)]
 impl KeyValueStoreError for ViewContainerError {
     const BACKEND: &'static str = "view_container";
 }
@@ -1207,18 +1211,3 @@ where
 /// A context that stores all values in memory.
 #[cfg(with_testing)]
 pub type KeyValueStoreMemoryContext<E> = ContextFromStore<E, ViewContainer<MemoryContext<()>>>;
-
-#[cfg(with_testing)]
-impl<E> KeyValueStoreMemoryContext<E> {
-    /// Creates a [`KeyValueStoreMemoryContext`].
-    pub async fn new(extra: E) -> Result<Self, ViewError> {
-        let context = create_test_memory_context();
-        let store = ViewContainer::new(context).await?;
-        let base_key = Vec::new();
-        Ok(Self {
-            store,
-            base_key,
-            extra,
-        })
-    }
-}

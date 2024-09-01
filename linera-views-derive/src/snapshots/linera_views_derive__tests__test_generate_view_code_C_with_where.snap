@@ -6,8 +6,7 @@ expression: "pretty(generate_view_code(input, true))"
 impl<C, MyParam> linera_views::views::View<C> for TestView<C, MyParam>
 where
     MyParam: Send + Sync + 'static,
-    C: linera_views::common::Context + Send + Sync + Clone + 'static,
-    linera_views::views::ViewError: From<C::Error>,
+    C: linera_views::context::Context + Send + Sync + Clone + 'static,
 {
     const NUM_INIT_KEYS: usize = RegisterView::<C, usize>::NUM_INIT_KEYS
         + CollectionView::<C, usize, RegisterView<C, usize>>::NUM_INIT_KEYS;
@@ -16,7 +15,7 @@ where
         self.register.context()
     }
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let mut keys = Vec::new();
         let index = 0;
         let base_key = context
@@ -40,7 +39,7 @@ where
         context: C,
         values: &[Option<Vec<u8>>],
     ) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let mut pos = 0;
         let index = 0;
         let pos_next = pos + RegisterView::<C, usize>::NUM_INIT_KEYS;
@@ -65,7 +64,7 @@ where
         Ok(Self { register, collection })
     }
     async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let keys = Self::pre_load(&context)?;
         let values = context.read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)

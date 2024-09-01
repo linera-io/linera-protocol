@@ -21,7 +21,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_views::{
-    common::Context,
+    context::Context,
     map_view::HashedMapView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,

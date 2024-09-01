@@ -8,10 +8,10 @@ where
     MyParam: Send + Sync + 'static,
 {
     async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
-        use linera_views::{common::Context, batch::Batch, views::View};
+        use linera_views::{context::Context, batch::Batch, views::View};
         #[cfg(not(target_arch = "wasm32"))]
-        linera_views::increment_counter(
-            &linera_views::SAVE_VIEW_COUNTER,
+        linera_views::metrics::increment_counter(
+            &linera_views::metrics::SAVE_VIEW_COUNTER,
             stringify!(TestView),
             &self.context().base_key(),
         );

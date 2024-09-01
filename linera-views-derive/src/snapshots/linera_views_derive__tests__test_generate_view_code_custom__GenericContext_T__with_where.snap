@@ -23,7 +23,7 @@ where
     fn pre_load(
         context: &custom::GenericContext<T>,
     ) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let mut keys = Vec::new();
         let index = 0;
         let base_key = context
@@ -50,7 +50,7 @@ where
         context: custom::GenericContext<T>,
         values: &[Option<Vec<u8>>],
     ) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let mut pos = 0;
         let index = 0;
         let pos_next = pos
@@ -82,7 +82,7 @@ where
     async fn load(
         context: custom::GenericContext<T>,
     ) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let keys = Self::pre_load(&context)?;
         let values = context.read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)

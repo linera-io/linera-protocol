@@ -16,7 +16,7 @@ use linera_base::{
     identifiers::{BlobId, BlobType, BytecodeId, ChainId, MessageId},
 };
 use linera_views::{
-    common::Context,
+    context::Context,
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};

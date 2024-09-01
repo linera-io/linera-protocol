@@ -19,7 +19,8 @@ use {
 
 use crate::{
     batch::Batch,
-    common::{from_bytes_option_or_default, Context, HasherOutput, MIN_VIEW_TAG},
+    common::{from_bytes_option_or_default, HasherOutput, MIN_VIEW_TAG},
+    context::Context,
     hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };

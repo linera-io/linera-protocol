@@ -14,9 +14,10 @@ use crate::test_utils::generate_test_namespace;
 use crate::{
     batch::{Batch, DeletePrefixExpander, WriteOperation},
     common::{
-        get_interval, AdminKeyValueStore, CommonStoreConfig, Context, ContextFromStore,
-        KeyIterable, KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        get_interval, AdminKeyValueStore, CommonStoreConfig, KeyIterable, KeyValueStoreError,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
+    context::{Context, ContextFromStore},
     value_splitting::DatabaseConsistencyError,
 };
 
@@ -373,7 +374,7 @@ impl AdminKeyValueStore for MemoryStore {
     }
 }
 
-/// An implementation of [`crate::common::Context`] that stores all values in memory.
+/// An implementation of [`crate::context::Context`] that stores all values in memory.
 pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
 
 /// Creates a default memory test config
@@ -385,36 +386,6 @@ pub fn create_memory_store_test_config() -> MemoryStoreConfig {
         cache_size: 1000,
     };
     MemoryStoreConfig { common_config }
-}
-
-impl<E> MemoryContext<E> {
-    /// Creates a [`MemoryContext`].
-    pub fn new(max_stream_queries: usize, namespace: &str, root_key: &[u8], extra: E) -> Self {
-        let store = MemoryStore::new(max_stream_queries, namespace, root_key).unwrap();
-        let base_key = Vec::new();
-        Self {
-            store,
-            base_key,
-            extra,
-        }
-    }
-
-    /// Creates a [`MemoryContext`] for testing.
-    #[cfg(with_testing)]
-    pub fn new_for_testing(
-        max_stream_queries: usize,
-        namespace: &str,
-        root_key: &[u8],
-        extra: E,
-    ) -> Self {
-        let store = MemoryStore::new_for_testing(max_stream_queries, namespace, root_key).unwrap();
-        let base_key = Vec::new();
-        Self {
-            store,
-            base_key,
-            extra,
-        }
-    }
 }
 
 /// Provides a `MemoryContext<()>` that can be used for tests.

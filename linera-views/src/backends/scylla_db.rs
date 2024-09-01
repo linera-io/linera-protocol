@@ -1,19 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This provides a KeyValueStore for the ScyllaDB database.
+//! This provides a `KeyValueStore for the ScyllaDB database.
 //! The code is functional but some aspects are missing.
 //!
 //! The current connection is done via a Session and a corresponding
 //! primary key that we name `namespace`. The maximum number of
 //! concurrent queries is controlled by max_concurrent_queries.
-//!
-//! We thus implement the
-//! * [`KeyValueStore`][trait1] for a database access.
-//! * [`Context`][trait2] for the context.
-//!
-//! [trait1]: common::KeyValueStore
-//! [trait2]: common::Context
 
 /// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
 /// The limit is in reality 100. But we need one entry for the root key.
@@ -44,9 +37,10 @@ use crate::test_utils::generate_test_namespace;
 use crate::{
     batch::{Batch, UnorderedBatch},
     common::{
-        get_upper_bound_option, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
-        KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        get_upper_bound_option, AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
+    context::ContextFromStore,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
     value_splitting::DatabaseConsistencyError,
@@ -955,17 +949,5 @@ pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
         .expect("store")
 }
 
-/// An implementation of [`crate::common::Context`] based on ScyllaDB
+/// An implementation of [`crate::context::Context`] based on ScyllaDB
 pub type ScyllaDbContext<E> = ContextFromStore<E, ScyllaDbStore>;
-
-impl<E: Clone + Send + Sync> ScyllaDbContext<E> {
-    /// Creates a [`ScyllaDbContext`].
-    pub fn new(store: ScyllaDbStore, extra: E) -> Self {
-        let base_key = Vec::new();
-        Self {
-            store,
-            base_key,
-            extra,
-        }
-    }
-}

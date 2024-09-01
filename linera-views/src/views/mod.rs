@@ -17,6 +17,33 @@ use crate::{batch::Batch, common::HasherOutput};
 #[path = "unit_tests/views.rs"]
 mod tests;
 
+/// The `RegisterView` implements a register for a single value.
+pub mod register_view;
+
+/// The `LogView` implements a log list that can be pushed.
+pub mod log_view;
+
+/// The `QueueView` implements a queue that can push on the back and delete on the front.
+pub mod queue_view;
+
+/// The `MapView` implements a map with ordered keys.
+pub mod map_view;
+
+/// The `SetView` implements a set with ordered entries.
+pub mod set_view;
+
+/// The `CollectionView` implements a map structure whose keys are ordered and the values are views.
+pub mod collection_view;
+
+/// The `ReentrantCollectionView` implements a map structure whose keys are ordered and the values are views with concurrent access.
+pub mod reentrant_collection_view;
+
+/// The implementation of a key-value store view.
+pub mod key_value_store_view;
+
+/// Wrapping a view to compute a hash.
+pub mod hashable_wrapper;
+
 /// A view gives exclusive access to read and write the data stored at an underlying
 /// address in storage.
 #[async_trait]

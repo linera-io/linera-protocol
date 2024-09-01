@@ -41,9 +41,10 @@ use crate::metering::{
 use crate::{
     batch::{Batch, SimpleUnorderedBatch},
     common::{
-        AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
-        KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        AdminKeyValueStore, CommonStoreConfig, KeyIterable, KeyValueIterable, KeyValueStoreError,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
+    context::ContextFromStore,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
@@ -1108,23 +1109,8 @@ impl DynamoDbStore {
 
 /// An implementation of [`Context`][trait1] based on [`DynamoDbStore`].
 ///
-/// [trait1]: crate::common::Context
+/// [trait1]: crate::context::Context
 pub type DynamoDbContext<E> = ContextFromStore<E, DynamoDbStore>;
-
-impl<E> DynamoDbContext<E>
-where
-    E: Clone + Sync + Send,
-{
-    /// Creates a new [`DynamoDbContext`] instance from the given AWS configuration.
-    pub fn new(store: DynamoDbStore, extra: E) -> Self {
-        let base_key = Vec::new();
-        DynamoDbContext {
-            store,
-            base_key,
-            extra,
-        }
-    }
-}
 
 /// Error when validating a table name.
 #[derive(Debug, Error)]

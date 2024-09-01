@@ -9,7 +9,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Owner},
     ownership::ChainOwnership,
 };
-use linera_views::{common::Context, map_view::MapView};
+use linera_views::{context::Context, map_view::MapView};
 
 use crate::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
