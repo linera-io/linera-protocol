@@ -67,8 +67,7 @@ jobs:
         cargo build --locked --release --target wasm32-unknown-unknown
     - name: Run end-to-end tests
       run: |
-        cargo build --release -p linera-storage-service
-        target/release/linera-storage-server memory --endpoint $LINERA_STORAGE_SERVICE &
+        cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
         cargo test --features storage-service,unstable-oracles -- storage_service --nocapture
     - name: Run Ethereum tests
       run: |
