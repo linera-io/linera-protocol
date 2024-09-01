@@ -6,7 +6,6 @@ expression: pretty(generate_save_delete_view_code(input))
 impl<C> linera_views::views::RootView<C> for TestView<C>
 where
     C: linera_views::context::Context + Send + Sync + Clone + 'static,
-    linera_views::views::ViewError: From<C::Error>,
 {
     async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
         use linera_views::{context::Context, batch::Batch, views::View};
