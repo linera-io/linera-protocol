@@ -155,9 +155,9 @@ where
     /// Pushes a value to the end of the log.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::context::create_test_memory_context;
     /// # use linera_views::log_view::LogView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::views::View;
     /// # let context = create_test_memory_context();
     /// let mut log = LogView::load(context).await.unwrap();
     /// log.push(34);
@@ -170,9 +170,9 @@ where
     /// Reads the size of the log.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::context::create_test_memory_context;
     /// # use linera_views::log_view::LogView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::views::View;
     /// # let context = create_test_memory_context();
     /// let mut log = LogView::load(context).await.unwrap();
     /// log.push(34);
@@ -203,9 +203,9 @@ where
     /// Reads the logged value with the given index (including staged ones).
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::context::create_test_memory_context;
     /// # use linera_views::log_view::LogView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::views::View;
     /// # let context = create_test_memory_context();
     /// let mut log = LogView::load(context).await.unwrap();
     /// log.push(34);
@@ -227,9 +227,9 @@ where
     /// Reads several logged keys (including staged ones)
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::context::create_test_memory_context;
     /// # use linera_views::log_view::LogView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::views::View;
     /// # let context = create_test_memory_context();
     /// let mut log = LogView::load(context).await.unwrap();
     /// log.push(34);
@@ -289,9 +289,9 @@ where
     /// Reads the logged values in the given range (including staged ones).
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::context::create_test_memory_context;
     /// # use linera_views::log_view::LogView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::views::View;
     /// # let context = create_test_memory_context();
     /// let mut log = LogView::load(context).await.unwrap();
     /// log.push(34);

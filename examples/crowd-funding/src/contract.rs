@@ -9,7 +9,7 @@ use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
-    views::{RootView, View, ViewStorageContext},
+    views::{RootView, View},
     Contract, ContractRuntime,
 };
 use state::{CrowdFunding, Status};
@@ -31,7 +31,7 @@ impl Contract for CrowdFundingContract {
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = CrowdFunding::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = CrowdFunding::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         CrowdFundingContract { state, runtime }

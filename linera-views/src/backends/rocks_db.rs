@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Implements [`crate::common::KeyValueStore`] for the RocksDB database.
+
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     ffi::OsString,
@@ -26,7 +28,6 @@ use crate::{
         get_upper_bound, AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError,
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
-    context::ContextFromStore,
     lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
@@ -501,9 +502,6 @@ pub async fn create_rocks_db_test_store() -> RocksDbStore {
         .expect("store")
 }
 
-/// An implementation of [`crate::context::Context`] based on RocksDB
-pub type RocksDbContext<E> = ContextFromStore<E, RocksDbStore>;
-
 impl RocksDbStore {
     #[cfg(with_metrics)]
     fn inner(&self) -> &RocksDbStoreInternal {
@@ -631,7 +629,7 @@ impl AdminKeyValueStore for RocksDbStore {
     }
 }
 
-/// The error type for [`RocksDbContext`]
+/// The error type for [`RocksDbStore`]
 #[derive(Error, Debug)]
 pub enum RocksDbStoreError {
     /// Tokio join error in RocksDb.

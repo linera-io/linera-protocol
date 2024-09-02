@@ -6,11 +6,7 @@
 mod state;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use linera_sdk::{
-    base::WithServiceAbi,
-    views::{View, ViewStorageContext},
-    Service, ServiceRuntime,
-};
+use linera_sdk::{base::WithServiceAbi, views::View, Service, ServiceRuntime};
 
 use self::state::Counter;
 
@@ -28,7 +24,7 @@ impl Service for CounterService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = Counter::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = Counter::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         CounterService { state }
@@ -71,11 +67,7 @@ impl QueryRoot {
 mod tests {
     use async_graphql::{Request, Response, Value};
     use futures::FutureExt as _;
-    use linera_sdk::{
-        util::BlockingWait,
-        views::{View, ViewStorageContext},
-        Service, ServiceRuntime,
-    };
+    use linera_sdk::{util::BlockingWait, views::View, Service, ServiceRuntime};
     use serde_json::json;
 
     use super::{Counter, CounterService};
@@ -84,7 +76,7 @@ mod tests {
     fn query() {
         let value = 61_098_721_u64;
         let runtime = ServiceRuntime::<CounterService>::new();
-        let mut state = Counter::load(ViewStorageContext::from(runtime.key_value_store()))
+        let mut state = Counter::load(runtime.root_view_storage_context())
             .blocking_wait()
             .expect("Failed to read from mock key value store");
         state.value.set(value);

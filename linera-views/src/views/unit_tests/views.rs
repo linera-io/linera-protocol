@@ -9,17 +9,15 @@ use test_case::test_case;
 
 #[cfg(with_dynamodb)]
 use crate::dynamo_db::{
-    create_dynamo_db_common_config, DynamoDbContext, DynamoDbStore, DynamoDbStoreConfig,
-    LocalStackTestContext,
+    create_dynamo_db_common_config, DynamoDbStore, DynamoDbStoreConfig, LocalStackTestContext,
 };
 #[cfg(with_rocksdb)]
-use crate::rocks_db::{RocksDbContext, RocksDbStore};
+use crate::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
-use crate::scylla_db::{ScyllaDbContext, ScyllaDbStore};
+use crate::scylla_db::ScyllaDbStore;
 use crate::{
     batch::Batch,
-    context::Context,
-    memory::{create_test_memory_context, MemoryContext},
+    context::{create_test_memory_context, Context, MemoryContext},
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::{HashedRegisterView, RegisterView},
@@ -29,7 +27,9 @@ use crate::{
     views::{HashableView, View, ViewError},
 };
 #[cfg(any(with_rocksdb, with_scylladb, with_dynamodb))]
-use crate::{common::AdminKeyValueStore, test_utils::generate_test_namespace};
+use crate::{
+    common::AdminKeyValueStore, context::ViewContext, test_utils::generate_test_namespace,
+};
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {
@@ -213,14 +213,14 @@ struct RocksDbContextFactory {}
 #[cfg(with_rocksdb)]
 #[async_trait]
 impl TestContextFactory for RocksDbContextFactory {
-    type Context = RocksDbContext<()>;
+    type Context = ViewContext<(), RocksDbStore>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let config = RocksDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
         let store = RocksDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
-        let context = RocksDbContext::create(store, ()).await?;
+        let context = ViewContext::create_root_context(store, ()).await?;
 
         Ok(context)
     }
@@ -235,7 +235,7 @@ struct DynamoDbContextFactory {
 #[cfg(with_dynamodb)]
 #[async_trait]
 impl TestContextFactory for DynamoDbContextFactory {
-    type Context = DynamoDbContext<()>;
+    type Context = ViewContext<(), DynamoDbStore>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         if self.localstack.is_none() {
@@ -252,7 +252,7 @@ impl TestContextFactory for DynamoDbContextFactory {
         };
         let store =
             DynamoDbStore::recreate_and_connect(&store_config, &namespace, root_key).await?;
-        Ok(DynamoDbContext::create(store, ()).await?)
+        Ok(ViewContext::create_root_context(store, ()).await?)
     }
 }
 
@@ -263,14 +263,14 @@ struct ScyllaDbContextFactory;
 #[cfg(with_scylladb)]
 #[async_trait]
 impl TestContextFactory for ScyllaDbContextFactory {
-    type Context = ScyllaDbContext<()>;
+    type Context = ViewContext<(), ScyllaDbStore>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let config = ScyllaDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
         let store = ScyllaDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
-        let context = ScyllaDbContext::create(store, ()).await?;
+        let context = ViewContext::create_root_context(store, ()).await?;
         Ok(context)
     }
 }

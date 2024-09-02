@@ -6,8 +6,7 @@ use std::time::{Duration, Instant};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use linera_views::{
     batch::Batch,
-    context::Context,
-    memory::{create_test_memory_context, MemoryContext},
+    context::{create_test_memory_context, Context, MemoryContext},
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     views::View,

@@ -22,8 +22,8 @@ use linera_execution::{
     SystemMessage, TestExecutionRuntimeContext,
 };
 use linera_views::{
-    context::Context as _,
-    memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
+    context::{Context as _, MemoryContext},
+    memory::TEST_MEMORY_MAX_STREAM_QUERIES,
     test_utils::generate_test_namespace,
     views::{View, ViewError},
 };

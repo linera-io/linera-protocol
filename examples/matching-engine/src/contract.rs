@@ -9,7 +9,7 @@ use std::cmp::min;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
-    views::{RootView, View, ViewStorageContext},
+    views::{RootView, View},
     Contract, ContractRuntime,
 };
 use matching_engine::{
@@ -57,7 +57,7 @@ impl Contract for MatchingEngineContract {
     type Parameters = Parameters;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = MatchingEngine::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = MatchingEngine::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         MatchingEngineContract { state, runtime }

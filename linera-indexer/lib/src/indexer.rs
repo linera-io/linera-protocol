@@ -12,7 +12,7 @@ use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::Chai
 use linera_chain::data_types::HashedCertificateValue;
 use linera_views::{
     common::KeyValueStore,
-    context::{Context, ContextFromStore},
+    context::{Context, ViewContext},
     map_view::MapView,
     register_view::RegisterView,
     set_view::SetView,
@@ -39,10 +39,10 @@ pub struct StateView<C> {
 #[derive(Clone)]
 pub struct State<C>(Arc<Mutex<StateView<C>>>);
 
-type StateSchema<S> = Schema<State<ContextFromStore<(), S>>, EmptyMutation, EmptySubscription>;
+type StateSchema<S> = Schema<State<ViewContext<(), S>>, EmptyMutation, EmptySubscription>;
 
 pub struct Indexer<S> {
-    pub state: State<ContextFromStore<(), S>>,
+    pub state: State<ViewContext<(), S>>,
     pub plugins: BTreeMap<String, Box<dyn Plugin<S>>>,
 }
 
@@ -73,7 +73,7 @@ where
         let store = store
             .clone_with_root_key(&root_key)
             .map_err(|_e| IndexerError::CloneWithRootKeyError)?;
-        let context = ContextFromStore::create(store, ())
+        let context = ViewContext::create_root_context(store, ())
             .await
             .map_err(|e| IndexerError::ViewError(e.into()))?;
         let state = State(Arc::new(Mutex::new(StateView::load(context).await?)));
@@ -87,7 +87,7 @@ where
     /// the indexer.
     pub async fn process_value(
         &self,
-        state: &mut StateView<ContextFromStore<(), S>>,
+        state: &mut StateView<ViewContext<(), S>>,
         value: &HashedCertificateValue,
     ) -> Result<(), IndexerError> {
         for plugin in self.plugins.values() {

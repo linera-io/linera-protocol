@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Add LRU (least recently used) caching to a given store.
+
 /// The standard cache size used for tests.
 pub const TEST_CACHE_SIZE: usize = 1000;
 
@@ -14,9 +16,9 @@ use std::{
 use linked_hash_map::LinkedHashMap;
 #[cfg(with_metrics)]
 use prometheus::{register_int_counter_vec, IntCounterVec};
-#[cfg(with_testing)]
-use {crate::context::ContextFromStore, crate::memory::MemoryStore};
 
+#[cfg(with_testing)]
+use crate::memory::MemoryStore;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
@@ -296,33 +298,6 @@ where
     }
 }
 
-/// A context that stores all values in memory.
+/// A memory store with caching.
 #[cfg(with_testing)]
-pub type LruCachingMemoryContext<E> = ContextFromStore<E, LruCachingStore<MemoryStore>>;
-
-/*
-#[cfg(with_testing)]
-impl<E> LruCachingMemoryContext<E> {
-    /// Creates a [`crate::key_value_store_view::KeyValueStoreMemoryContext`].
-    pub async fn new(extra: E, cache_size: usize) -> Result<Self, ViewError> {
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries: None,
-            max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
-            cache_size,
-        };
-        let config = MemoryStoreConfig { common_config };
-        let namespace = "linera";
-        let root_key = &[];
-        let store = MemoryStore::maybe_create_and_connect(&config, namespace, root_key)
-            .await
-            .expect("store");
-        let store = LruCachingStore::new(store, cache_size);
-        let base_key = Vec::new();
-        Ok(Self {
-            store,
-            base_key,
-            extra,
-        })
-    }
-}
-*/
+pub type LruCachingMemoryStore = LruCachingStore<MemoryStore>;

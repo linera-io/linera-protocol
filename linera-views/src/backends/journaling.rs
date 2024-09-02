@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Turns a `DirectKeyValueStore` into a `KeyValueStore` by adding journaling.
+//!
 //! Journaling aims to allow writing arbitrarily large batches of data in an atomic way.
 //! This is useful for database backends that limit the number of keys and/or the size of
 //! the data that can be written atomically (i.e. in the same database transaction).

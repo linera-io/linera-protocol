@@ -23,7 +23,7 @@ use linera_execution::{
 use linera_views::{
     batch::Batch,
     common::KeyValueStore,
-    context::ContextFromStore,
+    context::ViewContext,
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
@@ -345,7 +345,7 @@ where
     Store::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
-    type Context = ContextFromStore<ChainRuntimeContext<Self>, Store>;
+    type Context = ViewContext<ChainRuntimeContext<Self>, Store>;
     type Clock = C;
 
     fn clock(&self) -> &C {
@@ -367,7 +367,7 @@ where
         };
         let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
         let store = self.store.clone_with_root_key(&root_key)?;
-        let context = ContextFromStore::create(store, runtime_context).await?;
+        let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
 

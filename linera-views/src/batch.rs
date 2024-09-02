@@ -624,8 +624,7 @@ impl BatchValueWriter<UnorderedBatch> for UnorderedBatchIter {
 mod tests {
     use linera_views::{
         batch::{Batch, SimpleUnorderedBatch, UnorderedBatch},
-        context::Context,
-        memory::create_test_memory_context,
+        context::{create_test_memory_context, Context},
     };
 
     #[test]

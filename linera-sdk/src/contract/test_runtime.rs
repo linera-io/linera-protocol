@@ -20,7 +20,7 @@ use linera_base::{
 };
 use serde::Serialize;
 
-use crate::{Contract, DataBlobHash, KeyValueStore};
+use crate::{Contract, DataBlobHash, KeyValueStore, ViewStorageContext};
 
 /// A mock of the common runtime to interface with the host executing the contract.
 pub struct MockContractRuntime<Application>
@@ -106,6 +106,11 @@ where
     /// Returns the key-value store to interface with storage.
     pub fn key_value_store(&self) -> KeyValueStore {
         self.key_value_store.clone()
+    }
+
+    /// Returns a storage context suitable for a root view.
+    pub fn root_view_storage_context(&self) -> ViewStorageContext {
+        ViewStorageContext::new_unsafe(self.key_value_store(), Vec::new(), ())
     }
 
     /// Configures the application parameters to return during the test.

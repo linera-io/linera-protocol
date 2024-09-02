@@ -135,9 +135,9 @@ where
     /// Access the current value in the register.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::context::create_test_memory_context;
     /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::views::View;
     /// # let context = create_test_memory_context();
     /// let mut register = RegisterView::<_, u32>::load(context).await.unwrap();
     /// let value = register.get();
@@ -154,9 +154,9 @@ where
     /// Sets the value in the register.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::context::create_test_memory_context;
     /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::views::View;
     /// # let context = create_test_memory_context();
     /// let mut register = RegisterView::load(context).await.unwrap();
     /// register.set(5);
@@ -183,9 +183,9 @@ where
     /// Obtains a mutable reference to the value in the register.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::context::create_test_memory_context;
     /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::views::View;
     /// # let context = create_test_memory_context();
     /// let mut register: RegisterView<_, u32> = RegisterView::load(context).await.unwrap();
     /// let value = register.get_mut();

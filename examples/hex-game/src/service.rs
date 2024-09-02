@@ -10,10 +10,7 @@ use std::sync::{Arc, Mutex};
 use async_graphql::{ComplexObject, Context, EmptySubscription, Request, Response, Schema};
 use hex_game::{Operation, Player};
 use linera_sdk::{
-    base::WithServiceAbi,
-    graphql::GraphQLMutationRoot,
-    views::{View, ViewStorageContext},
-    Service, ServiceRuntime,
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
 };
 
 use self::state::HexState;
@@ -34,7 +31,7 @@ impl Service for HexService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = HexState::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = HexState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         HexService {
@@ -76,11 +73,7 @@ impl HexState {
 #[cfg(test)]
 mod tests {
     use async_graphql::{futures_util::FutureExt, Request};
-    use linera_sdk::{
-        util::BlockingWait,
-        views::{View, ViewStorageContext},
-        Service, ServiceRuntime,
-    };
+    use linera_sdk::{util::BlockingWait, views::View, Service, ServiceRuntime};
     use serde_json::json;
 
     use super::*;
@@ -88,7 +81,7 @@ mod tests {
     #[test]
     fn query() {
         let runtime = ServiceRuntime::<HexService>::new();
-        let state = HexState::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = HexState::load(runtime.root_view_storage_context())
             .blocking_wait()
             .expect("Failed to read from mock key value store");
 

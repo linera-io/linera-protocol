@@ -996,7 +996,7 @@ where
 #[cfg(test)]
 mod tests {
     use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ApplicationId};
-    use linera_views::memory::MemoryContext;
+    use linera_views::context::MemoryContext;
 
     use super::*;
     use crate::{ExecutionOutcome, ExecutionStateView, TestExecutionRuntimeContext};

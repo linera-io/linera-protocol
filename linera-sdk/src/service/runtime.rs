@@ -12,7 +12,7 @@ use linera_base::{
 };
 
 use super::wit::service_system_api as wit;
-use crate::{DataBlobHash, KeyValueStore, Service};
+use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
 
 /// The runtime available during execution of a query.
 pub struct ServiceRuntime<Application>
@@ -50,6 +50,11 @@ where
     /// Returns the key-value store to interface with storage.
     pub fn key_value_store(&self) -> KeyValueStore {
         KeyValueStore::for_services()
+    }
+
+    /// Returns a storage context suitable for a root view.
+    pub fn root_view_storage_context(&self) -> ViewStorageContext {
+        ViewStorageContext::new_unsafe(self.key_value_store(), Vec::new(), ())
     }
 
     /// Returns the application parameters provided when the application was created.

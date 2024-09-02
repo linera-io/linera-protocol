@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Implements [`crate::common::KeyValueStore`] in memory.
+
 use std::{
     collections::BTreeMap,
     fmt::Debug,
@@ -12,12 +14,11 @@ use thiserror::Error;
 #[cfg(with_testing)]
 use crate::test_utils::generate_test_namespace;
 use crate::{
-    batch::{Batch, DeletePrefixExpander, WriteOperation},
+    batch::{Batch, WriteOperation},
     common::{
-        get_interval, AdminKeyValueStore, CommonStoreConfig, KeyIterable, KeyValueStoreError,
+        get_interval, AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError,
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
-    context::{Context, ContextFromStore},
     value_splitting::DatabaseConsistencyError,
 };
 
@@ -374,9 +375,6 @@ impl AdminKeyValueStore for MemoryStore {
     }
 }
 
-/// An implementation of [`crate::context::Context`] that stores all values in memory.
-pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
-
 /// Creates a default memory test config
 pub fn create_memory_store_test_config() -> MemoryStoreConfig {
     let max_stream_queries = TEST_MEMORY_MAX_STREAM_QUERIES;
@@ -388,16 +386,6 @@ pub fn create_memory_store_test_config() -> MemoryStoreConfig {
     MemoryStoreConfig { common_config }
 }
 
-/// Provides a `MemoryContext<()>` that can be used for tests.
-/// It is not named create_memory_test_context because it is massively
-/// used and so we want to have a short name.
-#[cfg(with_testing)]
-pub fn create_test_memory_context() -> MemoryContext<()> {
-    let namespace = generate_test_namespace();
-    let root_key = &[];
-    MemoryContext::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, root_key, ())
-}
-
 /// Creates a test memory store for working.
 #[cfg(with_testing)]
 pub fn create_test_memory_store() -> MemoryStore {
@@ -406,7 +394,7 @@ pub fn create_test_memory_store() -> MemoryStore {
     MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, root_key).unwrap()
 }
 
-/// The error type for [`MemoryContext`].
+/// The error type for [`MemoryStore`].
 #[derive(Error, Debug)]
 pub enum MemoryStoreError {
     /// Serialization error with BCS.
@@ -428,18 +416,4 @@ pub enum MemoryStoreError {
 
 impl KeyValueStoreError for MemoryStoreError {
     const BACKEND: &'static str = "memory";
-}
-
-impl DeletePrefixExpander for MemoryContext<()> {
-    type Error = MemoryStoreError;
-
-    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let mut vector_list = Vec::new();
-        for key in <Vec<Vec<u8>> as KeyIterable<Self::Error>>::iterator(
-            &self.find_keys_by_prefix(key_prefix).await?,
-        ) {
-            vector_list.push(key?.to_vec());
-        }
-        Ok(vector_list)
-    }
 }

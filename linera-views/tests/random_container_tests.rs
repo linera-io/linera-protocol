@@ -6,10 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::Result;
 use linera_views::{
     collection_view::HashedCollectionView,
-    context::Context,
+    context::{create_test_memory_context, Context},
     key_value_store_view::{KeyValueStoreView, SizeData},
     map_view::HashedByteMapView,
-    memory::create_test_memory_context,
     queue_view::HashedQueueView,
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::RegisterView,

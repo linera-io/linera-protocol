@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Adds support for large values to a given store by splitting them between several keys.
+
 use std::fmt::Debug;
 
 use linera_base::ensure;

@@ -8,21 +8,21 @@ use async_trait::async_trait;
 #[cfg(any(with_dynamodb, with_rocksdb, with_scylladb))]
 use linera_views::common::AdminKeyValueStore as _;
 #[cfg(with_rocksdb)]
-use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDbStore};
+use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbStore};
 #[cfg(with_scylladb)]
-use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
+use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbStore};
 use linera_views::{
     batch::{
         Batch, WriteOperation,
         WriteOperation::{Delete, DeletePrefix, Put},
     },
     collection_view::HashedCollectionView,
-    context::Context,
-    key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView, ViewContainer},
+    context::{create_test_memory_context, Context, MemoryContext, ViewContext},
+    key_value_store_view::{KeyValueStoreView, ViewContainer},
     log_view::HashedLogView,
-    lru_caching::{LruCachingMemoryContext, LruCachingStore},
+    lru_caching::{LruCachingMemoryStore, LruCachingStore},
     map_view::{ByteMapView, HashedMapView},
-    memory::{create_test_memory_context, create_test_memory_store, MemoryContext, MemoryStore},
+    memory::{create_test_memory_store, MemoryStore},
     queue_view::HashedQueueView,
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::HashedRegisterView,
@@ -36,8 +36,7 @@ use linera_views::{
 #[cfg(with_dynamodb)]
 use linera_views::{
     dynamo_db::{
-        create_dynamo_db_common_config, DynamoDbContext, DynamoDbStore, DynamoDbStoreConfig,
-        LocalStackTestContext,
+        create_dynamo_db_common_config, DynamoDbStore, DynamoDbStoreConfig, LocalStackTestContext,
     },
     test_utils::generate_test_namespace,
 };
@@ -105,7 +104,7 @@ pub struct KeyValueStoreTestStorage {
 
 #[async_trait]
 impl StateStorage for KeyValueStoreTestStorage {
-    type Context = KeyValueStoreMemoryContext<usize>;
+    type Context = ViewContext<usize, ViewContainer<MemoryContext<()>>>;
 
     async fn new() -> Self {
         let context = create_test_memory_context();
@@ -132,7 +131,7 @@ pub struct LruMemoryStorage {
 
 #[async_trait]
 impl StateStorage for LruMemoryStorage {
-    type Context = LruCachingMemoryContext<usize>;
+    type Context = ViewContext<usize, LruCachingMemoryStore>;
 
     async fn new() -> Self {
         let store = create_test_memory_store();
@@ -162,7 +161,7 @@ pub struct RocksDbTestStorage {
 #[cfg(with_rocksdb)]
 #[async_trait]
 impl StateStorage for RocksDbTestStorage {
-    type Context = RocksDbContext<usize>;
+    type Context = ViewContext<usize, RocksDbStore>;
 
     async fn new() -> Self {
         let store = create_rocks_db_test_store().await;
@@ -177,7 +176,7 @@ impl StateStorage for RocksDbTestStorage {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
         let store = self.store.clone_with_root_key(&root_key)?;
-        let context = RocksDbContext::create(store, id).await?;
+        let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
 }
@@ -191,7 +190,7 @@ pub struct ScyllaDbTestStorage {
 #[cfg(with_scylladb)]
 #[async_trait]
 impl StateStorage for ScyllaDbTestStorage {
-    type Context = ScyllaDbContext<usize>;
+    type Context = ViewContext<usize, ScyllaDbStore>;
 
     async fn new() -> Self {
         let store = create_scylla_db_test_store().await;
@@ -206,7 +205,7 @@ impl StateStorage for ScyllaDbTestStorage {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
         let store = self.store.clone_with_root_key(&root_key)?;
-        let context = ScyllaDbContext::create(store, id).await?;
+        let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
 }
@@ -220,7 +219,7 @@ pub struct DynamoDbTestStorage {
 #[cfg(with_dynamodb)]
 #[async_trait]
 impl StateStorage for DynamoDbTestStorage {
-    type Context = DynamoDbContext<usize>;
+    type Context = ViewContext<usize, DynamoDbStore>;
 
     async fn new() -> Self {
         let localstack = LocalStackTestContext::new().await.expect("localstack");
@@ -245,7 +244,7 @@ impl StateStorage for DynamoDbTestStorage {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
         let store = self.store.clone_with_root_key(&root_key)?;
-        let context = DynamoDbContext::create(store, id).await?;
+        let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
 }

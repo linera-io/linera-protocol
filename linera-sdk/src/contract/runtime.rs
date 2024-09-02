@@ -16,7 +16,7 @@ use linera_base::{
 use serde::Serialize;
 
 use super::wit::contract_system_api as wit;
-use crate::{Contract, DataBlobHash, KeyValueStore};
+use crate::{Contract, DataBlobHash, KeyValueStore, ViewStorageContext};
 
 /// The common runtime to interface with the host executing the contract.
 ///
@@ -61,6 +61,11 @@ where
     /// Returns the key-value store to interface with storage.
     pub fn key_value_store(&self) -> KeyValueStore {
         KeyValueStore::for_contracts()
+    }
+
+    /// Returns a storage context suitable for a root view.
+    pub fn root_view_storage_context(&self) -> ViewStorageContext {
+        ViewStorageContext::new_unsafe(self.key_value_store(), Vec::new(), ())
     }
 
     /// Returns the application parameters provided when the application was created.

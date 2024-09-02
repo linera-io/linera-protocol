@@ -9,7 +9,7 @@ use amm::{AmmAbi, Message, Operation, Parameters};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
-    views::{RootView, View, ViewStorageContext},
+    views::{RootView, View},
     Contract, ContractRuntime,
 };
 use num_bigint::BigUint;
@@ -34,7 +34,7 @@ impl Contract for AmmContract {
     type Parameters = Parameters;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = Amm::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = Amm::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         AmmContract { state, runtime }

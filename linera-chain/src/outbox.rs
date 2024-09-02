@@ -3,7 +3,7 @@
 
 use linera_base::data_types::{ArithmeticError, BlockHeight};
 #[cfg(with_testing)]
-use linera_views::memory::{create_test_memory_context, MemoryContext};
+use linera_views::context::{create_test_memory_context, MemoryContext};
 use linera_views::{
     context::Context,
     queue_view::QueueView,

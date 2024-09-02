@@ -12,7 +12,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     backends::memory::MemoryStore,
-    batch::Batch,
+    batch::{Batch, DeletePrefixExpander},
     common::{
         from_bytes_option, KeyIterable, KeyValueIterable, KeyValueStoreError,
         RestrictedKeyValueStore, MIN_VIEW_TAG,
@@ -165,7 +165,7 @@ pub trait Context: Clone {
 /// Implementation of the [`Context`] trait on top of a DB client implementing
 /// [`crate::common::KeyValueStore`].
 #[derive(Debug, Default, Clone)]
-pub struct ContextFromStore<E, S> {
+pub struct ViewContext<E, S> {
     /// The DB client that is shared between views.
     store: S,
     /// The base key for the context.
@@ -174,23 +174,23 @@ pub struct ContextFromStore<E, S> {
     extra: E,
 }
 
-impl<E, S> ContextFromStore<E, S>
+impl<E, S> ViewContext<E, S>
 where
     S: RestrictedKeyValueStore,
 {
     /// Creates a context suitable for a root view, using the given store. If the
     /// journal's store is non-empty, it will be cleared first, before the context is
     /// returned.
-    pub async fn create(store: S, extra: E) -> Result<Self, S::Error> {
+    pub async fn create_root_context(store: S, extra: E) -> Result<Self, S::Error> {
         store.clear_journal().await?;
         Ok(Self::new_unsafe(store, Vec::new(), extra))
     }
 }
 
-impl<E, S> ContextFromStore<E, S> {
+impl<E, S> ViewContext<E, S> {
     /// Creates a context for the given base key, store, and an extra argument. NOTE: this
     /// constructor doesn't check the journal of the store. In doubt, use
-    /// [`ContextFromStore::create`] instead.
+    /// [`ViewContext::create_root_context`] instead.
     pub fn new_unsafe(store: S, base_key: Vec<u8>, extra: E) -> Self {
         Self {
             store,
@@ -226,7 +226,7 @@ where
 }
 
 #[async_trait]
-impl<E, S> Context for ContextFromStore<E, S>
+impl<E, S> Context for ViewContext<E, S>
 where
     E: Clone + Send + Sync,
     S: RestrictedKeyValueStore + Clone + Send + Sync,
@@ -306,7 +306,23 @@ where
     }
 }
 
-impl<E> ContextFromStore<E, MemoryStore> {
+/// An implementation of [`crate::context::Context`] that stores all values in memory.
+pub type MemoryContext<E> = ViewContext<E, MemoryStore>;
+
+/// Provides a `MemoryContext<()>` that can be used for tests.
+#[cfg(with_testing)]
+pub fn create_test_memory_context() -> MemoryContext<()> {
+    let namespace = crate::test_utils::generate_test_namespace();
+    let root_key = &[];
+    MemoryContext::new_for_testing(
+        crate::memory::TEST_MEMORY_MAX_STREAM_QUERIES,
+        &namespace,
+        root_key,
+        (),
+    )
+}
+
+impl<E> MemoryContext<E> {
     /// Creates a [`Context`] instance in memory for testing.
     #[cfg(with_testing)]
     pub fn new_for_testing(
@@ -322,5 +338,19 @@ impl<E> ContextFromStore<E, MemoryStore> {
             base_key,
             extra,
         }
+    }
+}
+
+impl DeletePrefixExpander for MemoryContext<()> {
+    type Error = crate::memory::MemoryStoreError;
+
+    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+        let mut vector_list = Vec::new();
+        for key in <Vec<Vec<u8>> as KeyIterable<Self::Error>>::iterator(
+            &self.find_keys_by_prefix(key_prefix).await?,
+        ) {
+            vector_list.push(key?.to_vec());
+        }
+        Ok(vector_list)
     }
 }

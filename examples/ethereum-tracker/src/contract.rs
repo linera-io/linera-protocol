@@ -9,7 +9,7 @@ use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument, U256Cont};
 use linera_sdk::{
     base::WithContractAbi,
     ethereum::{EthereumClient, EthereumDataType, EthereumQueries as _},
-    views::{RootView, View, ViewStorageContext},
+    views::{RootView, View},
     Contract, ContractRuntime,
 };
 
@@ -32,7 +32,7 @@ impl Contract for EthereumTrackerContract {
     type Parameters = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = EthereumTracker::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = EthereumTracker::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         EthereumTrackerContract { state, runtime }
