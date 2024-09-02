@@ -1761,6 +1761,232 @@ pub type HashedMapView<C, I, V> = WrappedHashableContainerView<C, MapView<C, I, 
 pub type HashedCustomMapView<C, I, V> =
     WrappedHashableContainerView<C, CustomMapView<C, I, V>, HasherOutput>;
 
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::{ByteMapView, CustomMapView, MapView};
+    use crate::{
+        context::Context,
+        graphql::{hash_name, mangle, Entry, MapInput},
+    };
+
+    impl<C: Send + Sync, V: async_graphql::OutputType> async_graphql::TypeName for ByteMapView<C, V> {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "ByteMapView_{}_{:08x}",
+                mangle(V::type_name()),
+                hash_name::<V>()
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<C, V> ByteMapView<C, V>
+    where
+        C: Context + Send + Sync,
+        V: async_graphql::OutputType
+            + serde::ser::Serialize
+            + serde::de::DeserializeOwned
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    {
+        #[graphql(derived(name = "keys"))]
+        async fn keys_(&self, count: Option<usize>) -> Result<Vec<Vec<u8>>, async_graphql::Error> {
+            let keys = self.keys().await?;
+            let it = keys.iter().cloned();
+            Ok(if let Some(count) = count {
+                it.take(count).collect()
+            } else {
+                it.collect()
+            })
+        }
+
+        async fn entry(
+            &self,
+            key: Vec<u8>,
+        ) -> Result<Entry<Vec<u8>, Option<V>>, async_graphql::Error> {
+            Ok(Entry {
+                value: self.get(&key).await?,
+                key,
+            })
+        }
+
+        async fn entries(
+            &self,
+            input: Option<MapInput<Vec<u8>>>,
+        ) -> Result<Vec<Entry<Vec<u8>, Option<V>>>, async_graphql::Error> {
+            let keys = input
+                .and_then(|input| input.filters)
+                .and_then(|filters| filters.keys);
+            let keys = if let Some(keys) = keys {
+                keys
+            } else {
+                self.keys().await?
+            };
+
+            let mut entries = vec![];
+            for key in keys {
+                entries.push(Entry {
+                    value: self.get(&key).await?,
+                    key,
+                })
+            }
+
+            Ok(entries)
+        }
+    }
+
+    impl<C: Send + Sync, I: async_graphql::OutputType, V: async_graphql::OutputType>
+        async_graphql::TypeName for MapView<C, I, V>
+    {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "MapView_{}_{}_{:08x}",
+                mangle(I::type_name()),
+                mangle(V::type_name()),
+                hash_name::<(I, V)>(),
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<C, I, V> MapView<C, I, V>
+    where
+        C: Context + Send + Sync,
+        I: async_graphql::OutputType
+            + async_graphql::InputType
+            + serde::ser::Serialize
+            + serde::de::DeserializeOwned
+            + std::fmt::Debug
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+        V: async_graphql::OutputType
+            + serde::ser::Serialize
+            + serde::de::DeserializeOwned
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    {
+        async fn keys(&self, count: Option<usize>) -> Result<Vec<I>, async_graphql::Error> {
+            let indices = self.indices().await?;
+            let it = indices.iter().cloned();
+            Ok(if let Some(count) = count {
+                it.take(count).collect()
+            } else {
+                it.collect()
+            })
+        }
+
+        async fn entry(&self, key: I) -> Result<Entry<I, Option<V>>, async_graphql::Error> {
+            Ok(Entry {
+                value: self.get(&key).await?,
+                key,
+            })
+        }
+
+        async fn entries(
+            &self,
+            input: Option<MapInput<I>>,
+        ) -> Result<Vec<Entry<I, Option<V>>>, async_graphql::Error> {
+            let keys = input
+                .and_then(|input| input.filters)
+                .and_then(|filters| filters.keys);
+            let keys = if let Some(keys) = keys {
+                keys
+            } else {
+                self.indices().await?
+            };
+
+            let mut values = vec![];
+            for key in keys {
+                values.push(Entry {
+                    value: self.get(&key).await?,
+                    key,
+                })
+            }
+
+            Ok(values)
+        }
+    }
+
+    impl<C: Send + Sync, I: async_graphql::OutputType, V: async_graphql::OutputType>
+        async_graphql::TypeName for CustomMapView<C, I, V>
+    {
+        fn type_name() -> Cow<'static, str> {
+            format!("CustomMapView_{}_{}", I::type_name(), V::type_name()).into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<C, I, V> CustomMapView<C, I, V>
+    where
+        C: Context + Send + Sync,
+        I: async_graphql::OutputType
+            + async_graphql::InputType
+            + crate::common::CustomSerialize
+            + std::fmt::Debug
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+        V: async_graphql::OutputType
+            + serde::ser::Serialize
+            + serde::de::DeserializeOwned
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    {
+        async fn keys(&self, count: Option<usize>) -> Result<Vec<I>, async_graphql::Error> {
+            let indices = self.indices().await?;
+            let it = indices.iter().cloned();
+            Ok(if let Some(count) = count {
+                it.take(count).collect()
+            } else {
+                it.collect()
+            })
+        }
+
+        async fn entry(&self, key: I) -> Result<Entry<I, Option<V>>, async_graphql::Error> {
+            Ok(Entry {
+                value: self.get(&key).await?,
+                key,
+            })
+        }
+
+        async fn entries(
+            &self,
+            input: Option<MapInput<I>>,
+        ) -> Result<Vec<Entry<I, Option<V>>>, async_graphql::Error> {
+            let keys = input
+                .and_then(|input| input.filters)
+                .and_then(|filters| filters.keys);
+            let keys = if let Some(keys) = keys {
+                keys
+            } else {
+                self.indices().await?
+            };
+
+            let mut values = vec![];
+            for key in keys {
+                values.push(Entry {
+                    value: self.get(&key).await?,
+                    key,
+                })
+            }
+
+            Ok(values)
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use std::borrow::Borrow;

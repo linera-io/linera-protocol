@@ -369,3 +369,41 @@ where
 
 /// Type wrapping `LogView` while memoizing the hash.
 pub type HashedLogView<C, T> = WrappedHashableContainerView<C, LogView<C, T>, HasherOutput>;
+
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::LogView;
+    use crate::{
+        context::Context,
+        graphql::{hash_name, mangle},
+    };
+
+    impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName for LogView<C, T> {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "LogView_{}_{:08x}",
+                mangle(T::type_name()),
+                hash_name::<T>()
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<C: Context, T: async_graphql::OutputType> LogView<C, T>
+    where
+        C: Send + Sync,
+        T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
+    {
+        async fn entries(
+            &self,
+            start: Option<usize>,
+            end: Option<usize>,
+        ) -> async_graphql::Result<Vec<T>> {
+            Ok(self
+                .read(start.unwrap_or_default()..end.unwrap_or_else(|| self.count()))
+                .await?)
+        }
+    }
+}

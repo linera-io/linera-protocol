@@ -233,3 +233,33 @@ where
 /// Type wrapping `RegisterView` while memoizing the hash.
 pub type HashedRegisterView<C, T> =
     WrappedHashableContainerView<C, RegisterView<C, T>, HasherOutput>;
+
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::RegisterView;
+    use crate::context::Context;
+
+    impl<C, T> async_graphql::OutputType for RegisterView<C, T>
+    where
+        C: Context + Send + Sync,
+        T: async_graphql::OutputType + Send + Sync,
+    {
+        fn type_name() -> Cow<'static, str> {
+            T::type_name()
+        }
+
+        fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+            T::create_type_info(registry)
+        }
+
+        #[allow(clippy::trivially_copy_pass_by_ref)]
+        async fn resolve(
+            &self,
+            ctx: &async_graphql::ContextSelectionSet<'_>,
+            field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+        ) -> async_graphql::ServerResult<async_graphql::Value> {
+            self.get().resolve(ctx, field).await
+        }
+    }
+}

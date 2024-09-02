@@ -191,3 +191,37 @@ impl<C, W, O> DerefMut for WrappedHashableContainerView<C, W, O> {
         &mut self.inner
     }
 }
+
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::WrappedHashableContainerView;
+    use crate::context::Context;
+
+    impl<C, W, O> async_graphql::OutputType for WrappedHashableContainerView<C, W, O>
+    where
+        C: Context + Send + Sync,
+        W: async_graphql::OutputType + Send + Sync,
+        O: Send + Sync,
+    {
+        fn type_name() -> Cow<'static, str> {
+            W::type_name()
+        }
+
+        fn qualified_type_name() -> String {
+            W::qualified_type_name()
+        }
+
+        fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+            W::create_type_info(registry)
+        }
+
+        async fn resolve(
+            &self,
+            ctx: &async_graphql::ContextSelectionSet<'_>,
+            field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+        ) -> async_graphql::ServerResult<async_graphql::Value> {
+            (**self).resolve(ctx, field).await
+        }
+    }
+}

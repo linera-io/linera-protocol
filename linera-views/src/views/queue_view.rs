@@ -473,3 +473,37 @@ where
 
 /// Type wrapping `QueueView` while memoizing the hash.
 pub type HashedQueueView<C, T> = WrappedHashableContainerView<C, QueueView<C, T>, HasherOutput>;
+
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::QueueView;
+    use crate::{
+        context::Context,
+        graphql::{hash_name, mangle},
+    };
+
+    impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName for QueueView<C, T> {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "QueueView_{}_{:08x}",
+                mangle(T::type_name()),
+                hash_name::<T>()
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<C: Context, T: async_graphql::OutputType> QueueView<C, T>
+    where
+        C: Send + Sync,
+        T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
+    {
+        async fn entries(&self, count: Option<usize>) -> async_graphql::Result<Vec<T>> {
+            Ok(self
+                .read_front(count.unwrap_or_else(|| self.count()))
+                .await?)
+        }
+    }
+}
