@@ -207,19 +207,19 @@ type ChainStateExtendedView {
 	Hashes of all certified blocks for this sender.
 	This ends with `block_hash` and has length `usize::from(next_block_height)`.
 	"""
-	confirmedLog: LogView_CryptoHash_20eccc8d!
+	confirmedLog: LogView_CryptoHash_b39baa6c!
 	"""
 	Sender chain and height of all certified blocks known as a receiver (local ordering).
 	"""
-	receivedLog: LogView_ChainAndHeight_c25ecaa6!
+	receivedLog: LogView_ChainAndHeight_74e1b2c7!
 	"""
 	Mailboxes used to receive messages indexed by their origin.
 	"""
-	inboxes: ReentrantCollectionView_Origin_InboxStateView_3485213288!
+	inboxes: ReentrantCollectionView_Origin_InboxStateView_1712852561!
 	"""
 	A queue of unskippable bundles, with the timestamp when we added them to the inbox.
 	"""
-	unskippableBundles: QueueView_TimestampedBundleInInbox_cdcf52b8!
+	unskippableBundles: QueueView_TimestampedBundleInInbox_f9f36704!
 	"""
 	Unskippable bundles that have been removed but are still in the queue.
 	"""
@@ -227,7 +227,7 @@ type ChainStateExtendedView {
 	"""
 	Mailboxes used to send messages, indexed by their target.
 	"""
-	outboxes: ReentrantCollectionView_Target_OutboxStateView_4197956612!
+	outboxes: ReentrantCollectionView_Target_OutboxStateView_2644302559!
 	"""
 	Number of outgoing messages in flight for each block height.
 	We use a `RegisterView` to prioritize speed for small maps.
@@ -236,7 +236,7 @@ type ChainStateExtendedView {
 	"""
 	Channels able to multicast messages to subscribers.
 	"""
-	channels: ReentrantCollectionView_ChannelFullName_ChannelStateView_4201533849!
+	channels: ReentrantCollectionView_ChannelFullName_ChannelStateView_394492371!
 }
 
 """
@@ -291,7 +291,7 @@ type ChannelStateView {
 	"""
 	The block heights so far, to be sent to future subscribers.
 	"""
-	blockHeights: LogView_BlockHeight_db6bcc27!
+	blockHeights: LogView_BlockHeight_be3af4a4!
 }
 
 """
@@ -357,7 +357,7 @@ scalar Destination
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_ChannelFullName_ChannelStateView_84ad3897 {
+type Entry_ChannelFullName_ChannelStateView_d35b7681 {
 	key: ChannelFullName!
 	value: ChannelStateView!
 }
@@ -365,7 +365,7 @@ type Entry_ChannelFullName_ChannelStateView_84ad3897 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_Origin_InboxStateView_7fb40df6 {
+type Entry_Origin_InboxStateView_7865682b {
 	key: Origin!
 	value: InboxStateView!
 }
@@ -381,7 +381,7 @@ type Entry_Owner_Amount_771b9c6c {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_Target_OutboxStateView_bc6210d6 {
+type Entry_Target_OutboxStateView_9fdb7825 {
 	key: Target!
 	value: OutboxStateView!
 }
@@ -459,12 +459,12 @@ type InboxStateView {
 	"""
 	These bundles have been added and are waiting to be removed.
 	"""
-	addedBundles: QueueView_MessageBundle_86d6cf45!
+	addedBundles: QueueView_MessageBundle_f06b78bb!
 	"""
 	These bundles have been removed by anticipation and are waiting to be added.
 	At least one of `added_bundles` and `removed_bundles` should be empty.
 	"""
-	removedBundles: QueueView_MessageBundle_86d6cf45!
+	removedBundles: QueueView_MessageBundle_f06b78bb!
 }
 
 """
@@ -491,15 +491,15 @@ A scalar that can represent any JSON Object value.
 """
 scalar JSONObject
 
-type LogView_BlockHeight_db6bcc27 {
+type LogView_BlockHeight_be3af4a4 {
 	entries(start: Int, end: Int): [BlockHeight!]!
 }
 
-type LogView_ChainAndHeight_c25ecaa6 {
+type LogView_ChainAndHeight_74e1b2c7 {
 	entries(start: Int, end: Int): [ChainAndHeight!]!
 }
 
-type LogView_CryptoHash_20eccc8d {
+type LogView_CryptoHash_b39baa6c {
 	entries(start: Int, end: Int): [CryptoHash!]!
 }
 
@@ -535,7 +535,7 @@ input MapInput_Target_16f15470 {
 	filters: MapFilters_Target_6fda9ea4
 }
 
-type MapView_Owner_Amount_798b2a71 {
+type MapView_Owner_Amount_6d9470be {
 	keys(count: Int): [Owner!]!
 	entry(key: Owner!): Entry_Owner_Amount_771b9c6c!
 	entries(input: MapInput_Owner_2b9cd89a): [Entry_Owner_Amount_771b9c6c!]!
@@ -718,7 +718,7 @@ type OutboxStateView {
 	Keep sending these certified blocks of ours until they are acknowledged by
 	receivers.
 	"""
-	queue: QueueView_BlockHeight_ebfa8266!
+	queue: QueueView_BlockHeight_729b63dd!
 }
 
 """
@@ -773,15 +773,15 @@ type QueryRoot {
 	version: VersionInfo!
 }
 
-type QueueView_BlockHeight_ebfa8266 {
+type QueueView_BlockHeight_729b63dd {
 	entries(count: Int): [BlockHeight!]!
 }
 
-type QueueView_MessageBundle_86d6cf45 {
+type QueueView_MessageBundle_f06b78bb {
 	entries(count: Int): [MessageBundle!]!
 }
 
-type QueueView_TimestampedBundleInInbox_cdcf52b8 {
+type QueueView_TimestampedBundleInInbox_f9f36704 {
 	entries(count: Int): [TimestampedBundleInInbox!]!
 }
 
@@ -790,22 +790,22 @@ The recipient of a transfer
 """
 scalar Recipient
 
-type ReentrantCollectionView_ChannelFullName_ChannelStateView_4201533849 {
+type ReentrantCollectionView_ChannelFullName_ChannelStateView_394492371 {
 	keys: [ChannelFullName!]!
-	entry(key: ChannelFullName!): Entry_ChannelFullName_ChannelStateView_84ad3897!
-	entries(input: MapInput_ChannelFullName_3aa4320a): [Entry_ChannelFullName_ChannelStateView_84ad3897!]!
+	entry(key: ChannelFullName!): Entry_ChannelFullName_ChannelStateView_d35b7681!
+	entries(input: MapInput_ChannelFullName_3aa4320a): [Entry_ChannelFullName_ChannelStateView_d35b7681!]!
 }
 
-type ReentrantCollectionView_Origin_InboxStateView_3485213288 {
+type ReentrantCollectionView_Origin_InboxStateView_1712852561 {
 	keys: [Origin!]!
-	entry(key: Origin!): Entry_Origin_InboxStateView_7fb40df6!
-	entries(input: MapInput_Origin_08662377): [Entry_Origin_InboxStateView_7fb40df6!]!
+	entry(key: Origin!): Entry_Origin_InboxStateView_7865682b!
+	entries(input: MapInput_Origin_08662377): [Entry_Origin_InboxStateView_7865682b!]!
 }
 
-type ReentrantCollectionView_Target_OutboxStateView_4197956612 {
+type ReentrantCollectionView_Target_OutboxStateView_2644302559 {
 	keys: [Target!]!
-	entry(key: Target!): Entry_Target_OutboxStateView_bc6210d6!
-	entries(input: MapInput_Target_16f15470): [Entry_Target_OutboxStateView_bc6210d6!]!
+	entry(key: Target!): Entry_Target_OutboxStateView_9fdb7825!
+	entries(input: MapInput_Target_16f15470): [Entry_Target_OutboxStateView_9fdb7825!]!
 }
 
 """
@@ -911,7 +911,7 @@ type SystemExecutionStateView {
 	committees: JSONObject!
 	ownership: ChainOwnership!
 	balance: Amount!
-	balances: MapView_Owner_Amount_798b2a71!
+	balances: MapView_Owner_Amount_6d9470be!
 	timestamp: Timestamp!
 }
 
