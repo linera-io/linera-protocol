@@ -75,7 +75,7 @@ where
     let store = store
         .clone_with_root_key(&root_key)
         .map_err(|_e| IndexerError::CloneWithRootKeyError)?;
-    let context = ViewContext::create(store, ())
+    let context = ViewContext::create_root_context(store, ())
         .await
         .map_err(|e| IndexerError::ViewError(e.into()))?;
     let plugin = V::load(context).await?;

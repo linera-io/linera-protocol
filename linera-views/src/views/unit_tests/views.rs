@@ -220,7 +220,7 @@ impl TestContextFactory for RocksDbContextFactory {
         let namespace = generate_test_namespace();
         let root_key = &[];
         let store = RocksDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
-        let context = ViewContext::create(store, ()).await?;
+        let context = ViewContext::create_root_context(store, ()).await?;
 
         Ok(context)
     }
@@ -252,7 +252,7 @@ impl TestContextFactory for DynamoDbContextFactory {
         };
         let store =
             DynamoDbStore::recreate_and_connect(&store_config, &namespace, root_key).await?;
-        Ok(ViewContext::create(store, ()).await?)
+        Ok(ViewContext::create_root_context(store, ()).await?)
     }
 }
 
@@ -270,7 +270,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
         let namespace = generate_test_namespace();
         let root_key = &[];
         let store = ScyllaDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
-        let context = ViewContext::create(store, ()).await?;
+        let context = ViewContext::create_root_context(store, ()).await?;
         Ok(context)
     }
 }

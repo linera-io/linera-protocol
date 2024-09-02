@@ -181,7 +181,7 @@ where
     /// Creates a context suitable for a root view, using the given store. If the
     /// journal's store is non-empty, it will be cleared first, before the context is
     /// returned.
-    pub async fn create(store: S, extra: E) -> Result<Self, S::Error> {
+    pub async fn create_root_context(store: S, extra: E) -> Result<Self, S::Error> {
         store.clear_journal().await?;
         Ok(Self::new_unsafe(store, Vec::new(), extra))
     }
@@ -190,7 +190,7 @@ where
 impl<E, S> ViewContext<E, S> {
     /// Creates a context for the given base key, store, and an extra argument. NOTE: this
     /// constructor doesn't check the journal of the store. In doubt, use
-    /// [`ViewContext::create`] instead.
+    /// [`ViewContext::create_root_context`] instead.
     pub fn new_unsafe(store: S, base_key: Vec<u8>, extra: E) -> Self {
         Self {
             store,

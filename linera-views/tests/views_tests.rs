@@ -176,7 +176,7 @@ impl StateStorage for RocksDbTestStorage {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
         let store = self.store.clone_with_root_key(&root_key)?;
-        let context = ViewContext::create(store, id).await?;
+        let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
 }
@@ -205,7 +205,7 @@ impl StateStorage for ScyllaDbTestStorage {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
         let store = self.store.clone_with_root_key(&root_key)?;
-        let context = ViewContext::create(store, id).await?;
+        let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
 }
@@ -244,7 +244,7 @@ impl StateStorage for DynamoDbTestStorage {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
         let store = self.store.clone_with_root_key(&root_key)?;
-        let context = ViewContext::create(store, id).await?;
+        let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
 }
