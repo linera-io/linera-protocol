@@ -16,7 +16,7 @@ use std::{env, time::Duration};
 
 use anyhow::Result;
 use async_graphql::InputType;
-use common::INTEGRATION_TEST_GUARD;
+use common::{get_fungible_account_owner, INTEGRATION_TEST_GUARD};
 use futures::{channel::mpsc, SinkExt, StreamExt};
 use linera_base::{
     command::resolve_binary,
@@ -39,17 +39,12 @@ use linera_service::cli_wrappers::{
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, ProcessInbox},
-        ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+        ApplicationWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     test_name,
 };
 use serde_json::{json, Value};
 use test_case::test_case;
-
-fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
-    let owner = client.get_owner().unwrap();
-    AccountOwner::User(owner)
-}
 
 #[cfg(feature = "ethereum")]
 #[cfg(any(
@@ -2857,60 +2852,6 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) -> Res
 
     faucet_service.ensure_is_running()?;
     faucet_service.terminate().await?;
-    net.ensure_is_running().await?;
-    net.terminate().await?;
-
-    Ok(())
-}
-
-#[cfg(feature = "benchmark")]
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service"
-))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
-#[test_log::test(tokio::test)]
-async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
-    use std::collections::BTreeMap;
-
-    use fungible::{FungibleTokenAbi, InitialState, Parameters};
-
-    config.num_other_initial_chains = 2;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    tracing::info!("Starting test {}", test_name!());
-
-    let (mut net, client) = config.instantiate().await?;
-
-    assert_eq!(client.load_wallet()?.num_chains(), 2);
-    // Launch local benchmark using all user chains and creating additional ones.
-    client.benchmark(2, 4, 10, None).await?;
-    assert_eq!(client.load_wallet()?.num_chains(), 4);
-
-    // Now we run the benchmark again, with the fungible token application instead of the
-    // native token.
-    let account_owner = get_fungible_account_owner(&client);
-    let accounts = BTreeMap::from([(account_owner, Amount::from_tokens(1_000_000))]);
-    let state = InitialState { accounts };
-    let (contract, service) = client.build_example("fungible").await?;
-    let params = Parameters::new("FUN");
-    let application_id = client
-        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
-            contract,
-            service,
-            &params,
-            &state,
-            &[],
-            None,
-        )
-        .await?;
-    client.benchmark(2, 5, 10, Some(application_id)).await?;
-
     net.ensure_is_running().await?;
     net.terminate().await?;
 
