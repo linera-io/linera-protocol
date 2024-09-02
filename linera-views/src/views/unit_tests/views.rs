@@ -28,7 +28,7 @@ use crate::{
 };
 #[cfg(any(with_rocksdb, with_scylladb, with_dynamodb))]
 use crate::{
-    common::AdminKeyValueStore, context::ContextFromStore, test_utils::generate_test_namespace,
+    common::AdminKeyValueStore, context::ViewContext, test_utils::generate_test_namespace,
 };
 
 #[tokio::test]
@@ -213,14 +213,14 @@ struct RocksDbContextFactory {}
 #[cfg(with_rocksdb)]
 #[async_trait]
 impl TestContextFactory for RocksDbContextFactory {
-    type Context = ContextFromStore<(), RocksDbStore>;
+    type Context = ViewContext<(), RocksDbStore>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let config = RocksDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
         let store = RocksDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
-        let context = ContextFromStore::create(store, ()).await?;
+        let context = ViewContext::create(store, ()).await?;
 
         Ok(context)
     }
@@ -235,7 +235,7 @@ struct DynamoDbContextFactory {
 #[cfg(with_dynamodb)]
 #[async_trait]
 impl TestContextFactory for DynamoDbContextFactory {
-    type Context = ContextFromStore<(), DynamoDbStore>;
+    type Context = ViewContext<(), DynamoDbStore>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         if self.localstack.is_none() {
@@ -252,7 +252,7 @@ impl TestContextFactory for DynamoDbContextFactory {
         };
         let store =
             DynamoDbStore::recreate_and_connect(&store_config, &namespace, root_key).await?;
-        Ok(ContextFromStore::create(store, ()).await?)
+        Ok(ViewContext::create(store, ()).await?)
     }
 }
 
@@ -263,14 +263,14 @@ struct ScyllaDbContextFactory;
 #[cfg(with_scylladb)]
 #[async_trait]
 impl TestContextFactory for ScyllaDbContextFactory {
-    type Context = ContextFromStore<(), ScyllaDbStore>;
+    type Context = ViewContext<(), ScyllaDbStore>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let config = ScyllaDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
         let store = ScyllaDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
-        let context = ContextFromStore::create(store, ()).await?;
+        let context = ViewContext::create(store, ()).await?;
         Ok(context)
     }
 }

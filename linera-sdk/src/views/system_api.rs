@@ -10,7 +10,7 @@ use linera_base::ensure;
 use linera_views::{
     batch::Batch,
     common::{ReadableKeyValueStore, WithError, WritableKeyValueStore},
-    context::ContextFromStore,
+    context::ViewContext,
 };
 use thiserror::Error;
 
@@ -367,11 +367,11 @@ impl WitInterface {
 
 /// Implementation of [`linera_views::context::Context`] to be used for data storage
 /// by Linera applications.
-pub type ViewStorageContext = ContextFromStore<(), KeyValueStore>;
+pub type ViewStorageContext = ViewContext<(), KeyValueStore>;
 
 impl From<KeyValueStore> for ViewStorageContext {
     fn from(store: KeyValueStore) -> Self {
-        ContextFromStore::new_unsafe(store, Vec::new(), ())
+        ViewContext::new_unsafe(store, Vec::new(), ())
     }
 }
 

@@ -165,7 +165,7 @@ pub trait Context: Clone {
 /// Implementation of the [`Context`] trait on top of a DB client implementing
 /// [`crate::common::KeyValueStore`].
 #[derive(Debug, Default, Clone)]
-pub struct ContextFromStore<E, S> {
+pub struct ViewContext<E, S> {
     /// The DB client that is shared between views.
     store: S,
     /// The base key for the context.
@@ -174,7 +174,7 @@ pub struct ContextFromStore<E, S> {
     extra: E,
 }
 
-impl<E, S> ContextFromStore<E, S>
+impl<E, S> ViewContext<E, S>
 where
     S: RestrictedKeyValueStore,
 {
@@ -187,10 +187,10 @@ where
     }
 }
 
-impl<E, S> ContextFromStore<E, S> {
+impl<E, S> ViewContext<E, S> {
     /// Creates a context for the given base key, store, and an extra argument. NOTE: this
     /// constructor doesn't check the journal of the store. In doubt, use
-    /// [`ContextFromStore::create`] instead.
+    /// [`ViewContext::create`] instead.
     pub fn new_unsafe(store: S, base_key: Vec<u8>, extra: E) -> Self {
         Self {
             store,
@@ -226,7 +226,7 @@ where
 }
 
 #[async_trait]
-impl<E, S> Context for ContextFromStore<E, S>
+impl<E, S> Context for ViewContext<E, S>
 where
     E: Clone + Send + Sync,
     S: RestrictedKeyValueStore + Clone + Send + Sync,
@@ -307,7 +307,7 @@ where
 }
 
 /// An implementation of [`crate::context::Context`] that stores all values in memory.
-pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
+pub type MemoryContext<E> = ViewContext<E, MemoryStore>;
 
 /// Provides a `MemoryContext<()>` that can be used for tests.
 /// It is not named create_memory_test_context because it is massively

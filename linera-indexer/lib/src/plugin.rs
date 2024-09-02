@@ -8,7 +8,7 @@ use std::sync::Arc;
 use async_graphql::{EmptyMutation, EmptySubscription, ObjectType, Schema};
 use axum::Router;
 use linera_chain::data_types::HashedCertificateValue;
-use linera_views::{common::KeyValueStore, context::ContextFromStore, views::View};
+use linera_views::{common::KeyValueStore, context::ViewContext, views::View};
 use tokio::sync::Mutex;
 
 use crate::common::IndexerError;
@@ -63,7 +63,7 @@ pub fn route<Q: ObjectType + 'static>(name: &str, query: Q, app: axum::Router) -
     .layer(tower_http::cors::CorsLayer::permissive())
 }
 
-pub async fn load<S, V: View<ContextFromStore<(), S>>>(
+pub async fn load<S, V: View<ViewContext<(), S>>>(
     store: S,
     name: &str,
 ) -> Result<Arc<Mutex<V>>, IndexerError>
@@ -75,7 +75,7 @@ where
     let store = store
         .clone_with_root_key(&root_key)
         .map_err(|_e| IndexerError::CloneWithRootKeyError)?;
-    let context = ContextFromStore::create(store, ())
+    let context = ViewContext::create(store, ())
         .await
         .map_err(|e| IndexerError::ViewError(e.into()))?;
     let plugin = V::load(context).await?;

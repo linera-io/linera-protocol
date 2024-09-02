@@ -17,7 +17,7 @@ use linera_indexer::{
 };
 use linera_views::{
     common::KeyValueStore,
-    context::{Context, ContextFromStore},
+    context::{Context, ViewContext},
     map_view::MapView,
     views::RootView,
 };
@@ -110,7 +110,7 @@ static NAME: &str = "operations";
 
 /// Implements `Plugin`
 #[async_trait::async_trait]
-impl<S> Plugin<S> for OperationsPlugin<ContextFromStore<(), S>>
+impl<S> Plugin<S> for OperationsPlugin<ViewContext<(), S>>
 where
     S: KeyValueStore + Clone + Send + Sync + 'static,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
