@@ -310,8 +310,6 @@ where
 pub type MemoryContext<E> = ViewContext<E, MemoryStore>;
 
 /// Provides a `MemoryContext<()>` that can be used for tests.
-/// It is not named create_memory_test_context because it is massively
-/// used and so we want to have a short name.
 #[cfg(with_testing)]
 pub fn create_test_memory_context() -> MemoryContext<()> {
     let namespace = crate::test_utils::generate_test_namespace();

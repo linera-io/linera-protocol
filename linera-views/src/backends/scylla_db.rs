@@ -5,7 +5,7 @@
 //!
 //! The current connection is done via a Session and a corresponding primary key called
 //! "namespace". The maximum number of concurrent queries is controlled by
-//! max_concurrent_queries.
+//! `max_concurrent_queries`.
 
 /// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
 /// The limit is in reality 100. But we need one entry for the root key.
