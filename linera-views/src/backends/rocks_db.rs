@@ -80,13 +80,13 @@ impl RocksDbStoreInternal {
         cache_size: usize,
         root_key: &[u8],
     ) -> Result<RocksDbStoreInternal, RocksDbStoreError> {
-        let full_path_buf = path_with_guard.path_buf.clone();
-        if !std::path::Path::exists(&full_path_buf) {
-            std::fs::create_dir(full_path_buf.clone())?;
+        let path = path_with_guard.path_buf.clone();
+        if !std::path::Path::exists(&path) {
+            std::fs::create_dir(path.clone())?;
         }
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
-        let db = DB::open(&options, full_path_buf)?;
+        let db = DB::open(&options, path)?;
         let root_key = root_key.to_vec();
         Ok(RocksDbStoreInternal {
             db: Arc::new(db),
@@ -125,7 +125,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let mut full_key = self.root_key.to_vec();
         full_key.extend(key);
         let key_may_exist =
-            { tokio::task::spawn_blocking(move || client.db.key_may_exist(full_key)).await? };
+            tokio::task::spawn_blocking(move || client.db.key_may_exist(full_key)).await?;
         if !key_may_exist {
             return Ok(false);
         }
