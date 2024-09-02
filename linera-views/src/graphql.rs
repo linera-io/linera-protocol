@@ -3,10 +3,7 @@
 
 use std::borrow::Cow;
 
-use crate::{
-    context::Context,
-    views::{View, ViewError},
-};
+use crate::{context::Context, views::View};
 
 // TODO(#1326): fix the proliferation of constraints from this module
 
@@ -240,7 +237,6 @@ where
         + Send
         + Sync
         + 'static,
-    ViewError: From<C::Error>,
 {
     #[graphql(derived(name = "keys"))]
     async fn keys_(&self, count: Option<usize>) -> Result<Vec<Vec<u8>>, async_graphql::Error> {
@@ -319,7 +315,6 @@ where
         + Send
         + Sync
         + 'static,
-    ViewError: From<C::Error>,
 {
     async fn keys(&self, count: Option<usize>) -> Result<Vec<I>, async_graphql::Error> {
         let indices = self.indices().await?;
@@ -390,7 +385,6 @@ where
         + Send
         + Sync
         + 'static,
-    ViewError: From<C::Error>,
 {
     async fn keys(&self, count: Option<usize>) -> Result<Vec<I>, async_graphql::Error> {
         let indices = self.indices().await?;
@@ -505,7 +499,6 @@ where
         + std::fmt::Debug
         + Clone,
     V: View<C> + async_graphql::OutputType,
-    ViewError: From<C::Error>,
     MapInput<K>: async_graphql::InputType,
     MapFilters<K>: async_graphql::InputType,
 {
@@ -570,7 +563,6 @@ where
         + crate::common::CustomSerialize
         + std::fmt::Debug,
     V: View<C> + async_graphql::OutputType,
-    ViewError: From<C::Error>,
     MapInput<K>: async_graphql::InputType,
     MapFilters<K>: async_graphql::InputType,
 {
@@ -665,7 +657,6 @@ where
         + std::fmt::Debug
         + Clone,
     V: View<C> + async_graphql::OutputType,
-    ViewError: From<C::Error>,
     MapInput<K>: async_graphql::InputType,
     MapFilters<K>: async_graphql::InputType,
 {
@@ -734,7 +725,6 @@ where
         + std::fmt::Debug
         + Clone,
     V: View<C> + async_graphql::OutputType,
-    ViewError: From<C::Error>,
     MapInput<K>: async_graphql::InputType,
     MapFilters<K>: async_graphql::InputType,
 {
@@ -784,7 +774,6 @@ impl<C: Context, I: async_graphql::OutputType> async_graphql::OutputType for Set
 where
     C: Send + Sync,
     I: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
-    ViewError: From<C::Error>,
 {
     fn type_name() -> Cow<'static, str> {
         format!("[{}]", I::qualified_type_name()).into()
@@ -818,7 +807,6 @@ impl<C: Context, I: async_graphql::OutputType> async_graphql::OutputType for Cus
 where
     C: Send + Sync,
     I: crate::common::CustomSerialize + Clone + Send + Sync,
-    ViewError: From<C::Error>,
 {
     fn type_name() -> Cow<'static, str> {
         format!("[{}]", I::qualified_type_name()).into()
@@ -863,7 +851,6 @@ impl<C: Context, T: async_graphql::OutputType> LogView<C, T>
 where
     C: Send + Sync,
     T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
-    ViewError: From<C::Error>,
 {
     async fn entries(
         &self,
@@ -920,7 +907,6 @@ impl<C: Context, T: async_graphql::OutputType> QueueView<C, T>
 where
     C: Send + Sync,
     T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
-    ViewError: From<C::Error>,
 {
     async fn entries(&self, count: Option<usize>) -> async_graphql::Result<Vec<T>> {
         Ok(self
