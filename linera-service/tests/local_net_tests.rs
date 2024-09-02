@@ -10,27 +10,22 @@
 
 mod common;
 
-use std::path::PathBuf;
-use std::time::Duration;
-use std::env;
-use anyhow::Result;
-use linera_base::identifiers::ChainId;
-use linera_base::identifiers::Account;
-use linera_base::data_types::Amount;
-use test_case::test_case;
-use linera_service::test_name;
-use linera_service::cli_wrappers::FaucetOption;
-use linera_service::cli_wrappers::ClientWrapper;
-use linera_service::cli_wrappers::Network;
-use linera_service::cli_wrappers::LineraNet;
-use linera_service::cli_wrappers::LineraNetConfig;
-use linera_service::cli_wrappers::local_net::LocalNetConfig;
-use linera_service::cli_wrappers::local_net::Database;
-use linera_service::cli_wrappers::local_net::get_node_port;
-use linera_service::cli_wrappers::local_net::ProcessInbox;
-use linera_service::cli_wrappers::local_net::PathProvider;
-use common::{get_fungible_account_owner, INTEGRATION_TEST_GUARD};
+use std::{env, path::PathBuf, time::Duration};
 
+use anyhow::Result;
+use common::{get_fungible_account_owner, INTEGRATION_TEST_GUARD};
+use linera_base::{
+    data_types::Amount,
+    identifiers::{Account, ChainId},
+};
+use linera_service::{
+    cli_wrappers::{
+        local_net::{get_node_port, Database, LocalNetConfig, PathProvider, ProcessInbox},
+        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+    },
+    test_name,
+};
+use test_case::test_case;
 
 /// Clears the `RUSTFLAGS` environment variable, if it was configured to make warnings fail as
 /// errors.
@@ -51,7 +46,7 @@ struct RestoreVarOnDrop;
 
 impl Drop for RestoreVarOnDrop {
     fn drop(&mut self) {
-	env::set_var("RUSTFLAGS", "-D warnings");
+        env::set_var("RUSTFLAGS", "-D warnings");
     }
 }
 
@@ -480,7 +475,7 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
             assert!(exports
                 .next()
                 .unwrap()?
-		.starts_with("export LINERA_WALLET="));
+                .starts_with("export LINERA_WALLET="));
             assert!(exports
                 .next()
                 .unwrap()?

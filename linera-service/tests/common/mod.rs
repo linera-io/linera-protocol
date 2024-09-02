@@ -3,11 +3,9 @@
 
 use std::sync::LazyLock;
 
-use tokio::sync::Mutex;
-
-use linera_service::cli_wrappers::ClientWrapper;
 use linera_base::identifiers::AccountOwner;
-
+use linera_service::cli_wrappers::ClientWrapper;
+use tokio::sync::Mutex;
 
 /// A static lock to prevent integration tests from running in parallel.
 pub static INTEGRATION_TEST_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
