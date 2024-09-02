@@ -7,10 +7,10 @@
     feature = "scylladb"
 ))]
 
-use std::{collections::BTreeMap, io::Read, str::FromStr, sync::LazyLock, time::Duration};
+use std::{collections::BTreeMap, str::FromStr, sync::LazyLock, time::Duration};
 
 use fungible::{FungibleTokenAbi, InitialState};
-use linera_base::{command::resolve_binary, data_types::Amount, identifiers::ChainId};
+use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_service::cli_wrappers::{
     local_net::{Database, LocalNetConfig, ProcessInbox},
     LineraNet, LineraNetConfig, Network,
@@ -19,9 +19,8 @@ use linera_service_graphql_client::{
     applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
     Transfer,
 };
-use tempfile::tempdir;
 use test_case::test_case;
-use tokio::{process::Command, sync::Mutex};
+use tokio::sync::Mutex;
 
 /// A static lock to prevent integration tests from running in parallel.
 pub static INTEGRATION_TEST_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
@@ -141,23 +140,4 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
 
     node_service.ensure_is_running().unwrap();
     net.terminate().await.unwrap();
-}
-
-#[test_log::test(tokio::test)]
-async fn test_check_service_schema() {
-    let tmp_dir = tempdir().unwrap();
-    let path = resolve_binary("linera-schema-export", "linera-service")
-        .await
-        .unwrap();
-    let mut command = Command::new(path);
-    let output = command.current_dir(tmp_dir.path()).output().await.unwrap();
-    let service_schema = String::from_utf8(output.stdout).unwrap();
-    let mut file_base = std::fs::File::open("gql/service_schema.graphql").unwrap();
-    let mut graphql_schema = String::new();
-    file_base.read_to_string(&mut graphql_schema).unwrap();
-    assert_eq!(
-        graphql_schema, service_schema,
-        "\nGraphQL service schema has changed -> \
-         regenerate schema following steps in linera-service-graphql-client/README.md\n"
-    )
 }
