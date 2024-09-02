@@ -53,11 +53,6 @@ impl Drop for RestoreVarOnDrop {
 // TODO(#2051): Enable the `test_end_to_end_reconfiguration::scylladb_grpc` that is sometimes failing due to runtime exhaustion.
 //#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
 //#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service"
-))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -191,11 +186,6 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     Ok(())
 }
 
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service"
-))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -257,11 +247,6 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     Ok(())
 }
 
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service"
-))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -303,11 +288,6 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
     Ok(())
 }
 
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service"
-))]
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
@@ -351,11 +331,6 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
     Ok(())
 }
 
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service"
-))]
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
@@ -496,11 +471,6 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
 }
 
 #[cfg(feature = "benchmark")]
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service"
-))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]

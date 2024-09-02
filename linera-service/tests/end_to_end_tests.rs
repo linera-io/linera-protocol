@@ -47,27 +47,12 @@ use serde_json::{json, Value};
 use test_case::test_case;
 
 #[cfg(feature = "ethereum")]
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service"
-))]
 struct EthereumTrackerApp(ApplicationWrapper<ethereum_tracker::EthereumTrackerAbi>);
 
 #[cfg(feature = "ethereum")]
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service"
-))]
 use linera_alloy::primitives::U256;
 
 #[cfg(feature = "ethereum")]
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service"
-))]
 impl EthereumTrackerApp {
     async fn get_amount(&self, account_owner: &str) -> U256 {
         use ethereum_tracker::U256Cont;
@@ -186,22 +171,8 @@ impl FungibleApp {
     }
 }
 
-#[cfg(any(
-    feature = "storage-service",
-    feature = "scylladb",
-    feature = "dynamodb",
-    feature = "kubernetes",
-    feature = "remote-net"
-))]
 struct NonFungibleApp(ApplicationWrapper<non_fungible::NonFungibleTokenAbi>);
 
-#[cfg(any(
-    feature = "storage-service",
-    feature = "scylladb",
-    feature = "dynamodb",
-    feature = "kubernetes",
-    feature = "remote-net"
-))]
 impl NonFungibleApp {
     pub fn create_token_id(
         chain_id: &ChainId,
@@ -284,10 +255,8 @@ impl NonFungibleApp {
     }
 }
 
-#[cfg(feature = "storage-service")]
 struct MatchingEngineApp(ApplicationWrapper<matching_engine::MatchingEngineAbi>);
 
-#[cfg(feature = "storage-service")]
 impl MatchingEngineApp {
     async fn get_account_info(
         &self,
@@ -363,14 +332,11 @@ impl AmmApp {
 }
 
 #[cfg(feature = "ethereum")]
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service"
-))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> Result<()> {
     use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
@@ -464,7 +430,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "storage_service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
@@ -960,13 +926,6 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     Ok(())
 }
 
-#[cfg(any(
-    feature = "storage-service",
-    feature = "scylladb",
-    feature = "dynamodb",
-    feature = "kubernetes",
-    feature = "remote-net"
-))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -1381,14 +1340,11 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     Ok(())
 }
 
-// TODO(#1159): We should enable the matching engine on other storages.
-// #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-// #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-// #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
-// #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
-#[cfg(feature = "storage-service")]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-// #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
