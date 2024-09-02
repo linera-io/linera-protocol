@@ -12,7 +12,7 @@
 
 mod common;
 
-use std::{env, path::PathBuf, time::Duration};
+use std::{env, time::Duration};
 
 use anyhow::Result;
 use async_graphql::InputType;
@@ -38,7 +38,7 @@ use linera_service::cli_wrappers::{
 };
 use linera_service::{
     cli_wrappers::{
-        local_net::{get_node_port, PathProvider, ProcessInbox},
+        local_net::{get_node_port, ProcessInbox},
         ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     test_name,
@@ -2915,29 +2915,6 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     net.terminate().await?;
 
     Ok(())
-}
-
-/// Clears the `RUSTFLAGS` environment variable, if it was configured to make warnings fail as
-/// errors.
-///
-/// The returned [`RestoreVarOnDrop`] restores the environment variable to its original value when
-/// it is dropped.
-fn override_disable_warnings_as_errors() -> Option<RestoreVarOnDrop> {
-    if matches!(env::var("RUSTFLAGS"), Ok(value) if value == "-D warnings") {
-        env::set_var("RUSTFLAGS", "");
-        Some(RestoreVarOnDrop)
-    } else {
-        None
-    }
-}
-
-/// Restores the `RUSTFLAGS` environment variable to make warnings fail as errors.
-struct RestoreVarOnDrop;
-
-impl Drop for RestoreVarOnDrop {
-    fn drop(&mut self) {
-        env::set_var("RUSTFLAGS", "-D warnings");
-    }
 }
 
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]

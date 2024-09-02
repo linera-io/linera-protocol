@@ -2,6 +2,59 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage-service",
+))]
+
+mod common;
+
+use std::path::PathBuf;
+use std::time::Duration;
+use std::env;
+use anyhow::Result;
+use linera_base::identifiers::ChainId;
+use linera_base::identifiers::Account;
+use linera_base::data_types::Amount;
+use test_case::test_case;
+use linera_service::test_name;
+use linera_service::cli_wrappers::FaucetOption;
+use linera_service::cli_wrappers::ClientWrapper;
+use linera_service::cli_wrappers::Network;
+use linera_service::cli_wrappers::LineraNet;
+use linera_service::cli_wrappers::LineraNetConfig;
+use linera_service::cli_wrappers::local_net::LocalNetConfig;
+use linera_service::cli_wrappers::local_net::Database;
+use linera_service::cli_wrappers::local_net::get_node_port;
+use linera_service::cli_wrappers::local_net::ProcessInbox;
+use linera_service::cli_wrappers::local_net::PathProvider;
+use common::INTEGRATION_TEST_GUARD;
+
+
+/// Clears the `RUSTFLAGS` environment variable, if it was configured to make warnings fail as
+/// errors.
+///
+/// The returned [`RestoreVarOnDrop`] restores the environment variable to its original value when
+/// it is dropped.
+fn override_disable_warnings_as_errors() -> Option<RestoreVarOnDrop> {
+    if matches!(env::var("RUSTFLAGS"), Ok(value) if value == "-D warnings") {
+        env::set_var("RUSTFLAGS", "");
+        Some(RestoreVarOnDrop)
+    } else {
+        None
+    }
+}
+
+/// Restores the `RUSTFLAGS` environment variable to make warnings fail as errors.
+struct RestoreVarOnDrop;
+
+impl Drop for RestoreVarOnDrop {
+    fn drop(&mut self) {
+	env::set_var("RUSTFLAGS", "-D warnings");
+    }
+}
+
 // TODO(#2051): Enable the `test_end_to_end_reconfiguration::scylladb_grpc` that is sometimes failing due to runtime exhaustion.
 //#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
 //#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
