@@ -52,7 +52,7 @@ impl<K: async_graphql::OutputType, V: async_graphql::OutputType> async_graphql::
             "Entry_{}_{}_{:08x}",
             mangle(K::type_name()),
             mangle(V::type_name()),
-            hash_name::<Self>(),
+            hash_name::<(K, V)>(),
         )
         .into()
     }
@@ -74,7 +74,7 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapFilters<K> {
         Cow::Owned(format!(
             "MapFilters_{}_{:08x}",
             mangle(K::type_name()),
-            hash_name::<Self>(),
+            hash_name::<K>(),
         ))
     }
 
@@ -149,7 +149,7 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapInput<K> {
         Cow::Owned(format!(
             "MapInput_{}_{:08x}",
             mangle(K::type_name()),
-            hash_name::<Self>(),
+            hash_name::<K>(),
         ))
     }
 
@@ -224,7 +224,7 @@ impl<C: Send + Sync, V: async_graphql::OutputType> async_graphql::TypeName for B
         format!(
             "ByteMapView_{}_{:08x}",
             mangle(V::type_name()),
-            hash_name::<Self>()
+            hash_name::<V>()
         )
         .into()
     }
@@ -294,7 +294,7 @@ impl<C: Send + Sync, I: async_graphql::OutputType, V: async_graphql::OutputType>
             "MapView_{}_{}_{:08x}",
             mangle(I::type_name()),
             mangle(V::type_name()),
-            hash_name::<Self>(),
+            hash_name::<(I, V)>(),
         )
         .into()
     }
@@ -489,7 +489,7 @@ impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
             "CollectionView_{}_{}_{:08x}",
             mangle(K::type_name()),
             mangle(V::type_name()),
-            hash_name::<Self>(),
+            hash_name::<(K, V)>(),
         )
         .into()
     }
@@ -556,7 +556,7 @@ impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
             "CustomCollectionView_{}_{}_{:08x}",
             mangle(K::type_name()),
             mangle(V::type_name()),
-            hash_name::<Self>(),
+            hash_name::<(K, V)>(),
         )
         .into()
     }
@@ -640,7 +640,7 @@ impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
             "ReentrantCollectionView_{}_{}_{}",
             mangle(K::type_name()),
             mangle(V::type_name()),
-            hash_name::<Self>(),
+            hash_name::<(K, V)>(),
         )
         .into()
     }
@@ -719,7 +719,7 @@ impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
             "ReentrantCustomCollectionView_{}_{}_{:08x}",
             mangle(K::type_name()),
             mangle(V::type_name()),
-            hash_name::<Self>(),
+            hash_name::<(K, V)>(),
         )
         .into()
     }
@@ -853,7 +853,7 @@ impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName for L
         format!(
             "LogView_{}_{:08x}",
             mangle(T::type_name()),
-            hash_name::<Self>()
+            hash_name::<T>()
         )
         .into()
     }
@@ -910,7 +910,7 @@ impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName for Q
         format!(
             "QueueView_{}_{:08x}",
             mangle(T::type_name()),
-            hash_name::<Self>()
+            hash_name::<T>()
         )
         .into()
     }
