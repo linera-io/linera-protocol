@@ -14,20 +14,11 @@ pub struct Memory<T> {
     dirty: Dirty,
 }
 
-impl<T> std::ops::DerefMut for Memory<T> {
-    fn deref_mut(&mut self) -> &mut T {
-        // We set `dirty` to aid debugging, though it does nothing for this
-        // implementation.
-        *self.dirty = true;
-        &mut self.value
-    }
-}
-
 impl<T> Memory<T> {
     pub fn new(value: T) -> Self {
         Self {
             value,
-            dirty: Dirty::new(false),
+            dirty: Dirty::new(true),
         }
     }
 }
@@ -36,6 +27,7 @@ impl<T: Send> Persist for Memory<T> {
     type Error = Error;
 
     fn as_mut(&mut self) -> &mut T {
+        *self.dirty = true;
         &mut self.value
     }
 

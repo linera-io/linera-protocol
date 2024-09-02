@@ -251,7 +251,7 @@ where
         self.save_wallet().await
     }
 
-    /// Remembers the new private key (if any) in the wallet.
+    /// Remembers the new chain and private key (if any) in the wallet.
     pub async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
@@ -402,9 +402,9 @@ where
         service: PathBuf,
     ) -> Result<BytecodeId, Error> {
         info!("Loading bytecode files");
-        let contract_bytecode: Bytecode = Bytecode::load_from_file(&contract).await.context(
-            format!("failed to load contract bytecode from {:?}", &contract),
-        )?;
+        let contract_bytecode: Bytecode = Bytecode::load_from_file(&contract)
+            .await
+            .with_context(|| format!("failed to load contract bytecode from {:?}", &contract))?;
         let service_bytecode = Bytecode::load_from_file(&service).await.context(format!(
             "failed to load service bytecode from {:?}",
             &service

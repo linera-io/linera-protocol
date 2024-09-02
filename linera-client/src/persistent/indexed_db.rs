@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
-
 use indexed_db_futures::prelude::*;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::wasm_bindgen;
@@ -10,17 +8,13 @@ use web_sys::DomException;
 
 use super::LocalPersist;
 
+/// An implementation of [`Persist`] based on an IndexedDB record with a given key.
+#[derive(derive_more::Deref)]
 pub struct IndexedDb<T> {
     key: String,
+    #[deref]
     value: T,
     database: IdbDatabase,
-}
-
-impl<T> Deref for IndexedDb<T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        &self.value
-    }
 }
 
 const DATABASE_NAME: &str = "linera-client";
