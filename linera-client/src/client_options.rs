@@ -39,6 +39,8 @@ pub enum Error {
     WalletAlreadyExists(PathBuf),
     #[error("default configuration directory not supported: please specify a path")]
     NoDefaultConfigurationDirectory,
+    #[error("no wallet found")]
+    NonexistentWallet,
     #[error("there are {public_keys} public keys but {weights} weights")]
     MisalignedWeights { public_keys: usize, weights: usize },
     #[error("storage error: {0}")]
@@ -260,7 +262,9 @@ impl ClientOptions {
 impl ClientOptions {
     pub async fn wallet(&self) -> Result<WalletState<persistent::IndexedDb<Wallet>>, Error> {
         Ok(WalletState::new(
-            persistent::IndexedDb::read("linera-wallet").await?,
+            persistent::IndexedDb::read("linera-wallet")
+                .await?
+                .ok_or(Error::NonexistentWallet)?,
         ))
     }
 }

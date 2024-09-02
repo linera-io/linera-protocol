@@ -157,12 +157,12 @@ impl WalletState<persistent::File<Wallet>> {
 impl WalletState<persistent::IndexedDb<Wallet>> {
     pub async fn create_from_indexed_db(key: &str, wallet: Wallet) -> Result<Self, Error> {
         Ok(Self::new(
-            persistent::IndexedDb::read_or_create(key, || Ok::<_, Error>(wallet)).await??,
+            persistent::IndexedDb::read_or_create(key, wallet).await?,
         ))
     }
 
-    pub async fn read_from_indexed_db(key: &str) -> Result<Self, Error> {
-        Ok(Self::new(persistent::IndexedDb::read(key).await?))
+    pub async fn read_from_indexed_db(key: &str) -> Result<Option<Self>, Error> {
+        Ok(persistent::IndexedDb::read(key).await?.map(Self::new))
     }
 }
 

@@ -6,7 +6,7 @@ use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::wasm_bindgen;
 use web_sys::DomException;
 
-use super::LocalPersist;
+use super::{dirty::Dirty, LocalPersist};
 
 /// An implementation of [`Persist`] based on an IndexedDB record with a given key.
 #[derive(derive_more::Deref)]
@@ -15,6 +15,7 @@ pub struct IndexedDb<T> {
     #[deref]
     value: T,
     database: IdbDatabase,
+    dirty: Dirty,
 }
 
 const DATABASE_NAME: &str = "linera-client";
@@ -42,57 +43,65 @@ impl From<DomException> for Error {
     }
 }
 
-impl<T: serde::Serialize + serde::de::DeserializeOwned> IndexedDb<T> {
-    pub async fn read_or_create<E>(
-        key: &str,
-        value: impl FnOnce() -> Result<T, E>,
-    ) -> Result<Result<Self, E>, Error> {
-        let mut db_req = IdbDatabase::open_u32(DATABASE_NAME, 1)?;
-        db_req.set_on_upgrade_needed(Some(|evt: &IdbVersionChangeEvent| -> Result<(), JsValue> {
-            if !evt.db().object_store_names().any(|n| n == STORE_NAME) {
-                evt.db().create_object_store(STORE_NAME)?;
-            }
-            Ok(())
-        }));
+async fn open_database() -> Result<IdbDatabase, Error> {
+    let mut db_req = IdbDatabase::open_u32(DATABASE_NAME, 1)?;
+    db_req.set_on_upgrade_needed(Some(|evt: &IdbVersionChangeEvent| -> Result<(), JsValue> {
+        if !evt.db().object_store_names().any(|n| n == STORE_NAME) {
+            evt.db().create_object_store(STORE_NAME)?;
+        }
+        Ok(())
+    }));
+    Ok(db_req.await?)
+}
 
-        let database: IdbDatabase = db_req.await?;
-        let tx =
-            database.transaction_on_one_with_mode(STORE_NAME, IdbTransactionMode::Readwrite)?;
-        let store: IdbObjectStore = tx.object_store(STORE_NAME)?;
-
-        Ok(if let Some(value) = store.get_owned(key)?.await? {
-            drop(tx);
-            Ok(Self {
-                key: key.to_owned(),
-                value: serde_wasm_bindgen::from_value(value)?,
-                database,
-            })
-        } else {
-            drop(tx);
-            match value() {
-                Ok(value) => {
-                    let mut this = Self {
-                        key: key.to_owned(),
-                        value,
-                        database,
-                    };
-                    this.persist().await?;
-                    Ok(this)
-                }
-                Err(e) => Err(e),
-            }
+impl<T> IndexedDb<T> {
+    pub async fn new(key: &str, value: T) -> Result<Self, Error> {
+        Ok(Self {
+            key: key.to_owned(),
+            value,
+            database: open_database().await?,
+            dirty: Dirty::new(true),
         })
-    }
-
-    pub async fn read(key: &str) -> Result<Self, Error> {
-        Self::read_or_create(key, || Err(Error::KeyNotFound(key.to_owned()))).await?
     }
 }
 
-impl<T: serde::Serialize + serde::de::DeserializeOwned> LocalPersist for IndexedDb<T> {
+impl<T: serde::de::DeserializeOwned> IndexedDb<T> {
+    pub async fn read(key: &str) -> Result<Option<Self>, Error> {
+        let database = open_database().await?;
+        let tx =
+            database.transaction_on_one_with_mode(STORE_NAME, IdbTransactionMode::Readwrite)?;
+        let store: IdbObjectStore = tx.object_store(STORE_NAME)?;
+        let Some(value) = store.get_owned(key)?.await? else {
+            return Ok(None);
+        };
+        drop(tx);
+        Ok(Some(Self {
+            key: key.to_owned(),
+            value: serde_wasm_bindgen::from_value(value)?,
+            database,
+            dirty: Dirty::new(false),
+        }))
+    }
+
+    pub async fn read_or_create(key: &str, value: T) -> Result<Self, Error>
+    where
+        T: serde::Serialize,
+    {
+        Ok(if let Some(this) = Self::read(key).await? {
+            this
+        } else {
+            let mut this = Self::new(key, value).await?;
+            this.persist().await?;
+            this
+        })
+    }
+}
+
+impl<T: serde::Serialize> LocalPersist for IndexedDb<T> {
     type Error = Error;
 
     fn as_mut(&mut self) -> &mut T {
+        *self.dirty = true;
         &mut self.value
     }
 
