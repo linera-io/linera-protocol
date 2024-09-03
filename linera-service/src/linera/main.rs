@@ -438,7 +438,6 @@ impl Runnable for Job {
                 info!("Starting operations to change validator set");
                 let time_start = Instant::now();
 
-                // Make sure genesis chains are subscribed to the admin chain.
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
                 if let SetValidator {
