@@ -13,10 +13,10 @@ mod common;
 use std::{env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
-use common::{get_fungible_account_owner, INTEGRATION_TEST_GUARD};
+use common::INTEGRATION_TEST_GUARD;
 use linera_base::{
     data_types::Amount,
-    identifiers::{Account, ChainId},
+    identifiers::{Account, AccountOwner, ChainId},
 };
 use linera_service::{
     cli_wrappers::{
@@ -26,6 +26,12 @@ use linera_service::{
     test_name,
 };
 use test_case::test_case;
+
+#[cfg(feature = "benchmark")]
+fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
+    let owner = client.get_owner().unwrap();
+    AccountOwner::User(owner)
+}
 
 /// Clears the `RUSTFLAGS` environment variable, if it was configured to make warnings fail as
 /// errors.

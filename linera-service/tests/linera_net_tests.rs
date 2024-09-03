@@ -16,7 +16,7 @@ use std::{env, time::Duration};
 
 use anyhow::Result;
 use async_graphql::InputType;
-use common::{get_fungible_account_owner, INTEGRATION_TEST_GUARD};
+use common::INTEGRATION_TEST_GUARD;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 use linera_base::{
     command::resolve_binary,
@@ -39,12 +39,17 @@ use linera_service::cli_wrappers::{
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, ProcessInbox},
-        ApplicationWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+        ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     test_name,
 };
 use serde_json::{json, Value};
 use test_case::test_case;
+
+fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
+    let owner = client.get_owner().unwrap();
+    AccountOwner::User(owner)
+}
 
 #[cfg(feature = "ethereum")]
 struct EthereumTrackerApp(ApplicationWrapper<ethereum_tracker::EthereumTrackerAbi>);
