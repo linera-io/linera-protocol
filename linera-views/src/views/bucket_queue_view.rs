@@ -253,7 +253,7 @@ where
     }
 }
 
-impl<'a, C, T, const N: usize> BucketQueueView<C, T, N>
+impl<C, T, const N: usize> BucketQueueView<C, T, N>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
@@ -429,7 +429,7 @@ where
         let key = self.get_index_key(*index)?;
         let value = self.context.read_value_bytes(&key).await?;
         let value = value.as_ref().ok_or(ViewError::MissingEntries)?;
-        let value = bcs::from_bytes::<Vec<T>>(&value)?;
+        let value = bcs::from_bytes::<Vec<T>>(value)?;
         Ok(Some(value[len-1].clone()))
     }
 
@@ -441,7 +441,7 @@ where
         let mut count_remain = count;
         if let Some(pair) = position {
             let mut keys = Vec::new();
-            let (mut i_block, mut position) = pair.clone();
+            let (i_block, mut position) = pair.clone();
             for block in i_block..self.data.len() {
                 let size = self.stored_indices.indices[block].0 - position;
                 if self.data[block].is_none() {
@@ -453,11 +453,10 @@ where
                     break;
                 }
                 count_remain -= size;
-                i_block += 1;
                 position = 0;
             }
             let values = self.context.read_multi_values_bytes(keys).await?;
-            let (mut i_block, mut position) = pair.clone();
+            let (i_block, mut position) = pair.clone();
             let mut pos = 0;
             count_remain = count;
             for block in i_block..self.data.len() {
@@ -469,7 +468,7 @@ where
                     None => {
                         let value = values[pos].as_ref().ok_or(ViewError::MissingEntries)?;
                         pos += 1;
-                        &bcs::from_bytes::<Vec<T>>(&value)?
+                        &bcs::from_bytes::<Vec<T>>(value)?
                     },
                 };
                 let end = if count_remain <= size {
@@ -485,7 +484,6 @@ where
                     break;
                 }
                 count_remain -= size;
-                i_block += 1;
                 position = 0;
             }
         }
