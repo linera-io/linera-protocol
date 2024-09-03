@@ -97,7 +97,7 @@ pub use backends::rocks_db;
 pub use backends::scylla_db;
 pub use backends::{journaling, lru_caching, memory, value_splitting};
 pub use views::{
-    collection_view, hashable_wrapper, key_value_store_view, log_view, map_view, queue_view,
+    bucket_queue_view, collection_view, hashable_wrapper, key_value_store_view, log_view, map_view, queue_view,
     reentrant_collection_view, register_view, set_view,
 };
 /// Re-exports used by the derive macros of this library.

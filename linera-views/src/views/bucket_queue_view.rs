@@ -1,0 +1,523 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use std::{
+    collections::VecDeque,
+    fmt::Debug,
+};
+
+use async_trait::async_trait;
+use serde::{Deserialize};
+use serde::{de::DeserializeOwned, Serialize};
+#[cfg(with_metrics)]
+use {
+    linera_base::prometheus_util::{self, MeasureLatency},
+    prometheus::HistogramVec,
+};
+
+use crate::{
+    batch::Batch,
+    common::{from_bytes_option, from_bytes_option_or_default, MIN_VIEW_TAG},
+    context::Context,
+    views::{View, ViewError},
+};
+
+/// Key tags to create the sub-keys of a BucketQueueView on top of the base key.
+#[repr(u8)]
+enum KeyTag {
+    /// Prefix for the front of the view
+    Front = MIN_VIEW_TAG,
+    /// Prefix for the storing of the stored-indices information
+    Store,
+    /// Prefix for the indices of the log.
+    Index,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct StoredIndices {
+    indices: Vec<(usize,usize)>,
+    position: usize,
+}
+
+impl StoredIndices {
+    fn is_empty(&self) -> bool {
+        self.indices.len() == 0
+    }
+}
+
+#[derive(Debug)]
+struct Cursor {
+    position: Option<(usize,usize)>,
+}
+
+impl Cursor {
+    pub fn new(stored_indices: &StoredIndices) -> Self {
+        if stored_indices.indices.len() == 0 {
+            Cursor { position: None }
+        } else {
+            Cursor { position: Some((0, stored_indices.position)) }
+        }
+    }
+
+    pub fn is_incrementable(&self) -> bool {
+        self.position.is_some()
+    }
+}
+
+/// A view that supports a FIFO queue for values of type `T`.
+pub struct BucketQueueView<C, T, const N: usize> {
+    context: C,
+    data: Vec<Option<Vec<T>>>,
+    new_back_values: VecDeque<T>,
+    stored_indices: StoredIndices,
+    cursor: Cursor,
+    delete_storage_first: bool,
+}
+
+#[async_trait]
+impl<C, T, const N: usize> View<C> for BucketQueueView<C, T, N>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    T: Send + Sync + Clone + Serialize + DeserializeOwned,
+{
+    const NUM_INIT_KEYS: usize = 2;
+
+    fn context(&self) -> &C {
+        &self.context
+    }
+
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        let key1 = context.base_tag(KeyTag::Front as u8);
+        let key2 = context.base_tag(KeyTag::Store as u8);
+        println!("pre_load key1(front)={:?}", key1);
+        println!("pre_load key2(store)={:?}", key2);
+        Ok(vec![key1, key2])
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let value1 = values.first().ok_or(ViewError::PostLoadValuesError)?;
+        let value2 = values.get(1).ok_or(ViewError::PostLoadValuesError)?;
+        let front = from_bytes_option::<Vec<T>, _>(value1)?;
+        let mut data = match front {
+            Some(front) => {
+                println!("post_load, |front|={}", front.len());
+                vec![Some(front)]
+            },
+            None => {
+                println!("post_load, None case");
+                vec![]
+            },
+        };
+        let stored_indices = from_bytes_option_or_default::<StoredIndices, _>(value2)?;
+        for _ in 1..stored_indices.indices.len() {
+            data.push(None);
+        }
+        let cursor = Cursor::new(&stored_indices);
+        println!("post_load stored_indices={:?}", stored_indices);
+        println!("post_load         cursor={:?}", cursor);
+        Ok(Self {
+            context,
+            data,
+            new_back_values: VecDeque::new(),
+            stored_indices,
+            cursor,
+            delete_storage_first: false,
+        })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let keys = Self::pre_load(&context)?;
+        let values = context.read_multi_values_bytes(keys).await?;
+        Self::post_load(context, &values)
+    }
+
+    fn rollback(&mut self) {
+        self.delete_storage_first = false;
+        self.cursor = Cursor::new(&self.stored_indices);
+        self.new_back_values.clear();
+    }
+
+    async fn has_pending_changes(&self) -> bool {
+        println!("---------------- has_pending_changes --------------");
+        if self.delete_storage_first {
+            println!("has_pending_changes, exit 1");
+            return true;
+        }
+        println!("self.cursor={:?}", self.cursor);
+        println!("self.stored_indices={:?}", self.stored_indices);
+        if self.stored_indices.indices.len() > 0 {
+            let Some((i_block, position)) = self.cursor.position else {
+                println!("has_pending_changes, exit 2");
+                return true;
+            };
+            if i_block != 0 || position != self.stored_indices.position {
+                println!("has_pending_changes i_block={} position={} stored_indices.position={}", i_block, position, self.stored_indices.position);
+                println!("has_pending_changes, exit 3");
+                return true;
+            }
+        }
+        println!("has_pending_changes, |new_back_values|={}", self.new_back_values.len());
+        !self.new_back_values.is_empty()
+    }
+
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let mut delete_view = false;
+        println!("------- F L U S H (start) ---------");
+        println!("flush stored_indices={:?}", self.stored_indices);
+        println!("flush cursor={:?}", self.cursor);
+        println!("flush |new_back_values|={}", self.new_back_values.len());
+        assert_eq!(self.data.len(), self.stored_indices.indices.len());
+        if self.delete_storage_first {
+            let key_prefix = self.context.base_key();
+            println!("flush delete_key_prefix 1 for key_prefix={:?}", key_prefix);
+            batch.delete_key_prefix(key_prefix);
+            delete_view = true;
+        }
+        println!("flush stored_count={}", self.stored_count());
+        if self.stored_count() == 0 {
+            let key_prefix = self.context.base_key();
+            println!("flush delete_key_prefix 2 for key_prefix={:?}", key_prefix);
+            batch.delete_key_prefix(key_prefix);
+            self.stored_indices = StoredIndices::default();
+            self.data.clear();
+        } else {
+            if let Some((i_block, position)) = self.cursor.position {
+                println!("flush i_block={} position={}", i_block, position);
+                for block in 0..i_block {
+                    let index = self.stored_indices.indices[block].1;
+                    println!("flush block={} index={}", block, index);
+                    let key = self.get_index_key(index)?;
+                    batch.delete_key(key);
+                }
+                let indices = self.stored_indices.indices[i_block..].to_vec();
+                println!("flush before |self.data|={}", self.data.len());
+                self.data.drain(0..i_block);
+                println!("flush after |self.data|={}", self.data.len());
+                println!("flush indices={:?}", indices);
+                self.stored_indices = StoredIndices { indices, position };
+                self.cursor = Cursor { position: Some((0, position)) };
+                println!("flush stored_indices 1={:?}", self.stored_indices);
+                // We need to ensure that the first index is in the front.
+                let first_index = self.stored_indices.indices[0].1;
+                println!("flush first_index={}", first_index);
+                if first_index != 0 {
+                    let size = self.stored_indices.indices[0].0;
+                    self.stored_indices.indices[0] = (size, 0);
+                    let key = self.get_index_key(first_index)?;
+                    println!("flush   key(fi)={:?}", key);
+                    batch.delete_key(key);
+                    let key = self.get_index_key(0)?;
+                    println!("flush   key(0)={:?}", key);
+                    let data0 = self.data.first().unwrap().as_ref().unwrap();
+                    println!("flush |data0|={}", data0.len());
+                    batch.put_key_value(key, &data0)?;
+                }
+            }
+        }
+        if !self.new_back_values.is_empty() {
+            delete_view = false;
+            let mut unused_index = match self.stored_indices.indices.last() {
+                Some((_, index)) => index + 1,
+                None => 0,
+            };
+            println!("flush unused_index={}", unused_index);
+            let new_back_values : VecDeque<T> = std::mem::take(&mut self.new_back_values);
+            let new_back_values : Vec<T> = new_back_values.into_iter().collect::<Vec<_>>();
+            for value_chunk in new_back_values.chunks(N) {
+                println!("flush index={} |value_chunk|={}", unused_index, value_chunk.len());
+                self.stored_indices.indices.push((value_chunk.len(), unused_index));
+                let value_chunk = value_chunk.to_vec();
+                let key = self.get_index_key(unused_index)?;
+                batch.put_key_value(key, &value_chunk)?;
+                self.data.push(Some(value_chunk));
+                unused_index += 1;
+            }
+            if !self.cursor.is_incrementable() {
+                self.cursor = Cursor { position: Some((0,0)) }
+            }
+            println!("flush |new_back_values|={}", self.new_back_values.len());
+        }
+        println!("flush stored_indices 2 : {:?}", self.stored_indices);
+        if !self.delete_storage_first || !self.stored_indices.is_empty() {
+            let key = self.context.base_tag(KeyTag::Store as u8);
+            batch.put_key_value(key, &self.stored_indices)?;
+        }
+        self.delete_storage_first = false;
+        println!("flush batch={:?}", batch);
+        println!("flush delete_view={}", delete_view);
+        for i in 0..self.data.len() {
+            match &self.data[i] {
+                Some(vec) => {
+                    println!("  i={} |self.data[u]|={}", i, vec.len());
+                },
+                None => {
+                    println!("  i={} None", i);
+                }
+            }
+        }
+        println!("------- F L U S H (end) ---------");
+        Ok(delete_view)
+    }
+
+    fn clear(&mut self) {
+        self.delete_storage_first = true;
+        self.new_back_values.clear();
+        self.cursor.position = None;
+    }
+}
+
+impl<'a, C, T, const N: usize> BucketQueueView<C, T, N>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+{
+    /// Get the key corresponding to the index
+    fn get_index_key(&self, index: usize) -> Result<Vec<u8>, ViewError> {
+        Ok(if index == 0 {
+            self.context.base_tag(KeyTag::Front as u8)
+        } else {
+            self.context.derive_tag_key(KeyTag::Index as u8, &index)?
+        })
+    }
+
+    /// Get the stored_count
+    fn stored_count(&self) -> usize {
+        if self.delete_storage_first {
+            0
+        } else {
+            let Some((i_block, position)) = self.cursor.position else {
+                return 0;
+            };
+            let mut stored_count = 0;
+            for block in i_block..self.stored_indices.indices.len() {
+                stored_count += self.stored_indices.indices[block].0;
+            }
+            stored_count -= position;
+            stored_count
+        }
+    }
+
+    /// The total number of entries of the container
+    pub fn count(&self) -> usize {
+        self.stored_count() + self.new_back_values.len()
+    }
+}
+
+
+
+impl<'a, C, T, const N: usize> BucketQueueView<C, T, N>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    T: Send + Sync + Clone + Serialize + DeserializeOwned,
+{
+    /// Reads the front value, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::bucket_queue_view::BucketQueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut queue = BucketQueueView::<_,u8,5>::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// assert_eq!(queue.front(), Some(34));
+    /// # })
+    /// ```
+    pub fn front(&self) -> Option<T> {
+        match self.cursor.position {
+            Some((i_block, position)) => {
+                let block = &self.data[i_block];
+                let block = block.as_ref().unwrap();
+                Some(block[position].clone())
+            },
+            None => {
+                self.new_back_values.front().cloned()
+            },
+        }
+    }
+
+    /// Deletes the front value, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::bucket_queue_view::BucketQueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut queue = BucketQueueView::<_,u128,5>::load(context).await.unwrap();
+    /// queue.push_back(34 as u128);
+    /// queue.delete_front().await.unwrap();
+    /// assert_eq!(queue.elements().await.unwrap(), Vec::<u128>::new());
+    /// # })
+    /// ```
+    pub async fn delete_front(&mut self) -> Result<(), ViewError> {
+        println!("delete_front beginning");
+        match self.cursor.position {
+            Some((mut i_block, mut position)) => {
+                position += 1;
+                if self.stored_indices.indices[i_block].0 == position {
+                    i_block += 1;
+                    position = 0;
+                }
+                if i_block == self.stored_indices.indices.len() {
+                    self.cursor = Cursor { position: None };
+                } else {
+                    self.cursor = Cursor { position: Some((i_block, position)) };
+                    if self.data[i_block].is_none() {
+                        let index = self.stored_indices.indices[i_block].1;
+                        let key = self.get_index_key(index)?;
+                        let value = self.context.read_value_bytes(&key).await?;
+                        let value = value.ok_or(ViewError::MissingEntries)?;
+                        let value = bcs::from_bytes(&value)?;
+                        self.data[i_block] = Some(value);
+                    }
+                }
+            },
+            None => {
+                self.new_back_values.pop_front();
+            },
+        }
+        Ok(())
+    }
+
+    /// Pushes a value to the end of the queue.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::bucket_queue_view::BucketQueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut queue = BucketQueueView::<_,u128,5>::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// assert_eq!(queue.elements().await.unwrap(), vec![34]);
+    /// # })
+    /// ```
+    pub fn push_back(&mut self, value: T) {
+        println!("push_back, before |new_back_values|={}", self.new_back_values.len());
+        self.new_back_values.push_back(value);
+        println!("push_back,  after |new_back_values|={}", self.new_back_values.len());
+    }
+
+    /// Returns the list of elements in the queue.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::bucket_queue_view::BucketQueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut queue = BucketQueueView::<_,u128,5>::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(37);
+    /// assert_eq!(queue.elements().await.unwrap(), vec![34, 37]);
+    /// # })
+    /// ```
+    pub async fn elements(&self) -> Result<Vec<T>, ViewError> {
+        let mut elements = Vec::<T>::new();
+        println!("------------ E L E M E N T S (start) -------------");
+        println!("elements stored_indices={:?}", self.stored_indices);
+        println!("elements cursor={:?}", self.cursor);
+        if let Some((i_block,position)) = self.cursor.position {
+            println!("elements i_block={} position={}", i_block, position);
+            println!("elements |self.data|={}", self.data.len());
+            for i in 0..self.data.len() {
+                match &self.data[i] {
+                    Some(vec) => {
+                        println!("i={} len={}", i, vec.len());
+                    },
+                    None => {
+                        println!("i={} None", i);
+                    },
+                }
+            }
+            let vec : &Vec<T> = &self.data.get(i_block).unwrap().as_ref().unwrap();
+            for element in &vec[position..] {
+                elements.push(element.clone());
+            }
+            let mut keys = Vec::new();
+            let mut lens = Vec::new();
+            for i in i_block+1..self.stored_indices.indices.len() {
+                if self.data[i].is_none() {
+                    let index = self.stored_indices.indices[i].1;
+                    let len = self.stored_indices.indices[i].0;
+                    println!("elements block={} |vec|={}", i, len);
+                    let key = self.get_index_key(index)?;
+                    keys.push(key);
+                    lens.push(len);
+                }
+            }
+            let values = self.context.read_multi_values_bytes(keys).await?;
+            let mut pos = 0;
+            for i in i_block+1..self.stored_indices.indices.len() {
+                match &self.data[i] {
+                    Some(vec) => {
+                        elements.extend(vec.clone());
+                    },
+                    None => {
+                        let value = values[pos].as_ref().ok_or(ViewError::MissingEntries)?;
+                        let value = bcs::from_bytes::<Vec<T>>(&value)?;
+                        assert_eq!(value.len(), lens[pos]);
+                        elements.extend(value);
+                        pos += 1;
+                    },
+                }
+            }
+        }
+        println!("elements |new_back_values|={}", self.new_back_values.len());
+        for value in &self.new_back_values {
+            elements.push(value.clone());
+        }
+        println!("elements |elements|={}", elements.len());
+        println!("------------ E L E M E N T S (end) -------------");
+        Ok(elements)
+    }
+
+    /// Returns the last element of a bucket queue view
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::bucket_queue_view::BucketQueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut queue = BucketQueueView::<_,u128,5>::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(37);
+    /// assert_eq!(queue.back().await.unwrap(), 37);
+    /// # })
+    /// ```
+    pub async fn back(&self) -> Result<Option<T>, ViewError> {
+        if let Some(value) = self.new_back_values.back() {
+            return Ok(Some(value.clone()));
+        }
+        if self.cursor.position.is_none() {
+            return Ok(None);
+        }
+        let Some((len, index)) = self.stored_indices.indices.last() else {
+            return Ok(None);
+        };
+        if let Some(vec) = self.data.last().unwrap() {
+            return Ok(Some(vec.last().unwrap().clone()));
+        }
+        let key = self.get_index_key(*index)?;
+        let value = self.context.read_value_bytes(&key).await?;
+        let value = value.as_ref().ok_or(ViewError::MissingEntries)?;
+        let value = bcs::from_bytes::<Vec<T>>(&value)?;
+        Ok(Some(value[len-1].clone()))
+    }
+
+
+
+    
+/*
+    async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
+        let count = range.len();
+        let mut keys = Vec::new();
+        let start = range.start;
+        let end = range.end;
+    }
+*/
+
+/*
+    async fn read_back(&self, 
+*/
+}
