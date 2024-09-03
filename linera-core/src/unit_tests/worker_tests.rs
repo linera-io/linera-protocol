@@ -10,6 +10,7 @@ mod wasm;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
+    num::NonZeroUsize,
     time::Duration,
 };
 
@@ -79,10 +80,15 @@ where
 {
     let key_pair = KeyPair::generate();
     let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
-    let worker = WorkerState::new("Single validator node".to_string(), Some(key_pair), storage)
-        .with_allow_inactive_chains(is_client)
-        .with_allow_messages_from_deprecated_epochs(is_client)
-        .with_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
+    let worker = WorkerState::new(
+        "Single validator node".to_string(),
+        Some(key_pair),
+        storage,
+        NonZeroUsize::new(10).expect("Chain worker limit should not be zero"),
+    )
+    .with_allow_inactive_chains(is_client)
+    .with_allow_messages_from_deprecated_epochs(is_client)
+    .with_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
     (committee, worker)
 }
 
