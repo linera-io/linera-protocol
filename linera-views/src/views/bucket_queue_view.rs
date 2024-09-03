@@ -482,7 +482,7 @@ where
     /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// queue.push_back(37);
-    /// assert_eq!(queue.back().await.unwrap(), 37);
+    /// assert_eq!(queue.back().await.unwrap(), Some(37));
     /// # })
     /// ```
     pub async fn back(&self) -> Result<Option<T>, ViewError> {
@@ -523,13 +523,15 @@ where
         if count == 0 {
             return Ok(Vec::new());
         }
-        let mut elements = Vec::new();
+        let mut elements = Vec::<T>::new();
         let mut count_remain = count;
         if let Some(pair) = self.cursor.position {
             let mut keys = Vec::new();
             let (mut i_block, mut position) = pair.clone();
+            println!("read_front: 1, i_block={} position={} len={}", i_block, position, self.data.len());
             for block in i_block..self.data.len() {
                 let size = self.stored_indices.indices[block].0 - position;
+                println!("read_front:  block={} position={} size={}", block, position, size);
                 if self.data[block].is_none() {
                     let index = self.stored_indices.indices[block].1;
                     let key = self.get_index_key(index)?;
@@ -544,21 +546,33 @@ where
             }
             let values = self.context.read_multi_values_bytes(keys).await?;
             let (mut i_block, mut position) = pair.clone();
+            println!("read_front: 2, i_block={} position={}", i_block, position);
             let mut pos = 0;
+            count_remain = count;
             for block in i_block..self.data.len() {
                 let size = self.stored_indices.indices[block].0 - position;
-                match &self.data[block] {
+                let vec = match &self.data[block] {
                     Some(vec) => {
-                        elements.extend(vec.clone());
+                        vec
                     },
                     None => {
                         let value = values[pos].as_ref().ok_or(ViewError::MissingEntries)?;
-                        let value = bcs::from_bytes::<Vec<T>>(&value)?;
-                        elements.extend(value);
                         pos += 1;
+                        &bcs::from_bytes::<Vec<T>>(&value)?
                     },
+                };
+                let end = if count_remain <= size {
+                    position + count_remain
+                } else {
+                    position + size
+                };
+                println!("read_front  block={}  start={} end={} size={}", block, position, end, size);
+                for element in &vec[position..end] {
+                    elements.push(element.clone());
                 }
+                println!("read_front  |elements|={} size={} count_remain={}", elements.len(), size, count_remain);
                 if size >= count_remain {
+                    count_remain = 0;
                     break;
                 }
                 count_remain -= size;
@@ -573,16 +587,4 @@ where
         Ok(elements)
     }
 
-/*
-    async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
-        let count = range.len();
-        let mut keys = Vec::new();
-        let start = range.start;
-        let end = range.end;
-    }
-*/
-
-/*
-    async fn read_back(&self, 
-*/
 }
