@@ -3,6 +3,7 @@
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    num::NonZeroUsize,
     sync::Arc,
 };
 
@@ -642,9 +643,14 @@ where
         for (i, key_pair) in key_pairs.into_iter().enumerate() {
             let name = ValidatorName(key_pair.public());
             let storage = storage_builder.build().await?;
-            let state = WorkerState::new(format!("Node {}", i), Some(key_pair), storage.clone())
-                .with_allow_inactive_chains(false)
-                .with_allow_messages_from_deprecated_epochs(false);
+            let state = WorkerState::new(
+                format!("Node {}", i),
+                Some(key_pair),
+                storage.clone(),
+                NonZeroUsize::new(100).expect("Chain worker limit should not be zero"),
+            )
+            .with_allow_inactive_chains(false)
+            .with_allow_messages_from_deprecated_epochs(false);
             let validator = LocalValidatorClient::new(name, state);
             if i < with_faulty_validators {
                 faulty_validators.insert(name);

@@ -6,7 +6,7 @@ use std::{
     borrow::Cow,
     collections::{hash_map, BTreeMap, HashMap, HashSet, VecDeque},
     num::NonZeroUsize,
-    sync::{Arc, LazyLock, Mutex, RwLock},
+    sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
 
@@ -40,6 +40,7 @@ use tracing::{error, instrument, trace, warn, Instrument as _};
 use {
     linera_base::prometheus_util,
     prometheus::{HistogramVec, IntCounterVec},
+    std::sync::LazyLock,
 };
 
 use crate::{
@@ -52,10 +53,6 @@ use crate::{
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
-
-/// The maximum number of [`ChainWorkerActor`]s to keep running.
-static CHAIN_WORKER_LIMIT: LazyLock<NonZeroUsize> =
-    LazyLock::new(|| NonZeroUsize::new(1_000).expect("`CHAIN_WORKER_LIMIT` should not be zero"));
 
 #[cfg(with_metrics)]
 static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -257,7 +254,12 @@ where
     ViewError: From<StorageClient::StoreError>,
 {
     #[tracing::instrument(level = "trace", skip(nickname, key_pair, storage))]
-    pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
+    pub fn new(
+        nickname: String,
+        key_pair: Option<KeyPair>,
+        storage: StorageClient,
+        chain_worker_limit: NonZeroUsize,
+    ) -> Self {
         WorkerState {
             nickname,
             storage,
@@ -267,7 +269,7 @@ where
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
-            chain_workers: Arc::new(Mutex::new(LruCache::new(*CHAIN_WORKER_LIMIT))),
+            chain_workers: Arc::new(Mutex::new(LruCache::new(chain_worker_limit))),
         }
     }
 
@@ -276,6 +278,7 @@ where
         nickname: String,
         storage: StorageClient,
         tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
+        chain_worker_limit: NonZeroUsize,
     ) -> Self {
         WorkerState {
             nickname,
@@ -286,7 +289,7 @@ where
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
-            chain_workers: Arc::new(Mutex::new(LruCache::new(*CHAIN_WORKER_LIMIT))),
+            chain_workers: Arc::new(Mutex::new(LruCache::new(chain_worker_limit))),
         }
     }
 

@@ -5,7 +5,7 @@
 #![recursion_limit = "256"]
 #![deny(clippy::large_futures)]
 
-use std::{collections::HashMap, env, path::PathBuf, sync::Arc, time::Instant};
+use std::{collections::HashMap, env, num::NonZeroUsize, path::PathBuf, sync::Arc, time::Instant};
 
 use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
@@ -1099,10 +1099,15 @@ impl Job {
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::StoreError>,
     {
-        let state = WorkerState::new("Local node".to_string(), None, storage)
-            .with_tracked_chains([message_id.chain_id, chain_id])
-            .with_allow_inactive_chains(true)
-            .with_allow_messages_from_deprecated_epochs(true);
+        let state = WorkerState::new(
+            "Local node".to_string(),
+            None,
+            storage,
+            NonZeroUsize::new(10).expect("Chain worker limit should not be zero"),
+        )
+        .with_tracked_chains([message_id.chain_id, chain_id])
+        .with_allow_inactive_chains(true)
+        .with_allow_messages_from_deprecated_epochs(true);
         let node_client = LocalNodeClient::new(state);
 
         // Take the latest committee we know of.

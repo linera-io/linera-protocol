@@ -6,6 +6,7 @@ use std::{
     collections::{hash_map, BTreeMap, HashMap, HashSet},
     convert::Infallible,
     iter,
+    num::NonZeroUsize,
     ops::{Deref, DerefMut},
     sync::{Arc, RwLock},
 };
@@ -120,10 +121,14 @@ where
         name: impl Into<String>,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
-        let state =
-            WorkerState::new_for_client(name.into(), storage.clone(), tracked_chains.clone())
-                .with_allow_inactive_chains(true)
-                .with_allow_messages_from_deprecated_epochs(true);
+        let state = WorkerState::new_for_client(
+            name.into(),
+            storage.clone(),
+            tracked_chains.clone(),
+            NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
+        )
+        .with_allow_inactive_chains(true)
+        .with_allow_messages_from_deprecated_epochs(true);
         let local_node = LocalNodeClient::new(state);
 
         Self {

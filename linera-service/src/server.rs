@@ -5,6 +5,7 @@
 #![deny(clippy::large_futures)]
 
 use std::{
+    num::NonZeroUsize,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -62,6 +63,7 @@ impl ServerContext {
             format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
             Some(self.server_config.key.copy()),
             storage,
+            NonZeroUsize::new(400).expect("Chain worker limit should not be zero"),
         )
         .with_allow_inactive_chains(false)
         .with_allow_messages_from_deprecated_epochs(false)
