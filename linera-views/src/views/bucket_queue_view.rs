@@ -69,7 +69,7 @@ struct Cursor {
 
 impl Cursor {
     pub fn new(stored_indices: &StoredIndices) -> Self {
-        if stored_indices.indices.len() == 0 {
+        if stored_indices.indices.is_empty() {
             Cursor { position: None }
         } else {
             Cursor { position: Some((0, stored_indices.position)) }
@@ -153,7 +153,7 @@ where
         if self.delete_storage_first {
             return true;
         }
-        if self.stored_indices.indices.len() > 0 {
+        if !self.stored_indices.indices.is_empty() {
             let Some((i_block, position)) = self.cursor.position else {
                 return true;
             };
@@ -439,7 +439,7 @@ where
         let mut count_remain = count;
         if let Some(pair) = position {
             let mut keys = Vec::new();
-            let (i_block, mut position) = pair.clone();
+            let (i_block, mut position) = pair;
             for block in i_block..self.data.len() {
                 let size = self.stored_indices.indices[block].0 - position;
                 if self.data[block].is_none() {
@@ -454,7 +454,7 @@ where
                 position = 0;
             }
             let values = self.context.read_multi_values_bytes(keys).await?;
-            let (i_block, mut position) = pair.clone();
+            position = pair.1;
             let mut pos = 0;
             count_remain = count;
             for block in i_block..self.data.len() {
