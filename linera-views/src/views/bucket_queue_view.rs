@@ -17,8 +17,9 @@ use {
 
 use crate::{
     batch::Batch,
-    common::{from_bytes_option, from_bytes_option_or_default, MIN_VIEW_TAG},
+    common::{from_bytes_option, from_bytes_option_or_default, HasherOutput, MIN_VIEW_TAG},
     context::Context,
+    hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
@@ -648,3 +649,39 @@ where
     }
 }
 
+/// Type wrapping `QueueView` while memoizing the hash.
+pub type HashedBucketQueueView<C, T, const N: usize> = WrappedHashableContainerView<C, BucketQueueView<C, T, N>, HasherOutput>;
+
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::BucketQueueView;
+    use crate::{
+        context::Context,
+        graphql::{hash_name, mangle},
+    };
+
+    impl<C: Send + Sync, T: async_graphql::OutputType, const N: usize> async_graphql::TypeName for BucketQueueView<C, T, N> {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "BucketQueueView_{}_{:08x}",
+                mangle(T::type_name()),
+                hash_name::<T>()
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<C: Context, T: async_graphql::OutputType, const N: usize> BucketQueueView<C, T, N>
+    where
+        C: Send + Sync,
+        T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
+    {
+        async fn entries(&self, count: Option<usize>) -> async_graphql::Result<Vec<T>> {
+            Ok(self
+                .read_front(count.unwrap_or_else(|| self.count()))
+                .await?)
+        }
+    }
+}
