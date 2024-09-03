@@ -534,4 +534,40 @@ where
     pub async fn read_front(&self, count: usize) -> Result<Vec<T>, ViewError> {
         self.read_context(self.cursor.position, count).await
     }
+
+    /// Returns the last element of a bucket queue view
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::bucket_queue_view::BucketQueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(37);
+    /// queue.push_back(47);
+    /// assert_eq!(queue.read_front(2).await.unwrap(), vec![34, 37]);
+    /// # })
+    /// ```
+    pub async fn read_back(&self, count: usize) -> Result<Vec<T>, ViewError> {
+        if count <= self.new_back_values.len() {
+            let start = self.new_back_values.len() - count;
+            Ok(self.new_back_values.range(start..).cloned().collect::<Vec<_>>())
+        } else {
+            println!("count={} self.count()={}", count, self.count());
+            let mut increment = self.count() - count;
+            let Some((i_block, mut position)) = self.cursor.position else {
+                unreachable!();
+            };
+            for block in i_block..self.data.len() {
+                let size = self.stored_indices.indices[block].0 - position;
+                if increment < size {
+                    return self.read_context(Some((block, position + increment)), count).await
+                }
+                increment -= size;
+                position = 0;
+            }
+            unreachable!();
+        }
+    }
 }

@@ -478,7 +478,11 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
                 let count = rng.gen_range(0..new_vector.len()+1);
                 println!("count={}", count);
                 let vec1 = view.queue.read_front(count).await?;
-                let vec2 = new_vector[0..count].to_vec();
+                let vec2 = new_vector[..count].to_vec();
+                assert_eq!(vec1, vec2);
+                let vec1 = view.queue.read_back(count).await?;
+                let start = new_vector.len() - count;
+                let vec2 = new_vector[start..].to_vec();
                 assert_eq!(vec1, vec2);
             }
         }
