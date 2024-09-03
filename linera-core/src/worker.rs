@@ -730,6 +730,10 @@ where
                 let chain_to_evict = *chain_to_evict;
 
                 chain_workers.pop(&chain_to_evict);
+                self.chain_worker_tasks
+                    .lock()
+                    .unwrap()
+                    .reap_finished_tasks();
             }
 
             let (sender, receiver) = mpsc::unbounded_channel();
