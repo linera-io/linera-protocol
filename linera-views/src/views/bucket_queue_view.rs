@@ -84,7 +84,7 @@ impl Cursor {
 /// A view that supports a FIFO queue for values of type `T`.
 pub struct BucketQueueView<C, T, const N: usize> {
     context: C,
-    data: Vec<Option<Vec<T>>>,
+    stored_data: Vec<Option<Vec<T>>>,
     new_back_values: VecDeque<T>,
     stored_indices: StoredIndices,
     cursor: Cursor,
@@ -114,7 +114,7 @@ where
         let value1 = values.first().ok_or(ViewError::PostLoadValuesError)?;
         let value2 = values.get(1).ok_or(ViewError::PostLoadValuesError)?;
         let front = from_bytes_option::<Vec<T>, _>(value1)?;
-        let mut data = match front {
+        let mut stored_data = match front {
             Some(front) => {
                 vec![Some(front)]
             },
@@ -124,12 +124,12 @@ where
         };
         let stored_indices = from_bytes_option_or_default::<StoredIndices, _>(value2)?;
         for _ in 1..stored_indices.indices.len() {
-            data.push(None);
+            stored_data.push(None);
         }
         let cursor = Cursor::new(&stored_indices);
         Ok(Self {
             context,
-            data,
+            stored_data,
             new_back_values: VecDeque::new(),
             stored_indices,
             cursor,
@@ -166,7 +166,7 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
-        assert_eq!(self.data.len(), self.stored_indices.indices.len());
+        assert_eq!(self.stored_data.len(), self.stored_indices.indices.len());
         if self.delete_storage_first {
             let key_prefix = self.context.base_key();
             batch.delete_key_prefix(key_prefix);
@@ -176,7 +176,7 @@ where
             let key_prefix = self.context.base_key();
             batch.delete_key_prefix(key_prefix);
             self.stored_indices = StoredIndices::default();
-            self.data.clear();
+            self.stored_data.clear();
         } else if let Some((i_block, position)) = self.cursor.position {
             for block in 0..i_block {
                 let index = self.stored_indices.indices[block].1;
@@ -184,7 +184,7 @@ where
                 batch.delete_key(key);
             }
             self.stored_indices.indices.drain(0..i_block);
-            self.data.drain(0..i_block);
+            self.stored_data.drain(0..i_block);
             self.cursor = Cursor { position: Some((0, position)) };
             // We need to ensure that the first index is in the front.
             let first_index = self.stored_indices.indices[0].1;
@@ -194,7 +194,7 @@ where
                 let key = self.get_index_key(first_index)?;
                 batch.delete_key(key);
                 let key = self.get_index_key(0)?;
-                let data0 = self.data.first().unwrap().as_ref().unwrap();
+                let data0 = self.stored_data.first().unwrap().as_ref().unwrap();
                 batch.put_key_value(key, &data0)?;
             }
         }
@@ -211,7 +211,7 @@ where
                 let value_chunk = value_chunk.to_vec();
                 let key = self.get_index_key(unused_index)?;
                 batch.put_key_value(key, &value_chunk)?;
-                self.data.push(Some(value_chunk));
+                self.stored_data.push(Some(value_chunk));
                 unused_index += 1;
             }
             if !self.cursor.is_incrementable() {
@@ -242,7 +242,7 @@ where
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(BucketQueueView {
             context: self.context.clone(),
-            data: self.data.clone(),
+            stored_data: self.stored_data.clone(),
 	    new_back_values: self.new_back_values.clone(),
             stored_indices: self.stored_indices.clone(),
 	    cursor: self.cursor.clone(),
@@ -312,7 +312,7 @@ where
     pub fn front(&self) -> Option<T> {
         match self.cursor.position {
             Some((i_block, position)) => {
-                let block = &self.data[i_block];
+                let block = &self.stored_data[i_block];
                 let block = block.as_ref().unwrap();
                 Some(block[position].clone())
             },
@@ -347,13 +347,13 @@ where
                     self.cursor = Cursor { position: None };
                 } else {
                     self.cursor = Cursor { position: Some((i_block, position)) };
-                    if self.data[i_block].is_none() {
+                    if self.stored_data[i_block].is_none() {
                         let index = self.stored_indices.indices[i_block].1;
                         let key = self.get_index_key(index)?;
                         let value = self.context.read_value_bytes(&key).await?;
                         let value = value.ok_or(ViewError::MissingEntries)?;
                         let value = bcs::from_bytes(&value)?;
-                        self.data[i_block] = Some(value);
+                        self.stored_data[i_block] = Some(value);
                     }
                 }
             },
@@ -421,7 +421,7 @@ where
         let Some((len, index)) = self.stored_indices.indices.last() else {
             return Ok(None);
         };
-        if let Some(vec) = self.data.last().unwrap() {
+        if let Some(vec) = self.stored_data.last().unwrap() {
             return Ok(Some(vec.last().unwrap().clone()));
         }
         let key = self.get_index_key(*index)?;
@@ -440,9 +440,9 @@ where
         if let Some(pair) = position {
             let mut keys = Vec::new();
             let (i_block, mut position) = pair;
-            for block in i_block..self.data.len() {
+            for block in i_block..self.stored_data.len() {
                 let size = self.stored_indices.indices[block].0 - position;
-                if self.data[block].is_none() {
+                if self.stored_data[block].is_none() {
                     let index = self.stored_indices.indices[block].1;
                     let key = self.get_index_key(index)?;
                     keys.push(key);
@@ -457,9 +457,9 @@ where
             position = pair.1;
             let mut pos = 0;
             count_remain = count;
-            for block in i_block..self.data.len() {
+            for block in i_block..self.stored_data.len() {
                 let size = self.stored_indices.indices[block].0 - position;
-                let vec = match &self.data[block] {
+                let vec = match &self.stored_data[block] {
                     Some(vec) => {
                         vec
                     },
@@ -534,7 +534,7 @@ where
             let Some((i_block, mut position)) = self.cursor.position else {
                 unreachable!();
             };
-            for block in i_block..self.data.len() {
+            for block in i_block..self.stored_data.len() {
                 let size = self.stored_indices.indices[block].0 - position;
                 if increment < size {
                     return self.read_context(Some((block, position + increment)), count).await
