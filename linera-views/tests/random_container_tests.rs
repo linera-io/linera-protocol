@@ -10,7 +10,7 @@ use linera_views::{
     key_value_store_view::{KeyValueStoreView, SizeData},
     map_view::HashedByteMapView,
     queue_view::HashedQueueView,
-    bucket_queue_view::BucketQueueView,
+    bucket_queue_view::HashedBucketQueueView,
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::RegisterView,
     test_utils,
@@ -403,9 +403,9 @@ async fn map_view_mutability() -> Result<()> {
     Ok(())
 }
 
-#[derive(RootView)]
+#[derive(CryptoHashRootView)]
 pub struct BucketQueueStateView<C> {
-    pub queue: BucketQueueView<C, u8, 5>,
+    pub queue: HashedBucketQueueView<C, u8, 5>,
 }
 
 #[tokio::test]
@@ -417,6 +417,7 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
     for i in 0..n {
         println!("ITER i={} / {}", i, n);
         let mut view = BucketQueueStateView::load(context.clone()).await?;
+        let hash = view.crypto_hash().await?;
         let save = rng.gen::<bool>();
         let elements = view.queue.elements().await?;
         println!("elements={:?}", elements);
@@ -479,6 +480,13 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
                 new_vector.clone_from(&vector);
             }
             let new_elements = view.queue.elements().await?;
+            let new_hash = view.crypto_hash().await?;
+            if elements == new_elements {
+                assert_eq!(new_hash, hash);
+            } else {
+                // If equal it is a bug or a hash collision (unlikely)
+                assert_ne!(new_hash, hash);
+            }
             println!("A: new_elements={:?}", new_elements);
             println!("A:   new_vector={:?}", new_vector);
             assert_eq!(new_elements, new_vector);
