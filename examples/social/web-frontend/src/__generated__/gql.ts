@@ -13,6 +13,7 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
  * Therefore it is highly recommended to use the babel or swc plugin for production.
  */
 const documents = {
+    "\n  query ReceivedPosts {\n    receivedPosts {\n      entries {\n        value {\n          key {\n            timestamp\n            author\n            index\n          }\n          text\n          imageUrl\n          comments {\n            text\n            chainId\n          }\n          likes\n        }\n      }\n    }\n  }\n": types.ReceivedPostsDocument,
     "\n    mutation createPost($message: String!, $image: String) {\n      post(text: $message, imageUrl: $image)\n    }\n  ": types.CreatePostDocument,
     "\n    mutation likePost($key: KeyInput!) {\n      like(key: $key)\n    }\n  ": types.LikePostDocument,
     "\n    mutation CommentOnPost($key: KeyInput!, $text: String!) {\n      comment(key: $key, comment: $text)\n    }\n  ": types.CommentOnPostDocument,
@@ -32,6 +33,10 @@ const documents = {
  */
 export function gql(source: string): unknown;
 
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  query ReceivedPosts {\n    receivedPosts {\n      entries {\n        value {\n          key {\n            timestamp\n            author\n            index\n          }\n          text\n          imageUrl\n          comments {\n            text\n            chainId\n          }\n          likes\n        }\n      }\n    }\n  }\n"): (typeof documents)["\n  query ReceivedPosts {\n    receivedPosts {\n      entries {\n        value {\n          key {\n            timestamp\n            author\n            index\n          }\n          text\n          imageUrl\n          comments {\n            text\n            chainId\n          }\n          likes\n        }\n      }\n    }\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
