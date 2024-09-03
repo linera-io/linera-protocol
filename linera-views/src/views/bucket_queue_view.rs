@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::VecDeque,
+    collections::{vec_deque::IterMut, VecDeque},
     fmt::Debug,
 };
 
@@ -569,5 +569,39 @@ where
             }
             unreachable!();
         }
+    }
+
+    async fn load_all(&mut self) -> Result<(), ViewError> {
+        if !self.delete_storage_first {
+            let elements = self.elements().await?;
+            self.data.clear();
+            self.stored_indices = StoredIndices::default();
+            for elt in elements {
+                self.new_back_values.push_back(elt);
+            }
+            self.delete_storage_first = true;
+        }
+        Ok(())
+    }
+
+
+    /// Gets a mutable iterator on the entries of the queue
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::bucket_queue_view::BucketQueueView;
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut queue = QueueView::<_,u8, 5>::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// let mut iter = queue.iter_mut().await.unwrap();
+    /// let value = iter.next().unwrap();
+    /// *value = 42;
+    /// assert_eq!(queue.elements().await.unwrap(), vec![42]);
+    /// # })
+    /// ```
+    pub async fn iter_mut(&'a mut self) -> Result<IterMut<'a, T>, ViewError> {
+        self.load_all().await?;
+        Ok(self.new_back_values.iter_mut())
     }
 }
