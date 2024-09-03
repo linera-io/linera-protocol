@@ -91,8 +91,6 @@ where
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
         let key1 = context.base_tag(KeyTag::Front as u8);
         let key2 = context.base_tag(KeyTag::Store as u8);
-        println!("pre_load key1(front)={:?}", key1);
-        println!("pre_load key2(store)={:?}", key2);
         Ok(vec![key1, key2])
     }
 
@@ -102,11 +100,9 @@ where
         let front = from_bytes_option::<Vec<T>, _>(value1)?;
         let mut data = match front {
             Some(front) => {
-                println!("post_load, |front|={}", front.len());
                 vec![Some(front)]
             },
             None => {
-                println!("post_load, None case");
                 vec![]
             },
         };
@@ -115,8 +111,6 @@ where
             data.push(None);
         }
         let cursor = Cursor::new(&stored_indices);
-        println!("post_load stored_indices={:?}", stored_indices);
-        println!("post_load         cursor={:?}", cursor);
         Ok(Self {
             context,
             data,
@@ -140,78 +134,52 @@ where
     }
 
     async fn has_pending_changes(&self) -> bool {
-        println!("---------------- has_pending_changes --------------");
         if self.delete_storage_first {
-            println!("has_pending_changes, exit 1");
             return true;
         }
-        println!("self.cursor={:?}", self.cursor);
-        println!("self.stored_indices={:?}", self.stored_indices);
         if self.stored_indices.indices.len() > 0 {
             let Some((i_block, position)) = self.cursor.position else {
-                println!("has_pending_changes, exit 2");
                 return true;
             };
             if i_block != 0 || position != self.stored_indices.position {
-                println!("has_pending_changes i_block={} position={} stored_indices.position={}", i_block, position, self.stored_indices.position);
-                println!("has_pending_changes, exit 3");
                 return true;
             }
         }
-        println!("has_pending_changes, |new_back_values|={}", self.new_back_values.len());
         !self.new_back_values.is_empty()
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
-        println!("------- F L U S H (start) ---------");
-        println!("flush stored_indices={:?}", self.stored_indices);
-        println!("flush cursor={:?}", self.cursor);
-        println!("flush |new_back_values|={}", self.new_back_values.len());
         assert_eq!(self.data.len(), self.stored_indices.indices.len());
         if self.delete_storage_first {
             let key_prefix = self.context.base_key();
-            println!("flush delete_key_prefix 1 for key_prefix={:?}", key_prefix);
             batch.delete_key_prefix(key_prefix);
             delete_view = true;
         }
-        println!("flush stored_count={}", self.stored_count());
         if self.stored_count() == 0 {
             let key_prefix = self.context.base_key();
-            println!("flush delete_key_prefix 2 for key_prefix={:?}", key_prefix);
             batch.delete_key_prefix(key_prefix);
             self.stored_indices = StoredIndices::default();
             self.data.clear();
         } else {
             if let Some((i_block, position)) = self.cursor.position {
-                println!("flush i_block={} position={}", i_block, position);
                 for block in 0..i_block {
                     let index = self.stored_indices.indices[block].1;
-                    println!("flush block={} index={}", block, index);
                     let key = self.get_index_key(index)?;
                     batch.delete_key(key);
                 }
-                let indices = self.stored_indices.indices[i_block..].to_vec();
-                println!("flush before |self.data|={}", self.data.len());
+                self.stored_indices.indices.drain(0..i_block);
                 self.data.drain(0..i_block);
-                println!("flush after |self.data|={}", self.data.len());
-                println!("flush indices={:?}", indices);
-                self.stored_indices = StoredIndices { indices, position };
                 self.cursor = Cursor { position: Some((0, position)) };
-                println!("flush stored_indices 1={:?}", self.stored_indices);
                 // We need to ensure that the first index is in the front.
                 let first_index = self.stored_indices.indices[0].1;
-                println!("flush first_index={}", first_index);
                 if first_index != 0 {
                     let size = self.stored_indices.indices[0].0;
                     self.stored_indices.indices[0] = (size, 0);
                     let key = self.get_index_key(first_index)?;
-                    println!("flush   key(fi)={:?}", key);
                     batch.delete_key(key);
                     let key = self.get_index_key(0)?;
-                    println!("flush   key(0)={:?}", key);
                     let data0 = self.data.first().unwrap().as_ref().unwrap();
-                    println!("flush |data0|={}", data0.len());
                     batch.put_key_value(key, &data0)?;
                 }
             }
@@ -222,11 +190,9 @@ where
                 Some((_, index)) => index + 1,
                 None => 0,
             };
-            println!("flush unused_index={}", unused_index);
             let new_back_values : VecDeque<T> = std::mem::take(&mut self.new_back_values);
             let new_back_values : Vec<T> = new_back_values.into_iter().collect::<Vec<_>>();
             for value_chunk in new_back_values.chunks(N) {
-                println!("flush index={} |value_chunk|={}", unused_index, value_chunk.len());
                 self.stored_indices.indices.push((value_chunk.len(), unused_index));
                 let value_chunk = value_chunk.to_vec();
                 let key = self.get_index_key(unused_index)?;
@@ -237,27 +203,12 @@ where
             if !self.cursor.is_incrementable() {
                 self.cursor = Cursor { position: Some((0,0)) }
             }
-            println!("flush |new_back_values|={}", self.new_back_values.len());
         }
-        println!("flush stored_indices 2 : {:?}", self.stored_indices);
         if !self.delete_storage_first || !self.stored_indices.is_empty() {
             let key = self.context.base_tag(KeyTag::Store as u8);
             batch.put_key_value(key, &self.stored_indices)?;
         }
         self.delete_storage_first = false;
-        println!("flush batch={:?}", batch);
-        println!("flush delete_view={}", delete_view);
-        for i in 0..self.data.len() {
-            match &self.data[i] {
-                Some(vec) => {
-                    println!("  i={} |self.data[u]|={}", i, vec.len());
-                },
-                None => {
-                    println!("  i={} None", i);
-                }
-            }
-        }
-        println!("------- F L U S H (end) ---------");
         Ok(delete_view)
     }
 
@@ -371,7 +322,6 @@ where
     /// # })
     /// ```
     pub async fn delete_front(&mut self) -> Result<(), ViewError> {
-        println!("delete_front beginning");
         match self.cursor.position {
             Some((mut i_block, mut position)) => {
                 position += 1;
@@ -476,10 +426,8 @@ where
         if let Some(pair) = position {
             let mut keys = Vec::new();
             let (mut i_block, mut position) = pair.clone();
-            println!("read_front: 1, i_block={} position={} len={}", i_block, position, self.data.len());
             for block in i_block..self.data.len() {
                 let size = self.stored_indices.indices[block].0 - position;
-                println!("read_front:  block={} position={} size={}", block, position, size);
                 if self.data[block].is_none() {
                     let index = self.stored_indices.indices[block].1;
                     let key = self.get_index_key(index)?;
@@ -494,7 +442,6 @@ where
             }
             let values = self.context.read_multi_values_bytes(keys).await?;
             let (mut i_block, mut position) = pair.clone();
-            println!("read_front: 2, i_block={} position={}", i_block, position);
             let mut pos = 0;
             count_remain = count;
             for block in i_block..self.data.len() {
@@ -514,11 +461,9 @@ where
                 } else {
                     position + size
                 };
-                println!("read_front  block={}  start={} end={} size={}", block, position, end, size);
                 for element in &vec[position..end] {
                     elements.push(element.clone());
                 }
-                println!("read_front  |elements|={} size={} count_remain={}", elements.len(), size, count_remain);
                 if size >= count_remain {
                     count_remain = 0;
                     break;
@@ -573,7 +518,6 @@ where
             let start = self.new_back_values.len() - count;
             Ok(self.new_back_values.range(start..).cloned().collect::<Vec<_>>())
         } else {
-            println!("count={} self.count()={}", count, self.count());
             let mut increment = self.count() - count;
             let Some((i_block, mut position)) = self.cursor.position else {
                 unreachable!();
@@ -593,7 +537,6 @@ where
     async fn load_all(&mut self) -> Result<(), ViewError> {
         if !self.delete_storage_first {
             let elements = self.elements().await?;
-            println!("load_all, |elements|={}", elements.len());
             self.new_back_values.clear();
             for elt in elements {
                 self.new_back_values.push_back(elt);

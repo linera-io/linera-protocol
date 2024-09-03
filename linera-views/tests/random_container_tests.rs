@@ -414,29 +414,23 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
     let mut rng = test_utils::make_deterministic_rng();
     let mut vector = Vec::new();
     let n = 200;
-    for i in 0..n {
-        println!("ITER i={} / {}", i, n);
+    for _ in 0..n {
         let mut view = BucketQueueStateView::load(context.clone()).await?;
         let hash = view.crypto_hash().await?;
         let save = rng.gen::<bool>();
         let elements = view.queue.elements().await?;
-        println!("elements={:?}", elements);
-        println!("  vector={:?}", vector);
         assert_eq!(elements, vector);
         //
         let count_oper = rng.gen_range(0..25);
         let mut new_vector = vector.clone();
-        for i_oper in 0..count_oper {
+        for _ in 0..count_oper {
             let choice = rng.gen_range(0..6);
             let count = view.queue.count();
-            println!("------------- ITER={} i_oper={}/{} choice={} count={}", i, i_oper, count_oper, choice, count);
             if choice == 0 {
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..10);
-                println!("choice 0, n_ins={}", n_ins);
                 for _ in 0..n_ins {
                     let val = rng.gen::<u8>();
-                    println!("   push_back for val={}", val);
                     view.queue.push_back(val);
                     new_vector.push(val);
                 }
@@ -444,7 +438,6 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
             if choice == 1 {
                 // deleting some entries
                 let n_remove = rng.gen_range(0..=count);
-                println!("choice 1, n_remove={}", n_remove);
                 for _ in 0..n_remove {
                     view.queue.delete_front().await?;
                     // slow but we do not care for tests.
@@ -468,13 +461,11 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
             }
             if choice == 3 {
                 // Doing the clearing
-                println!("choice 2, clear");
                 view.clear();
                 new_vector.clear();
             }
             if choice == 4 {
                 // Doing the rollback
-                println!("choice 3, rollback");
                 view.rollback();
                 assert!(!view.has_pending_changes().await);
                 new_vector.clone_from(&vector);
@@ -487,8 +478,6 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
                 // If equal it is a bug or a hash collision (unlikely)
                 assert_ne!(new_hash, hash);
             }
-            println!("A: new_elements={:?}", new_elements);
-            println!("A:   new_vector={:?}", new_vector);
             assert_eq!(new_elements, new_vector);
             let front1 = view.queue.front();
             let front2 = new_vector.first().cloned();
@@ -496,10 +485,8 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
             let back1 = view.queue.back().await?;
             let back2 = new_vector.last().cloned();
             assert_eq!(back1, back2);
-            println!("new_vector={:?}", new_vector);
             for _ in 0..3 {
                 let count = rng.gen_range(0..new_vector.len()+1);
-                println!("count={}", count);
                 let vec1 = view.queue.read_front(count).await?;
                 let vec2 = new_vector[..count].to_vec();
                 assert_eq!(vec1, vec2);
@@ -509,7 +496,6 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
                 assert_eq!(vec1, vec2);
             }
         }
-        println!("------------------- save={} -----------------", save);
         if save {
             if vector != new_vector {
                 assert!(view.has_pending_changes().await);
@@ -517,8 +503,6 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
             vector.clone_from(&new_vector);
             view.save().await?;
             let new_elements = view.queue.elements().await?;
-            println!("B: |..|={} new_elements={:?}", new_elements.len(), new_elements);
-            println!("B: |..|={}   new_vector={:?}", new_vector.len(), new_vector);
             assert_eq!(new_elements, new_vector);
             assert!(!view.has_pending_changes().await);
         }
