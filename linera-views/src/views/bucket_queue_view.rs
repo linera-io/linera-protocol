@@ -574,11 +574,12 @@ where
     async fn load_all(&mut self) -> Result<(), ViewError> {
         if !self.delete_storage_first {
             let elements = self.elements().await?;
-            self.data.clear();
-            self.stored_indices = StoredIndices::default();
+            println!("load_all, |elements|={}", elements.len());
+            self.new_back_values.clear();
             for elt in elements {
                 self.new_back_values.push_back(elt);
             }
+            self.cursor = Cursor { position: None };
             self.delete_storage_first = true;
         }
         Ok(())

@@ -426,7 +426,7 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
         let count_oper = rng.gen_range(0..25);
         let mut new_vector = vector.clone();
         for i_oper in 0..count_oper {
-            let choice = rng.gen_range(0..5);
+            let choice = rng.gen_range(0..6);
             let count = view.queue.count();
             println!("------------- ITER={} i_oper={}/{} choice={} count={}", i, i_oper, count_oper, choice, count);
             if choice == 0 {
@@ -450,13 +450,28 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
                     new_vector.remove(0);
                 }
             }
-            if choice == 2 {
+            if choice == 2 && count > 0 {
+                // changing some random entries
+                let pos = rng.gen_range(0..count);
+                let val = rng.gen::<u8>();
+                let mut iter = view.queue.iter_mut().await?;
+                (for _ in 0..pos {
+                    iter.next();
+                });
+                if let Some(value) = iter.next() {
+                    *value = val;
+                }
+                if let Some(value) = new_vector.get_mut(pos) {
+                    *value = val;
+                }
+            }
+            if choice == 3 {
                 // Doing the clearing
                 println!("choice 2, clear");
                 view.clear();
                 new_vector.clear();
             }
-            if choice == 3 {
+            if choice == 4 {
                 // Doing the rollback
                 println!("choice 3, rollback");
                 view.rollback();
