@@ -315,11 +315,11 @@ where
     /// Reads the front value, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::context::create_test_memory_context;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    /// let mut queue = BucketQueueView::<_,u8,5>::load(context).await.unwrap();
+    /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// queue.push_back(42);
     /// assert_eq!(queue.front(), Some(34));
@@ -341,11 +341,11 @@ where
     /// Deletes the front value, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::context::create_test_memory_context;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    /// let mut queue = BucketQueueView::<_,u128,5>::load(context).await.unwrap();
+    /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
     /// queue.push_back(34 as u128);
     /// queue.delete_front().await.unwrap();
     /// assert_eq!(queue.elements().await.unwrap(), Vec::<u128>::new());
@@ -384,11 +384,11 @@ where
     /// Pushes a value to the end of the queue.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::context::create_test_memory_context;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    /// let mut queue = BucketQueueView::<_,u128,5>::load(context).await.unwrap();
+    /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// assert_eq!(queue.elements().await.unwrap(), vec![34]);
     /// # })
@@ -402,11 +402,11 @@ where
     /// Returns the list of elements in the queue.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::context::create_test_memory_context;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    /// let mut queue = BucketQueueView::<_,u128,5>::load(context).await.unwrap();
+    /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// queue.push_back(37);
     /// assert_eq!(queue.elements().await.unwrap(), vec![34, 37]);
@@ -475,11 +475,11 @@ where
     /// Returns the last element of a bucket queue view
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_memory_context;
+    /// # use linera_views::context::create_test_memory_context;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_memory_context();
-    /// let mut queue = BucketQueueView::<_,u128,5>::load(context).await.unwrap();
+    /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// queue.push_back(37);
     /// assert_eq!(queue.back().await.unwrap(), 37);
@@ -505,9 +505,74 @@ where
         Ok(Some(value[len-1].clone()))
     }
 
+    /// Returns the last element of a bucket queue view
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::bucket_queue_view::BucketQueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(37);
+    /// queue.push_back(47);
+    /// assert_eq!(queue.read_front(2).await.unwrap(), vec![34, 37]);
+    /// # })
+    /// ```
+    pub async fn read_front(&self, count: usize) -> Result<Vec<T>, ViewError> {
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        let mut elements = Vec::new();
+        let mut count_remain = count;
+        if let Some(pair) = self.cursor.position {
+            let mut keys = Vec::new();
+            let (mut i_block, mut position) = pair.clone();
+            for block in i_block..self.data.len() {
+                let size = self.stored_indices.indices[block].0 - position;
+                if self.data[block].is_none() {
+                    let index = self.stored_indices.indices[block].1;
+                    let key = self.get_index_key(index)?;
+                    keys.push(key);
+                }
+                if size >= count_remain {
+                    break;
+                }
+                count_remain -= size;
+                i_block += 1;
+                position = 0;
+            }
+            let values = self.context.read_multi_values_bytes(keys).await?;
+            let (mut i_block, mut position) = pair.clone();
+            let mut pos = 0;
+            for block in i_block..self.data.len() {
+                let size = self.stored_indices.indices[block].0 - position;
+                match &self.data[block] {
+                    Some(vec) => {
+                        elements.extend(vec.clone());
+                    },
+                    None => {
+                        let value = values[pos].as_ref().ok_or(ViewError::MissingEntries)?;
+                        let value = bcs::from_bytes::<Vec<T>>(&value)?;
+                        elements.extend(value);
+                        pos += 1;
+                    },
+                }
+                if size >= count_remain {
+                    break;
+                }
+                count_remain -= size;
+                i_block += 1;
+                position = 0;
+            }
+        }
+        if count_remain > 0 {
+            let count_read = std::cmp::min(count_remain, self.new_back_values.len());
+            elements.extend(self.new_back_values.range(0..count_read).cloned());
+        }
+        Ok(elements)
+    }
 
-
-    
 /*
     async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
         let count = range.len();
