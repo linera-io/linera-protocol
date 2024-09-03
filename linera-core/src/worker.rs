@@ -33,6 +33,7 @@ use thiserror::Error;
 use tokio::{
     sync::{mpsc, oneshot, OwnedRwLockReadGuard},
     task::JoinSet,
+    time::sleep,
 };
 use tracing::{error, instrument, trace, warn, Instrument as _};
 #[cfg(with_metrics)]
@@ -677,17 +678,13 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<ChainActorEndpoint<StorageClient>, WorkerError> {
-        let mut new_receiver = None;
-        let sender = self
-            .chain_workers
-            .lock()
-            .unwrap()
-            .get_or_insert(chain_id, || {
-                let (sender, receiver) = mpsc::unbounded_channel();
-                new_receiver = Some(receiver);
-                sender
-            })
-            .clone();
+        let (sender, new_receiver) = loop {
+            match self.try_get_chain_worker_endpoint(chain_id) {
+                Some(endpoint) => break endpoint,
+                None => sleep(Duration::from_millis(250)).await,
+            }
+            warn!("No chain worker candidates found for eviction, retrying...");
+        };
 
         if let Some(receiver) = new_receiver {
             let actor = ChainWorkerActor::load(
@@ -706,6 +703,40 @@ where
         }
 
         Ok(sender)
+    }
+
+    /// Retrieves an endpoint to a [`ChainWorkerActor`] from the cache, attempting to create one
+    /// and add it to the cache if needed.
+    ///
+    /// Returns [`None`] if the cache is full and no candidate for eviction was found.
+    #[tracing::instrument(level = "trace", skip(self))]
+    fn try_get_chain_worker_endpoint(
+        &self,
+        chain_id: ChainId,
+    ) -> Option<(
+        ChainActorEndpoint<StorageClient>,
+        Option<mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>>,
+    )> {
+        let mut chain_workers = self.chain_workers.lock().unwrap();
+
+        if let Some(endpoint) = chain_workers.get(&chain_id) {
+            Some((endpoint.clone(), None))
+        } else {
+            if chain_workers.len() >= usize::from(chain_workers.cap()) {
+                let (chain_to_evict, _) = chain_workers
+                    .iter()
+                    .rev()
+                    .find(|(_, candidate_endpoint)| candidate_endpoint.strong_count() <= 1)?;
+                let chain_to_evict = *chain_to_evict;
+
+                chain_workers.pop(&chain_to_evict);
+            }
+
+            let (sender, receiver) = mpsc::unbounded_channel();
+            chain_workers.push(chain_id, sender.clone());
+
+            Some((sender, Some(receiver)))
+        }
     }
 
     #[instrument(skip_all, fields(
