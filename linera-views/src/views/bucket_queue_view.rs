@@ -19,7 +19,7 @@ use crate::{
     batch::Batch,
     common::{from_bytes_option, from_bytes_option_or_default, MIN_VIEW_TAG},
     context::Context,
-    views::{View, ViewError},
+    views::{ClonableView, View, ViewError},
 };
 
 /// Key tags to create the sub-keys of a BucketQueueView on top of the base key.
@@ -33,7 +33,7 @@ enum KeyTag {
     Index,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct StoredIndices {
     indices: Vec<(usize,usize)>,
     position: usize,
@@ -45,7 +45,7 @@ impl StoredIndices {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Cursor {
     position: Option<(usize,usize)>,
 }
@@ -264,6 +264,24 @@ where
         self.delete_storage_first = true;
         self.new_back_values.clear();
         self.cursor.position = None;
+    }
+}
+
+impl<C, T, const N: usize> ClonableView<C> for BucketQueueView<C, T, N>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    T: Clone + Send + Sync + Serialize + DeserializeOwned,
+{
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(BucketQueueView {
+            context: self.context.clone(),
+            data: self.data.clone(),
+	    new_back_values: self.new_back_values.clone(),
+            stored_indices: self.stored_indices.clone(),
+	    cursor: self.cursor.clone(),
+            delete_storage_first: self.delete_storage_first,
+        })
     }
 }
 
