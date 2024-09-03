@@ -910,3 +910,76 @@ pub type HashedSetView<C, I> = WrappedHashableContainerView<C, SetView<C, I>, Ha
 /// Type wrapping `CustomSetView` while memoizing the hash.
 pub type HashedCustomSetView<C, I> =
     WrappedHashableContainerView<C, CustomSetView<C, I>, HasherOutput>;
+
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::{CustomSetView, SetView};
+    use crate::context::Context;
+
+    impl<C: Context, I: async_graphql::OutputType> async_graphql::OutputType for SetView<C, I>
+    where
+        C: Send + Sync,
+        I: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
+    {
+        fn type_name() -> Cow<'static, str> {
+            format!("[{}]", I::qualified_type_name()).into()
+        }
+
+        fn qualified_type_name() -> String {
+            format!("[{}]!", I::qualified_type_name())
+        }
+
+        fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+            I::create_type_info(registry);
+            Self::qualified_type_name()
+        }
+
+        async fn resolve(
+            &self,
+            ctx: &async_graphql::ContextSelectionSet<'_>,
+            field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+        ) -> async_graphql::ServerResult<async_graphql::Value> {
+            let indices = self
+                .indices()
+                .await
+                .map_err(|e| async_graphql::Error::from(e).into_server_error(ctx.item.pos))?;
+            let indices_len = indices.len();
+            async_graphql::resolver_utils::resolve_list(ctx, field, indices, Some(indices_len))
+                .await
+        }
+    }
+
+    impl<C: Context, I: async_graphql::OutputType> async_graphql::OutputType for CustomSetView<C, I>
+    where
+        C: Send + Sync,
+        I: crate::common::CustomSerialize + Clone + Send + Sync,
+    {
+        fn type_name() -> Cow<'static, str> {
+            format!("[{}]", I::qualified_type_name()).into()
+        }
+
+        fn qualified_type_name() -> String {
+            format!("[{}]!", I::qualified_type_name())
+        }
+
+        fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+            I::create_type_info(registry);
+            Self::qualified_type_name()
+        }
+
+        async fn resolve(
+            &self,
+            ctx: &async_graphql::ContextSelectionSet<'_>,
+            field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+        ) -> async_graphql::ServerResult<async_graphql::Value> {
+            let indices = self
+                .indices()
+                .await
+                .map_err(|e| async_graphql::Error::from(e).into_server_error(ctx.item.pos))?;
+            let indices_len = indices.len();
+            async_graphql::resolver_utils::resolve_list(ctx, field, indices, Some(indices_len))
+                .await
+        }
+    }
+}
