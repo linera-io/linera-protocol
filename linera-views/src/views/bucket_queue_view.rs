@@ -19,7 +19,7 @@ use crate::{
     batch::Batch,
     common::{from_bytes_option, from_bytes_option_or_default, MIN_VIEW_TAG},
     context::Context,
-    views::{ClonableView, View, ViewError},
+    views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
 /// Key tags to create the sub-keys of a BucketQueueView on top of the base key.
@@ -624,3 +624,27 @@ where
         Ok(self.new_back_values.iter_mut())
     }
 }
+
+#[async_trait]
+impl<C, T, const N: usize> HashableView<C> for BucketQueueView<C, T, N>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    T: Send + Sync + Clone + Serialize + DeserializeOwned,
+{
+    type Hasher = sha3::Sha3_256;
+
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.hash().await
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        #[cfg(with_metrics)]
+        let _hash_latency = QUEUE_VIEW_HASH_RUNTIME.measure_latency();
+        let elements = self.elements().await?;
+        let mut hasher = sha3::Sha3_256::default();
+        hasher.update_with_bcs_bytes(&elements)?;
+        Ok(hasher.finalize())
+    }
+}
+
