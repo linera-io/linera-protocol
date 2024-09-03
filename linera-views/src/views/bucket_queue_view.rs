@@ -177,27 +177,25 @@ where
             batch.delete_key_prefix(key_prefix);
             self.stored_indices = StoredIndices::default();
             self.data.clear();
-        } else {
-            if let Some((i_block, position)) = self.cursor.position {
-                for block in 0..i_block {
-                    let index = self.stored_indices.indices[block].1;
-                    let key = self.get_index_key(index)?;
-                    batch.delete_key(key);
-                }
-                self.stored_indices.indices.drain(0..i_block);
-                self.data.drain(0..i_block);
-                self.cursor = Cursor { position: Some((0, position)) };
-                // We need to ensure that the first index is in the front.
-                let first_index = self.stored_indices.indices[0].1;
-                if first_index != 0 {
-                    let size = self.stored_indices.indices[0].0;
-                    self.stored_indices.indices[0] = (size, 0);
-                    let key = self.get_index_key(first_index)?;
-                    batch.delete_key(key);
-                    let key = self.get_index_key(0)?;
-                    let data0 = self.data.first().unwrap().as_ref().unwrap();
-                    batch.put_key_value(key, &data0)?;
-                }
+        } else if let Some((i_block, position)) = self.cursor.position {
+            for block in 0..i_block {
+                let index = self.stored_indices.indices[block].1;
+                let key = self.get_index_key(index)?;
+                batch.delete_key(key);
+            }
+            self.stored_indices.indices.drain(0..i_block);
+            self.data.drain(0..i_block);
+            self.cursor = Cursor { position: Some((0, position)) };
+            // We need to ensure that the first index is in the front.
+            let first_index = self.stored_indices.indices[0].1;
+            if first_index != 0 {
+                let size = self.stored_indices.indices[0].0;
+                self.stored_indices.indices[0] = (size, 0);
+                let key = self.get_index_key(first_index)?;
+                batch.delete_key(key);
+                let key = self.get_index_key(0)?;
+                let data0 = self.data.first().unwrap().as_ref().unwrap();
+                batch.put_key_value(key, &data0)?;
             }
         }
         if !self.new_back_values.is_empty() {
