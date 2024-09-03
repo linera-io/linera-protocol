@@ -639,7 +639,7 @@ where
     ///
     /// The returned view holds a lock on the chain state, which prevents the worker from changing
     /// the state of that chain.
-    #[tracing::instrument(level = "trace", skip(self, chain_id))]
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn chain_state_view(
         &self,
         chain_id: ChainId,
@@ -650,7 +650,7 @@ where
         .await
     }
 
-    #[tracing::instrument(level = "trace", skip(self, chain_id, request_builder))]
+    #[tracing::instrument(level = "trace", skip(self, request_builder))]
     /// Sends a request to the [`ChainWorker`] for a [`ChainId`] and waits for the `Response`.
     async fn query_chain_worker<Response>(
         &self,
@@ -673,7 +673,7 @@ where
 
     /// Retrieves an endpoint to a [`ChainWorkerActor`] from the cache, creating one and adding it
     /// to the cache if needed.
-    #[tracing::instrument(level = "trace", skip(self, chain_id))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn get_chain_worker_endpoint(
         &self,
         chain_id: ChainId,
