@@ -394,9 +394,7 @@ where
     /// # })
     /// ```
     pub fn push_back(&mut self, value: T) {
-        println!("push_back, before |new_back_values|={}", self.new_back_values.len());
         self.new_back_values.push_back(value);
-        println!("push_back,  after |new_back_values|={}", self.new_back_values.len());
     }
 
     /// Returns the list of elements in the queue.
@@ -413,63 +411,8 @@ where
     /// # })
     /// ```
     pub async fn elements(&self) -> Result<Vec<T>, ViewError> {
-        let mut elements = Vec::<T>::new();
-        println!("------------ E L E M E N T S (start) -------------");
-        println!("elements stored_indices={:?}", self.stored_indices);
-        println!("elements cursor={:?}", self.cursor);
-        if let Some((i_block,position)) = self.cursor.position {
-            println!("elements i_block={} position={}", i_block, position);
-            println!("elements |self.data|={}", self.data.len());
-            for i in 0..self.data.len() {
-                match &self.data[i] {
-                    Some(vec) => {
-                        println!("i={} len={}", i, vec.len());
-                    },
-                    None => {
-                        println!("i={} None", i);
-                    },
-                }
-            }
-            let vec : &Vec<T> = &self.data.get(i_block).unwrap().as_ref().unwrap();
-            for element in &vec[position..] {
-                elements.push(element.clone());
-            }
-            let mut keys = Vec::new();
-            let mut lens = Vec::new();
-            for i in i_block+1..self.stored_indices.indices.len() {
-                if self.data[i].is_none() {
-                    let index = self.stored_indices.indices[i].1;
-                    let len = self.stored_indices.indices[i].0;
-                    println!("elements block={} |vec|={}", i, len);
-                    let key = self.get_index_key(index)?;
-                    keys.push(key);
-                    lens.push(len);
-                }
-            }
-            let values = self.context.read_multi_values_bytes(keys).await?;
-            let mut pos = 0;
-            for i in i_block+1..self.stored_indices.indices.len() {
-                match &self.data[i] {
-                    Some(vec) => {
-                        elements.extend(vec.clone());
-                    },
-                    None => {
-                        let value = values[pos].as_ref().ok_or(ViewError::MissingEntries)?;
-                        let value = bcs::from_bytes::<Vec<T>>(&value)?;
-                        assert_eq!(value.len(), lens[pos]);
-                        elements.extend(value);
-                        pos += 1;
-                    },
-                }
-            }
-        }
-        println!("elements |new_back_values|={}", self.new_back_values.len());
-        for value in &self.new_back_values {
-            elements.push(value.clone());
-        }
-        println!("elements |elements|={}", elements.len());
-        println!("------------ E L E M E N T S (end) -------------");
-        Ok(elements)
+        let count = self.count();
+        self.read_context(self.cursor.position, count).await
     }
 
     /// Returns the last element of a bucket queue view
@@ -505,27 +448,13 @@ where
         Ok(Some(value[len-1].clone()))
     }
 
-    /// Returns the last element of a bucket queue view
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
-    /// # use linera_views::bucket_queue_view::BucketQueueView;
-    /// # use crate::linera_views::views::View;
-    /// # let context = create_test_memory_context();
-    /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
-    /// queue.push_back(34);
-    /// queue.push_back(37);
-    /// queue.push_back(47);
-    /// assert_eq!(queue.read_front(2).await.unwrap(), vec![34, 37]);
-    /// # })
-    /// ```
-    pub async fn read_front(&self, count: usize) -> Result<Vec<T>, ViewError> {
+    async fn read_context(&self, position: Option<(usize,usize)>, count: usize) -> Result<Vec<T>, ViewError> {
         if count == 0 {
             return Ok(Vec::new());
         }
         let mut elements = Vec::<T>::new();
         let mut count_remain = count;
-        if let Some(pair) = self.cursor.position {
+        if let Some(pair) = position {
             let mut keys = Vec::new();
             let (mut i_block, mut position) = pair.clone();
             println!("read_front: 1, i_block={} position={} len={}", i_block, position, self.data.len());
@@ -587,4 +516,22 @@ where
         Ok(elements)
     }
 
+
+    /// Returns the last element of a bucket queue view
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::bucket_queue_view::BucketQueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(37);
+    /// queue.push_back(47);
+    /// assert_eq!(queue.read_front(2).await.unwrap(), vec![34, 37]);
+    /// # })
+    /// ```
+    pub async fn read_front(&self, count: usize) -> Result<Vec<T>, ViewError> {
+        self.read_context(self.cursor.position, count).await
+    }
 }
