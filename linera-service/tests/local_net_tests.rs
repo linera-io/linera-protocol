@@ -14,9 +14,11 @@ use std::{env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use common::INTEGRATION_TEST_GUARD;
+#[cfg(feature = "benchmark")]
+use linera_base::identifiers::AccountOwner;
 use linera_base::{
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ChainId},
+    identifiers::{Account, ChainId},
 };
 use linera_service::{
     cli_wrappers::{
