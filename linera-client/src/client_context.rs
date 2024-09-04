@@ -53,10 +53,10 @@ use {
 use {
     linera_base::{
         crypto::CryptoHash,
-        data_types::{BlobContent, Bytecode},
+        data_types::{BlobBytes, Bytecode},
         identifiers::BytecodeId,
     },
-    std::path::PathBuf,
+    std::{fs, path::PathBuf},
 };
 
 #[cfg(web)]
@@ -441,20 +441,18 @@ where
         blob_path: PathBuf,
     ) -> Result<CryptoHash, Error> {
         info!("Loading data blob file");
-        let blob_content = BlobContent::load_from_file(&blob_path)
-            .await
-            .context(format!(
-                "failed to load data blob content from {:?}",
-                &blob_path
-            ))?;
+        let blob_bytes = fs::read(&blob_path).context(format!(
+            "failed to load data blob bytes from {:?}",
+            &blob_path
+        ))?;
 
         info!("Publishing data blob");
         self.apply_client_command(chain_client, |chain_client| {
-            let blob_content = blob_content.clone();
+            let blob_bytes = blob_bytes.clone();
             let chain_client = chain_client.clone();
             async move {
                 chain_client
-                    .publish_data_blob(blob_content)
+                    .publish_data_blob(blob_bytes)
                     .await
                     .context("Failed to publish data blob")
             }
@@ -462,7 +460,7 @@ where
         .await?;
 
         info!("{}", "Data blob published successfully!");
-        Ok(CryptoHash::new(&blob_content))
+        Ok(CryptoHash::new(&BlobBytes(blob_bytes)))
     }
 
     // TODO(#2490): Consider removing or renaming this.

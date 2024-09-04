@@ -28,8 +28,7 @@ use linera_base::{
     abi::Abi,
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Round,
-        Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Round, Timestamp,
     },
     ensure,
     identifiers::{
@@ -2493,14 +2492,12 @@ where
     }
 
     /// Publishes some data blobs.
-    #[tracing::instrument(level = "trace", skip(blob_contents))]
+    #[tracing::instrument(level = "trace", skip(bytes))]
     pub async fn publish_data_blobs(
         &self,
-        blob_contents: Vec<BlobContent>,
+        bytes: Vec<Vec<u8>>,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        let blobs = blob_contents
-            .into_iter()
-            .map(|blob_content| blob_content.with_data_blob_id());
+        let blobs = bytes.into_iter().map(Blob::new_data);
         let publish_blob_operations = blobs
             .clone()
             .map(|blob| {
@@ -2514,12 +2511,12 @@ where
     }
 
     /// Publishes some data blob.
-    #[tracing::instrument(level = "trace", skip(blob_content))]
+    #[tracing::instrument(level = "trace", skip(bytes))]
     pub async fn publish_data_blob(
         &self,
-        blob_content: BlobContent,
+        bytes: Vec<u8>,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        self.publish_data_blobs(vec![blob_content]).await
+        self.publish_data_blobs(vec![bytes]).await
     }
 
     /// Adds pending blobs

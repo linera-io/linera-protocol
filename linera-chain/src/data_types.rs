@@ -10,8 +10,8 @@ use linera_base::{
     data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{
-        Account, BlobId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
-        StreamId,
+        Account, BlobId, BlobType, ChainId, ChannelName, Destination, GenericApplicationId,
+        MessageId, Owner, StreamId,
     },
 };
 use linera_execution::{
@@ -66,12 +66,12 @@ impl Block {
         let mut blob_ids = HashSet::new();
         for operation in &self.operations {
             if let Operation::System(SystemOperation::PublishDataBlob { blob_hash }) = operation {
-                blob_ids.insert(BlobId::new_data_from_hash(*blob_hash));
+                blob_ids.insert(BlobId::new(*blob_hash, BlobType::Data));
             }
             if let Operation::System(SystemOperation::PublishBytecode { bytecode_id }) = operation {
                 blob_ids.extend([
-                    BlobId::new_contract_bytecode_from_hash(bytecode_id.contract_blob_hash),
-                    BlobId::new_service_bytecode_from_hash(bytecode_id.service_blob_hash),
+                    BlobId::new(bytecode_id.contract_blob_hash, BlobType::ContractBytecode),
+                    BlobId::new(bytecode_id.service_blob_hash, BlobType::ServiceBytecode),
                 ]);
             }
         }

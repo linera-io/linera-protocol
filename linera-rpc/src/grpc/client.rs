@@ -283,7 +283,7 @@ impl ValidatorNode for GrpcClient {
             .download_blob_content(api::BlobId::try_from(blob_id)?)
             .await?
             .into_inner()
-            .into())
+            .try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]

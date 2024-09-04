@@ -20,7 +20,7 @@ use futures::{
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
     data_types::{
-        Amount, ApplicationPermissions, BlobContent, Bytecode, TimeDelta, Timestamp,
+        Amount, ApplicationPermissions, BlobBytes, Bytecode, TimeDelta, Timestamp,
         UserApplicationDescription,
     },
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
@@ -613,14 +613,14 @@ where
     async fn publish_data_blob(
         &self,
         chain_id: ChainId,
-        blob_content: BlobContent,
+        bytes: Vec<u8>,
     ) -> Result<CryptoHash, Error> {
-        let hash = CryptoHash::new(&blob_content);
+        let hash = CryptoHash::new(&BlobBytes(bytes.clone()));
         self.apply_client_command(&chain_id, move |client| {
-            let blob_content = blob_content.clone();
+            let bytes = bytes.clone();
             async move {
                 let result = client
-                    .publish_data_blob(blob_content)
+                    .publish_data_blob(bytes)
                     .await
                     .map_err(Error::from)
                     .map(|outcome| outcome.map(|_| hash));

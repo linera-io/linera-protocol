@@ -19,7 +19,7 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, Blob, Bytecode, OracleResponse, UserApplicationDescription},
+    data_types::{Amount, Bytecode, OracleResponse, UserApplicationDescription},
     identifiers::{
         AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner, StreamId,
         StreamName,
@@ -102,53 +102,6 @@ where
 
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
-
-    let contract_blob = Blob::load_data_blob_from_file(contract_path.clone()).await?;
-    let expected_contract_blob_id = contract_blob.id();
-    let certificate = publisher
-        .publish_data_blob(contract_blob.content().clone())
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(certificate
-        .value()
-        .executed_block()
-        .unwrap()
-        .outcome
-        .oracle_responses
-        .iter()
-        .any(|responses| responses.contains(&OracleResponse::Blob(expected_contract_blob_id))));
-
-    let service_blob = Blob::load_data_blob_from_file(service_path.clone()).await?;
-    let expected_service_blob_id = service_blob.id();
-    let certificate = publisher
-        .publish_data_blob(service_blob.content().clone())
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(certificate
-        .value()
-        .executed_block()
-        .unwrap()
-        .outcome
-        .oracle_responses
-        .iter()
-        .any(|responses| responses.contains(&OracleResponse::Blob(expected_service_blob_id))));
-
-    // If I try to upload the contract blob again, I should get the same blob ID
-    let certificate = publisher
-        .publish_data_blob(contract_blob.into_inner())
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(certificate
-        .value()
-        .executed_block()
-        .unwrap()
-        .outcome
-        .oracle_responses
-        .iter()
-        .any(|responses| responses.contains(&OracleResponse::Blob(expected_contract_blob_id))));
 
     let (bytecode_id, _cert) = publisher
         .publish_bytecode(

@@ -13,7 +13,7 @@ use std::{sync::Arc, thread, vec};
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::BlockHeight,
-    identifiers::{BlobId, BlobType, BytecodeId, ChainId, MessageId},
+    identifiers::{BlobId, BytecodeId, ChainId, MessageId},
 };
 use linera_views::{
     context::Context,

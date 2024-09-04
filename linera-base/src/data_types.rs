@@ -10,7 +10,9 @@ use std::ops;
 use std::sync::LazyLock;
 use std::{
     fmt::{self, Display},
-    fs, io, iter,
+    fs,
+    hash::{Hash, Hasher},
+    io, iter,
     num::ParseIntError,
     path::Path,
     str::FromStr,
@@ -870,7 +872,8 @@ pub enum DecompressionError {
 }
 
 /// A compressed WebAssembly module's bytecode.
-#[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Deserialize, Hash, Serialize, WitType, WitStore)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct CompressedBytecode {
     /// Compressed bytes of the bytecode.
     #[serde(with = "serde_bytes")]
@@ -919,57 +922,69 @@ impl fmt::Debug for CompressedBytecode {
     }
 }
 
-impl BcsHashable for CompressedBytecode {}
+/// Internal bytes of a blob.
+#[derive(Clone, Serialize, Deserialize, WitType, WitStore)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+#[repr(transparent)]
+pub struct BlobBytes(#[serde(with = "serde_bytes")] pub Vec<u8>);
 
-impl From<CompressedBytecode> for BlobContent {
-    fn from(bytecode: CompressedBytecode) -> Self {
-        Self {
-            bytes: bytecode.compressed_bytes,
-        }
-    }
-}
+impl BcsHashable for BlobBytes {}
 
-impl From<BlobContent> for CompressedBytecode {
-    fn from(blob_content: BlobContent) -> Self {
-        Self {
-            compressed_bytes: blob_content.bytes,
-        }
+impl Hash for BlobBytes {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
     }
 }
 
 /// A blob of binary data.
-#[derive(Eq, PartialEq, Hash, Clone, Serialize, Deserialize, WitType, WitStore)]
-pub struct BlobContent {
-    /// Bytes of the binary blob.
-    #[serde(with = "serde_bytes")]
-    pub bytes: Vec<u8>,
+#[derive(Hash, Clone, Serialize, Deserialize, WitType, WitStore)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub enum BlobContent {
+    /// A generic data blob.
+    Data(#[serde(with = "serde_bytes")] Vec<u8>),
+    /// A blob containing contract bytecode.
+    ContractBytecode(CompressedBytecode),
+    /// A blob containing service bytecode.
+    ServiceBytecode(CompressedBytecode),
 }
 
 impl fmt::Debug for BlobContent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BlobContent").finish_non_exhaustive()
+        match self {
+            BlobContent::Data(_) => write!(f, "BlobContent::Data"),
+            BlobContent::ContractBytecode(_) => write!(f, "BlobContent::ContractBytecode"),
+            BlobContent::ServiceBytecode(_) => write!(f, "BlobContent::ServiceBytecode"),
+        }
     }
 }
 
 impl BlobContent {
-    /// Creates a new [`BlobContent`] from the provided bytes.
-    pub fn new(bytes: Vec<u8>) -> Self {
-        BlobContent { bytes }
-    }
-
-    /// Creates a [`BlobContent`] from a string for testing purposes.
-    #[cfg(with_testing)]
-    pub fn test_blob_content(content: &str) -> Self {
-        BlobContent {
-            bytes: content.as_bytes().to_vec(),
+    /// Creates a new [`BlobContent`] from the provided bytes and [`BlobId`]. Does not check if the bytes match the ID!
+    pub fn new_with_id_unchecked(id: BlobId, bytes: Vec<u8>) -> Self {
+        match id.blob_type {
+            BlobType::Data => BlobContent::Data(bytes),
+            BlobType::ContractBytecode => BlobContent::ContractBytecode(CompressedBytecode {
+                compressed_bytes: bytes,
+            }),
+            BlobType::ServiceBytecode => BlobContent::ServiceBytecode(CompressedBytecode {
+                compressed_bytes: bytes,
+            }),
         }
     }
 
-    /// Loads blob content from a file.
-    pub async fn load_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
-        Ok(BlobContent {
-            bytes: fs::read(path)?,
-        })
+    /// Creates a new data [`BlobContent`] from the provided bytes.
+    pub fn new_data(bytes: Vec<u8>) -> Self {
+        BlobContent::Data(bytes)
+    }
+
+    /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
+    pub fn new_contract_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
+        BlobContent::ContractBytecode(compressed_bytecode)
+    }
+
+    /// Creates a new service bytecode [`BlobContent`] from the provided bytes.
+    pub fn new_service_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
+        BlobContent::ServiceBytecode(compressed_bytecode)
     }
 
     /// Creates a `Blob` without checking that this is the correct `BlobId`.
@@ -982,39 +997,40 @@ impl BlobContent {
 
     /// Creates a `Blob` checking that this is the correct `BlobId`.
     pub fn with_blob_id_checked(self, blob_id: BlobId) -> Option<Blob> {
-        let blob = match blob_id.blob_type {
-            BlobType::Data => self.with_data_blob_id(),
-            BlobType::ContractBytecode => self.with_contract_bytecode_blob_id(),
-            BlobType::ServiceBytecode => self.with_service_bytecode_blob_id(),
-        };
+        match blob_id.blob_type {
+            BlobType::Data if matches!(&self, BlobContent::Data(_)) => Some(()),
+            BlobType::ContractBytecode if matches!(&self, BlobContent::ContractBytecode(_)) => {
+                Some(())
+            }
+            BlobType::ServiceBytecode if matches!(&self, BlobContent::ServiceBytecode(_)) => {
+                Some(())
+            }
+            _ => None,
+        }?;
 
-        if blob.id() == blob_id {
-            Some(blob)
+        let expected_blob_id = BlobId::from_content(&self);
+
+        if blob_id == expected_blob_id {
+            Some(self.with_blob_id_unchecked(expected_blob_id))
         } else {
             None
         }
     }
 
-    /// Creates a data `Blob` by hashing `self`.
-    pub fn with_data_blob_id(self) -> Blob {
-        let id = BlobId::new_data(&self);
-        Blob { id, content: self }
-    }
-
-    /// Creates a contract bytecode `Blob` by hashing `self`.
-    pub fn with_contract_bytecode_blob_id(self) -> Blob {
-        let id = BlobId::new_contract_bytecode(&self.clone().into());
-        Blob { id, content: self }
-    }
-
-    /// Creates a service bytecode `Blob` by hashing `self`.
-    pub fn with_service_bytecode_blob_id(self) -> Blob {
-        let id = BlobId::new_service_bytecode(&self.clone().into());
-        Blob { id, content: self }
+    /// Gets the inner blob's bytes.
+    pub fn inner_bytes(&self) -> Vec<u8> {
+        match self {
+            BlobContent::Data(bytes) => bytes,
+            BlobContent::ContractBytecode(compressed_bytecode) => {
+                &compressed_bytecode.compressed_bytes
+            }
+            BlobContent::ServiceBytecode(compressed_bytecode) => {
+                &compressed_bytecode.compressed_bytes
+            }
+        }
+        .clone()
     }
 }
-
-impl BcsHashable for BlobContent {}
 
 impl From<Blob> for BlobContent {
     fn from(blob: Blob) -> BlobContent {
@@ -1022,8 +1038,18 @@ impl From<Blob> for BlobContent {
     }
 }
 
+impl From<BlobContent> for Blob {
+    fn from(content: BlobContent) -> Blob {
+        Self {
+            id: BlobId::from_content(&content),
+            content,
+        }
+    }
+}
+
 /// A blob of binary data, with its content-addressed blob ID.
-#[derive(Eq, PartialEq, Debug, Hash, Clone, WitType, WitStore)]
+#[derive(Debug, Hash, Clone, WitType, WitStore)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct Blob {
     /// ID of the blob.
     id: BlobId,
@@ -1032,49 +1058,29 @@ pub struct Blob {
 }
 
 impl Blob {
-    /// Creates a new contract bytecode [`Blob`] from a [`CompressedBytecode`].
-    pub fn new_contract_bytecode(bytecode: CompressedBytecode) -> Self {
-        Blob {
-            id: BlobId::new_contract_bytecode(&bytecode),
-            content: bytecode.into(),
-        }
+    /// Creates a new [`Blob`] from the provided bytes and [`BlobId`]. Does not check if the bytes match the ID!
+    pub fn new_with_id_unchecked(id: BlobId, bytes: Vec<u8>) -> Self {
+        BlobContent::new_with_id_unchecked(id, bytes).into()
     }
 
-    /// Creates a new service bytecode [`Blob`] from a [`CompressedBytecode`].
-    pub fn new_service_bytecode(bytecode: CompressedBytecode) -> Self {
-        Blob {
-            id: BlobId::new_service_bytecode(&bytecode),
-            content: bytecode.into(),
-        }
+    /// Creates a new data [`Blob`] from the provided bytes.
+    pub fn new_data(bytes: Vec<u8>) -> Self {
+        BlobContent::new_data(bytes).into()
     }
 
-    /// Loads a data blob from a file.
-    pub async fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
-        let blob_content = BlobContent::load_from_file(path).await?;
-        Ok(blob_content.with_data_blob_id())
+    /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
+    pub fn new_contract_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
+        BlobContent::new_contract_bytecode(compressed_bytecode).into()
     }
 
-    /// Loads a contract bytecode blob from a file.
-    pub async fn load_contract_bytecode_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
-        let blob_content = BlobContent::load_from_file(path).await?;
-        Ok(blob_content.with_contract_bytecode_blob_id())
-    }
-
-    /// Loads a service bytecode blob from a file.
-    pub async fn load_service_bytecode_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
-        let blob_content = BlobContent::load_from_file(path).await?;
-        Ok(blob_content.with_service_bytecode_blob_id())
+    /// Creates a new service bytecode [`BlobContent`] from the provided bytes.
+    pub fn new_service_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
+        BlobContent::new_service_bytecode(compressed_bytecode).into()
     }
 
     /// A content-addressed blob ID i.e. the hash of the `Blob`.
     pub fn id(&self) -> BlobId {
         self.id
-    }
-
-    /// Creates a [`Blob`] from a string for testing purposes.
-    #[cfg(with_testing)]
-    pub fn test_data_blob(content: &str) -> Self {
-        BlobContent::test_blob_content(content).with_data_blob_id()
     }
 
     /// Returns a reference to the inner `BlobContent`, without the hash.
@@ -1083,32 +1089,19 @@ impl Blob {
     }
 
     /// Moves ownership of the blob of binary data
-    pub fn into_inner(self) -> BlobContent {
+    pub fn into_inner_content(self) -> BlobContent {
         self.content
     }
 
-    /// Moves ownership of the blob's bytecode. If the `Blob` is of the wrong type, returns `None`.
-    pub fn into_inner_contract_bytecode(self) -> Option<CompressedBytecode> {
-        match self.id.blob_type {
-            BlobType::ContractBytecode => Some(self.content.into()),
-            _ => None,
-        }
+    /// Gets the inner blob's bytes.
+    pub fn inner_bytes(&self) -> Vec<u8> {
+        self.content.inner_bytes()
     }
 
-    /// Moves ownership of the blob's bytecode. If the `Blob` is of the wrong type, returns `None`.
-    pub fn into_inner_service_bytecode(self) -> Option<CompressedBytecode> {
-        match self.id.blob_type {
-            BlobType::ServiceBytecode => Some(self.content.into()),
-            _ => None,
-        }
+    /// Loads data blob content from a file.
+    pub async fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
+        Ok(Self::new_data(fs::read(path)?))
     }
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename = "Blob")]
-struct SerializableBlob {
-    pub blob_type: BlobType,
-    pub blob_content: BlobContent,
 }
 
 impl Serialize for Blob {
@@ -1118,19 +1111,9 @@ impl Serialize for Blob {
     {
         if serializer.is_human_readable() {
             let blob_bytes = bcs::to_bytes(&self.content).map_err(serde::ser::Error::custom)?;
-            serializer.serialize_str(&format!(
-                "{}:{}",
-                self.id.blob_type,
-                hex::encode(blob_bytes)
-            ))
+            serializer.serialize_str(&hex::encode(blob_bytes))
         } else {
-            SerializableBlob::serialize(
-                &SerializableBlob {
-                    blob_type: self.id.blob_type,
-                    blob_content: self.content.clone(),
-                },
-                serializer,
-            )
+            BlobContent::serialize(self.content(), serializer)
         }
     }
 }
@@ -1140,42 +1123,21 @@ impl<'a> Deserialize<'a> for Blob {
     where
         D: Deserializer<'a>,
     {
-        fn get_blob_id(blob_type: &BlobType, blob_content: &BlobContent) -> BlobId {
-            match blob_type {
-                BlobType::Data => BlobId::new_data(blob_content),
-                BlobType::ContractBytecode => {
-                    BlobId::new_contract_bytecode(&blob_content.clone().into())
-                }
-                BlobType::ServiceBytecode => {
-                    BlobId::new_service_bytecode(&blob_content.clone().into())
-                }
-            }
-        }
-
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            let parts = s.split(':').collect::<Vec<_>>();
+            let content_bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+            let content: BlobContent =
+                bcs::from_bytes(&content_bytes).map_err(serde::de::Error::custom)?;
 
-            if parts.len() == 2 {
-                let blob_type = BlobType::from_str(parts[0])
-                    .context("Invalid BlobType!")
-                    .map_err(serde::de::Error::custom)?;
-                let blob_bytes = hex::decode(parts[1]).map_err(serde::de::Error::custom)?;
-                let blob: BlobContent =
-                    bcs::from_bytes(&blob_bytes).map_err(serde::de::Error::custom)?;
-
-                Ok(Blob {
-                    id: get_blob_id(&blob_type, &blob),
-                    content: blob,
-                })
-            } else {
-                Err(serde::de::Error::custom("Invalid Blob!"))
-            }
-        } else {
-            let blob = SerializableBlob::deserialize(deserializer)?;
             Ok(Blob {
-                id: get_blob_id(&blob.blob_type, &blob.blob_content),
-                content: blob.blob_content,
+                id: BlobId::from_content(&content),
+                content,
+            })
+        } else {
+            let content = BlobContent::deserialize(deserializer)?;
+            Ok(Blob {
+                id: BlobId::from_content(&content),
+                content,
             })
         }
     }

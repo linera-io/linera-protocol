@@ -426,7 +426,7 @@ where
             .read_blob(blob_id)
             .await
             .map_err(|err| Status::from_error(Box::new(err)))?;
-        Ok(Response::new(blob.into_inner().into()))
+        Ok(Response::new(blob.into_inner_content().try_into()?))
     }
 
     #[instrument(skip_all, err(Display))]

@@ -10,7 +10,7 @@ use futures::StreamExt;
 use linera_base::{
     crypto::*,
     data_types::*,
-    identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{Account, BlobId, BlobType, ChainDescription, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -1495,8 +1495,11 @@ where
         )
         .await?;
 
-    let blob0 = Blob::test_data_blob("blob0");
-    let blob0_id = blob0.id();
+    let blob0_bytes = b"blob0".to_vec();
+    let blob0_id = BlobId::new(
+        CryptoHash::new(&BlobBytes(blob0_bytes.clone())),
+        BlobType::Data,
+    );
 
     // Try to read a blob without publishing it first, should fail
     let result = client1_a
@@ -1512,7 +1515,7 @@ where
 
     // Publish blob on chain 1
     let publish_certificate = client1_a
-        .publish_data_blob(blob0.into_inner())
+        .publish_data_blob(blob0_bytes)
         .await
         .unwrap()
         .unwrap();
@@ -1546,7 +1549,7 @@ where
         .await;
 
     client2_a.synchronize_from_validators().await.unwrap();
-    let blob1 = Blob::test_data_blob("blob1");
+    let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
     client2_a.add_pending_blobs([blob1]).await;
@@ -1668,12 +1671,15 @@ where
     // Take one validator down
     builder.set_fault_type([3], FaultType::Offline).await;
 
-    let blob0 = Blob::test_data_blob("blob0");
-    let blob0_id = blob0.id();
+    let blob0_bytes = b"blob0".to_vec();
+    let blob0_id = BlobId::new(
+        CryptoHash::new(&BlobBytes(blob0_bytes.clone())),
+        BlobType::Data,
+    );
 
     // Publish blob on chain 1
     let publish_certificate = client1
-        .publish_data_blob(blob0.into_inner())
+        .publish_data_blob(blob0_bytes)
         .await
         .unwrap()
         .unwrap();
@@ -1688,7 +1694,7 @@ where
         .await;
 
     client2_a.synchronize_from_validators().await.unwrap();
-    let blob1 = Blob::test_data_blob("blob1");
+    let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
     client2_a.add_pending_blobs([blob1]).await;
@@ -1820,13 +1826,16 @@ where
     // Take one validator down
     builder.set_fault_type([3], FaultType::Offline).await;
 
-    let blob0 = Blob::test_data_blob("blob0");
-    let blob0_id = blob0.id();
+    let blob0_bytes = b"blob0".to_vec();
+    let blob0_id = BlobId::new(
+        CryptoHash::new(&BlobBytes(blob0_bytes.clone())),
+        BlobType::Data,
+    );
 
     client1.synchronize_from_validators().await.unwrap();
     // Publish blob0 on chain 1
     let publish_certificate0 = client1
-        .publish_data_blob(blob0.into_inner())
+        .publish_data_blob(blob0_bytes)
         .await
         .unwrap()
         .unwrap();
@@ -1836,13 +1845,16 @@ where
         .unwrap()
         .requires_blob(&blob0_id));
 
-    let blob2 = Blob::test_data_blob("blob2");
-    let blob2_id = blob2.id();
+    let blob2_bytes = b"blob2".to_vec();
+    let blob2_id = BlobId::new(
+        CryptoHash::new(&BlobBytes(blob2_bytes.clone())),
+        BlobType::Data,
+    );
 
     client2.synchronize_from_validators().await.unwrap();
     // Publish blob2 on chain 2
     let publish_certificate2 = client2
-        .publish_data_blob(blob2.into_inner())
+        .publish_data_blob(blob2_bytes)
         .await
         .unwrap()
         .unwrap();
@@ -1860,7 +1872,7 @@ where
         .await;
 
     client3_a.synchronize_from_validators().await.unwrap();
-    let blob1 = Blob::test_data_blob("blob1");
+    let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
     client3_a.add_pending_blobs([blob1]).await;
@@ -1935,7 +1947,7 @@ where
         .await;
 
     client3_b.synchronize_from_validators().await.unwrap();
-    let blob3 = Blob::test_data_blob("blob3");
+    let blob3 = Blob::new_data(b"blob3".to_vec());
     let blob3_hash = blob3.id().hash;
 
     client3_b.add_pending_blobs([blob3]).await;
@@ -2231,9 +2243,7 @@ where
         .manager;
     assert!(manager.requested_proposed.is_some());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
-    let result = client1
-        .publish_data_blob(BlobContent::test_blob_content("blob1"))
-        .await;
+    let result = client1.publish_data_blob(b"blob1".to_vec()).await;
     assert!(result.is_err());
     assert!(client1.pending_block().is_some());
     assert!(!client1.pending_blobs().is_empty());
@@ -2526,10 +2536,13 @@ where
     builder.set_fault_type([3], FaultType::Offline).await;
 
     // Publish a blob on chain 1.
-    let blob = Blob::test_data_blob("blob");
-    let blob_id = blob.id();
+    let blob_bytes = b"blob".to_vec();
+    let blob_id = BlobId::new(
+        CryptoHash::new(&BlobBytes(blob_bytes.clone())),
+        BlobType::Data,
+    );
     client1
-        .publish_data_blob(blob.into_inner())
+        .publish_data_blob(blob_bytes)
         .await
         .unwrap()
         .unwrap();

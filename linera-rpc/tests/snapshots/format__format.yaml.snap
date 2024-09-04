@@ -43,15 +43,19 @@ ApplicationPermissions:
     - close_chain:
         SEQ:
           TYPENAME: ApplicationId
-Blob:
-  STRUCT:
-    - blob_type:
-        TYPENAME: BlobType
-    - blob_content:
-        TYPENAME: BlobContent
 BlobContent:
-  STRUCT:
-    - bytes: BYTES
+  ENUM:
+    0:
+      Data:
+        NEWTYPE: BYTES
+    1:
+      ContractBytecode:
+        NEWTYPE:
+          TYPENAME: CompressedBytecode
+    2:
+      ServiceBytecode:
+        NEWTYPE:
+          TYPENAME: CompressedBytecode
 BlobId:
   STRUCT:
     - hash:
@@ -122,7 +126,7 @@ BlockProposal:
         TYPENAME: Signature
     - blobs:
         SEQ:
-          TYPENAME: Blob
+          TYPENAME: BlobContent
     - validated_block_certificate:
         OPTION:
           TYPENAME: LiteCertificate
@@ -291,7 +295,7 @@ ChainManagerInfo:
           KEY:
             TYPENAME: BlobId
           VALUE:
-            TYPENAME: Blob
+            TYPENAME: BlobContent
 ChainOwnership:
   STRUCT:
     - super_owners:
@@ -335,6 +339,9 @@ Committee:
             TYPENAME: ValidatorState
     - policy:
         TYPENAME: ResourceControlPolicy
+CompressedBytecode:
+  STRUCT:
+    - compressed_bytes: BYTES
 CrateVersion:
   STRUCT:
     - major: U32
@@ -415,7 +422,7 @@ HandleCertificateRequest:
     - wait_for_outgoing_messages: BOOL
     - blobs:
         SEQ:
-          TYPENAME: Blob
+          TYPENAME: BlobContent
 HandleLiteCertRequest:
   STRUCT:
     - certificate:

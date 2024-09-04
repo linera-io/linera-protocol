@@ -27,7 +27,8 @@ use futures::{
 };
 use linera_base::{
     command::resolve_binary,
-    data_types::{Amount, Blob},
+    crypto::CryptoHash,
+    data_types::{Amount, BlobBytes},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
 };
 use linera_chain::data_types::{Medium, Origin};
@@ -1007,14 +1008,14 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     let nft1_name = "nft1".to_string();
     let nft1_minter = account_owner1;
 
-    let nft1_blob = Blob::test_data_blob("nft1_data");
-    let nft1_blob_id = nft1_blob.id();
+    let nft1_blob_bytes = b"nft1_data".to_vec();
+    let nft1_blob_hash = CryptoHash::new(&BlobBytes(nft1_blob_bytes.clone()));
     let blob_hash = node_service1
-        .publish_data_blob(&chain1, nft1_blob.content())
+        .publish_data_blob(&chain1, nft1_blob_bytes.clone())
         .await?;
-    assert_eq!(nft1_blob_id.hash, blob_hash);
+    assert_eq!(nft1_blob_hash, blob_hash);
 
-    let nft1_blob_hash = DataBlobHash(nft1_blob_id.hash);
+    let nft1_blob_hash = DataBlobHash(nft1_blob_hash);
 
     let nft1_id = NonFungibleApp::create_token_id(
         &chain1,
@@ -1033,7 +1034,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         owner: account_owner1,
         name: nft1_name,
         minter: nft1_minter,
-        payload: nft1_blob.content().bytes.clone(),
+        payload: nft1_blob_bytes,
     };
 
     assert_eq!(app1.get_nft(&nft1_id).await?, expected_nft1);
@@ -1137,14 +1138,14 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
 
     let nft2_name = "nft2".to_string();
     let nft2_minter = account_owner2;
-    let nft2_blob = Blob::test_data_blob("nft2_data");
-    let nft2_blob_id = nft2_blob.id();
+    let nft2_blob_bytes = b"nft2_data".to_vec();
+    let nft2_blob_hash = CryptoHash::new(&BlobBytes(nft2_blob_bytes.clone()));
     let blob_hash = node_service2
-        .publish_data_blob(&chain2, nft2_blob.content())
+        .publish_data_blob(&chain2, nft2_blob_bytes.clone())
         .await?;
-    assert_eq!(nft2_blob_id.hash, blob_hash);
+    assert_eq!(nft2_blob_hash, blob_hash);
 
-    let nft2_blob_hash = DataBlobHash(nft2_blob_id.hash);
+    let nft2_blob_hash = DataBlobHash(nft2_blob_hash);
 
     let nft2_id = NonFungibleApp::create_token_id(
         &chain2,
@@ -1164,7 +1165,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         owner: account_owner2,
         name: nft2_name,
         minter: nft2_minter,
-        payload: nft2_blob.content().bytes.clone(),
+        payload: nft2_blob_bytes,
     };
 
     // Confirm it's there
