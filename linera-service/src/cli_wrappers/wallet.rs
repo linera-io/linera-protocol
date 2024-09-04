@@ -180,6 +180,7 @@ impl ClientWrapper {
             operation_byte,
             message,
             message_byte,
+            maximum_executed_block_size,
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
         } = policy;
@@ -203,6 +204,10 @@ impl ClientWrapper {
             .args(["--operation-price", &operation.to_string()])
             .args(["--operation-byte-price", &operation_byte.to_string()])
             .args(["--message-price", &message.to_string()])
+            .args([
+                "--maximum-executed-block-size",
+                &maximum_executed_block_size.to_string(),
+            ])
             .args([
                 "--maximum-bytes-read-per-block",
                 &maximum_bytes_read_per_block.to_string(),

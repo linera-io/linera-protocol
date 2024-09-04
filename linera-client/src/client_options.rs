@@ -511,6 +511,10 @@ pub enum ClientCommand {
         #[arg(long)]
         message_byte: Option<Amount>,
 
+        /// Set the maximum size of an executed block.
+        #[arg(long)]
+        maximum_executed_block_size: Option<u64>,
+
         /// Set the maximum read data per block.
         #[arg(long)]
         maximum_bytes_read_per_block: Option<u64>,
@@ -616,6 +620,10 @@ pub enum ClientCommand {
         /// Set the additional price for each byte in the argument of a user message.
         #[arg(long, default_value = "0")]
         message_byte_price: Amount,
+
+        /// Set the maximum size of an executed block.
+        #[arg(long)]
+        maximum_executed_block_size: Option<u64>,
 
         /// Set the maximum read data per block.
         #[arg(long)]

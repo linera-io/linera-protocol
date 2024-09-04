@@ -148,6 +148,8 @@ pub enum ExecutionError {
     ExcessiveRead,
     #[error("Excessive number of bytes written to storage")]
     ExcessiveWrite,
+    #[error("Serialized size of the executed block exceeds limit")]
+    ExecutedBlockTooLarge,
     #[error("Runtime failed to respond to application")]
     MissingRuntimeResponse,
     #[error("Bytecode ID {0:?} is invalid")]
@@ -164,6 +166,8 @@ pub enum ExecutionError {
     UnexpectedOracleResponse,
     #[error("Invalid JSON: {}", .0)]
     Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    Bcs(#[from] bcs::Error),
     #[error("Recorded response for oracle query has the wrong type")]
     OracleResponseMismatch,
     #[error("Assertion failed: local time {local_time} is not earlier than {timestamp}")]

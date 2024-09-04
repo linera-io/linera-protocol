@@ -8,9 +8,11 @@ use std::sync::Arc;
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Amount, ArithmeticError},
+    ensure,
     identifiers::Owner,
 };
 use linera_views::{context::Context, views::ViewError};
+use serde::Serialize;
 
 use crate::{
     system::SystemExecutionError, ExecutionError, ExecutionStateView, Message, Operation,
@@ -32,6 +34,8 @@ pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
 pub struct ResourceTracker {
     /// The number of blocks created.
     pub blocks: u32,
+    /// The total size of the executed block so far.
+    pub executed_block_size: u64,
     /// The fuel used so far.
     pub fuel: u64,
     /// The number of read operations.
@@ -249,6 +253,33 @@ where
             .bytes_stored
             .checked_add(delta)
             .ok_or(ArithmeticError::Overflow)?;
+        Ok(())
+    }
+}
+
+impl<Account, Tracker> ResourceController<Account, Tracker>
+where
+    Tracker: AsMut<ResourceTracker>,
+{
+    /// Tracks the serialized size of an executed block, or parts of it.
+    pub fn track_executed_block_size_of(
+        &mut self,
+        data: &impl Serialize,
+    ) -> Result<(), ExecutionError> {
+        self.track_executed_block_size(bcs::serialized_size(data)?)
+    }
+
+    /// Tracks the serialized size of an executed block, or parts of it.
+    pub fn track_executed_block_size(&mut self, size: usize) -> Result<(), ExecutionError> {
+        let tracker = self.tracker.as_mut();
+        tracker.executed_block_size = u64::try_from(size)
+            .ok()
+            .and_then(|size| tracker.executed_block_size.checked_add(size))
+            .ok_or(ExecutionError::ExecutedBlockTooLarge)?;
+        ensure!(
+            tracker.executed_block_size <= self.policy.maximum_executed_block_size,
+            ExecutionError::ExecutedBlockTooLarge
+        );
         Ok(())
     }
 }

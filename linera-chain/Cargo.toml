@@ -19,6 +19,7 @@ web = ["linera-base/web", "linera-views/web", "linera-execution/web"]
 [dependencies]
 async-graphql.workspace = true
 async-trait.workspace = true
+bcs.workspace = true
 futures.workspace = true
 hex.workspace = true
 linera-base.workspace = true
