@@ -303,7 +303,8 @@ impl Runnable for Job {
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id);
                 info!(
-                    "Evaluating the local balance of {} by staging execution of known incoming messages", account
+                    "Evaluating the local balance of {account} by staging execution of known \
+                    incoming messages"
                 );
                 let time_start = Instant::now();
                 let balance = match account.owner {

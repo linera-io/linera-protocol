@@ -216,7 +216,7 @@ ChainInfo:
               TYPENAME: Epoch
             VALUE:
               TYPENAME: Committee
-    - requested_pending_messages:
+    - requested_pending_message_bundles:
         SEQ:
           TYPENAME: IncomingBundle
     - requested_sent_certificate_hashes:
@@ -237,7 +237,7 @@ ChainInfoQuery:
         OPTION:
           TYPENAME: Owner
     - request_committees: BOOL
-    - request_pending_messages: BOOL
+    - request_pending_message_bundles: BOOL
     - request_sent_certificate_hashes_in_range:
         OPTION:
           TYPENAME: BlockHeightRange

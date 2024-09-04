@@ -87,8 +87,8 @@ where
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
     local_node: LocalNodeClient<Storage>,
-    /// Maximum number of pending messages processed at a time in a block.
-    max_pending_messages: usize,
+    /// Maximum number of pending message bundles processed at a time in a block.
+    max_pending_message_bundles: usize,
     /// The policy for automatically handling incoming messages.
     message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
@@ -111,7 +111,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
     pub fn new(
         validator_node_provider: P,
         storage: S,
-        max_pending_messages: usize,
+        max_pending_message_bundles: usize,
         cross_chain_message_delivery: CrossChainMessageDelivery,
         tracked_chains: impl IntoIterator<Item = ChainId>,
         name: impl Into<String>,
@@ -131,7 +131,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             validator_node_provider,
             local_node,
             chains: DashMap::new(),
-            max_pending_messages,
+            max_pending_message_bundles,
             message_policy: MessagePolicy::new(BlanketMessagePolicy::Accept, None),
             cross_chain_message_delivery,
             tracked_chains,
@@ -199,7 +199,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             client: self.clone(),
             chain_id,
             options: ChainClientOptions {
-                max_pending_messages: self.max_pending_messages,
+                max_pending_message_bundles: self.max_pending_message_bundles,
                 message_policy: self.message_policy.clone(),
                 cross_chain_message_delivery: self.cross_chain_message_delivery,
             },
@@ -297,8 +297,8 @@ pub struct ChainState {
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct ChainClientOptions {
-    /// Maximum number of pending messages processed at a time in a block.
-    pub max_pending_messages: usize,
+    /// Maximum number of pending message bundles processed at a time in a block.
+    pub max_pending_message_bundles: usize,
     /// The policy for automatically handling incoming messages.
     pub message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
@@ -585,17 +585,15 @@ where
     }
 
     #[tracing::instrument(level = "trace")]
-    /// Obtains up to `self.options.max_pending_messages` pending messages for the local chain.
-    ///
-    /// Messages known to be redundant are filtered out: A `RegisterApplications` message whose
-    /// entries are already known never needs to be included in a block.
-    async fn pending_messages(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
+    /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
+    /// local chain.
+    async fn pending_message_bundles(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
         if self.state().next_block_height != BlockHeight::ZERO
             && self.options.message_policy.is_ignore()
         {
             return Ok(Vec::new()); // OpenChain is already received, other are ignored.
         }
-        let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
+        let query = ChainInfoQuery::new(self.chain_id).with_pending_message_bundles();
         let info = self
             .client
             .local_node
@@ -606,8 +604,8 @@ where
             info.next_block_height == self.state().next_block_height,
             ChainClientError::WalletSynchronizationError
         );
-        let mut requested_pending_messages = info.requested_pending_messages;
-        let mut pending_messages = vec![];
+        let mut requested_pending_message_bundles = info.requested_pending_message_bundles;
+        let mut pending_message_bundles = vec![];
         // The first incoming message of any child chain must be `OpenChain`. We must have it in
         // our inbox, and include it before all other messages.
         if info.next_block_height == BlockHeight::ZERO
@@ -616,37 +614,40 @@ where
                 .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
                 .is_child()
         {
-            let Some(index) = requested_pending_messages.iter().position(|message| {
-                matches!(
-                    message.bundle.messages.first(),
-                    Some(PostedMessage {
-                        message: Message::System(SystemMessage::OpenChain(_)),
-                        ..
-                    })
-                )
-            }) else {
+            let Some(index) = requested_pending_message_bundles
+                .iter()
+                .position(|message| {
+                    matches!(
+                        message.bundle.messages.first(),
+                        Some(PostedMessage {
+                            message: Message::System(SystemMessage::OpenChain(_)),
+                            ..
+                        })
+                    )
+                })
+            else {
                 return Err(LocalNodeError::InactiveChain(self.chain_id).into());
             };
-            let open_chain_message = requested_pending_messages.remove(index);
-            pending_messages.push(open_chain_message);
+            let open_chain_bundle = requested_pending_message_bundles.remove(index);
+            pending_message_bundles.push(open_chain_bundle);
         }
         if self.options.message_policy.is_ignore() {
-            return Ok(pending_messages); // Ignore messages other than OpenChain.
+            return Ok(pending_message_bundles); // Ignore messages other than OpenChain.
         }
-        for mut message in requested_pending_messages {
-            if pending_messages.len() >= self.options.max_pending_messages {
+        for mut bundle in requested_pending_message_bundles {
+            if pending_message_bundles.len() >= self.options.max_pending_message_bundles {
                 warn!(
-                    "Limiting block to {} incoming messages",
-                    self.options.max_pending_messages
+                    "Limiting block to {} incoming message bundles",
+                    self.options.max_pending_message_bundles
                 );
                 break;
             }
-            if !self.options.message_policy.handle(&mut message) {
+            if !self.options.message_policy.handle(&mut bundle) {
                 continue;
             }
-            pending_messages.push(message);
+            pending_message_bundles.push(bundle);
         }
-        Ok(pending_messages)
+        Ok(pending_message_bundles)
     }
 
     #[tracing::instrument(level = "trace")]
@@ -1907,7 +1908,7 @@ where
                 return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
             }
         }
-        let incoming_bundles = self.pending_messages().await?;
+        let incoming_bundles = self.pending_message_bundles().await?;
         let confirmed_value = self.set_pending_block(incoming_bundles, operations).await?;
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
@@ -2035,7 +2036,7 @@ where
     /// incoming messages in a new block.
     ///
     /// Does not attempt to synchronize with validators. The result will reflect up to
-    /// `max_pending_messages` incoming messages and the execution fees for a single
+    /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
     /// block.
     pub async fn query_balance(&self) -> Result<Amount, ChainClientError> {
         let (balance, _) = self.query_balances_with_owner(None).await?;
@@ -2047,7 +2048,7 @@ where
     /// incoming messages in a new block.
     ///
     /// Does not attempt to synchronize with validators. The result will reflect up to
-    /// `max_pending_messages` incoming messages and the execution fees for a single
+    /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
     /// block.
     pub async fn query_owner_balance(&self, owner: Owner) -> Result<Amount, ChainClientError> {
         Ok(self
@@ -2062,13 +2063,13 @@ where
     /// staging the execution of incoming messages in a new block.
     ///
     /// Does not attempt to synchronize with validators. The result will reflect up to
-    /// `max_pending_messages` incoming messages and the execution fees for a single
+    /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
     /// block.
     async fn query_balances_with_owner(
         &self,
         owner: Option<Owner>,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
-        let incoming_bundles = self.pending_messages().await?;
+        let incoming_bundles = self.pending_message_bundles().await?;
         let timestamp = self.next_timestamp(&incoming_bundles).await;
         let block = Block {
             epoch: self.epoch().await?,
@@ -2689,7 +2690,8 @@ where
     }
 
     #[tracing::instrument(level = "trace")]
-    /// Creates an empty block to process all incoming messages. This may require several blocks.
+    /// Creates blocks without any operations to process all incoming messages. This may require
+    /// several blocks.
     ///
     /// If not all certificates could be processed due to a timeout, the timestamp for when to retry
     /// is returned, too.
@@ -2699,7 +2701,7 @@ where
         self.prepare_chain().await?;
         let mut certificates = Vec::new();
         loop {
-            let incoming_bundles = self.pending_messages().await?;
+            let incoming_bundles = self.pending_message_bundles().await?;
             if incoming_bundles.is_empty() {
                 return Ok((certificates, None));
             }
@@ -2715,7 +2717,9 @@ where
     }
 
     #[tracing::instrument(level = "trace")]
-    /// Creates an empty block to process all incoming messages. This may require several blocks.
+    /// Creates blocks without any operations to process all incoming messages. This may require
+    /// several blocks.
+    ///
     /// If we are not a chain owner, this doesn't fail, and just returns an empty list.
     pub async fn process_inbox_if_owned(
         &self,
