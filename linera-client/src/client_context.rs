@@ -1,11 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
 use futures::Future;
@@ -14,6 +10,7 @@ use linera_base::{
     data_types::{BlockHeight, Timestamp},
     identifiers::{Account, ChainId},
     ownership::ChainOwnership,
+    time::{Duration, Instant},
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
@@ -617,7 +614,7 @@ where
                 let chain_client = self.make_chain_client(chain_id);
                 async move {
                     for i in 0..5 {
-                        tokio::time::sleep(Duration::from_secs(i)).await;
+                        linera_base::time::timer::sleep(Duration::from_secs(i)).await;
                         chain_client.process_inbox().await?;
                         let chain_state = chain_client.chain_state_view().await?;
                         if chain_state

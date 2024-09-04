@@ -1,9 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, Instant};
-
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use linera_base::time::{Duration, Instant};
 use linera_views::{
     batch::Batch,
     context::{create_test_memory_context, Context, MemoryContext},

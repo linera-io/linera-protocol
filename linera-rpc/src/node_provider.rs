@@ -1,8 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
+use linera_base::time::Duration;
 use linera_core::node::{LocalValidatorNodeProvider, NodeError};
 
 #[cfg(with_simple_network)]

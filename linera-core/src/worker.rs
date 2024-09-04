@@ -17,6 +17,7 @@ use linera_base::{
     data_types::{ArithmeticError, Blob, BlockHeight, Round, UserApplicationDescription},
     doc_scalar,
     identifiers::{BlobId, ChainId, Owner, UserApplicationId},
+    time::timer::{sleep, timeout},
 };
 use linera_chain::{
     data_types::{
@@ -33,7 +34,6 @@ use thiserror::Error;
 use tokio::{
     sync::{mpsc, oneshot, OwnedRwLockReadGuard},
     task::JoinSet,
-    time::{sleep, timeout},
 };
 use tracing::{error, instrument, trace, warn, Instrument as _};
 #[cfg(with_metrics)]

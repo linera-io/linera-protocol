@@ -276,7 +276,7 @@ where
 
     async fn maybe_sleep(delay_ms: u64) {
         if delay_ms > 0 {
-            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            linera_base::time::timer::sleep(Duration::from_millis(delay_ms)).await;
         }
     }
 }

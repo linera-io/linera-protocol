@@ -372,8 +372,10 @@ where
 
                     for i in 0..cross_chain_max_retries {
                         // Delay increases linearly with the attempt number.
-                        tokio::time::sleep(cross_chain_sender_delay + cross_chain_retry_delay * i)
-                            .await;
+                        linera_base::time::timer::sleep(
+                            cross_chain_sender_delay + cross_chain_retry_delay * i,
+                        )
+                        .await;
 
                         let result = || async {
                             let cross_chain_request = cross_chain_request.clone().try_into()?;

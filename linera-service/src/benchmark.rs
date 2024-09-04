@@ -10,6 +10,7 @@ use linera_base::{
     async_graphql::InputType,
     data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, Owner},
+    time::timer::Instant,
 };
 use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
 use linera_service::cli_wrappers::{
@@ -19,7 +20,6 @@ use linera_service::cli_wrappers::{
 use port_selector::random_free_tcp_port;
 use rand::{Rng as _, SeedableRng};
 use serde_json::Value;
-use tokio::time::Instant;
 use tracing::info;
 
 #[derive(clap::Parser)]
@@ -235,7 +235,7 @@ async fn benchmark_with_fungible(
                             .await?,
                     );
                     for i in 0.. {
-                        tokio::time::sleep(Duration::from_secs(i)).await;
+                        linera_base::time::timer::sleep(Duration::from_secs(i)).await;
                         let actual_balance =
                             app.get_amount(&AccountOwner::User(context.owner)).await;
                         if actual_balance == expected_balance {

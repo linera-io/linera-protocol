@@ -1,10 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use async_trait::async_trait;
 use futures::{channel::mpsc, stream::StreamExt};
+use linera_base::time::Duration;
 use linera_core::{
     node::NodeError,
     worker::{NetworkActions, WorkerError, WorkerState},
@@ -107,7 +106,10 @@ where
             // Send the cross-chain query and retry if needed.
             for i in 0..cross_chain_max_retries {
                 // Delay increases linearly with the attempt number.
-                tokio::time::sleep(cross_chain_sender_delay + cross_chain_retry_delay * i).await;
+                linera_base::time::timer::sleep(
+                    cross_chain_sender_delay + cross_chain_retry_delay * i,
+                )
+                .await;
 
                 let status = pool.send_message_to(message.clone(), &remote_address).await;
                 match status {

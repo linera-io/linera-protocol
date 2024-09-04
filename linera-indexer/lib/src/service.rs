@@ -3,8 +3,6 @@
 
 //! This module defines the service client for the indexer.
 
-use std::time::Duration;
-
 use async_tungstenite::{
     tokio::connect_async,
     tungstenite::{client::IntoClientRequest, http::HeaderValue},
@@ -15,7 +13,9 @@ use futures::{
 };
 use graphql_client::reqwest::post_graphql;
 use graphql_ws_client::{graphql::StreamingOperation, GraphQLClientClientBuilder};
-use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
+use linera_base::{
+    crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId, time::Duration,
+};
 use linera_chain::data_types::HashedCertificateValue;
 use linera_core::worker::Reason;
 use linera_service_graphql_client::{block, chains, notifications, Block, Chains, Notifications};

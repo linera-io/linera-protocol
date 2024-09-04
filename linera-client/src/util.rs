@@ -1,13 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, num::ParseIntError, str::FromStr, time::Duration};
+use std::{collections::HashSet, num::ParseIntError, str::FromStr};
 
 use futures::future;
 use linera_base::{
     crypto::CryptoError,
     data_types::{TimeDelta, Timestamp},
     identifiers::ChainId,
+    time::Duration,
 };
 use linera_core::{data_types::RoundTimeout, node::NotificationStream, worker::Reason};
 use tokio_stream::StreamExt as _;
@@ -36,7 +37,7 @@ pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: Round
     });
     future::select(
         Box::pin(stream.next()),
-        Box::pin(tokio::time::sleep(
+        Box::pin(linera_base::time::timer::sleep(
             timeout.timestamp.duration_since(Timestamp::now()),
         )),
     )

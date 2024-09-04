@@ -3614,7 +3614,7 @@ where
     }
 
     drop(worker);
-    tokio::time::sleep(Duration::from_millis(10)).await;
+    linera_base::time::timer::sleep(Duration::from_millis(10)).await;
     application.assert_no_more_expected_calls();
     application.assert_no_active_instances();
 
@@ -3774,7 +3774,7 @@ where
     }
 
     drop(worker);
-    tokio::time::sleep(Duration::from_millis(10)).await;
+    linera_base::time::timer::sleep(Duration::from_millis(10)).await;
     application.assert_no_more_expected_calls();
     application.assert_no_active_instances();
 

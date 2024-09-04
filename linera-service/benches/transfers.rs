@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, Instant};
-
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::{
     stream::{self, FuturesUnordered},
@@ -11,6 +9,7 @@ use futures::{
 use linera_base::{
     data_types::Amount,
     identifiers::{Account, ChainId, Owner},
+    time::{Duration, Instant},
 };
 use linera_execution::system::Recipient;
 use linera_sdk::test::{ActiveChain, TestValidator};

@@ -4,10 +4,10 @@
 use std::{
     fmt::{Debug, Display},
     future::Future,
-    time::{Duration, Instant},
 };
 
 use async_trait::async_trait;
+use linera_base::time::{Duration, Instant};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{

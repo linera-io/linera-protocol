@@ -48,7 +48,7 @@ async fn run_indexer(path_provider: &PathProvider) -> Child {
     let child = command.spawn().unwrap();
     let client = reqwest_client();
     for i in 0..10 {
-        tokio::time::sleep(Duration::from_secs(i)).await;
+        linera_base::time::timer::sleep(Duration::from_secs(i)).await;
         let request = client
             .get(format!("http://localhost:{}/", port))
             .send()
@@ -118,9 +118,9 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     let chain1 = ChainId::root(1);
     for _ in 0..10 {
         transfer(&req_client, chain0, chain1, "0.1").await;
-        tokio::time::sleep(Duration::from_millis(TRANSFER_DELAY_MILLIS)).await;
+        linera_base::time::timer::sleep(Duration::from_millis(TRANSFER_DELAY_MILLIS)).await;
     }
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    linera_base::time::timer::sleep(Duration::from_secs(2)).await;
 
     // checking indexer state
     let variables = block::Variables {

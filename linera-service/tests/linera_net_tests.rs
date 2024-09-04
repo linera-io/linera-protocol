@@ -545,8 +545,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) -> Result<()> {
-    use std::time::Instant;
-
+    use linera_base::time::Instant;
     use social::SocialAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -619,7 +618,9 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     });
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
-        let result = tokio::time::timeout(deadline - Instant::now(), notifications.next()).await?;
+        let result =
+            linera_base::time::timer::timeout(deadline - Instant::now(), notifications.next())
+                .await?;
         anyhow::ensure!(result.transpose()?.is_some(), "Failed to confirm post");
         let response = app2.query(query).await?;
         if response == expected_response {
@@ -2482,7 +2483,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
 
     // Verify that the default chain now has 6 and the new one has 4 tokens.
     for i in 0..10 {
-        tokio::time::sleep(Duration::from_secs(i)).await;
+        linera_base::time::timer::sleep(Duration::from_secs(i)).await;
         let balance1 = app1.get_amount(&owner).await;
         let balance2 = app2.get_amount(&owner).await;
         if balance1 == Amount::from_tokens(6) && balance2 == Amount::from_tokens(4) {
