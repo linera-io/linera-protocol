@@ -98,7 +98,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--recv-timeout-ms <RECV_TIMEOUT>` — Timeout for receiving responses (milliseconds)
 
   Default value: `4000`
-* `--max-pending-messages <MAX_PENDING_MESSAGES>`
+* `--max-pending-message-bundles <MAX_PENDING_MESSAGE_BUNDLES>` — The maximum number of incoming message bundles to include in a block proposal
 
   Default value: `10`
 * `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use

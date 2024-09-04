@@ -377,7 +377,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
                 .request_owner_balance
                 .map(TryInto::try_into)
                 .transpose()?,
-            request_pending_messages: chain_info_query.request_pending_messages,
+            request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             chain_id: try_proto_convert(chain_info_query.chain_id)?,
             request_sent_certificate_hashes_in_range,
             request_received_log_excluding_first_nth: chain_info_query
@@ -403,7 +403,7 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             chain_id: Some(chain_info_query.chain_id.into()),
             request_committees: chain_info_query.request_committees,
             request_owner_balance: chain_info_query.request_owner_balance.map(Into::into),
-            request_pending_messages: chain_info_query.request_pending_messages,
+            request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_sent_certificate_hashes_in_range,
             request_received_log_excluding_first_nth: chain_info_query
@@ -698,7 +698,7 @@ pub mod tests {
             state_hash: None,
             requested_committees: None,
             requested_owner_balance: None,
-            requested_pending_messages: vec![],
+            requested_pending_message_bundles: vec![],
             requested_sent_certificate_hashes: vec![],
             count_received_log: 0,
             requested_received_log: vec![],
@@ -729,7 +729,7 @@ pub mod tests {
             test_next_block_height: Some(BlockHeight::from(10)),
             request_committees: false,
             request_owner_balance: None,
-            request_pending_messages: false,
+            request_pending_message_bundles: false,
             request_sent_certificate_hashes_in_range: Some(
                 linera_core::data_types::BlockHeightRange {
                     start: BlockHeight::from(3),

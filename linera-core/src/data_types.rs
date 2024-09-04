@@ -55,7 +55,7 @@ pub struct ChainInfoQuery {
     /// Query the current committees.
     pub request_committees: bool,
     /// Query the received messages that are waiting be picked in the next block.
-    pub request_pending_messages: bool,
+    pub request_pending_message_bundles: bool,
     /// Query a range of certificate hashes sent from the chain.
     pub request_sent_certificate_hashes_in_range: Option<BlockHeightRange>,
     /// Query new certificate sender chain IDs and block heights received from the chain.
@@ -75,7 +75,7 @@ impl ChainInfoQuery {
             test_next_block_height: None,
             request_committees: false,
             request_owner_balance: None,
-            request_pending_messages: false,
+            request_pending_message_bundles: false,
             request_sent_certificate_hashes_in_range: None,
             request_received_log_excluding_first_nth: None,
             request_manager_values: false,
@@ -99,8 +99,8 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_pending_messages(mut self) -> Self {
-        self.request_pending_messages = true;
+    pub fn with_pending_message_bundles(mut self) -> Self {
+        self.request_pending_message_bundles = true;
         self
     }
 
@@ -156,7 +156,7 @@ pub struct ChainInfo {
     /// The current committees.
     pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
     /// The received messages that are waiting be picked in the next block (if requested).
-    pub requested_pending_messages: Vec<IncomingBundle>,
+    pub requested_pending_message_bundles: Vec<IncomingBundle>,
     /// The response to `request_sent_certificate_hashes_in_range`
     pub requested_sent_certificate_hashes: Vec<CryptoHash>,
     /// The current number of received certificates (useful for `request_received_log_excluding_first_nth`)
@@ -236,7 +236,7 @@ where
             state_hash: *view.execution_state_hash.get(),
             requested_committees: None,
             requested_owner_balance: None,
-            requested_pending_messages: Vec::new(),
+            requested_pending_message_bundles: Vec::new(),
             requested_sent_certificate_hashes: Vec::new(),
             count_received_log: view.received_log.count(),
             requested_received_log: Vec::new(),

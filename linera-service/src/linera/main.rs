@@ -303,7 +303,8 @@ impl Runnable for Job {
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id);
                 info!(
-                    "Evaluating the local balance of {} by staging execution of known incoming messages", account
+                    "Evaluating the local balance of {account} by staging execution of known \
+                    incoming messages"
                 );
                 let time_start = Instant::now();
                 let balance = match account.owner {
@@ -438,7 +439,6 @@ impl Runnable for Job {
                 info!("Starting operations to change validator set");
                 let time_start = Instant::now();
 
-                // Make sure genesis chains are subscribed to the admin chain.
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
                 if let SetValidator {
