@@ -11,7 +11,7 @@ interface ReceivedPosts {
 }
 
 export const RECEIVED_POSTS = gql`
-  query {
+  query ReceivedPosts {
     receivedPosts {
       entries {
         value {
@@ -33,7 +33,13 @@ export const RECEIVED_POSTS = gql`
   }
 `
 
-const NOTIFICATION_SUBSCRIPTION = gql`
+// A tag for GraphQL queries that are destined for the node service
+// rather than the application.  This exists to prevent
+// `graphql-codegen` getting confused when generating TypeScript
+// bindings for the application GraphQL queries.
+const nodeGql = gql;
+
+const NOTIFICATION_SUBSCRIPTION = nodeGql`
   subscription Notifications($chainId: String!) {
     notifications(chainId: $chainId)
   }
