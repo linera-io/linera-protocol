@@ -18,6 +18,16 @@ pub struct IndexedDb<T> {
     dirty: Dirty,
 }
 
+impl<T: serde::Serialize> std::fmt::Debug for IndexedDb<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("persistent::IndexedDb")
+            .field("key", &self.key)
+            .field("value", &serde_json::to_string(&self.value))
+            .field("dirty", &*self.dirty)
+            .finish_non_exhaustive()
+    }
+}
+
 const DATABASE_NAME: &str = "linera-client";
 const STORE_NAME: &str = "linera-wallet";
 
@@ -25,8 +35,6 @@ const STORE_NAME: &str = "linera-wallet";
 pub enum Error {
     #[error("marshalling error: {0}")]
     Marshalling(#[source] gloo_utils::errors::JsError),
-    #[error("key not found: {0}")]
-    KeyNotFound(String),
     #[error("DOM exception: {0:?}")]
     DomException(#[source] gloo_utils::errors::JsError),
 }
@@ -55,6 +63,7 @@ async fn open_database() -> Result<IdbDatabase, Error> {
 }
 
 impl<T> IndexedDb<T> {
+    #[tracing::instrument(level = "trace", skip(value))]
     pub async fn new(key: &str, value: T) -> Result<Self, Error> {
         Ok(Self {
             key: key.to_owned(),
@@ -66,6 +75,7 @@ impl<T> IndexedDb<T> {
 }
 
 impl<T: serde::de::DeserializeOwned> IndexedDb<T> {
+    #[tracing::instrument(level = "trace")]
     pub async fn read(key: &str) -> Result<Option<Self>, Error> {
         let database = open_database().await?;
         let tx =
@@ -83,6 +93,7 @@ impl<T: serde::de::DeserializeOwned> IndexedDb<T> {
         }))
     }
 
+    #[tracing::instrument(level = "trace", fields(value = &serde_json::to_string(&value).unwrap()))]
     pub async fn read_or_create(key: &str, value: T) -> Result<Self, Error>
     where
         T: serde::Serialize,
@@ -100,6 +111,7 @@ impl<T: serde::de::DeserializeOwned> IndexedDb<T> {
 impl<T: serde::Serialize> LocalPersist for IndexedDb<T> {
     type Error = Error;
 
+    #[tracing::instrument(level = "trace")]
     fn as_mut(&mut self) -> &mut T {
         *self.dirty = true;
         &mut self.value
@@ -109,12 +121,15 @@ impl<T: serde::Serialize> LocalPersist for IndexedDb<T> {
         self.value
     }
 
+    #[tracing::instrument(level = "trace")]
     async fn persist(&mut self) -> Result<(), Error> {
+        let serializer = serde_wasm_bindgen::Serializer::new().serialize_large_number_types_as_bigints(true);
         self.database
             .transaction_on_one_with_mode(STORE_NAME, IdbTransactionMode::Readwrite)?
             .object_store(STORE_NAME)?
-            .put_key_val_owned(&self.key, &serde_wasm_bindgen::to_value(&self.value)?)?
+            .put_key_val_owned(&self.key, &self.value.serialize(&serializer)?)?
             .await?;
+        *self.dirty = false;
         Ok(())
     }
 }
