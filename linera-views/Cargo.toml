@@ -84,3 +84,7 @@ harness = false
 [[bench]]
 name = "stores"
 harness = false
+
+[[bench]]
+name = "queue_view"
+harness = false
