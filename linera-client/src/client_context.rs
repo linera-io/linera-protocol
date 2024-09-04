@@ -128,6 +128,11 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
 {
+    /// Returns a reference to the wallet.
+    pub fn wallet(&self) -> &Wallet {
+        &self.wallet
+    }
+
     /// Returns the [`WalletState`] as a mutable reference.
     pub fn wallet_mut(&mut self) -> &mut WalletState<W> {
         &mut self.wallet

@@ -123,7 +123,8 @@ impl<T: serde::Serialize> LocalPersist for IndexedDb<T> {
 
     #[tracing::instrument(level = "trace")]
     async fn persist(&mut self) -> Result<(), Error> {
-        let serializer = serde_wasm_bindgen::Serializer::new().serialize_large_number_types_as_bigints(true);
+        let serializer =
+            serde_wasm_bindgen::Serializer::new().serialize_large_number_types_as_bigints(true);
         self.database
             .transaction_on_one_with_mode(STORE_NAME, IdbTransactionMode::Readwrite)?
             .object_store(STORE_NAME)?
