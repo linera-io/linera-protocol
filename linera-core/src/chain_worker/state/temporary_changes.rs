@@ -278,7 +278,7 @@ where
                 }
             );
         }
-        if query.request_pending_messages {
+        if query.request_pending_message_bundles {
             let mut messages = Vec::new();
             let pairs = chain.inboxes.try_load_all_entries().await?;
             let action = if *chain.execution_state.system.closed.get() {
@@ -310,7 +310,7 @@ where
                 }
             }
 
-            info.requested_pending_messages = messages;
+            info.requested_pending_message_bundles = messages;
         }
         if let Some(range) = query.request_sent_certificate_hashes_in_range {
             let start: usize = range.start.try_into()?;

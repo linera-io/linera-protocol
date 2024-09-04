@@ -140,7 +140,7 @@ message ChainInfoQuery {
   bool request_committees = 3;
 
   // Query the received messages that are waiting be picked in the next block.
-  bool request_pending_messages = 4;
+  bool request_pending_message_bundles = 4;
 
   // Query a range of certificates hashes sent from the chain.
   optional bytes request_sent_certificate_hashes_in_range = 5;

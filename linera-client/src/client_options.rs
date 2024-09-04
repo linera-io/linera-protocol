@@ -86,8 +86,9 @@ pub struct ClientOptions {
     #[arg(long = "recv-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
     pub recv_timeout: Duration,
 
+    /// The maximum number of incoming message bundles to include in a block proposal.
     #[arg(long, default_value = "10")]
-    pub max_pending_messages: usize,
+    pub max_pending_message_bundles: usize,
 
     /// The WebAssembly runtime to use.
     #[arg(long)]

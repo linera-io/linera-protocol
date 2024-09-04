@@ -278,7 +278,7 @@ pub struct ChainTipState {
     pub block_hash: Option<CryptoHash>,
     /// Sequence number tracking blocks.
     pub next_block_height: BlockHeight,
-    /// Number of incoming messages.
+    /// Number of incoming message bundles.
     pub num_incoming_bundles: u32,
     /// Number of operations.
     pub num_operations: u32,
@@ -615,7 +615,7 @@ where
         Ok(true)
     }
 
-    /// Removes the incoming messages in the block from the inboxes.
+    /// Removes the incoming message bundles in the block from the inboxes.
     pub async fn remove_bundles_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let mut bundles_by_origin: BTreeMap<_, Vec<&MessageBundle>> = Default::default();
@@ -683,7 +683,7 @@ where
     /// * Modifies the state of outboxes and channels, if needed.
     /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown
     ///   away.
-    /// * Returns the list of messages caused by the block being executed.
+    /// * Returns the outcome of the execution.
     pub async fn execute_block(
         &mut self,
         block: &Block,

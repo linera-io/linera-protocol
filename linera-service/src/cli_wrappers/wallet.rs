@@ -57,7 +57,7 @@ pub struct ClientWrapper {
     testing_prng_seed: Option<u64>,
     storage: String,
     wallet: String,
-    max_pending_messages: usize,
+    max_pending_message_bundles: usize,
     network: Network,
     pub path_provider: PathProvider,
 }
@@ -79,7 +79,7 @@ impl ClientWrapper {
             testing_prng_seed,
             storage,
             wallet,
-            max_pending_messages: 10_000,
+            max_pending_message_bundles: 10_000,
             network,
             path_provider,
         }
@@ -152,8 +152,8 @@ impl ClientWrapper {
             .args(["--wallet", &self.wallet])
             .args(["--storage", &self.storage])
             .args([
-                "--max-pending-messages",
-                &self.max_pending_messages.to_string(),
+                "--max-pending-message-bundles",
+                &self.max_pending_message_bundles.to_string(),
             ])
             .args(["--send-timeout-ms", "500000"])
             .args(["--recv-timeout-ms", "500000"])
