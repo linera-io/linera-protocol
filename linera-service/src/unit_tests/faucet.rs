@@ -43,12 +43,22 @@ impl chain_listener::ClientContext for ClientContext {
         unimplemented!()
     }
 
-    fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {
+    async fn update_wallet_for_new_chain(
+        &mut self,
+        _: ChainId,
+        _: Option<KeyPair>,
+        _: Timestamp,
+    ) -> Result<(), linera_client::Error> {
         self.update_calls += 1;
+        Ok(())
     }
 
-    async fn update_wallet(&mut self, _: &ChainClient<TestProvider, TestStorage>) {
+    async fn update_wallet(
+        &mut self,
+        _: &ChainClient<TestProvider, TestStorage>,
+    ) -> Result<(), linera_client::Error> {
         self.update_calls += 1;
+        Ok(())
     }
 }
 

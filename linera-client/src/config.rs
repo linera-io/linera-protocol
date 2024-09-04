@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{iter::IntoIterator, ops::Deref};
+use std::{
+    iter::IntoIterator,
+    ops::{Deref, DerefMut},
+};
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, CryptoRng, KeyPair, PublicKey},
@@ -28,14 +31,13 @@ pub enum Error {
 }
 
 use crate::{
-    persistent::{self, Persist},
-    util,
+    persistent, util,
     wallet::{UserChain, Wallet},
 };
 
 util::impl_from_dynamic!(Error:Persistence, persistent::memory::Error);
-#[cfg(with_local_storage)]
-util::impl_from_dynamic!(Error:Persistence, persistent::local_storage::Error);
+#[cfg(with_indexed_db)]
+util::impl_from_dynamic!(Error:Persistence, persistent::indexed_db::Error);
 #[cfg(feature = "fs")]
 util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
 
@@ -55,6 +57,11 @@ pub struct ValidatorServerConfig {
     pub key: KeyPair,
     pub internal_network: ValidatorInternalNetworkConfig,
 }
+
+#[cfg(web)]
+use crate::persistent::{LocalPersist as Persist, LocalPersistExt as _};
+#[cfg(not(web))]
+use crate::persistent::{Persist, PersistExt as _};
 
 /// The (public) configuration for all validators.
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -88,35 +95,48 @@ pub struct WalletState<W> {
     prng: Box<dyn CryptoRng>,
 }
 
+impl<W: Persist<Target = Wallet>> WalletState<W> {
+    pub async fn add_chains<Chains: IntoIterator<Item = UserChain>>(
+        &mut self,
+        chains: Chains,
+    ) -> Result<(), Error> {
+        self.wallet.as_mut().extend(chains);
+        W::persist(&mut self.wallet)
+            .await
+            .map_err(|e| Error::Persistence(Box::new(e)))
+    }
+}
+
 impl<W: Deref> Deref for WalletState<W> {
     type Target = W::Target;
+    fn deref(&self) -> &W::Target {
+        self.wallet.deref()
+    }
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.wallet
+impl<W: DerefMut> DerefMut for WalletState<W> {
+    fn deref_mut(&mut self) -> &mut W::Target {
+        self.wallet.deref_mut()
     }
 }
 
 impl<W: Persist<Target = Wallet>> Persist for WalletState<W> {
     type Error = W::Error;
 
-    fn persist(this: &mut Self) -> Result<(), W::Error> {
-        Persist::mutate(&mut this.wallet).refresh_prng_seed(&mut this.prng);
+    fn as_mut(&mut self) -> &mut Wallet {
+        self.wallet.as_mut()
+    }
+
+    async fn persist(&mut self) -> Result<(), W::Error> {
+        self.wallet
+            .mutate(|w| w.refresh_prng_seed(&mut self.prng))
+            .await?;
         tracing::debug!("Persisted user chains");
         Ok(())
     }
 
-    fn as_mut(this: &mut Self) -> &mut Wallet {
-        Persist::as_mut(&mut this.wallet)
-    }
-
-    fn into_value(this: Self) -> Wallet {
-        Persist::into_value(this.wallet)
-    }
-}
-
-impl<W: Persist<Target = Wallet>> Extend<UserChain> for WalletState<W> {
-    fn extend<Chains: IntoIterator<Item = UserChain>>(&mut self, chains: Chains) {
-        Persist::mutate(self).extend(chains);
+    fn into_value(self) -> Wallet {
+        self.wallet.into_value()
     }
 }
 
@@ -133,17 +153,16 @@ impl WalletState<persistent::File<Wallet>> {
     }
 }
 
-#[cfg(with_local_storage)]
-impl WalletState<persistent::LocalStorage<Wallet>> {
-    pub fn create_from_local_storage(key: &str, wallet: Wallet) -> Result<Self, Error> {
-        Ok(Self::new(persistent::LocalStorage::read_or_create(
-            key,
-            || Ok(wallet),
-        )?))
+#[cfg(with_indexed_db)]
+impl WalletState<persistent::IndexedDb<Wallet>> {
+    pub async fn create_from_indexed_db(key: &str, wallet: Wallet) -> Result<Self, Error> {
+        Ok(Self::new(
+            persistent::IndexedDb::read_or_create(key, wallet).await?,
+        ))
     }
 
-    pub fn read_from_local_storage(key: &str) -> Result<Self, Error> {
-        Ok(Self::new(persistent::LocalStorage::read(key)?))
+    pub async fn read_from_indexed_db(key: &str) -> Result<Option<Self>, Error> {
+        Ok(persistent::IndexedDb::read(key).await?.map(Self::new))
     }
 }
 

@@ -13,6 +13,7 @@ use linera_chain::data_types::{
 use linera_client::{
     chain_listener::{ChainListenerConfig, ClientContext},
     wallet::Wallet,
+    Error,
 };
 use linera_core::{
     client::ChainClient,
@@ -141,9 +142,18 @@ impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientConte
         unimplemented!()
     }
 
-    fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {}
+    async fn update_wallet_for_new_chain(
+        &mut self,
+        _: ChainId,
+        _: Option<KeyPair>,
+        _: Timestamp,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
 
-    async fn update_wallet(&mut self, _: &ChainClient<P, S>) {}
+    async fn update_wallet(&mut self, _: &ChainClient<P, S>) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 #[tokio::main]

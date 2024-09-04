@@ -63,6 +63,8 @@ use {
     tracing::error,
 };
 
+use crate::persistent::PersistExt as _;
+
 #[cfg(feature = "benchmark")]
 fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
     match response {
@@ -102,7 +104,7 @@ impl Runnable for Job {
         S: Storage + Clone + Send + Sync + 'static,
     {
         let Job(options) = self;
-        let wallet = options.wallet()?;
+        let wallet = options.wallet().await?;
         let mut context = ClientContext::new(storage.clone(), options.clone(), wallet);
         let command = options.command;
 
@@ -180,7 +182,9 @@ impl Runnable for Job {
                     } => block.timestamp,
                     _ => panic!("Unexpected certificate."),
                 };
-                context.update_wallet_for_new_chain(id, key_pair, timestamp);
+                context
+                    .update_wallet_for_new_chain(id, key_pair, timestamp)
+                    .await?;
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
@@ -228,7 +232,9 @@ impl Runnable for Job {
                     } => block.timestamp,
                     _ => panic!("Unexpected certificate."),
                 };
-                context.update_wallet_for_new_chain(id, key_pair, timestamp);
+                context
+                    .update_wallet_for_new_chain(id, key_pair, timestamp)
+                    .await?;
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
@@ -327,7 +333,7 @@ impl Runnable for Job {
                     Some(owner) => chain_client.query_owner_balance(owner).await,
                     None => chain_client.query_balance().await,
                 };
-                context.update_and_save_wallet(&chain_client).await;
+                context.update_and_save_wallet(&chain_client).await?;
                 let balance = result.context("Failed to synchronize from validators")?;
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
@@ -340,7 +346,7 @@ impl Runnable for Job {
                 info!("Synchronizing chain information");
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
-                context.update_and_save_wallet(&chain_client).await;
+                context.update_and_save_wallet(&chain_client).await?;
                 let time_total = time_start.elapsed();
                 info!(
                     "Synchronized chain information in {} ms",
@@ -406,7 +412,7 @@ impl Runnable for Job {
                 );
                 let time_start = Instant::now();
                 let result = chain_client.local_committee().await;
-                context.update_and_save_wallet(&chain_client).await;
+                context.update_and_save_wallet(&chain_client).await?;
                 let committee = result.context("Failed to get local committee")?;
                 let time_total = time_start.elapsed();
                 info!("Validators obtained after {} ms", time_total.as_millis());
@@ -643,7 +649,7 @@ impl Runnable for Job {
                     })
                     .await
                     .context("Failed to finalize committee")?;
-                context.save_wallet();
+                context.save_wallet().await?;
 
                 let time_total = time_start.elapsed();
                 info!("Operations confirmed after {} ms", time_total.as_millis());
@@ -749,7 +755,7 @@ impl Runnable for Job {
 
                 info!("Updating local state of user chains");
                 context.update_wallet_from_certificates(certificates).await;
-                context.save_wallet();
+                context.save_wallet().await?;
             }
 
             Watch { chain_id, raw } => {
@@ -761,7 +767,7 @@ impl Runnable for Job {
                 join_set.spawn_task(listener);
                 while let Some(notification) = notifications.next().await {
                     if let Reason::NewBlock { .. } = notification.reason {
-                        context.update_and_save_wallet(&chain_client).await;
+                        context.update_and_save_wallet(&chain_client).await?;
                     }
                     if raw {
                         println!("{}", serde_json::to_string(&notification)?);
@@ -966,7 +972,7 @@ impl Runnable for Job {
                 )
                 .await?;
                 println!("{}", chain_id);
-                context.save_wallet();
+                context.save_wallet().await?;
             }
 
             Project(project_command) => match project_command {
@@ -1036,7 +1042,7 @@ impl Runnable for Job {
                         info!("Please try again at {}", timeout.timestamp)
                     }
                 }
-                context.update_and_save_wallet(&chain_client).await;
+                context.update_and_save_wallet(&chain_client).await?;
             }
 
             Wallet(WalletCommand::Init {
@@ -1052,7 +1058,10 @@ impl Runnable for Job {
                     Owner::from(&public_key),
                     faucet_url,
                 );
-                context.wallet_mut().add_unassigned_key_pair(key_pair);
+                context
+                    .wallet_mut()
+                    .mutate(|w| w.add_unassigned_key_pair(key_pair))
+                    .await?;
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let outcome = faucet.claim(&public_key).await?;
                 let validators = faucet.current_validators().await?;
@@ -1073,7 +1082,10 @@ impl Runnable for Job {
                     .into_iter()
                     .chain([admin_id, outcome.chain_id]);
                 Self::print_peg_certificate_hash(storage, chains, &context).await?;
-                context.wallet_mut().set_default_chain(outcome.chain_id)?;
+                context
+                    .wallet_mut()
+                    .mutate(|w| w.set_default_chain(outcome.chain_id))
+                    .await??;
             }
 
             CreateGenesisConfig { .. } | Keygen | Net(_) | Wallet(_) | HelpMarkdown => {
@@ -1160,7 +1172,10 @@ impl Job {
         );
         context
             .wallet_mut()
-            .assign_new_chain_to_key(public_key, chain_id, executed_block.block.timestamp)
+            .mutate(|w| {
+                w.assign_new_chain_to_key(public_key, chain_id, executed_block.block.timestamp)
+            })
+            .await?
             .context("could not assign the new chain")?;
         Ok(())
     }
@@ -1325,7 +1340,6 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 genesis_config_path,
                 GenesisConfig::new(committee_config, admin_id, timestamp, policy, network_name),
             )?;
-            let mut genesis_config_ref = Persist::mutate(&mut genesis_config);
             let mut rng = Box::<dyn CryptoRng>::from(*testing_prng_seed);
             let mut chains = vec![];
             for i in 0..*num_other_initial_chains {
@@ -1334,14 +1348,15 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 let chain = UserChain::make_initial(&mut rng, description, timestamp);
                 // Public "genesis" state.
                 let key = chain.key_pair.as_ref().unwrap().public();
-                genesis_config_ref.chains.push((key, *initial_funding));
+                genesis_config.chains.push((key, *initial_funding));
                 // Private keys.
                 chains.push(chain);
             }
-            drop(genesis_config_ref);
+            genesis_config.persist().await?;
             options
-                .create_wallet(Persist::into_value(genesis_config), *testing_prng_seed)?
-                .extend(chains);
+                .create_wallet(genesis_config.into_value(), *testing_prng_seed)?
+                .mutate(|wallet| wallet.extend(chains))
+                .await?;
             options.initialize_storage().boxed().await?;
             Ok(())
         }
@@ -1362,10 +1377,12 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
         },
 
         ClientCommand::Keygen => {
-            let mut wallet = options.wallet()?;
+            let mut wallet = options.wallet().await?;
             let key_pair = wallet.generate_key_pair();
             let public = key_pair.public();
-            Persist::mutate(&mut wallet).add_unassigned_key_pair(key_pair);
+            wallet
+                .mutate(|w| w.add_unassigned_key_pair(key_pair))
+                .await?;
             println!("{}", public);
             Ok(())
         }
@@ -1436,22 +1453,34 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {
             WalletCommand::Show { chain_id } => {
-                wallet::pretty_print(&*options.wallet()?, *chain_id);
+                wallet::pretty_print(&*options.wallet().await?, *chain_id);
                 Ok(())
             }
 
             WalletCommand::SetDefault { chain_id } => {
-                Persist::mutate(&mut options.wallet()?).set_default_chain(*chain_id)?;
+                options
+                    .wallet()
+                    .await?
+                    .mutate(|w| w.set_default_chain(*chain_id))
+                    .await??;
                 Ok(())
             }
 
             WalletCommand::ForgetKeys { chain_id } => {
-                Persist::mutate(&mut options.wallet()?).forget_keys(chain_id)?;
+                options
+                    .wallet()
+                    .await?
+                    .mutate(|w| w.forget_keys(chain_id))
+                    .await??;
                 Ok(())
             }
 
             WalletCommand::ForgetChain { chain_id } => {
-                Persist::mutate(&mut options.wallet()?).forget_chain(chain_id)?;
+                options
+                    .wallet()
+                    .await?
+                    .mutate(|w| w.forget_chain(chain_id))
+                    .await??;
                 Ok(())
             }
 
@@ -1492,12 +1521,16 @@ Make sure to use a Linera client compatible with this network.
                     (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
                 };
                 let timestamp = genesis_config.timestamp;
-                let mut wallet = options.create_wallet(genesis_config, *testing_prng_seed)?;
-                wallet.extend(
-                    with_other_chains
-                        .iter()
-                        .map(|chain_id| UserChain::make_other(*chain_id, timestamp)),
-                );
+                options
+                    .create_wallet(genesis_config, *testing_prng_seed)?
+                    .mutate(|wallet| {
+                        wallet.extend(
+                            with_other_chains
+                                .iter()
+                                .map(|chain_id| UserChain::make_other(*chain_id, timestamp)),
+                        )
+                    })
+                    .await?;
                 options.initialize_storage().boxed().await?;
                 if *with_new_chain {
                     ensure!(

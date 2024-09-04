@@ -57,7 +57,8 @@ pub struct ChainListenerConfig {
     pub delay_after_ms: u64,
 }
 
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 pub trait ClientContext {
     type ValidatorNodeProvider: LocalValidatorNodeProvider;
     type Storage: Storage;
@@ -69,17 +70,17 @@ pub trait ClientContext {
         chain_id: ChainId,
     ) -> ChainClient<Self::ValidatorNodeProvider, Self::Storage>;
 
-    fn update_wallet_for_new_chain(
+    async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
-    );
+    ) -> Result<(), Error>;
 
     async fn update_wallet(
         &mut self,
         client: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
-    );
+    ) -> Result<(), Error>;
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
@@ -197,7 +198,7 @@ where
                             timeout = new_timeout.timestamp;
                         }
                     }
-                    context.lock().await.update_wallet(&client).await;
+                    context.lock().await.update_wallet(&client).await?;
                     continue;
                 }
             };
@@ -220,7 +221,7 @@ where
                 continue;
             };
             {
-                context.lock().await.update_wallet(&client).await;
+                context.lock().await.update_wallet(&client).await?;
             }
             let value = storage.read_hashed_certificate_value(hash).await?;
             let Some(executed_block) = value.inner().executed_block() else {
@@ -258,7 +259,9 @@ where
                 let key_pair = owners
                     .iter()
                     .find_map(|public_key| context_guard.wallet().key_pair_for_pk(public_key));
-                context_guard.update_wallet_for_new_chain(new_id, key_pair, timestamp);
+                context_guard
+                    .update_wallet_for_new_chain(new_id, key_pair, timestamp)
+                    .await?;
                 Self::run_with_chain_id(
                     new_id,
                     clients.clone(),
