@@ -103,7 +103,7 @@ impl Wallet {
         self.chains.len()
     }
 
-    pub fn last_chain(&mut self) -> Option<&UserChain> {
+    pub fn last_chain(&self) -> Option<&UserChain> {
         self.chains.values().last()
     }
 

@@ -34,6 +34,7 @@ use crate::{
     chain_listener::{self, ChainClients, ChainListener, ChainListenerConfig, ClientContext as _},
     config::{CommitteeConfig, GenesisConfig, ValidatorConfig},
     wallet::{UserChain, Wallet},
+    Error,
 };
 
 type TestStorage = DbStorage<MemoryStore, TestClock>;
@@ -44,7 +45,8 @@ struct ClientContext {
     client: Arc<Client<TestProvider, TestStorage>>,
 }
 
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 impl chain_listener::ClientContext for ClientContext {
     type ValidatorNodeProvider = TestProvider;
     type Storage = TestStorage;
@@ -76,12 +78,12 @@ impl chain_listener::ClientContext for ClientContext {
         )
     }
 
-    fn update_wallet_for_new_chain(
+    async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
-    ) {
+    ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
             self.wallet.insert(UserChain {
                 chain_id,
@@ -93,10 +95,16 @@ impl chain_listener::ClientContext for ClientContext {
                 pending_blobs: BTreeMap::new(),
             });
         }
+
+        Ok(())
     }
 
-    async fn update_wallet(&mut self, client: &ChainClient<TestProvider, TestStorage>) {
+    async fn update_wallet(
+        &mut self,
+        client: &ChainClient<TestProvider, TestStorage>,
+    ) -> Result<(), Error> {
         self.wallet.update_from_state(client).await;
+        Ok(())
     }
 }
 
@@ -158,7 +166,9 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     };
     let key_pair = KeyPair::generate_from(&mut rng);
     let public_key = key_pair.public();
-    context.update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time());
+    context
+        .update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time())
+        .await?;
     let chain_clients = ChainClients::from_clients(context.clients()).await;
     let context = Arc::new(Mutex::new(context));
     let listener = ChainListener::new(config, chain_clients);

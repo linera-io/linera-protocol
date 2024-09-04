@@ -158,7 +158,7 @@ where
         let result = client
             .open_chain(ownership, ApplicationPermissions::default(), self.amount)
             .await;
-        self.context.lock().await.update_wallet(&client).await;
+        self.context.lock().await.update_wallet(&client).await?;
         let (message_id, certificate) = match result? {
             ClientOutcome::Committed(result) => result,
             ClientOutcome::WaitForTimeout(timeout) => {
