@@ -577,6 +577,9 @@ async fn queue_view_mutability_check() -> Result<()> {
                 assert!(!view.has_pending_changes().await);
                 new_vector.clone_from(&vector);
             }
+            let front1 = view.queue.front().await?;
+            let front2 = new_vector.first().cloned();
+            assert_eq!(front1, front2);
             let new_elements = view.queue.elements().await?;
             let new_hash = view.crypto_hash().await?;
             if elements == new_elements {

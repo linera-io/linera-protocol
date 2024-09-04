@@ -578,7 +578,7 @@ where
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use linera_views::views::View;
     /// # let context = create_test_memory_context();
-    /// let mut queue = QueueView::<_, u8, 5>::load(context).await.unwrap();
+    /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// let mut iter = queue.iter_mut().await.unwrap();
     /// let value = iter.next().unwrap();
