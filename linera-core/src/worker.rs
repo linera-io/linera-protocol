@@ -33,6 +33,7 @@ use thiserror::Error;
 use tokio::{
     sync::{mpsc, oneshot, OwnedRwLockReadGuard},
     task::JoinSet,
+    time::{sleep, timeout},
 };
 use tracing::{error, instrument, trace, warn, Instrument as _};
 #[cfg(with_metrics)]
@@ -210,6 +211,8 @@ pub enum WorkerError {
     BlobsNotFound(Vec<BlobId>),
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
+    #[error("The worker is too busy to handle new chains")]
+    FullChainWorkerCache,
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -638,7 +641,7 @@ where
     ///
     /// The returned view holds a lock on the chain state, which prevents the worker from changing
     /// the state of that chain.
-    #[tracing::instrument(level = "trace", skip(self, chain_id))]
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn chain_state_view(
         &self,
         chain_id: ChainId,
@@ -649,7 +652,7 @@ where
         .await
     }
 
-    #[tracing::instrument(level = "trace", skip(self, chain_id, request_builder))]
+    #[tracing::instrument(level = "trace", skip(self, request_builder))]
     /// Sends a request to the [`ChainWorker`] for a [`ChainId`] and waits for the `Response`.
     async fn query_chain_worker<Response>(
         &self,
@@ -672,22 +675,22 @@ where
 
     /// Retrieves an endpoint to a [`ChainWorkerActor`] from the cache, creating one and adding it
     /// to the cache if needed.
-    #[tracing::instrument(level = "trace", skip(self, chain_id))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn get_chain_worker_endpoint(
         &self,
         chain_id: ChainId,
     ) -> Result<ChainActorEndpoint<StorageClient>, WorkerError> {
-        let mut new_receiver = None;
-        let sender = self
-            .chain_workers
-            .lock()
-            .unwrap()
-            .get_or_insert(chain_id, || {
-                let (sender, receiver) = mpsc::unbounded_channel();
-                new_receiver = Some(receiver);
-                sender
-            })
-            .clone();
+        let (sender, new_receiver) = timeout(Duration::from_secs(3), async move {
+            loop {
+                match self.try_get_chain_worker_endpoint(chain_id) {
+                    Some(endpoint) => break endpoint,
+                    None => sleep(Duration::from_millis(250)).await,
+                }
+                warn!("No chain worker candidates found for eviction, retrying...");
+            }
+        })
+        .await
+        .map_err(|_| WorkerError::FullChainWorkerCache)?;
 
         if let Some(receiver) = new_receiver {
             let actor = ChainWorkerActor::load(
@@ -706,6 +709,45 @@ where
         }
 
         Ok(sender)
+    }
+
+    /// Retrieves an endpoint to a [`ChainWorkerActor`] from the cache, attempting to create one
+    /// and add it to the cache if needed.
+    ///
+    /// Returns [`None`] if the cache is full and no candidate for eviction was found.
+    #[tracing::instrument(level = "trace", skip(self))]
+    #[allow(clippy::type_complexity)]
+    fn try_get_chain_worker_endpoint(
+        &self,
+        chain_id: ChainId,
+    ) -> Option<(
+        ChainActorEndpoint<StorageClient>,
+        Option<mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>>,
+    )> {
+        let mut chain_workers = self.chain_workers.lock().unwrap();
+
+        if let Some(endpoint) = chain_workers.get(&chain_id) {
+            Some((endpoint.clone(), None))
+        } else {
+            if chain_workers.len() >= usize::from(chain_workers.cap()) {
+                let (chain_to_evict, _) = chain_workers
+                    .iter()
+                    .rev()
+                    .find(|(_, candidate_endpoint)| candidate_endpoint.strong_count() <= 1)?;
+                let chain_to_evict = *chain_to_evict;
+
+                chain_workers.pop(&chain_to_evict);
+                self.chain_worker_tasks
+                    .lock()
+                    .unwrap()
+                    .reap_finished_tasks();
+            }
+
+            let (sender, receiver) = mpsc::unbounded_channel();
+            chain_workers.push(chain_id, sender.clone());
+
+            Some((sender, Some(receiver)))
+        }
     }
 
     #[instrument(skip_all, fields(
