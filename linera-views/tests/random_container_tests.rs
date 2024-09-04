@@ -5,12 +5,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Result;
 use linera_views::{
+    bucket_queue_view::HashedBucketQueueView,
     collection_view::HashedCollectionView,
     context::{create_test_memory_context, Context},
     key_value_store_view::{KeyValueStoreView, SizeData},
     map_view::HashedByteMapView,
     queue_view::HashedQueueView,
-    bucket_queue_view::HashedBucketQueueView,
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::RegisterView,
     test_utils,
@@ -486,7 +486,7 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
             let back2 = new_vector.last().cloned();
             assert_eq!(back1, back2);
             for _ in 0..3 {
-                let count = rng.gen_range(0..new_vector.len()+1);
+                let count = rng.gen_range(0..new_vector.len() + 1);
                 let vec1 = view.queue.read_front(count).await?;
                 let vec2 = new_vector[..count].to_vec();
                 assert_eq!(vec1, vec2);

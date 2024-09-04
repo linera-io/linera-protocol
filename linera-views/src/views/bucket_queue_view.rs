@@ -9,8 +9,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use serde::{Deserialize};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{self, MeasureLatency},
@@ -52,7 +51,7 @@ enum KeyTag {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct StoredIndices {
-    indices: Vec<(usize,usize)>,
+    indices: Vec<(usize, usize)>,
     position: usize,
 }
 
@@ -64,7 +63,7 @@ impl StoredIndices {
 
 #[derive(Debug, Clone)]
 struct Cursor {
-    position: Option<(usize,usize)>,
+    position: Option<(usize, usize)>,
 }
 
 impl Cursor {
@@ -72,7 +71,9 @@ impl Cursor {
         if stored_indices.indices.is_empty() {
             Cursor { position: None }
         } else {
-            Cursor { position: Some((0, stored_indices.position)) }
+            Cursor {
+                position: Some((0, stored_indices.position)),
+            }
         }
     }
 
@@ -117,10 +118,10 @@ where
         let mut stored_data = match front {
             Some(front) => {
                 vec![Some(front)]
-            },
+            }
             None => {
                 vec![]
-            },
+            }
         };
         let stored_indices = from_bytes_option_or_default::<StoredIndices, _>(value2)?;
         for _ in 1..stored_indices.indices.len() {
@@ -185,7 +186,9 @@ where
             }
             self.stored_indices.indices.drain(0..i_block);
             self.stored_data.drain(0..i_block);
-            self.cursor = Cursor { position: Some((0, position)) };
+            self.cursor = Cursor {
+                position: Some((0, position)),
+            };
             // We need to ensure that the first index is in the front.
             let first_index = self.stored_indices.indices[0].1;
             if first_index != 0 {
@@ -204,10 +207,12 @@ where
                 Some((_, index)) => index + 1,
                 None => 0,
             };
-            let new_back_values : VecDeque<T> = std::mem::take(&mut self.new_back_values);
-            let new_back_values : Vec<T> = new_back_values.into_iter().collect::<Vec<_>>();
+            let new_back_values: VecDeque<T> = std::mem::take(&mut self.new_back_values);
+            let new_back_values: Vec<T> = new_back_values.into_iter().collect::<Vec<_>>();
             for value_chunk in new_back_values.chunks(N) {
-                self.stored_indices.indices.push((value_chunk.len(), unused_index));
+                self.stored_indices
+                    .indices
+                    .push((value_chunk.len(), unused_index));
                 let value_chunk = value_chunk.to_vec();
                 let key = self.get_index_key(unused_index)?;
                 batch.put_key_value(key, &value_chunk)?;
@@ -215,7 +220,9 @@ where
                 unused_index += 1;
             }
             if !self.cursor.is_incrementable() {
-                self.cursor = Cursor { position: Some((0,0)) }
+                self.cursor = Cursor {
+                    position: Some((0, 0)),
+                }
             }
         }
         if !self.delete_storage_first || !self.stored_indices.is_empty() {
@@ -243,9 +250,9 @@ where
         Ok(BucketQueueView {
             context: self.context.clone(),
             stored_data: self.stored_data.clone(),
-	    new_back_values: self.new_back_values.clone(),
+            new_back_values: self.new_back_values.clone(),
             stored_indices: self.stored_indices.clone(),
-	    cursor: self.cursor.clone(),
+            cursor: self.cursor.clone(),
             delete_storage_first: self.delete_storage_first,
         })
     }
@@ -288,8 +295,6 @@ where
     }
 }
 
-
-
 impl<'a, C, T, const N: usize> BucketQueueView<C, T, N>
 where
     C: Context + Send + Sync,
@@ -315,10 +320,8 @@ where
                 let block = &self.stored_data[i_block];
                 let block = block.as_ref().unwrap();
                 Some(block[position].clone())
-            },
-            None => {
-                self.new_back_values.front().cloned()
-            },
+            }
+            None => self.new_back_values.front().cloned(),
         }
     }
 
@@ -346,7 +349,9 @@ where
                 if i_block == self.stored_indices.indices.len() {
                     self.cursor = Cursor { position: None };
                 } else {
-                    self.cursor = Cursor { position: Some((i_block, position)) };
+                    self.cursor = Cursor {
+                        position: Some((i_block, position)),
+                    };
                     if self.stored_data[i_block].is_none() {
                         let index = self.stored_indices.indices[i_block].1;
                         let key = self.get_index_key(index)?;
@@ -356,10 +361,10 @@ where
                         self.stored_data[i_block] = Some(value);
                     }
                 }
-            },
+            }
             None => {
                 self.new_back_values.pop_front();
-            },
+            }
         }
         Ok(())
     }
@@ -428,10 +433,14 @@ where
         let value = self.context.read_value_bytes(&key).await?;
         let value = value.as_ref().ok_or(ViewError::MissingEntries)?;
         let value = bcs::from_bytes::<Vec<T>>(value)?;
-        Ok(Some(value[len-1].clone()))
+        Ok(Some(value[len - 1].clone()))
     }
 
-    async fn read_context(&self, position: Option<(usize,usize)>, count: usize) -> Result<Vec<T>, ViewError> {
+    async fn read_context(
+        &self,
+        position: Option<(usize, usize)>,
+        count: usize,
+    ) -> Result<Vec<T>, ViewError> {
         if count == 0 {
             return Ok(Vec::new());
         }
@@ -460,14 +469,12 @@ where
             for block in i_block..self.stored_data.len() {
                 let size = self.stored_indices.indices[block].0 - position;
                 let vec = match &self.stored_data[block] {
-                    Some(vec) => {
-                        vec
-                    },
+                    Some(vec) => vec,
                     None => {
                         let value = values[pos].as_ref().ok_or(ViewError::MissingEntries)?;
                         pos += 1;
                         &bcs::from_bytes::<Vec<T>>(value)?
-                    },
+                    }
                 };
                 let end = if count_remain <= size {
                     position + count_remain
@@ -491,7 +498,6 @@ where
         }
         Ok(elements)
     }
-
 
     /// Returns the last element of a bucket queue view
     /// ```rust
@@ -528,7 +534,11 @@ where
     pub async fn read_back(&self, count: usize) -> Result<Vec<T>, ViewError> {
         if count <= self.new_back_values.len() {
             let start = self.new_back_values.len() - count;
-            Ok(self.new_back_values.range(start..).cloned().collect::<Vec<_>>())
+            Ok(self
+                .new_back_values
+                .range(start..)
+                .cloned()
+                .collect::<Vec<_>>())
         } else {
             let mut increment = self.count() - count;
             let Some((i_block, mut position)) = self.cursor.position else {
@@ -537,7 +547,9 @@ where
             for block in i_block..self.stored_data.len() {
                 let size = self.stored_indices.indices[block].0 - position;
                 if increment < size {
-                    return self.read_context(Some((block, position + increment)), count).await
+                    return self
+                        .read_context(Some((block, position + increment)), count)
+                        .await;
                 }
                 increment -= size;
                 position = 0;
@@ -559,7 +571,6 @@ where
         Ok(())
     }
 
-
     /// Gets a mutable iterator on the entries of the queue
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -567,7 +578,7 @@ where
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use linera_views::views::View;
     /// # let context = create_test_memory_context();
-    /// let mut queue = QueueView::<_,u8, 5>::load(context).await.unwrap();
+    /// let mut queue = QueueView::<_, u8, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// let mut iter = queue.iter_mut().await.unwrap();
     /// let value = iter.next().unwrap();
@@ -605,7 +616,8 @@ where
 }
 
 /// Type wrapping `QueueView` while memoizing the hash.
-pub type HashedBucketQueueView<C, T, const N: usize> = WrappedHashableContainerView<C, BucketQueueView<C, T, N>, HasherOutput>;
+pub type HashedBucketQueueView<C, T, const N: usize> =
+    WrappedHashableContainerView<C, BucketQueueView<C, T, N>, HasherOutput>;
 
 mod graphql {
     use std::borrow::Cow;
@@ -616,7 +628,9 @@ mod graphql {
         graphql::{hash_name, mangle},
     };
 
-    impl<C: Send + Sync, T: async_graphql::OutputType, const N: usize> async_graphql::TypeName for BucketQueueView<C, T, N> {
+    impl<C: Send + Sync, T: async_graphql::OutputType, const N: usize> async_graphql::TypeName
+        for BucketQueueView<C, T, N>
+    {
         fn type_name() -> Cow<'static, str> {
             format!(
                 "BucketQueueView_{}_{:08x}",

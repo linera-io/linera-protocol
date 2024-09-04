@@ -1,28 +1,28 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, Instant};
-use std::fmt::Debug;
-
-use linera_views::test_utils::{DeterministicRng, make_deterministic_rng};
-use linera_views::views::{CryptoHashRootView, RootView};
+use std::{
+    fmt::Debug,
+    time::{Duration, Instant},
+};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use linera_views::{
-    common::KeyValueStore,
-    backends::memory::create_test_memory_store,
-    context::ViewContext,
-    bucket_queue_view::BucketQueueView,
-    queue_view::QueueView,
-    views::View,
-};
-use rand::Rng;
 #[cfg(with_dynamodb)]
 use linera_views::dynamo_db::create_dynamo_db_test_store;
 #[cfg(with_rocksdb)]
 use linera_views::rocks_db::create_rocks_db_test_store;
 #[cfg(with_scylladb)]
 use linera_views::scylla_db::create_scylla_db_test_store;
+use linera_views::{
+    backends::memory::create_test_memory_store,
+    bucket_queue_view::BucketQueueView,
+    common::KeyValueStore,
+    context::ViewContext,
+    queue_view::QueueView,
+    test_utils::{make_deterministic_rng, DeterministicRng},
+    views::{CryptoHashRootView, RootView, View},
+};
+use rand::Rng;
 use tokio::runtime::Runtime;
 
 /// The number of operations
@@ -35,7 +35,7 @@ enum Operations {
 }
 
 fn generate_test_case(n_operation: usize, rng: &mut DeterministicRng) -> Vec<Operations> {
-    let mut operations = Vec:: new();
+    let mut operations = Vec::new();
     let mut total_length = 0;
     for _ in 0..n_operation {
         let choice = rng.gen_range(0..10);
@@ -58,11 +58,18 @@ pub struct QueueStateView<C> {
     pub queue: QueueView<C, u8>,
 }
 
-pub async fn performance_queue_view<S: KeyValueStore + Clone + Sync + 'static>(store: S, iterations: u64) -> Duration
+pub async fn performance_queue_view<S: KeyValueStore + Clone + Sync + 'static>(
+    store: S,
+    iterations: u64,
+) -> Duration
 where
     S::Error: Debug + Send + Sync + 'static,
 {
-    let context = ViewContext { store, base_key: Vec::new(), extra: () };
+    let context = ViewContext {
+        store,
+        base_key: Vec::new(),
+        extra: (),
+    };
     let mut total_time = Duration::ZERO;
     let mut rng = make_deterministic_rng();
     for _ in 0..iterations {
@@ -74,13 +81,13 @@ where
             match operation {
                 Operations::Save => {
                     view.save().await.unwrap();
-                },
+                }
                 Operations::DeleteFront => {
                     view.queue.delete_front();
-                },
+                }
                 Operations::PushBack(val) => {
                     view.queue.push_back(val);
-                },
+                }
             }
             black_box(view.queue.front().await.unwrap());
         }
@@ -138,11 +145,18 @@ pub struct BucketQueueStateView<C> {
     pub queue: BucketQueueView<C, u8, 100>,
 }
 
-pub async fn performance_bucket_queue_view<S: KeyValueStore + Clone + Sync + 'static>(store: S, iterations: u64) -> Duration
+pub async fn performance_bucket_queue_view<S: KeyValueStore + Clone + Sync + 'static>(
+    store: S,
+    iterations: u64,
+) -> Duration
 where
     S::Error: Debug + Send + Sync + 'static,
 {
-    let context = ViewContext { store, base_key: Vec::new(), extra: () };
+    let context = ViewContext {
+        store,
+        base_key: Vec::new(),
+        extra: (),
+    };
     let mut total_time = Duration::ZERO;
     let mut rng = make_deterministic_rng();
     for _ in 0..iterations {
@@ -154,13 +168,13 @@ where
             match operation {
                 Operations::Save => {
                     view.save().await.unwrap();
-                },
+                }
                 Operations::DeleteFront => {
                     view.queue.delete_front().await.unwrap();
-                },
+                }
                 Operations::PushBack(val) => {
                     view.queue.push_back(val);
-                },
+                }
             }
             black_box(view.queue.front());
         }
@@ -213,13 +227,5 @@ fn bench_bucket_queue_view(criterion: &mut Criterion) {
     });
 }
 
-
-
-
-
-criterion_group!(
-    benches,
-    bench_queue_view,
-    bench_bucket_queue_view
-);
+criterion_group!(benches, bench_queue_view, bench_bucket_queue_view);
 criterion_main!(benches);
