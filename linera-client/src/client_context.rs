@@ -16,13 +16,12 @@ use linera_chain::data_types::Certificate;
 use linera_core::{
     client::{ChainClient, Client, MessagePolicy},
     data_types::ClientOutcome,
+    join_set_ext::{JoinSet, JoinSetExt as _},
     node::CrossChainMessageDelivery,
-    JoinSetExt as _,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
 use thiserror_context::Context;
-use tokio::task::JoinSet;
 use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
 use {
@@ -83,7 +82,7 @@ where
     pub notification_retry_delay: Duration,
     pub notification_retries: u32,
     pub options: ClientOptions,
-    pub chain_listeners: JoinSet<()>,
+    pub chain_listeners: JoinSet,
 }
 
 #[cfg_attr(not(web), async_trait)]
@@ -172,7 +171,7 @@ where
             notification_retry_delay: options.notification_retry_delay,
             notification_retries: options.notification_retries,
             options,
-            chain_listeners: JoinSet::new(),
+            chain_listeners: JoinSet::default(),
         }
     }
 

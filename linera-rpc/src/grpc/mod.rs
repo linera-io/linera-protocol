@@ -29,8 +29,8 @@ pub enum GrpcError {
     #[error("failed to communicate cross-chain queries: {0}")]
     CrossChain(#[from] tonic::Status),
 
-    #[error("failed to execute task to completion: {0}")]
-    Join(#[from] tokio::sync::oneshot::error::RecvError),
+    #[error("failed to execute task to completion")]
+    Join(#[from] futures::channel::oneshot::Canceled),
 
     #[error("failed to parse socket address: {0}")]
     SocketAddr(#[from] std::net::AddrParseError),
