@@ -33,7 +33,7 @@ use thiserror::Error;
 use tokio::{
     sync::{mpsc, oneshot, OwnedRwLockReadGuard},
     task::JoinSet,
-    time::sleep,
+    time::{sleep, timeout},
 };
 use tracing::{error, instrument, trace, warn, Instrument as _};
 #[cfg(with_metrics)]
@@ -211,6 +211,8 @@ pub enum WorkerError {
     BlobsNotFound(Vec<BlobId>),
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
+    #[error("The worker is too busy to handle new chains")]
+    FullChainWorkerCache,
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -678,13 +680,17 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<ChainActorEndpoint<StorageClient>, WorkerError> {
-        let (sender, new_receiver) = loop {
-            match self.try_get_chain_worker_endpoint(chain_id) {
-                Some(endpoint) => break endpoint,
-                None => sleep(Duration::from_millis(250)).await,
+        let (sender, new_receiver) = timeout(Duration::from_secs(3), async move {
+            loop {
+                match self.try_get_chain_worker_endpoint(chain_id) {
+                    Some(endpoint) => break endpoint,
+                    None => sleep(Duration::from_millis(250)).await,
+                }
+                warn!("No chain worker candidates found for eviction, retrying...");
             }
-            warn!("No chain worker candidates found for eviction, retrying...");
-        };
+        })
+        .await
+        .map_err(|_| WorkerError::FullChainWorkerCache)?;
 
         if let Some(receiver) = new_receiver {
             let actor = ChainWorkerActor::load(
