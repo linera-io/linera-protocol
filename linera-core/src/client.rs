@@ -462,10 +462,7 @@ pub type ChainGuard<'a, T> = Unsend<DashMapRef<'a, ChainId, T>>;
 pub type ChainGuardMut<'a, T> = Unsend<DashMapRefMut<'a, ChainId, T>>;
 pub type ChainGuardMapped<'a, T> = Unsend<DashMapMappedRef<'a, ChainId, ChainState, T>>;
 
-impl<P, S> ChainClient<P, S>
-where
-    S: Storage,
-{
+impl<P: 'static, S: Storage> ChainClient<P, S> {
     #[tracing::instrument(level = "trace", skip(self))]
     /// Gets a shared reference to the chain's state.
     pub fn state(&self) -> ChainGuard<ChainState> {
@@ -545,7 +542,7 @@ enum ReceiveCertificateMode {
 
 impl<P, S> ChainClient<P, S>
 where
-    P: LocalValidatorNodeProvider + Sync,
+    P: LocalValidatorNodeProvider + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
     #[tracing::instrument(level = "trace")]
@@ -2978,10 +2975,7 @@ where
     /// and synchronizes the local state accordingly.
     pub async fn listen(
         &self,
-    ) -> Result<(impl Future<Output = ()>, AbortOnDrop, NotificationStream), ChainClientError>
-    where
-        P: Send + 'static,
-    {
+    ) -> Result<(impl Future<Output = ()>, AbortOnDrop, NotificationStream), ChainClientError> {
         use future::FutureExt as _;
 
         async fn await_while_polling<F: FusedFuture>(
@@ -3054,10 +3048,7 @@ where
     async fn update_streams(
         &self,
         senders: &mut HashMap<ValidatorName, AbortHandle>,
-    ) -> Result<impl Future<Output = ()>, ChainClientError>
-    where
-        P: Send + 'static,
-    {
+    ) -> Result<impl Future<Output = ()>, ChainClientError> {
         let (chain_id, nodes, local_node) = {
             let committee = self.local_committee().await?;
             let nodes: HashMap<_, _> = self
