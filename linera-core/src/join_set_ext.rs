@@ -137,7 +137,7 @@ pub use implementation::*;
 
 /// A handle to a task spawned with [`JoinSetExt`].
 ///
-/// Dropping a handle aborts its respective task.
+/// Dropping a handle detaches its respective task.
 pub struct TaskHandle<Output> {
     output_receiver: oneshot::Receiver<Output>,
     abort_handle: AbortHandle,
