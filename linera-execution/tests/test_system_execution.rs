@@ -117,7 +117,7 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
         local_time: Timestamp::from(0),
     };
     let response = view
-        .query_application(context, Query::System(SystemQuery), None, None)
+        .query_application(context, Query::System(SystemQuery), None)
         .await
         .unwrap();
     assert_eq!(

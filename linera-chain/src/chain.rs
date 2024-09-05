@@ -22,10 +22,10 @@ use linera_base::{
     },
 };
 use linera_execution::{
-    system::OpenChainConfig, ExecutionError, ExecutionOutcome, ExecutionRequest,
-    ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, Operation,
-    OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
-    ResourceController, ResourceTracker, Response, ServiceRuntimeRequest, TransactionTracker,
+    system::OpenChainConfig, ExecutionError, ExecutionOutcome, ExecutionRuntimeContext,
+    ExecutionStateView, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker, Response,
+    ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -375,10 +375,7 @@ where
         &mut self,
         local_time: Timestamp,
         query: Query,
-        incoming_execution_requests: Option<
-            &mut futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        >,
-        runtime_request_sender: Option<&mut std::sync::mpsc::Sender<ServiceRuntimeRequest>>,
+        service_runtime_endpoint: Option<&mut ServiceRuntimeEndpoint>,
     ) -> Result<Response, ChainError> {
         let context = QueryContext {
             chain_id: self.chain_id(),
@@ -387,12 +384,7 @@ where
         };
         let response = self
             .execution_state
-            .query_application(
-                context,
-                query,
-                incoming_execution_requests,
-                runtime_request_sender,
-            )
+            .query_application(context, query, service_runtime_endpoint)
             .await
             .map_err(|error| ChainError::ExecutionError(error, ChainExecutionContext::Query))?;
         Ok(response)

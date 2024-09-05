@@ -45,6 +45,14 @@ pub struct ExecutionStateView<C> {
     pub users: HashedReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
 }
 
+/// How to interact with a long-lived service runtime.
+pub struct ServiceRuntimeEndpoint {
+    /// How to receive requests.
+    pub incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+    /// How to query the runtime.
+    pub runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+}
+
 #[cfg(with_testing)]
 impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
 where
@@ -443,10 +451,7 @@ where
         &mut self,
         context: QueryContext,
         query: Query,
-        incoming_execution_requests: Option<
-            &mut futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        >,
-        runtime_request_sender: Option<&mut std::sync::mpsc::Sender<ServiceRuntimeRequest>>,
+        endpoint: Option<&mut ServiceRuntimeEndpoint>,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match query {
@@ -459,22 +464,21 @@ where
                 bytes,
             } => {
                 let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
-                let response = match (incoming_execution_requests, runtime_request_sender) {
-                    (Some(requests), Some(sender)) => {
+                let response = match endpoint {
+                    Some(endpoint) => {
                         self.query_user_application_with_long_lived_service(
                             application_id,
                             context,
                             bytes,
-                            requests,
-                            sender,
+                            &mut endpoint.incoming_execution_requests,
+                            &mut endpoint.runtime_request_sender,
                         )
                         .await?
                     }
-                    (None, None) => {
+                    None => {
                         self.query_user_application(application_id, context, bytes)
                             .await?
                     }
-                    _ => unreachable!("invalid parameters"),
                 };
                 Ok(Response::User(response))
             }
