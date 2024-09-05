@@ -1,10 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use colored::Colorize as _;
-use linera_base::data_types::Amount;
+use linera_base::{data_types::Amount, time::Duration};
 use linera_client::storage::StorageConfig;
 use linera_execution::ResourceControlPolicy;
 use linera_service::{
@@ -137,7 +135,7 @@ async fn net_up(
         .expect("Initialized clients should always have a default chain");
 
     // Make time to (hopefully) display the message after the tracing logs.
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    linera_base::time::timer::sleep(Duration::from_secs(1)).await;
 
     // Create the wallet for the initial "root" chains.
     info!("Local test network successfully started.");

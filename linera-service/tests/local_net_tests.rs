@@ -233,7 +233,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
             client1
                 .transfer(Amount::from_tokens(1), chain, ChainId::root(9))
                 .await?;
-            tokio::time::sleep(Duration::from_secs(i)).await;
+            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
             height += 1;
             let response = node_service2
                 .query_node(format!(

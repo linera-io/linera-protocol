@@ -1,12 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use criterion::{criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion};
 use linera_base::{
     data_types::Amount,
     identifiers::{Account, ChainDescription},
+    time::Duration,
 };
 use linera_core::{
     client,

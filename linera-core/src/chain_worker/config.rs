@@ -3,9 +3,9 @@
 
 //! Configuration parameters for the chain worker.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
-use linera_base::crypto::KeyPair;
+use linera_base::{crypto::KeyPair, time::Duration};
 
 /// Configuration parameters for the [`ChainWorkerState`][`super::state::ChainWorkerState`].
 #[derive(Clone, Default)]

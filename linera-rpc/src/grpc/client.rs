@@ -1,13 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{iter, time::Duration};
+use std::iter;
 
 use futures::{future, stream, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlobContent},
     identifiers::{BlobId, ChainId},
+    time::Duration,
 };
 use linera_chain::data_types::{self, Certificate, CertificateValue, HashedCertificateValue};
 #[cfg(web)]
@@ -248,7 +249,7 @@ impl ValidatorNode for GrpcClient {
                 let delay = notification_retry_delay.saturating_mul(retry_count);
                 retry_count += 1;
                 future::Either::Right(async move {
-                    tokio::time::sleep(delay).await;
+                    linera_base::time::timer::sleep(delay).await;
                     true
                 })
             })

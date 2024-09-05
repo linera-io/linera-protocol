@@ -21,8 +21,9 @@ web = [
     "rand/std",
     "rand/std_rng",
     "tracing-web",
-    "web-time",
+    "wasmtimer",
     "wasm-bindgen-futures",
+    "web-time",
 ]
 
 [dependencies]
@@ -52,9 +53,11 @@ serde_json.workspace = true
 sha3.workspace = true
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
+tokio = { workspace = true, features = ["time"] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["json", "fmt", "ansi"] }
 wasm-bindgen-futures = { workspace = true, optional = true }
+wasmtimer = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

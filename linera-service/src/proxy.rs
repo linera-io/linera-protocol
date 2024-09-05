@@ -276,8 +276,8 @@ where
         recv_timeout: Duration,
     ) -> Result<Option<RpcMessage>> {
         let mut connection = protocol.connect((shard.host, shard.port)).await?;
-        tokio::time::timeout(send_timeout, connection.send(message)).await??;
-        let message = tokio::time::timeout(recv_timeout, connection.next())
+        linera_base::time::timer::timeout(send_timeout, connection.send(message)).await??;
+        let message = linera_base::time::timer::timeout(recv_timeout, connection.next())
             .await?
             .transpose()?;
         Ok(message)

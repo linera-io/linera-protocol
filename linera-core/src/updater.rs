@@ -14,7 +14,7 @@ use linera_base::{
     data_types::{BlockHeight, Round},
     ensure,
     identifiers::ChainId,
-    time::{Duration, Instant},
+    time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::data_types::{BlockProposal, Certificate, LiteVote};
 use linera_execution::committee::{Committee, ValidatorName};
@@ -27,14 +27,6 @@ use crate::{
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, LocalValidatorNode, NodeError},
 };
-
-cfg_if::cfg_if! {
-    if #[cfg(web)] {
-        use wasmtimer::tokio::timeout;
-    } else {
-        use tokio::time::timeout;
-    }
-}
 
 /// The amount of time we wait for additional validators to contribute to the result, as a fraction
 /// of how long it took to reach a quorum.

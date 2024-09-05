@@ -3423,7 +3423,6 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
- "cfg-if",
  "cfg_aliases",
  "clap",
  "dashmap 5.5.3",

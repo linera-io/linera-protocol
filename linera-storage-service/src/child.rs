@@ -1,10 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use anyhow::{bail, Result};
-use linera_base::command::CommandExt;
+use linera_base::{command::CommandExt, time::Duration};
 use port_selector::random_free_tcp_port;
 use tokio::process::{Child, Command};
 
@@ -16,7 +14,7 @@ pub async fn get_free_port() -> Result<u16> {
         if let Some(port) = port {
             return Ok(port);
         }
-        tokio::time::sleep(Duration::from_secs(i)).await;
+        linera_base::time::timer::sleep(Duration::from_secs(i)).await;
     }
     bail!("Failed to obtain a port");
 }
@@ -63,7 +61,7 @@ impl StorageService {
             if storage_service_check_absence(&self.endpoint).await? {
                 return Ok(());
             }
-            tokio::time::sleep(Duration::from_secs(i)).await;
+            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
         }
         bail!("Failed to start child server");
     }
@@ -80,7 +78,7 @@ impl StorageService {
             if result.is_ok() {
                 return Ok(guard);
             }
-            tokio::time::sleep(Duration::from_secs(i)).await;
+            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
         }
         bail!("Failed to start child server");
     }

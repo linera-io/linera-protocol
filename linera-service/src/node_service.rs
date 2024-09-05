@@ -1140,7 +1140,7 @@ pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: Round
     });
     future::select(
         Box::pin(stream.next()),
-        Box::pin(tokio::time::sleep(
+        Box::pin(linera_base::time::timer::sleep(
             timeout.timestamp.duration_since(Timestamp::now()),
         )),
     )

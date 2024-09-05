@@ -238,7 +238,7 @@ impl Clock for WallClock {
     }
 
     async fn sleep(&self, delta: TimeDelta) {
-        tokio::time::sleep(delta.as_duration()).await
+        linera_base::time::timer::sleep(delta.as_duration()).await
     }
 
     async fn sleep_until(&self, timestamp: Timestamp) {

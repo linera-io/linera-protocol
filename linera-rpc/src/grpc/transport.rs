@@ -5,8 +5,8 @@ use crate::NodeOptions;
 
 #[derive(Clone, Debug, Default)]
 pub struct Options {
-    pub connect_timeout: Option<std::time::Duration>,
-    pub timeout: Option<std::time::Duration>,
+    pub connect_timeout: Option<linera_base::time::Duration>,
+    pub timeout: Option<linera_base::time::Duration>,
 }
 
 impl From<&'_ NodeOptions> for Options {

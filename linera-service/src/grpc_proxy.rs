@@ -129,7 +129,7 @@ where
 
     fn call(&mut self, request: tonic::codegen::http::Request<Body>) -> Self::Future {
         #[cfg(with_metrics)]
-        let start = std::time::Instant::now();
+        let start = linera_base::time::Instant::now();
         let future = self.service.call(request);
         async move {
             let response = future.await?;

@@ -563,7 +563,7 @@ impl LocalNet {
             }
             Network::Tcp | Network::Udp => {
                 info!("Letting validator proxy {validator} start");
-                tokio::time::sleep(Duration::from_secs(2)).await;
+                linera_base::time::timer::sleep(Duration::from_secs(2)).await;
             }
         }
         Ok(child)
@@ -574,9 +574,9 @@ impl LocalNet {
             .context("endpoint should always parse")?
             .connect_lazy();
         let mut client = HealthClient::new(connection);
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        linera_base::time::timer::sleep(Duration::from_millis(100)).await;
         for i in 0..10 {
-            tokio::time::sleep(Duration::from_millis(i * 500)).await;
+            linera_base::time::timer::sleep(Duration::from_millis(i * 500)).await;
             let result = client.check(HealthCheckRequest::default()).await;
             if result.is_ok() && result.unwrap().get_ref().status() == ServingStatus::Serving {
                 info!("Successfully started {nickname}");
@@ -630,7 +630,7 @@ impl LocalNet {
                 if i_try == max_try {
                     bail!("Failed to initialize after {} attempts", max_try);
                 }
-                let one_second = std::time::Duration::from_secs(1);
+                let one_second = linera_base::time::Duration::from_secs(1);
                 std::thread::sleep(one_second);
             }
             self.set_init.insert(key);
@@ -661,7 +661,7 @@ impl LocalNet {
             }
             Network::Tcp | Network::Udp => {
                 info!("Letting validator server {validator}:{shard} start");
-                tokio::time::sleep(Duration::from_secs(2)).await;
+                linera_base::time::timer::sleep(Duration::from_secs(2)).await;
             }
         }
         Ok(child)

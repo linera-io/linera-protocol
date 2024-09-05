@@ -4236,6 +4236,7 @@ dependencies = [
  "tracing-subscriber",
  "tracing-web",
  "wasm-bindgen-futures",
+ "wasmtimer",
  "web-time",
  "zstd",
 ]
@@ -4333,7 +4334,6 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
- "cfg-if",
  "cfg_aliases",
  "clap",
  "counter",
@@ -4367,7 +4367,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "trait-variant",
- "wasmtimer",
 ]
 
 [[package]]

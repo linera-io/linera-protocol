@@ -390,7 +390,7 @@ impl ClientWrapper {
             .spawn_into()?;
         let client = reqwest_client();
         for i in 0..10 {
-            tokio::time::sleep(Duration::from_secs(i)).await;
+            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
             let request = client
                 .get(format!("http://localhost:{}/", port))
                 .send()
@@ -445,7 +445,7 @@ impl ClientWrapper {
             .spawn_into()?;
         let client = reqwest_client();
         for i in 0..10 {
-            tokio::time::sleep(Duration::from_secs(i)).await;
+            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
             let request = client
                 .get(format!("http://localhost:{}/", port))
                 .send()
@@ -951,7 +951,7 @@ impl NodeService {
         let n_try = 15;
         let query = query.as_ref();
         for i in 0..n_try {
-            tokio::time::sleep(Duration::from_secs(i)).await;
+            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
             let url = format!("http://localhost:{}/", self.port);
             let client = reqwest_client();
             let response = client
