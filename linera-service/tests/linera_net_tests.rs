@@ -10,8 +10,6 @@
     feature = "remote-net"
 ))]
 
-mod common;
-
 use std::{env, time::Duration};
 
 use anyhow::Result;
