@@ -165,15 +165,15 @@ impl ValidatorNode for SimpleClient {
 #[derive(Clone)]
 pub struct SimpleMassClient {
     pub network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
-    send_timeout: linera_base::time::Duration,
-    recv_timeout: linera_base::time::Duration,
+    send_timeout: Duration,
+    recv_timeout: Duration,
 }
 
 impl SimpleMassClient {
     pub fn new(
         network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
-        send_timeout: linera_base::time::Duration,
-        recv_timeout: linera_base::time::Duration,
+        send_timeout: Duration,
+        recv_timeout: Duration,
     ) -> Self {
         Self {
             network,
