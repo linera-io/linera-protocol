@@ -31,10 +31,7 @@ use linera_storage::Storage;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::{
-    sync::{mpsc, oneshot, OwnedRwLockReadGuard},
-    task::JoinSet,
-};
+use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{error, instrument, trace, warn, Instrument as _};
 #[cfg(with_metrics)]
 use {
@@ -46,7 +43,7 @@ use {
 use crate::{
     chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    join_set_ext::JoinSetExt,
+    join_set_ext::{JoinSet, JoinSetExt},
     value_cache::ValueCache,
 };
 
@@ -244,7 +241,7 @@ where
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     /// The set of spawned [`ChainWorkerActor`] tasks.
-    chain_worker_tasks: Arc<Mutex<JoinSet<()>>>,
+    chain_worker_tasks: Arc<Mutex<JoinSet>>,
     /// The cache of running [`ChainWorkerActor`]s.
     chain_workers: Arc<Mutex<LruCache<ChainId, ChainActorEndpoint<StorageClient>>>>,
 }

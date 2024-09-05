@@ -9,7 +9,7 @@
 pub mod chain_worker;
 pub mod client;
 pub mod data_types;
-mod join_set_ext;
+pub mod join_set_ext;
 pub mod local_node;
 pub mod node;
 pub mod notifier;
