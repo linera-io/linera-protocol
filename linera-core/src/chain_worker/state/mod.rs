@@ -56,6 +56,9 @@ where
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+    // We use an `Arc` here to avoid bifurcating the code, even though on the Web this is
+    // not going to be sent to another thread.
+    #[cfg_attr(web, allow(clippy::arc_with_non_send_sync))]
     service_runtime: Arc<Mutex<ServiceSyncRuntime>>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
     recent_blobs: Arc<ValueCache<BlobId, Blob>>,
