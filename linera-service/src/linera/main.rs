@@ -599,6 +599,7 @@ impl Runnable for Job {
                             {:.2} per byte in the argument of an operation\n\
                             {:.2} per outgoing messages\n\
                             {:.2} per byte in the argument of an outgoing messages\n\
+                            {:.2} maximum size of an executed block\n\
                             {:.2} maximum number bytes read per block\n\
                             {:.2} maximum number bytes written per block",
                                         policy.block,
@@ -612,6 +613,7 @@ impl Runnable for Job {
                                         policy.operation_byte,
                                         policy.message,
                                         policy.message_byte,
+                                        policy.maximum_executed_block_size,
                                         policy.maximum_bytes_read_per_block,
                                         policy.maximum_bytes_written_per_block
                                     );
@@ -626,6 +628,7 @@ impl Runnable for Job {
                                         && operation_byte.is_none()
                                         && message.is_none()
                                         && message_byte.is_none()
+                                        && maximum_executed_block_size.is_none()
                                         && maximum_bytes_read_per_block.is_none()
                                         && maximum_bytes_written_per_block.is_none()
                                     {
