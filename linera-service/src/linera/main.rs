@@ -1451,6 +1451,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 policy_config,
                 kubernetes: true,
                 binaries,
+                path: _,
             } => {
                 net_up_utils::handle_net_up_kubernetes(
                     *extra_wallets,
