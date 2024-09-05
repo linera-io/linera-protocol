@@ -55,8 +55,8 @@ where
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
-    execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-    runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+    execution_state_receiver: Option<futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>>,
+    runtime_request_sender: Option<std::sync::mpsc::Sender<ServiceRuntimeRequest>>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
     recent_blobs: Arc<ValueCache<BlobId, Blob>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
@@ -76,8 +76,10 @@ where
         blob_cache: Arc<ValueCache<BlobId, Blob>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         chain_id: ChainId,
-        execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        execution_state_receiver: Option<
+            futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+        >,
+        runtime_request_sender: Option<std::sync::mpsc::Sender<ServiceRuntimeRequest>>,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 

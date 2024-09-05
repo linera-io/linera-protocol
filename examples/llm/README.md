@@ -59,8 +59,11 @@ Then, a node service for the current wallet has to be started:
 
 ```bash
 PORT=8080
-linera service --port $PORT &
-```
+linera --long-lived-services service --port $PORT &
+ ```
+
+The experimental option `--long-lived-services` is used for performance, to avoid
+reloading the model between queries.
 
 Next, navigate to `llm/web-frontend` and install the requisite `npm`
 dependencies:
@@ -75,6 +78,5 @@ Finally, navigate to `localhost:3000` to interact with the Linera ChatBot.
 ```bash
 echo "http://localhost:3000/$CHAIN?app=$APP_ID&port=$PORT"
 ```
- 
 
 <!-- cargo-rdme end -->

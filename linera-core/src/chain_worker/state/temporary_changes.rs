@@ -105,8 +105,8 @@ where
             .query_application(
                 local_time,
                 query,
-                &mut self.0.execution_state_receiver,
-                &mut self.0.runtime_request_sender,
+                self.0.execution_state_receiver.as_mut(),
+                self.0.runtime_request_sender.as_mut(),
             )
             .await?;
         Ok(response)

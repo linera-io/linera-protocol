@@ -216,8 +216,23 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![]
             },
-            &mut execution_request_receiver,
-            &mut runtime_request_sender,
+            Some(&mut execution_request_receiver),
+            Some(&mut runtime_request_sender),
+        )
+        .await
+        .unwrap(),
+        Response::User(dummy_operation.clone())
+    );
+
+    assert_eq!(
+        view.query_application(
+            context,
+            Query::User {
+                application_id: caller_id,
+                bytes: vec![]
+            },
+            None,
+            None,
         )
         .await
         .unwrap(),

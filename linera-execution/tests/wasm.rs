@@ -136,8 +136,8 @@ async fn test_fuel_for_counter_wasm_application(
         .query_application(
             context,
             Query::user(app_id, &request).unwrap(),
-            &mut execution_request_receiver,
-            &mut runtime_request_sender,
+            Some(&mut execution_request_receiver),
+            Some(&mut runtime_request_sender),
         )
         .await?
     else {

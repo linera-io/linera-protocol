@@ -134,7 +134,7 @@ where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
     worker: ChainWorkerState<StorageClient>,
-    service_runtime_thread: linera_base::task::BlockingFuture<()>,
+    service_runtime_thread: Option<linera_base::task::BlockingFuture<()>>,
 }
 
 impl<StorageClient> ChainWorkerActor<StorageClient>
@@ -151,8 +151,14 @@ where
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         chain_id: ChainId,
     ) -> Result<Self, WorkerError> {
-        let (service_runtime_thread, execution_state_receiver, runtime_request_sender) =
-            Self::spawn_service_runtime_actor(chain_id);
+        let (service_runtime_thread, execution_state_receiver, runtime_request_sender) = {
+            if config.long_lived_services {
+                let (thread, receiver, sender) = Self::spawn_service_runtime_actor(chain_id);
+                (Some(thread), Some(receiver), Some(sender))
+            } else {
+                (None, None, None)
+            }
+        };
 
         let worker = ChainWorkerState::load(
             config,
@@ -312,9 +318,11 @@ where
         }
 
         drop(self.worker);
-        self.service_runtime_thread
-            .await
-            .expect("Service runtime thread should not panic");
+        if let Some(thread) = self.service_runtime_thread {
+            thread
+                .await
+                .expect("Service runtime thread should not panic");
+        }
 
         trace!("`ChainWorkerActor` finished");
     }
