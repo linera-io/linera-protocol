@@ -129,7 +129,7 @@ pub struct ClientOptions {
     #[arg(long)]
     pub wait_for_outgoing_messages: bool,
 
-    /// Whether to application services can persist in some cases between queries.
+    /// (EXPERIMENTAL) Whether application services can persist in some cases between queries.
     #[arg(long)]
     pub long_lived_services: bool,
 
