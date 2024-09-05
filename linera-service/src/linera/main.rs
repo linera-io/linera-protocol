@@ -1475,6 +1475,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 testing_prng_seed,
                 table_name,
                 policy_config,
+                path,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -1486,6 +1487,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                     *testing_prng_seed,
                     table_name,
                     policy_config.into_policy(),
+                    path,
                 )
                 .boxed()
                 .await
