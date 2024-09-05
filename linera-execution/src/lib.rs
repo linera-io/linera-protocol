@@ -86,11 +86,21 @@ pub type UserContractCode = Arc<dyn UserContractModule + Send + Sync + 'static>;
 /// An implementation of [`UserServiceModule`].
 pub type UserServiceCode = Arc<dyn UserServiceModule + Send + Sync + 'static>;
 
-/// An implementation of [`UserContract`].
-pub type UserContractInstance = Box<dyn UserContract + 'static>;
+cfg_if::cfg_if! {
+    if #[cfg(web)] {
+        /// An implementation of [`UserContract`].
+        pub type UserContractInstance = Box<dyn UserContract + 'static>;
 
-/// An implementation of [`UserService`].
-pub type UserServiceInstance = Box<dyn UserService + 'static>;
+        /// An implementation of [`UserService`].
+        pub type UserServiceInstance = Box<dyn UserService + 'static>;
+    } else {
+        /// An implementation of [`UserContract`].
+        pub type UserContractInstance = Box<dyn UserContract + Send + 'static>;
+
+        /// An implementation of [`UserService`].
+        pub type UserServiceInstance = Box<dyn UserService + Send + 'static>;
+    }
+}
 
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
 pub trait UserContractModule {

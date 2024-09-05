@@ -9,7 +9,7 @@ mod temporary_changes;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    sync::{self, Arc},
+    sync::{self, Arc, Mutex},
 };
 
 use linera_base::{
@@ -26,8 +26,8 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, ExecutionRequest, Message, Query, QueryContext, Response,
-    ServiceRuntimeRequest, SystemMessage,
+    committee::Epoch, ExecutionRequest, Message, Query, QueryContext, Response, ServiceSyncRuntime,
+    SystemMessage,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
@@ -56,7 +56,7 @@ where
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-    runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+    service_runtime: Arc<Mutex<ServiceSyncRuntime>>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
     recent_blobs: Arc<ValueCache<BlobId, Blob>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
@@ -77,7 +77,7 @@ where
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         chain_id: ChainId,
         execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        service_runtime: ServiceSyncRuntime,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 
@@ -87,11 +87,11 @@ where
             chain,
             shared_chain_view: None,
             execution_state_receiver,
-            runtime_request_sender,
             recent_hashed_certificate_values: certificate_value_cache,
             recent_blobs: blob_cache,
             tracked_chains,
             knows_chain_is_active: false,
+            service_runtime: Arc::new(Mutex::new(service_runtime)),
         })
     }
 

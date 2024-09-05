@@ -207,8 +207,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };
-    let (mut execution_request_receiver, mut runtime_request_sender) =
-        context.spawn_service_runtime_actor();
+    let (mut execution_request_receiver, service_runtime) = context.spawn_service_runtime();
     assert_eq!(
         view.query_application(
             context,
@@ -217,7 +216,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 bytes: vec![]
             },
             &mut execution_request_receiver,
-            &mut runtime_request_sender,
+            service_runtime,
         )
         .await
         .unwrap(),

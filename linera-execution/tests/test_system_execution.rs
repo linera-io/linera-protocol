@@ -116,12 +116,13 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };
+    let (_execution_request_receiver, service_runtime) = context.spawn_service_runtime();
     let response = view
         .query_application(
             context,
             Query::System(SystemQuery),
             &mut futures::channel::mpsc::unbounded().1,
-            &mut std::sync::mpsc::channel().0,
+            service_runtime,
         )
         .await
         .unwrap();
