@@ -1401,7 +1401,7 @@ impl ServiceSyncRuntime {
     }
 
     /// Prepares the runtime to query an application.
-    pub(crate) fn prepare_for_query(&mut self, new_context: QueryContext) {
+    pub fn prepare_for_query(&mut self, new_context: QueryContext) {
         let expected_context = QueryContext {
             local_time: new_context.local_time,
             ..self.current_context
@@ -1416,7 +1416,7 @@ impl ServiceSyncRuntime {
     }
 
     /// Queries an application specified by its [`UserApplicationId`].
-    pub(crate) fn run_query(
+    pub fn run_query(
         &mut self,
         application_id: UserApplicationId,
         query: Vec<u8>,

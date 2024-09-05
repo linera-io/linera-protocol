@@ -57,9 +57,7 @@ mod implementation {
 
     /// Spawns a blocking task on the same thread (!).
     /// TODO(#2399): replace this by a Web worker.
-    pub fn spawn_blocking<R: Send + 'static, F: FnOnce() -> R + Send + 'static>(
-        task: F,
-    ) -> BlockingFuture<R> {
+    pub fn spawn_blocking<R: 'static, F: FnOnce() -> R + 'static>(task: F) -> BlockingFuture<R> {
         spawn(async { task() })
     }
 }

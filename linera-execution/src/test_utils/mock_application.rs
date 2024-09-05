@@ -17,8 +17,8 @@ use std::{
 
 use crate::{
     ContractSyncRuntimeHandle, ExecutionError, FinalizeContext, MessageContext, OperationContext,
-    QueryContext, ServiceSyncRuntimeHandle, UserContract, UserContractModule, UserService,
-    UserServiceModule,
+    QueryContext, ServiceSyncRuntimeHandle, UserContract, UserContractInstance, UserContractModule,
+    UserService, UserServiceInstance, UserServiceModule,
 };
 
 /// A mocked implementation of a user application.
@@ -245,7 +245,7 @@ impl UserContractModule for MockApplication {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
-    ) -> Result<Box<dyn UserContract + 'static>, ExecutionError> {
+    ) -> Result<UserContractInstance, ExecutionError> {
         Ok(Box::new(self.create_mock_instance(runtime)))
     }
 }
@@ -254,7 +254,7 @@ impl UserServiceModule for MockApplication {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
-    ) -> Result<Box<dyn UserService + 'static>, ExecutionError> {
+    ) -> Result<UserServiceInstance, ExecutionError> {
         Ok(Box::new(self.create_mock_instance(runtime)))
     }
 }

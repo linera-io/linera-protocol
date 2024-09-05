@@ -5,7 +5,7 @@
 use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, HashSet},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use async_graphql::SimpleObject;
@@ -25,7 +25,7 @@ use linera_execution::{
     system::OpenChainConfig, ExecutionError, ExecutionOutcome, ExecutionRequest,
     ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, Operation,
     OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
-    ResourceController, ResourceTracker, Response, ServiceRuntimeRequest, TransactionTracker,
+    ResourceController, ResourceTracker, Response, ServiceSyncRuntime, TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -378,7 +378,7 @@ where
         incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
             ExecutionRequest,
         >,
-        runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        service_runtime: Arc<Mutex<ServiceSyncRuntime>>,
     ) -> Result<Response, ChainError> {
         let context = QueryContext {
             chain_id: self.chain_id(),
@@ -387,12 +387,7 @@ where
         };
         let response = self
             .execution_state
-            .query_application(
-                context,
-                query,
-                incoming_execution_requests,
-                runtime_request_sender,
-            )
+            .query_application(context, query, incoming_execution_requests, service_runtime)
             .await
             .map_err(|error| ChainError::ExecutionError(error, ChainExecutionContext::Query))?;
         Ok(response)

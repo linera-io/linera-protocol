@@ -125,8 +125,7 @@ async fn test_fuel_for_counter_wasm_application(
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };
-    let (mut execution_request_receiver, mut runtime_request_sender) =
-        context.spawn_service_runtime_actor();
+    let (mut execution_request_receiver, service_runtime) = context.spawn_service_runtime();
     let expected_value = async_graphql::Response::new(
         async_graphql::Value::from_json(json!({"value" : increments.into_iter().sum::<u64>()}))
             .unwrap(),
@@ -137,7 +136,7 @@ async fn test_fuel_for_counter_wasm_application(
             context,
             Query::user(app_id, &request).unwrap(),
             &mut execution_request_receiver,
-            &mut runtime_request_sender,
+            service_runtime,
         )
         .await?
     else {

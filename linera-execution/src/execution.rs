@@ -3,7 +3,9 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    mem, vec,
+    mem,
+    sync::{Arc, Mutex},
+    vec,
 };
 
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryStreamExt};
@@ -24,10 +26,9 @@ use {
         ResourceControlPolicy, ResourceTracker, TestExecutionRuntimeContext, UserContractCode,
     },
     linera_views::context::MemoryContext,
-    std::sync::Arc,
 };
 
-use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
+use super::{runtime::ServiceSyncRuntime, ExecutionRequest};
 use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
     ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
@@ -446,7 +447,7 @@ where
         incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
             ExecutionRequest,
         >,
-        runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        service_runtime: Arc<Mutex<ServiceSyncRuntime>>,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match query {
@@ -465,7 +466,7 @@ where
                         context,
                         bytes,
                         incoming_execution_requests,
-                        runtime_request_sender,
+                        service_runtime,
                     )
                     .await?;
                 Ok(Response::User(response))
@@ -481,19 +482,14 @@ where
         incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
             ExecutionRequest,
         >,
-        runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        service_runtime: Arc<Mutex<ServiceSyncRuntime>>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let (response_sender, response_receiver) = oneshot::channel();
-        let mut response_receiver = response_receiver.fuse();
-
-        runtime_request_sender
-            .send(ServiceRuntimeRequest::Query {
-                application_id,
-                context,
-                query,
-                callback: response_sender,
-            })
-            .expect("Service runtime thread should only stop when `request_sender` is dropped");
+        let mut response_future = linera_base::task::spawn_blocking(move || {
+            let mut service_runtime_guard = service_runtime.lock().unwrap();
+            service_runtime_guard.prepare_for_query(context);
+            service_runtime_guard.run_query(application_id, query)
+        })
+        .fuse();
 
         loop {
             futures::select! {
@@ -502,7 +498,7 @@ where
                         self.handle_request(request).await?;
                     }
                 }
-                response = &mut response_receiver => {
+                response = &mut response_future => {
                     return response.map_err(|_| ExecutionError::MissingRuntimeResponse)?;
                 }
             }

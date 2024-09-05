@@ -106,7 +106,7 @@ where
                 local_time,
                 query,
                 &mut self.0.execution_state_receiver,
-                &mut self.0.runtime_request_sender,
+                self.0.service_runtime.clone(),
             )
             .await?;
         Ok(response)
