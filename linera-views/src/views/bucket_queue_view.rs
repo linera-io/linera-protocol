@@ -263,7 +263,7 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
 {
-    /// Get the key corresponding to the index
+    /// Gets the key corresponding to the index
     fn get_index_key(&self, index: usize) -> Result<Vec<u8>, ViewError> {
         Ok(if index == 0 {
             self.context.base_tag(KeyTag::Front as u8)
