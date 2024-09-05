@@ -60,7 +60,7 @@ pub use crate::wasm::{
 };
 pub use crate::{
     applications::ApplicationRegistryView,
-    execution::ExecutionStateView,
+    execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::ExecutionRequest,
     policy::ResourceControlPolicy,
     resources::{ResourceController, ResourceTracker},

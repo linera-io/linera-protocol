@@ -9,11 +9,6 @@ The model used by Linera Stories is a 40M parameter TinyLlama by A. Karpathy. Fi
 
 CAVEAT:
 
-* We currently use a local HTTP service to provide model data to the wallet
-  implementation (aka "node service"). In the future, model data will be stored on-chain
-  ([#1981](https://github.com/linera-io/linera-protocol/issues/1981)) or in an external
-  decentralized storage.
-
 * Running larger LLMs with acceptable performance will likely require hardware acceleration ([#1931](https://github.com/linera-io/linera-protocol/issues/1931)).
 
 * The service currently is restarted when the wallet receives a new block for the chain where the
@@ -59,8 +54,11 @@ Then, a node service for the current wallet has to be started:
 
 ```bash
 PORT=8080
-linera service --port $PORT &
-```
+linera --long-lived-services service --port $PORT &
+ ```
+
+The experimental option `--long-lived-services` is used for performance, to avoid
+reloading the model between queries.
 
 Next, navigate to `llm/web-frontend` and install the requisite `npm`
 dependencies:
@@ -75,6 +73,5 @@ Finally, navigate to `localhost:3000` to interact with the Linera ChatBot.
 ```bash
 echo "http://localhost:3000/$CHAIN?app=$APP_ID&port=$PORT"
 ```
- 
 
 <!-- cargo-rdme end -->

@@ -102,12 +102,7 @@ where
         let response = self
             .0
             .chain
-            .query_application(
-                local_time,
-                query,
-                &mut self.0.execution_state_receiver,
-                &mut self.0.runtime_request_sender,
-            )
+            .query_application(local_time, query, self.0.service_runtime_endpoint.as_mut())
             .await?;
         Ok(response)
     }

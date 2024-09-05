@@ -159,6 +159,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             storage.clone(),
             10,
             delivery,
+            false,
             [chain_id0],
             "Client node",
         )),

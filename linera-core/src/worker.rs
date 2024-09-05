@@ -313,6 +313,13 @@ where
         self
     }
 
+    #[tracing::instrument(level = "trace", skip(self, value))]
+    pub fn with_long_lived_services(mut self, value: bool) -> Self {
+        self.chain_worker_config.long_lived_services = value;
+        self
+    }
+
+    #[tracing::instrument(level = "trace", skip(self, tracked_chains))]
     /// Configures the subset of chains that this worker is tracking.
     pub fn with_tracked_chains(
         mut self,

@@ -26,8 +26,7 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, ExecutionRequest, Message, Query, QueryContext, Response,
-    ServiceRuntimeRequest, SystemMessage,
+    committee::Epoch, Message, Query, QueryContext, Response, ServiceRuntimeEndpoint, SystemMessage,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
@@ -55,8 +54,7 @@ where
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
-    execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-    runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+    service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
     recent_blobs: Arc<ValueCache<BlobId, Blob>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
@@ -76,8 +74,7 @@ where
         blob_cache: Arc<ValueCache<BlobId, Blob>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         chain_id: ChainId,
-        execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 
@@ -86,8 +83,7 @@ where
             storage,
             chain,
             shared_chain_view: None,
-            execution_state_receiver,
-            runtime_request_sender,
+            service_runtime_endpoint,
             recent_hashed_certificate_values: certificate_value_cache,
             recent_blobs: blob_cache,
             tracked_chains,

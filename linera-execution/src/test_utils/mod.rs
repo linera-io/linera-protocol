@@ -27,8 +27,8 @@ pub use self::{
 };
 use crate::{
     ApplicationRegistryView, ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView,
-    QueryContext, ServiceRuntimeRequest, ServiceSyncRuntime, TestExecutionRuntimeContext,
-    UserApplicationDescription, UserApplicationId,
+    QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest, ServiceSyncRuntime,
+    TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
 };
 
 pub fn create_dummy_user_application_description(index: u64) -> UserApplicationDescription {
@@ -109,20 +109,18 @@ impl QueryContext {
     /// Spawns a thread running the [`ServiceSyncRuntime`] actor.
     ///
     /// Returns the endpoints to communicate with the actor.
-    pub fn spawn_service_runtime_actor(
-        self,
-    ) -> (
-        futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        std::sync::mpsc::Sender<ServiceRuntimeRequest>,
-    ) {
-        let (execution_state_sender, execution_state_receiver) =
+    pub fn spawn_service_runtime_actor(self) -> ServiceRuntimeEndpoint {
+        let (execution_state_sender, incoming_execution_requests) =
             futures::channel::mpsc::unbounded();
-        let (request_sender, request_receiver) = std::sync::mpsc::channel();
+        let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
 
         thread::spawn(move || {
-            ServiceSyncRuntime::new(execution_state_sender, self).run(request_receiver)
+            ServiceSyncRuntime::new(execution_state_sender, self).run(runtime_request_receiver)
         });
 
-        (execution_state_receiver, request_sender)
+        ServiceRuntimeEndpoint {
+            incoming_execution_requests,
+            runtime_request_sender,
+        }
     }
 }

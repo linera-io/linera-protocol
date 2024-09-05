@@ -74,7 +74,11 @@ const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;
 
 /// Instantiates the protocol with a single validator. Returns the corresponding committee
 /// and the (non-sharded, in-memory) "worker" that we can interact with.
-fn init_worker<S>(storage: S, is_client: bool) -> (Committee, WorkerState<S>)
+fn init_worker<S>(
+    storage: S,
+    is_client: bool,
+    has_long_lived_services: bool,
+) -> (Committee, WorkerState<S>)
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
@@ -88,6 +92,7 @@ where
     )
     .with_allow_inactive_chains(is_client)
     .with_allow_messages_from_deprecated_epochs(is_client)
+    .with_long_lived_services(has_long_lived_services)
     .with_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
     (committee, worker)
 }
@@ -98,7 +103,9 @@ where
     I: IntoIterator<Item = (ChainDescription, PublicKey, Amount)>,
     S: Storage + Clone + Send + Sync + 'static,
 {
-    let (committee, worker) = init_worker(storage, /* is_client */ false);
+    let (committee, worker) = init_worker(
+        storage, /* is_client */ false, /* has_long_lived_services */ false,
+    );
     for (description, pubk, balance) in balances {
         worker
             .storage
@@ -1687,7 +1694,9 @@ where
 {
     let storage = storage_builder.build().await?;
     let sender_key_pair = KeyPair::generate();
-    let (committee, worker) = init_worker(storage, /* is_client */ false);
+    let (committee, worker) = init_worker(
+        storage, /* is_client */ false, /* has_long_lived_services */ false,
+    );
     let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -1724,7 +1733,9 @@ where
 {
     let storage = storage_builder.build().await?;
     let sender_key_pair = KeyPair::generate();
-    let (committee, worker) = init_worker(storage, /* is_client */ true);
+    let (committee, worker) = init_worker(
+        storage, /* is_client */ true, /* has_long_lived_services */ false,
+    );
     let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -2886,7 +2897,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         TestClock::new(),
     )
     .await?;
-    let (committee, worker) = init_worker(store, true);
+    let (committee, worker) = init_worker(store, true, false);
     let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
 
     let key_pair0 = KeyPair::generate();
@@ -3564,13 +3575,23 @@ where
     let key_pair = KeyPair::generate();
     let balance = Amount::ZERO;
 
-    let (_committee, worker) = init_worker_with_chain(
+    let (committee, worker) = init_worker(
         storage.clone(),
-        chain_description,
-        key_pair.public(),
-        balance,
-    )
-    .await;
+        /* is_client */ false,
+        /* has_long_lived_services */ true,
+    );
+    worker
+        .storage
+        .create_chain(
+            committee,
+            ChainId::root(0),
+            chain_description,
+            key_pair.public(),
+            balance,
+            Timestamp::from(0),
+        )
+        .await
+        .unwrap();
 
     let mut applications;
     {
@@ -3644,13 +3665,23 @@ where
     let key_pair = KeyPair::generate();
     let balance = Amount::ZERO;
 
-    let (committee, worker) = init_worker_with_chain(
+    let (committee, worker) = init_worker(
         storage.clone(),
-        chain_description,
-        key_pair.public(),
-        balance,
-    )
-    .await;
+        /* is_client */ false,
+        /* has_long_lived_services */ true,
+    );
+    worker
+        .storage
+        .create_chain(
+            committee.clone(),
+            ChainId::root(0),
+            chain_description,
+            key_pair.public(),
+            balance,
+            Timestamp::from(0),
+        )
+        .await
+        .unwrap();
 
     let mut applications;
     {
