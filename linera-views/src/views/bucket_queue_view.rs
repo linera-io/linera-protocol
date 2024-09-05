@@ -38,7 +38,7 @@ static BUCKET_QUEUE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(||
     .expect("Histogram can be created")
 });
 
-/// Key tags to create the sub-keys of a BucketQueueView on top of the base key.
+/// Key tags to create the sub-keys of a [`BucketQueueView`] on top of the base key.
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the front of the view
