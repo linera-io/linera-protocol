@@ -737,6 +737,14 @@ where
         };
         resource_controller
             .track_executed_block_size(EMPTY_EXECUTED_BLOCK_SIZE)
+            .and_then(|()| {
+                resource_controller
+                    .track_executed_block_size_sequence_extension(0, block.incoming_bundles.len())
+            })
+            .and_then(|()| {
+                resource_controller
+                    .track_executed_block_size_sequence_extension(0, block.operations.len())
+            })
             .map_err(|err| ChainError::ExecutionError(err, ChainExecutionContext::Block))?;
 
         if self.is_closed() {
@@ -872,6 +880,15 @@ where
             resource_controller
                 .track_executed_block_size_of(&(&txn_oracle_responses, &txn_messages, &txn_events))
                 .map_err(with_context)?;
+            resource_controller
+                .track_executed_block_size_sequence_extension(oracle_responses.len(), 1)
+                .map_err(with_context)?;
+            resource_controller
+                .track_executed_block_size_sequence_extension(messages.len(), 1)
+                .map_err(with_context)?;
+            resource_controller
+                .track_executed_block_size_sequence_extension(events.len(), 1)
+                .map_err(with_context)?;
             oracle_responses.push(txn_oracle_responses);
             messages.push(txn_messages);
             events.push(txn_events);
@@ -931,24 +948,6 @@ where
             oracle_responses,
             events,
         };
-        // Check the size again: Adding the parts could have missed changes in the ULEB128-encoded
-        // vector lengths. If that's the case, we blame the last transaction.
-        let executed_block_size = bcs::serialized_size(&(block, &outcome))
-            .map_err(|err| ChainError::ExecutionError(err.into(), ChainExecutionContext::Block))?;
-        ensure!(
-            u64::try_from(executed_block_size).unwrap_or(u64::MAX)
-                <= resource_controller.policy.maximum_executed_block_size,
-            ChainError::ExecutionError(
-                ExecutionError::ExecutedBlockTooLarge,
-                match block.transactions().last() {
-                    Some((txn_index, Transaction::ExecuteOperation(_))) =>
-                        ChainExecutionContext::Operation(txn_index),
-                    Some((txn_index, Transaction::ReceiveMessages(_))) =>
-                        ChainExecutionContext::IncomingBundle(txn_index),
-                    None => ChainExecutionContext::Block,
-                }
-            )
-        );
         Ok(outcome)
     }
 
