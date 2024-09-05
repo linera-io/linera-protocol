@@ -142,6 +142,7 @@ where
             storage,
             options.max_pending_messages,
             delivery,
+            options.long_lived_services,
             wallet.chain_ids(),
             "Client node",
         );

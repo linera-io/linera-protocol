@@ -197,6 +197,14 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         ]
     );
 
+    {
+        let state_key = state_key.clone();
+        caller_application.expect_call(ExpectedCall::handle_query(|runtime, _context, _query| {
+            let state = runtime.read_value_bytes(state_key)?.unwrap_or_default();
+            Ok(state)
+        }));
+    }
+
     caller_application.expect_call(ExpectedCall::handle_query(|runtime, _context, _query| {
         let state = runtime.read_value_bytes(state_key)?.unwrap_or_default();
         Ok(state)
@@ -207,8 +215,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };
-    let (mut execution_request_receiver, mut runtime_request_sender) =
-        context.spawn_service_runtime_actor();
+    let mut service_runtime_endpoint = context.spawn_service_runtime_actor();
     assert_eq!(
         view.query_application(
             context,
@@ -216,8 +223,21 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![]
             },
-            &mut execution_request_receiver,
-            &mut runtime_request_sender,
+            Some(&mut service_runtime_endpoint),
+        )
+        .await
+        .unwrap(),
+        Response::User(dummy_operation.clone())
+    );
+
+    assert_eq!(
+        view.query_application(
+            context,
+            Query::User {
+                application_id: caller_id,
+                bytes: vec![]
+            },
+            Some(&mut service_runtime_endpoint),
         )
         .await
         .unwrap(),

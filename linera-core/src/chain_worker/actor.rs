@@ -22,8 +22,7 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, ExecutionRequest, Query, QueryContext, Response, ServiceRuntimeRequest,
-    ServiceSyncRuntime,
+    committee::Epoch, Query, QueryContext, Response, ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::Storage;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
@@ -134,7 +133,7 @@ where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
     worker: ChainWorkerState<StorageClient>,
-    service_runtime_thread: linera_base::task::BlockingFuture<()>,
+    service_runtime_thread: Option<linera_base::task::BlockingFuture<()>>,
 }
 
 impl<StorageClient> ChainWorkerActor<StorageClient>
@@ -151,8 +150,14 @@ where
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         chain_id: ChainId,
     ) -> Result<Self, WorkerError> {
-        let (service_runtime_thread, execution_state_receiver, runtime_request_sender) =
-            Self::spawn_service_runtime_actor(chain_id);
+        let (service_runtime_thread, service_runtime_endpoint) = {
+            if config.long_lived_services {
+                let (thread, endpoint) = Self::spawn_service_runtime_actor(chain_id);
+                (Some(thread), Some(endpoint))
+            } else {
+                (None, None)
+            }
+        };
 
         let worker = ChainWorkerState::load(
             config,
@@ -161,8 +166,7 @@ where
             blob_cache,
             tracked_chains,
             chain_id,
-            execution_state_receiver,
-            runtime_request_sender,
+            service_runtime_endpoint,
         )
         .await?;
 
@@ -179,8 +183,7 @@ where
         chain_id: ChainId,
     ) -> (
         linera_base::task::BlockingFuture<()>,
-        futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        ServiceRuntimeEndpoint,
     ) {
         let context = QueryContext {
             chain_id,
@@ -188,7 +191,7 @@ where
             local_time: Timestamp::from(0),
         };
 
-        let (execution_state_sender, execution_state_receiver) =
+        let (execution_state_sender, incoming_execution_requests) =
             futures::channel::mpsc::unbounded();
         let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
 
@@ -196,11 +199,11 @@ where
             ServiceSyncRuntime::new(execution_state_sender, context).run(runtime_request_receiver)
         });
 
-        (
-            service_runtime_thread,
-            execution_state_receiver,
+        let endpoint = ServiceRuntimeEndpoint {
+            incoming_execution_requests,
             runtime_request_sender,
-        )
+        };
+        (service_runtime_thread, endpoint)
     }
 
     /// Runs the worker until there are no more incoming requests.
@@ -311,10 +314,12 @@ where
             }
         }
 
-        drop(self.worker);
-        self.service_runtime_thread
-            .await
-            .expect("Service runtime thread should not panic");
+        if let Some(thread) = self.service_runtime_thread {
+            drop(self.worker);
+            thread
+                .await
+                .expect("Service runtime thread should not panic");
+        }
 
         trace!("`ChainWorkerActor` finished");
     }

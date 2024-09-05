@@ -113,6 +113,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         storage: S,
         max_pending_messages: usize,
         cross_chain_message_delivery: CrossChainMessageDelivery,
+        long_lived_services: bool,
         tracked_chains: impl IntoIterator<Item = ChainId>,
         name: impl Into<String>,
     ) -> Self {
@@ -123,6 +124,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             tracked_chains.clone(),
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
         )
+        .with_long_lived_services(long_lived_services)
         .with_allow_inactive_chains(true)
         .with_allow_messages_from_deprecated_epochs(true);
         let local_node = LocalNodeClient::new(state);

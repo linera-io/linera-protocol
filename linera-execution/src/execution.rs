@@ -32,8 +32,8 @@ use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
     ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
     MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, Response, SystemMessage, TransactionTracker,
-    UserApplicationDescription, UserApplicationId,
+    RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
+    TransactionTracker, UserApplicationDescription, UserApplicationId,
 };
 
 /// A view accessing the execution state of a chain.
@@ -43,6 +43,14 @@ pub struct ExecutionStateView<C> {
     pub system: SystemExecutionStateView<C>,
     /// User applications.
     pub users: HashedReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
+}
+
+/// How to interact with a long-lived service runtime.
+pub struct ServiceRuntimeEndpoint {
+    /// How to receive requests.
+    pub incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+    /// How to query the runtime.
+    pub runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
 }
 
 #[cfg(with_testing)]
@@ -443,10 +451,7 @@ where
         &mut self,
         context: QueryContext,
         query: Query,
-        incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
-            ExecutionRequest,
-        >,
-        runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        endpoint: Option<&mut ServiceRuntimeEndpoint>,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match query {
@@ -459,21 +464,48 @@ where
                 bytes,
             } => {
                 let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
-                let response = self
-                    .query_user_application(
-                        application_id,
-                        context,
-                        bytes,
-                        incoming_execution_requests,
-                        runtime_request_sender,
-                    )
-                    .await?;
+                let response = match endpoint {
+                    Some(endpoint) => {
+                        self.query_user_application_with_long_lived_service(
+                            application_id,
+                            context,
+                            bytes,
+                            &mut endpoint.incoming_execution_requests,
+                            &mut endpoint.runtime_request_sender,
+                        )
+                        .await?
+                    }
+                    None => {
+                        self.query_user_application(application_id, context, bytes)
+                            .await?
+                    }
+                };
                 Ok(Response::User(response))
             }
         }
     }
 
     async fn query_user_application(
+        &mut self,
+        application_id: UserApplicationId,
+        context: QueryContext,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        let (execution_state_sender, mut execution_state_receiver) =
+            futures::channel::mpsc::unbounded();
+        let execution_outcomes_future = linera_base::task::spawn_blocking(move || {
+            let mut runtime = ServiceSyncRuntime::new(execution_state_sender, context);
+            runtime.run_query(application_id, query)
+        });
+        while let Some(request) = execution_state_receiver.next().await {
+            self.handle_request(request).await?;
+        }
+
+        let response = execution_outcomes_future.await??;
+        Ok(response)
+    }
+
+    async fn query_user_application_with_long_lived_service(
         &mut self,
         application_id: UserApplicationId,
         context: QueryContext,
