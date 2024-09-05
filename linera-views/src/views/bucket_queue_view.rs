@@ -57,7 +57,7 @@ struct StoredIndices {
 
 impl StoredIndices {
     fn is_empty(&self) -> bool {
-        self.indices.len() == 0
+        self.indices.is_empty()
     }
 }
 
