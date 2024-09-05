@@ -197,6 +197,14 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         ]
     );
 
+    {
+        let state_key = state_key.clone();
+        caller_application.expect_call(ExpectedCall::handle_query(|runtime, _context, _query| {
+            let state = runtime.read_value_bytes(state_key)?.unwrap_or_default();
+            Ok(state)
+        }));
+    }
+
     caller_application.expect_call(ExpectedCall::handle_query(|runtime, _context, _query| {
         let state = runtime.read_value_bytes(state_key)?.unwrap_or_default();
         Ok(state)
@@ -229,7 +237,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![]
             },
-            None,
+            Some(&mut service_runtime_endpoint),
         )
         .await
         .unwrap(),
