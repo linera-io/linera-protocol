@@ -43,7 +43,7 @@ static BUCKET_QUEUE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(||
 enum KeyTag {
     /// Prefix for the front of the view
     Front = MIN_VIEW_TAG,
-    /// Prefix for the storing of the stored-indices information
+    /// Prefix for [`StoredIndices`]
     Store,
     /// Prefix for the indices of the log.
     Index,
