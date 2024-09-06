@@ -65,11 +65,9 @@ pub async fn performance_queue_view<S: KeyValueStore + Clone + Sync + 'static>(
 where
     S::Error: Debug + Send + Sync + 'static,
 {
-    let context = ViewContext {
-        store,
-        base_key: Vec::new(),
-        extra: (),
-    };
+    let context = ViewContext::<(), S>::create_root_context(store, ())
+        .await
+        .unwrap();
     let mut total_time = Duration::ZERO;
     let mut rng = make_deterministic_rng();
     for _ in 0..iterations {

@@ -167,11 +167,11 @@ pub trait Context: Clone {
 #[derive(Debug, Default, Clone)]
 pub struct ViewContext<E, S> {
     /// The DB client that is shared between views.
-    pub store: S,
+    store: S,
     /// The base key for the context.
-    pub base_key: Vec<u8>,
+    base_key: Vec<u8>,
     /// User-defined data attached to the view.
-    pub extra: E,
+    extra: E,
 }
 
 impl<E, S> ViewContext<E, S>
