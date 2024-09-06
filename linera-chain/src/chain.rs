@@ -203,6 +203,9 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
     .expect("Histogram can be created")
 });
 
+/// The BCS-serialized size of an empty `ExecutedBlock`.
+const EMPTY_EXECUTED_BLOCK_SIZE: usize = 91;
+
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
 pub struct TimestampedBundleInInbox {
@@ -732,6 +735,17 @@ where
             tracker: ResourceTracker::default(),
             account: block.authenticated_signer,
         };
+        resource_controller
+            .track_executed_block_size(EMPTY_EXECUTED_BLOCK_SIZE)
+            .and_then(|()| {
+                resource_controller
+                    .track_executed_block_size_sequence_extension(0, block.incoming_bundles.len())
+            })
+            .and_then(|()| {
+                resource_controller
+                    .track_executed_block_size_sequence_extension(0, block.operations.len())
+            })
+            .map_err(|err| ChainError::ExecutionError(err, ChainExecutionContext::Block))?;
 
         if self.is_closed() {
             ensure!(
@@ -789,6 +803,9 @@ where
             let mut txn_tracker = TransactionTracker::new(next_message_index, maybe_responses);
             match transaction {
                 Transaction::ReceiveMessages(incoming_bundle) => {
+                    resource_controller
+                        .track_executed_block_size_of(&incoming_bundle)
+                        .map_err(with_context)?;
                     for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
                         self.execute_message_in_block(
                             message_id,
@@ -804,6 +821,9 @@ where
                     }
                 }
                 Transaction::ExecuteOperation(operation) => {
+                    resource_controller
+                        .track_executed_block_size_of(&operation)
+                        .map_err(with_context)?;
                     #[cfg(with_metrics)]
                     let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
                     let context = OperationContext {
@@ -857,6 +877,18 @@ where
                         .map_err(with_context)?;
                 }
             }
+            resource_controller
+                .track_executed_block_size_of(&(&txn_oracle_responses, &txn_messages, &txn_events))
+                .map_err(with_context)?;
+            resource_controller
+                .track_executed_block_size_sequence_extension(oracle_responses.len(), 1)
+                .map_err(with_context)?;
+            resource_controller
+                .track_executed_block_size_sequence_extension(messages.len(), 1)
+                .map_err(with_context)?;
+            resource_controller
+                .track_executed_block_size_sequence_extension(events.len(), 1)
+                .map_err(with_context)?;
             oracle_responses.push(txn_oracle_responses);
             messages.push(txn_messages);
             events.push(txn_events);
@@ -910,12 +942,13 @@ where
             messages.len(),
             block.incoming_bundles.len() + block.operations.len()
         );
-        Ok(BlockExecutionOutcome {
+        let outcome = BlockExecutionOutcome {
             messages,
             state_hash,
             oracle_responses,
             events,
-        })
+        };
+        Ok(outcome)
     }
 
     /// Executes a message as part of an incoming bundle in a block.
@@ -1239,4 +1272,14 @@ where
         }
         Ok(())
     }
+}
+
+#[test]
+fn empty_executed_block_size() {
+    let executed_block = crate::data_types::ExecutedBlock {
+        block: crate::test::make_first_block(ChainId::root(0)),
+        outcome: crate::data_types::BlockExecutionOutcome::default(),
+    };
+    let size = bcs::serialized_size(&executed_block).unwrap();
+    assert_eq!(size, EMPTY_EXECUTED_BLOCK_SIZE);
 }

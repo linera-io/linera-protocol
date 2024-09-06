@@ -34,6 +34,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 assert_matches.workspace = true
+bcs.workspace = true
 linera-chain = { path = ".", features = ["test"] }
 
 [build-dependencies]

@@ -146,8 +146,9 @@ async fn test_fee_consumption(
         operation_byte: Amount::from_tokens(23),
         message: Amount::from_tokens(29),
         message_byte: Amount::from_tokens(31),
-        maximum_bytes_read_per_block: 37,
-        maximum_bytes_written_per_block: 41,
+        maximum_executed_block_size: 37,
+        maximum_bytes_read_per_block: 41,
+        maximum_bytes_written_per_block: 43,
     };
 
     let consumed_fees = spends

@@ -399,6 +399,7 @@ View or update the resource control policy
 * `--operation-byte <OPERATION_BYTE>` — Set the additional price for each byte in the argument of a user operation
 * `--message <MESSAGE>` — Set the base price of sending a message from a block..
 * `--message-byte <MESSAGE_BYTE>` — Set the additional price for each byte in the argument of a user message
+* `--maximum-executed-block-size <MAXIMUM_EXECUTED_BLOCK_SIZE>` — Set the maximum size of an executed block
 * `--maximum-bytes-read-per-block <MAXIMUM_BYTES_READ_PER_BLOCK>` — Set the maximum read data per block
 * `--maximum-bytes-written-per-block <MAXIMUM_BYTES_WRITTEN_PER_BLOCK>` — Set the maximum write data per block
 
@@ -458,6 +459,7 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 * `--message-byte-price <MESSAGE_BYTE_PRICE>` — Set the additional price for each byte in the argument of a user message
 
   Default value: `0`
+* `--maximum-executed-block-size <MAXIMUM_EXECUTED_BLOCK_SIZE>` — Set the maximum size of an executed block
 * `--maximum-bytes-read-per-block <MAXIMUM_BYTES_READ_PER_BLOCK>` — Set the maximum read data per block
 * `--maximum-bytes-written-per-block <MAXIMUM_BYTES_WRITTEN_PER_BLOCK>` — Set the maximum write data per block
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY

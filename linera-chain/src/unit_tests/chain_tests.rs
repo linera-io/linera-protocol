@@ -3,7 +3,7 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{iter, sync::Arc};
+use std::{collections::BTreeMap, iter, sync::Arc};
 
 use assert_matches::assert_matches;
 use linera_base::{
@@ -15,11 +15,11 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_execution::{
-    committee::{Committee, Epoch},
-    system::OpenChainConfig,
+    committee::{Committee, Epoch, ValidatorName, ValidatorState},
+    system::{OpenChainConfig, Recipient, UserData},
     test_utils::{ExpectedCall, MockApplication},
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind, Operation,
-    SystemMessage, TestExecutionRuntimeContext,
+    ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind,
+    Operation, ResourceControlPolicy, SystemMessage, SystemOperation, TestExecutionRuntimeContext,
 };
 use linera_views::{
     context::{Context as _, MemoryContext},
@@ -31,7 +31,7 @@ use linera_views::{
 use crate::{
     data_types::{HashedCertificateValue, IncomingBundle, MessageAction, MessageBundle, Origin},
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
-    ChainError, ChainStateView,
+    ChainError, ChainExecutionContext, ChainStateView,
 };
 
 impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>>
@@ -92,6 +92,83 @@ fn make_open_chain_config() -> OpenChainConfig {
         balance: Amount::from_tokens(10),
         application_permissions: Default::default(),
     }
+}
+
+#[tokio::test]
+async fn test_block_size_limit() {
+    let time = Timestamp::from(0);
+    let message_id = make_admin_message_id(BlockHeight(3));
+    let chain_id = ChainId::child(message_id);
+    let mut chain = ChainStateView::new(chain_id).await;
+
+    // The size of the executed valid block below.
+    let maximum_executed_block_size = 667;
+
+    // Initialize the chain.
+    let mut config = make_open_chain_config();
+    config.committees.insert(
+        Epoch(0),
+        Committee::new(
+            BTreeMap::from([(
+                ValidatorName(PublicKey::test_key(1)),
+                ValidatorState {
+                    network_address: PublicKey::test_key(1).to_string(),
+                    votes: 1,
+                },
+            )]),
+            ResourceControlPolicy {
+                maximum_executed_block_size,
+                ..ResourceControlPolicy::default()
+            },
+        ),
+    );
+
+    chain
+        .execute_init_message(message_id, &config, time, time)
+        .await
+        .unwrap();
+    let open_chain_bundle = IncomingBundle {
+        origin: Origin::chain(admin_id()),
+        bundle: MessageBundle {
+            certificate_hash: CryptoHash::test_hash("certificate"),
+            height: BlockHeight(1),
+            transaction_index: 0,
+            timestamp: time,
+            messages: vec![Message::System(SystemMessage::OpenChain(config))
+                .to_posted(0, MessageKind::Protected)],
+        },
+        action: MessageAction::Accept,
+    };
+
+    let valid_block = make_first_block(chain_id).with_incoming_bundle(open_chain_bundle.clone());
+
+    // Any block larger than the valid block is rejected.
+    let invalid_block = valid_block
+        .clone()
+        .with_operation(SystemOperation::Transfer {
+            owner: None,
+            recipient: Recipient::root(0),
+            amount: Amount::ONE,
+            user_data: UserData::default(),
+        });
+    let result = chain.execute_block(&invalid_block, time, None).await;
+    assert_matches!(
+        result,
+        Err(ChainError::ExecutionError(
+            ExecutionError::ExecutedBlockTooLarge,
+            ChainExecutionContext::Operation(1),
+        ))
+    );
+
+    // The valid block is accepted...
+    let outcome = chain.execute_block(&valid_block, time, None).await.unwrap();
+    let executed_block = outcome.with(valid_block);
+
+    // ...because its size is exactly at the allowed limit.
+    assert_eq!(
+        bcs::serialized_size(&executed_block).unwrap(),
+        maximum_executed_block_size as usize
+    );
 }
 
 #[tokio::test]
