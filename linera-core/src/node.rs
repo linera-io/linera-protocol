@@ -94,7 +94,7 @@ pub trait LocalValidatorNode {
 }
 
 /// Turn an address into a validator node.
-#[allow(clippy::result_large_err)]
+#[expect(clippy::result_large_err)]
 pub trait LocalValidatorNodeProvider {
     type Node: LocalValidatorNode + Clone + 'static;
 

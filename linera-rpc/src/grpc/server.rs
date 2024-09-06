@@ -179,7 +179,7 @@ impl<S> GrpcServer<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn spawn(
         host: String,
         port: u16,
@@ -338,7 +338,7 @@ where
     }
 
     #[instrument(skip_all, fields(nickname, %this_shard))]
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn forward_cross_chain_queries(
         nickname: String,
         network: ValidatorInternalNetworkConfig,

@@ -72,7 +72,7 @@ pub trait RuntimeMemory<Instance> {
 }
 
 /// A handle to interface with a guest Wasm module instance's memory.
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub struct Memory<'runtime, Instance>
 where
     Instance: CabiReallocAlias + CabiFreeAlias,

@@ -24,7 +24,7 @@ use {
     std::path::PathBuf,
 };
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 #[cfg(feature = "kubernetes")]
 pub async fn handle_net_up_kubernetes(
     extra_wallets: Option<usize>,
@@ -61,7 +61,7 @@ pub async fn handle_net_up_kubernetes(
     wait_for_shutdown(shutdown_notifier, &mut net).await
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub async fn handle_net_up_service(
     extra_wallets: Option<usize>,
     num_other_initial_chains: u32,

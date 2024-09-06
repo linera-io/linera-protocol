@@ -701,7 +701,7 @@ struct QueryResponses {
 
 // Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
 #[doc(hidden)]
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub struct DynamoDbKeyBlockIterator<'a> {
     prefix_len: usize,
     pos: usize,
@@ -761,7 +761,7 @@ pub struct DynamoDbKeyValues {
 }
 
 #[doc(hidden)]
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub struct DynamoDbKeyValueIterator<'a> {
     prefix_len: usize,
     pos: usize,
@@ -793,7 +793,7 @@ impl<'a> Iterator for DynamoDbKeyValueIterator<'a> {
 }
 
 #[doc(hidden)]
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub struct DynamoDbKeyValueIteratorOwned {
     prefix_len: usize,
     pos: usize,
@@ -966,7 +966,7 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
 
 /// A shared DB client for DynamoDb implementing LruCaching
 #[derive(Clone)]
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub struct DynamoDbStore {
     #[cfg(with_metrics)]
     store: MeteredStore<

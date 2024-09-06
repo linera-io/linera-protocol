@@ -36,7 +36,7 @@ sol!(
     "./contracts/EventNumerics.json"
 );
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub struct AnvilTest {
     pub anvil_instance: AnvilInstance,
     pub endpoint: String,
