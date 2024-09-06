@@ -1,12 +1,15 @@
 [package]
 name = "linera-client"
-version.workspace = true
+description = "A library for writing Linera client applications."
+readme = "README.md"
+documentation = "https://docs.rs/linera-client/latest/linera_client/"
+
 authors.workspace = true
-repository.workspace = true
+edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-edition.workspace = true
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+repository.workspace = true
+version.workspace = true
 
 [features]
 default = ["fs", "storage-service"]
