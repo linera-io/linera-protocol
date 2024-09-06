@@ -959,7 +959,12 @@ impl NodeService {
                 .json(&json!({ "query": query }))
                 .send()
                 .await
-                .with_context(|| format!("query_node: failed to post query={}", query))?;
+                .with_context(|| {
+                    format!(
+                        "query_node: failed to post query={}",
+                        query.get(..200).unwrap_or(query)
+                    )
+                })?;
             anyhow::ensure!(
                 response.status().is_success(),
                 "Query \"{}\" failed: {}",
@@ -1259,7 +1264,12 @@ impl Faucet {
             .json(&json!({ "query": &query }))
             .send()
             .await
-            .with_context(|| format!("claim: failed to post query={}", query))?;
+            .with_context(|| {
+                format!(
+                    "claim: failed to post query={}",
+                    query.get(..200).unwrap_or(&query)
+                )
+            })?;
         anyhow::ensure!(
             response.status().is_success(),
             "Query \"{}\" failed: {}",
@@ -1353,7 +1363,12 @@ impl<A> ApplicationWrapper<A> {
             .json(&json!({ "query": query }))
             .send()
             .await
-            .with_context(|| format!("raw_query: failed to post query={}", query))?;
+            .with_context(|| {
+                format!(
+                    "raw_query: failed to post query={}",
+                    query.get(..200).unwrap_or(query)
+                )
+            })?;
         anyhow::ensure!(
             response.status().is_success(),
             "Query \"{}\" failed: {}",
