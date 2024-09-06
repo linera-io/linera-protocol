@@ -42,7 +42,6 @@ use linera_views::{
 };
 use rand::{Rng, RngCore};
 
-#[allow(clippy::type_complexity)]
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
     pub x1: HashedRegisterView<C, u64>,

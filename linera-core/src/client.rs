@@ -165,7 +165,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
 
     #[tracing::instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
     /// Creates a new `ChainClient`.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn create_chain_client(
         self: &Arc<Self>,
         chain_id: ChainId,

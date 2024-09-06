@@ -952,7 +952,7 @@ where
     }
 
     /// Executes a message as part of an incoming bundle in a block.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn execute_message_in_block(
         &mut self,
         message_id: MessageId,

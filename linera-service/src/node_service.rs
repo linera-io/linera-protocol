@@ -304,7 +304,7 @@ where
     /// Claims `amount` units of value from the given owner's account in the remote
     /// `target` chain. Depending on its configuration, the `target` chain may refuse to
     /// process the message.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn claim(
         &self,
         chain_id: ChainId,
@@ -362,7 +362,7 @@ where
 
     /// Creates (or activates) a new chain by installing the given authentication keys.
     /// This will automatically subscribe to the future committees created by `admin_id`.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn open_multi_owner_chain(
         &self,
         chain_id: ChainId,
@@ -459,7 +459,7 @@ where
     }
 
     /// Changes the authentication key of the chain.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn change_multiple_owners(
         &self,
         chain_id: ChainId,
@@ -956,7 +956,7 @@ where
         }
     }
 
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S, C>, SubscriptionRoot<P, S>> {
         Schema::build(
             QueryRoot {

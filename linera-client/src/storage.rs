@@ -57,7 +57,6 @@ util::impl_from_dynamic!(Error:Backend, linera_views::dynamo_db::DynamoDbStoreEr
 util::impl_from_dynamic!(Error:Backend, linera_views::scylla_db::ScyllaDbStoreError);
 
 /// The configuration of the key value store in use.
-#[allow(clippy::large_enum_variant)]
 pub enum StoreConfig {
     /// The storage service key-value store
     #[cfg(feature = "storage-service")]

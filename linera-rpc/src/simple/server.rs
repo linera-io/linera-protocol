@@ -41,7 +41,6 @@ impl<S> Server<S>
 where
     S: Storage,
 {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
         host: String,
@@ -75,7 +74,7 @@ impl<S> Server<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn forward_cross_chain_queries(
         nickname: String,
         network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
