@@ -3,7 +3,8 @@
 # Use a local registry to simulate publishing crates from the current workspace.
 #
 # Requirements (MacOS):
-#   cargo install cargo-local-registry
+#   # TODO(#2338): remove the pinned revision
+#   cargo install --locked cargo-local-registry --git https://github.com/dhovart/cargo-local-registry --rev 2b20904a
 #   cargo install cargo-index
 #   brew install jq
 #
