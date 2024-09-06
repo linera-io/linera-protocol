@@ -272,8 +272,19 @@ where
         })
     }
 
-    /// Get the stored_count
-    fn stored_count(&self) -> usize {
+    /// Get the number of entries in the container that are stored
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::bucket_queue_view::BucketQueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// assert_eq!(queue.stored_count(), 0);
+    /// # })
+    /// ```
+    pub fn stored_count(&self) -> usize {
         if self.delete_storage_first {
             0
         } else {
@@ -290,6 +301,17 @@ where
     }
 
     /// The total number of entries of the container
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::bucket_queue_view::BucketQueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// assert_eq!(queue.count(), 1);
+    /// # })
+    /// ```
     pub fn count(&self) -> usize {
         self.stored_count() + self.new_back_values.len()
     }
