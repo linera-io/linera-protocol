@@ -269,6 +269,9 @@ where
         old_len: usize,
         delta: usize,
     ) -> Result<(), ExecutionError> {
+        if delta == 0 {
+            return Ok(());
+        }
         let new_len = old_len + delta;
         // ULEB128 uses one byte per 7 bits of the number. It always uses at least one byte.
         let old_size = ((usize::BITS - old_len.leading_zeros()) / 7).max(1);
