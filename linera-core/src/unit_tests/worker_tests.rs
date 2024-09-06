@@ -168,7 +168,7 @@ where
         .unwrap()
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn make_simple_transfer_certificate<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
@@ -200,7 +200,7 @@ where
     .await
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn make_transfer_certificate<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
@@ -234,7 +234,7 @@ where
     .await
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn make_transfer_certificate_for_epoch<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,

@@ -121,7 +121,6 @@ doc_scalar!(
 );
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[allow(clippy::large_enum_variant)]
 /// Reason for the notification.
 pub enum Reason {
     NewBlock {
@@ -723,7 +722,7 @@ where
     ///
     /// Returns [`None`] if the cache is full and no candidate for eviction was found.
     #[tracing::instrument(level = "trace", skip(self))]
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     fn try_get_chain_worker_endpoint(
         &self,
         chain_id: ChainId,
