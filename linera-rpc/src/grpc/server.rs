@@ -139,11 +139,10 @@ impl<S> Layer<S> for GrpcPrometheusMetricsMiddlewareLayer {
     }
 }
 
-impl<S> Service<tonic::codegen::http::Request<tonic::transport::Body>>
-    for GrpcPrometheusMetricsMiddlewareService<S>
+impl<S, Req> Service<Req> for GrpcPrometheusMetricsMiddlewareService<S>
 where
     S::Future: Send + 'static,
-    S: Service<tonic::codegen::http::Request<tonic::transport::Body>> + std::marker::Send,
+    S: Service<Req> + std::marker::Send,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -153,10 +152,7 @@ where
         self.service.poll_ready(cx)
     }
 
-    fn call(
-        &mut self,
-        request: tonic::codegen::http::Request<tonic::transport::Body>,
-    ) -> Self::Future {
+    fn call(&mut self, request: Req) -> Self::Future {
         #[cfg(with_metrics)]
         let start = Instant::now();
         let future = self.service.call(request);
@@ -251,7 +247,7 @@ where
 
             let reflection_service = tonic_reflection::server::Builder::configure()
                 .register_encoded_file_descriptor_set(crate::FILE_DESCRIPTOR_SET)
-                .build()?;
+                .build_v1()?;
 
             health_reporter
                 .set_serving::<ValidatorWorkerServer<Self>>()
