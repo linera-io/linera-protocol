@@ -44,7 +44,7 @@ use tokio::{select, task::JoinSet};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::{
-    transport::{Body, Channel, Identity, Server, ServerTlsConfig},
+    transport::{Channel, Identity, Server, ServerTlsConfig},
     Request, Response, Status,
 };
 use tower::{builder::ServiceBuilder, Layer, Service};
@@ -114,10 +114,10 @@ impl<S> Layer<S> for PrometheusMetricsMiddlewareLayer {
     }
 }
 
-impl<S> Service<tonic::codegen::http::Request<Body>> for PrometheusMetricsMiddlewareService<S>
+impl<S, Req> Service<Req> for PrometheusMetricsMiddlewareService<S>
 where
     S::Future: Send + 'static,
-    S: Service<tonic::codegen::http::Request<Body>> + std::marker::Send,
+    S: Service<Req> + std::marker::Send,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -127,7 +127,7 @@ where
         self.service.poll_ready(cx)
     }
 
-    fn call(&mut self, request: tonic::codegen::http::Request<Body>) -> Self::Future {
+    fn call(&mut self, request: Req) -> Self::Future {
         #[cfg(with_metrics)]
         let start = linera_base::time::Instant::now();
         let future = self.service.call(request);
@@ -250,7 +250,7 @@ where
         );
         let reflection_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(linera_rpc::FILE_DESCRIPTOR_SET)
-            .build()?;
+            .build_v1()?;
         let public_server = join_set.spawn_task(
             self.public_server()?
                 .layer(
