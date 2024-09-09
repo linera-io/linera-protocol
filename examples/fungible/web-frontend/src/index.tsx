@@ -1,27 +1,29 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import "./index.css";
-import App from "./App";
+import React from 'react';
+import ReactDOM from 'react-dom/client';
 import {
   BrowserRouter,
   Route,
   Routes,
   useParams,
   useSearchParams,
-} from "react-router-dom";
-import GraphQLProvider from "./GraphQLProvider";
+} from 'react-router-dom'; 
+import GraphQLProvider from './GraphQLProvider';
+import App from './App';
+import './index.css';
 
-const root = ReactDOM.createRoot(document.getElementById("root"));
-
+const root = ReactDOM.createRoot(
+  document.getElementById('root') as HTMLElement
+);
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path=":id" element={<GraphQLApp />} />
-      </Routes>
-    </BrowserRouter>
+     <BrowserRouter>
+    <Routes>
+      <Route path=":id" element={<GraphQLApp />} />
+    </Routes>
+  </BrowserRouter>
   </React.StrictMode>
 );
+
 
 function GraphQLApp() {
   const { id } = useParams();
@@ -36,11 +38,11 @@ function GraphQLApp() {
     throw Error("missing owner query param");
   }
   if (port == null) {
-    port = 8080;
+    port = "8080";
   }
   return (
     <GraphQLProvider chainId={id} applicationId={app} port={port}>
-      <App chainId={id} owner={owner} />
+      <App chainId={id || ''} owner={owner} />
     </GraphQLProvider>
   );
 }
