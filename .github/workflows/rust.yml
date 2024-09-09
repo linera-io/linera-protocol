@@ -74,26 +74,26 @@ jobs:
     - name: Run Ethereum tests
       run: |
         cargo test -p linera-ethereum --features ethereum
-        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service,unstable-oracles
+        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,remote-net,unstable-oracles
+    - name: Run the set of validators
+      run: |
+        cargo run --bin linera -- --storage service:tcp:127.0.0.1:1235:TEST net up --policy-config devnet --path /tmp/WORK &
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
     - name: Check that the WIT files are up-to-date
       run: |
         cargo run --bin wit-generator -- -c
+    - name: Run the faucet
+      run: |
+        cargo run --release --bin linera -- faucet --amount 1000 --port 8079 &
     - name: Run all tests using the default features
       run: |
         cargo test --features unstable-oracles --locked
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime
-    - name: Run the set of validators
-      run: |
-        cargo run --bin linera -- --storage service:tcp:127.0.0.1:1235:TEST net up --policy-config devnet --path /tmp/WORK --validators 4 --shards 4 &
-    - name: Run the faucet
-      run: |
-        cargo run --release --bin linera -- faucet --amount 1000 --port 8079 &
-    - Name: Run the end-to-end tests for the smart contracts
+    - Name: Run the end-to-end tests for the linera-net smart contracts tests
       run: |
         cargo test -p linera-service --features remote-net
     - name: Run the benchmark test

@@ -215,17 +215,17 @@ impl PathProvider {
     }
 
     pub fn new(path: &Option<String>) -> anyhow::Result<Self> {
-        match path {
+        Ok(match path {
             None => {
                 let tmp_dir = Arc::new(tempfile::tempdir()?);
-                Ok(PathProvider::TemporaryDirectory { tmp_dir })
-            },
+                PathProvider::TemporaryDirectory { tmp_dir }
+            }
             Some(path) => {
                 let path = Path::new(path);
                 let path_buf = path.to_path_buf();
-                Ok(PathProvider::ExternalPath { path_buf })
-            },
-        }
+                PathProvider::ExternalPath { path_buf }
+            }
+        })
     }
 }
 
