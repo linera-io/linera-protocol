@@ -603,7 +603,7 @@ async fn main() {
     };
     let endpoint = endpoint.parse().unwrap();
     info!(
-        "Starting of storage_service_service on endpoint={}",
+        "Starting of linera_storage_service on endpoint={}",
         endpoint
     );
     Server::builder()
