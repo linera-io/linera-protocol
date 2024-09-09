@@ -837,12 +837,13 @@ where
             .client
             .download_certificates(&nodes, self.chain_id, next_block_height)
             .await?;
-        // Check that our local node has the expected block hash.
-        ensure!(
-            info.next_block_height == next_block_height
-                && self.state().block_hash == info.block_hash,
-            ChainClientError::InternalError("Invalid chain of blocks in local node")
-        );
+        if info.next_block_height == next_block_height {
+            // Check that our local node has the expected block hash.
+            ensure!(
+                self.state().block_hash == info.block_hash,
+                ChainClientError::InternalError("Invalid chain of blocks in local node")
+            );
+        }
         let ownership = &info.manager.ownership;
         let keys: HashSet<_> = self.state().known_key_pairs.keys().cloned().collect();
         if ownership.all_owners().any(|owner| !keys.contains(owner)) {
