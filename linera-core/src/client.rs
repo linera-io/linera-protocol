@@ -280,7 +280,7 @@ pub struct ChainState {
     /// Sequence number that we plan to use for the next block.
     /// We track this value outside local storage mainly for security reasons.
     pub next_block_height: BlockHeight,
-    /// The block we are currently trying to propose for the next height.
+    /// The block we are currently trying to propose for the next height, if any.
     pub pending_block: Option<Block>,
     /// Known key pairs from present and past identities.
     pub known_key_pairs: BTreeMap<Owner, KeyPair>,
