@@ -653,13 +653,6 @@ where
     }
 
     #[tracing::instrument(level = "trace")]
-    /// Obtains the set of committees trusted by the local chain.
-    async fn committees(&self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError> {
-        let (_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
-        Ok(committees)
-    }
-
-    #[tracing::instrument(level = "trace")]
     /// Obtains the current epoch of the given chain as well as its set of trusted committees.
     pub async fn epoch_and_committees(
         &self,
@@ -682,7 +675,7 @@ where
     #[tracing::instrument(level = "trace")]
     /// Obtains the epochs of the committees trusted by the local chain.
     pub async fn epochs(&self) -> Result<Vec<Epoch>, LocalNodeError> {
-        let committees = self.committees().await?;
+        let (_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         Ok(committees.into_keys().collect())
     }
 
@@ -876,13 +869,6 @@ where
         } else {
             self.finalize_block(committee, certificate).await
         }
-    }
-
-    #[tracing::instrument(level = "trace")]
-    /// Returns the pending blobs from the local node's chain manager.
-    async fn chain_managers_pending_blobs(&self) -> Result<BTreeMap<BlobId, Blob>, LocalNodeError> {
-        let chain = self.chain_state_view().await?;
-        Ok(chain.manager.get().pending_blobs.clone())
     }
 
     #[tracing::instrument(level = "trace", skip(committee, delivery))]
@@ -3077,29 +3063,25 @@ where
         node: <P as LocalValidatorNodeProvider>::Node,
         node_client: LocalNodeClient<S>,
     ) -> Result<(), ChainClientError> {
-        let ((committees, max_epoch), chain_id, current_tracker) = {
-            let (committees, max_epoch) = self.known_committees().await?;
-            let chain_id = self.chain_id;
-            let current_tracker: u64 = self
-                .state()
-                .received_certificate_trackers
-                .get(&name)
-                .copied()
-                .unwrap_or(0);
-            ((committees, max_epoch), chain_id, current_tracker)
-        };
+        let chain_id = self.chain_id;
+        let (committees, max_epoch) = self.known_committees().await?;
+        let current_tracker = self
+            .state()
+            .received_certificate_trackers
+            .get(&name)
+            .copied()
+            .unwrap_or(0);
         // Proceed to downloading received certificates.
-        let (name, tracker, certificates) =
-            ChainClient::<P, S>::synchronize_received_certificates_from_validator(
-                chain_id,
-                name,
-                current_tracker,
-                committees,
-                max_epoch,
-                node,
-                node_client,
-            )
-            .await?;
+        let (name, tracker, certificates) = Self::synchronize_received_certificates_from_validator(
+            chain_id,
+            name,
+            current_tracker,
+            committees,
+            max_epoch,
+            node,
+            node_client,
+        )
+        .await?;
         // Process received certificates. If the client state has changed during the
         // network calls, we should still be fine.
         self.receive_certificates_from_validator(name, tracker, certificates)
