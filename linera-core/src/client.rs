@@ -270,6 +270,8 @@ impl MessagePolicy {
     }
 }
 
+/// The state of our interaction with a particular chain: how far we have synchronized it and
+/// whether we are currently attempting to propose a new block.
 pub struct ChainState {
     /// Latest block hash, if any.
     pub block_hash: Option<CryptoHash>,
@@ -278,14 +280,15 @@ pub struct ChainState {
     /// Sequence number that we plan to use for the next block.
     /// We track this value outside local storage mainly for security reasons.
     pub next_block_height: BlockHeight,
-    /// Pending block.
+    /// The block we are currently trying to propose for the next height, if any.
     pub pending_block: Option<Block>,
     /// Known key pairs from present and past identities.
     pub known_key_pairs: BTreeMap<Owner, KeyPair>,
     /// The ID of the admin chain.
     pub admin_id: ChainId,
 
-    /// Support synchronization of received certificates.
+    /// For each validator, up to which index we have synchronized their
+    /// [`ChainStateView::received_log`].
     pub received_certificate_trackers: HashMap<ValidatorName, u64>,
     /// This contains blobs belonging to our `pending_block` that may not even have
     /// been processed by (i.e. been proposed to) our own local chain manager yet.
@@ -650,13 +653,6 @@ where
     }
 
     #[tracing::instrument(level = "trace")]
-    /// Obtains the set of committees trusted by the local chain.
-    async fn committees(&self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError> {
-        let (_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
-        Ok(committees)
-    }
-
-    #[tracing::instrument(level = "trace")]
     /// Obtains the current epoch of the given chain as well as its set of trusted committees.
     pub async fn epoch_and_committees(
         &self,
@@ -679,7 +675,7 @@ where
     #[tracing::instrument(level = "trace")]
     /// Obtains the epochs of the committees trusted by the local chain.
     pub async fn epochs(&self) -> Result<Vec<Epoch>, LocalNodeError> {
-        let committees = self.committees().await?;
+        let (_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         Ok(committees.into_keys().collect())
     }
 
@@ -787,7 +783,8 @@ where
     }
 
     #[tracing::instrument(level = "trace")]
-    /// Prepares the chain for the next operation.
+    /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
+    /// its current height.
     async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
@@ -874,13 +871,6 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace")]
-    /// Returns the pending blobs from the local node's chain manager.
-    async fn chain_managers_pending_blobs(&self) -> Result<BTreeMap<BlobId, Blob>, LocalNodeError> {
-        let chain = self.chain_state_view().await?;
-        Ok(chain.manager.get().pending_blobs.clone())
-    }
-
     #[tracing::instrument(level = "trace", skip(committee, delivery))]
     /// Broadcasts certified blocks to validators.
     async fn communicate_chain_updates(
@@ -950,13 +940,8 @@ where
             },
         )
         .await?;
-        let round = match action {
-            CommunicateAction::SubmitBlock { proposal } => proposal.content.round,
-            CommunicateAction::FinalizeBlock { certificate, .. } => certificate.round,
-            CommunicateAction::RequestTimeout { round, .. } => round,
-        };
         ensure!(
-            (votes_hash, votes_round) == (value.hash(), round),
+            (votes_hash, votes_round) == (value.hash(), action.round()),
             ChainClientError::ProtocolError("Unexpected response from validators")
         );
         // Certificate is valid because
@@ -1149,7 +1134,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(tracker, certificates))]
-    /// Processes the result of [`synchronize_received_certificates_from_validator`].
+    /// Processes the result of [`synchronize_received_certificates_from_validator`] and updates
+    /// the tracker for this validator.
     async fn receive_certificates_from_validator(
         &self,
         name: ValidatorName,
@@ -3077,29 +3063,25 @@ where
         node: <P as LocalValidatorNodeProvider>::Node,
         node_client: LocalNodeClient<S>,
     ) -> Result<(), ChainClientError> {
-        let ((committees, max_epoch), chain_id, current_tracker) = {
-            let (committees, max_epoch) = self.known_committees().await?;
-            let chain_id = self.chain_id;
-            let current_tracker: u64 = self
-                .state()
-                .received_certificate_trackers
-                .get(&name)
-                .copied()
-                .unwrap_or(0);
-            ((committees, max_epoch), chain_id, current_tracker)
-        };
+        let chain_id = self.chain_id;
+        let (committees, max_epoch) = self.known_committees().await?;
+        let current_tracker = self
+            .state()
+            .received_certificate_trackers
+            .get(&name)
+            .copied()
+            .unwrap_or(0);
         // Proceed to downloading received certificates.
-        let (name, tracker, certificates) =
-            ChainClient::<P, S>::synchronize_received_certificates_from_validator(
-                chain_id,
-                name,
-                current_tracker,
-                committees,
-                max_epoch,
-                node,
-                node_client,
-            )
-            .await?;
+        let (name, tracker, certificates) = Self::synchronize_received_certificates_from_validator(
+            chain_id,
+            name,
+            current_tracker,
+            committees,
+            max_epoch,
+            node,
+            node_client,
+        )
+        .await?;
         // Process received certificates. If the client state has changed during the
         // network calls, we should still be fine.
         self.receive_certificates_from_validator(name, tracker, certificates)
