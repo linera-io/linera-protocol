@@ -950,13 +950,8 @@ where
             },
         )
         .await?;
-        let round = match action {
-            CommunicateAction::SubmitBlock { proposal } => proposal.content.round,
-            CommunicateAction::FinalizeBlock { certificate, .. } => certificate.round,
-            CommunicateAction::RequestTimeout { round, .. } => round,
-        };
         ensure!(
-            (votes_hash, votes_round) == (value.hash(), round),
+            (votes_hash, votes_round) == (value.hash(), action.round()),
             ChainClientError::ProtocolError("Unexpected response from validators")
         );
         // Certificate is valid because

@@ -51,6 +51,17 @@ pub enum CommunicateAction {
     },
 }
 
+impl CommunicateAction {
+    /// The round to which this action pertains.
+    pub fn round(&self) -> Round {
+        match self {
+            CommunicateAction::SubmitBlock { proposal } => proposal.content.round,
+            CommunicateAction::FinalizeBlock { certificate, .. } => certificate.round,
+            CommunicateAction::RequestTimeout { round, .. } => *round,
+        }
+    }
+}
+
 pub struct ValidatorUpdater<A, S>
 where
     S: Storage,
