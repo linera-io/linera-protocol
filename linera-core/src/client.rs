@@ -221,6 +221,57 @@ impl<P, S: Storage + Clone> Client<P, S> {
     }
 }
 
+impl<P, S> Client<P, S>
+where
+    P: LocalValidatorNodeProvider + Sync + 'static,
+    S: Storage + Sync + Send + Clone + 'static,
+{
+    async fn download_certificates(
+        &self,
+        nodes: &[(ValidatorName, P::Node)],
+        chain_id: ChainId,
+        height: BlockHeight,
+    ) -> Result<Box<ChainInfo>, LocalNodeError> {
+        let mut notifications = Vec::<Notification>::new();
+        let info = self
+            .local_node
+            .download_certificates(nodes, chain_id, height, &mut notifications)
+            .await?;
+        self.notifier.handle_notifications(&notifications);
+        Ok(info)
+    }
+
+    async fn try_process_certificates(
+        &self,
+        name: &ValidatorName,
+        node: &impl LocalValidatorNode,
+        chain_id: ChainId,
+        certificates: Vec<Certificate>,
+    ) -> Option<Box<ChainInfo>> {
+        let mut notifications = Vec::<Notification>::new();
+        let result = self
+            .local_node
+            .try_process_certificates(name, node, chain_id, certificates, &mut notifications)
+            .await;
+        self.notifier.handle_notifications(&notifications);
+        result
+    }
+
+    async fn handle_certificate(
+        &self,
+        certificate: Certificate,
+        blobs: Vec<Blob>,
+    ) -> Result<ChainInfoResponse, LocalNodeError> {
+        let mut notifications = Vec::<Notification>::new();
+        let result = self
+            .local_node
+            .handle_certificate(certificate, blobs, &mut notifications)
+            .await;
+        self.notifier.handle_notifications(&notifications);
+        result
+    }
+}
+
 /// Policies for automatically handling incoming messages.
 #[derive(Clone, Debug)]
 pub struct MessagePolicy {
@@ -781,13 +832,6 @@ where
             .copy())
     }
 
-    #[tracing::instrument(level = "trace", skip(notifications))]
-    /// Notifies subscribers and clears the `notifications`.
-    fn handle_notifications(&self, notifications: &mut Vec<Notification>) {
-        self.client.notifier.handle_notifications(notifications);
-        notifications.clear();
-    }
-
     #[tracing::instrument(level = "trace")]
     /// Obtains the public key associated to the current identity.
     pub async fn public_key(&self) -> Result<PublicKey, ChainClientError> {
@@ -803,13 +847,10 @@ where
         // network.
         let next_block_height = self.state().next_block_height;
         let nodes = self.validator_nodes().await?;
-        let mut notifications = vec![];
         let mut info = self
             .client
-            .local_node
-            .download_certificates(&nodes, self.chain_id, next_block_height, &mut notifications)
+            .download_certificates(&nodes, self.chain_id, next_block_height)
             .await?;
-        self.handle_notifications(&mut notifications);
         if info.next_block_height == next_block_height {
             // Check that our local node has the expected block hash.
             ensure!(
@@ -818,17 +859,13 @@ where
             );
         }
         let ownership = &info.manager.ownership;
-        let keys: std::collections::HashSet<_> =
-            self.state().known_key_pairs.keys().cloned().collect();
+        let keys: HashSet<_> = self.state().known_key_pairs.keys().cloned().collect();
         if ownership.all_owners().any(|owner| !keys.contains(owner)) {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
             let nodes = self.validator_nodes().await?;
-            info = self
-                .synchronize_chain_state(&nodes, self.chain_id, &mut notifications)
-                .await?;
-            self.handle_notifications(&mut notifications);
+            info = self.synchronize_chain_state(&nodes, self.chain_id).await?;
         }
         self.update_from_info(&info);
         Ok(info)
@@ -1037,12 +1074,9 @@ where
             .validator_node_provider
             .make_nodes(remote_committee)?
             .collect();
-        let mut notifications = vec![];
         self.client
-            .local_node
-            .download_certificates(&nodes, block.chain_id, block.height, &mut notifications)
+            .download_certificates(&nodes, block.chain_id, block.height)
             .await?;
-        self.handle_notifications(&mut notifications);
         // Process the received operations. Download required hashed certificate values if necessary.
         if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
             match &err {
@@ -1204,11 +1238,9 @@ where
             .validator_node_provider
             .make_nodes(&local_committee)?
             .collect();
-        let mut notifications = vec![];
         // Synchronize the state of the admin chain from the network.
-        self.synchronize_chain_state(&nodes, self.admin_id(), &mut notifications)
+        self.synchronize_chain_state(&nodes, self.admin_id())
             .await?;
-        self.handle_notifications(&mut notifications);
         let node_client = self.client.local_node.clone();
         // Now we should have a complete view of all committees in the system.
         let (committees, max_epoch) = self.known_committees().await?;
@@ -1318,14 +1350,11 @@ where
         certificate: Certificate,
         blobs: Vec<Blob>,
     ) -> Result<(), LocalNodeError> {
-        let mut notifications = vec![];
         let info = self
             .client
-            .local_node
-            .handle_certificate(certificate, blobs, &mut notifications)
+            .handle_certificate(certificate, blobs)
             .await?
             .info;
-        self.handle_notifications(&mut notifications);
         self.update_from_info(&info);
         Ok(())
     }
@@ -1391,29 +1420,22 @@ where
         &self,
         validators: &[(ValidatorName, impl LocalValidatorNode)],
         chain_id: ChainId,
-        notifications: &mut impl Extend<Notification>,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let mut futures = vec![];
 
         for (name, node) in validators {
             let client = self.clone();
-            let mut notifications = vec![];
             futures.push(async move {
-                (
-                    client
-                        .try_synchronize_chain_state_from(name, node, chain_id, &mut notifications)
-                        .await,
-                    notifications,
-                )
+                client
+                    .try_synchronize_chain_state_from(name, node, chain_id)
+                    .await
             });
         }
 
-        for (result, new_notifications) in future::join_all(futures).await {
+        for result in future::join_all(futures).await {
             if let Err(e) = result {
                 error!(?e, "Error synchronizing chain state");
             }
-
-            notifications.extend(new_notifications);
         }
 
         self.client
@@ -1423,7 +1445,7 @@ where
             .map_err(Into::into)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, name, node, chain_id, notifications))]
+    #[tracing::instrument(level = "trace", skip(self, name, node, chain_id))]
     /// Downloads any certificates from the specified validator that we are missing for the given
     /// chain, and processes them.
     pub async fn try_synchronize_chain_state_from(
@@ -1431,7 +1453,6 @@ where
         name: &ValidatorName,
         node: &impl LocalValidatorNode,
         chain_id: ChainId,
-        notifications: &mut impl Extend<Notification>,
     ) -> Result<(), ChainClientError> {
         let local_info = self.client.local_node.local_chain_info(chain_id).await?;
         let range = BlockHeightRange {
@@ -1464,8 +1485,7 @@ where
         if !certificates.is_empty()
             && self
                 .client
-                .local_node
-                .try_process_certificates(name, node, chain_id, certificates, notifications)
+                .try_process_certificates(name, node, chain_id, certificates)
                 .await
                 .is_none()
         {
@@ -1518,11 +1538,7 @@ where
             }
             let hash = cert.hash();
             let mut blobs = vec![];
-            while let Err(original_err) = self
-                .client
-                .local_node
-                .handle_certificate(*cert.clone(), blobs, notifications)
-                .await
+            while let Err(original_err) = self.client.handle_certificate(*cert.clone(), blobs).await
             {
                 if let LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) =
                     &original_err
@@ -2908,7 +2924,6 @@ where
                 }
             }
             Reason::NewBlock { height, .. } => {
-                let mut notifications = vec![];
                 let chain_id = notification.chain_id;
                 if self
                     .local_next_block_height(chain_id, &mut local_node)
@@ -2919,13 +2934,12 @@ where
                     return;
                 }
                 if let Err(error) = self
-                    .try_synchronize_chain_state_from(&name, &node, chain_id, &mut notifications)
+                    .try_synchronize_chain_state_from(&name, &node, chain_id)
                     .await
                 {
                     error!("Fail to process notification: {error}");
                     return;
                 }
-                self.handle_notifications(&mut notifications);
                 let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
                     .await;
@@ -2934,7 +2948,6 @@ where
                 }
             }
             Reason::NewRound { height, round } => {
-                let mut notifications = vec![];
                 let chain_id = notification.chain_id;
                 if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
@@ -2943,13 +2956,12 @@ where
                     }
                 }
                 if let Err(error) = self
-                    .try_synchronize_chain_state_from(&name, &node, chain_id, &mut notifications)
+                    .try_synchronize_chain_state_from(&name, &node, chain_id)
                     .await
                 {
                     error!("Fail to process notification: {error}");
                     return;
                 }
-                self.handle_notifications(&mut notifications);
                 let Some(info) = self.local_chain_info(chain_id, &mut local_node).await else {
                     error!("Fail to read local chain info for {chain_id}");
                     return;
